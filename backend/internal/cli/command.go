@@ -48,6 +48,8 @@ func (e commandEnv) runIssue(ctx context.Context, args []string) int {
 		return e.createIssue(ctx, args[1:])
 	case "status":
 		return e.getIssue(ctx, args[1:])
+	case "update":
+		return e.updateIssue(ctx, args[1:])
 	case "logs":
 		return e.getIssueLogs(ctx, args[1:])
 	case "enqueue", "retry", "cancel":

@@ -66,8 +66,8 @@ flowchart TD
    - 扫描 `todo` issue
    - 标记 `in_progress`
    - 调 Codex 执行
-   - 成功标 `done`
-   - 失败标 `failed`
+   - 等待 Codex 通过 CLI/API 显式标记 `done` 或 `failed`
+   - turn 结束但未显式标记时，标 `failed`
 
 4. **Codex App Server Adapter**
    - 拉起或连接 `codex app-server`
@@ -263,8 +263,8 @@ create table issue_templates (
 3. 创建 Codex thread
 4. 启动 Codex turn
 5. 监听 Codex 事件并写入 issue_events
-6. turn 成功：issue -> done
-7. turn 失败：issue -> failed
+6. Codex 完成验证后显式执行 CLI：issue -> done / failed
+7. turn 结束但未显式更新 issue：issue -> failed
 8. 继续下一个 todo issue
 9. 队列为空后 loop idle
 ```
@@ -394,7 +394,7 @@ item/fileChange/patchUpdated
 ```txt
 item/agentMessage/delta             -> issue.log
 item/commandExecution/outputDelta   -> issue.command_output
-turn/completed success              -> issue.done
+turn/completed success              -> keep explicit issue status, otherwise issue.failed
 turn/completed error                -> issue.failed
 thread/status/changed active        -> runner.active
 thread/status/changed idle          -> runner.idle
@@ -421,6 +421,10 @@ thread/status/changed idle          -> runner.idle
 4. 如果需要运行测试，请运行最小必要验证。
 5. 完成后总结修改内容、验证结果、未验证风险。
 6. 不要提交 git commit，除非用户明确要求。
+7. 只有在你确认修改完成且验证通过后，最后执行：
+   `codex-issue-runner issue update --id {{issue.id}} --status done --json`
+8. 如果验证失败、需求无法完成或存在阻塞，不要标记 done；请说明失败原因，并执行：
+   `codex-issue-runner issue update --id {{issue.id}} --status failed --error "<失败原因>" --json`
 ```
 
 `title` 是面板展示和 Codex session name，可选；为空时从 `description` 第一条有效内容自动派生。Codex 执行以 `{{issue.content}}` 为核心内容，避免 session preview 被固定模板前缀污染。
@@ -524,6 +528,20 @@ PATCH  /api/issue-templates/:id
 DELETE /api/issue-templates/:id
 ```
 
+### Cron Task API
+
+```http
+GET    /api/cron-tasks
+POST   /api/cron-tasks
+GET    /api/cron-tasks/:id
+PATCH  /api/cron-tasks/:id
+DELETE /api/cron-tasks/:id
+```
+
+第一版 cron task 聚焦 `triage_to_todo`：到点后把匹配范围内的 `triage`
+issue 批量切到 `todo`，写入 `issue.status_changed` 事件，并启动受影响项目
+runner loop。支持 `once` 与 `daily` 两种模式。
+
 ### SSE API
 
 ```http
@@ -573,6 +591,7 @@ type AppEvent =
 - status
 - attempt_count
 - updated_at
+- 看板列：`Triage / Todo / In Progress / Failed / Done / Cancelled`
 
 操作：
 
@@ -616,7 +635,7 @@ error = "Service restarted while issue was in progress"
 后续增强：
 
 1. 如果有 `codex_thread_id`，尝试读取 thread 状态
-2. 如果 turn 已完成，补写 done/failed
+2. 如果 turn 已完成但 issue 未显式标记终态，补写 failed
 3. 如果无法判断，标记 `failed_stale`
 
 ---
@@ -788,7 +807,7 @@ MVP 可以先前后端分开跑，等 API/runner 稳定后再做 embedded web UI
 - `runIssue(issue)`
 - `turn/start`
 - 日志写入 issue_events
-- `turn/completed` 后更新 issue 状态
+- Codex 显式 `issue update` 后更新 issue 状态
 
 验收：
 
@@ -848,7 +867,7 @@ MVP 可以先前后端分开跑，等 API/runner 稳定后再做 embedded web UI
 ## 第一版明确不做
 
 - 不做 Telegram / WeChat
-- 不做 cron
+- 不做复杂 crontab 表达式解析
 - 不做 workspace meta-chat
 - 不做多 agent 调度
 - 不做自动 git commit
@@ -867,7 +886,7 @@ MVP 完成标准：
 3. 将 issue 放入 todo
 4. 服务自动调用 Codex app-server 执行
 5. issue 页面看到实时输出
-6. 执行完成后自动标记 done 或 failed
+6. Codex 验证后通过 CLI 显式标记 done 或 failed
 7. failed issue 可以 retry
 
 ---

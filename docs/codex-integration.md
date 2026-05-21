@@ -40,6 +40,7 @@ codex-issue-runner issue create \
 ```bash
 codex-issue-runner issue status --id <issue-id> --json
 codex-issue-runner issue logs --id <issue-id>
+codex-issue-runner issue update --id <issue-id> --status done --json
 codex-issue-runner issue retry --id <issue-id> --json
 codex-issue-runner issue cancel --id <issue-id> --json
 ```

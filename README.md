@@ -10,6 +10,7 @@
 - 全局 SSE：`GET /api/events`
 - 项目 auto-run / loop start-stop
 - issue enqueue / retry / cancel
+- Triage cron：到点批量将 Triage issue 切到 Todo 并启动运行
 - 通过 `codex app-server --listen stdio://` 执行 todo issue
 - 前端 Vite proxy 已指向后端 `/api -> http://127.0.0.1:3008`
 
@@ -22,6 +23,7 @@
 ```
 
 后端默认启动在 `http://127.0.0.1:3008`，前端默认启动在 `http://127.0.0.1:3568`。
+`./dev.sh` 是前台开发模式：终端退出后服务会停止，不适合作为长期后台服务。
 
 也可以分别启动。后端：
 
@@ -43,6 +45,61 @@ CODEX_RUNNER_ADDR=127.0.0.1:3008 \
 CODEX_RUNNER_DB=data/app.db \
 CODEX_RUNNER_CODEX_CMD=codex \
 go run ./backend/cmd/codex-issue-runner
+```
+
+生产/部署模式下后端也可以直接托管前端构建产物：
+
+```bash
+cd frontend && npm run build
+cd ..
+go run ./backend/cmd/codex-issue-runner serve \
+  --addr 127.0.0.1:3008 \
+  --db data/app.db \
+  --web-dir frontend/dist
+```
+
+## 后台部署模式（macOS launchd）
+
+本仓库提供 macOS LaunchAgent 部署脚本，会构建前端与 Go 二进制，并把服务注册为后台长期运行：
+
+```bash
+./deploy.sh
+```
+
+部署后访问：
+
+```txt
+http://127.0.0.1:3008/
+```
+
+常用运维命令：
+
+```bash
+# 查看 launchd / 端口 / API 状态
+./scripts/status-launchd.sh
+
+# 停止并移除后台服务
+./scripts/uninstall-launchd.sh
+```
+
+默认配置：
+
+```txt
+服务名: com.xiaobei.codex-issue-runner
+监听:   127.0.0.1:3008
+DB:     data/app.db
+Web:    frontend/dist
+二进制: dist/codex-issue-runner
+日志:   data/logs/launchd.out.log / data/logs/launchd.err.log
+```
+
+可通过环境变量覆盖：
+
+```bash
+CODEX_RUNNER_ADDR=127.0.0.1:3018 \
+CODEX_RUNNER_DEPLOY_DB=/absolute/path/app.db \
+CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
+./deploy.sh
 ```
 
 ## CLI 调用
@@ -71,11 +128,33 @@ codex-issue-runner issue create \
 # 查询状态 / 日志 / 重试 / 取消
 codex-issue-runner issue status --id 42
 codex-issue-runner issue logs --id 42
+codex-issue-runner issue update --id 42 --status done --json
 codex-issue-runner issue retry --id 42 --json
 codex-issue-runner issue cancel --id 42 --json
 ```
 
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
+
+## Triage Cron
+
+可以在 Issues 看板右上角点「定时运行 Triage」，或在 Settings 里统一管理 cron 任务。
+
+- `once`：到指定时间运行一次，完成后状态变为 `done`
+- `daily`：每天在指定 `HH:MM` 运行一次
+- `project_id` 为空时处理所有项目；填写项目 id 时只处理该项目
+- 触发后会把匹配范围内所有 `triage` issue 更新为 `todo`，记录状态事件，并启动受影响项目的 runner loop
+
+API 示例：
+
+```bash
+curl -X POST http://127.0.0.1:3008/api/cron-tasks \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "12点运行所有 Triage",
+    "mode": "once",
+    "next_run_at": "2026-05-21T04:00:00Z"
+  }'
+```
 
 ## 验证
 

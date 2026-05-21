@@ -42,6 +42,15 @@ func scanIssueEvent(row scanner) (IssueEvent, error) {
 	return e, err
 }
 
+func scanCronTask(row scanner) (CronTask, error) {
+	var task CronTask
+	err := row.Scan(&task.ID, &task.Name, &task.ProjectID, &task.Action,
+		&task.Mode, &task.TimeOfDay, &task.NextRunAt, &task.LastRunAt,
+		&task.Status, &task.RunCount, &task.Error, &task.CreatedAt,
+		&task.UpdatedAt)
+	return task, err
+}
+
 func scanUpload(row scanner) (Upload, error) {
 	var upload Upload
 	err := row.Scan(&upload.ID, &upload.OriginalName, &upload.MimeType,

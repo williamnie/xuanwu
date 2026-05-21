@@ -31,6 +31,19 @@ func postJSON(ctx context.Context, client *http.Client, addr, path string, in, o
 	return doJSON(client, req, out)
 }
 
+func patchJSON(ctx context.Context, client *http.Client, addr, path string, in, out any) error {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint(addr, path), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return doJSON(client, req, out)
+}
+
 func doJSON(client *http.Client, req *http.Request, out any) error {
 	resp, err := client.Do(req)
 	if err != nil {

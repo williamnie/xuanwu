@@ -43,8 +43,10 @@ func (s *Store) init() error {
 		issueTemplatesSchema,
 		issuesSchema,
 		issueEventsSchema,
+		cronTasksSchema,
 		uploadsSchema,
 		`create index if not exists idx_issues_queue on issues(project_id, status, priority, created_at)`,
+		`create index if not exists idx_cron_tasks_due on cron_tasks(status, next_run_at)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {

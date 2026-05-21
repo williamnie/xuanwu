@@ -8,13 +8,14 @@ import {
   useDataStore,
 } from '../store/dataStore';
 import {
-  Plus, 
-  X, 
-  Clock, 
+  Plus,
+  X,
+  Clock,
   Sparkles,
   Link2
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
+import CronTasksPanel from '../components/CronTasksPanel';
 
 export default function Issues({
   filterProject,
@@ -85,18 +86,14 @@ export default function Issues({
 
     try {
       const { issueId, currentStatus } = JSON.parse(dataStr);
-      
-      // 如果目标状态和当前状态一致，或者目标状态是在 cancelled 列且当前状态已是 cancelled/failed，则忽略
-      const isTargetCancelled = targetStatus === 'cancelled';
-      const isCurrentCancelled = currentStatus === 'cancelled' || currentStatus === 'failed';
-      
-      if (currentStatus === targetStatus || (isTargetCancelled && isCurrentCancelled)) {
+
+      if (currentStatus === targetStatus) {
         return;
       }
 
       // 调用接口更新状态
       await api.updateIssue(issueId, { status: targetStatus });
-      
+
       // 成功后重新加载数据，保证即时同步
       refreshAllData();
     } catch (err) {
@@ -146,7 +143,7 @@ export default function Issues({
     const now = new Date();
     const date = new Date(dateStr);
     const diffMs = now - date;
-    
+
     const minutes = Math.floor(diffMs / 60000);
     const hours = Math.floor(diffMs / 3600000);
     const days = Math.floor(diffMs / 86400000);
@@ -201,10 +198,9 @@ export default function Issues({
   const triageIssues = projectIssues.filter(i => i.status === 'triage');
   const todoIssues = projectIssues.filter(i => i.status === 'todo');
   const inProgressIssues = projectIssues.filter(i => i.status === 'in_progress');
+  const failedIssues = projectIssues.filter(i => i.status === 'failed');
   const doneIssues = projectIssues.filter(i => i.status === 'done');
-  
-  // 截图中的 Cancelled 列合并了 cancelled 和 failed 的任务，提供清晰的报错展示
-  const cancelledIssues = projectIssues.filter(i => i.status === 'cancelled' || i.status === 'failed');
+  const cancelledIssues = projectIssues.filter(i => i.status === 'cancelled');
 
   // 3. 看板五列的配置信息
   const columns = [
@@ -230,6 +226,13 @@ export default function Issues({
       issues: inProgressIssues
     },
     {
+      id: 'failed',
+      title: 'Failed',
+      dotColor: '#ef4444', // 红色
+      emptyText: 'nothing failed',
+      issues: failedIssues
+    },
+    {
       id: 'done',
       title: 'Done',
       dotColor: '#10b981', // 绿色
@@ -252,6 +255,8 @@ export default function Issues({
         return columns.filter(c => c.id === 'triage');
       case 'active':
         return columns.filter(c => c.id === 'todo' || c.id === 'in_progress');
+      case 'failed':
+        return columns.filter(c => c.id === 'failed');
       case 'archive':
         return columns.filter(c => c.id === 'done' || c.id === 'cancelled');
       case 'all':
@@ -264,34 +269,36 @@ export default function Issues({
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
-      
+
       {/* 头部控制栏 (对齐截图) */}
       <div className="view-header">
         <h1 className="view-title">
           Issues <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 500 }}>— {projectIssues.length}</span>
         </h1>
-        
-        {/* 新增 Issue 动作按钮 */}
-        <button 
-          className="btn btn-primary" 
-          style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-          onClick={() => handleOpenNewIssue('todo')}
-        >
-          <Plus size={14} /> New issue
-        </button>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <CronTasksPanel compact defaultProjectId={filterProject} />
+          <button
+            className="btn btn-primary"
+            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+            onClick={() => handleOpenNewIssue('todo')}
+          >
+            <Plus size={14} /> New issue
+          </button>
+        </div>
       </div>
 
       {/* 核心看板网格组件 */}
       <div className="kanban-board">
         {visibleColumns.map(col => (
-          <div 
-            key={col.id} 
+          <div
+            key={col.id}
             className={`kanban-column ${draggedOverColumnId === col.id ? 'drag-over' : ''}`}
             onDragOver={(e) => handleDragOver(e, col.id)}
             onDragLeave={(e) => handleDragLeave(e, col.id)}
             onDrop={(e) => handleDrop(e, col.id)}
           >
-            
+
             {/* 列头部 */}
             <div className="kanban-column-header">
               <div className="kanban-column-title">
@@ -299,8 +306,8 @@ export default function Issues({
                 <span>{col.title}</span>
                 <span className="kanban-column-count">{col.issues.length}</span>
               </div>
-              <button 
-                className="kanban-column-add-btn" 
+              <button
+                className="kanban-column-add-btn"
                 onClick={() => handleOpenNewIssue(col.id === 'cancelled' ? 'cancelled' : col.id)}
                 title={`添加新任务到 ${col.title}`}
               >
@@ -318,8 +325,8 @@ export default function Issues({
                 col.issues.map(issue => {
                   const proj = projects.find(p => p.id === issue.project_id);
                   return (
-                    <div 
-                      key={issue.id} 
+                    <div
+                      key={issue.id}
                       className={`kanban-card ${draggingIssueId === issue.id ? 'dragging' : ''}`}
                       draggable="true"
                       onDragStart={(e) => handleDragStart(e, issue.id, issue.status)}
@@ -333,14 +340,14 @@ export default function Issues({
 
                       {/* 底部属性与微标 */}
                       <div className="kanban-card-footer">
-                        
+
                         {/* 关联项目微标 (带圆点指示) */}
                         <span className="kanban-card-project">
-                          <span 
-                            style={{ 
-                              width: '6px', 
-                              height: '6px', 
-                              borderRadius: '50%', 
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
                               background: '#f97316', // 截图中的橙色圆点
                               display: 'inline-block'
                             }}
@@ -375,12 +382,12 @@ export default function Issues({
       {isNewIssueOpen && (
         <div className="modal-overlay">
           <div className="glass-card modal-content" style={{ maxWidth: '760px', padding: '24px' }}>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Sparkles size={16} color="var(--primary)" /> 创建新 Issue ({prefilledStatus.toUpperCase()})
               </h3>
-              <button 
+              <button
                 style={{ background: 'transparent', color: 'var(--text-muted)', border: 'none', cursor: 'pointer' }}
                 onClick={() => setIsNewIssueOpen(false)}
               >
@@ -389,7 +396,7 @@ export default function Issues({
             </div>
 
             <form onSubmit={handleCreateIssue} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              
+
               {formError && (
                 <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 12px', borderRadius: '4px', fontSize: '0.78rem' }}>
                   {formError}
@@ -404,8 +411,8 @@ export default function Issues({
               ) : (
                 <div className="form-group">
                   <label>关联目标项目 *</label>
-                  <select 
-                    className="form-control" 
+                  <select
+                    className="form-control"
                     value={formProjectId}
                     onChange={(e) => setFormProjectId(e.target.value)}
                     required
@@ -439,9 +446,9 @@ export default function Issues({
 
               <div className="form-group">
                 <label>任务标题（可选，会自动生成）</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
+                <input
+                  type="text"
+                  className="form-control"
                   placeholder="不填则从任务内容第一行自动生成"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
@@ -460,8 +467,8 @@ export default function Issues({
 
               <div className="form-group">
                 <label>任务优先级</label>
-                <select 
-                  className="form-control" 
+                <select
+                  className="form-control"
                   value={formPriority}
                   onChange={(e) => setFormPriority(e.target.value)}
                 >

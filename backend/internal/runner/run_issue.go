@@ -83,21 +83,48 @@ func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event code
 		r.publishLog(ctx, issueID, event)
 	}
 	if event.Method == "error" && event.Error != "" {
+		if r.issueAlreadyTerminal(ctx, issueID) {
+			return true, nil
+		}
 		r.failIssue(ctx, issueID, event.Error)
 		return true, nil
 	}
 	if event.Method != "turn/completed" {
 		return false, nil
 	}
+	return true, r.finishIssueAfterTurn(ctx, issueID, event)
+}
+
+func (r *Runner) issueAlreadyTerminal(ctx context.Context, issueID int64) bool {
+	current, err := r.store.GetIssue(ctx, issueID)
+	return err == nil && isTerminalStatus(current.Status)
+}
+
+func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event codex.Event) error {
+	current, err := r.store.GetIssue(ctx, issueID)
+	if err != nil {
+		return err
+	}
+	if isTerminalStatus(current.Status) {
+		return nil
+	}
 	if event.Status == "completed" {
-		r.completeIssue(ctx, issueID)
-		return true, nil
+		r.failIssue(ctx, issueID, missingExplicitStatusMessage())
+		return nil
 	}
 	if event.Error == "" {
 		event.Error = "Codex turn ended with status: " + event.Status
 	}
 	r.failIssue(ctx, issueID, event.Error)
-	return true, nil
+	return nil
+}
+
+func isTerminalStatus(status string) bool {
+	return status == store.StatusDone || status == store.StatusFailed || status == store.StatusCancelled
+}
+
+func missingExplicitStatusMessage() string {
+	return "Codex turn completed without explicit issue status update; expected Codex to run codex-issue-runner issue update after verification"
 }
 
 func matches(event codex.Event, threadID, turnID string) bool {

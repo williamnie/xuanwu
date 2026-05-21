@@ -88,6 +88,42 @@ func TestIssueStatusPrintsHumanSummary(t *testing.T) {
 	}
 }
 
+func TestIssueUpdatePatchesStatusAndError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/api/issues/7" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode patch payload: %v", err)
+		}
+		if payload["status"] != "failed" || payload["error"] != "npm test failed" {
+			t.Fatalf("unexpected patch payload: %+v", payload)
+		}
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"id": float64(7), "project_id": "demo", "title": "验证失败任务",
+			"status": "failed", "error": "npm test failed",
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"issue", "update", "--addr", server.URL, "--id", "7",
+		"--status", "failed", "--error", "npm test failed", "--json",
+	}, &stdout, &stderr, Options{})
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	var output map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("stdout is not JSON: %q err=%v", stdout.String(), err)
+	}
+	if output["status"] != "failed" || output["error"] != "npm test failed" {
+		t.Fatalf("unexpected output: %+v", output)
+	}
+}
+
 func TestIssueRetryPostsAction(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/issues/9/retry" {

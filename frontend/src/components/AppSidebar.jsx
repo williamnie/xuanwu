@@ -160,7 +160,8 @@ function IssuesSidebarFilters({
   const filteredIssuesList = issues.filter(i => !filterProject || i.project_id === filterProject);
   const triageCount = filteredIssuesList.filter(i => i.status === 'triage').length;
   const activeCount = filteredIssuesList.filter(i => i.status === 'todo' || i.status === 'in_progress').length;
-  const archiveCount = filteredIssuesList.filter(i => i.status === 'done' || i.status === 'failed' || i.status === 'cancelled').length;
+  const failedCount = filteredIssuesList.filter(i => i.status === 'failed').length;
+  const archiveCount = filteredIssuesList.filter(i => i.status === 'done' || i.status === 'cancelled').length;
   const allCount = filteredIssuesList.length;
   const activeLoops = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length;
   const totalProjects = projects.length;
@@ -201,6 +202,11 @@ function IssuesSidebarFilters({
         <button className={`sub-filter-item ${focusFilter === 'active' ? 'active' : ''}`} onClick={() => setFocusFilter('active')}>
           <span><span className="sub-filter-dot" style={{ background: '#3b82f6' }}></span>Active only</span>
           <span>{activeCount}</span>
+        </button>
+
+        <button className={`sub-filter-item ${focusFilter === 'failed' ? 'active' : ''}`} onClick={() => setFocusFilter('failed')}>
+          <span><span className="sub-filter-dot" style={{ background: '#ef4444' }}></span>Failed</span>
+          <span>{failedCount}</span>
         </button>
 
         <button className={`sub-filter-item ${focusFilter === 'archive' ? 'active' : ''}`} onClick={() => setFocusFilter('archive')}>

@@ -37,6 +37,22 @@ const ISSUE_TEMPLATE_FIELDS = [
   'updated_at',
 ];
 
+const CRON_TASK_FIELDS = [
+  'id',
+  'name',
+  'project_id',
+  'action',
+  'mode',
+  'time_of_day',
+  'next_run_at',
+  'last_run_at',
+  'status',
+  'run_count',
+  'error',
+  'created_at',
+  'updated_at',
+];
+
 export const RECONCILE_INTERVAL_MS = 30_000;
 
 function fieldSignature(item, fields) {
@@ -75,6 +91,10 @@ export function sameIssues(current, next) {
 
 export function sameIssueTemplates(current, next) {
   return sameListByFields(current, next, ISSUE_TEMPLATE_FIELDS);
+}
+
+export function sameCronTasks(current, next) {
+  return sameListByFields(current, next, CRON_TASK_FIELDS);
 }
 
 function eventIdentity(event, index) {

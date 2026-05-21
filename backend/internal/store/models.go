@@ -9,6 +9,15 @@ const (
 	StatusCancelled  = "cancelled"
 )
 
+const (
+	CronActionTriageToTodo = "triage_to_todo"
+	CronModeOnce           = "once"
+	CronModeDaily          = "daily"
+	CronStatusActive       = "active"
+	CronStatusPaused       = "paused"
+	CronStatusDone         = "done"
+)
+
 type Project struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
@@ -79,6 +88,33 @@ type IssueEvent struct {
 	Type      string `json:"type"`
 	Payload   string `json:"payload"`
 	CreatedAt string `json:"created_at"`
+}
+
+type CronTask struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	ProjectID string `json:"project_id"`
+	Action    string `json:"action"`
+	Mode      string `json:"mode"`
+	TimeOfDay string `json:"time_of_day"`
+	NextRunAt string `json:"next_run_at"`
+	LastRunAt string `json:"last_run_at"`
+	Status    string `json:"status"`
+	RunCount  int    `json:"run_count"`
+	Error     string `json:"error"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type CronTaskPatch struct {
+	Name      *string `json:"name"`
+	ProjectID *string `json:"project_id"`
+	Action    *string `json:"action"`
+	Mode      *string `json:"mode"`
+	TimeOfDay *string `json:"time_of_day"`
+	NextRunAt *string `json:"next_run_at"`
+	Status    *string `json:"status"`
+	Error     *string `json:"error"`
 }
 
 type Upload struct {

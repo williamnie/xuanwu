@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +47,7 @@ func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInp
 func (f *fakeCodex) InterruptTurn(context.Context, string, string) error { return nil }
 func (f *fakeCodex) Events() <-chan codex.Event                          { return f.events }
 
-func TestRunnerCompletesTodoIssue(t *testing.T) {
+func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
@@ -57,9 +58,12 @@ func TestRunnerCompletesTodoIssue(t *testing.T) {
 		t.Fatalf("start project: %v", err)
 	}
 	defer r.StopProject("demo")
-	got := waitIssueStatus(t, st, issue.ID, store.StatusDone)
+	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
 	if got.CodexThreadID != "thread-1" || got.CodexTurnID != "turn-1" {
 		t.Fatalf("runtime ids not persisted: %+v", got)
+	}
+	if !strings.Contains(got.Error, "explicit issue status update") {
+		t.Fatalf("error = %q, want explicit status update message", got.Error)
 	}
 	if fake.setName != "task" {
 		t.Fatalf("thread name = %q, want issue title", fake.setName)
@@ -93,6 +97,9 @@ func TestRenderPromptDefaultStartsWithIssueContent(t *testing.T) {
 	wantPrefix := "修复 session 列表标题重复\n\n执行上下文："
 	if len(got) < len(wantPrefix) || got[:len(wantPrefix)] != wantPrefix {
 		t.Fatalf("default prompt should start with issue content:\n%s", got)
+	}
+	if !strings.Contains(got, "codex-issue-runner issue update --id 7 --status done --json") {
+		t.Fatalf("default prompt should tell Codex to mark the issue done:\n%s", got)
 	}
 }
 

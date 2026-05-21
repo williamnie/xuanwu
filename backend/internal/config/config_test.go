@@ -8,6 +8,7 @@ func TestParseUsesProvidedArgsWithoutGlobalFlagState(t *testing.T) {
 		"--db", "/tmp/runner.db",
 		"--codex-cmd", "/usr/local/bin/codex",
 		"--codex-args", "app-server --listen stdio://",
+		"--web-dir", "/tmp/web",
 	})
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -17,6 +18,9 @@ func TestParseUsesProvidedArgsWithoutGlobalFlagState(t *testing.T) {
 	}
 	if cfg.CodexCmd != "/usr/local/bin/codex" {
 		t.Fatalf("codex cmd mismatch: %+v", cfg)
+	}
+	if cfg.WebDir != "/tmp/web" {
+		t.Fatalf("web dir mismatch: %+v", cfg)
 	}
 	if got := cfg.CodexArgs; len(got) != 3 || got[0] != "app-server" || got[2] != "stdio://" {
 		t.Fatalf("codex args mismatch: %#v", got)

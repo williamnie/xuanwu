@@ -25,6 +25,10 @@ const DefaultIssuePromptTemplate = `{{issue.content}}
 4. 如果需要运行测试，请运行最小必要验证。
 5. 完成后总结修改内容、验证结果、未验证风险。
 6. 不要提交 git commit，除非用户明确要求。
+7. 只有在你确认修改完成且验证通过后，最后执行：
+   codex-issue-runner issue update --id {{issue.id}} --status done --json
+8. 如果验证失败、需求无法完成或存在阻塞，不要标记 done；请说明失败原因，并执行：
+   codex-issue-runner issue update --id {{issue.id}} --status failed --error "<失败原因>" --json
 `
 
 const legacyDefaultIssuePromptTemplate = `你正在处理一个项目 issue。

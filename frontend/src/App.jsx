@@ -23,7 +23,7 @@ export default function App() {
     currentPage: 'issues', // 默认进入 Issues 看板以响应用户偏好
     selectedIssueId: null,
     filterProject: '', // '' 表示 Any project
-    focusFilter: 'all', // 'all' | 'triage' | 'active' | 'archive'
+    focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
 
     // 新增 Issue 弹窗的全局状态（可以从侧边栏 + 看板列头触发）
     isNewIssueOpen: false,
@@ -121,7 +121,9 @@ export default function App() {
           event.type === 'issue.status_changed' ||
           event.type === 'issue.error' ||
           event.type === 'runner.started' ||
-          event.type === 'runner.stopped'
+          event.type === 'runner.stopped' ||
+          event.type === 'cron_task.ran' ||
+          event.type === 'cron_task.error'
         ) {
           refreshAllData();
         }

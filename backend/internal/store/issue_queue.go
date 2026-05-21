@@ -1,0 +1,68 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"strings"
+)
+
+func (s *Store) PromoteTriageToTodo(ctx context.Context, projectID string) ([]Issue, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	issues, err := selectTriageIssues(ctx, tx, projectID)
+	if err != nil || len(issues) == 0 {
+		return issues, err
+	}
+	updatedAt := now()
+	for idx := range issues {
+		if err := setIssueTodo(ctx, tx, issues[idx].ID, updatedAt); err != nil {
+			return nil, err
+		}
+		issues[idx].Status = StatusTodo
+		issues[idx].Error = ""
+		issues[idx].UpdatedAt = updatedAt
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return issues, nil
+}
+
+func selectTriageIssues(ctx context.Context, tx *sql.Tx, projectID string) ([]Issue, error) {
+	query, args := triageIssueQuery(projectID)
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	issues := []Issue{}
+	for rows.Next() {
+		issue, err := scanIssue(rows)
+		if err != nil {
+			return nil, err
+		}
+		issues = append(issues, issue)
+	}
+	return issues, rows.Err()
+}
+
+func triageIssueQuery(projectID string) (string, []any) {
+	conds := []string{"status=?"}
+	args := []any{StatusTriage}
+	if projectID != "" {
+		conds = append(conds, "project_id=?")
+		args = append(args, projectID)
+	}
+	query := issueSelect + ` where ` + strings.Join(conds, " and ") +
+		` order by priority desc, created_at asc`
+	return query, args
+}
+
+func setIssueTodo(ctx context.Context, tx *sql.Tx, issueID int64, updatedAt string) error {
+	_, err := tx.ExecContext(ctx, `update issues set status=?, error='', updated_at=?
+		where id=? and status=?`, StatusTodo, updatedAt, issueID, StatusTriage)
+	return err
+}

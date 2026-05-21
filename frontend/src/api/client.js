@@ -131,6 +131,22 @@ export const api = {
     method: 'DELETE',
   }),
 
+  getCronTasks: () => request('/api/cron-tasks'),
+
+  createCronTask: (task) => request('/api/cron-tasks', {
+    method: 'POST',
+    body: JSON.stringify(task),
+  }),
+
+  updateCronTask: (id, updates) => request(`/api/cron-tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  deleteCronTask: (id) => request(`/api/cron-tasks/${id}`, {
+    method: 'DELETE',
+  }),
+
   getIssues: (projectId = '', status = '') => {
     const params = new URLSearchParams();
     if (projectId) params.append('projectId', projectId);

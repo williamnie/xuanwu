@@ -34,16 +34,6 @@ func (r *Runner) publishStatus(issueID int64, status string) {
 	r.bus.Publish(events.AppEvent{Type: "issue.status_changed", IssueID: issueID, Status: status})
 }
 
-func (r *Runner) completeIssue(ctx context.Context, issueID int64) {
-	if current, err := r.store.GetIssue(ctx, issueID); err == nil && current.Status == store.StatusCancelled {
-		return
-	}
-	_, err := r.store.SetIssueStatus(ctx, issueID, store.StatusDone, "")
-	if err == nil {
-		r.recordStatusEvent(ctx, issueID, store.StatusDone)
-	}
-}
-
 func (r *Runner) failIssue(ctx context.Context, issueID int64, message string) {
 	if current, err := r.store.GetIssue(ctx, issueID); err == nil && current.Status == store.StatusCancelled {
 		return

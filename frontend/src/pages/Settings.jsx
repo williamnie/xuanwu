@@ -1,3 +1,4 @@
+import CronTasksPanel from '../components/CronTasksPanel';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
 
 export default function Settings() {
@@ -9,6 +10,7 @@ export default function Settings() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
+        <CronTasksPanel />
         <IssueTemplatesPanel />
       </div>
     </div>

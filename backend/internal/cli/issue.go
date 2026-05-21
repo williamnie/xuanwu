@@ -66,6 +66,33 @@ func (e commandEnv) getIssue(ctx context.Context, args []string) int {
 	return 0
 }
 
+func (e commandEnv) updateIssue(ctx context.Context, args []string) int {
+	fs := newFlagSet("issue update")
+	addr, asJSON := e.addCommonFlags(fs)
+	idRaw := fs.String("id", "", "issue id")
+	status := fs.String("status", "", "issue status")
+	errText := fs.String("error", "", "issue error message")
+	if err := fs.Parse(args); err != nil {
+		return e.fail(err.Error())
+	}
+	id, err := parseID(*idRaw)
+	if err != nil {
+		return e.fail(err.Error())
+	}
+	payload := issueUpdatePayload(*status, *errText)
+	if len(payload) == 0 {
+		return e.fail("--status or --error is required")
+	}
+	var issue issueDTO
+	if err := patchJSON(ctx, e.client, *addr, fmt.Sprintf("/api/issues/%d", id), payload, &issue); err != nil {
+		return e.fail(err.Error())
+	}
+	if err := writeIssue(e.out, issue, *asJSON); err != nil {
+		return e.fail(err.Error())
+	}
+	return 0
+}
+
 func (e commandEnv) getIssueLogs(ctx context.Context, args []string) int {
 	fs := newFlagSet("issue logs")
 	addr, asJSON := e.addCommonFlags(fs)
@@ -134,4 +161,20 @@ func createPayload(projectID, title, body, status string, priority int, template
 		issue.Status = "triage"
 	}
 	return issue, nil
+}
+
+func issueUpdatePayload(status, errText string) map[string]string {
+	payload := map[string]string{}
+	status = strings.TrimSpace(status)
+	errText = strings.TrimSpace(errText)
+	if status != "" {
+		payload["status"] = status
+		if status != "failed" {
+			payload["error"] = ""
+		}
+	}
+	if errText != "" {
+		payload["error"] = errText
+	}
+	return payload
 }

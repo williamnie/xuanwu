@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
-import { sameIssueTemplates, sameIssues, sameProjects } from '../utils/stateGuards';
+import { sameCronTasks, sameIssueTemplates, sameIssues, sameProjects } from '../utils/stateGuards';
 
 export const useDataStore = create((set, get) => ({
   projects: [],
   issues: [],
   issueTemplates: [],
+  cronTasks: [],
   loading: true,
   backendOnline: false,
 
@@ -16,14 +17,16 @@ export const useDataStore = create((set, get) => ({
 
   refreshAllData: async () => {
     try {
-      const [projList, issueList, templateList] = await Promise.all([
+      const [projList, issueList, templateList, cronTaskList] = await Promise.all([
         api.getProjects(),
         api.getIssues(),
         api.getIssueTemplates(),
+        api.getCronTasks(),
       ]);
       const nextProjects = projList || [];
       const nextIssues = issueList || [];
       const nextTemplates = templateList || [];
+      const nextCronTasks = cronTaskList || [];
       const current = get();
       const patch = {};
 
@@ -35,6 +38,9 @@ export const useDataStore = create((set, get) => ({
       }
       if (!sameIssueTemplates(current.issueTemplates, nextTemplates)) {
         patch.issueTemplates = nextTemplates;
+      }
+      if (!sameCronTasks(current.cronTasks, nextCronTasks)) {
+        patch.cronTasks = nextCronTasks;
       }
       if (!current.backendOnline) {
         patch.backendOnline = true;
@@ -65,6 +71,7 @@ export const useDataStore = create((set, get) => ({
 export const selectProjects = (state) => state.projects;
 export const selectIssues = (state) => state.issues;
 export const selectIssueTemplates = (state) => state.issueTemplates;
+export const selectCronTasks = (state) => state.cronTasks;
 export const selectBackendOnline = (state) => state.backendOnline;
 export const selectLoading = (state) => state.loading;
 export const selectRefreshAllData = (state) => state.refreshAllData;

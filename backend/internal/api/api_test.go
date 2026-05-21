@@ -143,6 +143,32 @@ func TestImageUploadAPIStoresAndServesImage(t *testing.T) {
 	}
 }
 
+func TestWebDirServesSPAWithoutShadowingAPI(t *testing.T) {
+	webDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<main>runner ui</main>"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	assetsDir := filepath.Join(webDir, "assets")
+	if err := os.Mkdir(assetsDir, 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(assetsDir, "app.js"), []byte("console.log('ok')"), 0o644); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+
+	srv := newTestServerWithWeb(t, webDir)
+	assertBodyContains(t, srv, "/", "runner ui")
+	assertBodyContains(t, srv, "/assets/app.js", "console.log")
+	assertBodyContains(t, srv, "/issues/42", "runner ui")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/nope", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound || strings.Contains(rr.Body.String(), "runner ui") {
+		t.Fatalf("API should keep JSON 404, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 type projectSyncTestResponse struct {
 	Source  string `json:"source"`
 	Summary struct {
@@ -215,6 +241,10 @@ func writeCodexState(t *testing.T, path, existingPath, newPath, missingPath stri
 }
 
 func newTestServer(t *testing.T) *Server {
+	return newTestServerWithWeb(t, "")
+}
+
+func newTestServerWithWeb(t *testing.T, webDir string) *Server {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
 	if err != nil {
@@ -223,7 +253,17 @@ func newTestServer(t *testing.T) *Server {
 	t.Cleanup(func() { _ = st.Close() })
 	bus := events.NewBus()
 	r := runner.New(st, bus, noopCodex{ch: make(chan codex.Event)})
-	return NewServer(st, bus, r)
+	return NewServerWithWebDir(st, bus, r, webDir)
+}
+
+func assertBodyContains(t *testing.T, h http.Handler, path, want string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), want) {
+		t.Fatalf("GET %s status=%d body=%s want=%q", path, rr.Code, rr.Body.String(), want)
+	}
 }
 
 func postJSON[T any](t *testing.T, h http.Handler, path string, body any) T {

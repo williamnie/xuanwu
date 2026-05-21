@@ -11,6 +11,7 @@ type Config struct {
 	DBPath    string
 	CodexCmd  string
 	CodexArgs []string
+	WebDir    string
 }
 
 func Load() Config {
@@ -27,6 +28,7 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.Addr, "addr", cfg.Addr, "HTTP listen address")
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database path")
 	fs.StringVar(&cfg.CodexCmd, "codex-cmd", cfg.CodexCmd, "Codex command path")
+	fs.StringVar(&cfg.WebDir, "web-dir", cfg.WebDir, "static web UI directory")
 	codexArgs := fs.String("codex-args", strings.Join(cfg.CodexArgs, " "), "Codex app-server args")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -41,6 +43,7 @@ func defaultConfig() Config {
 		DBPath:    env("CODEX_RUNNER_DB", "data/app.db"),
 		CodexCmd:  env("CODEX_RUNNER_CODEX_CMD", "codex"),
 		CodexArgs: []string{"app-server", "--listen", "stdio://"},
+		WebDir:    env("CODEX_RUNNER_WEB_DIR", ""),
 	}
 }
 
