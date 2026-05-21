@@ -45,6 +45,8 @@ cat > "$PLIST" <<PLIST
 <dict>
   <key>Label</key>
   <string>$(xml_escape "$LABEL")</string>
+  <key>Program</key>
+  <string>$(xml_escape "$BINARY_PATH")</string>
   <key>WorkingDirectory</key>
   <string>$(xml_escape "$ROOT_DIR")</string>
   <key>ProgramArguments</key>
