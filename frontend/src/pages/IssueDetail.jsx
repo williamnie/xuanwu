@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
+import IssueEditModal from '../components/IssueEditModal';
+import {
+  selectRefreshAllData,
+  useDataStore,
+} from '../store/dataStore';
 import {
   hasIssueEvent,
   issueEventKey,
@@ -18,11 +23,15 @@ import {
   Terminal,
   AlertTriangle,
   Play,
-  UserCheck
+  UserCheck,
+  Pencil,
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
+import { canEditIssue } from '../utils/issueEdit';
 
 export default function IssueDetail({ issueId, navigateTo }) {
+  const refreshAllData = useDataStore(selectRefreshAllData);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [detailState, updateDetailState] = useImmer({
     issue: null,
     project: null,
@@ -187,6 +196,18 @@ export default function IssueDetail({ issueId, navigateTo }) {
     }
   };
 
+  const closeEditModal = useCallback(() => {
+    setIsEditModalOpen(false);
+  }, []);
+
+  const handleIssueSaved = useCallback((updatedIssue) => {
+    updateDetailState(draft => {
+      draft.issue = updatedIssue;
+    });
+    setIsEditModalOpen(false);
+    refreshAllData();
+  }, [refreshAllData, updateDetailState]);
+
   const parseEventPayload = (event) => {
     if (!event?.payload) return {};
     if (typeof event.payload !== 'string') return event.payload;
@@ -337,10 +358,15 @@ export default function IssueDetail({ issueId, navigateTo }) {
         </button>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          {issue.status === 'triage' && (
-            <button className="btn btn-success" onClick={handleEnqueue}>
-              <Play size={14} /> 启动运行
-            </button>
+          {canEditIssue(issue) && (
+            <>
+              <button className="btn btn-secondary" onClick={() => setIsEditModalOpen(true)}>
+                <Pencil size={14} /> 编辑内容
+              </button>
+              <button className="btn btn-success" onClick={handleEnqueue}>
+                <Play size={14} /> 启动运行
+              </button>
+            </>
           )}
 
           {(issue.status === 'todo' || issue.status === 'in_progress') && (
@@ -508,6 +534,14 @@ export default function IssueDetail({ issueId, navigateTo }) {
         </div>
 
       </div>
+
+      {isEditModalOpen && (
+        <IssueEditModal
+          issue={issue}
+          onClose={closeEditModal}
+          onSaved={handleIssueSaved}
+        />
+      )}
 
     </div>
   );
