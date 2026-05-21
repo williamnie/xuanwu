@@ -1,0 +1,24 @@
+# Runtime data
+/data/
+*.db
+*.db-*
+logs/
+
+# Build outputs
+/dist/
+/build/
+frontend/dist/
+backend/bin/
+
+# Dependencies
+node_modules/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
