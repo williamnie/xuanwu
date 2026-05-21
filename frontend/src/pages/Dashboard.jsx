@@ -1,0 +1,312 @@
+import { useState, useEffect } from 'react';
+import { api } from '../api/client';
+import { 
+  Folder, 
+  ListTodo, 
+  CheckCircle2, 
+  Terminal, 
+  Clock, 
+  AlertTriangle, 
+  ArrowRight,
+  Loader2
+} from 'lucide-react';
+
+export default function Dashboard({ navigateTo }) {
+  const [projects, setProjects] = useState([]);
+  const [issues, setIssues] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchData = async () => {
+    try {
+      const [projList, issueList] = await Promise.all([
+        api.getProjects(),
+        api.getIssues()
+      ]);
+      setProjects(projList || []);
+      setIssues(issueList || []);
+      setError(null);
+    } catch {
+      setError('无法连接到后端服务。请确保 Go 后端 API Server 已在端口 3008 启动。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // 订阅全局 SSE 事件流
+    const unsubscribe = api.subscribeToEvents(
+      (event) => {
+        // 当收到重要的状态变化事件时，重新拉取最新数据
+        if (
+          event.type === 'issue.status_changed' || 
+          event.type === 'issue.created' || 
+          event.type === 'runner.started' || 
+          event.type === 'runner.stopped' ||
+          event.type === 'issue.error'
+        ) {
+          fetchData();
+        }
+
+        // 将新事件加入实时活动流，限制最多保存 20 条
+        setEvents((prev) => {
+          const newEvent = {
+            id: Date.now() + Math.random(),
+            timestamp: new Date().toLocaleTimeString(),
+            ...event
+          };
+          return [newEvent, ...prev].slice(0, 20);
+        });
+      },
+      () => {
+        // SSE 错误处理
+      }
+    );
+
+    // 轮询备份 (每 5 秒)，防止 SSE 失败
+    const interval = setInterval(fetchData, 5000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
+        <Loader2 className="animate-spin" size={40} color="var(--primary)" />
+        <p style={{ color: 'var(--text-secondary)' }}>加载系统看板中...</p>
+      </div>
+    );
+  }
+
+  // 统计计算
+  const activeLoopsCount = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length; // 简化展示
+  const inProgressIssues = issues.filter(i => i.status === 'in_progress');
+  const todoIssues = issues.filter(i => i.status === 'todo');
+  const doneIssues = issues.filter(i => i.status === 'done');
+
+  return (
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      
+      {/* 头部标题区域 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>系统总览</h1>
+          <p style={{ color: 'var(--text-muted)' }}>实时监控项目 Loop 运行状态与待处理 Issue 队列</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span className={`status-dot ${activeLoopsCount > 0 ? 'active' : 'idle'}`}></span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {activeLoopsCount > 0 ? `${activeLoopsCount} 个项目 Loop 运行中` : 'Loop 空闲中'}
+          </span>
+        </div>
+      </div>
+
+      {/* 错误警报 */}
+      {error && (
+        <div className="glass-card" style={{ borderLeft: '4px solid var(--error)', display: 'flex', gap: '16px', alignItems: 'center', padding: '16px 24px', background: 'var(--error-bg)' }}>
+          <AlertTriangle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
+          <div>
+            <h4 style={{ color: 'var(--error)', fontWeight: 600, marginBottom: '2px' }}>连接后端 API 失败</h4>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{error}</p>
+          </div>
+          <button className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={fetchData}>
+            重试连接
+          </button>
+        </div>
+      )}
+
+      {/* 统计指标网格 */}
+      <div className="grid-cols-3">
+        <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--primary-glow)', color: 'var(--primary)' }}>
+            <Folder size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: '2.2rem', fontWeight: 700, lineHeight: 1 }}>{projects.length}</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>总监控项目</div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--warning-glow)', color: 'var(--warning)' }}>
+            <ListTodo size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: '2.2rem', fontWeight: 700, lineHeight: 1 }}>{todoIssues.length + inProgressIssues.length}</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>队列中 (待处理/运行中)</div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--success-glow)', color: 'var(--success)' }}>
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <div style={{ fontSize: '2.2rem', fontWeight: 700, lineHeight: 1 }}>{doneIssues.length}</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>已自动修复 Issue</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 双栏布局 */}
+      <div className="grid-cols-2">
+        {/* 左栏：活跃任务与快捷队列 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={18} color="var(--primary)" /> 运行中任务 ({inProgressIssues.length})
+          </h3>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {inProgressIssues.length === 0 ? (
+              <div className="glass-card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                当前没有正在运行的 Issue 任务。
+              </div>
+            ) : (
+              inProgressIssues.map(issue => {
+                const proj = projects.find(p => p.id === issue.project_id);
+                return (
+                  <div key={issue.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                          {proj ? proj.name : issue.project_id}
+                        </span>
+                        <h4 style={{ fontSize: '1rem', fontWeight: 600, marginTop: '4px' }}>{issue.title}</h4>
+                      </div>
+                      <span className="status-badge in_progress">
+                        <span className="status-dot running"></span>
+                        运行中
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                      <span>重试次数: {issue.attempt_count} 次</span>
+                      <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => navigateTo('issues', issue.id)}>
+                        查看流式日志 <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 600 }}>队列等待中 ({todoIssues.length})</h3>
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => navigateTo('issues')}>
+              管理队列
+            </button>
+          </div>
+
+          <div className="glass-card" style={{ padding: '0px', overflow: 'hidden' }}>
+            {todoIssues.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                待办队列为空
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {todoIssues.slice(0, 5).map((issue, index) => {
+                  const proj = projects.find(p => p.id === issue.project_id);
+                  return (
+                    <div key={issue.id} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '16px 20px', 
+                      borderBottom: index === todoIssues.slice(0, 5).length - 1 ? 'none' : '1px solid var(--border-color)',
+                      background: 'rgba(255, 255, 255, 0.01)'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{issue.title}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          项目: {proj ? proj.name : issue.project_id} | 优先级: {issue.priority}
+                        </div>
+                      </div>
+                      <span className="status-badge todo">Todo</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 右栏：系统实时通知 / 活动流 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Terminal size={18} color="var(--primary)" /> 全局活动事件流
+          </h3>
+
+          <div className="glass-card" style={{ flex: 1, maxHeight: '500px', display: 'flex', flexDirection: 'column', padding: '16px 20px', background: 'var(--bg-terminal)', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>事件</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>时间</span>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
+              {events.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  [等待事件接收...]
+                </div>
+              ) : (
+                events.map(event => {
+                  let badgeColor = '#7aa2f7'; // default blue
+                  let text;
+
+                  switch (event.type) {
+                    case 'issue.created':
+                      badgeColor = '#bb9af7';
+                      text = `新建任务 Issue #${event.issueId}`;
+                      break;
+                    case 'issue.status_changed':
+                      badgeColor = event.status === 'done' ? 'var(--success)' : event.status === 'failed' ? 'var(--error)' : 'var(--warning)';
+                      text = `Issue #${event.issueId} 状态变更 -> ${event.status}`;
+                      break;
+                    case 'issue.log':
+                      badgeColor = '#cfc9c2';
+                      text = `Issue #${event.issueId} 日志输出: ${event.text ? event.text.slice(0, 40) + '...' : ''}`;
+                      break;
+                    case 'issue.error':
+                      badgeColor = 'var(--error)';
+                      text = `Issue #${event.issueId} 执行失败: ${event.error}`;
+                      break;
+                    case 'runner.started':
+                      badgeColor = 'var(--success)';
+                      text = `项目 Loop [${event.projectId}] 已启动`;
+                      break;
+                    case 'runner.stopped':
+                      badgeColor = 'var(--triage)';
+                      text = `项目 Loop [${event.projectId}] 已停止`;
+                      break;
+                    case 'approval.required':
+                      badgeColor = 'var(--warning)';
+                      text = `Issue #${event.issueId} 触发人工审批请求 [ID: ${event.approvalId}]`;
+                      break;
+                    default:
+                      text = JSON.stringify(event);
+                  }
+
+                  return (
+                    <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
+                      <span style={{ color: '#a9b1d6', display: 'flex', gap: '8px' }}>
+                        <span style={{ color: badgeColor }}>•</span>
+                        <span>{text}</span>
+                      </span>
+                      <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', flexShrink: 0, marginLeft: '8px' }}>{event.timestamp}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
