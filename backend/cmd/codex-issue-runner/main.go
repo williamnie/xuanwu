@@ -4,8 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/api"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/cli"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/config"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
@@ -14,7 +17,28 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	serve, args := commandMode(os.Args[1:])
+	if !serve {
+		os.Exit(cli.Run(context.Background(), args, os.Stdout, os.Stderr, cli.Options{}))
+	}
+	runServer(args)
+}
+
+func commandMode(args []string) (bool, []string) {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return true, args
+	}
+	if args[0] == "serve" {
+		return true, args[1:]
+	}
+	return false, args
+}
+
+func runServer(args []string) {
+	cfg, err := config.Parse(args)
+	if err != nil {
+		log.Fatal(err)
+	}
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		log.Fatal(err)

@@ -14,19 +14,34 @@ type Config struct {
 }
 
 func Load() Config {
-	cfg := Config{
+	cfg, err := Parse(os.Args[1:])
+	if err != nil {
+		panic(err)
+	}
+	return cfg
+}
+
+func Parse(args []string) (Config, error) {
+	cfg := defaultConfig()
+	fs := flag.NewFlagSet("codex-issue-runner serve", flag.ExitOnError)
+	fs.StringVar(&cfg.Addr, "addr", cfg.Addr, "HTTP listen address")
+	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database path")
+	fs.StringVar(&cfg.CodexCmd, "codex-cmd", cfg.CodexCmd, "Codex command path")
+	codexArgs := fs.String("codex-args", strings.Join(cfg.CodexArgs, " "), "Codex app-server args")
+	if err := fs.Parse(args); err != nil {
+		return Config{}, err
+	}
+	cfg.CodexArgs = strings.Fields(*codexArgs)
+	return cfg, nil
+}
+
+func defaultConfig() Config {
+	return Config{
 		Addr:      env("CODEX_RUNNER_ADDR", "127.0.0.1:3008"),
 		DBPath:    env("CODEX_RUNNER_DB", "data/app.db"),
 		CodexCmd:  env("CODEX_RUNNER_CODEX_CMD", "codex"),
 		CodexArgs: []string{"app-server", "--listen", "stdio://"},
 	}
-	flag.StringVar(&cfg.Addr, "addr", cfg.Addr, "HTTP listen address")
-	flag.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database path")
-	flag.StringVar(&cfg.CodexCmd, "codex-cmd", cfg.CodexCmd, "Codex command path")
-	args := flag.String("codex-args", strings.Join(cfg.CodexArgs, " "), "Codex app-server args")
-	flag.Parse()
-	cfg.CodexArgs = strings.Fields(*args)
-	return cfg
 }
 
 func env(key, fallback string) string {

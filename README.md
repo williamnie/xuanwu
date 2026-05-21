@@ -45,6 +45,38 @@ CODEX_RUNNER_CODEX_CMD=codex \
 go run ./backend/cmd/codex-issue-runner
 ```
 
+## CLI 调用
+
+同一个二进制同时支持后端服务和短命令 CLI：
+
+```bash
+# 后台服务；不写子命令时也保持兼容，默认等价于 serve
+go run ./backend/cmd/codex-issue-runner serve --addr 127.0.0.1:3008 --db data/app.db
+
+# 创建项目并开启 auto-run
+codex-issue-runner project create \
+  --id movo-web \
+  --cwd /Users/xiaobei/Documents/rcrai/movo-web \
+  --auto-run \
+  --json
+
+# 创建 issue，并立即 enqueue 进入自动化执行
+codex-issue-runner issue create \
+  --project movo-web \
+  --title "修复 ChatInput Stop 按钮" \
+  --body-file /tmp/issue.md \
+  --run \
+  --json
+
+# 查询状态 / 日志 / 重试 / 取消
+codex-issue-runner issue status --id 42
+codex-issue-runner issue logs --id 42
+codex-issue-runner issue retry --id 42 --json
+codex-issue-runner issue cancel --id 42 --json
+```
+
+CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
+
 ## 验证
 
 ```bash
