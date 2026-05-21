@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Loader2, Play, Plus, RefreshCw, Square, Terminal } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { api } from '../api/client';
+import MarkdownPreview from '../components/editor/MarkdownPreview';
+import PromptEditor from '../components/editor/PromptEditor';
+import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
+import { selectProjects, useDataStore } from '../store/dataStore';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import './sessions/Sessions.css';
 
 const PAGE_SIZE = 50;
-const markdownPlugins = [remarkGfm];
 
 function displayTitle(session) {
   return session?.name || session?.preview || 'Untitled Codex session';
@@ -20,7 +21,12 @@ function flattenItems(turns) {
 
 function textFromUserContent(content) {
   if (!Array.isArray(content)) return '';
-  return content.filter((item) => item.type === 'text').map((item) => item.text).join('\n');
+  return content.map((item) => {
+    if (item.type === 'text' || item.type === 'input_text') return item.text || '';
+    if (item.type === 'localImage') return localImagePathToAttachmentMarkdown(item.path);
+    if (item.type === 'image' || item.type === 'input_image') return `![image](${item.url || item.image_url || ''})`;
+    return '';
+  }).filter(Boolean).join('\n\n');
 }
 
 function renderItemText(item) {
@@ -37,7 +43,8 @@ function eventLine(event) {
   return event.method || 'codex.event';
 }
 
-export default function Sessions({ projects = [] }) {
+export default function Sessions() {
+  const projects = useDataStore(selectProjects);
   const [sessions, setSessions] = useState([]);
   const [cursor, setCursor] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -184,7 +191,12 @@ export default function Sessions({ projects = [] }) {
         <section className="session-detail glass-card">
           {selectedSession ? <SessionDetail session={selectedSession} items={selectedItems} liveEvents={liveEvents} /> : <EmptyDetail />}
           <form className="session-composer" onSubmit={sendMessage}>
-            <textarea className="form-control" rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="给当前 Codex session 发送消息..." />
+            <PromptEditor
+              value={message}
+              onChange={setMessage}
+              placeholder="给当前 Codex session 发送消息..."
+              minHeight={110}
+            />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button type="button" className="btn btn-secondary" onClick={interrupt}><Square size={15} /> Stop</button>
               <button className="btn btn-primary" disabled={sending || !selectedId}><Play size={15} /> 发送</button>
@@ -255,17 +267,13 @@ function LiveEvent({ event }) {
 }
 
 function MarkdownText({ text }) {
-  return (
-    <div className="session-markdown">
-      <ReactMarkdown remarkPlugins={markdownPlugins}>{text || ''}</ReactMarkdown>
-    </div>
-  );
+  return <MarkdownPreview text={text || ''} className="session-markdown" />;
 }
 
 function CreateSessionModal({ projects, projectId, cwd, prompt, sending, selectedProject, onProjectChange, onCwdChange, onPromptChange, onClose, onSubmit }) {
   return (
     <div className="modal-overlay">
-      <form className="modal-content" onSubmit={onSubmit}>
+      <form className="modal-content" style={{ maxWidth: 720 }} onSubmit={onSubmit}>
         <h3 style={{ marginBottom: 16 }}>创建 Codex Session</h3>
         <div className="form-group">
           <label>项目配置</label>
@@ -281,7 +289,12 @@ function CreateSessionModal({ projects, projectId, cwd, prompt, sending, selecte
         </div>
         <div className="form-group">
           <label>首条消息（可选）</label>
-          <textarea className="form-control" rows={5} value={prompt} onChange={(e) => onPromptChange(e.target.value)} placeholder="创建后立即发送给 Codex..." />
+          <PromptEditor
+            value={prompt}
+            onChange={onPromptChange}
+            placeholder="创建后立即发送给 Codex..."
+            minHeight={160}
+          />
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>

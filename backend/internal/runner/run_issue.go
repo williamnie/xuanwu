@@ -3,7 +3,7 @@ package runner
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
@@ -41,14 +41,25 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 		return err
 	}
 	r.updateRuntime(ctx, issue.ID, threadID, "")
+	r.setCodexThreadName(ctx, threadID, issue)
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
 	defer unsubscribe()
-	turnID, err := r.codex.TurnStart(ctx, threadID, renderPrompt(project, issue))
+	input, err := buildTurnInput(ctx, r.store, renderPrompt(project, issue))
+	if err != nil {
+		return err
+	}
+	turnID, err := r.codex.TurnStart(ctx, threadID, input)
 	if err != nil {
 		return err
 	}
 	r.updateRuntime(ctx, issue.ID, threadID, turnID)
 	return r.consumeEvents(ctx, issue.ID, threadID, turnID, eventsCh)
+}
+
+func (r *Runner) setCodexThreadName(ctx context.Context, threadID string, issue store.Issue) {
+	if name := strings.TrimSpace(issue.Title); name != "" {
+		_ = r.codex.ThreadSetName(ctx, threadID, name)
+	}
 }
 
 func (r *Runner) consumeEvents(ctx context.Context, issueID int64, threadID, turnID string, eventsCh <-chan codex.Event) error {
@@ -109,23 +120,33 @@ func (r *Runner) publishLog(ctx context.Context, issueID int64, event codex.Even
 }
 
 func renderPrompt(project store.Project, issue store.Issue) string {
-	return fmt.Sprintf(`你正在处理一个项目 issue。
+	template := issue.PromptTemplate
+	if strings.TrimSpace(template) == "" {
+		template = store.DefaultIssuePromptTemplate
+	}
+	prompt := renderIssuePromptTemplate(template, project, issue)
+	if strings.HasSuffix(prompt, "\n") {
+		return prompt
+	}
+	return prompt + "\n"
+}
 
-项目路径：
-%s
+func renderIssuePromptTemplate(template string, project store.Project, issue store.Issue) string {
+	return strings.NewReplacer(
+		"{{project.id}}", project.ID,
+		"{{project.name}}", project.Name,
+		"{{project.cwd}}", project.CWD,
+		"{{issue.id}}", strconv.FormatInt(issue.ID, 10),
+		"{{issue.title}}", issue.Title,
+		"{{issue.content}}", issueContent(issue),
+		"{{issue.description}}", strings.TrimSpace(issue.Description),
+		"{{issue.priority}}", strconv.Itoa(issue.Priority),
+	).Replace(template)
+}
 
-Issue 标题：
-%s
-
-Issue 描述：
-%s
-
-要求：
-1. 先阅读相关代码确认根因。
-2. 只做和这个 issue 直接相关的最小修改。
-3. 不要扩大改动范围。
-4. 如果需要运行测试，请运行最小必要验证。
-5. 完成后总结修改内容、验证结果、未验证风险。
-6. 不要提交 git commit，除非用户明确要求。
-`, project.CWD, issue.Title, strings.TrimSpace(issue.Description))
+func issueContent(issue store.Issue) string {
+	if text := strings.TrimSpace(issue.Description); text != "" {
+		return text
+	}
+	return strings.TrimSpace(issue.Title)
 }

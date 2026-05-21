@@ -176,6 +176,8 @@ create table issues (
   description text,
   status text not null,
   priority integer not null default 0,
+  template_id text not null default '',
+  prompt_template text not null default '',
   codex_thread_id text,
   codex_turn_id text,
   attempt_count integer not null default 0,
@@ -184,6 +186,9 @@ create table issues (
   updated_at text not null
 );
 ```
+
+- `template_id`：创建 issue 时选择的模板 id
+- `prompt_template`：创建 issue 时的模板内容快照；后续模板修改不影响已创建 issue
 
 状态说明：
 
@@ -217,6 +222,32 @@ create table issue_events (
 - 错误
 - approval 请求
 - turn completed
+
+### issue_templates
+
+```sql
+create table issue_templates (
+  id text primary key,
+  name text not null,
+  content text not null,
+  is_default integer not null default 0,
+  created_at text not null,
+  updated_at text not null
+);
+```
+
+模板支持的占位符：
+
+```txt
+{{project.id}}
+{{project.name}}
+{{project.cwd}}
+{{issue.id}}
+{{issue.content}}
+{{issue.title}}
+{{issue.description}}
+{{issue.priority}}
+```
 
 ---
 
@@ -373,19 +404,15 @@ thread/status/changed idle          -> runner.idle
 
 ## Prompt 模板
 
-每个 issue 转成固定 prompt：
+每个 issue 通过可配置模板转成 prompt。系统会内置一个默认模板，创建 issue 时可选择模板，并把模板内容快照到 issue 上：
 
 ```md
-你正在处理一个项目 issue。
+{{issue.content}}
 
-项目路径：
-{{project.cwd}}
-
-Issue 标题：
-{{issue.title}}
-
-Issue 描述：
-{{issue.description}}
+执行上下文：
+- 项目路径：{{project.cwd}}
+- Issue ID：{{issue.id}}
+- Issue 标题：{{issue.title}}
 
 要求：
 1. 先阅读相关代码确认根因。
@@ -396,13 +423,9 @@ Issue 描述：
 6. 不要提交 git commit，除非用户明确要求。
 ```
 
-后续可以支持项目级附加说明：
+`title` 是面板展示和 Codex session name，可选；为空时从 `description` 第一条有效内容自动派生。Codex 执行以 `{{issue.content}}` 为核心内容，避免 session preview 被固定模板前缀污染。
 
-```txt
-project.issue_prompt_template
-project.pre_script
-project.post_script
-```
+新增模板或设置默认模板后，只影响后续创建的 issue。
 
 ---
 
@@ -489,6 +512,16 @@ POST   /api/issues/:id/enqueue
 POST   /api/issues/:id/retry
 POST   /api/issues/:id/cancel
 GET    /api/issues/:id/events
+```
+
+### Issue Template API
+
+```http
+GET    /api/issue-templates
+POST   /api/issue-templates
+GET    /api/issue-templates/:id
+PATCH  /api/issue-templates/:id
+DELETE /api/issue-templates/:id
 ```
 
 ### SSE API

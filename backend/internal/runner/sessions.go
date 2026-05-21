@@ -146,7 +146,12 @@ func (r *Runner) startInitialTurn(ctx context.Context, threadID, prompt string) 
 
 func (r *Runner) startSessionTurn(ctx context.Context, threadID, prompt string) (string, error) {
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
-	turnID, err := r.codex.TurnStart(ctx, threadID, strings.TrimSpace(prompt))
+	input, err := buildTurnInput(ctx, r.store, prompt)
+	if err != nil {
+		unsubscribe()
+		return "", err
+	}
+	turnID, err := r.codex.TurnStart(ctx, threadID, input)
 	if err != nil {
 		unsubscribe()
 		return "", err

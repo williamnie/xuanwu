@@ -33,6 +33,11 @@ func (a *Adapter) ThreadResume(ctx context.Context, threadID string) (Session, e
 	return decodeThreadResult(result)
 }
 
+func (a *Adapter) ThreadSetName(ctx context.Context, threadID, name string) error {
+	_, err := a.request(ctx, "thread/setName", map[string]any{"threadId": threadID, "name": name})
+	return err
+}
+
 func threadListParams(input SessionListInput) map[string]any {
 	params := map[string]any{}
 	if input.Limit > 0 {

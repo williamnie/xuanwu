@@ -1,5 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useImmer } from 'use-immer';
 import { api } from '../api/client';
+import {
+  selectBackendOnline,
+  selectIssues,
+  selectProjects,
+  selectRefreshAllData,
+  useDataStore,
+} from '../store/dataStore';
 import { 
   FolderPlus, 
   Folder, 
@@ -9,8 +16,7 @@ import {
   Trash2, 
   Play, 
   Square, 
-  X, 
-  Loader2,
+  X,
   AlertCircle
 } from 'lucide-react';
 
@@ -45,90 +51,106 @@ function normalizeCodexModel(model) {
 }
 
 export default function Projects() {
-  const [projects, setProjects] = useState([]);
-  const [issues, setIssues] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
-  
-  // Modal 状态
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
-  const [selectedProjectId, setSelectedProjectId] = useState(null);
-  
-  // 表单状态
-  const [formCwd, setFormCwd] = useState('');
-  const [formAutoRun, setFormAutoRun] = useState(false);
-  const [formModel, setFormModel] = useState(DEFAULT_CODEX_MODEL);
-  const [formApproval, setFormApproval] = useState('never');
-  const [formSandbox, setFormSandbox] = useState('workspace-write');
-  
-  const [formError, setFormError] = useState('');
+  const projects = useDataStore(selectProjects);
+  const issues = useDataStore(selectIssues);
+  const backendOnline = useDataStore(selectBackendOnline);
+  const refreshAllData = useDataStore(selectRefreshAllData);
+  const [ui, updateUi] = useImmer({
+    syncing: false,
+    syncResult: null,
+    isModalOpen: false,
+    modalMode: 'create', // 'create' | 'edit'
+    selectedProjectId: null,
+    formCwd: '',
+    formAutoRun: false,
+    formModel: DEFAULT_CODEX_MODEL,
+    formApproval: 'never',
+    formSandbox: 'workspace-write',
+    formError: '',
+  });
 
-  const loadData = async () => {
-    try {
-      const [projList, issueList] = await Promise.all([
-        api.getProjects(),
-        api.getIssues()
-      ]);
-      setProjects(projList || []);
-      setIssues(issueList || []);
-      setError(null);
-    } catch {
-      setError('加载数据失败，请检查 Go 后端服务连接。');
-    } finally {
-      setLoading(false);
-    }
+  const {
+    syncing,
+    syncResult,
+    isModalOpen,
+    modalMode,
+    selectedProjectId,
+    formCwd,
+    formAutoRun,
+    formModel,
+    formApproval,
+    formSandbox,
+    formError,
+  } = ui;
+
+  const closeModal = () => {
+    updateUi(draft => {
+      draft.isModalOpen = false;
+    });
   };
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000); // 5秒轮询
-    return () => clearInterval(interval);
-  }, []);
+  const setFormField = (field, value) => {
+    updateUi(draft => {
+      draft[field] = value;
+    });
+  };
 
   const handleSyncCodexProjects = async () => {
-    setSyncing(true);
-    setSyncResult(null);
+    updateUi(draft => {
+      draft.syncing = true;
+      draft.syncResult = null;
+    });
     try {
       const result = await api.syncCodexProjects();
-      setSyncResult(result);
-      await loadData();
+      updateUi(draft => {
+        draft.syncResult = result;
+      });
+      await refreshAllData();
     } catch (err) {
-      setSyncResult({ error: err.message || '同步 Codex 项目失败' });
+      updateUi(draft => {
+        draft.syncResult = { error: err.message || '同步 Codex 项目失败' };
+      });
     } finally {
-      setSyncing(false);
+      updateUi(draft => {
+        draft.syncing = false;
+      });
     }
   };
 
   const handleOpenCreateModal = () => {
-    setModalMode('create');
-    setFormCwd('');
-    setFormAutoRun(false);
-    setFormModel(DEFAULT_CODEX_MODEL);
-    setFormApproval('never');
-    setFormSandbox('workspace-write');
-    setFormError('');
-    setIsModalOpen(true);
+    updateUi(draft => {
+      draft.modalMode = 'create';
+      draft.selectedProjectId = null;
+      draft.formCwd = '';
+      draft.formAutoRun = false;
+      draft.formModel = DEFAULT_CODEX_MODEL;
+      draft.formApproval = 'never';
+      draft.formSandbox = 'workspace-write';
+      draft.formError = '';
+      draft.isModalOpen = true;
+    });
   };
 
   const handleOpenEditModal = (proj) => {
-    setModalMode('edit');
-    setSelectedProjectId(proj.id);
-    setFormCwd(proj.cwd);
-    setFormAutoRun(proj.auto_run === 1);
-    setFormModel(normalizeCodexModel(proj.model || DEFAULT_CODEX_MODEL));
-    setFormApproval(proj.approval_policy || 'never');
-    setFormSandbox(proj.sandbox || 'workspace-write');
-    setFormError('');
-    setIsModalOpen(true);
+    updateUi(draft => {
+      draft.modalMode = 'edit';
+      draft.selectedProjectId = proj.id;
+      draft.formCwd = proj.cwd;
+      draft.formAutoRun = proj.auto_run === 1;
+      draft.formModel = normalizeCodexModel(proj.model || DEFAULT_CODEX_MODEL);
+      draft.formApproval = proj.approval_policy || 'never';
+      draft.formSandbox = proj.sandbox || 'workspace-write';
+      draft.formError = '';
+      draft.isModalOpen = true;
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formCwd.trim()) {
-      setFormError('工作路径(CWD)不能为空');
+      updateUi(draft => {
+        draft.formError = '工作路径(CWD)不能为空';
+      });
       return;
     }
 
@@ -149,10 +171,14 @@ export default function Projects() {
       } else {
         await api.updateProject(selectedProjectId, payload);
       }
-      setIsModalOpen(false);
-      loadData();
+      updateUi(draft => {
+        draft.isModalOpen = false;
+      });
+      refreshAllData();
     } catch (err) {
-      setFormError(err.message || '操作失败');
+      updateUi(draft => {
+        draft.formError = err.message || '操作失败';
+      });
     }
   };
 
@@ -160,7 +186,7 @@ export default function Projects() {
     if (window.confirm('确定要删除该项目吗？关联的 Issue 也会被删除！')) {
       try {
         await api.deleteProject(id);
-        loadData();
+        refreshAllData();
       } catch (err) {
         alert(err.message || '删除失败');
       }
@@ -171,7 +197,7 @@ export default function Projects() {
     const nextAutoRun = proj.auto_run === 1 ? 0 : 1;
     try {
       await api.updateProject(proj.id, { auto_run: nextAutoRun });
-      loadData();
+      refreshAllData();
     } catch {
       alert('更新自动执行配置失败');
     }
@@ -180,7 +206,7 @@ export default function Projects() {
   const handleStartLoop = async (id) => {
     try {
       await api.startProjectLoop(id);
-      loadData();
+      refreshAllData();
     } catch (err) {
       alert('启动 Loop 失败: ' + err.message);
     }
@@ -189,20 +215,11 @@ export default function Projects() {
   const handleStopLoop = async (id) => {
     try {
       await api.stopProjectLoop(id);
-      loadData();
+      refreshAllData();
     } catch (err) {
       alert('停止 Loop 失败: ' + err.message);
     }
   };
-
-  if (loading && projects.length === 0) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
-        <Loader2 className="animate-spin" size={40} color="var(--primary)" />
-        <p style={{ color: 'var(--text-secondary)' }}>正在拉取项目数据...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, flex: 1 }}>
@@ -226,12 +243,12 @@ export default function Projects() {
 
       {/* 滚动内容区 */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
-        {error && (
+        {!backendOnline && (
           <div className="glass-card" style={{ borderLeft: '4px solid var(--error)', display: 'flex', gap: '16px', alignItems: 'center', padding: '16px 24px', background: 'var(--error-bg)' }}>
             <AlertCircle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
             <div>
               <h4 style={{ color: 'var(--error)', fontWeight: 600 }}>API 连接错误</h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{error}</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>加载数据失败，请检查 Go 后端服务连接。</p>
             </div>
           </div>
         )}
@@ -396,6 +413,7 @@ export default function Projects() {
             })}
           </div>
         )}
+
       </div>
 
 
@@ -407,7 +425,11 @@ export default function Projects() {
               <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>
                 {modalMode === 'create' ? '新增监控项目' : '编辑项目配置'}
               </h2>
-              <button style={{ background: 'transparent', color: 'var(--text-muted)' }} onClick={() => setIsModalOpen(false)}>
+              <button
+                type="button"
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
+                onClick={closeModal}
+              >
                 <X size={20} />
               </button>
             </div>
@@ -427,7 +449,7 @@ export default function Projects() {
                   className="form-control" 
                   placeholder="/Users/username/projects/project-name"
                   value={formCwd}
-                  onChange={(e) => setFormCwd(e.target.value)}
+                  onChange={(e) => setFormField('formCwd', e.target.value)}
                   required 
                 />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -441,7 +463,7 @@ export default function Projects() {
                   <select 
                     className="form-control" 
                     value={formModel}
-                    onChange={(e) => setFormModel(e.target.value)}
+                    onChange={(e) => setFormField('formModel', e.target.value)}
                   >
                     {CODEX_MODEL_OPTIONS.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -454,7 +476,7 @@ export default function Projects() {
                   <select 
                     className="form-control" 
                     value={formApproval}
-                    onChange={(e) => setFormApproval(e.target.value)}
+                    onChange={(e) => setFormField('formApproval', e.target.value)}
                   >
                     <option value="never">从不审核 (自动运行)</option>
                     <option value="always">每次执行必审</option>
@@ -468,7 +490,7 @@ export default function Projects() {
                 <select 
                   className="form-control" 
                   value={formSandbox}
-                  onChange={(e) => setFormSandbox(e.target.value)}
+                  onChange={(e) => setFormField('formSandbox', e.target.value)}
                 >
                   <option value="workspace-write">仅允许修改当前项目目录 (推荐)</option>
                   <option value="danger-full-access">全系统读写访问 (危险)</option>
@@ -481,7 +503,7 @@ export default function Projects() {
                   <input 
                     type="checkbox" 
                     checked={formAutoRun}
-                    onChange={(e) => setFormAutoRun(e.target.checked)}
+                    onChange={(e) => setFormField('formAutoRun', e.target.checked)}
                   />
                   <span className="slider"></span>
                 </label>
@@ -492,7 +514,7 @@ export default function Projects() {
               </div>
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="btn btn-secondary" onClick={closeModal}>
                   取消
                 </button>
                 <button type="submit" className="btn btn-primary">

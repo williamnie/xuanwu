@@ -42,8 +42,27 @@ async function readErrorMessage(response) {
   }
 }
 
-function subscribeToEvents(onEvent, onError) {
+async function uploadImage(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch(`${API_BASE}/api/uploads/images`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+  return response.json();
+}
+
+function subscribeToEvents(onEvent, onError, onOpen) {
   const eventSource = new EventSource(`${API_BASE}/api/events`);
+
+  eventSource.onopen = () => {
+    if (onOpen) {
+      onOpen();
+    }
+  };
 
   eventSource.onmessage = (event) => {
     try {
@@ -95,6 +114,22 @@ export const api = {
   }),
 
   getProjectLoopStatus: (id) => request(`/api/projects/${id}/loop/status`),
+
+  getIssueTemplates: () => request('/api/issue-templates'),
+
+  createIssueTemplate: (template) => request('/api/issue-templates', {
+    method: 'POST',
+    body: JSON.stringify(template),
+  }),
+
+  updateIssueTemplate: (id, updates) => request(`/api/issue-templates/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  deleteIssueTemplate: (id) => request(`/api/issue-templates/${id}`, {
+    method: 'DELETE',
+  }),
 
   getIssues: (projectId = '', status = '') => {
     const params = new URLSearchParams();
@@ -153,6 +188,8 @@ export const api = {
   interruptSession: (id) => request(`/api/sessions/${id}/interrupt`, {
     method: 'POST',
   }),
+
+  uploadImage,
 
   subscribeToEvents,
 };

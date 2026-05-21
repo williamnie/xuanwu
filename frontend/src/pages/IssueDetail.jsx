@@ -1,56 +1,90 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { useImmer } from 'use-immer';
 import { api } from '../api/client';
-import { 
-  ArrowLeft, 
-  RotateCw, 
-  XOctagon, 
-  CheckCircle, 
-  XCircle, 
-  Terminal, 
+import {
+  hasIssueEvent,
+  issueEventKey,
+  RECONCILE_INTERVAL_MS,
+  sameIssue,
+  sameIssueEvents,
+  sameProject,
+} from '../utils/stateGuards';
+import {
+  ArrowLeft,
+  RotateCw,
+  XOctagon,
+  CheckCircle,
+  XCircle,
+  Terminal,
   AlertTriangle,
   Play,
   UserCheck
 } from 'lucide-react';
+import MarkdownPreview from '../components/editor/MarkdownPreview';
 
 export default function IssueDetail({ issueId, navigateTo }) {
-  const [issue, setIssue] = useState(null);
-  const [project, setProject] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // 用于自动滚动到终端底部
-  const terminalEndRef = useRef(null);
+  const [detailState, updateDetailState] = useImmer({
+    issue: null,
+    project: null,
+    events: [],
+    loading: true,
+    error: null,
+  });
+  const { issue, project, events, loading, error } = detailState;
+
+  // 只滚动终端自己的滚动容器，避免把整个详情页抢到最底部。
+  const terminalRef = useRef(null);
+  const shouldFollowTerminalRef = useRef(true);
+  const lastScrolledEventKeyRef = useRef('');
 
   const loadIssueData = useCallback(async () => {
     try {
       const issueData = await api.getIssue(issueId);
-      setIssue(issueData);
+      let projData = null;
+      let eventList = [];
 
       if (issueData) {
         // 加载关联项目
         try {
-          const projData = await api.getProject(issueData.project_id);
-          setProject(projData);
+          projData = await api.getProject(issueData.project_id);
         } catch (e) {
           console.error('获取关联项目失败:', e);
         }
 
         // 加载现有事件日志
         try {
-          const eventList = await api.getIssueEvents(issueId);
-          setEvents(eventList || []);
+          eventList = await api.getIssueEvents(issueId);
         } catch (e) {
           console.error('获取日志事件失败:', e);
         }
       }
-      setError(null);
+
+      updateDetailState(draft => {
+        if (!sameIssue(draft.issue, issueData)) {
+          draft.issue = issueData;
+        }
+        if (projData && !sameProject(draft.project, projData)) {
+          draft.project = projData;
+        }
+        if (!sameIssueEvents(draft.events, eventList || [])) {
+          draft.events = eventList || [];
+        }
+        if (draft.error !== null) {
+          draft.error = null;
+        }
+        if (draft.loading) {
+          draft.loading = false;
+        }
+      });
     } catch {
-      setError('加载任务详情失败，请检查后端 API 服务。');
-    } finally {
-      setLoading(false);
+      updateDetailState(draft => {
+        draft.error = '加载任务详情失败，请检查后端 API 服务。';
+        if (draft.loading) {
+          draft.loading = false;
+        }
+      });
     }
-  }, [issueId]);
+  }, [issueId, updateDetailState]);
 
   useEffect(() => {
     loadIssueData();
@@ -59,37 +93,56 @@ export default function IssueDetail({ issueId, navigateTo }) {
     const unsubscribe = api.subscribeToEvents((data) => {
       // 如果收到的事件是关于当前这一条 issue 的，动态更新
       if (Number(data.issueId) === Number(issueId)) {
-        if (data.type === 'issue.status_changed') {
-          setIssue(prev => prev ? { ...prev, status: data.status } : null);
-        }
-        
-        if (data.type === 'issue.error') {
-          setIssue(prev => prev ? { ...prev, error: data.error, status: 'failed' } : null);
-        }
+        updateDetailState(draft => {
+          if (data.type === 'issue.status_changed' && draft.issue && draft.issue.status !== data.status) {
+            draft.issue.status = data.status;
+          }
 
-        // 追加事件到终端列表
-        setEvents((prev) => {
-          // 防止重复添加（主要是轮询和 SSE 产生的竞态条件）
-          const exists = prev.some(e => e.id === data.id);
-          if (exists) return prev;
-          return [...prev, data];
+          if (data.type === 'issue.error' && draft.issue) {
+            if (draft.issue.error !== data.error) {
+              draft.issue.error = data.error;
+            }
+            if (draft.issue.status !== 'failed') {
+              draft.issue.status = 'failed';
+            }
+          }
+
+          // 追加事件到终端列表；重复的轮询/SSE 结果不再制造新数组。
+          if (!hasIssueEvent(draft.events, data)) {
+            draft.events.push(data);
+          }
         });
       }
     });
 
-    // 5秒轮询备份，确保状态最终一致性
-    const interval = setInterval(loadIssueData, 5000);
+    // SSE 是实时主通道；低频 reconcile 只用于补偿断线期间错过的事件。
+    const interval = setInterval(loadIssueData, RECONCILE_INTERVAL_MS);
 
     return () => {
       unsubscribe();
       clearInterval(interval);
     };
-  }, [issueId, loadIssueData]);
+  }, [issueId, loadIssueData, updateDetailState]);
 
-  // 监听事件变化，滚动终端到底部
+  const updateTerminalFollowState = useCallback(() => {
+    const node = terminalRef.current;
+    if (!node) return;
+    const distanceToBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+    shouldFollowTerminalRef.current = distanceToBottom < 80;
+  }, []);
+
+  // 监听真正新增的事件，只在用户仍停留在终端底部附近时跟随滚动。
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    const lastEvent = events[events.length - 1];
+    const lastEventKey = issueEventKey(lastEvent, events.length - 1);
+    if (!lastEventKey || lastEventKey === lastScrolledEventKeyRef.current) {
+      return;
+    }
+
+    lastScrolledEventKeyRef.current = lastEventKey;
+    const node = terminalRef.current;
+    if (node && shouldFollowTerminalRef.current) {
+      node.scrollTop = node.scrollHeight;
     }
   }, [events]);
 
@@ -105,7 +158,9 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const handleRetry = async () => {
     try {
       await api.retryIssue(issueId);
-      setEvents([]); // 重置本地日志，等待新线程输出
+      updateDetailState(draft => {
+        draft.events = [];
+      }); // 重置本地日志，等待新线程输出
       loadIssueData();
     } catch (err) {
       alert('重新运行失败: ' + err.message);
@@ -180,7 +235,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
     return events.map((event, idx) => {
       const timestamp = new Date(event.created_at || Date.now()).toLocaleTimeString();
       const payload = parseEventPayload(event);
-      
+
       // 1. 系统状态变更
       if (event.type === 'issue.status_changed') {
         const status = event.status || payload.status || 'unknown';
@@ -274,7 +329,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
+
       {/* 头部返回与快速操作 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button className="btn btn-secondary" style={{ padding: '8px 14px' }} onClick={() => navigateTo('issues')}>
@@ -304,10 +359,10 @@ export default function IssueDetail({ issueId, navigateTo }) {
 
       {/* 主面板内容 */}
       <div className="grid-cols-3" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'start' }}>
-        
+
         {/* 左侧：任务细节与极客终端 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
+
           <div className="glass-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
               <div>
@@ -330,7 +385,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
             {issue.description && (
               <div style={{ marginTop: '20px', background: 'rgba(0,0,0,0.03)', padding: '16px', borderRadius: '10px', fontSize: '0.9rem', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>任务描述</div>
-                <div style={{ whiteSpace: 'pre-wrap' }}>{issue.description}</div>
+                <MarkdownPreview text={issue.description} />
               </div>
             )}
           </div>
@@ -340,7 +395,12 @@ export default function IssueDetail({ issueId, navigateTo }) {
             <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Terminal size={18} color="var(--primary)" /> Codex 智能代理工作终端 (实时)
             </h3>
-            <div className="terminal-view" style={{ minHeight: '400px' }}>
+            <div
+              ref={terminalRef}
+              className="terminal-view"
+              style={{ minHeight: '400px' }}
+              onScroll={updateTerminalFollowState}
+            >
               <div className="terminal-line info" style={{ borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '12px' }}>
                 🚀 CODEX ISSUE LOOP RUNNER DAEMON [ONLINE]
                 <br />
@@ -352,10 +412,8 @@ export default function IssueDetail({ issueId, navigateTo }) {
                 <br />
                 回合 ID: {issue.codex_turn_id || '暂无'}
               </div>
-              
+
               {renderTerminalLines()}
-              
-              <div ref={terminalEndRef} />
             </div>
           </div>
 
@@ -363,7 +421,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
 
         {/* 右侧：元数据信息与运行设置 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
+
           {/* 故障错误警报栏 */}
           {issue.error && (
             <div className="glass-card" style={{ background: 'var(--error-bg)', borderColor: 'rgba(244,63,94,0.3)', borderLeft: '4px solid var(--error)' }}>
@@ -383,7 +441,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
-              
+
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>当前状态:</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{issue.status.toUpperCase()}</span>
@@ -427,18 +485,18 @@ export default function IssueDetail({ issueId, navigateTo }) {
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               若 Codex 已经完成修改但由于一些脚本检测导致状态未能流转，或者您需要直接标记其状态，可在此手动强制修改：
             </p>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button 
-                className="btn btn-secondary btn-success" 
+              <button
+                className="btn btn-secondary btn-success"
                 style={{ padding: '8px 12px', fontSize: '0.8rem', width: '100%', justifyContent: 'flex-start' }}
                 onClick={() => handleMarkStatus('done')}
               >
                 <CheckCircle size={14} /> 强制标记为：完成 (Done)
               </button>
-              
-              <button 
-                className="btn btn-secondary btn-danger" 
+
+              <button
+                className="btn btn-secondary btn-danger"
                 style={{ padding: '8px 12px', fontSize: '0.8rem', width: '100%', justifyContent: 'flex-start' }}
                 onClick={() => handleMarkStatus('failed')}
               >

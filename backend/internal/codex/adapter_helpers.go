@@ -50,8 +50,12 @@ func threadStartParams(input ThreadInput) map[string]any {
 	}
 }
 
-func textInput(prompt string) map[string]any {
-	return map[string]any{"type": "text", "text": prompt, "text_elements": []any{}}
+func TextInput(text string) UserInput {
+	return UserInput{Type: "text", Text: text, TextElements: []any{}}
+}
+
+func LocalImageInput(path string) UserInput {
+	return UserInput{Type: "localImage", Path: path}
 }
 
 func approvalPolicy(value string) string {

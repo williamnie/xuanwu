@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 )
@@ -69,6 +70,179 @@ func TestIssueEventsRoundTrip(t *testing.T) {
 	}
 	if events[0].ID != event.ID || events[0].Payload != `{"text":"hello"}` {
 		t.Fatalf("unexpected event: %+v", events[0])
+	}
+}
+
+func TestCreateIssueDerivesTitleFromDescription(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, err := st.CreateIssue(ctx, Issue{
+		ProjectID:   "demo",
+		Description: "  修复 Codex session 标题固定前缀\n\n补充上下文  ",
+		Status:      StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	if issue.Title != "修复 Codex session 标题固定前缀" {
+		t.Fatalf("derived title = %q", issue.Title)
+	}
+	if issue.Description != "修复 Codex session 标题固定前缀\n\n补充上下文" {
+		t.Fatalf("description not trimmed: %q", issue.Description)
+	}
+}
+
+func TestIssueTemplateSelectionSnapshotsPromptTemplate(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	templates, err := st.ListIssueTemplates(ctx)
+	if err != nil {
+		t.Fatalf("list default templates: %v", err)
+	}
+	if len(templates) != 1 || templates[0].ID != DefaultIssueTemplateID || templates[0].IsDefault != 1 {
+		t.Fatalf("default template not seeded: %+v", templates)
+	}
+	custom, err := st.CreateIssueTemplate(ctx, IssueTemplate{
+		Name:    "Markdown 修复",
+		Content: "项目={{project.cwd}}\n标题={{issue.title}}\n描述={{issue.description}}\n",
+	})
+	if err != nil {
+		t.Fatalf("create template: %v", err)
+	}
+	issue, err := st.CreateIssue(ctx, Issue{
+		ProjectID:   "demo",
+		Title:       "渲染 markdown",
+		Description: "支持 **粗体**",
+		Status:      StatusTodo,
+		TemplateID:  custom.ID,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	if issue.TemplateID != custom.ID || issue.PromptTemplate != custom.Content {
+		t.Fatalf("issue did not snapshot selected template: %+v template=%+v", issue, custom)
+	}
+	one := 1
+	updated, err := st.UpdateIssueTemplate(ctx, custom.ID, IssueTemplatePatch{IsDefault: &one})
+	if err != nil {
+		t.Fatalf("set default template: %v", err)
+	}
+	if updated.IsDefault != 1 {
+		t.Fatalf("template not default: %+v", updated)
+	}
+	zero := 0
+	if _, err = st.UpdateIssueTemplate(ctx, custom.ID, IssueTemplatePatch{IsDefault: &zero}); err != nil {
+		t.Fatalf("unset default template: %v", err)
+	}
+	templates, _ = st.ListIssueTemplates(ctx)
+	defaultCount := 0
+	for _, tmpl := range templates {
+		defaultCount += tmpl.IsDefault
+	}
+	if defaultCount != 1 {
+		t.Fatalf("expected exactly one default template: %+v", templates)
+	}
+}
+
+func TestCreateAndReadUpload(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	upload, err := st.CreateUpload(ctx, Upload{
+		ID:           "upload_test",
+		OriginalName: "screenshot.png",
+		MimeType:     "image/png",
+		SizeBytes:    24,
+		SHA256:       "abc123",
+		StoragePath:  filepath.Join(t.TempDir(), "screenshot.png"),
+	})
+	if err != nil {
+		t.Fatalf("create upload: %v", err)
+	}
+	if upload.URL != "/api/uploads/upload_test/content" {
+		t.Fatalf("unexpected upload URL: %+v", upload)
+	}
+	got, err := st.GetUpload(ctx, "upload_test")
+	if err != nil {
+		t.Fatalf("get upload: %v", err)
+	}
+	if got.OriginalName != "screenshot.png" || got.MimeType != "image/png" ||
+		got.StoragePath != upload.StoragePath {
+		t.Fatalf("unexpected upload: %+v", got)
+	}
+}
+
+func TestOpenMigratesExistingIssuesWithTemplates(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open old db: %v", err)
+	}
+	_, err = db.Exec(`create table projects (
+		id text primary key, name text not null, cwd text not null unique,
+		auto_run integer not null default 0, model text not null default '',
+		approval_policy text not null default 'never',
+		sandbox text not null default 'workspace-write',
+		created_at text not null, updated_at text not null
+	);
+	create table issues (
+		id integer primary key autoincrement, project_id text not null,
+		title text not null, description text not null default '',
+		status text not null, priority integer not null default 0,
+		codex_thread_id text not null default '', codex_turn_id text not null default '',
+		attempt_count integer not null default 0, error text not null default '',
+		created_at text not null, updated_at text not null
+	);
+	insert into projects (id, name, cwd, created_at, updated_at)
+		values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+	insert into issues (project_id, title, description, status, created_at, updated_at)
+		values ('demo', 'old issue', 'legacy', 'todo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');`)
+	if closeErr := db.Close(); err != nil || closeErr != nil {
+		t.Fatalf("seed old db: exec=%v close=%v", err, closeErr)
+	}
+
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open migrated store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	issue, err := st.GetIssue(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("get migrated issue: %v", err)
+	}
+	if issue.TemplateID != "" || issue.PromptTemplate != "" {
+		t.Fatalf("legacy issue should keep empty snapshot: %+v", issue)
+	}
+	templates, err := st.ListIssueTemplates(context.Background())
+	if err != nil || len(templates) != 1 || templates[0].IsDefault != 1 {
+		t.Fatalf("default template not seeded after migration: %+v err=%v", templates, err)
+	}
+}
+
+func TestOpenMigratesLegacyDefaultIssueTemplate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	_, err = st.db.Exec(`update issue_templates set content=? where id=?`,
+		legacyDefaultIssuePromptTemplate, DefaultIssueTemplateID)
+	if closeErr := st.Close(); err != nil || closeErr != nil {
+		t.Fatalf("seed legacy template: exec=%v close=%v", err, closeErr)
+	}
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	tmpl, err := st.GetIssueTemplate(context.Background(), DefaultIssueTemplateID)
+	if err != nil {
+		t.Fatalf("get template: %v", err)
+	}
+	if tmpl.Content != DefaultIssuePromptTemplate {
+		t.Fatalf("legacy default template was not migrated:\n%s", tmpl.Content)
 	}
 }
 

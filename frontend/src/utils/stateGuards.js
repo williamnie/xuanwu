@@ -18,10 +18,21 @@ const ISSUE_FIELDS = [
   'description',
   'status',
   'priority',
+  'template_id',
+  'prompt_template',
   'codex_thread_id',
   'codex_turn_id',
   'attempt_count',
   'error',
+  'created_at',
+  'updated_at',
+];
+
+const ISSUE_TEMPLATE_FIELDS = [
+  'id',
+  'name',
+  'content',
+  'is_default',
   'created_at',
   'updated_at',
 ];
@@ -62,10 +73,25 @@ export function sameIssues(current, next) {
   return sameListByFields(current, next, ISSUE_FIELDS);
 }
 
+export function sameIssueTemplates(current, next) {
+  return sameListByFields(current, next, ISSUE_TEMPLATE_FIELDS);
+}
+
 function eventIdentity(event, index) {
   if (!event) return '';
   const issueId = event.issue_id ?? event.issueId ?? '';
-  return [event.id ?? `pending-${index}`, issueId, event.type, event.created_at ?? ''].join('\u001f');
+  const pendingKey = [
+    'pending',
+    issueId,
+    event.type ?? '',
+    event.status ?? '',
+    event.error ?? '',
+    event.text ?? '',
+    event.payload ?? '',
+    event.created_at ?? '',
+    index,
+  ].join('\u001f');
+  return [event.id ?? pendingKey, issueId, event.type, event.created_at ?? ''].join('\u001f');
 }
 
 export function sameIssueEvents(current = [], next = []) {
@@ -81,8 +107,17 @@ export function hasIssueEvent(events, candidate) {
   if (candidate.id) {
     return events.some(event => event.id === candidate.id);
   }
-  const candidateKey = eventIdentity(candidate, events.length);
-  return events.some((event, index) => eventIdentity(event, index) === candidateKey);
+  const issueId = candidate.issue_id ?? candidate.issueId ?? '';
+  return events.some(event => {
+    const eventIssueId = event.issue_id ?? event.issueId ?? '';
+    return !event.id &&
+      eventIssueId === issueId &&
+      event.type === candidate.type &&
+      event.status === candidate.status &&
+      event.error === candidate.error &&
+      event.text === candidate.text &&
+      event.payload === candidate.payload;
+  });
 }
 
 export function issueEventKey(event, fallbackIndex = 0) {

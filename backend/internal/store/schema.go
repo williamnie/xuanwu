@@ -13,6 +13,16 @@ create table if not exists projects (
   updated_at text not null
 );`
 
+const issueTemplatesSchema = `
+create table if not exists issue_templates (
+  id text primary key,
+  name text not null,
+  content text not null,
+  is_default integer not null default 0,
+  created_at text not null,
+  updated_at text not null
+);`
+
 const issuesSchema = `
 create table if not exists issues (
   id integer primary key autoincrement,
@@ -21,6 +31,8 @@ create table if not exists issues (
   description text not null default '',
   status text not null,
   priority integer not null default 0,
+  template_id text not null default '',
+  prompt_template text not null default '',
   codex_thread_id text not null default '',
   codex_turn_id text not null default '',
   attempt_count integer not null default 0,
@@ -38,4 +50,15 @@ create table if not exists issue_events (
   payload text not null default '',
   created_at text not null,
   foreign key(issue_id) references issues(id) on delete cascade
+);`
+
+const uploadsSchema = `
+create table if not exists uploads (
+  id text primary key,
+  original_name text not null,
+  mime_type text not null,
+  size_bytes integer not null,
+  sha256 text not null,
+  storage_path text not null,
+  created_at text not null
 );`

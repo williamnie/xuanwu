@@ -20,6 +20,15 @@ type Event struct {
 	Payload  string
 }
 
+type UserInput struct {
+	Type         string `json:"type"`
+	Text         string `json:"text,omitempty"`
+	TextElements []any  `json:"text_elements,omitempty"`
+	URL          string `json:"url,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Name         string `json:"name,omitempty"`
+}
+
 type Client interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -27,7 +36,8 @@ type Client interface {
 	ThreadList(ctx context.Context, input SessionListInput) (SessionListResult, error)
 	ThreadRead(ctx context.Context, threadID string) (Session, error)
 	ThreadResume(ctx context.Context, threadID string) (Session, error)
-	TurnStart(ctx context.Context, threadID, prompt string) (string, error)
+	ThreadSetName(ctx context.Context, threadID, name string) error
+	TurnStart(ctx context.Context, threadID string, input []UserInput) (string, error)
 	InterruptTurn(ctx context.Context, threadID, turnID string) error
 	Events() <-chan Event
 }

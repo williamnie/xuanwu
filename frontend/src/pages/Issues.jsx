@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import { 
+import {
+  selectIssueTemplates,
+  selectIssues,
+  selectProjects,
+  selectRefreshAllData,
+  useDataStore,
+} from '../store/dataStore';
+import {
   Plus, 
   X, 
   Clock, 
   Sparkles,
   Link2
 } from 'lucide-react';
+import PromptEditor from '../components/editor/PromptEditor';
 
 export default function Issues({
-  projects,
-  issues,
   filterProject,
   focusFilter,
   isNewIssueOpen,
@@ -18,13 +24,18 @@ export default function Issues({
   prefilledStatus,
   handleOpenNewIssue,
   navigateTo,
-  loadAllData
 }) {
+  const projects = useDataStore(selectProjects);
+  const issues = useDataStore(selectIssues);
+  const issueTemplates = useDataStore(selectIssueTemplates);
+  const refreshAllData = useDataStore(selectRefreshAllData);
+
   // 新建 Issue 的局部表单状态
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formProjectId, setFormProjectId] = useState(projects[0]?.id || '');
   const [formPriority, setFormPriority] = useState(0);
+  const [formTemplateId, setFormTemplateId] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -87,14 +98,14 @@ export default function Issues({
       await api.updateIssue(issueId, { status: targetStatus });
       
       // 成功后重新加载数据，保证即时同步
-      loadAllData();
+      refreshAllData();
     } catch (err) {
       console.error('更新 Issue 状态失败:', err);
       alert(`更改状态失败: ${err.message || '网络异常'}`);
     }
   };
 
-  // 当模态框打开时重置表单输入内容，防止轮询更新项目列表时清空用户输入
+  // 当模态框打开时重置表单输入内容，防止共享项目列表更新时清空用户输入
   useEffect(() => {
     if (isNewIssueOpen) {
       setFormTitle('');
@@ -103,6 +114,16 @@ export default function Issues({
       setFormError('');
     }
   }, [isNewIssueOpen]);
+
+  useEffect(() => {
+    if (!isNewIssueOpen) return;
+    setFormTemplateId(prev => {
+      if (prev && issueTemplates.some(t => t.id === prev)) {
+        return prev;
+      }
+      return issueTemplates.find(t => t.is_default === 1)?.id || issueTemplates[0]?.id || '';
+    });
+  }, [isNewIssueOpen, issueTemplates]);
 
   // 当模态框打开或者项目列表变化时，同步关联项目 ID，但不影响已输入内容和用户手动选择
   useEffect(() => {
@@ -138,8 +159,8 @@ export default function Issues({
 
   const handleCreateIssue = async (e) => {
     e.preventDefault();
-    if (!formTitle.trim()) {
-      setFormError('任务标题不能为空');
+    if (!formDescription.trim()) {
+      setFormError('任务内容不能为空');
       return;
     }
     const finalProjectId = formProjectId || (projects[0]?.id || '');
@@ -152,11 +173,12 @@ export default function Issues({
     setFormError('');
 
     const payload = {
-      title: formTitle,
-      description: formDescription,
+      title: formTitle.trim(),
+      description: formDescription.trim(),
       project_id: finalProjectId,
       priority: parseInt(formPriority),
       status: prefilledStatus || 'triage',
+      template_id: formTemplateId,
     };
 
     try {
@@ -164,7 +186,7 @@ export default function Issues({
       setIsNewIssueOpen(false);
       setFormTitle('');
       setFormDescription('');
-      loadAllData();
+      refreshAllData();
     } catch (err) {
       setFormError(err.message || '新建 Issue 失败');
     } finally {
@@ -352,7 +374,7 @@ export default function Issues({
       {/* 新建 Issue 高级模态框 (完美融合) */}
       {isNewIssueOpen && (
         <div className="modal-overlay">
-          <div className="glass-card modal-content" style={{ maxWidth: '460px', padding: '24px' }}>
+          <div className="glass-card modal-content" style={{ maxWidth: '760px', padding: '24px' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -395,27 +417,44 @@ export default function Issues({
                 </div>
               )}
 
+              {issueTemplates.length > 0 && (
+                <div className="form-group">
+                  <label>Issue 执行模板</label>
+                  <select
+                    className="form-control"
+                    value={formTemplateId}
+                    onChange={(e) => setFormTemplateId(e.target.value)}
+                  >
+                    {issueTemplates.map(template => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}{template.is_default === 1 ? '（默认）' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    模板会在创建时快照保存，后续修改模板不会影响已创建 Issue。
+                  </span>
+                </div>
+              )}
+
               <div className="form-group">
-                <label>任务标题 / 描述性诉求 *</label>
+                <label>任务标题（可选，会自动生成）</label>
                 <input 
                   type="text" 
                   className="form-control" 
-                  placeholder="例如: 修复节点删除后的状态流转 bug"
+                  placeholder="不填则从任务内容第一行自动生成"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  required 
                 />
               </div>
 
               <div className="form-group">
-                <label>故障详情 / 附加修复上下文</label>
-                <textarea 
-                  className="form-control" 
-                  rows={4}
-                  placeholder="可在此写入复现路径、报错日志等。Codex 代理将作为上下文参考..."
+                <label>任务内容 / 需求描述 *</label>
+                <PromptEditor
+                  placeholder="直接写要 Codex 处理的完整内容，例如复现路径、报错日志、期望改动和验证方式..."
                   value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  style={{ resize: 'vertical' }}
+                  onChange={setFormDescription}
+                  minHeight={180}
                 />
               </div>
 

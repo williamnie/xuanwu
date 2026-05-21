@@ -82,8 +82,8 @@ func (a *Adapter) ThreadStart(ctx context.Context, input ThreadInput) (string, e
 	return nestedString(result, "thread", "id")
 }
 
-func (a *Adapter) TurnStart(ctx context.Context, threadID, prompt string) (string, error) {
-	params := map[string]any{"threadId": threadID, "input": []any{textInput(prompt)}}
+func (a *Adapter) TurnStart(ctx context.Context, threadID string, input []UserInput) (string, error) {
+	params := map[string]any{"threadId": threadID, "input": input}
 	result, err := a.request(ctx, "turn/start", params)
 	if err != nil {
 		return "", err

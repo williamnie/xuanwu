@@ -1,5 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useImmer } from 'use-immer';
 import { api } from '../api/client';
+import {
+  selectBackendOnline,
+  selectIssues,
+  selectProjects,
+  selectRefreshAllData,
+  useDataStore,
+} from '../store/dataStore';
 import { 
   Folder, 
   ListTodo, 
@@ -7,58 +15,32 @@ import {
   Terminal, 
   Clock, 
   AlertTriangle, 
-  ArrowRight,
-  Loader2
+  ArrowRight
 } from 'lucide-react';
 
-export default function Dashboard({ navigateTo }) {
-  const [projects, setProjects] = useState([]);
-  const [issues, setIssues] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const fetchData = async () => {
-    try {
-      const [projList, issueList] = await Promise.all([
-        api.getProjects(),
-        api.getIssues()
-      ]);
-      setProjects(projList || []);
-      setIssues(issueList || []);
-      setError(null);
-    } catch {
-      setError('无法连接到后端服务。请确保 Go 后端 API Server 已在端口 3008 启动。');
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function Dashboard({
+  navigateTo,
+}) {
+  const projects = useDataStore(selectProjects);
+  const issues = useDataStore(selectIssues);
+  const backendOnline = useDataStore(selectBackendOnline);
+  const refreshAllData = useDataStore(selectRefreshAllData);
+  const [events, updateEvents] = useImmer([]);
 
   useEffect(() => {
-    fetchData();
-
     // 订阅全局 SSE 事件流
     const unsubscribe = api.subscribeToEvents(
       (event) => {
-        // 当收到重要的状态变化事件时，重新拉取最新数据
-        if (
-          event.type === 'issue.status_changed' || 
-          event.type === 'issue.created' || 
-          event.type === 'runner.started' || 
-          event.type === 'runner.stopped' ||
-          event.type === 'issue.error'
-        ) {
-          fetchData();
-        }
-
         // 将新事件加入实时活动流，限制最多保存 20 条
-        setEvents((prev) => {
-          const newEvent = {
-            id: Date.now() + Math.random(),
+        updateEvents((draft) => {
+          draft.unshift({
+            viewId: `${Date.now()}-${Math.random()}`,
             timestamp: new Date().toLocaleTimeString(),
             ...event
-          };
-          return [newEvent, ...prev].slice(0, 20);
+          });
+          if (draft.length > 20) {
+            draft.length = 20;
+          }
         });
       },
       () => {
@@ -66,23 +48,8 @@ export default function Dashboard({ navigateTo }) {
       }
     );
 
-    // 轮询备份 (每 5 秒)，防止 SSE 失败
-    const interval = setInterval(fetchData, 5000);
-
-    return () => {
-      unsubscribe();
-      clearInterval(interval);
-    };
-  }, []);
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
-        <Loader2 className="animate-spin" size={40} color="var(--primary)" />
-        <p style={{ color: 'var(--text-secondary)' }}>加载系统看板中...</p>
-      </div>
-    );
-  }
+    return () => unsubscribe();
+  }, [updateEvents]);
 
   // 统计计算
   const activeLoopsCount = projects.filter(p => p.loop_status === 'running' || p.auto_run === 1).length; // 简化展示
@@ -108,14 +75,14 @@ export default function Dashboard({ navigateTo }) {
       </div>
 
       {/* 错误警报 */}
-      {error && (
+      {!backendOnline && (
         <div className="glass-card" style={{ borderLeft: '4px solid var(--error)', display: 'flex', gap: '16px', alignItems: 'center', padding: '16px 24px', background: 'var(--error-bg)' }}>
           <AlertTriangle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
           <div>
             <h4 style={{ color: 'var(--error)', fontWeight: 600, marginBottom: '2px' }}>连接后端 API 失败</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{error}</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>无法连接到后端服务。请确保 Go 后端 API Server 已在端口 3008 启动。</p>
           </div>
-          <button className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={fetchData}>
+          <button className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={refreshAllData}>
             重试连接
           </button>
         </div>
@@ -292,7 +259,7 @@ export default function Dashboard({ navigateTo }) {
                   }
 
                   return (
-                    <div key={event.id} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
+                    <div key={event.viewId} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
                       <span style={{ color: '#a9b1d6', display: 'flex', gap: '8px' }}>
                         <span style={{ color: badgeColor }}>•</span>
                         <span>{text}</span>

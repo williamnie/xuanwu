@@ -31,19 +31,36 @@ type ProjectPatch struct {
 	Sandbox        *string `json:"sandbox"`
 }
 
+type IssueTemplate struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Content   string `json:"content"`
+	IsDefault int    `json:"is_default"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type IssueTemplatePatch struct {
+	Name      *string `json:"name"`
+	Content   *string `json:"content"`
+	IsDefault *int    `json:"is_default"`
+}
+
 type Issue struct {
-	ID            int64  `json:"id"`
-	ProjectID     string `json:"project_id"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	Status        string `json:"status"`
-	Priority      int    `json:"priority"`
-	CodexThreadID string `json:"codex_thread_id"`
-	CodexTurnID   string `json:"codex_turn_id"`
-	AttemptCount  int    `json:"attempt_count"`
-	Error         string `json:"error"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID             int64  `json:"id"`
+	ProjectID      string `json:"project_id"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Status         string `json:"status"`
+	Priority       int    `json:"priority"`
+	TemplateID     string `json:"template_id"`
+	PromptTemplate string `json:"prompt_template"`
+	CodexThreadID  string `json:"codex_thread_id"`
+	CodexTurnID    string `json:"codex_turn_id"`
+	AttemptCount   int    `json:"attempt_count"`
+	Error          string `json:"error"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 type IssuePatch struct {
@@ -62,6 +79,17 @@ type IssueEvent struct {
 	Type      string `json:"type"`
 	Payload   string `json:"payload"`
 	CreatedAt string `json:"created_at"`
+}
+
+type Upload struct {
+	ID           string `json:"id"`
+	OriginalName string `json:"original_name"`
+	MimeType     string `json:"mime_type"`
+	SizeBytes    int64  `json:"size_bytes"`
+	SHA256       string `json:"sha256"`
+	StoragePath  string `json:"storage_path,omitempty"`
+	URL          string `json:"url"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type IssueFilter struct {

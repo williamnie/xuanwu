@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
@@ -32,7 +36,8 @@ func (n noopCodex) ThreadRead(context.Context, string) (codex.Session, error) {
 func (n noopCodex) ThreadResume(context.Context, string) (codex.Session, error) {
 	return codex.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
 }
-func (n noopCodex) TurnStart(context.Context, string, string) (string, error) {
+func (n noopCodex) ThreadSetName(context.Context, string, string) error { return nil }
+func (n noopCodex) TurnStart(context.Context, string, []codex.UserInput) (string, error) {
 	return "turn-new", nil
 }
 func (n noopCodex) InterruptTurn(context.Context, string, string) error { return nil }
@@ -47,10 +52,13 @@ func TestProjectAndIssueAPI(t *testing.T) {
 		t.Fatalf("unexpected project: %+v", project)
 	}
 	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
-		"project_id": "demo", "title": "Fix bug", "status": "triage",
+		"project_id": "demo", "description": "Fix bug from content", "status": "triage",
 	})
 	if issue.ID == 0 || issue.Status != "triage" {
 		t.Fatalf("unexpected issue: %+v", issue)
+	}
+	if issue.Title != "Fix bug from content" {
+		t.Fatalf("expected derived title, got %+v", issue)
 	}
 	enqueued := postJSON[store.Issue](t, srv, "/api/issues/1/enqueue", map[string]any{})
 	if enqueued.Status != store.StatusTodo {
@@ -59,6 +67,36 @@ func TestProjectAndIssueAPI(t *testing.T) {
 	events := getJSON[[]store.IssueEvent](t, srv, "/api/issues/1/events")
 	if len(events) < 2 {
 		t.Fatalf("expected created/status events: %+v", events)
+	}
+}
+
+func TestIssueTemplateAPIAndIssueSelection(t *testing.T) {
+	srv := newTestServer(t)
+	templates := getJSON[[]store.IssueTemplate](t, srv, "/api/issue-templates")
+	if len(templates) != 1 || templates[0].ID != store.DefaultIssueTemplateID || templates[0].IsDefault != 1 {
+		t.Fatalf("unexpected seeded templates: %+v", templates)
+	}
+	custom := postJSON[store.IssueTemplate](t, srv, "/api/issue-templates", map[string]any{
+		"name":    "最小修复",
+		"content": "路径={{project.cwd}}\n任务={{issue.title}}\n",
+	})
+	if custom.ID == "" || custom.Content == "" {
+		t.Fatalf("unexpected custom template: %+v", custom)
+	}
+	patched := patchJSON[store.IssueTemplate](t, srv, "/api/issue-templates/"+custom.ID, map[string]any{
+		"is_default": 1,
+	})
+	if patched.IsDefault != 1 {
+		t.Fatalf("default flag not updated: %+v", patched)
+	}
+	_ = postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Fix bug", "status": "triage", "template_id": custom.ID,
+	})
+	if issue.TemplateID != custom.ID || issue.PromptTemplate != custom.Content {
+		t.Fatalf("issue did not use selected template: %+v template=%+v", issue, custom)
 	}
 }
 
@@ -73,6 +111,35 @@ func TestSessionAPI(t *testing.T) {
 	})
 	if created.ThreadID != "thread-new" || created.TurnID != "turn-new" {
 		t.Fatalf("unexpected created session: %+v", created)
+	}
+}
+
+func TestImageUploadAPIStoresAndServesImage(t *testing.T) {
+	srv := newTestServer(t)
+	body, contentType := multipartBody(t, "file", "screenshot.png", "image/png",
+		[]byte("\x89PNG\r\n\x1a\nfake image bytes"))
+	req := httptest.NewRequest(http.MethodPost, "/api/uploads/images", body)
+	req.Header.Set("Content-Type", contentType)
+	upload := decodeResponse[store.Upload](t, srv, req, http.StatusCreated)
+	if upload.ID == "" || upload.OriginalName != "screenshot.png" ||
+		upload.MimeType != "image/png" || upload.SizeBytes == 0 {
+		t.Fatalf("unexpected upload response: %+v", upload)
+	}
+	if !strings.HasPrefix(upload.URL, "/api/uploads/") {
+		t.Fatalf("upload url should point to api content endpoint: %+v", upload)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/uploads/"+upload.ID+"/content", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, getReq)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET upload status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("content-type = %q", got)
+	}
+	if !bytes.Contains(rr.Body.Bytes(), []byte("fake image bytes")) {
+		t.Fatalf("served body mismatch: %q", rr.Body.String())
 	}
 }
 
@@ -173,6 +240,14 @@ func getJSON[T any](t *testing.T, h http.Handler, path string) T {
 	return decodeResponse[T](t, h, req, http.StatusOK)
 }
 
+func patchJSON[T any](t *testing.T, h http.Handler, path string, body any) T {
+	t.Helper()
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	return decodeResponse[T](t, h, req, http.StatusOK)
+}
+
 func decodeResponse[T any](t *testing.T, h http.Handler, req *http.Request, ok ...int) T {
 	t.Helper()
 	rr := httptest.NewRecorder()
@@ -194,4 +269,28 @@ func statusOK(code int, allowed []int) bool {
 		}
 	}
 	return false
+}
+
+func multipartBody(t *testing.T, field, filename, contentType string, data []byte) (io.Reader, string) {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreatePart(textprotoMIMEHeader(field, filename, contentType))
+	if err != nil {
+		t.Fatalf("create multipart part: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("write multipart part: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+	return &body, writer.FormDataContentType()
+}
+
+func textprotoMIMEHeader(field, filename, contentType string) textproto.MIMEHeader {
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="`+field+`"; filename="`+filename+`"`)
+	header.Set("Content-Type", contentType)
+	return header
 }

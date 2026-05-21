@@ -30,10 +30,18 @@ func (s *Store) CreateIssue(ctx context.Context, i Issue) (Issue, error) {
 	if i.Status == "" {
 		i.Status = StatusTriage
 	}
+	if err := normalizeIssueForCreate(&i); err != nil {
+		return Issue{}, err
+	}
+	if err := s.applyIssueTemplateSnapshot(ctx, &i); err != nil {
+		return Issue{}, err
+	}
 	_, err := s.db.ExecContext(ctx, `insert into issues
-		(project_id, title, description, status, priority, created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?)`,
-		i.ProjectID, i.Title, i.Description, i.Status, i.Priority, t, t)
+		(project_id, title, description, status, priority, template_id,
+		prompt_template, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		i.ProjectID, i.Title, i.Description, i.Status, i.Priority,
+		i.TemplateID, i.PromptTemplate, t, t)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -129,4 +137,5 @@ func issueListQuery(f IssueFilter) (string, []any) {
 }
 
 const issueSelect = `select id, project_id, title, description, status, priority,
-	codex_thread_id, codex_turn_id, attempt_count, error, created_at, updated_at from issues`
+	template_id, prompt_template, codex_thread_id, codex_turn_id, attempt_count,
+	error, created_at, updated_at from issues`
