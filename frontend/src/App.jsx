@@ -6,6 +6,7 @@ import Projects from './pages/Projects';
 import Issues from './pages/Issues';
 import IssueDetail from './pages/IssueDetail';
 import Sessions from './pages/Sessions';
+import Cron from './pages/Cron';
 import Settings from './pages/Settings';
 import AppSidebar from './components/AppSidebar';
 import {
@@ -181,6 +182,8 @@ export default function App() {
             <Projects />
           ) : currentPage === 'sessions' ? (
             <Sessions />
+          ) : currentPage === 'cron' ? (
+            <Cron />
           ) : currentPage === 'settings' ? (
             <Settings />
           ) : (

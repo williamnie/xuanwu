@@ -1,4 +1,5 @@
 import {
+  CalendarClock,
   FolderGit2,
   Layers,
   ListTodo,
@@ -9,6 +10,7 @@ import {
 } from 'lucide-react';
 import {
   selectBackendOnline,
+  selectCronTasks,
   selectIssues,
   selectProjects,
   useDataStore,
@@ -70,6 +72,13 @@ export default function AppSidebar({
             <ListTodo size={16} /> Issues
           </span>
           <IssueCountBadge active={currentPage === 'issues'} />
+        </button>
+
+        <button className={`nav-item ${currentPage === 'cron' ? 'active' : ''}`} onClick={() => navigateTo('cron')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CalendarClock size={16} /> Cron
+          </span>
+          <CronCountBadge active={currentPage === 'cron'} />
         </button>
 
         <button className={`nav-item ${currentPage === 'projects' ? 'active' : ''}`} onClick={() => navigateTo('projects')}>
@@ -144,6 +153,18 @@ function ProjectCountBadge({ active }) {
   return (
     <span className="nav-badge" style={{ background: active ? 'var(--primary-glow)' : undefined, color: active ? 'var(--primary)' : undefined }}>
       {projects.length}
+    </span>
+  );
+}
+
+function CronCountBadge({ active }) {
+  const cronTasks = useDataStore(selectCronTasks);
+  const activeCount = cronTasks.filter(task => task.status === 'active').length;
+  const label = activeCount > 0 ? activeCount : cronTasks.length;
+
+  return (
+    <span className="nav-badge" style={{ background: active ? 'var(--primary-glow)' : undefined, color: active ? 'var(--primary)' : undefined }}>
+      {label}
     </span>
   );
 }
