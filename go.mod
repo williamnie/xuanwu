@@ -2,7 +2,10 @@ module github.com/xiaobei/codex-issue-runner
 
 go 1.25.4
 
-require modernc.org/sqlite v1.50.1
+require (
+	github.com/fsnotify/fsnotify v1.9.0
+	modernc.org/sqlite v1.50.1
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

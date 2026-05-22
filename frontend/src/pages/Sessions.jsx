@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Plus, RefreshCw, Settings, Terminal } from 'lucide-react';
 import { api } from '../api/client';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
@@ -12,6 +12,8 @@ import VirtualSessionList from './sessions/VirtualSessionList';
 import './sessions/Sessions.css';
 
 const PAGE_SIZE = 50;
+const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
+const SESSION_LIST_REFRESH_DELAY_MS = 800;
 
 function textFromUserContent(content) {
   if (!Array.isArray(content)) return '';
@@ -47,6 +49,8 @@ export default function Sessions() {
   const [sessionRunning, setSessionRunning] = useState(false);
   const [approvalRequest, setApprovalRequest] = useState(null);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const detailRefreshTimer = useRef(null);
+  const listRefreshTimer = useRef(null);
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const selectedSessionProject = useMemo(() => {
@@ -113,7 +117,23 @@ export default function Sessions() {
   useEffect(() => { loadModels(); }, [loadModels]);
   useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
 
+  const scheduleListRefresh = useCallback(() => {
+    window.clearTimeout(listRefreshTimer.current);
+    listRefreshTimer.current = window.setTimeout(loadFirstPage, SESSION_LIST_REFRESH_DELAY_MS);
+  }, [loadFirstPage]);
+
+  const scheduleSelectedRefresh = useCallback((threadId) => {
+    if (!threadId || threadId !== selectedId) return;
+    window.clearTimeout(detailRefreshTimer.current);
+    detailRefreshTimer.current = window.setTimeout(loadSelected, SESSION_DETAIL_REFRESH_DELAY_MS);
+  }, [loadSelected, selectedId]);
+
   useEffect(() => api.subscribeToEvents((event) => {
+    if (isSessionFileEvent(event)) {
+      scheduleListRefresh();
+      scheduleSelectedRefresh(event.threadId);
+      return;
+    }
     if (event.type !== 'codex.event') return;
     if (event.method === 'approval/requested') {
       setApprovalRequest(parseApprovalPayload(event.payload));
@@ -126,7 +146,12 @@ export default function Sessions() {
       loadSelected();
       loadFirstPage();
     }
-  }), [loadFirstPage, loadSelected, selectedId]);
+  }), [loadFirstPage, loadSelected, scheduleListRefresh, scheduleSelectedRefresh, selectedId]);
+
+  useEffect(() => () => {
+    window.clearTimeout(detailRefreshTimer.current);
+    window.clearTimeout(listRefreshTimer.current);
+  }, []);
 
   const openCreate = () => {
     const project = projects[0] || null;
@@ -297,6 +322,10 @@ function parseApprovalPayload(payload) {
   } catch {
     return { id: '', method: 'approval/requested', params: {} };
   }
+}
+
+function isSessionFileEvent(event) {
+  return event?.type === 'session.created' || event?.type === 'session.updated';
 }
 
 function mergeSessions(prev, next) {
