@@ -25,10 +25,20 @@ cleanup_embedded_web() {
   rm -rf "$EMBED_WEB_DIR"
 }
 
-if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
+install_frontend_deps() {
+  if [ -d "$ROOT_DIR/frontend/node_modules" ]; then
+    return
+  fi
+  if [ -f "$ROOT_DIR/frontend/package-lock.json" ]; then
+    echo "[build] frontend/node_modules not found, running npm ci..."
+    npm --prefix "$ROOT_DIR/frontend" ci
+    return
+  fi
   echo "[build] frontend/node_modules not found, running npm install..."
   npm --prefix "$ROOT_DIR/frontend" install
-fi
+}
+
+install_frontend_deps
 
 echo "[build] building frontend..."
 npm --prefix "$ROOT_DIR/frontend" run build

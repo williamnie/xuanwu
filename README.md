@@ -65,9 +65,41 @@ go run ./backend/cmd/codex-issue-runner serve \
   --web-dir frontend/dist
 ```
 
-## 后台部署模式（macOS launchd）
+## 一键安装部署（推荐）
 
-本仓库提供 macOS LaunchAgent 部署脚本，会构建前端与 Go 二进制，并把服务注册为后台长期运行：
+如果只是使用 Codex Issue Runner，推荐直接安装 GitHub Release 里的预构建二进制；脚本会自动下载当前系统架构的 release，并注册为后台服务（macOS 使用 launchd，Linux 使用 user systemd）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
+```
+
+固定版本安装：
+
+```bash
+export CODEX_RUNNER_VERSION=v0.1.0
+curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
+```
+
+常用覆盖项：
+
+```bash
+export CODEX_RUNNER_ADDR=127.0.0.1:3018
+export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
+export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
+curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
+```
+
+默认安装位置：
+
+```txt
+二进制: ~/.local/bin/codex-issue-runner
+数据:   ~/.local/state/codex-issue-runner/app.db
+访问:   http://127.0.0.1:3008/
+```
+
+## 从源码后台部署（macOS launchd）
+
+本仓库也提供 macOS LaunchAgent 源码部署脚本，会构建前端与 Go 二进制，并把服务注册为后台长期运行：
 
 ```bash
 ./deploy.sh
@@ -107,6 +139,32 @@ CODEX_RUNNER_ADDR=127.0.0.1:3018 \
 CODEX_RUNNER_DEPLOY_DB=/absolute/path/app.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
 ./deploy.sh
+```
+
+
+## GitHub Release 发布
+
+推送 `v*` tag 后，GitHub Actions 会自动运行后端测试、构建内嵌前端的单文件二进制，并发布 Release 资产：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Release 默认包含：
+
+```txt
+codex-issue-runner_darwin_arm64.tar.gz
+codex-issue-runner_darwin_amd64.tar.gz
+codex-issue-runner_linux_arm64.tar.gz
+codex-issue-runner_linux_amd64.tar.gz
+checksums.txt
+```
+
+本地也可以手动打包：
+
+```bash
+./scripts/package-release.sh
 ```
 
 ## CLI 调用

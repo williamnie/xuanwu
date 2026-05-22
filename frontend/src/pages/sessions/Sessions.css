@@ -294,7 +294,7 @@
 }
 
 .chat-bubble-container.user .session-markdown {
-  text-align: right;
+  text-align: left;
 }
 
 .chat-bubble-container.agent {
