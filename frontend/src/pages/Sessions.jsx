@@ -952,9 +952,7 @@ function UserMessageBubble({ item }) {
   const text = textFromUserContent(item.content);
   return (
     <div className="chat-bubble-container user">
-      <div className="chat-bubble-avatar">U</div>
       <div className="chat-bubble-content">
-        <div className="chat-bubble-sender">User</div>
         <div className="chat-bubble-body">
           <MarkdownText text={text} />
         </div>

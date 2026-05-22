@@ -652,8 +652,23 @@ body {
   border: 1px solid var(--border-color);
   background: var(--bg-card);
   color: var(--text-primary);
+  font-family: inherit;
   font-size: 0.85rem;
+  line-height: 1.4;
   outline: none;
+}
+
+.form-control:is(input, textarea) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: padding-box;
+}
+
+.form-control:is(input, textarea):-webkit-autofill,
+.form-control:is(input, textarea):-webkit-autofill:hover,
+.form-control:is(input, textarea):-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px var(--bg-card) inset;
 }
 
 .form-control:focus {

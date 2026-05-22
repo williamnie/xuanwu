@@ -237,3 +237,12 @@ curl -X POST http://127.0.0.1:3008/api/cron-tasks \
 go test ./backend/...
 cd frontend && npm run build
 ```
+
+## 许可证
+
+本项目采用 [PolyForm Noncommercial License 1.0.0](LICENSE)，仅允许非商业目的使用。
+商业使用、商业部署或将本项目作为商业产品/服务的一部分使用，需要获得项目作者的单独商业授权。
+
+项目所有者保留对本项目进行商业化、专有版本发布或闭源发行的权利。
+
+分发本项目或其衍生版本时，请同时保留 `LICENSE` 与 `NOTICE`。
