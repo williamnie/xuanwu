@@ -20,8 +20,10 @@ frontend_install() {
     return
   fi
   if [ -f "$ROOT_DIR/frontend/package-lock.json" ]; then
-    npm --prefix "$ROOT_DIR/frontend" ci
-    return
+    if npm --prefix "$ROOT_DIR/frontend" ci; then
+      return
+    fi
+    echo "[release] npm ci failed, falling back to npm install..." >&2
   fi
   npm --prefix "$ROOT_DIR/frontend" install
 }

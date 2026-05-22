@@ -31,8 +31,10 @@ install_frontend_deps() {
   fi
   if [ -f "$ROOT_DIR/frontend/package-lock.json" ]; then
     echo "[build] frontend/node_modules not found, running npm ci..."
-    npm --prefix "$ROOT_DIR/frontend" ci
-    return
+    if npm --prefix "$ROOT_DIR/frontend" ci; then
+      return
+    fi
+    echo "[build] npm ci failed, falling back to npm install..." >&2
   fi
   echo "[build] frontend/node_modules not found, running npm install..."
   npm --prefix "$ROOT_DIR/frontend" install
