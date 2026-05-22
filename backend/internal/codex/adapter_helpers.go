@@ -83,7 +83,7 @@ func turnStartParams(threadID string, input []UserInput, options TurnOptions) ma
 		params["approvalPolicy"] = approvalPolicy(options.ApprovalPolicy)
 	}
 	if options.Sandbox != "" {
-		params["sandboxPolicy"] = defaultString(options.Sandbox, "workspace-write")
+		params["sandboxPolicy"] = turnSandboxPolicy(options.Sandbox)
 	}
 	return params
 }
@@ -106,6 +106,20 @@ func approvalPolicy(value string) string {
 		return "on-request"
 	default:
 		return value
+	}
+}
+
+func turnSandboxPolicy(value string) map[string]any {
+	normalized := strings.TrimSpace(value)
+	switch normalized {
+	case "read-only", "readOnly":
+		return map[string]any{"type": "readOnly"}
+	case "", "workspace-write", "workspaceWrite":
+		return map[string]any{"type": "workspaceWrite"}
+	case "danger-full-access", "dangerFullAccess":
+		return map[string]any{"type": "dangerFullAccess"}
+	default:
+		return map[string]any{"type": normalized}
 	}
 }
 

@@ -81,7 +81,8 @@ func TestTurnStartParamsIncludesSessionOverrides(t *testing.T) {
 	if params["model"] != "gpt-5.5" || params["effort"] != "xhigh" {
 		t.Fatalf("model/effort params = %#v", params)
 	}
-	if params["approvalPolicy"] != "on-request" || params["sandboxPolicy"] != "read-only" {
+	sandboxPolicy, ok := params["sandboxPolicy"].(map[string]any)
+	if params["approvalPolicy"] != "on-request" || !ok || sandboxPolicy["type"] != "readOnly" {
 		t.Fatalf("permission params = %#v", params)
 	}
 }
