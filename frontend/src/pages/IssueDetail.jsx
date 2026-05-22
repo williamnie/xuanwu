@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
 import IssueEditModal from '../components/IssueEditModal';
+import { message } from '../store/toastStore';
 import {
   selectRefreshAllData,
   useDataStore,
@@ -160,7 +161,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
       await api.enqueueIssue(issueId);
       loadIssueData();
     } catch (err) {
-      alert('加入队列失败: ' + err.message);
+      message.error('加入队列失败: ' + err.message);
     }
   };
 
@@ -172,7 +173,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
       }); // 重置本地日志，等待新线程输出
       loadIssueData();
     } catch (err) {
-      alert('重新运行失败: ' + err.message);
+      message.error('重新运行失败: ' + err.message);
     }
   };
 
@@ -182,7 +183,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
         await api.cancelIssue(issueId);
         loadIssueData();
       } catch (err) {
-        alert('取消任务失败: ' + err.message);
+        message.error('取消任务失败: ' + err.message);
       }
     }
   };
@@ -192,7 +193,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
       await api.updateIssue(issueId, { status: targetStatus });
       loadIssueData();
     } catch (err) {
-      alert('更改状态失败: ' + err.message);
+      message.error('更改状态失败: ' + err.message);
     }
   };
 

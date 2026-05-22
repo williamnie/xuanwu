@@ -1,5 +1,6 @@
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
+import { message } from '../store/toastStore';
 import {
   selectBackendOnline,
   selectIssues,
@@ -188,7 +189,7 @@ export default function Projects() {
         await api.deleteProject(id);
         refreshAllData();
       } catch (err) {
-        alert(err.message || '删除失败');
+        message.error(err.message || '删除失败');
       }
     }
   };
@@ -199,7 +200,7 @@ export default function Projects() {
       await api.updateProject(proj.id, { auto_run: nextAutoRun });
       refreshAllData();
     } catch {
-      alert('更新自动执行配置失败');
+      message.error('更新自动执行配置失败');
     }
   };
 
@@ -208,7 +209,7 @@ export default function Projects() {
       await api.startProjectLoop(id);
       refreshAllData();
     } catch (err) {
-      alert('启动 Loop 失败: ' + err.message);
+      message.error('启动 Loop 失败: ' + err.message);
     }
   };
 
@@ -217,7 +218,7 @@ export default function Projects() {
       await api.stopProjectLoop(id);
       refreshAllData();
     } catch (err) {
-      alert('停止 Loop 失败: ' + err.message);
+      message.error('停止 Loop 失败: ' + err.message);
     }
   };
 

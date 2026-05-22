@@ -17,6 +17,7 @@ import {
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Loader2, Menu } from 'lucide-react';
+import ToastContainer from './components/ToastContainer';
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
@@ -191,6 +192,7 @@ export default function App() {
 
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' ? 'in-sessions-page' : ''}`}>
+      <ToastContainer />
       {sidebarCollapsed && (
         <button
           className="sidebar-expand-btn animate-fade-in"

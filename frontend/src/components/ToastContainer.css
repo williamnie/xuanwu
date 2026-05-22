@@ -1,0 +1,119 @@
+.codex-toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  max-width: 480px;
+  width: 90%;
+}
+
+.codex-toast-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  font-size: 0.88rem;
+  font-weight: 500;
+  width: max-content;
+  max-width: 100%;
+  animation: toastSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  position: relative;
+  
+  /* 毛玻璃玻璃拟态效果 */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  color: #1e293b;
+}
+
+[data-theme="dark"] .codex-toast-item {
+  background: rgba(30, 30, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.codex-toast-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.15);
+}
+
+.codex-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.codex-toast-content {
+  flex: 1;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.codex-toast-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  margin-right: -4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.codex-toast-item:hover .codex-toast-close {
+  opacity: 1;
+}
+
+.codex-toast-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #64748b;
+}
+
+[data-theme="dark"] .codex-toast-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+}
+
+/* 针对不同类型的轻微底部分类色条或细边高亮 */
+.codex-toast-item.success {
+  border-left: 3px solid #10b981;
+}
+.codex-toast-item.error {
+  border-left: 3px solid #ef4444;
+}
+.codex-toast-item.warning {
+  border-left: 3px solid #f59e0b;
+}
+.codex-toast-item.info {
+  border-left: 3px solid #3b82f6;
+}
+
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

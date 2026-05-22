@@ -5,6 +5,7 @@ import {
   SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder, Volume2
 } from 'lucide-react';
 import { api } from '../api/client';
+import { message } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
 import { selectProjects, useDataStore } from '../store/dataStore';
@@ -46,7 +47,6 @@ export default function Sessions() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState('');
   const [projectId, setProjectId] = useState('');
   const [cwd, setCwd] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -109,9 +109,8 @@ export default function Sessions() {
       setSessions(data);
       setCursor(result.nextCursor || '');
       setSelectedId((current) => current || data[0]?.id || '');
-      setError('');
     } catch (err) {
-      setError(err.message || '加载 Codex sessions 失败');
+      message.error(err.message || '加载 Codex sessions 失败');
     } finally {
       setLoading(false);
     }
@@ -125,7 +124,7 @@ export default function Sessions() {
       setSessions((prev) => mergeSessions(prev, result.data || []));
       setCursor(result.nextCursor || '');
     } catch (err) {
-      setError(err.message || '继续加载 sessions 失败');
+      message.error(err.message || '继续加载 sessions 失败');
     } finally {
       setLoadingMore(false);
     }
@@ -145,10 +144,9 @@ export default function Sessions() {
       setSelectedSession(detail);
       setSessionRunning(running);
       setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
-      setError('');
     } catch (err) {
       if (selectedIdRef.current !== requestId) return;
-      setError(err.message || '读取 session 详情失败');
+      message.error(err.message || '读取 session 详情失败');
     } finally {
       if (selectedIdRef.current === requestId) {
         setDetailLoading(false);
@@ -247,7 +245,7 @@ export default function Sessions() {
       await api.resolveCodexApproval(approvalRequest.id, { decision, scope });
       setApprovalRequest(null);
     } catch (err) {
-      setError(err.message || '提交授权决策失败');
+      message.error(err.message || '提交授权决策失败');
     } finally {
       setApprovalSubmitting(false);
     }
@@ -270,7 +268,7 @@ export default function Sessions() {
       setMessage('');
       setLiveEvents([]);
     } catch (err) {
-      setError(err.message || '发送消息失败');
+      message.error(err.message || '发送消息失败');
     } finally {
       setSending(false);
     }
@@ -305,7 +303,7 @@ export default function Sessions() {
       setPrompt('');
       await loadFirstPage();
     } catch (err) {
-      setError(err.message || '创建 session 失败');
+      message.error(err.message || '创建 session 失败');
     } finally {
       setSending(false);
     }
@@ -431,7 +429,6 @@ export default function Sessions() {
 
       {/* 右侧主工作区 */}
       <main className="sessions-client-main">
-        {error && <ErrorBanner message={error} />}
 
         {activeView === 'chat' && (
           <div className="active-session-shell">
@@ -692,10 +689,6 @@ function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detai
 
 function LoadingState() {
   return <div style={{ display: 'grid', placeItems: 'center', height: '60vh' }}><Loader2 className="animate-spin" size={36} color="var(--primary)" /></div>;
-}
-
-function ErrorBanner({ message }) {
-  return <div className="glass-card session-error"><AlertCircle size={20} /> {message}</div>;
 }
 
 function EmptyDetail() {

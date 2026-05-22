@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api/client';
 import { resolveAttachmentSrc } from './attachments';
+import { message } from '../../store/toastStore';
 import './PromptEditor.css';
 
 const AttachmentImage = Image.extend({
@@ -57,7 +58,7 @@ export default function PromptEditor({
         }).run();
       }
     } catch (err) {
-      window.alert(`图片上传失败：${err.message || '网络异常'}`);
+      message.error(`图片上传失败：${err.message || '网络异常'}`);
     } finally {
       setUploading(false);
     }

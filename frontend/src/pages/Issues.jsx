@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { message } from '../store/toastStore';
 import {
   selectIssueTemplates,
   selectIssues,
@@ -98,7 +99,7 @@ export default function Issues({
       refreshAllData();
     } catch (err) {
       console.error('更新 Issue 状态失败:', err);
-      alert(`更改状态失败: ${err.message || '网络异常'}`);
+      message.error(`更改状态失败: ${err.message || '网络异常'}`);
     }
   };
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Pause, Play, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
+import { message } from '../store/toastStore';
 import {
   selectCronTasks,
   selectProjects,
@@ -102,7 +103,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
       await api.updateCronTask(task.id, { status });
       refreshAllData();
     } catch (err) {
-      alert(err.message || '更新 cron 任务失败');
+      message.error(err.message || '更新 cron 任务失败');
     }
   };
 
@@ -112,7 +113,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
       await api.deleteCronTask(task.id);
       refreshAllData();
     } catch (err) {
-      alert(err.message || '删除 cron 任务失败');
+      message.error(err.message || '删除 cron 任务失败');
     }
   };
 

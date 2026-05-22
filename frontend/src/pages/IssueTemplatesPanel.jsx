@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api/client';
+import { message } from '../store/toastStore';
 import {
   selectIssueTemplates,
   selectRefreshAllData,
@@ -84,7 +85,7 @@ export default function IssueTemplatesPanel() {
       await api.updateIssueTemplate(template.id, { is_default: 1 });
       await refreshAllData();
     } catch (err) {
-      alert(err.message || '设置默认模板失败');
+      message.error(err.message || '设置默认模板失败');
     }
   };
 
@@ -94,7 +95,7 @@ export default function IssueTemplatesPanel() {
       await api.deleteIssueTemplate(template.id);
       await refreshAllData();
     } catch (err) {
-      alert(err.message || '删除模板失败');
+      message.error(err.message || '删除模板失败');
     }
   };
 
