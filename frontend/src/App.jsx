@@ -11,12 +11,40 @@ import Settings from './pages/Settings';
 import AppSidebar from './components/AppSidebar';
 import {
   selectLoading,
-  selectRefreshAllData,
+  selectRefreshData,
   selectSetBackendOnline,
   useDataStore,
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Loader2, Menu } from 'lucide-react';
+
+const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
+  'issue.created',
+  'issue.status_changed',
+  'issue.error',
+  'runner.started',
+  'runner.stopped',
+  'cron_task.ran',
+  'cron_task.error',
+]);
+
+function getReconcileSlices(currentPage, selectedIssueId) {
+  if (currentPage === 'issues') {
+    return selectedIssueId
+      ? ['projects', 'issues']
+      : ['projects', 'issues', 'issueTemplates', 'cronTasks'];
+  }
+  if (currentPage === 'projects') {
+    return ['projects', 'issues'];
+  }
+  if (currentPage === 'cron') {
+    return ['projects', 'cronTasks'];
+  }
+  if (currentPage === 'dashboard') {
+    return ['projects', 'issues'];
+  }
+  return [];
+}
 
 export default function App() {
   const [appState, updateAppState] = useImmer(() => ({
@@ -38,7 +66,7 @@ export default function App() {
   }));
 
   const loading = useDataStore(selectLoading);
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
   const setBackendOnline = useDataStore(selectSetBackendOnline);
 
   const {
@@ -113,12 +141,21 @@ export default function App() {
     });
   }, [updateAppState]);
 
+  const refreshVisibleData = useCallback(() => {
+    const slices = getReconcileSlices(currentPage, selectedIssueId);
+    if (slices.length === 0) return;
+    refreshData(slices);
+  }, [currentPage, refreshData, selectedIssueId]);
+
   useEffect(() => {
-    refreshAllData();
+    refreshVisibleData();
     // SSE 是主通道；低频 reconcile 只兜底补偿断线期间错过的事件。
-    const interval = setInterval(refreshAllData, RECONCILE_INTERVAL_MS);
+    const slices = getReconcileSlices(currentPage, selectedIssueId);
+    if (slices.length === 0) return undefined;
+
+    const interval = setInterval(refreshVisibleData, RECONCILE_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [refreshAllData]);
+  }, [currentPage, refreshVisibleData, selectedIssueId]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -129,23 +166,15 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = api.subscribeToEvents(
       (event) => {
-        if (
-          event.type === 'issue.created' ||
-          event.type === 'issue.status_changed' ||
-          event.type === 'issue.error' ||
-          event.type === 'runner.started' ||
-          event.type === 'runner.stopped' ||
-          event.type === 'cron_task.ran' ||
-          event.type === 'cron_task.error'
-        ) {
-          refreshAllData();
+        if (ACTIVE_RECONCILE_EVENT_TYPES.has(event.type)) {
+          refreshVisibleData();
         }
       },
       () => setBackendOnline(false),
       () => setBackendOnline(true)
     );
     return () => unsubscribe();
-  }, [refreshAllData, setBackendOnline]);
+  }, [refreshVisibleData, setBackendOnline]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');

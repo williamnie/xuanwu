@@ -289,7 +289,6 @@ export default function IssueDetail({ issueId, navigateTo }) {
     return mergedEvents.map((event, idx) => {
       const timestamp = new Date(event.created_at || Date.now()).toLocaleTimeString();
       const payload = event._payload;
-      const text = event._textMerged;
 
       // 1. 系统状态变更
       if (event.type === 'issue.status_changed') {
