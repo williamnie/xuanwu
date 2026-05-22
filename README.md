@@ -13,6 +13,13 @@
 - Triage cron：到点批量将 Triage issue 切到 Todo 并启动运行
 - 通过 `codex app-server --listen stdio://` 执行 todo issue
 - 前端 Vite proxy 已指向后端 `/api -> http://127.0.0.1:3008`
+- Dashboard Codex token 用量统计：今日/周/月 token、最近 7 天趋势、5 小时/周限额剩余量
+
+## Dashboard 用量统计
+
+Dashboard 会从本机 Codex session JSONL 里的 `token_count` 事件聚合用量，展示每日、周、月 token 统计，以及最新 5 小时限额和周限额的已用/剩余百分比。
+
+![Dashboard Codex token 用量统计](docs/assets/codex-usage-dashboard.jpg)
 
 ## 本地启动
 

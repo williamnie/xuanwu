@@ -12,10 +12,12 @@ import (
 )
 
 type Server struct {
-	store  *store.Store
-	bus    *events.Bus
-	runner *runner.Runner
-	web    http.Handler
+	store            *store.Store
+	bus              *events.Bus
+	runner           *runner.Runner
+	web              http.Handler
+	codexSessionsDir string
+	usageCache       codexUsageCache
 }
 
 func NewServer(st *store.Store, bus *events.Bus, runner *runner.Runner) *Server {
@@ -23,7 +25,17 @@ func NewServer(st *store.Store, bus *events.Bus, runner *runner.Runner) *Server 
 }
 
 func NewServerWithWebDir(st *store.Store, bus *events.Bus, runner *runner.Runner, webDir string) *Server {
-	s := &Server{store: st, bus: bus, runner: runner}
+	return NewServerWithWebDirAndSessionsDir(st, bus, runner, webDir, "")
+}
+
+func NewServerWithWebDirAndSessionsDir(
+	st *store.Store,
+	bus *events.Bus,
+	runner *runner.Runner,
+	webDir string,
+	codexSessionsDir string,
+) *Server {
+	s := &Server{store: st, bus: bus, runner: runner, codexSessionsDir: codexSessionsDir}
 	if webDir != "" {
 		s.web = spaHandler{root: webDir}
 	}
@@ -79,6 +91,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) > 0 && parts[0] == "codex" {
 		s.routeCodex(w, r, parts)
+		return
+	}
+	if len(parts) > 0 && parts[0] == "usage" {
+		s.routeUsage(w, r, parts)
 		return
 	}
 	writeError(w, http.StatusNotFound, "not found")

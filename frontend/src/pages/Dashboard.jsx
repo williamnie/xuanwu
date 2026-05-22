@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
+import CodexUsagePanel from '../components/CodexUsagePanel';
 import {
   selectBackendOnline,
   selectIssues,
@@ -120,6 +121,8 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      <CodexUsagePanel />
 
       {/* 双栏布局 */}
       <div className="grid-cols-2">

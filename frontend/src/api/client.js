@@ -131,6 +131,8 @@ export const api = {
     method: 'DELETE',
   }),
 
+  getCodexUsage: () => request('/api/usage/codex'),
+
   getCronTasks: () => request('/api/cron-tasks'),
 
   createCronTask: (task) => request('/api/cron-tasks', {
