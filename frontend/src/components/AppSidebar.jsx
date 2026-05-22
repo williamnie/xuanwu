@@ -4,7 +4,6 @@ import {
   FolderGit2,
   Layers,
   ListTodo,
-  MessageSquare,
   Moon,
   Settings,
   Sun,
@@ -66,16 +65,14 @@ export default function AppSidebar({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
         <button className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <LayoutDashboard size={16} /> 面板
+            <LayoutDashboard size={16} /> Dashboard
           </span>
-          <span className="nav-badge">—</span>
         </button>
 
         <button className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Layers size={16} /> Sessions
           </span>
-          <span className="nav-badge">∞</span>
         </button>
 
         <button className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
