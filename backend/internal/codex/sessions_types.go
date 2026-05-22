@@ -2,6 +2,11 @@ package codex
 
 import "encoding/json"
 
+const (
+	SessionOriginCodexApp = "codex_app"
+	SessionOriginRunner   = "runner"
+)
+
 type SessionListInput struct {
 	Cursor string
 	Limit  int
@@ -34,4 +39,5 @@ type Session struct {
 	Name          *string         `json:"name,omitempty"`
 	Turns         json.RawMessage `json:"turns,omitempty"`
 	IsRunning     bool            `json:"isRunning,omitempty"`
+	Origin        string          `json:"origin,omitempty"`
 }

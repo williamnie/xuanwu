@@ -577,7 +577,7 @@
   cursor: pointer;
 }
 
-/* 聊天和右侧环境信息主体布局 */
+/* 聊天主体布局 */
 .active-session-shell {
   flex: 1;
   display: flex;
@@ -656,142 +656,6 @@
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
-}
-
-/* 右侧环境/进度侧边栏 */
-.session-env-sidebar {
-  width: 250px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border-color);
-  background-color: var(--bg-card);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  overflow-y: auto;
-}
-
-/* 进度标题 */
-.env-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.env-title-text {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* 环境信息主区域 */
-.env-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.env-section-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-}
-
-.env-section-title {
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.env-section-cog {
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.env-section-cog:hover {
-  color: var(--text-primary);
-}
-
-/* 单个环境信息项 */
-.env-item-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.82rem;
-}
-
-.env-item-label {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.env-item-value {
-  color: var(--text-primary);
-  font-weight: 600;
-  text-align: right;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 变动行数小标记 */
-.env-change-badge {
-  display: inline-flex;
-  gap: 6px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.env-change-badge .added {
-  color: #10b981;
-}
-
-.env-change-badge .removed {
-  color: #ef4444;
-}
-
-/* 分支小标签 */
-.env-branch-tag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--primary);
-  background-color: var(--primary-glow);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.76rem;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 自动化管理页面无缝承载容器 */
-.cron-embedded-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow-y: auto;
-  background-color: var(--bg-primary);
-  padding: 40px;
-}
-
-.cron-embedded-container .view-header {
-  border: none;
-  padding: 0 0 20px 0;
-  background: transparent;
-  margin-bottom: 20px;
 }
 
 /* 渐入微动画 */
@@ -914,5 +778,4 @@
     background-position: 0% 50%;
   }
 }
-
 

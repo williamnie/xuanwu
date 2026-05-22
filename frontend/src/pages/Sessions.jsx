@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
   AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Plus, Settings,
-  Pin, Search, Puzzle, Clock, MessageSquarePlus,
-  SlidersHorizontal, GitBranch, ShieldAlert, Brain, ArrowUp, Folder, Volume2
+  Pin, Search, MessageSquarePlus,
+  SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder, Volume2
 } from 'lucide-react';
 import { api } from '../api/client';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
@@ -12,7 +12,6 @@ import ApprovalDialog from './sessions/ApprovalDialog';
 import SessionComposer from './sessions/SessionComposer';
 import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
-import Cron from './Cron';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -312,74 +311,6 @@ export default function Sessions() {
     }
   };
 
-  // 动态分析 Turn 工具执行，计算累积文件修改行数
-  const calculatedChanges = useMemo(() => {
-    let added = 0;
-    let removed = 0;
-    if (!selectedSession || !selectedSession.turns) return { added: 0, removed: 0 };
-    
-    let turns;
-    try {
-      if (typeof selectedSession.turns === 'string') {
-        turns = JSON.parse(selectedSession.turns);
-      } else {
-        turns = selectedSession.turns;
-      }
-    } catch {
-      return { added: 0, removed: 0 };
-    }
-
-    if (!Array.isArray(turns)) return { added: 0, removed: 0 };
-
-    for (const turn of turns) {
-      const items = turn.items || [];
-      for (const item of items) {
-        if (item.type === 'fileChange') {
-          if (Array.isArray(item.changes)) {
-            for (const change of item.changes) {
-              const diffText = change.diff || '';
-              const lines = diffText.split('\n');
-              for (const line of lines) {
-                if (line.startsWith('+') && !line.startsWith('+++')) added++;
-                else if (line.startsWith('-') && !line.startsWith('---')) removed++;
-              }
-            }
-          } else {
-            const diffText = item.text || '';
-            const lines = diffText.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('+') && !line.startsWith('+++')) added++;
-              else if (line.startsWith('-') && !line.startsWith('---')) removed++;
-            }
-          }
-        }
-      }
-    }
-    return { added, removed };
-  }, [selectedSession]);
-
-  const showChanges = useMemo(() => {
-    if (calculatedChanges.added > 0 || calculatedChanges.removed > 0) {
-      return calculatedChanges;
-    }
-    // 优雅占位符，若无改动，默认展示截图同款
-    return { added: 9858, removed: 1603 };
-  }, [calculatedChanges]);
-
-  // 动态提取 Git 分支信息
-  const resolvedGitInfo = useMemo(() => {
-    if (!selectedSession || !selectedSession.gitInfo) return null;
-    try {
-      let info = selectedSession.gitInfo;
-      if (typeof info === 'string') {
-        info = JSON.parse(info);
-      }
-      return info;
-    } catch {
-      return null;
-    }
-  }, [selectedSession]);
-
   // 标题中项目名的过滤
   const filteredSessions = useMemo(() => {
     let result = sessions;
@@ -435,21 +366,6 @@ export default function Sessions() {
             <span>搜索</span>
           </button>
           
-          <button 
-            className={`sidebar-shortcut-item ${activeView === 'plugins' ? 'active' : ''}`}
-            onClick={() => { setActiveView(activeView === 'plugins' ? 'new' : 'plugins'); }}
-          >
-            <span className="sidebar-shortcut-item-icon"><Puzzle size={16} /></span>
-            <span>插件</span>
-          </button>
-          
-          <button 
-            className={`sidebar-shortcut-item ${activeView === 'cron' ? 'active' : ''}`}
-            onClick={() => { setActiveView(activeView === 'cron' ? 'new' : 'cron'); }}
-          >
-            <span className="sidebar-shortcut-item-icon"><Clock size={16} /></span>
-            <span>自动化</span>
-          </button>
         </div>
 
         {/* 搜索框 */}
@@ -480,6 +396,7 @@ export default function Sessions() {
                 >
                   <span className="pinned-title" title={s.name || s.preview}>{s.name || s.preview || '未命名 Codex 会话'}</span>
                   <div className="pinned-actions">
+                    <SessionOriginBadge origin={s.origin} />
                     <button 
                       className="pinned-action-btn" 
                       onClick={(e) => togglePinSession(s.id, e)} 
@@ -495,6 +412,7 @@ export default function Sessions() {
         )}
 
         {/* 项目会话列表 */}
+        <SessionOriginLegend />
         <div className="sidebar-section-title">项目</div>
         <div className="sidebar-scroll-area">
           <VirtualSessionList
@@ -548,87 +466,6 @@ export default function Sessions() {
               </div>
             </div>
 
-            {/* 右侧环境/进度信息侧栏 */}
-            <aside className="session-env-sidebar animate-fade-in">
-              <div className="env-title-row">
-                <span className="env-title-text">进度 <ChevronRight size={13} /></span>
-              </div>
-              
-              <div className="env-section">
-                <div className="env-section-title-row">
-                  <span className="env-section-title">环境信息</span>
-                  <Settings size={13} className="env-section-cog" />
-                </div>
-                
-                <div className="env-item-row">
-                  <span className="env-item-label">变更</span>
-                  <span className="env-item-value">
-                    {detailLoading ? (
-                      <span className="skeleton-inline" style={{ width: '60px' }}></span>
-                    ) : (
-                      <div className="env-change-badge">
-                        <span className="added">+{showChanges.added.toLocaleString()}</span>
-                        <span className="removed">-{showChanges.removed.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </span>
-                </div>
-
-                <div className="env-item-row">
-                  <span className="env-item-label">本地</span>
-                  <span className="env-item-value" style={{ color: '#10b981', fontWeight: 700 }}>Active</span>
-                </div>
-
-                <div className="env-item-row">
-                  <span className="env-item-label">分支</span>
-                  <span className="env-item-value">
-                    {detailLoading ? (
-                      <span className="skeleton-inline" style={{ width: '80px' }}></span>
-                    ) : (
-                      <span className="env-branch-tag" title={resolvedGitInfo?.branch || 'feature/big'}>
-                        <GitBranch size={11} />
-                        {resolvedGitInfo?.branch || 'feature/big'}
-                      </span>
-                    )}
-                  </span>
-                </div>
-
-                <div className="env-item-row">
-                  <span className="env-item-label">提交</span>
-                  <span className="env-item-value" title={detailLoading ? '' : (resolvedGitInfo?.commit || '本地已就绪')}>
-                    {detailLoading ? (
-                      <span className="skeleton-inline" style={{ width: '50px' }}></span>
-                    ) : (
-                      resolvedGitInfo?.commit ? resolvedGitInfo.commit.substring(0, 7) : '本地已就绪'
-                    )}
-                  </span>
-                </div>
-
-                <div className="env-item-row">
-                  <span className="env-item-label">请求状态</span>
-                  <span className="env-item-value" style={{ color: 'var(--text-muted)' }}>
-                    {detailLoading ? (
-                      <span className="skeleton-inline" style={{ width: '60px' }}></span>
-                    ) : (
-                      selectedSession?.approvalPolicy === 'never' ? '无需授权' : '按需授权'
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              <div className="env-section" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                <div className="env-section-title-row" style={{ border: 'none', padding: 0 }}>
-                  <span className="env-section-title">来源</span>
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '6px' }}>
-                  {detailLoading ? (
-                    <span className="skeleton-inline" style={{ width: '100px', display: 'block', height: '12px' }}></span>
-                  ) : (
-                    selectedSession?.source || '用户手动触发'
-                  )}
-                </div>
-              </div>
-            </aside>
           </div>
         )}
 
@@ -737,40 +574,11 @@ export default function Sessions() {
                     <option value="read-only">只读沙箱模式</option>
                   </select>
                 </div>
-
-                <div className="bottom-tag-select">
-                  <GitBranch size={13} />
-                  <span>分支: {selectedProject?.branch || 'feature/big'}</span>
-                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 自动化嵌入页面 */}
-        {activeView === 'cron' && (
-          <div className="cron-embedded-container animate-fade-in">
-            <Cron />
-          </div>
-        )}
-
-        {/* 插件占位界面 */}
-        {activeView === 'plugins' && (
-          <div className="new-session-container animate-fade-in">
-            <div className="new-session-center-card" style={{ gap: '16px' }}>
-              <div style={{ padding: '20px', borderRadius: '50%', background: 'var(--primary-glow)', color: 'var(--primary)', marginBottom: '10px' }}>
-                <Puzzle size={40} />
-              </div>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>智能插件中心</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '360px', textAlign: 'center', lineHeight: 1.5 }}>
-                Codex 客户端插件中心即将上线。你可以在此安装、更新和管理扩展插件，赋予 AI 智能代理处理复杂工作流的超凡能力。
-              </p>
-              <button className="btn btn-primary" style={{ marginTop: '10px' }} onClick={() => setActiveView('new')}>
-                返回对话
-              </button>
-            </div>
-          </div>
-        )}
       </main>
 
       <ApprovalDialog request={approvalRequest} submitting={approvalSubmitting} onResolve={resolveApproval} />
@@ -796,6 +604,31 @@ function isSessionStartEvent(event) {
 
 function isSessionStopEvent(event) {
   return event?.method === 'turn/completed' || event?.method === 'error';
+}
+
+function SessionOriginBadge({ origin }) {
+  const meta = sessionOriginMeta(origin);
+  return <span className={`session-origin-dot ${meta.className}`} title={meta.title} />;
+}
+
+function sessionOriginMeta(origin) {
+  if (origin === 'runner') {
+    return { className: 'runner', label: 'Runner', title: 'Runner：由 codex-issue-runner 创建或执行' };
+  }
+  return { className: 'codex-app', label: 'Codex App', title: 'Codex App：来自 Codex App / CLI 会话' };
+}
+
+function SessionOriginLegend() {
+  return (
+    <div className="session-origin-legend" aria-label="Session 来源说明">
+      <span className="session-origin-legend-item">
+        <span className="session-origin-dot codex-app" /> Codex App
+      </span>
+      <span className="session-origin-legend-item">
+        <span className="session-origin-dot runner" /> Runner
+      </span>
+    </div>
+  );
 }
 
 function mergeSessions(prev, next) {
@@ -849,6 +682,7 @@ function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detai
       name: detail.name ?? session.name,
       preview: detail.preview ?? session.preview,
       status: detail.status ?? session.status,
+      origin: detail.origin ?? session.origin,
       updatedAt: detail.updatedAt ?? session.updatedAt,
       isRunning: running,
     };

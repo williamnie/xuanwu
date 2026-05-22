@@ -46,7 +46,7 @@ func threadStartParams(input ThreadInput) map[string]any {
 	params := map[string]any{
 		"cwd": input.CWD, "model": model, "approvalPolicy": approvalPolicy(input.ApprovalPolicy),
 		"sandbox": defaultString(input.Sandbox, "workspace-write"), "developerInstructions": input.DeveloperInstructions,
-		"ephemeral": false, "threadSource": "user",
+		"ephemeral": false, "threadSource": defaultString(input.ThreadSource, "codex-issue-runner"),
 	}
 	if input.ReasoningEffort != "" {
 		params["config"] = map[string]any{"model_reasoning_effort": input.ReasoningEffort}

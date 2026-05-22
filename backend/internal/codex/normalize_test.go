@@ -46,6 +46,9 @@ func TestThreadStartParamsMapsFrontendApprovalValues(t *testing.T) {
 	if params["approvalPolicy"] != "on-request" {
 		t.Fatalf("approval mapping = %v", params["approvalPolicy"])
 	}
+	if params["threadSource"] != "codex-issue-runner" {
+		t.Fatalf("threadSource = %v", params["threadSource"])
+	}
 	params = threadStartParams(ThreadInput{CWD: "/tmp/demo", ApprovalPolicy: "always"})
 	if params["approvalPolicy"] != "untrusted" {
 		t.Fatalf("approval mapping = %v", params["approvalPolicy"])

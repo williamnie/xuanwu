@@ -165,6 +165,9 @@ func TestListSessionsMarksManualSessionRunning(t *testing.T) {
 	if len(list.Data) != 1 || !list.Data[0].IsRunning {
 		t.Fatalf("session should be running: %+v", list)
 	}
+	if list.Data[0].Origin != codex.SessionOriginRunner {
+		t.Fatalf("session origin = %q, want runner", list.Data[0].Origin)
+	}
 }
 
 func TestListSessionsMarksIssueRunnerThreadRunning(t *testing.T) {
@@ -179,6 +182,43 @@ func TestListSessionsMarksIssueRunnerThreadRunning(t *testing.T) {
 	}
 	if len(list.Data) != 1 || !list.Data[0].IsRunning {
 		t.Fatalf("issue runner session should be running: %+v", list)
+	}
+	if list.Data[0].Origin != codex.SessionOriginRunner {
+		t.Fatalf("session origin = %q, want runner", list.Data[0].Origin)
+	}
+}
+
+func TestListSessionsMarksCodexAppOriginByDefault(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	list, err := r.ListSessions(context.Background(), codex.SessionListInput{})
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(list.Data) != 1 || list.Data[0].Origin != codex.SessionOriginCodexApp {
+		t.Fatalf("session should be codex app origin: %+v", list)
+	}
+}
+
+func TestListSessionsMarksPersistedIssueThreadAsRunnerOrigin(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
+	if err := st.UpdateIssueRuntime(ctx, issue.ID, "thread-1", "turn-1"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	list, err := r.ListSessions(ctx, codex.SessionListInput{})
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(list.Data) != 1 || list.Data[0].Origin != codex.SessionOriginRunner {
+		t.Fatalf("session should be persisted runner origin: %+v", list)
 	}
 }
 

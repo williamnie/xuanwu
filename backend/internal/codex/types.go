@@ -9,6 +9,7 @@ type ThreadInput struct {
 	ApprovalPolicy        string
 	Sandbox               string
 	DeveloperInstructions string
+	ThreadSource          string
 }
 
 type TurnOptions struct {

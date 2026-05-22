@@ -105,6 +105,23 @@ func (s *Store) UpdateIssueRuntime(ctx context.Context, id int64, threadID, turn
 	return err
 }
 
+func (s *Store) ListIssueThreadIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `select distinct codex_thread_id from issues where codex_thread_id<>''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := map[string]bool{}
+	for rows.Next() {
+		var threadID string
+		if err := rows.Scan(&threadID); err != nil {
+			return nil, err
+		}
+		ids[threadID] = true
+	}
+	return ids, rows.Err()
+}
+
 func (s *Store) SetIssueStatus(ctx context.Context, id int64, status, errText string) (Issue, error) {
 	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?, updated_at=? where id=?`,
 		status, errText, now(), id)

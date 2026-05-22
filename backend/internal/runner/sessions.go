@@ -52,6 +52,9 @@ func (r *Runner) ListSessions(ctx context.Context, input codex.SessionListInput)
 		return codex.SessionListResult{}, err
 	}
 	r.applyRunningSessionState(res.Data)
+	if err := r.applySessionOrigin(ctx, res.Data); err != nil {
+		return codex.SessionListResult{}, err
+	}
 	return res, nil
 }
 
@@ -66,6 +69,11 @@ func (r *Runner) ReadSession(ctx context.Context, threadID string) (codex.Sessio
 	if r.isThreadRunning(sessionThreadID(res, threadID)) || codex.SessionStatusIsRunning(res.Status) {
 		res.IsRunning = true
 	}
+	sessions := []codex.Session{res}
+	if err := r.applySessionOrigin(ctx, sessions); err != nil {
+		return codex.Session{}, err
+	}
+	res = sessions[0]
 	return res, nil
 }
 
@@ -167,6 +175,7 @@ func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) 
 		target.Sandbox = input.Sandbox
 	}
 	target.DeveloperInstructions = developerInstructions()
+	target.ThreadSource = "codex-issue-runner"
 }
 
 func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input SessionCreateInput) (SessionCreateResult, error) {
@@ -252,6 +261,43 @@ func (r *Runner) applyRunningSessionState(sessions []codex.Session) {
 			sessions[i].IsRunning = true
 		}
 	}
+}
+
+func (r *Runner) applySessionOrigin(ctx context.Context, sessions []codex.Session) error {
+	issueThreadIDs, err := r.store.ListIssueThreadIDs(ctx)
+	if err != nil {
+		return err
+	}
+	knownRunnerThreadIDs := r.runningThreadIDs()
+	for i := range sessions {
+		if isRunnerSession(sessions[i], issueThreadIDs, knownRunnerThreadIDs) {
+			sessions[i].Origin = codex.SessionOriginRunner
+		} else {
+			sessions[i].Origin = codex.SessionOriginCodexApp
+		}
+	}
+	return nil
+}
+
+func isRunnerSession(session codex.Session, issueThreadIDs, knownRunnerThreadIDs map[string]bool) bool {
+	if knownRunnerThreadIDs[session.ID] {
+		return true
+	}
+	if issueThreadIDs[session.ID] {
+		return true
+	}
+	if isRunnerSource(session.Source) {
+		return true
+	}
+	if session.ThreadSource != nil && isRunnerSource(*session.ThreadSource) {
+		return true
+	}
+	return false
+}
+
+func isRunnerSource(source string) bool {
+	source = strings.ToLower(strings.TrimSpace(source))
+	return strings.HasPrefix(source, "codex-issue-runner")
 }
 
 func (r *Runner) isThreadRunning(threadID string) bool {

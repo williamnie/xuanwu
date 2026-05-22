@@ -96,6 +96,7 @@ func (a *Adapter) ModelList(ctx context.Context, input ModelListInput) (ModelLis
 	if err := json.Unmarshal(result, &out); err != nil {
 		return ModelListResult{}, err
 	}
+	applyConfiguredModelDefaults(&out)
 	return out, nil
 }
 
