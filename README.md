@@ -142,6 +142,16 @@ codex-issue-runner issue cancel --id 42 --json
 
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
 
+## Codex Skill（可选）
+
+仓库内置了一个 Codex skill，方便 Codex 在会话里创建、查询、重试、取消和显式完成 runner issue：
+
+```bash
+./scripts/install-codex-skill.sh
+```
+
+安装后 skill 会写入 `${CODEX_HOME:-$HOME/.codex}/skills/codex-issue-runner/SKILL.md`。源码位于 `skills/codex-issue-runner/SKILL.md`，可随仓库一起开源和审查。
+
 ## Triage Cron
 
 可以在 Issues 看板右上角点「定时运行 Triage」，或在 Settings 里统一管理 cron 任务。
