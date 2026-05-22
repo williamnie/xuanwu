@@ -108,26 +108,35 @@ export default function AppSidebar({
       )}
 
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <button
+        <div
           className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
-          style={{ paddingLeft: '8px' }}
+          style={{ paddingLeft: '8px', cursor: 'pointer' }}
           onClick={() => navigateTo('settings')}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Settings size={16} /> Settings
           </span>
-          <span className="nav-badge">—</span>
-        </button>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', marginTop: '6px' }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>明暗主题</span>
-          <button className="btn btn-secondary" style={{ padding: '6px', borderRadius: '6px', border: '1px solid var(--border-color)' }} onClick={toggleTheme}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleTheme();
+            }}
+            style={{
+              background: 'transparent',
+              border: '1px solid transparent',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-muted)'
+            }}
+            className="sidebar-theme-btn"
+            title="切换主题"
+          >
             {theme === 'dark' ? <Sun size={14} color="#fbbf24" /> : <Moon size={14} color="var(--primary)" />}
           </button>
-        </div>
-
-        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
-          © 2026 Codex Loop Runner
         </div>
       </div>
     </aside>
@@ -245,7 +254,7 @@ function IssuesSidebarFilters({
       </div>
 
       <div className="sidebar-section-title">Project</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+      <div className="sidebar-project-list">
         <button className={`sub-filter-item ${filterProject === '' ? 'active' : ''}`} onClick={() => setFilterProject('')}>
           <span>All projects</span>
           <span>{issues.length}</span>

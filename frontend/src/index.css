@@ -325,6 +325,31 @@ body {
   transition: width 0.3s ease;
 }
 
+.sidebar-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sidebar-theme-btn {
+  transition: all 0.2s ease;
+}
+
+.sidebar-theme-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--border-color-hover) !important;
+  box-shadow: var(--shadow-sm);
+  transform: scale(1.08);
+}
+
+[data-theme="dark"] .sidebar-theme-btn:hover {
+  background: var(--bg-card);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
 /* Sub-items list (FOCUS & PROJECT) */
 .sub-filter-item {
   display: flex;
