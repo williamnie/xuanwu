@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
 import CronTasksPanel from '../components/CronTasksPanel';
+import { sortIssuesByIdDesc } from '../utils/issueSort';
 
 export default function Issues({
   filterProject,
@@ -193,7 +194,9 @@ export default function Issues({
   };
 
   // 1. 过滤当前项目的 Issue 列表
-  const projectIssues = issues.filter(i => !filterProject || i.project_id === filterProject);
+  const projectIssues = sortIssuesByIdDesc(
+    issues.filter(i => !filterProject || i.project_id === filterProject)
+  );
 
   // 2. 将 Issue 数据按照看板状态分类
   const triageIssues = projectIssues.filter(i => i.status === 'triage');
