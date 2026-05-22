@@ -162,15 +162,7 @@ export default function App() {
     localStorage.setItem('codex-theme', theme);
   }, [theme]);
 
-  // 进入 sessions 页面时，自动收起左侧菜单
-  useEffect(() => {
-    if (currentPage === 'sessions') {
-      updateAppState(draft => {
-        draft.sidebarCollapsed = true;
-      });
-      localStorage.setItem('codex-sidebar-collapsed', 'true');
-    }
-  }, [currentPage, updateAppState]);
+
 
   // 订阅 SSE 实时变更，触发数据刷新
   useEffect(() => {
