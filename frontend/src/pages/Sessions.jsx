@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
-  AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Plus, RefreshCw, Settings, Terminal,
-  ArrowLeft, ArrowRight, Pin, Search, Puzzle, Clock, MessageSquarePlus, LogOut,
-  SlidersHorizontal, GitBranch, ShieldAlert, Brain, Cpu, ArrowUp, Folder, FolderOpen, Volume2
+  AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Plus, Settings,
+  Pin, Search, Puzzle, Clock, MessageSquarePlus,
+  SlidersHorizontal, GitBranch, ShieldAlert, Brain, ArrowUp, Folder, Volume2
 } from 'lucide-react';
 import { api } from '../api/client';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
 import { selectProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
-import SessionCreateModal from './sessions/SessionCreateModal';
 import SessionComposer from './sessions/SessionComposer';
 import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
@@ -39,16 +38,16 @@ function compactModelName(value) {
     .trim();
 }
 
-export default function Sessions({ navigateTo, theme, toggleTheme }) {
+export default function Sessions() {
   const projects = useDataStore(selectProjects);
   const [sessions, setSessions] = useState([]);
   const [cursor, setCursor] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [selectedSession, setSelectedSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [cwd, setCwd] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -65,6 +64,12 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const detailRefreshTimer = useRef(null);
   const listRefreshTimer = useRef(null);
+  const selectedIdRef = useRef(selectedId);
+  const lastSelectedIdRef = useRef(selectedId);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   // 客户端风格路由、置顶与搜索状态
   const [activeView, setActiveView] = useState('chat');
@@ -127,15 +132,28 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     }
   }, [cursor, loadingMore]);
 
-  const loadSelected = useCallback(async () => {
+  const loadSelected = useCallback(async (isSwitching = false) => {
     if (!selectedId) return;
+    if (isSwitching) {
+      setDetailLoading(true);
+      setSelectedSession(null);
+    }
+    const requestId = selectedId;
     try {
-      const detail = await api.getSession(selectedId);
+      const detail = await api.getSession(requestId);
+      if (selectedIdRef.current !== requestId) return;
+      const running = isSessionRunning(detail);
       setSelectedSession(detail);
-      setSessionRunning(!!detail.isRunning);
+      setSessionRunning(running);
+      setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
       setError('');
     } catch (err) {
+      if (selectedIdRef.current !== requestId) return;
       setError(err.message || '读取 session 详情失败');
+    } finally {
+      if (selectedIdRef.current === requestId) {
+        setDetailLoading(false);
+      }
     }
   }, [selectedId]);
 
@@ -153,7 +171,13 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
   }, []);
 
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
-  useEffect(() => { loadSelected(); }, [loadSelected]);
+  
+  useEffect(() => {
+    const isSwitching = lastSelectedIdRef.current !== selectedId;
+    lastSelectedIdRef.current = selectedId;
+    loadSelected(isSwitching);
+  }, [selectedId, loadSelected]);
+
   useEffect(() => { loadModels(); }, [loadModels]);
   useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
 
@@ -179,9 +203,18 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
       setApprovalRequest(parseApprovalPayload(event.payload));
       return;
     }
+    if (event.threadId && isSessionStartEvent(event)) {
+      setSessions((prev) => setSessionRunningInList(prev, event.threadId, true));
+    }
+    if (event.threadId && isSessionStopEvent(event)) {
+      setSessions((prev) => setSessionRunningInList(prev, event.threadId, false));
+    }
     if (event.threadId !== selectedId) return;
     setLiveEvents((prev) => [...prev, event].slice(-200));
-    if (event.method === 'turn/completed' || event.method === 'error') {
+    if (isSessionStartEvent(event)) {
+      setSessionRunning(true);
+    }
+    if (isSessionStopEvent(event)) {
       setSessionRunning(false);
       loadSelected();
       loadFirstPage();
@@ -192,40 +225,6 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     window.clearTimeout(detailRefreshTimer.current);
     window.clearTimeout(listRefreshTimer.current);
   }, []);
-
-  const openCreate = () => {
-    const project = projects[0] || null;
-    setProjectId(project?.id || '');
-    setCwd(project?.cwd || '');
-    setSessionSettings(defaultSessionSettings(project));
-    setPrompt('');
-    setIsCreateOpen(true);
-    loadModels();
-  };
-
-  const createSession = async (event) => {
-    event.preventDefault();
-    setSending(true);
-    try {
-      const result = await api.createSession({
-        project_id: projectId,
-        cwd,
-        prompt,
-        model: sessionSettings.model,
-        reasoning_effort: sessionSettings.reasoningEffort,
-        approval_policy: sessionSettings.approvalPolicy,
-        sandbox: sessionSettings.sandbox,
-      });
-      setIsCreateOpen(false);
-      setSelectedId(result.thread_id);
-      setLiveEvents([]);
-      await loadFirstPage();
-    } catch (err) {
-      setError(err.message || '创建 session 失败');
-    } finally {
-      setSending(false);
-    }
-  };
 
   const handleProjectChange = (id) => {
     const project = projects.find((item) => item.id === id) || null;
@@ -268,6 +267,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
         sandbox: messageSettings.sandbox,
       });
       setSessionRunning(true);
+      setSessions((prev) => setSessionRunningInList(prev, selectedId, true));
       setMessage('');
       setLiveEvents([]);
     } catch (err) {
@@ -281,6 +281,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     if (!selectedId) return;
     await api.interruptSession(selectedId);
     setSessionRunning(false);
+    setSessions((prev) => setSessionRunningInList(prev, selectedId, false));
   };
 
   // 新建并启动会话
@@ -299,6 +300,8 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
         sandbox: sessionSettings.sandbox,
       });
       setSelectedId(result.thread_id);
+      setSessionRunning(Boolean(result.turn_id));
+      setSessions((prev) => setSessionRunningInList(prev, result.thread_id, Boolean(result.turn_id)));
       setLiveEvents([]);
       setPrompt('');
       await loadFirstPage();
@@ -315,7 +318,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     let removed = 0;
     if (!selectedSession || !selectedSession.turns) return { added: 0, removed: 0 };
     
-    let turns = [];
+    let turns;
     try {
       if (typeof selectedSession.turns === 'string') {
         turns = JSON.parse(selectedSession.turns);
@@ -323,7 +326,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
         turns = selectedSession.turns;
       }
     } catch {
-      turns = [];
+      return { added: 0, removed: 0 };
     }
 
     if (!Array.isArray(turns)) return { added: 0, removed: 0 };
@@ -396,6 +399,14 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     return sessions.filter((s) => pinnedSessionIds.includes(s.id));
   }, [sessions, pinnedSessionIds]);
 
+  const selectSession = useCallback((id) => {
+    const nextSession = sessions.find((item) => item.id === id);
+    setSelectedId(id);
+    setActiveView('chat');
+    setLiveEvents([]);
+    setSessionRunning(isSessionRunning(nextSession));
+  }, [sessions]);
+
   if (loading && sessions.length === 0) {
     return <LoadingState />;
   }
@@ -410,7 +421,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
         <div className="sidebar-shortcut-items">
           <button 
             className={`sidebar-shortcut-item ${activeView === 'new' ? 'active' : ''}`}
-            onClick={() => { setSelectedId(''); setActiveView('new'); setPrompt(''); }}
+            onClick={() => { setSelectedId(''); setActiveView('new'); setPrompt(''); setSessionRunning(false); }}
           >
             <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
             <span>新对话</span>
@@ -465,7 +476,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
                 <button 
                   key={s.id} 
                   className={`pinned-session-row ${selectedId === s.id && activeView === 'chat' ? 'active' : ''}`}
-                  onClick={() => { setSelectedId(s.id); setActiveView('chat'); setLiveEvents([]); setSessionRunning(false); }}
+                  onClick={() => selectSession(s.id)}
                 >
                   <span className="pinned-title" title={s.name || s.preview}>{s.name || s.preview || '未命名 Codex 会话'}</span>
                   <div className="pinned-actions">
@@ -492,7 +503,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
             selectedId={selectedId}
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
-            onSelect={(id) => { setSelectedId(id); setActiveView('chat'); setLiveEvents([]); setSessionRunning(false); }}
+            onSelect={selectSession}
             onLoadMore={loadMore}
           />
         </div>
@@ -508,7 +519,16 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
           <div className="active-session-shell">
             {/* 中间聊天区 */}
             <div className="client-chat-area">
-              {selectedSession ? <SessionDetail session={selectedSession} liveEvents={liveEvents} /> : <EmptyDetail />}
+              {detailLoading ? (
+                <div className="session-detail-loading">
+                  <Loader2 className="animate-spin" size={24} color="var(--primary)" />
+                  <span>正在加载会话详情...</span>
+                </div>
+              ) : selectedSession ? (
+                <SessionDetail session={selectedSession} liveEvents={liveEvents} />
+              ) : (
+                <EmptyDetail />
+              )}
               
               <div className="client-chat-composer-section">
                 <SessionComposer
@@ -543,10 +563,14 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
                 <div className="env-item-row">
                   <span className="env-item-label">变更</span>
                   <span className="env-item-value">
-                    <div className="env-change-badge">
-                      <span className="added">+{showChanges.added.toLocaleString()}</span>
-                      <span className="removed">-{showChanges.removed.toLocaleString()}</span>
-                    </div>
+                    {detailLoading ? (
+                      <span className="skeleton-inline" style={{ width: '60px' }}></span>
+                    ) : (
+                      <div className="env-change-badge">
+                        <span className="added">+{showChanges.added.toLocaleString()}</span>
+                        <span className="removed">-{showChanges.removed.toLocaleString()}</span>
+                      </div>
+                    )}
                   </span>
                 </div>
 
@@ -558,24 +582,36 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
                 <div className="env-item-row">
                   <span className="env-item-label">分支</span>
                   <span className="env-item-value">
-                    <span className="env-branch-tag" title={resolvedGitInfo?.branch || 'feature/big'}>
-                      <GitBranch size={11} />
-                      {resolvedGitInfo?.branch || 'feature/big'}
-                    </span>
+                    {detailLoading ? (
+                      <span className="skeleton-inline" style={{ width: '80px' }}></span>
+                    ) : (
+                      <span className="env-branch-tag" title={resolvedGitInfo?.branch || 'feature/big'}>
+                        <GitBranch size={11} />
+                        {resolvedGitInfo?.branch || 'feature/big'}
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 <div className="env-item-row">
                   <span className="env-item-label">提交</span>
-                  <span className="env-item-value" title={resolvedGitInfo?.commit || '本地已就绪'}>
-                    {resolvedGitInfo?.commit ? resolvedGitInfo.commit.substring(0, 7) : '本地已就绪'}
+                  <span className="env-item-value" title={detailLoading ? '' : (resolvedGitInfo?.commit || '本地已就绪')}>
+                    {detailLoading ? (
+                      <span className="skeleton-inline" style={{ width: '50px' }}></span>
+                    ) : (
+                      resolvedGitInfo?.commit ? resolvedGitInfo.commit.substring(0, 7) : '本地已就绪'
+                    )}
                   </span>
                 </div>
 
                 <div className="env-item-row">
                   <span className="env-item-label">请求状态</span>
                   <span className="env-item-value" style={{ color: 'var(--text-muted)' }}>
-                    {selectedSession?.approvalPolicy === 'never' ? '无需授权' : '按需授权'}
+                    {detailLoading ? (
+                      <span className="skeleton-inline" style={{ width: '60px' }}></span>
+                    ) : (
+                      selectedSession?.approvalPolicy === 'never' ? '无需授权' : '按需授权'
+                    )}
                   </span>
                 </div>
               </div>
@@ -585,7 +621,11 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
                   <span className="env-section-title">来源</span>
                 </div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '6px' }}>
-                  {selectedSession?.source || '用户手动触发'}
+                  {detailLoading ? (
+                    <span className="skeleton-inline" style={{ width: '100px', display: 'block', height: '12px' }}></span>
+                  ) : (
+                    selectedSession?.source || '用户手动触发'
+                  )}
                 </div>
               </div>
             </aside>
@@ -750,9 +790,70 @@ function isSessionFileEvent(event) {
   return event?.type === 'session.created' || event?.type === 'session.updated';
 }
 
+function isSessionStartEvent(event) {
+  return event?.method === 'turn/started';
+}
+
+function isSessionStopEvent(event) {
+  return event?.method === 'turn/completed' || event?.method === 'error';
+}
+
 function mergeSessions(prev, next) {
   const seen = new Set(prev.map((item) => item.id));
   return [...prev, ...next.filter((item) => !seen.has(item.id))];
+}
+
+function isSessionRunning(session) {
+  if (!session) return false;
+  if (session.isRunning) return true;
+  const value = sessionStatusValue(session.status);
+  return ['running', 'inprogress', 'in-progress', 'streaming', 'busy'].includes(value);
+}
+
+function sessionStatusValue(status) {
+  if (!status) return '';
+  let value = status;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return normalizeSessionStatusValue(value);
+    }
+  }
+  return normalizeSessionStatusValue(value.type || value.state || value.status || '');
+}
+
+function normalizeSessionStatusValue(value) {
+  return String(value || '').trim().toLowerCase().replaceAll('_', '-');
+}
+
+function setSessionRunningInList(list, id, running) {
+  if (!id) return list;
+  let changed = false;
+  const next = list.map((session) => {
+    if (session.id !== id || session.isRunning === running) return session;
+    changed = true;
+    return { ...session, isRunning: running };
+  });
+  return changed ? next : list;
+}
+
+function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detail)) {
+  if (!detail?.id) return list;
+  let changed = false;
+  const next = list.map((session) => {
+    if (session.id !== detail.id) return session;
+    changed = true;
+    return {
+      ...session,
+      name: detail.name ?? session.name,
+      preview: detail.preview ?? session.preview,
+      status: detail.status ?? session.status,
+      updatedAt: detail.updatedAt ?? session.updatedAt,
+      isRunning: running,
+    };
+  });
+  return changed ? next : list;
 }
 
 function LoadingState() {
