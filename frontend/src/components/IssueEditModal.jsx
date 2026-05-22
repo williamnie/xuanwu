@@ -113,6 +113,7 @@ function DescriptionField({ value, onChange }) {
         value={value}
         onChange={onChange}
         minHeight={220}
+        hideToolbar={true}
       />
     </div>
   );

@@ -37,6 +37,7 @@ export default function PromptEditor({
   variant = 'default',
   footerControls = null,
   actions = null,
+  hideToolbar = false, // 新增参数：是否隐藏顶部工具条
 }) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
@@ -68,7 +69,7 @@ export default function PromptEditor({
 
   return (
     <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''} ${editor.isFocused ? 'focused' : ''}`}>
-      {!isComposer && <PromptToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
+      {!isComposer && !hideToolbar && <PromptToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
       <EditorContent editor={editor} className={`prompt-editor-content ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />
       {isComposer && (
         <div className="prompt-composer-footer">
