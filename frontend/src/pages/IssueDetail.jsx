@@ -245,7 +245,40 @@ export default function IssueDetail({ issueId, navigateTo }) {
   // 日志解析转换
   // 将 Go 传过来的原始 issue_events 处理成可在终端渲染的行
   const renderTerminalLines = () => {
-    if (events.length === 0) {
+    // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
+    const getMergedEvents = () => {
+      const merged = [];
+      for (const event of events) {
+        const payload = parseEventPayload(event);
+        const isDelta = event.type === 'issue.log' && 
+          (payload.codexMethod === 'item/agentMessage/delta' || 
+           payload.codexMethod === 'item/commandExecution/outputDelta');
+        
+        if (merged.length > 0) {
+          const lastMerged = merged[merged.length - 1];
+          const canMerge = isDelta && 
+            lastMerged.type === 'issue.log' && 
+            lastMerged._payload?.codexMethod === payload.codexMethod;
+            
+          if (canMerge) {
+            const currentText = payload.text || event.text || '';
+            lastMerged._textMerged += currentText;
+            continue;
+          }
+        }
+        
+        merged.push({
+          ...event,
+          _payload: payload,
+          _textMerged: payload.text || event.text || ''
+        });
+      }
+      return merged;
+    };
+
+    const mergedEvents = getMergedEvents();
+
+    if (mergedEvents.length === 0) {
       return (
         <div style={{ color: '#565f89', textAlign: 'center', padding: '40px 0', fontStyle: 'italic' }}>
           [ 等待事件输出 / 当前暂无控制台日志 ]
@@ -253,9 +286,10 @@ export default function IssueDetail({ issueId, navigateTo }) {
       );
     }
 
-    return events.map((event, idx) => {
+    return mergedEvents.map((event, idx) => {
       const timestamp = new Date(event.created_at || Date.now()).toLocaleTimeString();
-      const payload = parseEventPayload(event);
+      const payload = event._payload;
+      const text = event._textMerged;
 
       // 1. 系统状态变更
       if (event.type === 'issue.status_changed') {
@@ -280,7 +314,8 @@ export default function IssueDetail({ issueId, navigateTo }) {
       // 3. Codex 日志事件 (有具体的 Codex 回合、线程或输出)
       if (event.type === 'issue.log') {
         const method = payload.codexMethod || '';
-        const text = payload.text || event.text || '';
+        // 优先使用外部已合并好的 _textMerged，若无则回退取原本事件文本
+        const text = event._textMerged || payload.text || event.text || '';
 
         // 根据不同的通知类型，渲染不同的极客控制台线条
         if (method === 'item/agentMessage/delta') {
