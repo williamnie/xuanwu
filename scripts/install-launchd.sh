@@ -55,11 +55,13 @@ cat > "$PLIST" <<PLIST
   <key>Label</key>
   <string>$(xml_escape "$LABEL")</string>
   <key>Program</key>
-  <string>$(xml_escape "$BINARY_PATH")</string>
-  <key>WorkingDirectory</key>
-  <string>$(xml_escape "$ROOT_DIR")</string>
+  <string>/bin/bash</string>
   <key>ProgramArguments</key>
   <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec "\$@"</string>
+    <string>$(xml_escape "$LABEL.exec")</string>
     <string>$(xml_escape "$BINARY_PATH")</string>
     <string>serve</string>
     <string>--addr</string>
@@ -96,11 +98,11 @@ launchctl enable "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
 launchctl kickstart -k "$DOMAIN/$LABEL"
 
 URL="$(service_url)"
-for _ in {1..30}; do
+for _ in {1..120}; do
   if curl -fsS "$URL/api/projects" >/dev/null 2>&1; then
     break
   fi
-  sleep 0.3
+  sleep 0.5
 done
 
 "$ROOT_DIR/scripts/status-launchd.sh"
