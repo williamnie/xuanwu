@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
@@ -183,6 +184,25 @@ func TestWebDirServesSPAWithoutShadowingAPI(t *testing.T) {
 	}
 }
 
+func TestEmbeddedSPAFSServesFallback(t *testing.T) {
+	webFS := fstest.MapFS{
+		"index.html":    {Data: []byte("<main>embedded ui</main>")},
+		"assets/app.js": {Data: []byte("console.log('embedded')")},
+	}
+	srv := newTestServerWithWebHandler(t, newFSSPAHandler(webFS))
+
+	assertBodyContains(t, srv, "/", "embedded ui")
+	assertBodyContains(t, srv, "/assets/app.js", "embedded")
+	assertBodyContains(t, srv, "/sessions/thread-1", "embedded ui")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/nope", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound || strings.Contains(rr.Body.String(), "embedded ui") {
+		t.Fatalf("API should keep JSON 404, status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 type projectSyncTestResponse struct {
 	Source  string `json:"source"`
 	Summary struct {
@@ -260,6 +280,11 @@ func newTestServer(t *testing.T) *Server {
 
 func newTestServerWithWeb(t *testing.T, webDir string) *Server {
 	t.Helper()
+	return newTestServerWithWebHandler(t, newWebHandler(webDir))
+}
+
+func newTestServerWithWebHandler(t *testing.T, web http.Handler) *Server {
+	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -267,7 +292,9 @@ func newTestServerWithWeb(t *testing.T, webDir string) *Server {
 	t.Cleanup(func() { _ = st.Close() })
 	bus := events.NewBus()
 	r := runner.New(st, bus, noopCodex{ch: make(chan codex.Event)})
-	return NewServerWithWebDir(st, bus, r, webDir)
+	srv := NewServerWithWebDir(st, bus, r, "")
+	srv.web = web
+	return srv
 }
 
 func assertBodyContains(t *testing.T, h http.Handler, path, want string) {

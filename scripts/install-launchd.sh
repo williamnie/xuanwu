@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
 DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$ROOT_DIR/data/app.db}"
-WEB_DIR="${CODEX_RUNNER_WEB_DIR:-$ROOT_DIR/frontend/dist}"
+WEB_DIR="${CODEX_RUNNER_WEB_DIR:-}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$ROOT_DIR/data/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
@@ -27,6 +27,15 @@ service_url() {
     printf 'http://127.0.0.1%s' "$ADDR"
   else
     printf 'http://%s' "$ADDR"
+  fi
+}
+
+web_dir_args() {
+  if [ -n "$WEB_DIR" ]; then
+    cat <<ARGS
+    <string>--web-dir</string>
+    <string>$(xml_escape "$WEB_DIR")</string>
+ARGS
   fi
 }
 
@@ -59,8 +68,7 @@ cat > "$PLIST" <<PLIST
     <string>$(xml_escape "$DB_PATH")</string>
     <string>--codex-cmd</string>
     <string>$(xml_escape "$CODEX_CMD")</string>
-    <string>--web-dir</string>
-    <string>$(xml_escape "$WEB_DIR")</string>
+$(web_dir_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -97,4 +105,9 @@ done
 
 "$ROOT_DIR/scripts/status-launchd.sh"
 echo "[launchd] installed plist: $PLIST"
+if [ -n "$WEB_DIR" ]; then
+  echo "[launchd] web dir override: $WEB_DIR"
+else
+  echo "[launchd] web: embedded in binary"
+fi
 echo "[launchd] logs: $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"

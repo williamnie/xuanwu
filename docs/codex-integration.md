@@ -19,7 +19,7 @@ Go 后端启动时会创建 Codex adapter，但不会立刻拉起 Codex app-serv
 CODEX_RUNNER_ADDR       默认 127.0.0.1:3008
 CODEX_RUNNER_DB         默认 data/app.db
 CODEX_RUNNER_CODEX_CMD  默认 codex
-CODEX_RUNNER_WEB_DIR    默认空，仅 API；部署时可指向 frontend/dist
+CODEX_RUNNER_WEB_DIR    默认空，使用二进制内嵌前端；设置后改为托管外部目录
 --codex-args            默认 app-server --listen stdio://
 ```
 

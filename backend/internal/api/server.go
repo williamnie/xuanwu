@@ -1,14 +1,18 @@
 package api
 
 import (
+	"bytes"
+	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
+	webassets "github.com/xiaobei/codex-issue-runner/backend/internal/web"
 )
 
 type Server struct {
@@ -36,10 +40,18 @@ func NewServerWithWebDirAndSessionsDir(
 	codexSessionsDir string,
 ) *Server {
 	s := &Server{store: st, bus: bus, runner: runner, codexSessionsDir: codexSessionsDir}
-	if webDir != "" {
-		s.web = spaHandler{root: webDir}
-	}
+	s.web = newWebHandler(webDir)
 	return s
+}
+
+func newWebHandler(webDir string) http.Handler {
+	if webDir != "" {
+		return spaHandler{root: webDir}
+	}
+	if embedded, ok := webassets.EmbeddedFS(); ok {
+		return newFSSPAHandler(embedded)
+	}
+	return nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +125,7 @@ type spaHandler struct {
 }
 
 func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	cleaned := strings.TrimPrefix(filepath.Clean("/"+r.URL.Path), "/")
+	cleaned := cleanSPAPath(r.URL.Path)
 	target := filepath.Join(h.root, filepath.FromSlash(cleaned))
 	if cleaned == "." || !isRegularFile(target) {
 		target = filepath.Join(h.root, "index.html")
@@ -121,7 +133,47 @@ func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, target)
 }
 
+type fsSPAHandler struct {
+	fsys fs.FS
+}
+
+func newFSSPAHandler(fsys fs.FS) http.Handler {
+	return fsSPAHandler{fsys: fsys}
+}
+
+func (h fsSPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	cleaned := cleanSPAPath(r.URL.Path)
+	if cleaned == "." || !isFSRegularFile(h.fsys, cleaned) {
+		cleaned = "index.html"
+	}
+	serveFSFile(w, r, h.fsys, cleaned)
+}
+
+func cleanSPAPath(value string) string {
+	cleaned := strings.TrimPrefix(path.Clean("/"+value), "/")
+	if cleaned == "" {
+		return "."
+	}
+	return cleaned
+}
+
+func serveFSFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) {
+	body, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	info, _ := fs.Stat(fsys, name)
+	modTime := info.ModTime()
+	http.ServeContent(w, r, name, modTime, bytes.NewReader(body))
+}
+
 func isRegularFile(path string) bool {
 	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func isFSRegularFile(fsys fs.FS, name string) bool {
+	info, err := fs.Stat(fsys, name)
 	return err == nil && !info.IsDir()
 }

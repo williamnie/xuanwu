@@ -95,7 +95,7 @@ http://127.0.0.1:3008/
 服务名: com.xiaobei.codex-issue-runner
 监听:   127.0.0.1:3008
 DB:     data/app.db
-Web:    frontend/dist
+Web:    内嵌在二进制中（可用 CODEX_RUNNER_WEB_DIR 覆盖）
 二进制: dist/codex-issue-runner
 日志:   data/logs/launchd.out.log / data/logs/launchd.err.log
 ```
