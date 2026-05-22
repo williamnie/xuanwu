@@ -16,6 +16,12 @@ function defaultRunAt() {
   return toLocalInputValue(date);
 }
 
+function minOnceRunAt() {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() + 1, 0, 0);
+  return toLocalInputValue(date);
+}
+
 function toLocalInputValue(date) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
@@ -65,6 +71,15 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleOpen = () => {
+    setForm(prev => ({
+      ...prev,
+      projectId: defaultProjectId,
+      runAt: defaultRunAt(),
+    }));
+    setOpen(true);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
@@ -104,14 +119,14 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
   if (compact) {
     return (
       <>
-        <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.78rem' }} onClick={() => setOpen(true)}>
+        <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.78rem' }} onClick={handleOpen}>
           <CalendarClock size={14} /> 定时运行 Triage
         </button>
         {open && (
           <div className="modal-overlay">
             <div className="glass-card modal-content" style={{ maxWidth: '680px', padding: '22px' }}>
               <PanelHeader onClose={() => setOpen(false)} />
-              {renderForm({ projects, form, updateField, error, submitting, handleSubmit })}
+              {renderForm({ projects, form, updateField, error, submitting, handleSubmit, minRunAt: minOnceRunAt() })}
               {renderTaskList({ tasks: visibleTasks, projects, handleToggleStatus, handleDelete })}
             </div>
           </div>
@@ -123,7 +138,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <PanelHeader />
-      {renderForm({ projects, form, updateField, error, submitting, handleSubmit })}
+      {renderForm({ projects, form, updateField, error, submitting, handleSubmit, minRunAt: minOnceRunAt() })}
       {renderTaskList({ tasks: visibleTasks, projects, handleToggleStatus, handleDelete })}
     </section>
   );
@@ -149,7 +164,7 @@ function PanelHeader({ onClose }) {
   );
 }
 
-function renderForm({ projects, form, updateField, error, submitting, handleSubmit }) {
+function renderForm({ projects, form, updateField, error, submitting, handleSubmit, minRunAt }) {
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: '12px', alignItems: 'end' }}>
       <div className="form-group" style={{ marginBottom: 0 }}>
@@ -170,7 +185,7 @@ function renderForm({ projects, form, updateField, error, submitting, handleSubm
       </div>
       <div className="form-group" style={{ marginBottom: 0 }}>
         <label>{form.mode === 'daily' ? '每日时间' : '开始时间'}</label>
-        <input className="form-control" type="datetime-local" value={form.runAt} onChange={(e) => updateField('runAt', e.target.value)} required />
+        <input className="form-control" type="datetime-local" value={form.runAt} min={form.mode === 'once' ? minRunAt : undefined} onChange={(e) => updateField('runAt', e.target.value)} required />
       </div>
       <button className="btn btn-primary" style={{ padding: '8px 14px' }} disabled={submitting}>
         {submitting ? '保存中...' : '设置 Cron'}

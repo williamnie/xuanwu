@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -9,7 +10,7 @@ import (
 func TestCronTaskLifecycle(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()
-	nextRun := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	nextRun := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
 
 	task, err := st.CreateCronTask(ctx, CronTask{
 		Name:      "午间运行 triage",
@@ -24,12 +25,13 @@ func TestCronTaskLifecycle(t *testing.T) {
 		t.Fatalf("unexpected defaults: %+v", task)
 	}
 
-	due, err := st.ListDueCronTasks(ctx, time.Date(2026, 5, 21, 12, 0, 1, 0, time.UTC))
+	dueAt, _ := time.Parse(time.RFC3339, nextRun)
+	due, err := st.ListDueCronTasks(ctx, dueAt.Add(time.Second))
 	if err != nil || len(due) != 1 || due[0].ID != task.ID {
 		t.Fatalf("due tasks = %+v err=%v", due, err)
 	}
 
-	ran, err := st.MarkCronTaskRan(ctx, task.ID, time.Date(2026, 5, 21, 12, 0, 2, 0, time.UTC))
+	ran, err := st.MarkCronTaskRan(ctx, task.ID, dueAt.Add(2*time.Second))
 	if err != nil {
 		t.Fatalf("mark ran: %v", err)
 	}
@@ -38,10 +40,29 @@ func TestCronTaskLifecycle(t *testing.T) {
 	}
 }
 
+func TestCreateCronTaskRejectsPastOnceRunAt(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	pastRun := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
+
+	_, err := st.CreateCronTask(ctx, CronTask{
+		Name:      "过去时间不应立即运行",
+		ProjectID: "demo",
+		Mode:      CronModeOnce,
+		NextRunAt: pastRun,
+	})
+	if err == nil {
+		t.Fatalf("expected past once run_at to be rejected")
+	}
+	if !errors.Is(err, ErrCronTaskInvalid) {
+		t.Fatalf("expected ErrCronTaskInvalid, got %v", err)
+	}
+}
+
 func TestDailyCronTaskKeepsActiveAndSchedulesNextDay(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()
-	firstRun := time.Date(2026, 5, 21, 4, 0, 0, 0, time.UTC)
+	firstRun := time.Now().UTC().Add(time.Hour)
 
 	task, err := st.CreateCronTask(ctx, CronTask{
 		Name:      "每日运行 triage",

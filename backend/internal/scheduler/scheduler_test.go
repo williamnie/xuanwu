@@ -24,7 +24,7 @@ func TestRunDuePromotesTriageIssuesAndStartsProjects(t *testing.T) {
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "queued later", Status: store.StatusTriage})
-	dueAt := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC)
+	dueAt := time.Now().UTC().Add(time.Hour)
 	task, err := st.CreateCronTask(ctx, store.CronTask{
 		Name:      "run demo triage",
 		ProjectID: "demo",

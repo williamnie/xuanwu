@@ -13,7 +13,7 @@ import (
 
 func TestCronTaskAPI(t *testing.T) {
 	srv := newTestServer(t)
-	nextRun := time.Date(2026, 5, 21, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	nextRun := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
 	task := postJSON[store.CronTask](t, srv, "/api/cron-tasks", map[string]any{
 		"name":        "12点运行 Triage",
 		"project_id":  "demo",

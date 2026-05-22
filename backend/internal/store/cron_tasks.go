@@ -192,6 +192,9 @@ func normalizeCronRunTime(task *CronTask, base time.Time) error {
 		if err != nil {
 			return fmt.Errorf("%w: next_run_at 需要 RFC3339", ErrCronTaskInvalid)
 		}
+		if task.Mode == CronModeOnce && task.Status == CronStatusActive && !t.After(base) {
+			return fmt.Errorf("%w: next_run_at 必须晚于当前时间", ErrCronTaskInvalid)
+		}
 		task.NextRunAt = t.UTC().Format(time.RFC3339)
 	}
 	if task.Mode == CronModeDaily {
