@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Loader2, Play, Plus, RefreshCw, Square, Terminal } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Play, Plus, RefreshCw, Settings, Square, Terminal } from 'lucide-react';
 import { api } from '../api/client';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import PromptEditor from '../components/editor/PromptEditor';
@@ -10,15 +10,6 @@ import './sessions/Sessions.css';
 
 const PAGE_SIZE = 50;
 
-function displayTitle(session) {
-  return session?.name || session?.preview || 'Untitled Codex session';
-}
-
-function flattenItems(turns) {
-  if (!Array.isArray(turns)) return [];
-  return turns.flatMap((turn) => (turn.items || []).map((item) => ({ ...item, turnId: turn.id })));
-}
-
 function textFromUserContent(content) {
   if (!Array.isArray(content)) return '';
   return content.map((item) => {
@@ -27,20 +18,6 @@ function textFromUserContent(content) {
     if (item.type === 'image' || item.type === 'input_image') return `![image](${item.url || item.image_url || ''})`;
     return '';
   }).filter(Boolean).join('\n\n');
-}
-
-function renderItemText(item) {
-  if (item.type === 'userMessage') return textFromUserContent(item.content);
-  if (item.type === 'agentMessage') return item.text || '';
-  if (item.type === 'commandExecution') return item.command || item.text || '';
-  return item.text || item.type;
-}
-
-function eventLine(event) {
-  if (event.text) return event.text;
-  if (event.error) return event.error;
-  if (event.status) return `${event.method}: ${event.status}`;
-  return event.method || 'codex.event';
 }
 
 export default function Sessions() {
@@ -60,7 +37,6 @@ export default function Sessions() {
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
 
-  const selectedItems = useMemo(() => flattenItems(selectedSession?.turns), [selectedSession]);
   const selectedProject = projects.find((project) => project.id === projectId);
 
   const loadFirstPage = useCallback(async () => {
@@ -189,7 +165,7 @@ export default function Sessions() {
         </section>
 
         <section className="session-detail glass-card">
-          {selectedSession ? <SessionDetail session={selectedSession} items={selectedItems} liveEvents={liveEvents} /> : <EmptyDetail />}
+          {selectedSession ? <SessionDetail session={selectedSession} liveEvents={liveEvents} /> : <EmptyDetail />}
           <form className="session-composer" onSubmit={sendMessage}>
             <PromptEditor
               value={message}
@@ -241,29 +217,361 @@ function EmptyDetail() {
   return <div className="session-empty">选择一个 Codex session 查看历史，或创建新 session。</div>;
 }
 
-function SessionDetail({ session, items, liveEvents }) {
+function parseDiff(diffText) {
+  if (!diffText) return [];
+  const lines = diffText.split('\n');
+  const files = [];
+  let currentFile = null;
+
+  for (const line of lines) {
+    if (line.startsWith('--- ') || line.startsWith('diff --git ')) {
+      let fullPath;
+      if (line.startsWith('--- ')) {
+        fullPath = line.substring(4).trim();
+      } else {
+        const parts = line.split(' ');
+        fullPath = parts[parts.length - 1].substring(2).trim();
+      }
+      if (fullPath.startsWith('a/') || fullPath.startsWith('b/')) {
+        fullPath = fullPath.substring(2);
+      }
+      const name = fullPath.split('/').pop() || fullPath;
+      currentFile = {
+        path: fullPath,
+        name: name,
+        added: 0,
+        removed: 0,
+        lines: [],
+      };
+      files.push(currentFile);
+    } else if (currentFile) {
+      currentFile.lines.push(line);
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        currentFile.added++;
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        currentFile.removed++;
+      }
+    }
+  }
+  return files;
+}
+
+function projectNameFromPath(cwd) {
+  const trimmed = String(cwd || '').trim().replace(/[\\/]+$/, '');
+  if (!trimmed) return 'No project';
+  return trimmed.split(/[\\/]/).pop() || 'No project';
+}
+
+function SessionDetail({ session, liveEvents }) {
+  const turns = session?.turns || [];
+
   return (
     <div className="session-detail-body">
-      <div className="session-detail-head">
-        <h1>{displayTitle(session)}</h1>
-        <code>{session.id}</code>
-        <span>{session.cwd}</span>
-      </div>
       <div className="session-transcript">
-        {items.map((item) => <MessageItem key={`${item.turnId}-${item.id}`} item={item} />)}
-        {liveEvents.map((event, index) => <LiveEvent key={`${event.turnId}-${index}`} event={event} />)}
+        {turns.map((turn, index) => (
+          <TurnItem key={turn.id || index} turn={turn} />
+        ))}
+        {liveEvents && liveEvents.length > 0 && (
+          <LiveTurnItem liveEvents={liveEvents} />
+        )}
       </div>
     </div>
   );
 }
 
-function MessageItem({ item }) {
-  const role = item.type === 'userMessage' ? 'user' : 'agent';
-  return <div className={`session-message ${role}`}><strong>{role}</strong><MarkdownText text={renderItemText(item)} /></div>;
+function TurnItem({ turn }) {
+  const elements = [];
+  let currentTools = [];
+
+  for (const item of (turn.items || [])) {
+    if (item.type === 'userMessage' || item.type === 'agentMessage') {
+      if (currentTools.length > 0) {
+        elements.push(<ToolsCollapsible key={`${currentTools[0].id || 'tools'}-collapsible`} tools={currentTools} />);
+        currentTools = [];
+      }
+      if (item.type === 'userMessage') {
+        elements.push(<UserMessageBubble key={item.id} item={item} />);
+      } else {
+        elements.push(<AgentMessageBubble key={item.id} item={item} />);
+      }
+    } else {
+      currentTools.push(item);
+    }
+  }
+
+  if (currentTools.length > 0) {
+    elements.push(<ToolsCollapsible key={`${currentTools[0].id || 'tools'}-collapsible`} tools={currentTools} />);
+  }
+
+  return (
+    <div className="turn-container animate-fade-in">
+      {elements}
+    </div>
+  );
 }
 
-function LiveEvent({ event }) {
-  return <div className="session-message live"><strong>{event.method}</strong><MarkdownText text={eventLine(event)} /></div>;
+function ToolsCollapsible({ tools, isLive }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const commandCount = tools.filter(t => t.type === 'commandExecution').length;
+  const fileCount = tools.filter(t => t.type === 'fileChange').length;
+  
+  let summary = '执行了辅助工具';
+  if (commandCount > 0 && fileCount > 0) {
+    summary = `运行了 ${commandCount} 个终端命令，修改了 ${fileCount} 个文件`;
+  } else if (commandCount > 0) {
+    summary = `运行了 ${commandCount} 个终端命令`;
+  } else if (fileCount > 0) {
+    summary = `修改了 ${fileCount} 个文件`;
+  }
+
+  if (isLive) {
+    summary = '正在执行工具以解决问题...';
+  }
+
+  return (
+    <div className="tools-collapsible-wrapper">
+      <button 
+        className={`tools-trigger-btn ${isOpen ? 'open' : ''} ${isLive ? 'live' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="tools-trigger-left">
+          <span className="tools-indicator-icon">
+            <Settings size={13} className={isLive ? 'spin-animation' : ''} />
+          </span>
+          <span className="tools-trigger-text">{summary}</span>
+        </span>
+        <span className="tools-trigger-chevron">
+          {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="tools-details-content animate-slide-down">
+          {tools.map((tool, idx) => (
+            <ToolDetailItem key={idx} tool={tool} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolDetailItem({ tool }) {
+  if (tool.type === 'commandExecution') {
+    return (
+      <div className="tool-detail-item command">
+        <div className="terminal-window">
+          <div className="terminal-header">
+            <div className="terminal-dots">
+              <span className="dot red"></span>
+              <span className="dot yellow"></span>
+              <span className="dot green"></span>
+            </div>
+            <span className="terminal-title">zsh — {projectNameFromPath(tool.cwd || '')}</span>
+          </div>
+          <div className="terminal-body">
+            <div className="terminal-prompt-line">
+              <span className="terminal-prompt">macbook %</span>{' '}
+              <span className="terminal-command-text">{tool.command || tool.text}</span>
+            </div>
+            {tool.text && tool.text !== tool.command && (
+              <pre className="terminal-output">{tool.text}</pre>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (tool.type === 'fileChange') {
+    let files;
+    if (Array.isArray(tool.changes) && tool.changes.length > 0) {
+      files = tool.changes.map((c) => {
+        const fullPath = c.path || '';
+        const name = fullPath.split('/').pop() || fullPath;
+        const diffText = c.diff || '';
+        const lines = diffText.split('\n');
+        let added = 0;
+        let removed = 0;
+        for (const line of lines) {
+          if (line.startsWith('+') && !line.startsWith('+++')) added++;
+          else if (line.startsWith('-') && !line.startsWith('---')) removed++;
+        }
+        return {
+          path: fullPath,
+          name: name,
+          added,
+          removed,
+          lines,
+        };
+      });
+    } else {
+      const diffText = tool.text || '';
+      files = parseDiff(diffText);
+    }
+
+    if (files.length === 0) {
+      const diffText = tool.text || '';
+      return (
+        <div className="tool-detail-item file-change">
+          <div className="diff-file-card">
+            <div className="diff-file-header">
+              <span className="diff-file-icon"><FileCode size={14} /></span>
+              <span className="diff-file-path">文件改动详情</span>
+            </div>
+            <div className="diff-file-body" style={{ padding: '12px 14px' }}>
+              {diffText ? (
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>{diffText}</pre>
+              ) : (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontStyle: 'italic' }}>无具体的代码差异（可能是新增空白文件、修改文件属性或未完成保存）</span>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="tool-detail-item file-change">
+        {files.map((file, fIdx) => (
+          <div key={fIdx} className="diff-file-card">
+            <div className="diff-file-header">
+              <span className="diff-file-icon"><FileCode size={14} /></span>
+              <span className="diff-file-path" title={file.path}>{file.name}</span>
+              <div className="diff-file-badges">
+                <span className="diff-badge added">+{file.added}</span>
+                <span className="diff-badge removed">-{file.removed}</span>
+              </div>
+            </div>
+            <div className="diff-file-body">
+              {file.lines.map((line, lIdx) => {
+                let lineClass = 'diff-line';
+                if (line.startsWith('+') && !line.startsWith('+++')) lineClass += ' added';
+                else if (line.startsWith('-') && !line.startsWith('---')) lineClass += ' removed';
+                else if (line.startsWith('@@')) lineClass += ' meta';
+                return (
+                  <div key={lIdx} className={lineClass}>
+                    {line}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="tool-detail-item unknown">
+      <code>{tool.type}: {tool.text}</code>
+    </div>
+  );
+}
+
+function UserMessageBubble({ item }) {
+  const text = textFromUserContent(item.content);
+  return (
+    <div className="chat-bubble-container user">
+      <div className="chat-bubble-avatar">U</div>
+      <div className="chat-bubble-content">
+        <div className="chat-bubble-sender">User</div>
+        <div className="chat-bubble-body">
+          <MarkdownText text={text} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgentMessageBubble({ item }) {
+  const text = item.text || '';
+  return (
+    <div className="chat-bubble-container agent animate-fade-in">
+      <div className="chat-bubble-avatar agent-logo">A</div>
+      <div className="chat-bubble-content">
+        <div className="chat-bubble-sender">Agent</div>
+        <div className="chat-bubble-body">
+          <MarkdownText text={text} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveTurnItem({ liveEvents }) {
+  const parsed = useMemo(() => {
+    let agentMessageText = '';
+    const tools = [];
+    let activeTool = null;
+    
+    for (const event of liveEvents) {
+      const method = event.method;
+      const text = event.text || '';
+      
+      if (method === 'item/agentMessage/delta') {
+        agentMessageText += text;
+      } else if (method === 'item/commandExecution/outputDelta') {
+        if (activeTool && activeTool.type === 'commandExecution') {
+          activeTool.text += text;
+        }
+      } else if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') {
+        if (activeTool && activeTool.type === 'fileChange') {
+          activeTool.text += text;
+        }
+      } else if (method === 'item/started') {
+        let toolType = 'tool';
+        let command = '';
+        try {
+          const payload = JSON.parse(event.payload || '{}');
+          const item = payload.item || {};
+          toolType = item.type || 'tool';
+          command = item.command || '';
+        } catch {
+          if (event.payload?.includes('commandExecution')) toolType = 'commandExecution';
+          if (event.payload?.includes('fileChange')) toolType = 'fileChange';
+        }
+        
+        activeTool = {
+          type: toolType,
+          command: command,
+          text: '',
+          status: 'inProgress',
+        };
+        tools.push(activeTool);
+      } else if (method === 'item/completed') {
+        if (activeTool) {
+          activeTool.status = 'completed';
+        }
+      }
+    }
+    
+    return {
+      tools,
+      agentMessageText,
+    };
+  }, [liveEvents]);
+
+  const { tools, agentMessageText } = parsed;
+
+  return (
+    <div className="turn-container active-live">
+      {tools.length > 0 && <ToolsCollapsible tools={tools} isLive={true} />}
+      
+      {agentMessageText && (
+        <div className="chat-bubble-container agent streaming">
+          <div className="chat-bubble-avatar agent-logo">A</div>
+          <div className="chat-bubble-content">
+            <div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking...</span></div>
+            <div className="chat-bubble-body">
+              <MarkdownText text={agentMessageText} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MarkdownText({ text }) {
