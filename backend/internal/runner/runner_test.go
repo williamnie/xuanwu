@@ -30,13 +30,13 @@ func (f *fakeCodex) ModelList(context.Context, codex.ModelListInput) (codex.Mode
 	return codex.ModelListResult{}, nil
 }
 func (f *fakeCodex) ThreadList(context.Context, codex.SessionListInput) (codex.SessionListResult, error) {
-	return codex.SessionListResult{}, nil
+	return codex.SessionListResult{Data: []codex.Session{{ID: "thread-1", CWD: "/tmp/demo"}}}, nil
 }
 func (f *fakeCodex) ThreadRead(context.Context, string) (codex.Session, error) {
 	return codex.Session{}, nil
 }
 func (f *fakeCodex) ThreadResume(context.Context, string) (codex.Session, error) {
-	return codex.Session{}, nil
+	return codex.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
 }
 func (f *fakeCodex) ThreadSetName(_ context.Context, _ string, name string) error {
 	f.setName = name
@@ -149,6 +149,36 @@ func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {
 		fake.turnOptions[0].ApprovalPolicy != "always" ||
 		fake.turnOptions[0].Sandbox != "danger-full-access" {
 		t.Fatalf("turn options = %+v", fake.turnOptions)
+	}
+}
+
+func TestListSessionsMarksManualSessionRunning(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+	r.setSessionRunning("thread-1", "turn-1")
+
+	list, err := r.ListSessions(context.Background(), codex.SessionListInput{})
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(list.Data) != 1 || !list.Data[0].IsRunning {
+		t.Fatalf("session should be running: %+v", list)
+	}
+}
+
+func TestListSessionsMarksIssueRunnerThreadRunning(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+	r.setRunning(7, &runState{threadID: "thread-1", turnID: "turn-1"})
+
+	list, err := r.ListSessions(context.Background(), codex.SessionListInput{})
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(list.Data) != 1 || !list.Data[0].IsRunning {
+		t.Fatalf("issue runner session should be running: %+v", list)
 	}
 }
 

@@ -51,13 +51,7 @@ func (r *Runner) ListSessions(ctx context.Context, input codex.SessionListInput)
 	if err != nil {
 		return codex.SessionListResult{}, err
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for i := range res.Data {
-		if _, ok := r.sessions[res.Data[i].ID]; ok {
-			res.Data[i].IsRunning = true
-		}
-	}
+	r.applyRunningSessionState(res.Data)
 	return res, nil
 }
 
@@ -69,9 +63,7 @@ func (r *Runner) ReadSession(ctx context.Context, threadID string) (codex.Sessio
 	if err != nil {
 		return codex.Session{}, err
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.sessions[res.ID]; ok {
+	if r.isThreadRunning(sessionThreadID(res, threadID)) || codex.SessionStatusIsRunning(res.Status) {
 		res.IsRunning = true
 	}
 	return res, nil
@@ -247,4 +239,48 @@ func (r *Runner) waitSessionTurn(threadID, turnID string, eventsCh <-chan codex.
 			return
 		}
 	}
+}
+
+func (r *Runner) applyRunningSessionState(sessions []codex.Session) {
+	runningIDs := r.runningThreadIDs()
+	for i := range sessions {
+		if sessions[i].IsRunning || codex.SessionStatusIsRunning(sessions[i].Status) {
+			sessions[i].IsRunning = true
+			continue
+		}
+		if runningIDs[sessions[i].ID] {
+			sessions[i].IsRunning = true
+		}
+	}
+}
+
+func (r *Runner) isThreadRunning(threadID string) bool {
+	if threadID == "" {
+		return false
+	}
+	return r.runningThreadIDs()[threadID]
+}
+
+func (r *Runner) runningThreadIDs() map[string]bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ids := map[string]bool{}
+	for threadID := range r.sessions {
+		if threadID != "" {
+			ids[threadID] = true
+		}
+	}
+	for _, state := range r.running {
+		if state != nil && state.threadID != "" {
+			ids[state.threadID] = true
+		}
+	}
+	return ids
+}
+
+func sessionThreadID(session codex.Session, fallback string) string {
+	if session.ID != "" {
+		return session.ID
+	}
+	return fallback
 }
