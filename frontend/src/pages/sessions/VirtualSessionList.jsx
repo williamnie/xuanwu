@@ -166,7 +166,7 @@ export default function VirtualSessionList({ sessions, projects = [], selectedId
                       />
                     ))
                   ) : (
-                    <div className="project-group-empty">No conversations yet</div>
+                    <div className="project-group-empty">暂无对话</div>
                   )}
                 </div>
               )}

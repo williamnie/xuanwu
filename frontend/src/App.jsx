@@ -185,6 +185,16 @@ export default function App() {
     setIsNewIssueOpen(true);
   };
 
+  if (currentPage === 'sessions') {
+    return (
+      <Sessions
+        navigateTo={navigateTo}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
+    );
+  }
+
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       {sidebarCollapsed && (
@@ -232,8 +242,6 @@ export default function App() {
             />
           ) : currentPage === 'projects' ? (
             <Projects />
-          ) : currentPage === 'sessions' ? (
-            <Sessions />
           ) : currentPage === 'cron' ? (
             <Cron />
           ) : currentPage === 'settings' ? (

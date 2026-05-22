@@ -1,0 +1,846 @@
+/* Codex Sessions 桌面客户端高仿真专属样式表 */
+
+/* 全屏通顶客户端容器 */
+.sessions-client-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* 左侧 macOS 风格侧边栏 */
+.sessions-client-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background-color: #f3f3f5; /* macOS 经典侧边栏灰 */
+  border-right: 1px solid #e0e0e2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px 14px 16px 14px;
+  user-select: none;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+[data-theme="dark"] .sessions-client-sidebar {
+  background-color: #1e1e24; /* 深色下稍微暗一点的侧边栏 */
+  border-right: 1px solid #2d2d34;
+}
+
+/* macOS 红黄绿窗口按钮 */
+.sidebar-mac-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding-left: 2px;
+}
+
+.mac-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.mac-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+.mac-dot.red { background-color: #ff5f56; }
+.mac-dot.yellow { background-color: #ffbd2e; }
+.mac-dot.green { background-color: #27c93f; }
+
+.mac-arrows {
+  display: flex;
+  gap: 12px;
+  color: #a0a0a5;
+}
+
+[data-theme="dark"] .mac-arrows {
+  color: #5d5d64;
+}
+
+.mac-arrow {
+  cursor: pointer;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.mac-arrow:hover {
+  color: var(--text-primary);
+}
+
+/* 顶部快捷菜单项 */
+.sidebar-shortcut-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 20px;
+}
+
+.sidebar-shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #4b5563;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .sidebar-shortcut-item {
+  color: #9ca3af;
+}
+
+.sidebar-shortcut-item:hover {
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="dark"] .sidebar-shortcut-item:hover {
+  background-color: #2d2d34;
+  color: #f9fafb;
+}
+
+.sidebar-shortcut-item.active {
+  background-color: #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .sidebar-shortcut-item.active {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+.sidebar-shortcut-item-icon {
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+}
+
+.sidebar-shortcut-item.active .sidebar-shortcut-item-icon {
+  color: var(--primary);
+}
+
+/* 侧边栏标题栏 */
+.sidebar-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 12px 0 6px 8px;
+  user-select: none;
+}
+
+[data-theme="dark"] .sidebar-section-title {
+  color: #4b5563;
+}
+
+/* 会话与项目滚动列表区 */
+.sidebar-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  margin-right: -10px;
+  padding-right: 6px;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .sidebar-scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 置顶列表项 */
+.pinned-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.pinned-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+  border-radius: 6px;
+  color: #374151;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  gap: 8px;
+}
+
+[data-theme="dark"] .pinned-session-row {
+  background-color: rgba(255, 255, 255, 0.01);
+  border-color: rgba(255, 255, 255, 0.02);
+  color: #d1d5db;
+}
+
+.pinned-session-row:hover {
+  background-color: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+[data-theme="dark"] .pinned-session-row:hover {
+  background-color: #2d2d34;
+  border-color: #374151;
+}
+
+.pinned-session-row.active {
+  background-color: #e2e8f0;
+  border-color: #cbd5e1;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+[data-theme="dark"] .pinned-session-row.active {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+.pinned-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9ca3af;
+}
+
+.pinned-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.pinned-action-btn:hover {
+  color: #4b5563;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .pinned-action-btn:hover {
+  color: #f3f4f6;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 侧边栏底部操作区 */
+.sidebar-bottom-actions {
+  margin-top: auto;
+  border-top: 1px solid #e0e0e2;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+[data-theme="dark"] .sidebar-bottom-actions {
+  border-top-color: #2d2d34;
+}
+
+.sidebar-bottom-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #4b5563;
+  font-size: 0.8rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+[data-theme="dark"] .sidebar-bottom-btn {
+  color: #9ca3af;
+}
+
+.sidebar-bottom-btn:hover {
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="dark"] .sidebar-bottom-btn:hover {
+  background-color: #2d2d34;
+  color: #f9fafb;
+}
+
+/* 右侧内容工作区 */
+.sessions-client-main {
+  flex: 1;
+  display: flex;
+  background-color: var(--bg-primary);
+  height: 100%;
+  min-width: 0;
+  position: relative;
+}
+
+/* 新建会话主容器（图三极简风格） */
+.new-session-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+}
+
+.new-session-center-card {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  margin-top: -6vh; /* 稍微靠上一些 */
+}
+
+/* "我们应该在 XXX 中构建什么？" 标题 */
+.new-session-title {
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* 一体化输入框容器 */
+.new-session-composer-wrapper {
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.new-session-composer-wrapper:focus-within {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.06);
+}
+
+/* 输入框大文本域 */
+.new-session-textarea {
+  width: 100%;
+  min-height: 80px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  padding: 0 4px;
+}
+
+.new-session-textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+/* 输入框底部控件排版 */
+.new-session-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(0, 0, 0, 0.03);
+  padding-top: 12px;
+}
+
+[data-theme="dark"] .new-session-composer-footer {
+  border-top-color: rgba(255, 255, 255, 0.03);
+}
+
+.new-session-composer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.new-session-composer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 输入框内的精致小选择器 */
+.composer-embedded-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background-color: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  border-radius: 99px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+[data-theme="dark"] .composer-embedded-select {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.01);
+}
+
+.composer-embedded-select:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .composer-embedded-select:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.composer-embedded-select.danger {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.1);
+}
+
+.composer-embedded-select.danger:hover {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.composer-embedded-select select {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 加号与语音按钮 */
+.composer-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.composer-icon-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .composer-icon-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 圆圈发送/创建按钮 */
+.composer-circle-submit {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: #111827;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .composer-circle-submit {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.composer-circle-submit:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.composer-circle-submit:disabled {
+  background-color: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+[data-theme="dark"] .composer-circle-submit:disabled {
+  background-color: #374151;
+  color: #4b5563;
+}
+
+/* 输入框正下方的圆角配置标签 */
+.new-session-bottom-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.bottom-tag-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background-color: #f3f3f5;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .bottom-tag-select {
+  background-color: #27272f;
+  border-color: #374151;
+  color: #9ca3af;
+}
+
+.bottom-tag-select:hover {
+  background-color: #e5e7eb;
+  border-color: #cbd5e1;
+  color: #1f2937;
+}
+
+[data-theme="dark"] .bottom-tag-select:hover {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #f3f4f6;
+}
+
+.bottom-tag-select select {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 聊天和右侧环境信息主体布局 */
+.active-session-shell {
+  flex: 1;
+  display: flex;
+  height: 100%;
+  min-width: 0;
+}
+
+/* 中间聊天区（无缝客户端风格） */
+.client-chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background-color: var(--bg-primary);
+}
+
+/* 隐藏聊天卡片边框 */
+.client-chat-area .session-detail {
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+
+.client-chat-area .session-detail-body {
+  background: transparent;
+}
+
+.client-chat-area .session-transcript {
+  background: transparent;
+  padding: 30px 40px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* 精美聊天气泡样式改造 */
+.client-chat-area .chat-bubble-body {
+  border-radius: 18px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.015);
+  font-size: 0.9rem;
+}
+
+.client-chat-area .chat-bubble-container.user .chat-bubble-body {
+  background-color: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #1f2937;
+}
+
+[data-theme="dark"] .client-chat-area .chat-bubble-container.user .chat-bubble-body {
+  background-color: #2d2d34;
+  border-color: #374151;
+  color: #f3f4f6;
+}
+
+.client-chat-area .chat-bubble-container.agent .chat-bubble-body {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+/* 输入框在聊天区的位置 */
+.client-chat-composer-section {
+  padding: 16px 40px 24px 40px;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.client-chat-composer-section .session-composer {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* 右侧环境/进度侧边栏 */
+.session-env-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* 进度标题 */
+.env-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.env-title-text {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 环境信息主区域 */
+.env-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.env-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.env-section-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.env-section-cog {
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.env-section-cog:hover {
+  color: var(--text-primary);
+}
+
+/* 单个环境信息项 */
+.env-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+}
+
+.env-item-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.env-item-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 变动行数小标记 */
+.env-change-badge {
+  display: inline-flex;
+  gap: 6px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.env-change-badge .added {
+  color: #10b981;
+}
+
+.env-change-badge .removed {
+  color: #ef4444;
+}
+
+/* 分支小标签 */
+.env-branch-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+  background-color: var(--primary-glow);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 自动化管理页面无缝承载容器 */
+.cron-embedded-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  padding: 40px;
+}
+
+.cron-embedded-container .view-header {
+  border: none;
+  padding: 0 0 20px 0;
+  background: transparent;
+  margin-bottom: 20px;
+}
+
+/* 渐入微动画 */
+@keyframes clientFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.99) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.client-animate-fade-in {
+  animation: clientFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 统一普通 Session 项在侧栏的高质感 Hover / Active 体验 */
+.session-item-row {
+  color: #4b5563;
+  margin: 1px 0;
+  transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .session-item-row {
+  color: #9ca3af;
+}
+
+.session-item-row:hover {
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="dark"] .session-item-row:hover {
+  background-color: #2d2d34;
+  color: #f9fafb;
+}
+
+.session-item-row.active {
+  background-color: #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .session-item-row.active {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
