@@ -2,7 +2,7 @@
 
 本地 Codex App Server 驱动的 Issue Loop Runner，用于管理多个本地项目的 issue 队列，并自动调用 Codex 执行任务。
 
-第一版目标见 [`docs/design.md`](docs/design.md)。当前已具备：
+第一版目标见 [`docs/design.md`](docs/design.md)；Go 后端与 Codex app-server 的运行时对接见 [`docs/codex-integration.md`](docs/codex-integration.md)。当前已具备：
 
 - Go API Server（默认 `127.0.0.1:3008`）
 - SQLite 持久化（默认 `data/app.db`）
