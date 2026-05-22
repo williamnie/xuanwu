@@ -78,6 +78,9 @@ func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	if fake.setName != "task" {
 		t.Fatalf("thread name = %q, want issue title", fake.setName)
 	}
+	if len(fake.threadInputs) != 1 || fake.threadInputs[0].ThreadSource != codex.ThreadSourceSubagent {
+		t.Fatalf("issue thread source = %+v, want subagent", fake.threadInputs)
+	}
 	events, _ := st.ListIssueEvents(ctx, issue.ID)
 	if len(events) == 0 {
 		t.Fatalf("expected issue log/status events")

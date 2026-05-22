@@ -3,6 +3,7 @@ package codex
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 func decodeID(raw json.RawMessage) (int64, error) {
@@ -46,12 +47,24 @@ func threadStartParams(input ThreadInput) map[string]any {
 	params := map[string]any{
 		"cwd": input.CWD, "model": model, "approvalPolicy": approvalPolicy(input.ApprovalPolicy),
 		"sandbox": defaultString(input.Sandbox, "workspace-write"), "developerInstructions": input.DeveloperInstructions,
-		"ephemeral": false, "threadSource": defaultString(input.ThreadSource, "codex-issue-runner"),
+		"ephemeral": false,
+	}
+	if source := threadSource(input.ThreadSource); source != "" {
+		params["threadSource"] = source
 	}
 	if input.ReasoningEffort != "" {
 		params["config"] = map[string]any{"model_reasoning_effort": input.ReasoningEffort}
 	}
 	return params
+}
+
+func threadSource(value string) string {
+	switch strings.TrimSpace(value) {
+	case ThreadSourceUser, ThreadSourceSubagent, ThreadSourceMemoryConsolidation:
+		return strings.TrimSpace(value)
+	default:
+		return ""
+	}
 }
 
 func modelListParams(input ModelListInput) map[string]any {

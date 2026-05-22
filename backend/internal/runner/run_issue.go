@@ -36,6 +36,7 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 	threadID, err := r.codex.ThreadStart(ctx, codex.ThreadInput{
 		CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy,
 		Sandbox: project.Sandbox, DeveloperInstructions: developerInstructions(),
+		ThreadSource: codex.ThreadSourceSubagent,
 	})
 	if err != nil {
 		return err

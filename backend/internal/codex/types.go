@@ -2,6 +2,12 @@ package codex
 
 import "context"
 
+const (
+	ThreadSourceUser                = "user"
+	ThreadSourceSubagent            = "subagent"
+	ThreadSourceMemoryConsolidation = "memory_consolidation"
+)
+
 type ThreadInput struct {
 	CWD                   string
 	Model                 string

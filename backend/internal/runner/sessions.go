@@ -175,7 +175,7 @@ func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) 
 		target.Sandbox = input.Sandbox
 	}
 	target.DeveloperInstructions = developerInstructions()
-	target.ThreadSource = "codex-issue-runner"
+	target.ThreadSource = codex.ThreadSourceUser
 }
 
 func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input SessionCreateInput) (SessionCreateResult, error) {

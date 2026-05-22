@@ -46,12 +46,23 @@ func TestThreadStartParamsMapsFrontendApprovalValues(t *testing.T) {
 	if params["approvalPolicy"] != "on-request" {
 		t.Fatalf("approval mapping = %v", params["approvalPolicy"])
 	}
-	if params["threadSource"] != "codex-issue-runner" {
-		t.Fatalf("threadSource = %v", params["threadSource"])
-	}
 	params = threadStartParams(ThreadInput{CWD: "/tmp/demo", ApprovalPolicy: "always"})
 	if params["approvalPolicy"] != "untrusted" {
 		t.Fatalf("approval mapping = %v", params["approvalPolicy"])
+	}
+}
+
+func TestThreadStartParamsDropsUnsupportedLegacyThreadSource(t *testing.T) {
+	params := threadStartParams(ThreadInput{CWD: "/tmp/demo", ThreadSource: "codex-issue-runner"})
+	if source, ok := params["threadSource"]; ok {
+		t.Fatalf("threadSource = %v, want omitted for unsupported legacy value", source)
+	}
+}
+
+func TestThreadStartParamsKeepsSupportedThreadSource(t *testing.T) {
+	params := threadStartParams(ThreadInput{CWD: "/tmp/demo", ThreadSource: ThreadSourceSubagent})
+	if params["threadSource"] != ThreadSourceSubagent {
+		t.Fatalf("threadSource = %v, want %s", params["threadSource"], ThreadSourceSubagent)
 	}
 }
 
