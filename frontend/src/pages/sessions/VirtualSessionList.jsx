@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Folder, FolderOpen, ChevronDown, ChevronRight } from 'lucide-react';
+import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 
 function projectNameFromPath(cwd) {
   const trimmed = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -30,7 +30,11 @@ const SessionItem = memo(function SessionItem({ session, active, onSelect }) {
     >
       <span className="session-item-title" title={title}>{title}</span>
       <div className="session-item-right">
-        {active ? (
+        {session.isRunning ? (
+          <span className="session-item-loading">
+            <Loader2 size={12} />
+          </span>
+        ) : active ? (
           <span className="session-item-active-dot" />
         ) : (
           <span className="session-item-time">{relativeTime}</span>

@@ -219,15 +219,29 @@
   padding-left: 12px;
 }
 
-/* Chat bubble styling 气泡流设计 */
+/* Chat bubble styling 极简无框设计 */
 .chat-bubble-container {
   display: flex;
   gap: 14px;
-  max-width: 90%;
+  max-width: 85%;
+  margin-bottom: 8px;
 }
 
 .chat-bubble-container.user {
-  align-self: flex-start;
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chat-bubble-container.user .chat-bubble-content {
+  align-items: flex-end;
+}
+
+.chat-bubble-container.user .chat-bubble-sender {
+  text-align: right;
+}
+
+.chat-bubble-container.user .session-markdown {
+  text-align: right;
 }
 
 .chat-bubble-container.agent {
@@ -235,29 +249,32 @@
 }
 
 .chat-bubble-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   flex: 0 0 auto;
-  box-shadow: var(--shadow-sm);
-  background: #cbd5e1;
-  color: #334155;
+  box-shadow: none;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .chat-bubble-avatar {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .chat-bubble-container.user .chat-bubble-avatar {
-  background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%);
-  color: #0f172a;
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
 }
 
 .chat-bubble-container.agent .chat-bubble-avatar {
-  background: var(--primary-gradient);
-  color: white;
-  box-shadow: 0 2px 8px var(--primary-glow);
+  background: var(--primary-glow);
+  color: var(--primary);
 }
 
 .chat-bubble-content {
@@ -276,28 +293,27 @@
 }
 
 .chat-bubble-body {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px 16px 16px 16px;
-  padding: 14px 18px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 4px 0 !important;
+  box-shadow: none !important;
 }
 
 .chat-bubble-container.user .chat-bubble-body {
-  background: rgba(14, 165, 233, 0.04);
-  border-color: rgba(14, 165, 233, 0.12);
-  border-radius: 16px 4px 16px 16px;
-  align-self: flex-start;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
 }
 
 [data-theme="dark"] .chat-bubble-container.user .chat-bubble-body {
-  background: rgba(56, 189, 248, 0.05);
-  border-color: rgba(56, 189, 248, 0.15);
+  background: transparent !important;
+  border: none !important;
 }
 
 .chat-bubble-container.agent .chat-bubble-body {
-  background: var(--bg-card);
-  border-color: var(--border-color);
+  background: transparent !important;
+  border: none !important;
 }
 
 /* Streaming Badge */
@@ -635,6 +651,14 @@
 /* Animations */
 .spin-animation {
   animation: spin 3s linear infinite;
+}
+
+.session-item-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {

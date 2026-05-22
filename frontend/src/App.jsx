@@ -162,6 +162,16 @@ export default function App() {
     localStorage.setItem('codex-theme', theme);
   }, [theme]);
 
+  // 进入 sessions 页面时，自动收起左侧菜单
+  useEffect(() => {
+    if (currentPage === 'sessions') {
+      updateAppState(draft => {
+        draft.sidebarCollapsed = true;
+      });
+      localStorage.setItem('codex-sidebar-collapsed', 'true');
+    }
+  }, [currentPage, updateAppState]);
+
   // 订阅 SSE 实时变更，触发数据刷新
   useEffect(() => {
     const unsubscribe = api.subscribeToEvents(
@@ -185,18 +195,10 @@ export default function App() {
     setIsNewIssueOpen(true);
   };
 
-  if (currentPage === 'sessions') {
-    return (
-      <Sessions
-        navigateTo={navigateTo}
-        theme={theme}
-        toggleTheme={toggleTheme}
-      />
-    );
-  }
+
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' ? 'in-sessions-page' : ''}`}>
       {sidebarCollapsed && (
         <button
           className="sidebar-expand-btn animate-fade-in"
@@ -239,6 +241,12 @@ export default function App() {
               prefilledStatus={prefilledStatus}
               handleOpenNewIssue={handleOpenNewIssue}
               navigateTo={navigateTo}
+            />
+          ) : currentPage === 'sessions' ? (
+            <Sessions
+              navigateTo={navigateTo}
+              theme={theme}
+              toggleTheme={toggleTheme}
             />
           ) : currentPage === 'projects' ? (
             <Projects />

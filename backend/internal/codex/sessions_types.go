@@ -33,4 +33,5 @@ type Session struct {
 	GitInfo       json.RawMessage `json:"gitInfo,omitempty"`
 	Name          *string         `json:"name,omitempty"`
 	Turns         json.RawMessage `json:"turns,omitempty"`
+	IsRunning     bool            `json:"isRunning,omitempty"`
 }

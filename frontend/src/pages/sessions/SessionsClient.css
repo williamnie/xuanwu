@@ -3,12 +3,8 @@
 /* 全屏通顶客户端容器 */
 .sessions-client-container {
   display: flex;
-  width: 100vw;
-  height: 100vh;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 100;
+  width: 100%;
+  height: 100%;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -622,26 +618,28 @@
 
 /* 精美聊天气泡样式改造 */
 .client-chat-area .chat-bubble-body {
-  border-radius: 18px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.015);
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  background-color: transparent !important;
   font-size: 0.9rem;
 }
 
 .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  background-color: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #1f2937;
+  background-color: transparent !important;
+  border: none !important;
+  color: var(--text-primary) !important;
 }
 
 [data-theme="dark"] .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  background-color: #2d2d34;
-  border-color: #374151;
-  color: #f3f4f6;
+  background-color: transparent !important;
+  border: none !important;
+  color: var(--text-primary) !important;
 }
 
 .client-chat-area .chat-bubble-container.agent .chat-bubble-body {
-  background-color: var(--bg-card);
-  border-color: var(--border-color);
+  background-color: transparent !important;
+  border: none !important;
 }
 
 /* 输入框在聊天区的位置 */
@@ -842,5 +840,36 @@
 [data-theme="dark"] .session-item-row.active {
   background-color: #374151;
   color: #f9fafb;
+}
+
+/* ==========================================================================
+   Gap and Padding Elimination under in-sessions-page layout
+   ========================================================================== */
+.in-sessions-page .sidebar {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+/* 当进入 sessions 页面且主侧栏折叠时，彻底让主侧栏不占用任何屏幕空间且隐藏，防止物理残留 */
+.in-sessions-page.sidebar-collapsed .sidebar {
+  display: none !important;
+}
+
+/* Sessions 页面下主工作区强制锁定为 100vh 高度且消除 padding */
+.in-sessions-page .main-content {
+  padding: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+/* 当主侧栏折叠时，强制消除左侧的 margin 和 padding */
+.in-sessions-page.sidebar-collapsed .main-content {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* 当主侧边栏折叠时，在 Sessions 页面的左边栏上空出间距，避免浮动的展开按钮盖住快捷项 */
+.sidebar-collapsed .sessions-client-sidebar {
+  padding-top: 56px !important;
 }
 

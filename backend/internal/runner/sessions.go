@@ -47,14 +47,34 @@ func (r *Runner) ListSessions(ctx context.Context, input codex.SessionListInput)
 	if err := r.prepareCodex(ctx); err != nil {
 		return codex.SessionListResult{}, err
 	}
-	return r.codex.ThreadList(ctx, input)
+	res, err := r.codex.ThreadList(ctx, input)
+	if err != nil {
+		return codex.SessionListResult{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range res.Data {
+		if _, ok := r.sessions[res.Data[i].ID]; ok {
+			res.Data[i].IsRunning = true
+		}
+	}
+	return res, nil
 }
 
 func (r *Runner) ReadSession(ctx context.Context, threadID string) (codex.Session, error) {
 	if err := r.prepareCodex(ctx); err != nil {
 		return codex.Session{}, err
 	}
-	return r.codex.ThreadResume(ctx, threadID)
+	res, err := r.codex.ThreadResume(ctx, threadID)
+	if err != nil {
+		return codex.Session{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.sessions[res.ID]; ok {
+		res.IsRunning = true
+	}
+	return res, nil
 }
 
 func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (SessionCreateResult, error) {

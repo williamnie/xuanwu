@@ -132,6 +132,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     try {
       const detail = await api.getSession(selectedId);
       setSelectedSession(detail);
+      setSessionRunning(!!detail.isRunning);
       setError('');
     } catch (err) {
       setError(err.message || '读取 session 详情失败');
@@ -403,18 +404,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
     <div className="sessions-client-container client-animate-fade-in">
       {/* 左侧 macOS 风格侧边栏 */}
       <aside className="sessions-client-sidebar">
-        {/* macOS 控制按钮 */}
-        <div className="sidebar-mac-header">
-          <div className="mac-dots">
-            <span className="mac-dot red"></span>
-            <span className="mac-dot yellow"></span>
-            <span className="mac-dot green"></span>
-          </div>
-          <div className="mac-arrows">
-            <span className="mac-arrow" title="后退"><ArrowLeft size={14} /></span>
-            <span className="mac-arrow" title="前进"><ArrowRight size={14} /></span>
-          </div>
-        </div>
+
 
         {/* 快捷菜单项 */}
         <div className="sidebar-shortcut-items">
@@ -507,18 +497,7 @@ export default function Sessions({ navigateTo, theme, toggleTheme }) {
           />
         </div>
 
-        {/* 底部操作区 */}
-        <div className="sidebar-bottom-actions">
-          <button className="sidebar-bottom-btn" onClick={() => navigateTo('issues')} title="返回系统看板">
-            <LogOut size={14} style={{ transform: 'rotate(180deg)' }} />
-            <span>返回看板</span>
-          </button>
 
-          <button className="sidebar-bottom-btn" onClick={toggleTheme} title="切换主题">
-            <Settings size={14} />
-            <span>{theme === 'dark' ? '亮色模式' : '暗色模式'}</span>
-          </button>
-        </div>
       </aside>
 
       {/* 右侧主工作区 */}

@@ -8,6 +8,7 @@ import {
   Moon,
   Settings,
   Sun,
+  LayoutDashboard,
 } from 'lucide-react';
 import {
   selectBackendOnline,
@@ -63,9 +64,9 @@ export default function AppSidebar({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <button className="nav-item">
+        <button className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <MessageSquare size={16} /> Chat
+            <LayoutDashboard size={16} /> 面板
           </span>
           <span className="nav-badge">—</span>
         </button>
