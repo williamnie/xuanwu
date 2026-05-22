@@ -49,7 +49,7 @@ function getReconcileSlices(currentPage, selectedIssueId) {
 export default function App() {
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
-    currentPage: 'issues', // 默认进入 Issues 看板以响应用户偏好
+    currentPage: 'dashboard', // 默认进入 Dashboard
     selectedIssueId: null,
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
