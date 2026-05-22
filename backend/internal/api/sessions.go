@@ -9,16 +9,21 @@ import (
 )
 
 type createSessionRequest struct {
-	ProjectID      string `json:"project_id"`
-	CWD            string `json:"cwd"`
-	Model          string `json:"model"`
-	ApprovalPolicy string `json:"approval_policy"`
-	Sandbox        string `json:"sandbox"`
-	Prompt         string `json:"prompt"`
+	ProjectID       string `json:"project_id"`
+	CWD             string `json:"cwd"`
+	Model           string `json:"model"`
+	ReasoningEffort string `json:"reasoning_effort"`
+	ApprovalPolicy  string `json:"approval_policy"`
+	Sandbox         string `json:"sandbox"`
+	Prompt          string `json:"prompt"`
 }
 
 type sessionMessageRequest struct {
-	Prompt string `json:"prompt"`
+	Prompt          string `json:"prompt"`
+	Model           string `json:"model"`
+	ReasoningEffort string `json:"reasoning_effort"`
+	ApprovalPolicy  string `json:"approval_policy"`
+	Sandbox         string `json:"sandbox"`
 }
 
 func (s *Server) routeSessions(w http.ResponseWriter, r *http.Request, parts []string) {
@@ -104,7 +109,7 @@ func (s *Server) createSessionMessage(w http.ResponseWriter, r *http.Request, th
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
-	turnID, err := s.runner.StartSessionTurn(r.Context(), threadID, req.Prompt)
+	turnID, err := s.runner.StartSessionTurn(r.Context(), threadID, toSessionTurnInput(req))
 	if err != nil {
 		handleErr(w, err)
 		return
@@ -133,7 +138,14 @@ func parseSessionLimit(r *http.Request) int {
 
 func toSessionCreateInput(req createSessionRequest) runner.SessionCreateInput {
 	return runner.SessionCreateInput{
-		ProjectID: req.ProjectID, CWD: req.CWD, Model: req.Model,
+		ProjectID: req.ProjectID, CWD: req.CWD, Model: req.Model, ReasoningEffort: req.ReasoningEffort,
 		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox, Prompt: req.Prompt,
+	}
+}
+
+func toSessionTurnInput(req sessionMessageRequest) runner.SessionTurnInput {
+	return runner.SessionTurnInput{
+		Prompt: req.Prompt, Model: req.Model, ReasoningEffort: req.ReasoningEffort,
+		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox,
 	}
 }

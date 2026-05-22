@@ -43,11 +43,36 @@ func threadStartParams(input ThreadInput) map[string]any {
 	if input.Model == "" || input.Model == "codex-default" {
 		model = nil
 	}
-	return map[string]any{
+	params := map[string]any{
 		"cwd": input.CWD, "model": model, "approvalPolicy": approvalPolicy(input.ApprovalPolicy),
 		"sandbox": defaultString(input.Sandbox, "workspace-write"), "developerInstructions": input.DeveloperInstructions,
 		"ephemeral": false, "threadSource": "user",
 	}
+	if input.ReasoningEffort != "" {
+		params["config"] = map[string]any{"model_reasoning_effort": input.ReasoningEffort}
+	}
+	return params
+}
+
+func modelListParams(input ModelListInput) map[string]any {
+	return map[string]any{"includeHidden": input.IncludeHidden}
+}
+
+func turnStartParams(threadID string, input []UserInput, options TurnOptions) map[string]any {
+	params := map[string]any{"threadId": threadID, "input": input}
+	if options.Model != "" && options.Model != "codex-default" {
+		params["model"] = options.Model
+	}
+	if options.ReasoningEffort != "" {
+		params["effort"] = options.ReasoningEffort
+	}
+	if options.ApprovalPolicy != "" {
+		params["approvalPolicy"] = approvalPolicy(options.ApprovalPolicy)
+	}
+	if options.Sandbox != "" {
+		params["sandboxPolicy"] = defaultString(options.Sandbox, "workspace-write")
+	}
+	return params
 }
 
 func TextInput(text string) UserInput {

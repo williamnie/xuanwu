@@ -16,7 +16,7 @@ import {
   useDataStore,
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Menu } from 'lucide-react';
 
 export default function App() {
   const [appState, updateAppState] = useImmer(() => ({
@@ -32,6 +32,9 @@ export default function App() {
 
     // 主题状态 (默认亮色以匹配截图，支持一键切换)
     theme: localStorage.getItem('codex-theme') || 'light',
+
+    // 侧边栏折叠状态
+    sidebarCollapsed: localStorage.getItem('codex-sidebar-collapsed') === 'true',
   }));
 
   const loading = useDataStore(selectLoading);
@@ -46,6 +49,7 @@ export default function App() {
     isNewIssueOpen,
     prefilledStatus,
     theme,
+    sidebarCollapsed,
   } = appState;
 
   const setIsNewIssueOpen = useCallback((open) => {
@@ -87,6 +91,14 @@ export default function App() {
       if (draft.theme !== resolved) {
         draft.theme = resolved;
       }
+    });
+  }, [updateAppState]);
+
+  const toggleSidebar = useCallback(() => {
+    updateAppState(draft => {
+      const nextCollapsed = !draft.sidebarCollapsed;
+      draft.sidebarCollapsed = nextCollapsed;
+      localStorage.setItem('codex-sidebar-collapsed', String(nextCollapsed));
     });
   }, [updateAppState]);
 
@@ -145,7 +157,17 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {sidebarCollapsed && (
+        <button
+          className="sidebar-expand-btn animate-fade-in"
+          onClick={toggleSidebar}
+          title="展开菜单"
+        >
+          <Menu size={18} />
+        </button>
+      )}
+
       <AppSidebar
         currentPage={currentPage}
         filterProject={filterProject}
@@ -156,6 +178,7 @@ export default function App() {
         setFocusFilter={setFocusFilter}
         theme={theme}
         toggleTheme={toggleTheme}
+        toggleSidebar={toggleSidebar}
       />
 
       {/* 右侧主工作区 */}

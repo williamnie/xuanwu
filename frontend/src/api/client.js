@@ -189,6 +189,8 @@ export const api = {
     return request(`/api/sessions${query}`);
   },
 
+  getCodexModels: () => request('/api/codex/models'),
+
   createSession: (session) => request('/api/sessions', {
     method: 'POST',
     body: JSON.stringify(session),
@@ -196,13 +198,18 @@ export const api = {
 
   getSession: (id) => request(`/api/sessions/${id}`),
 
-  sendSessionMessage: (id, prompt) => request(`/api/sessions/${id}/messages`, {
+  sendSessionMessage: (id, message) => request(`/api/sessions/${id}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
   }),
 
   interruptSession: (id) => request(`/api/sessions/${id}/interrupt`, {
     method: 'POST',
+  }),
+
+  resolveCodexApproval: (id, decision) => request(`/api/codex/approvals/${id}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(decision),
   }),
 
   uploadImage,

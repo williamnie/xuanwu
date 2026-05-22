@@ -15,6 +15,7 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  Plus,
   Quote,
 } from 'lucide-react';
 import { api } from '../../api/client';
@@ -28,10 +29,19 @@ const AttachmentImage = Image.extend({
   },
 });
 
-export default function PromptEditor({ value, onChange, placeholder, minHeight = 160 }) {
+export default function PromptEditor({
+  value,
+  onChange,
+  placeholder,
+  minHeight = 160,
+  variant = 'default',
+  footerControls = null,
+  actions = null,
+}) {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const editor = usePromptEditor(value, onChange, placeholder, uploadFiles);
+  const isComposer = variant === 'composer';
 
   async function uploadFiles(files) {
     const images = Array.from(files).filter(file => file.type.startsWith('image/'));
@@ -52,12 +62,31 @@ export default function PromptEditor({ value, onChange, placeholder, minHeight =
     }
   }
 
-  if (!editor) return <div className="prompt-editor-shell" style={{ minHeight }} />;
+  if (!editor) {
+    return <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />;
+  }
 
   return (
-    <div className={`prompt-editor-shell ${editor.isFocused ? 'focused' : ''}`}>
-      <PromptToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />
-      <EditorContent editor={editor} className="prompt-editor-content" style={{ minHeight }} />
+    <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''} ${editor.isFocused ? 'focused' : ''}`}>
+      {!isComposer && <PromptToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
+      <EditorContent editor={editor} className={`prompt-editor-content ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />
+      {isComposer && (
+        <div className="prompt-composer-footer">
+          <div className="prompt-composer-left">
+            <button
+              type="button"
+              className="prompt-composer-add"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title={uploading ? '图片上传中' : '添加图片'}
+            >
+              {uploading ? <ImagePlus size={16} /> : <Plus size={17} />}
+            </button>
+            {footerControls}
+          </div>
+          {actions && <div className="prompt-composer-actions">{actions}</div>}
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"

@@ -13,13 +13,15 @@ type Adapter struct {
 	command string
 	args    []string
 
-	mu      sync.Mutex
-	started bool
-	nextID  int64
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	pending map[int64]chan rpcResponse
-	events  chan Event
+	mu               sync.Mutex
+	started          bool
+	nextID           int64
+	nextApprovalID   int64
+	cmd              *exec.Cmd
+	stdin            io.WriteCloser
+	pending          map[int64]chan rpcResponse
+	pendingApprovals map[string]chan ApprovalDecision
+	events           chan Event
 }
 
 type rpcResponse struct {
@@ -28,7 +30,10 @@ type rpcResponse struct {
 }
 
 func NewAdapter(command string, args []string) *Adapter {
-	return &Adapter{command: command, args: args, pending: map[int64]chan rpcResponse{}, events: make(chan Event, 256)}
+	return &Adapter{
+		command: command, args: args, pending: map[int64]chan rpcResponse{},
+		pendingApprovals: map[string]chan ApprovalDecision{}, events: make(chan Event, 256),
+	}
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -82,8 +87,20 @@ func (a *Adapter) ThreadStart(ctx context.Context, input ThreadInput) (string, e
 	return nestedString(result, "thread", "id")
 }
 
-func (a *Adapter) TurnStart(ctx context.Context, threadID string, input []UserInput) (string, error) {
-	params := map[string]any{"threadId": threadID, "input": input}
+func (a *Adapter) ModelList(ctx context.Context, input ModelListInput) (ModelListResult, error) {
+	result, err := a.request(ctx, "model/list", modelListParams(input))
+	if err != nil {
+		return ModelListResult{}, err
+	}
+	var out ModelListResult
+	if err := json.Unmarshal(result, &out); err != nil {
+		return ModelListResult{}, err
+	}
+	return out, nil
+}
+
+func (a *Adapter) TurnStart(ctx context.Context, threadID string, input []UserInput, options TurnOptions) (string, error) {
+	params := turnStartParams(threadID, input, options)
 	result, err := a.request(ctx, "turn/start", params)
 	if err != nil {
 		return "", err

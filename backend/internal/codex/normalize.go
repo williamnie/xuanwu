@@ -18,6 +18,8 @@ func normalizeEvent(method string, raw json.RawMessage) Event {
 		e.Text = stringField(p, "delta")
 	case "item/fileChange/patchUpdated":
 		e.Text = patchText(p)
+	case "item/started", "item/completed":
+		e.Text = itemLifecycleText(method, p)
 	case "turn/completed":
 		e.Status, e.Error = turnStatus(p)
 	case "turn/started":
@@ -33,6 +35,42 @@ func stringField(m map[string]any, key string) string {
 		return value
 	}
 	return ""
+}
+
+func itemLifecycleText(method string, m map[string]any) string {
+	item, ok := m["item"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	switch stringField(item, "type") {
+	case "commandExecution":
+		return commandLifecycleText(method, item)
+	case "fileChange":
+		return fileChangeLifecycleText(method, item)
+	default:
+		return ""
+	}
+}
+
+func commandLifecycleText(method string, item map[string]any) string {
+	command := stringField(item, "command")
+	if command == "" {
+		return ""
+	}
+	if method == "item/started" {
+		return "$ " + command
+	}
+	if status := stringField(item, "status"); status != "" && status != "completed" {
+		return "! command " + status + ": " + command
+	}
+	return ""
+}
+
+func fileChangeLifecycleText(method string, item map[string]any) string {
+	if method != "item/completed" {
+		return ""
+	}
+	return patchText(item)
 }
 
 func patchText(m map[string]any) string {

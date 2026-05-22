@@ -1,0 +1,164 @@
+.session-composer {
+  flex: 0 0 auto;
+  padding: 16px 24px 18px;
+  border-top: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.86), rgba(255, 255, 255, 0.98));
+}
+
+.session-composer-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 28px;
+  border-radius: 999px;
+  padding: 0 7px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.session-composer-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  outline: none;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+}
+
+.session-composer-select-value {
+  color: currentColor;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 28px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.session-composer-select:hover,
+.session-composer-select:focus-within {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.session-composer-chevron {
+  flex: 0 0 auto;
+  margin-left: -1px;
+  pointer-events: none;
+}
+
+.session-composer-select.permission {
+  background: #f4f5f7;
+  color: #334155;
+}
+
+.session-composer-select.permission.danger {
+  background: #fff1f2;
+  color: #ef4444;
+}
+
+.session-composer-select.permission select {
+  font-weight: 740;
+}
+
+.session-composer-select.permission .session-composer-select-value {
+  font-weight: 740;
+}
+
+.session-composer-select.model {
+  margin-left: auto;
+  color: #111827;
+}
+
+.session-composer-select.model .session-composer-select-value {
+  font-weight: 690;
+}
+
+.session-composer-select.effort .session-composer-select-value {
+  color: #6b7280;
+}
+
+.session-composer-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #141820;
+  color: #fff;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+}
+
+.session-composer-circle:hover:not(:disabled) {
+  background: #030712;
+  transform: translateY(-1px);
+}
+
+.session-composer-circle:disabled,
+.session-composer-select select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+[data-theme="dark"] .session-composer {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.98));
+}
+
+[data-theme="dark"] .session-composer-select select {
+  color: currentColor;
+}
+
+[data-theme="dark"] .session-composer-select:hover,
+[data-theme="dark"] .session-composer-select:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .session-composer-select.permission {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .session-composer-select.permission.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+[data-theme="dark"] .session-composer-select.model select {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .session-composer-select.effort .session-composer-select-value {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .session-composer-circle {
+  background: #f8fafc;
+  color: #020617;
+}
+
+@media (max-width: 760px) {
+  .session-composer {
+    padding: 12px;
+  }
+
+  .session-composer-select.model {
+    margin-left: 0;
+  }
+
+  .session-composer-select-value {
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Play, Plus, RefreshCw, Settings, Square, Terminal } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Plus, RefreshCw, Settings, Terminal } from 'lucide-react';
 import { api } from '../api/client';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
-import PromptEditor from '../components/editor/PromptEditor';
 import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
 import { selectProjects, useDataStore } from '../store/dataStore';
+import ApprovalDialog from './sessions/ApprovalDialog';
+import SessionCreateModal from './sessions/SessionCreateModal';
+import SessionComposer from './sessions/SessionComposer';
+import { defaultMessageSettings, defaultSessionSettings } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import './sessions/Sessions.css';
 
@@ -33,11 +36,23 @@ export default function Sessions() {
   const [projectId, setProjectId] = useState('');
   const [cwd, setCwd] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [sessionSettings, setSessionSettings] = useState(() => defaultSessionSettings(null));
+  const [messageSettings, setMessageSettings] = useState(() => defaultMessageSettings(null));
+  const [models, setModels] = useState([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
+  const [sessionRunning, setSessionRunning] = useState(false);
+  const [approvalRequest, setApprovalRequest] = useState(null);
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
   const selectedProject = projects.find((project) => project.id === projectId);
+  const selectedSessionProject = useMemo(() => {
+    const sessionCwd = selectedSession?.cwd || selectedSession?.path || '';
+    return projects.find((project) => project.cwd === sessionCwd) || null;
+  }, [projects, selectedSession]);
 
   const loadFirstPage = useCallback(async () => {
     setLoading(true);
@@ -80,30 +95,62 @@ export default function Sessions() {
     }
   }, [selectedId]);
 
+  const loadModels = useCallback(async () => {
+    setModelsLoading(true);
+    try {
+      const result = await api.getCodexModels();
+      setModels(result.data || []);
+      setModelsError('');
+    } catch (err) {
+      setModelsError(err.message || '读取 Codex 模型列表失败');
+    } finally {
+      setModelsLoading(false);
+    }
+  }, []);
+
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
   useEffect(() => { loadSelected(); }, [loadSelected]);
+  useEffect(() => { loadModels(); }, [loadModels]);
+  useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
 
   useEffect(() => api.subscribeToEvents((event) => {
-    if (event.type !== 'codex.event' || event.threadId !== selectedId) return;
+    if (event.type !== 'codex.event') return;
+    if (event.method === 'approval/requested') {
+      setApprovalRequest(parseApprovalPayload(event.payload));
+      return;
+    }
+    if (event.threadId !== selectedId) return;
     setLiveEvents((prev) => [...prev, event].slice(-200));
-    if (event.method === 'turn/completed') {
+    if (event.method === 'turn/completed' || event.method === 'error') {
+      setSessionRunning(false);
       loadSelected();
       loadFirstPage();
     }
   }), [loadFirstPage, loadSelected, selectedId]);
 
   const openCreate = () => {
-    setProjectId(projects[0]?.id || '');
-    setCwd(projects[0]?.cwd || '');
+    const project = projects[0] || null;
+    setProjectId(project?.id || '');
+    setCwd(project?.cwd || '');
+    setSessionSettings(defaultSessionSettings(project));
     setPrompt('');
     setIsCreateOpen(true);
+    loadModels();
   };
 
   const createSession = async (event) => {
     event.preventDefault();
     setSending(true);
     try {
-      const result = await api.createSession({ project_id: projectId, cwd, prompt });
+      const result = await api.createSession({
+        project_id: projectId,
+        cwd,
+        prompt,
+        model: sessionSettings.model,
+        reasoning_effort: sessionSettings.reasoningEffort,
+        approval_policy: sessionSettings.approvalPolicy,
+        sandbox: sessionSettings.sandbox,
+      });
       setIsCreateOpen(false);
       setSelectedId(result.thread_id);
       setLiveEvents([]);
@@ -115,12 +162,47 @@ export default function Sessions() {
     }
   };
 
+  const handleProjectChange = (id) => {
+    const project = projects.find((item) => item.id === id) || null;
+    setProjectId(id);
+    setCwd(project?.cwd || cwd);
+    setSessionSettings(defaultSessionSettings(project));
+  };
+
+  const handleSettingChange = (field, value) => {
+    setSessionSettings((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleMessageSettingChange = (field, value) => {
+    setMessageSettings((current) => ({ ...current, [field]: value }));
+  };
+
+  const resolveApproval = async (decision, scope = 'turn') => {
+    if (!approvalRequest) return;
+    setApprovalSubmitting(true);
+    try {
+      await api.resolveCodexApproval(approvalRequest.id, { decision, scope });
+      setApprovalRequest(null);
+    } catch (err) {
+      setError(err.message || '提交授权决策失败');
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  };
+
   const sendMessage = async (event) => {
     event.preventDefault();
     if (!selectedId || !message.trim()) return;
     setSending(true);
     try {
-      await api.sendSessionMessage(selectedId, message);
+      await api.sendSessionMessage(selectedId, {
+        prompt: message,
+        model: messageSettings.model,
+        reasoning_effort: messageSettings.reasoningEffort,
+        approval_policy: messageSettings.approvalPolicy,
+        sandbox: messageSettings.sandbox,
+      });
+      setSessionRunning(true);
       setMessage('');
       setLiveEvents([]);
     } catch (err) {
@@ -133,6 +215,7 @@ export default function Sessions() {
   const interrupt = async () => {
     if (!selectedId) return;
     await api.interruptSession(selectedId);
+    setSessionRunning(false);
   };
 
   if (loading && sessions.length === 0) {
@@ -159,45 +242,61 @@ export default function Sessions() {
             selectedId={selectedId}
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
-            onSelect={(id) => { setSelectedId(id); setLiveEvents([]); }}
+            onSelect={(id) => { setSelectedId(id); setLiveEvents([]); setSessionRunning(false); }}
             onLoadMore={loadMore}
           />
         </section>
 
         <section className="session-detail glass-card">
           {selectedSession ? <SessionDetail session={selectedSession} liveEvents={liveEvents} /> : <EmptyDetail />}
-          <form className="session-composer" onSubmit={sendMessage}>
-            <PromptEditor
-              value={message}
-              onChange={setMessage}
-              placeholder="给当前 Codex session 发送消息..."
-              minHeight={110}
-            />
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-secondary" onClick={interrupt}><Square size={15} /> Stop</button>
-              <button className="btn btn-primary" disabled={sending || !selectedId}><Play size={15} /> 发送</button>
-            </div>
-          </form>
+          <SessionComposer
+            value={message}
+            onChange={setMessage}
+            settings={messageSettings}
+            onSettingChange={handleMessageSettingChange}
+            models={models}
+            modelsLoading={modelsLoading}
+            modelsError={modelsError}
+            sending={sending}
+            running={sessionRunning}
+            selectedId={selectedId}
+            onSubmit={sendMessage}
+            onStop={interrupt}
+          />
         </section>
       </div>
 
       {isCreateOpen && (
-        <CreateSessionModal
+        <SessionCreateModal
           projects={projects}
           projectId={projectId}
           cwd={cwd}
           prompt={prompt}
           sending={sending}
           selectedProject={selectedProject}
-          onProjectChange={(id) => { setProjectId(id); setCwd(projects.find((p) => p.id === id)?.cwd || cwd); }}
+          models={models}
+          modelsLoading={modelsLoading}
+          modelsError={modelsError}
+          settings={sessionSettings}
+          onProjectChange={handleProjectChange}
           onCwdChange={setCwd}
           onPromptChange={setPrompt}
+          onSettingsChange={handleSettingChange}
           onClose={() => setIsCreateOpen(false)}
           onSubmit={createSession}
         />
       )}
+      <ApprovalDialog request={approvalRequest} submitting={approvalSubmitting} onResolve={resolveApproval} />
     </div>
   );
+}
+
+function parseApprovalPayload(payload) {
+  try {
+    return JSON.parse(payload || '{}');
+  } catch {
+    return { id: '', method: 'approval/requested', params: {} };
+  }
 }
 
 function mergeSessions(prev, next) {
@@ -576,39 +675,4 @@ function LiveTurnItem({ liveEvents }) {
 
 function MarkdownText({ text }) {
   return <MarkdownPreview text={text || ''} className="session-markdown" />;
-}
-
-function CreateSessionModal({ projects, projectId, cwd, prompt, sending, selectedProject, onProjectChange, onCwdChange, onPromptChange, onClose, onSubmit }) {
-  return (
-    <div className="modal-overlay">
-      <form className="modal-content" style={{ maxWidth: 720 }} onSubmit={onSubmit}>
-        <h3 style={{ marginBottom: 16 }}>创建 Codex Session</h3>
-        <div className="form-group">
-          <label>项目配置</label>
-          <select className="form-control" value={projectId} onChange={(e) => onProjectChange(e.target.value)}>
-            <option value="">手动输入 CWD</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label>CWD</label>
-          <input className="form-control" value={cwd} onChange={(e) => onCwdChange(e.target.value)} placeholder="/absolute/project/path" />
-          {selectedProject && <small style={{ color: 'var(--text-muted)' }}>默认继承项目 model / sandbox / approval 设置。</small>}
-        </div>
-        <div className="form-group">
-          <label>首条消息（可选）</label>
-          <PromptEditor
-            value={prompt}
-            onChange={onPromptChange}
-            placeholder="创建后立即发送给 Codex..."
-            minHeight={160}
-          />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" disabled={sending}>{sending ? <Loader2 className="animate-spin" size={15} /> : <Plus size={15} />} 创建</button>
-        </div>
-      </form>
-    </div>
-  );
 }

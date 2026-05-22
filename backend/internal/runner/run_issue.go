@@ -48,7 +48,7 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 	if err != nil {
 		return err
 	}
-	turnID, err := r.codex.TurnStart(ctx, threadID, input)
+	turnID, err := r.codex.TurnStart(ctx, threadID, input, codex.TurnOptions{})
 	if err != nil {
 		return err
 	}

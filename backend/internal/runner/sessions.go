@@ -10,17 +10,37 @@ import (
 )
 
 type SessionCreateInput struct {
-	ProjectID      string
-	CWD            string
-	Model          string
-	ApprovalPolicy string
-	Sandbox        string
-	Prompt         string
+	ProjectID       string
+	CWD             string
+	Model           string
+	ReasoningEffort string
+	ApprovalPolicy  string
+	Sandbox         string
+	Prompt          string
 }
 
 type SessionCreateResult struct {
 	ThreadID string `json:"thread_id"`
 	TurnID   string `json:"turn_id,omitempty"`
+}
+
+type SessionTurnInput struct {
+	Prompt          string
+	Model           string
+	ReasoningEffort string
+	ApprovalPolicy  string
+	Sandbox         string
+}
+
+func (r *Runner) ListModels(ctx context.Context) (codex.ModelListResult, error) {
+	if err := r.prepareCodex(ctx); err != nil {
+		return codex.ModelListResult{}, err
+	}
+	return r.codex.ModelList(ctx, codex.ModelListInput{})
+}
+
+func (r *Runner) ResolveApproval(ctx context.Context, requestID string, decision codex.ApprovalDecision) error {
+	return r.codex.ResolveApproval(ctx, requestID, decision)
 }
 
 func (r *Runner) ListSessions(ctx context.Context, input codex.SessionListInput) (codex.SessionListResult, error) {
@@ -49,11 +69,11 @@ func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (S
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
-	return r.startInitialTurn(ctx, threadID, input.Prompt)
+	return r.startInitialTurn(ctx, threadID, input)
 }
 
-func (r *Runner) StartSessionTurn(ctx context.Context, threadID, prompt string) (string, error) {
-	if strings.TrimSpace(prompt) == "" {
+func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input SessionTurnInput) (string, error) {
+	if strings.TrimSpace(input.Prompt) == "" {
 		return "", errors.New("消息内容不能为空")
 	}
 	if err := r.prepareCodex(ctx); err != nil {
@@ -62,7 +82,7 @@ func (r *Runner) StartSessionTurn(ctx context.Context, threadID, prompt string) 
 	if _, err := r.codex.ThreadResume(ctx, threadID); err != nil {
 		return "", err
 	}
-	return r.startSessionTurn(ctx, threadID, prompt)
+	return r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, sessionTurnOptions(input))
 }
 
 func (r *Runner) InterruptSession(threadID string) bool {
@@ -104,7 +124,10 @@ func (r *Runner) sessionProject(ctx context.Context, id string) (*store.Project,
 }
 
 func mergeSessionThreadInput(project *store.Project, input SessionCreateInput) (codex.ThreadInput, error) {
-	threadInput := codex.ThreadInput{CWD: input.CWD, Model: input.Model, ApprovalPolicy: input.ApprovalPolicy, Sandbox: input.Sandbox}
+	threadInput := codex.ThreadInput{
+		CWD: input.CWD, Model: input.Model, ReasoningEffort: input.ReasoningEffort,
+		ApprovalPolicy: input.ApprovalPolicy, Sandbox: input.Sandbox,
+	}
 	if project != nil {
 		threadInput = codex.ThreadInput{CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy, Sandbox: project.Sandbox}
 	}
@@ -122,6 +145,9 @@ func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) 
 	if input.Model != "" {
 		target.Model = input.Model
 	}
+	if input.ReasoningEffort != "" {
+		target.ReasoningEffort = input.ReasoningEffort
+	}
 	if input.ApprovalPolicy != "" {
 		target.ApprovalPolicy = input.ApprovalPolicy
 	}
@@ -131,12 +157,12 @@ func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) 
 	target.DeveloperInstructions = developerInstructions()
 }
 
-func (r *Runner) startInitialTurn(ctx context.Context, threadID, prompt string) (SessionCreateResult, error) {
+func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input SessionCreateInput) (SessionCreateResult, error) {
 	result := SessionCreateResult{ThreadID: threadID}
-	if strings.TrimSpace(prompt) == "" {
+	if strings.TrimSpace(input.Prompt) == "" {
 		return result, nil
 	}
-	turnID, err := r.startSessionTurn(ctx, threadID, prompt)
+	turnID, err := r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, sessionCreateTurnOptions(input))
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
@@ -144,14 +170,14 @@ func (r *Runner) startInitialTurn(ctx context.Context, threadID, prompt string) 
 	return result, nil
 }
 
-func (r *Runner) startSessionTurn(ctx context.Context, threadID, prompt string) (string, error) {
+func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prompt string, options codex.TurnOptions) (string, error) {
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
 	input, err := buildTurnInput(ctx, r.store, prompt)
 	if err != nil {
 		unsubscribe()
 		return "", err
 	}
-	turnID, err := r.codex.TurnStart(ctx, threadID, input)
+	turnID, err := r.codex.TurnStart(ctx, threadID, input, options)
 	if err != nil {
 		unsubscribe()
 		return "", err
@@ -159,6 +185,21 @@ func (r *Runner) startSessionTurn(ctx context.Context, threadID, prompt string) 
 	r.setSessionRunning(threadID, turnID)
 	go r.waitSessionTurn(threadID, turnID, eventsCh, unsubscribe)
 	return turnID, nil
+}
+
+func sessionCreateTurnOptions(input SessionCreateInput) codex.TurnOptions {
+	return turnOptionsFromFields(input.Model, input.ReasoningEffort, input.ApprovalPolicy, input.Sandbox)
+}
+
+func sessionTurnOptions(input SessionTurnInput) codex.TurnOptions {
+	return turnOptionsFromFields(input.Model, input.ReasoningEffort, input.ApprovalPolicy, input.Sandbox)
+}
+
+func turnOptionsFromFields(model, reasoningEffort, approvalPolicy, sandbox string) codex.TurnOptions {
+	return codex.TurnOptions{
+		Model: model, ReasoningEffort: reasoningEffort,
+		ApprovalPolicy: approvalPolicy, Sandbox: sandbox,
+	}
 }
 
 func (r *Runner) setSessionRunning(threadID, turnID string) {

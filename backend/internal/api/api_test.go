@@ -27,6 +27,13 @@ func (n noopCodex) Stop(context.Context) error  { return nil }
 func (n noopCodex) ThreadStart(context.Context, codex.ThreadInput) (string, error) {
 	return "thread-new", nil
 }
+func (n noopCodex) ModelList(context.Context, codex.ModelListInput) (codex.ModelListResult, error) {
+	return codex.ModelListResult{Data: []codex.Model{{
+		ID: "gpt-5.5", Model: "gpt-5.5", DisplayName: "GPT-5.5",
+		DefaultReasoningEffort:    "xhigh",
+		SupportedReasoningEfforts: []codex.ReasoningEffortOption{{ReasoningEffort: "xhigh", Description: "超高"}},
+	}}}, nil
+}
 func (n noopCodex) ThreadList(context.Context, codex.SessionListInput) (codex.SessionListResult, error) {
 	return codex.SessionListResult{Data: []codex.Session{{ID: "thread-1", CWD: "/tmp/demo", Preview: "hello"}}, NextCursor: "next"}, nil
 }
@@ -37,11 +44,14 @@ func (n noopCodex) ThreadResume(context.Context, string) (codex.Session, error) 
 	return codex.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
 }
 func (n noopCodex) ThreadSetName(context.Context, string, string) error { return nil }
-func (n noopCodex) TurnStart(context.Context, string, []codex.UserInput) (string, error) {
+func (n noopCodex) TurnStart(context.Context, string, []codex.UserInput, codex.TurnOptions) (string, error) {
 	return "turn-new", nil
 }
 func (n noopCodex) InterruptTurn(context.Context, string, string) error { return nil }
-func (n noopCodex) Events() <-chan codex.Event                          { return n.ch }
+func (n noopCodex) ResolveApproval(context.Context, string, codex.ApprovalDecision) error {
+	return nil
+}
+func (n noopCodex) Events() <-chan codex.Event { return n.ch }
 
 func TestProjectAndIssueAPI(t *testing.T) {
 	srv := newTestServer(t)
@@ -102,6 +112,10 @@ func TestIssueTemplateAPIAndIssueSelection(t *testing.T) {
 
 func TestSessionAPI(t *testing.T) {
 	srv := newTestServer(t)
+	models := getJSON[codex.ModelListResult](t, srv, "/api/codex/models")
+	if len(models.Data) != 1 || models.Data[0].ID != "gpt-5.5" {
+		t.Fatalf("unexpected models: %+v", models)
+	}
 	list := getJSON[codex.SessionListResult](t, srv, "/api/sessions?limit=20")
 	if len(list.Data) != 1 || list.Data[0].ID != "thread-1" || list.NextCursor != "next" {
 		t.Fatalf("unexpected sessions: %+v", list)

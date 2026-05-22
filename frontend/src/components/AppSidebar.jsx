@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  ChevronLeft,
   FolderGit2,
   Layers,
   ListTodo,
@@ -26,10 +27,11 @@ export default function AppSidebar({
   setFocusFilter,
   theme,
   toggleTheme,
+  toggleSidebar,
 }) {
   return (
     <aside className="sidebar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 8px', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 8px', marginBottom: '24px', position: 'relative' }}>
         <div style={{
           width: '32px',
           height: '32px',
@@ -50,6 +52,14 @@ export default function AppSidebar({
           </h2>
           <ApiStatus />
         </div>
+        <button
+          className="sidebar-collapse-btn"
+          onClick={toggleSidebar}
+          title="收起菜单"
+          style={{ marginLeft: 'auto' }}
+        >
+          <ChevronLeft size={16} />
+        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

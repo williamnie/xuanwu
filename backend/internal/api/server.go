@@ -77,6 +77,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.routeSessions(w, r, parts)
 		return
 	}
+	if len(parts) > 0 && parts[0] == "codex" {
+		s.routeCodex(w, r, parts)
+		return
+	}
 	writeError(w, http.StatusNotFound, "not found")
 }
 

@@ -13,15 +13,21 @@ import (
 )
 
 type fakeCodex struct {
-	events     chan codex.Event
-	setName    string
-	turnInputs []codex.UserInput
+	events       chan codex.Event
+	setName      string
+	threadInputs []codex.ThreadInput
+	turnInputs   []codex.UserInput
+	turnOptions  []codex.TurnOptions
 }
 
 func (f *fakeCodex) Start(context.Context) error { return nil }
 func (f *fakeCodex) Stop(context.Context) error  { return nil }
-func (f *fakeCodex) ThreadStart(context.Context, codex.ThreadInput) (string, error) {
+func (f *fakeCodex) ThreadStart(_ context.Context, input codex.ThreadInput) (string, error) {
+	f.threadInputs = append(f.threadInputs, input)
 	return "thread-1", nil
+}
+func (f *fakeCodex) ModelList(context.Context, codex.ModelListInput) (codex.ModelListResult, error) {
+	return codex.ModelListResult{}, nil
 }
 func (f *fakeCodex) ThreadList(context.Context, codex.SessionListInput) (codex.SessionListResult, error) {
 	return codex.SessionListResult{}, nil
@@ -36,8 +42,9 @@ func (f *fakeCodex) ThreadSetName(_ context.Context, _ string, name string) erro
 	f.setName = name
 	return nil
 }
-func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInput) (string, error) {
+func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInput, options codex.TurnOptions) (string, error) {
 	f.turnInputs = input
+	f.turnOptions = append(f.turnOptions, options)
 	go func() {
 		f.events <- codex.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
 		f.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
@@ -45,7 +52,10 @@ func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInp
 	return "turn-1", nil
 }
 func (f *fakeCodex) InterruptTurn(context.Context, string, string) error { return nil }
-func (f *fakeCodex) Events() <-chan codex.Event                          { return f.events }
+func (f *fakeCodex) ResolveApproval(context.Context, string, codex.ApprovalDecision) error {
+	return nil
+}
+func (f *fakeCodex) Events() <-chan codex.Event { return f.events }
 
 func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	st := openRunnerStore(t)
@@ -100,6 +110,45 @@ func TestRenderPromptDefaultStartsWithIssueContent(t *testing.T) {
 	}
 	if !strings.Contains(got, "codex-issue-runner issue update --id 7 --status done --json") {
 		t.Fatalf("default prompt should tell Codex to mark the issue done:\n%s", got)
+	}
+}
+
+func TestCreateSessionPassesModelEffortAndPermissions(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+	_, err := r.CreateSession(context.Background(), SessionCreateInput{
+		CWD: t.TempDir(), Prompt: "hello", Model: "gpt-5.5",
+		ReasoningEffort: "xhigh", ApprovalPolicy: "danger-only", Sandbox: "read-only",
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if len(fake.threadInputs) != 1 || fake.threadInputs[0].ReasoningEffort != "xhigh" {
+		t.Fatalf("thread input = %+v", fake.threadInputs)
+	}
+	if len(fake.turnOptions) != 1 || fake.turnOptions[0].ReasoningEffort != "xhigh" ||
+		fake.turnOptions[0].ApprovalPolicy != "danger-only" || fake.turnOptions[0].Sandbox != "read-only" {
+		t.Fatalf("turn options = %+v", fake.turnOptions)
+	}
+}
+
+func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+	_, err := r.StartSessionTurn(context.Background(), "thread-1", SessionTurnInput{
+		Prompt: "follow up", Model: "gpt-5.4",
+		ReasoningEffort: "high", ApprovalPolicy: "always", Sandbox: "danger-full-access",
+	})
+	if err != nil {
+		t.Fatalf("start session turn: %v", err)
+	}
+	if len(fake.turnOptions) != 1 || fake.turnOptions[0].Model != "gpt-5.4" ||
+		fake.turnOptions[0].ReasoningEffort != "high" ||
+		fake.turnOptions[0].ApprovalPolicy != "always" ||
+		fake.turnOptions[0].Sandbox != "danger-full-access" {
+		t.Fatalf("turn options = %+v", fake.turnOptions)
 	}
 }
 

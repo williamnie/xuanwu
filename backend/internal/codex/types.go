@@ -5,9 +5,17 @@ import "context"
 type ThreadInput struct {
 	CWD                   string
 	Model                 string
+	ReasoningEffort       string
 	ApprovalPolicy        string
 	Sandbox               string
 	DeveloperInstructions string
+}
+
+type TurnOptions struct {
+	Model           string
+	ReasoningEffort string
+	ApprovalPolicy  string
+	Sandbox         string
 }
 
 type Event struct {
@@ -29,15 +37,48 @@ type UserInput struct {
 	Name         string `json:"name,omitempty"`
 }
 
+type ModelListInput struct {
+	IncludeHidden bool
+}
+
+type ModelListResult struct {
+	Data       []Model `json:"data"`
+	NextCursor string  `json:"nextCursor,omitempty"`
+}
+
+type Model struct {
+	ID                        string                  `json:"id"`
+	Model                     string                  `json:"model"`
+	DisplayName               string                  `json:"displayName"`
+	Description               string                  `json:"description"`
+	IsDefault                 bool                    `json:"isDefault"`
+	Hidden                    bool                    `json:"hidden"`
+	DefaultReasoningEffort    string                  `json:"defaultReasoningEffort"`
+	SupportedReasoningEfforts []ReasoningEffortOption `json:"supportedReasoningEfforts"`
+	InputModalities           []string                `json:"inputModalities,omitempty"`
+}
+
+type ReasoningEffortOption struct {
+	ReasoningEffort string `json:"reasoningEffort"`
+	Description     string `json:"description"`
+}
+
+type ApprovalDecision struct {
+	Decision string `json:"decision"`
+	Scope    string `json:"scope,omitempty"`
+}
+
 type Client interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
 	ThreadStart(ctx context.Context, input ThreadInput) (string, error)
+	ModelList(ctx context.Context, input ModelListInput) (ModelListResult, error)
 	ThreadList(ctx context.Context, input SessionListInput) (SessionListResult, error)
 	ThreadRead(ctx context.Context, threadID string) (Session, error)
 	ThreadResume(ctx context.Context, threadID string) (Session, error)
 	ThreadSetName(ctx context.Context, threadID, name string) error
-	TurnStart(ctx context.Context, threadID string, input []UserInput) (string, error)
+	TurnStart(ctx context.Context, threadID string, input []UserInput, options TurnOptions) (string, error)
 	InterruptTurn(ctx context.Context, threadID, turnID string) error
+	ResolveApproval(ctx context.Context, requestID string, decision ApprovalDecision) error
 	Events() <-chan Event
 }

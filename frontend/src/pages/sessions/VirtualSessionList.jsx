@@ -1,25 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GitBranch, MessageSquare } from 'lucide-react';
-
-const ROW_HEIGHT = 96;
-const OVERSCAN = 6;
-
-function formatTime(seconds) {
-  if (!seconds) return 'unknown';
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).format(new Date(seconds * 1000));
-}
-
-function sessionTitle(session) {
-  return session.name || session.preview || 'Untitled Codex session';
-}
-
-function statusType(session) {
-  if (!session.status) return 'unknown';
-  if (typeof session.status === 'string') return session.status;
-  return session.status.type || 'unknown';
-}
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Folder, FolderOpen, ChevronDown, ChevronRight } from 'lucide-react';
 
 function projectNameFromPath(cwd) {
   const trimmed = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -27,91 +7,172 @@ function projectNameFromPath(cwd) {
   return trimmed.split(/[\\/]/).pop() || 'No project';
 }
 
-function projectNameForSession(session, projectsByCwd) {
-  const cwd = session.cwd || '';
-  return projectsByCwd.get(cwd)?.name || projectNameFromPath(cwd);
+function formatRelativeTime(seconds) {
+  if (!seconds) return '';
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - seconds;
+  if (diff < 0) return '刚刚';
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d`;
+  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date(seconds * 1000));
 }
 
-function useVirtualRows(containerRef, count) {
-  const frameRef = useRef(0);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [height, setHeight] = useState(0);
+const SessionItem = memo(function SessionItem({ session, active, onSelect }) {
+  const title = session.name || session.preview || 'Untitled Codex session';
+  const relativeTime = formatRelativeTime(session.updatedAt || session.createdAt);
 
-  useEffect(() => {
-    if (!containerRef.current) return undefined;
-    const node = containerRef.current;
-    const updateHeight = () => setHeight(node.clientHeight);
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [containerRef]);
-
-  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
-
-  const onScroll = useCallback((event) => {
-    const nextTop = event.currentTarget.scrollTop;
-    cancelAnimationFrame(frameRef.current);
-    frameRef.current = requestAnimationFrame(() => setScrollTop(nextTop));
-  }, []);
-
-  return useMemo(() => {
-    const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-    const visible = Math.ceil(height / ROW_HEIGHT) + OVERSCAN * 2;
-    const end = Math.min(count, start + visible);
-    return { onScroll, start, end, totalHeight: count * ROW_HEIGHT, offsetY: start * ROW_HEIGHT };
-  }, [count, height, onScroll, scrollTop]);
-}
-
-const SessionRow = memo(function SessionRow({ session, active, projectName, onSelect }) {
-  const title = sessionTitle(session);
-  const status = statusType(session);
   return (
-    <button className={`session-row ${active ? 'active' : ''}`} onClick={() => onSelect(session.id)}>
-      <div className="session-row-icon"><MessageSquare size={16} /></div>
-      <div className="session-row-main">
-        <div className="session-row-title" title={title}>{title}</div>
-        <div className="session-row-meta">
-          <span className={`session-status ${status}`}>{status}</span>
-          <span>{formatTime(session.updatedAt || session.createdAt)}</span>
-        </div>
-        <div className="session-row-project" title={session.cwd || projectName}>
-          <GitBranch size={12} /> {projectName}
-        </div>
+    <button 
+      className={`session-item-row ${active ? 'active' : ''}`} 
+      onClick={() => onSelect(session.id)}
+    >
+      <span className="session-item-title" title={title}>{title}</span>
+      <div className="session-item-right">
+        {active ? (
+          <span className="session-item-active-dot" />
+        ) : (
+          <span className="session-item-time">{relativeTime}</span>
+        )}
       </div>
     </button>
   );
 });
 
 export default function VirtualSessionList({ sessions, projects = [], selectedId, hasMore, loadingMore, onSelect, onLoadMore }) {
-  const containerRef = useRef(null);
-  const virtual = useVirtualRows(containerRef, sessions.length);
+  const [collapsed, setCollapsed] = useState({});
+
   const projectsByCwd = useMemo(() => new Map(projects.map((project) => [project.cwd, project])), [projects]);
 
+  // 分组与排序逻辑
+  const groups = useMemo(() => {
+    const groupMap = new Map();
+    for (const project of projects) {
+      groupMap.set(project.id, {
+        id: project.id,
+        name: project.name,
+        cwd: project.cwd,
+        sessions: [],
+        isVirtual: false,
+      });
+    }
+
+    const virtualGroups = new Map();
+    for (const session of sessions) {
+      const cwd = session.cwd || '';
+      const matchedProject = projectsByCwd.get(cwd);
+      if (matchedProject) {
+        groupMap.get(matchedProject.id).sessions.push(session);
+      } else {
+        const virtualName = projectNameFromPath(cwd);
+        const virtualKey = `virtual-${cwd || 'no-cwd'}`;
+        if (!virtualGroups.has(virtualKey)) {
+          virtualGroups.set(virtualKey, {
+            id: virtualKey,
+            name: virtualName,
+            cwd: cwd,
+            sessions: [],
+            isVirtual: true,
+          });
+        }
+        virtualGroups.get(virtualKey).sessions.push(session);
+      }
+    }
+
+    const allGroups = [
+      ...Array.from(groupMap.values()),
+      ...Array.from(virtualGroups.values())
+    ];
+
+    for (const g of allGroups) {
+      let maxTime = 0;
+      for (const s of g.sessions) {
+        const t = s.updatedAt || s.createdAt || 0;
+        if (t > maxTime) maxTime = t;
+      }
+      g.maxTime = maxTime;
+    }
+
+    allGroups.sort((a, b) => {
+      if (b.maxTime !== a.maxTime) {
+        return b.maxTime - a.maxTime;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    return allGroups;
+  }, [sessions, projects, projectsByCwd]);
+
+  // 自动展开激活 Session 所在的项目组
+  useEffect(() => {
+    if (!selectedId || sessions.length === 0) return;
+    const activeSession = sessions.find((s) => s.id === selectedId);
+    if (!activeSession) return;
+
+    const matchedProject = projectsByCwd.get(activeSession.cwd || '');
+    const projId = matchedProject ? matchedProject.id : `virtual-${activeSession.cwd || 'no-cwd'}`;
+
+    setCollapsed((prev) => {
+      if (prev[projId]) {
+        return { ...prev, [projId]: false };
+      }
+      return prev;
+    });
+  }, [selectedId, sessions, projectsByCwd]);
+
+  const toggleCollapse = (id) => {
+    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const handleScroll = useCallback((event) => {
-    virtual.onScroll(event);
     const node = event.currentTarget;
-    if (hasMore && !loadingMore && node.scrollTop + node.clientHeight > node.scrollHeight - 500) {
+    if (hasMore && !loadingMore && node.scrollTop + node.clientHeight > node.scrollHeight - 200) {
       onLoadMore();
     }
-  }, [hasMore, loadingMore, onLoadMore, virtual]);
-
-  const visibleSessions = sessions.slice(virtual.start, virtual.end);
+  }, [hasMore, loadingMore, onLoadMore]);
 
   return (
-    <div ref={containerRef} className="session-list-viewport" onScroll={handleScroll}>
-      <div style={{ height: virtual.totalHeight, position: 'relative' }}>
-        <div style={{ transform: `translateY(${virtual.offsetY}px)` }}>
-          {visibleSessions.map((session) => (
-            <SessionRow
-              key={session.id}
-              session={session}
-              projectName={projectNameForSession(session, projectsByCwd)}
-              active={selectedId === session.id}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
+    <div className="session-list-viewport" onScroll={handleScroll}>
+      <div className="project-session-groups">
+        {groups.map((group) => {
+          const isCollapsed = collapsed[group.id];
+          const hasSessions = group.sessions.length > 0;
+
+          return (
+            <div key={group.id} className="project-group-container">
+              <button 
+                className="project-group-header" 
+                onClick={() => toggleCollapse(group.id)}
+              >
+                <span className="project-group-chevron">
+                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                </span>
+                <span className="project-group-icon">
+                  {isCollapsed ? <Folder size={14} /> : <FolderOpen size={14} />}
+                </span>
+                <span className="project-group-name" title={group.cwd}>{group.name}</span>
+              </button>
+
+              {!isCollapsed && (
+                <div className="project-group-sessions animate-slide-down">
+                  {hasSessions ? (
+                    group.sessions.map((session) => (
+                      <SessionItem
+                        key={session.id}
+                        session={session}
+                        active={selectedId === session.id}
+                        onSelect={onSelect}
+                      />
+                    ))
+                  ) : (
+                    <div className="project-group-empty">No conversations yet</div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       {loadingMore && <div className="session-list-loading">继续加载 Codex sessions...</div>}
     </div>

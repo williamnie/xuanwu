@@ -1,0 +1,161 @@
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.approval-card {
+  width: min(620px, 100%);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.24);
+  padding: 20px;
+}
+
+.approval-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  margin-bottom: 16px;
+}
+
+.approval-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+}
+
+.approval-header p {
+  margin: 4px 0 0;
+  color: #7b8190;
+  font-size: 0.8rem;
+}
+
+.approval-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #fff1ed;
+  color: #f04b23;
+}
+
+.approval-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-reason,
+.approval-command,
+.approval-paths,
+.approval-meta {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.approval-command span,
+.approval-paths span,
+.approval-meta span {
+  display: block;
+  margin-bottom: 7px;
+  color: #8a8f98;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.approval-command pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: #111827;
+}
+
+.approval-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.approval-paths code,
+.approval-meta code {
+  color: #343a46;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.approval-btn {
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.approval-btn.primary {
+  background: #111827;
+  color: #fff;
+}
+
+.approval-btn.secondary {
+  background: #fff7ed;
+  color: #ea580c;
+  border-color: rgba(249, 115, 22, 0.18);
+}
+
+.approval-btn.ghost {
+  background: transparent;
+  color: #6b7280;
+  border-color: rgba(107, 114, 128, 0.16);
+}
+
+.approval-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .approval-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #111827;
+}
+
+[data-theme="dark"] .approval-header h3,
+[data-theme="dark"] .approval-command pre {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .approval-reason,
+[data-theme="dark"] .approval-command,
+[data-theme="dark"] .approval-paths,
+[data-theme="dark"] .approval-meta {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.82);
+}

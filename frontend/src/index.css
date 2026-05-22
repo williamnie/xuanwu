@@ -144,6 +144,7 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Sidebar (cohesive with screenshot) */
@@ -160,6 +161,69 @@ body {
   padding: 20px 16px;
   z-index: 100;
   overflow-y: auto;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sidebar 折叠样式与过渡效果 */
+.app-container.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
+}
+
+.app-container.sidebar-collapsed .main-content {
+  margin-left: 0 !important;
+  padding-left: 64px !important;
+}
+
+/* 侧边栏展开悬浮按钮 */
+.sidebar-expand-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 101;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+}
+
+.sidebar-expand-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+  transform: scale(1.08);
+  box-shadow: var(--shadow-md);
+}
+
+/* 侧边栏内部收起按钮 */
+.sidebar-collapse-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .sidebar-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-section-title {
