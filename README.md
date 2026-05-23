@@ -86,6 +86,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 export CODEX_RUNNER_ADDR=127.0.0.1:3018
 export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
 export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
+export CODEX_RUNNER_AUTH_TOKEN=your_custom_token  # 自定义 API 访问令牌 (可选)
 curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
 ```
 
@@ -130,6 +131,7 @@ DB:     data/app.db
 Web:    内嵌在二进制中（可用 CODEX_RUNNER_WEB_DIR 覆盖）
 二进制: dist/codex-issue-runner
 日志:   data/logs/launchd.out.log / data/logs/launchd.err.log
+Token:  默认在服务首次启动时自动生成并写入 data/auth_token 文件中
 ```
 
 可通过环境变量覆盖：
@@ -138,6 +140,7 @@ Web:    内嵌在二进制中（可用 CODEX_RUNNER_WEB_DIR 覆盖）
 CODEX_RUNNER_ADDR=127.0.0.1:3018 \
 CODEX_RUNNER_DEPLOY_DB=/absolute/path/app.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
+CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
 ./deploy.sh
 ```
 
