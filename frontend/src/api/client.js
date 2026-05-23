@@ -209,6 +209,8 @@ export const api = {
 
   getIssueEvents: (id) => request(`/api/issues/${id}/events`),
 
+  getIssueRuns: (id) => request(`/api/issues/${id}/runs`),
+
   createIssueComment: (id, comment) => request(`/api/issues/${id}/comments`, {
     method: 'POST',
     body: JSON.stringify(comment),

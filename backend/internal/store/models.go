@@ -96,6 +96,19 @@ type Issue struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type IssueRun struct {
+	ID            string `json:"id"`
+	IssueID       int64  `json:"issue_id"`
+	Attempt       int    `json:"attempt"`
+	Status        string `json:"status"`
+	CodexThreadID string `json:"codex_thread_id"`
+	CodexTurnID   string `json:"codex_turn_id"`
+	StartedAt     string `json:"started_at"`
+	EndedAt       string `json:"ended_at"`
+	ExitReason    string `json:"exit_reason"`
+	Error         string `json:"error"`
+}
+
 type IssuePatch struct {
 	Title           *string `json:"title"`
 	Description     *string `json:"description"`

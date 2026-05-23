@@ -52,6 +52,34 @@ func TestIssueAPIListReadUpdateFlow(t *testing.T) {
 	}
 }
 
+func TestIssueRunsAPI(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "run history", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-1", "turn-1"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	if _, err := srv.store.SetIssueStatus(ctx, claimed.ID, store.StatusDone, ""); err != nil {
+		t.Fatalf("mark done: %v", err)
+	}
+
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].IssueID != issue.ID || runs[0].Status != store.StatusDone ||
+		runs[0].CodexThreadID != "thread-1" || runs[0].CodexTurnID != "turn-1" ||
+		runs[0].StartedAt == "" || runs[0].EndedAt == "" {
+		t.Fatalf("unexpected runs response: %+v", runs)
+	}
+}
+
 func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
 	session := getJSON[codex.Session](t, srv, "/api/sessions/thread-1")

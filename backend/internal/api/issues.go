@@ -101,6 +101,15 @@ func (s *Server) handleIssueAction(w http.ResponseWriter, r *http.Request, id in
 		writeJSON(w, http.StatusOK, events)
 		return
 	}
+	if action == "runs" && requireMethod(w, r, http.MethodGet) {
+		runs, err := s.store.ListIssueRuns(r.Context(), id)
+		if err != nil {
+			handleErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, runs)
+		return
+	}
 	if action == "comments" && requireMethod(w, r, http.MethodPost) {
 		s.createIssueComment(w, r, id)
 		return

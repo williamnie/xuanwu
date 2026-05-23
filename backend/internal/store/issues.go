@@ -79,6 +79,11 @@ func (s *Store) UpdateIssue(ctx context.Context, id int64, patch IssuePatch) (Is
 	if err != nil {
 		return Issue{}, err
 	}
+	if patch.Status != nil {
+		if err := s.closeOpenIssueRun(ctx, id, i.Status, patchStatusExitReason(i.Status), i.Error); err != nil {
+			return Issue{}, err
+		}
+	}
 	return s.GetIssue(ctx, id)
 }
 
@@ -99,6 +104,13 @@ func (s *Store) ClaimNextIssue(ctx context.Context, projectID string) (Issue, bo
 	if err != nil {
 		return Issue{}, false, err
 	}
+	attempt, err := currentIssueAttempt(ctx, tx, id)
+	if err != nil {
+		return Issue{}, false, err
+	}
+	if err := createIssueRun(ctx, tx, id, attempt, t); err != nil {
+		return Issue{}, false, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Issue{}, false, err
 	}
@@ -109,6 +121,11 @@ func (s *Store) ClaimNextIssue(ctx context.Context, projectID string) (Issue, bo
 func (s *Store) UpdateIssueRuntime(ctx context.Context, id int64, threadID, turnID string) error {
 	_, err := s.db.ExecContext(ctx, `update issues set codex_thread_id=?,
 		codex_turn_id=?, updated_at=? where id=?`, threadID, turnID, now(), id)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `update issue_runs set codex_thread_id=?,
+		codex_turn_id=? where issue_id=? and ended_at=''`, threadID, turnID, id)
 	return err
 }
 
@@ -136,6 +153,9 @@ func (s *Store) SetIssueStatus(ctx context.Context, id int64, status, errText st
 	if err != nil {
 		return Issue{}, err
 	}
+	if err := s.closeOpenIssueRun(ctx, id, status, issueStatusExitReason(status, errText), errText); err != nil {
+		return Issue{}, err
+	}
 	return s.GetIssue(ctx, id)
 }
 
@@ -149,6 +169,9 @@ func (s *Store) ScheduleIssueAutoRetry(ctx context.Context, id int64, reason, ne
 	if err := requireAffected(res); err != nil {
 		return Issue{}, err
 	}
+	if err := s.closeOpenIssueRun(ctx, id, "auto_retry", "auto_retry_scheduled", reason); err != nil {
+		return Issue{}, err
+	}
 	return s.GetIssue(ctx, id)
 }
 
@@ -159,14 +182,21 @@ func (s *Store) ResetIssueForRunnerHold(ctx context.Context, id int64, message s
 	if err != nil {
 		return Issue{}, err
 	}
+	if err := s.closeOpenIssueRun(ctx, id, "hold", "hold", message); err != nil {
+		return Issue{}, err
+	}
 	return s.GetIssue(ctx, id)
 }
 
 func (s *Store) FailStaleIssues(ctx context.Context) error {
+	message := "Service restarted while issue was in progress"
 	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?,
 		auto_retry_next_at='', auto_retry_reason='', updated_at=? where status=?`,
-		StatusFailed, "Service restarted while issue was in progress", now(), StatusInProgress)
-	return err
+		StatusFailed, message, now(), StatusInProgress)
+	if err != nil {
+		return err
+	}
+	return s.closeStaleIssueRuns(ctx, message)
 }
 
 func issueListQuery(f IssueFilter) (string, []any) {

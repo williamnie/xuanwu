@@ -43,11 +43,13 @@ func (s *Store) init() error {
 		issueTemplatesSchema,
 		issuesSchema,
 		issueEventsSchema,
+		issueRunsSchema,
 		cronTasksSchema,
 		uploadsSchema,
 		appPreferencesSchema,
 		projectHoldsSchema,
 		`create index if not exists idx_issues_queue on issues(project_id, status, priority, created_at)`,
+		`create index if not exists idx_issue_runs_issue on issue_runs(issue_id, attempt)`,
 		`create index if not exists idx_cron_tasks_due on cron_tasks(status, next_run_at)`,
 	}
 	for _, stmt := range stmts {

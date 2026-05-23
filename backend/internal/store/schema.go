@@ -55,6 +55,21 @@ create table if not exists issue_events (
   foreign key(issue_id) references issues(id) on delete cascade
 );`
 
+const issueRunsSchema = `
+create table if not exists issue_runs (
+  id text primary key,
+  issue_id integer not null,
+  attempt integer not null,
+  status text not null,
+  codex_thread_id text not null default '',
+  codex_turn_id text not null default '',
+  started_at text not null,
+  ended_at text not null default '',
+  exit_reason text not null default '',
+  error text not null default '',
+  foreign key(issue_id) references issues(id) on delete cascade
+);`
+
 const cronTasksSchema = `
 create table if not exists cron_tasks (
   id integer primary key autoincrement,

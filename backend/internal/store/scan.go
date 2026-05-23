@@ -56,6 +56,14 @@ func scanIssueEvent(row scanner) (IssueEvent, error) {
 	return e, err
 }
 
+func scanIssueRun(row scanner) (IssueRun, error) {
+	var run IssueRun
+	err := row.Scan(&run.ID, &run.IssueID, &run.Attempt, &run.Status,
+		&run.CodexThreadID, &run.CodexTurnID, &run.StartedAt, &run.EndedAt,
+		&run.ExitReason, &run.Error)
+	return run, err
+}
+
 func scanCronTask(row scanner) (CronTask, error) {
 	var task CronTask
 	err := row.Scan(&task.ID, &task.Name, &task.ProjectID, &task.Action,

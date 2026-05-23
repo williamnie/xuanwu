@@ -32,6 +32,88 @@ func TestProjectIssueQueueLifecycle(t *testing.T) {
 	}
 }
 
+func TestIssueRunHistoryLifecycle(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "task", Status: StatusTodo})
+
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("list runs after claim: %v", err)
+	}
+	if len(runs) != 1 || runs[0].IssueID != issue.ID || runs[0].Attempt != 1 ||
+		runs[0].Status != StatusInProgress || runs[0].StartedAt == "" || runs[0].EndedAt != "" {
+		t.Fatalf("unexpected first run after claim: %+v", runs)
+	}
+
+	if err := st.UpdateIssueRuntime(ctx, claimed.ID, "thread-1", "turn-1"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	done := StatusDone
+	if _, err := st.UpdateIssue(ctx, claimed.ID, IssuePatch{Status: &done}); err != nil {
+		t.Fatalf("mark done: %v", err)
+	}
+	runs, err = st.ListIssueRuns(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("list runs after done: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Status != StatusDone || runs[0].EndedAt == "" ||
+		runs[0].CodexThreadID != "thread-1" || runs[0].CodexTurnID != "turn-1" ||
+		runs[0].ExitReason != "explicit_status_update" {
+		t.Fatalf("first run not closed with runtime ids: %+v", runs)
+	}
+
+	todo := StatusTodo
+	if _, err := st.UpdateIssue(ctx, claimed.ID, IssuePatch{Status: &todo}); err != nil {
+		t.Fatalf("retry issue: %v", err)
+	}
+	second, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim second run: ok=%v err=%v", ok, err)
+	}
+	runs, err = st.ListIssueRuns(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("list second run: %v", err)
+	}
+	if len(runs) != 2 || runs[0].Attempt != 1 || runs[1].Attempt != 2 ||
+		runs[0].ID == runs[1].ID || second.AttemptCount != 2 {
+		t.Fatalf("retry should append second run without overwriting first: issue=%+v runs=%+v", second, runs)
+	}
+}
+
+func TestFailStaleIssuesClosesOpenRuns(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "stale", Status: StatusTodo})
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim stale issue: ok=%v err=%v", ok, err)
+	}
+	if err := st.UpdateIssueRuntime(ctx, claimed.ID, "thread-stale", "turn-stale"); err != nil {
+		t.Fatalf("update stale runtime: %v", err)
+	}
+
+	if err := st.FailStaleIssues(ctx); err != nil {
+		t.Fatalf("fail stale issues: %v", err)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("list stale runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Status != StatusFailed ||
+		runs[0].ExitReason != "service_restarted" || runs[0].EndedAt == "" ||
+		runs[0].CodexThreadID != "thread-stale" || runs[0].CodexTurnID != "turn-stale" ||
+		runs[0].Error == "" {
+		t.Fatalf("stale run not closed correctly: %+v", runs)
+	}
+}
+
 func TestClaimNextIssueSkipsAutoRetryUntilDue(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()

@@ -28,6 +28,7 @@ import {
   Pencil,
   MessageCircle,
   Send,
+  History,
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
@@ -70,6 +71,27 @@ function formatRetryTime(value) {
   return date.toLocaleString();
 }
 
+function sameIssueRuns(current = [], next = []) {
+  if (current === next) return true;
+  if (!Array.isArray(current) || !Array.isArray(next)) return false;
+  if (current.length !== next.length) return false;
+  return current.every((run, index) => issueRunSignature(run) === issueRunSignature(next[index]));
+}
+
+function issueRunSignature(run) {
+  return [
+    run?.id,
+    run?.attempt,
+    run?.status,
+    run?.codex_thread_id,
+    run?.codex_turn_id,
+    run?.started_at,
+    run?.ended_at,
+    run?.exit_reason,
+    run?.error,
+  ].join('\u001f');
+}
+
 export default function IssueDetail({ issueId, navigateTo }) {
   const refreshAllData = useDataStore(selectRefreshAllData);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -80,10 +102,11 @@ export default function IssueDetail({ issueId, navigateTo }) {
     issue: null,
     project: null,
     events: [],
+    runs: [],
     loading: true,
     error: null,
   });
-  const { issue, project, events, loading, error } = detailState;
+  const { issue, project, events, runs, loading, error } = detailState;
 
   // 只滚动终端自己的滚动容器，避免把整个详情页抢到最底部。
   const terminalRef = useRef(null);
@@ -95,6 +118,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
       const issueData = await api.getIssue(issueId);
       let projData = null;
       let eventList = [];
+      let runList = [];
 
       if (issueData) {
         // 加载关联项目
@@ -110,6 +134,12 @@ export default function IssueDetail({ issueId, navigateTo }) {
         } catch (e) {
           console.error('获取日志事件失败:', e);
         }
+
+        try {
+          runList = await api.getIssueRuns(issueId);
+        } catch (e) {
+          console.error('获取运行历史失败:', e);
+        }
       }
 
       updateDetailState(draft => {
@@ -121,6 +151,9 @@ export default function IssueDetail({ issueId, navigateTo }) {
         }
         if (!sameIssueEvents(draft.events, eventList || [])) {
           draft.events = eventList || [];
+        }
+        if (!sameIssueRuns(draft.runs, runList || [])) {
+          draft.runs = runList || [];
         }
         if (draft.error !== null) {
           draft.error = null;
@@ -682,6 +715,8 @@ ${error}` : error;
             </div>
           </div>
 
+          <IssueRunsPanel runs={runs} currentStatus={issue.status} />
+
           {/* 人工干预区 */}
           <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -781,6 +816,82 @@ function RefinementItem({ label, value }) {
       )}
     </div>
   );
+}
+
+function IssueRunsPanel({ runs, currentStatus }) {
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
+      <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <History size={18} color="var(--primary)" /> Runs 历史
+      </h3>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+        当前状态是 <strong>{currentStatus}</strong>；下方按 attempt 展示每一轮独立执行记录。
+      </p>
+
+      {runs.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+          暂无 run 记录，issue 进入 runner claim 后会生成第一条。
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
+          {runs.map(run => (
+            <IssueRunCard key={run.id} run={run} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IssueRunCard({ run }) {
+  const running = !run.ended_at;
+  const error = run.error ? summarize(run.error, 160) : '';
+  return (
+    <article style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
+        <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Attempt #{run.attempt}</span>
+        <span className={`status-badge ${run.status}`} style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
+          {running && <span className="status-dot running"></span>}
+          {run.status}
+        </span>
+      </div>
+
+      <RunField label="Run ID" value={run.id} mono />
+      <RunField label="Thread" value={run.codex_thread_id || '暂无'} mono />
+      <RunField label="Turn" value={run.codex_turn_id || '暂无'} mono />
+      <RunField label="开始" value={formatDateTime(run.started_at)} />
+      <RunField label="结束" value={running ? '运行中' : formatDateTime(run.ended_at)} />
+      {run.exit_reason && <RunField label="退出原因" value={run.exit_reason} />}
+      {error && (
+        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', borderRadius: '8px', padding: '8px', fontSize: '0.75rem', overflowWrap: 'anywhere' }}>
+          {error}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function RunField({ label, value, mono = false }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{label}</span>
+      <span style={{ fontFamily: mono ? 'var(--font-mono)' : undefined, fontSize: mono ? '0.72rem' : '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function formatDateTime(value) {
+  if (!value) return '暂无';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function summarize(value, maxLength) {
+  if (!value || value.length <= maxLength) return value || '';
+  return `${value.slice(0, maxLength - 1)}…`;
 }
 
 function IssueDiscussion({ events, draft, error, submitting, onDraftChange, onSubmit }) {
