@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -99,6 +100,81 @@ func TestRunnerHoldsProjectWhenTurnStartReturnsAuthError(t *testing.T) {
 	}
 }
 
+func TestRunnerSchedulesAutoRetryForTransientCodexError(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network", Status: store.StatusTodo})
+	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+	r.autoRetryDelay = 5 * time.Second
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
+	reason := "Reconnecting... 1/5 stream disconnected before completion: Transport error: network error: error decoding response body"
+	fake.events <- codex.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
+
+	waiting := waitIssueAutoRetry(t, st, issue.ID)
+	if waiting.Status != store.StatusTodo || waiting.AttemptCount != 1 {
+		t.Fatalf("transient error should return issue to todo after first attempt: %+v", waiting)
+	}
+	if waiting.AutoRetryReason != reason || waiting.AutoRetryNextAt == "" {
+		t.Fatalf("auto retry state missing: %+v", waiting)
+	}
+	assertAutoRetryEvent(t, st, issue.ID, reason, 2)
+}
+
+func TestRunnerDoesNotAutoRetryPermissionDeniedError(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "denied", Status: store.StatusTodo})
+	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
+	fake.events <- codex.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: "approval denied: permission denied"}
+
+	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
+	if got.AutoRetryNextAt != "" || got.AutoRetryReason != "" {
+		t.Fatalf("permission denied must not schedule auto retry: %+v", got)
+	}
+}
+
+func TestRunnerFailsTransientErrorAfterMaxAutoRetryAttempts(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "max retry", Status: store.StatusTodo})
+	advanceIssueAttempts(t, st, issue.ID, 2)
+	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
+	reason := "Transport error: connection reset by peer"
+	fake.events <- codex.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
+
+	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
+	if got.AttemptCount != 3 || got.Error != reason ||
+		got.AutoRetryNextAt != "" || got.AutoRetryReason != "" {
+		t.Fatalf("max attempts should fail with original error: %+v", got)
+	}
+}
+
 func TestRunnerHealthCheckClearsHoldAndResumesQueue(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()
@@ -157,6 +233,59 @@ func waitProjectHold(t *testing.T, st *store.Store, projectID string) store.Proj
 	project, _ := st.GetProject(context.Background(), projectID)
 	t.Fatalf("project hold missing: %+v", project)
 	return project
+}
+
+func waitIssueAutoRetry(t *testing.T, st *store.Store, id int64) store.Issue {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		issue, _ := st.GetIssue(context.Background(), id)
+		if issue.Status == store.StatusTodo && issue.AutoRetryNextAt != "" {
+			return issue
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	issue, _ := st.GetIssue(context.Background(), id)
+	t.Fatalf("issue auto retry missing: %+v", issue)
+	return issue
+}
+
+func assertAutoRetryEvent(t *testing.T, st *store.Store, issueID int64, reason string, attempt int) {
+	t.Helper()
+	events, err := st.ListIssueEvents(context.Background(), issueID)
+	if err != nil {
+		t.Fatalf("list issue events: %v", err)
+	}
+	for _, event := range events {
+		if event.Type != "issue.auto_retry_scheduled" {
+			continue
+		}
+		var payload struct {
+			Reason      string `json:"reason"`
+			NextRetryAt string `json:"next_retry_at"`
+			Attempt     int    `json:"attempt"`
+		}
+		if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+			t.Fatalf("decode auto retry payload: %v payload=%s", err, event.Payload)
+		}
+		if payload.Reason == reason && payload.NextRetryAt != "" && payload.Attempt == attempt {
+			return
+		}
+		t.Fatalf("unexpected auto retry payload: %+v", payload)
+	}
+	t.Fatalf("missing issue.auto_retry_scheduled event: %+v", events)
+}
+
+func advanceIssueAttempts(t *testing.T, st *store.Store, issueID int64, attempts int) {
+	t.Helper()
+	for n := 0; n < attempts; n++ {
+		if _, ok, err := st.ClaimNextIssue(context.Background(), "demo"); err != nil || !ok {
+			t.Fatalf("advance claim %d: ok=%v err=%v", n+1, ok, err)
+		}
+		if _, err := st.SetIssueStatus(context.Background(), issueID, store.StatusTodo, ""); err != nil {
+			t.Fatalf("reset attempt %d: %v", n+1, err)
+		}
+	}
 }
 
 func waitIssueError(t *testing.T, st *store.Store, id int64) store.Issue {

@@ -34,6 +34,9 @@ func (r *Runner) runIssue(issue store.Issue) {
 			r.holdIssue(ctx, issue, reason)
 			return
 		}
+		if r.scheduleAutoRetryIfNeeded(ctx, issue.ID, err) {
+			return
+		}
 		r.failIssue(ctx, issue.ID, err.Error())
 	}
 }
@@ -127,6 +130,9 @@ func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event 
 	}
 	if reason, ok := isRunnerHoldError(event.Error); ok {
 		return runnerHoldError{reason: reason}
+	}
+	if isTransientCodexTransportError(event.Error) {
+		return eventError(event.Error)
 	}
 	r.failIssue(ctx, issueID, event.Error)
 	return nil

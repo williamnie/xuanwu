@@ -30,6 +30,12 @@ func applyIssuePatch(i *Issue, patch IssuePatch) {
 	if patch.CodexTurnID != nil {
 		i.CodexTurnID = *patch.CodexTurnID
 	}
+	if patch.AutoRetryNextAt != nil {
+		i.AutoRetryNextAt = *patch.AutoRetryNextAt
+	}
+	if patch.AutoRetryReason != nil {
+		i.AutoRetryReason = *patch.AutoRetryReason
+	}
 	if patch.Error != nil {
 		i.Error = *patch.Error
 	}
@@ -41,11 +47,12 @@ func lastInsertID(ctx context.Context, db *sql.DB) (int64, error) {
 	return id, err
 }
 
-func selectNextIssueID(ctx context.Context, tx *sql.Tx, projectID string) (int64, bool, error) {
+func selectNextIssueID(ctx context.Context, tx *sql.Tx, projectID, dueAt string) (int64, bool, error) {
 	row := tx.QueryRowContext(ctx, `select i.id from issues i
 		left join project_holds h on h.project_id=i.project_id
 		where i.project_id=? and i.status=? and h.project_id is null
-		order by i.priority desc, i.created_at asc limit 1`, projectID, StatusTodo)
+			and (i.auto_retry_next_at='' or julianday(i.auto_retry_next_at)<=julianday(?))
+		order by i.priority desc, i.created_at asc limit 1`, projectID, StatusTodo, dueAt)
 	var id int64
 	err := row.Scan(&id)
 	if err == sql.ErrNoRows {

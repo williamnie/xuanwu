@@ -18,6 +18,7 @@ type Runner struct {
 	execMu              sync.Mutex
 	healthCheckInterval time.Duration
 	healthCheckWait     time.Duration
+	autoRetryDelay      time.Duration
 
 	eventOnce    sync.Once
 	eventMu      sync.Mutex
@@ -48,7 +49,8 @@ func New(st *store.Store, bus *events.Bus, client codex.Client) *Runner {
 	return &Runner{
 		store: st, bus: bus, codex: client, eventSubs: map[int]chan codex.Event{},
 		healthCheckInterval: defaultHoldCheckInterval, healthCheckWait: 20 * time.Second,
-		loops: map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
+		autoRetryDelay: defaultAutoRetryDelay,
+		loops:          map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
 	}
 }
 

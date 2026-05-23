@@ -136,8 +136,10 @@ func (s *Store) migrateIssueColumns() error {
 		return err
 	}
 	additions := map[string]string{
-		"template_id":     `alter table issues add column template_id text not null default ''`,
-		"prompt_template": `alter table issues add column prompt_template text not null default ''`,
+		"template_id":        `alter table issues add column template_id text not null default ''`,
+		"prompt_template":    `alter table issues add column prompt_template text not null default ''`,
+		"auto_retry_next_at": `alter table issues add column auto_retry_next_at text not null default ''`,
+		"auto_retry_reason":  `alter table issues add column auto_retry_reason text not null default ''`,
 	}
 	for name, stmt := range additions {
 		if columns[name] {

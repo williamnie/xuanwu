@@ -48,6 +48,23 @@ function parseEventPayload(event) {
   }
 }
 
+function latestAutoRetryEvent(events) {
+  for (let idx = events.length - 1; idx >= 0; idx -= 1) {
+    const event = events[idx];
+    if (event.type === 'issue.auto_retry_scheduled') {
+      return parseEventPayload(event);
+    }
+  }
+  return null;
+}
+
+function formatRetryTime(value) {
+  if (!value) return '未知时间';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
 export default function IssueDetail({ issueId, navigateTo }) {
   const refreshAllData = useDataStore(selectRefreshAllData);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -295,6 +312,10 @@ ${error}` : error;
   // 日志解析转换
   // 将 Go 传过来的原始 issue_events 处理成可在终端渲染的行
   const commentEvents = events.filter(event => event.type === 'issue.comment');
+  const autoRetryPayload = latestAutoRetryEvent(events);
+  const autoRetryNextAt = issue.auto_retry_next_at || autoRetryPayload?.next_retry_at || '';
+  const autoRetryReason = issue.auto_retry_reason || autoRetryPayload?.reason || '';
+  const isWaitingAutoRetry = issue.status === 'todo' && Boolean(autoRetryNextAt);
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
@@ -370,6 +391,14 @@ ${error}` : error;
         return (
           <div key={event.id || idx} className="terminal-line error">
             &gt;&gt; [{timestamp}] 发生异常: {error}
+          </div>
+        );
+      }
+
+      if (event.type === 'issue.auto_retry_scheduled') {
+        return (
+          <div key={event.id || idx} className="terminal-line header">
+            &gt;&gt; [{timestamp}] 已安排自动重试 #{payload.attempt || '?'}，下次时间: {formatRetryTime(payload.next_retry_at)}，原因: {payload.reason || 'transient transport error'}
           </div>
         );
       }
@@ -554,6 +583,22 @@ ${error}` : error;
 
         {/* 右侧：元数据信息与运行设置 */}
         <div className="issue-detail-side" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+          {isWaitingAutoRetry && (
+            <div className="glass-card" style={{ background: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.3)', borderLeft: '4px solid var(--warning)' }}>
+              <h4 style={{ color: 'var(--warning)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <RotateCw size={18} /> 等待自动重试
+              </h4>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
+                下次重试时间：{formatRetryTime(autoRetryNextAt)}
+              </p>
+              {autoRetryReason && (
+                <p className="issue-error-text" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  原因：{autoRetryReason}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 故障错误警报栏 */}
           {issue.error && (

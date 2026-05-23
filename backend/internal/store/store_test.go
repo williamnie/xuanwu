@@ -32,6 +32,46 @@ func TestProjectIssueQueueLifecycle(t *testing.T) {
 	}
 }
 
+func TestClaimNextIssueSkipsAutoRetryUntilDue(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "retry later", Status: StatusTodo})
+	if _, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || !ok {
+		t.Fatalf("claim before future schedule: ok=%v err=%v", ok, err)
+	}
+
+	future := "2999-01-01T00:00:00Z"
+	waiting, err := st.ScheduleIssueAutoRetry(ctx, issue.ID, "Transport error: network error", future)
+	if err != nil {
+		t.Fatalf("schedule auto retry: %v", err)
+	}
+	if waiting.Status != StatusTodo || waiting.AutoRetryNextAt != future ||
+		waiting.AutoRetryReason != "Transport error: network error" {
+		t.Fatalf("unexpected waiting issue: %+v", waiting)
+	}
+	if claimed, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || ok {
+		t.Fatalf("future auto retry should not be claimed: ok=%v issue=%+v err=%v", ok, claimed, err)
+	}
+
+	due, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "retry due", Status: StatusTodo})
+	if _, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || !ok {
+		t.Fatalf("claim before due schedule: ok=%v err=%v", ok, err)
+	}
+	past := "2000-01-01T00:00:00Z"
+	if _, err = st.ScheduleIssueAutoRetry(ctx, due.ID, "Transport error: network error", past); err != nil {
+		t.Fatalf("reschedule auto retry: %v", err)
+	}
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("due auto retry should be claimed: ok=%v err=%v", ok, err)
+	}
+	if claimed.ID != due.ID || claimed.Status != StatusInProgress || claimed.AttemptCount != 2 ||
+		claimed.AutoRetryNextAt != "" || claimed.AutoRetryReason != "" || claimed.Error != "" {
+		t.Fatalf("claimed issue should clear auto retry state: %+v", claimed)
+	}
+}
+
 func TestProjectNameAndModelDefaults(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()

@@ -38,7 +38,8 @@ func scanIssue(row scanner) (Issue, error) {
 	var i Issue
 	err := row.Scan(&i.ID, &i.ProjectID, &i.Title, &i.Description, &i.Status,
 		&i.Priority, &i.TemplateID, &i.PromptTemplate, &i.CodexThreadID,
-		&i.CodexTurnID, &i.AttemptCount, &i.Error, &i.CreatedAt, &i.UpdatedAt)
+		&i.CodexTurnID, &i.AttemptCount, &i.AutoRetryNextAt,
+		&i.AutoRetryReason, &i.Error, &i.CreatedAt, &i.UpdatedAt)
 	return i, err
 }
 
