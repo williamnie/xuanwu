@@ -2,11 +2,14 @@
 
 > 调研时间：2026-05-24
 > 范围：只判断 Codex / Claude Code / opencode / Kimi Code 作为 `codex-issue-runner` 底层 code agent provider 的接入优先级；不做实现、不设计插件市场。
+>
+> CLI-only subprocess 细化设计见 `docs/cli-provider-adapter.md`。
 
 ## 明确结论
 
 - **不建议今晚/近期立即开大工程做多 provider 抽象。** 现有 Codex baseline 已覆盖 issue 执行、持久 thread、structured event、approval、interrupt、Sessions 页面和显式 `issue update` 回写；多 provider 现在应停留在 PoC 与接口边界验证。
 - **最小 MVP 应先做 “issue execution only”。** 不要第一版就接 Sessions 页面；Sessions 需要 list/read/resume/transcript/interrupt/approval/status 全链路一致，跨 provider 会立刻放大 UI 和数据模型差异。
+- **CLI-only provider 的第一版应更窄：只支持受控 subprocess 执行 issue。** 若不能稳定恢复 session/transcript，就只出现在 issue execution/run history，不进入 Sessions 页。
 - **first provider PoC 推荐：Claude Code。** 优先使用 Agent SDK，而不是只包 CLI；它最接近生产自动化需求，具备 SDK、streaming、session、permission/approval 体系。
 - **接入难度排序（从低到高）：Claude Code < opencode < Kimi Code。** opencode 的 HTTP server/SDK 能力强，但运行模型更像“独立 backend”；Kimi Code 的 Wire 能力完整但标注为 experimental，需要先验证真实版本稳定性。
 
