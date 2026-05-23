@@ -108,6 +108,12 @@ export default function IssueDetail({ issueId, navigateTo }) {
             draft.issue.status = data.status;
           }
 
+          if (data.type === 'issue.notification_failed' && draft.issue) {
+            const error = data.error || parseEventPayload(data).error || '通知失败';
+            draft.issue.error = draft.issue.error ? `${draft.issue.error}
+${error}` : error;
+          }
+
           if (data.type === 'issue.error' && draft.issue) {
             if (draft.issue.error !== data.error) {
               draft.issue.error = data.error;
@@ -301,7 +307,17 @@ export default function IssueDetail({ issueId, navigateTo }) {
         );
       }
 
-      // 2. 发生错误
+      // 2. 通知失败
+      if (event.type === 'issue.notification_failed') {
+        const error = event.error || payload.error || '通知失败';
+        return (
+          <div key={event.id || idx} className="terminal-line error">
+            &gt;&gt; [{timestamp}] 通知失败: {error}
+          </div>
+        );
+      }
+
+      // 3. 发生错误
       if (event.type === 'issue.error') {
         const error = event.error || payload.error || '未知错误';
         return (
@@ -311,7 +327,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
         );
       }
 
-      // 3. Codex 日志事件 (有具体的 Codex 回合、线程或输出)
+      // 4. Codex 日志事件 (有具体的 Codex 回合、线程或输出)
       if (event.type === 'issue.log') {
         const method = payload.codexMethod || '';
         // 优先使用外部已合并好的 _textMerged，若无则回退取原本事件文本
@@ -374,7 +390,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
         );
       }
 
-      // 未知格式默认渲染
+      // 5. 未知格式默认渲染
       return (
         <div key={event.id || idx} className="terminal-line" style={{ opacity: 0.8 }}>
           [{timestamp}] {JSON.stringify(event)}

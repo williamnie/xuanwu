@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/notifications"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 	webassets "github.com/xiaobei/codex-issue-runner/backend/internal/web"
@@ -25,6 +26,7 @@ type Server struct {
 	authToken        string
 	usageCache       codexUsageCache
 	restart          func()
+	notifier         *notifications.Notifier
 }
 
 func NewServer(st *store.Store, bus *events.Bus, runner *runner.Runner) *Server {
@@ -44,6 +46,10 @@ func NewServerWithWebDirAndSessionsDir(
 ) *Server {
 	s := &Server{store: st, bus: bus, runner: runner, codexSessionsDir: codexSessionsDir}
 	s.web = newWebHandler(webDir)
+	s.notifier = notifications.New(st, bus, nil)
+	if runner != nil {
+		runner.SetIssueNotifier(s.notifier)
+	}
 	return s
 }
 
@@ -125,6 +131,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) > 0 && parts[0] == "usage" {
 		s.routeUsage(w, r, parts)
+		return
+	}
+	if len(parts) > 0 && parts[0] == "notifications" {
+		s.routeNotifications(w, r, parts)
 		return
 	}
 	if len(parts) > 0 && parts[0] == "system" {

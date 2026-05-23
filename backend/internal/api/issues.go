@@ -72,6 +72,7 @@ func (s *Server) createIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
+	before, _ := s.store.GetIssue(r.Context(), id)
 	var patch store.IssuePatch
 	if err := decodeJSON(r, &patch); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
@@ -84,6 +85,7 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 	if patch.Status != nil {
 		s.recordIssueEvent(r, id, "issue.status_changed", map[string]string{"status": updated.Status})
+		s.notifyTerminalIssue(r, before.Status, updated)
 	}
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -146,4 +148,14 @@ func (s *Server) writeIssue(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)
+}
+
+func (s *Server) notifyTerminalIssue(r *http.Request, previousStatus string, issue store.Issue) {
+	if s.notifier == nil || previousStatus == issue.Status {
+		return
+	}
+	if issue.Status != store.StatusDone && issue.Status != store.StatusFailed {
+		return
+	}
+	s.notifier.NotifyIssueStatus(r.Context(), issue)
 }

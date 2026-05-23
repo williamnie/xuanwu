@@ -42,17 +42,25 @@ func (r *Runner) failIssue(ctx context.Context, issueID int64, message string) {
 	if err != nil {
 		return
 	}
-	r.recordStatusEvent(ctx, issueID, store.StatusFailed)
+	issue, err := r.recordStatusEvent(ctx, issueID, store.StatusFailed)
+	if err == nil {
+		r.notifyIssueStatus(ctx, issue)
+	}
 	r.recordErrorEvent(ctx, issueID, message)
 }
 
-func (r *Runner) recordStatusEvent(ctx context.Context, issueID int64, status string) {
+func (r *Runner) recordStatusEvent(ctx context.Context, issueID int64, status string) (store.Issue, error) {
 	payload, _ := json.Marshal(map[string]string{"status": status})
 	e, err := r.store.AddIssueEvent(ctx, issueID, "issue.status_changed", string(payload))
 	if err != nil {
-		return
+		return store.Issue{}, err
 	}
 	r.bus.Publish(events.AppEvent{ID: e.ID, Type: e.Type, IssueID: issueID, Status: status, CreatedAt: e.CreatedAt})
+	issue, err := r.store.GetIssue(ctx, issueID)
+	if err != nil {
+		return store.Issue{}, err
+	}
+	return issue, nil
 }
 
 func (r *Runner) recordErrorEvent(ctx context.Context, issueID int64, message string) {
@@ -65,5 +73,12 @@ func (r *Runner) recordErrorEvent(ctx context.Context, issueID int64, message st
 }
 
 func developerInstructions() string {
-	return "Codex Issue Runner 后台自动执行模式：保持改动最小，优先验证，完成后给出简短总结；不要主动提交 git commit。"
+	return "Codex Issue Runner 后台自动执行模式：保持改动最小，" +
+		"优先验证，完成后给出简短总结；不要主动提交 git commit。"
+}
+
+func (r *Runner) notifyIssueStatus(ctx context.Context, issue store.Issue) {
+	if r.notifier != nil {
+		r.notifier.NotifyIssueStatus(ctx, issue)
+	}
 }

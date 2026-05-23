@@ -14,6 +14,7 @@ type Runner struct {
 	store               *store.Store
 	bus                 *events.Bus
 	codex               codex.Client
+	notifier            IssueNotifier
 	execMu              sync.Mutex
 	healthCheckInterval time.Duration
 	healthCheckWait     time.Duration
@@ -33,6 +34,14 @@ type runState struct {
 	cancel   context.CancelFunc
 	threadID string
 	turnID   string
+}
+
+type IssueNotifier interface {
+	NotifyIssueStatus(context.Context, store.Issue)
+}
+
+func (r *Runner) SetIssueNotifier(notifier IssueNotifier) {
+	r.notifier = notifier
 }
 
 func New(st *store.Store, bus *events.Bus, client codex.Client) *Runner {

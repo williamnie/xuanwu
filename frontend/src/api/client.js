@@ -152,6 +152,13 @@ export const api = {
     body: JSON.stringify({}),
   }),
 
+  getNotificationSettings: () => request('/api/notifications/settings'),
+
+  updateNotificationSettings: (settings) => request('/api/notifications/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  }),
+
   getCronTasks: () => request('/api/cron-tasks'),
 
   createCronTask: (task) => request('/api/cron-tasks', {

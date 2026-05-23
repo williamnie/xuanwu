@@ -4,6 +4,7 @@ import CronTasksPanel from '../components/CronTasksPanel';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
+import NotificationSettingsPanel from './NotificationSettingsPanel';
 
 export default function Settings() {
   return (
@@ -15,6 +16,7 @@ export default function Settings() {
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
         <RestartPanel />
+        <NotificationSettingsPanel />
         <CronTasksPanel />
         <IssueTemplatesPanel />
       </div>

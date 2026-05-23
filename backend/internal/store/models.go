@@ -55,6 +55,13 @@ type SessionPreferences struct {
 	LastProjectID string `json:"last_project_id"`
 }
 
+type NotificationSettings struct {
+	WebhookURL  string   `json:"webhook_url"`
+	Events      []string `json:"events"`
+	ActiveStart string   `json:"active_start"`
+	ActiveEnd   string   `json:"active_end"`
+}
+
 type IssueTemplate struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
