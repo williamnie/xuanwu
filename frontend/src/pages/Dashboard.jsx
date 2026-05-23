@@ -125,9 +125,9 @@ export default function Dashboard({
       <CodexUsagePanel />
 
       {/* 双栏布局 */}
-      <div className="grid-cols-2">
+      <div className="grid-cols-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         {/* 左栏：活跃任务与快捷队列 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Clock size={18} color="var(--primary)" /> 运行中任务 ({inProgressIssues.length})
           </h3>
@@ -207,18 +207,18 @@ export default function Dashboard({
         </div>
 
         {/* 右栏：系统实时通知 / 活动流 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Terminal size={18} color="var(--primary)" /> 全局活动事件流
           </h3>
 
-          <div className="glass-card" style={{ flex: 1, maxHeight: '500px', display: 'flex', flexDirection: 'column', padding: '16px 20px', background: 'var(--bg-terminal)', border: '1px solid var(--border-color)' }}>
+          <div className="glass-card" style={{ flex: 1, maxHeight: '500px', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '16px 20px', background: 'var(--bg-terminal)', border: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '12px' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>事件</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>时间</span>
             </div>
             
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
               {events.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                   [等待事件接收...]
@@ -262,10 +262,10 @@ export default function Dashboard({
                   }
 
                   return (
-                    <div key={event.viewId} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
-                      <span style={{ color: '#a9b1d6', display: 'flex', gap: '8px' }}>
+                    <div key={event.viewId} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', minWidth: 0, fontFamily: 'var(--font-mono)', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '6px' }}>
+                      <span style={{ color: '#a9b1d6', display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
                         <span style={{ color: badgeColor }}>•</span>
-                        <span>{text}</span>
+                        <span style={{ minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{text}</span>
                       </span>
                       <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', flexShrink: 0, marginLeft: '8px' }}>{event.timestamp}</span>
                     </div>
