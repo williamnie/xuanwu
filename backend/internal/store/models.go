@@ -40,6 +40,10 @@ type ProjectPatch struct {
 	Sandbox        *string `json:"sandbox"`
 }
 
+type SessionPreferences struct {
+	LastProjectID string `json:"last_project_id"`
+}
+
 type IssueTemplate struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`

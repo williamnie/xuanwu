@@ -5,11 +5,12 @@ import {
   SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder, Volume2
 } from 'lucide-react';
 import { api } from '../api/client';
-import { message } from '../store/toastStore';
+import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
 import { selectProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
+import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
 import SessionComposer from './sessions/SessionComposer';
 import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
@@ -49,6 +50,7 @@ export default function Sessions() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [cwd, setCwd] = useState('');
+  const [lastProjectId, setLastProjectId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [sessionSettings, setSessionSettings] = useState(() => defaultSessionSettings(null));
   const [messageSettings, setMessageSettings] = useState(() => defaultMessageSettings(null));
@@ -110,7 +112,7 @@ export default function Sessions() {
       setCursor(result.nextCursor || '');
       setSelectedId((current) => current || data[0]?.id || '');
     } catch (err) {
-      message.error(err.message || '加载 Codex sessions 失败');
+      toast.error(err.message || '加载 Codex sessions 失败');
     } finally {
       setLoading(false);
     }
@@ -124,7 +126,7 @@ export default function Sessions() {
       setSessions((prev) => mergeSessions(prev, result.data || []));
       setCursor(result.nextCursor || '');
     } catch (err) {
-      message.error(err.message || '继续加载 sessions 失败');
+      toast.error(err.message || '继续加载 sessions 失败');
     } finally {
       setLoadingMore(false);
     }
@@ -146,7 +148,7 @@ export default function Sessions() {
       setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
     } catch (err) {
       if (selectedIdRef.current !== requestId) return;
-      message.error(err.message || '读取 session 详情失败');
+      toast.error(err.message || '读取 session 详情失败');
     } finally {
       if (selectedIdRef.current === requestId) {
         setDetailLoading(false);
@@ -168,6 +170,24 @@ export default function Sessions() {
   }, []);
 
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
+  useEffect(() => {
+    let alive = true;
+    api.getSessionPreferences()
+      .then((prefs) => {
+        if (alive) setLastProjectId(prefs?.last_project_id || '');
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (projectId || !lastProjectId) return;
+    const project = resolveLastSessionProject(projects, lastProjectId);
+    if (!project) return;
+    setProjectId(project.id);
+    setCwd(project.cwd);
+    setSessionSettings(defaultSessionSettings(project));
+  }, [lastProjectId, projectId, projects]);
   
   useEffect(() => {
     const isSwitching = lastSelectedIdRef.current !== selectedId;
@@ -245,7 +265,7 @@ export default function Sessions() {
       await api.resolveCodexApproval(approvalRequest.id, { decision, scope });
       setApprovalRequest(null);
     } catch (err) {
-      message.error(err.message || '提交授权决策失败');
+      toast.error(err.message || '提交授权决策失败');
     } finally {
       setApprovalSubmitting(false);
     }
@@ -268,7 +288,7 @@ export default function Sessions() {
       setMessage('');
       setLiveEvents([]);
     } catch (err) {
-      message.error(err.message || '发送消息失败');
+      toast.error(err.message || '发送消息失败');
     } finally {
       setSending(false);
     }
@@ -284,7 +304,14 @@ export default function Sessions() {
   // 新建并启动会话
   const handleCreateNewSession = async (e) => {
     if (e) e.preventDefault();
-    if (sending || !prompt.trim()) return;
+    if (sending) return;
+    const guard = canCreateSession({ projectId, cwd, prompt });
+    if (!guard.ok) {
+      if (guard.reason === 'missing_project') {
+        toast.error(guard.message || PROJECT_REQUIRED_MESSAGE);
+      }
+      return;
+    }
     setSending(true);
     try {
       const result = await api.createSession({
@@ -303,7 +330,7 @@ export default function Sessions() {
       setPrompt('');
       await loadFirstPage();
     } catch (err) {
-      message.error(err.message || '创建 session 失败');
+      toast.error(err.message || '创建 session 失败');
     } finally {
       setSending(false);
     }
@@ -554,8 +581,9 @@ export default function Sessions() {
               <div className="new-session-bottom-tags">
                 <div className="bottom-tag-select">
                   <Folder size={13} />
-                  <span>项目: {selectedProject?.name || '手动路径'}</span>
+                  <span>项目: {selectedProject?.name || '未选择'}</span>
                   <select value={projectId} onChange={(e) => handleProjectChange(e.target.value)}>
+                    <option value="">选择项目</option>
                     {projects.map((project) => (
                       <option key={project.id} value={project.id}>{project.name}</option>
                     ))}

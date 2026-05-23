@@ -79,3 +79,10 @@ create table if not exists uploads (
   storage_path text not null,
   created_at text not null
 );`
+
+const appPreferencesSchema = `
+create table if not exists app_preferences (
+  key text primary key,
+  value text not null,
+  updated_at text not null
+);`

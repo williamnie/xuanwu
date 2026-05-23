@@ -1,11 +1,13 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
 type createSessionRequest struct {
@@ -29,6 +31,10 @@ type sessionMessageRequest struct {
 func (s *Server) routeSessions(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 1 {
 		s.handleSessions(w, r)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "preferences" {
+		s.handleSessionPreferences(w, r)
 		return
 	}
 	if len(parts) == 2 {
@@ -100,7 +106,25 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		handleErr(w, err)
 		return
 	}
+	if req.ProjectID != "" {
+		if err := s.store.SetLastSessionProject(r.Context(), req.ProjectID); err != nil {
+			handleErr(w, err)
+			return
+		}
+	}
 	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) handleSessionPreferences(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	projectID, err := s.store.LastSessionProject(r.Context())
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		handleErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, store.SessionPreferences{LastProjectID: projectID})
 }
 
 func (s *Server) createSessionMessage(w http.ResponseWriter, r *http.Request, threadID string) {

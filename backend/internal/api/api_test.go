@@ -129,6 +129,24 @@ func TestSessionAPI(t *testing.T) {
 	}
 }
 
+func TestSessionAPIRemembersLastProject(t *testing.T) {
+	srv := newTestServer(t)
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(),
+	})
+	initial := getJSON[store.SessionPreferences](t, srv, "/api/sessions/preferences")
+	if initial.LastProjectID != "" {
+		t.Fatalf("initial preferences = %+v", initial)
+	}
+	_ = postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
+		"project_id": project.ID, "prompt": "hello",
+	})
+	got := getJSON[store.SessionPreferences](t, srv, "/api/sessions/preferences")
+	if got.LastProjectID != "demo" {
+		t.Fatalf("preferences = %+v, want demo", got)
+	}
+}
+
 func TestImageUploadAPIStoresAndServesImage(t *testing.T) {
 	srv := newTestServer(t)
 	body, contentType := multipartBody(t, "file", "screenshot.png", "image/png",

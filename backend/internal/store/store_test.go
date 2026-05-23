@@ -173,6 +173,24 @@ func TestCreateAndReadUpload(t *testing.T) {
 	}
 }
 
+func TestLastSessionProjectPreferenceRoundTrip(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	if _, err := st.LastSessionProject(ctx); err != ErrNotFound {
+		t.Fatalf("empty preference err = %v, want ErrNotFound", err)
+	}
+	if err := st.SetLastSessionProject(ctx, "demo"); err != nil {
+		t.Fatalf("set preference: %v", err)
+	}
+	if err := st.SetLastSessionProject(ctx, "movo-web"); err != nil {
+		t.Fatalf("update preference: %v", err)
+	}
+	got, err := st.LastSessionProject(ctx)
+	if err != nil || got != "movo-web" {
+		t.Fatalf("preference = %q err=%v", got, err)
+	}
+}
+
 func TestOpenMigratesExistingIssuesWithTemplates(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	db, err := sql.Open("sqlite", path)

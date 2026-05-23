@@ -45,6 +45,7 @@ func (s *Store) init() error {
 		issueEventsSchema,
 		cronTasksSchema,
 		uploadsSchema,
+		appPreferencesSchema,
 		`create index if not exists idx_issues_queue on issues(project_id, status, priority, created_at)`,
 		`create index if not exists idx_cron_tasks_due on cron_tasks(status, next_run_at)`,
 	}

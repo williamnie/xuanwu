@@ -193,6 +193,8 @@ export const api = {
 
   getCodexModels: () => request('/api/codex/models'),
 
+  getSessionPreferences: () => request('/api/sessions/preferences'),
+
   createSession: (session) => request('/api/sessions', {
     method: 'POST',
     body: JSON.stringify(session),
