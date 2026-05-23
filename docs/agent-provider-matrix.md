@@ -10,7 +10,7 @@
 - **不建议今晚/近期立即开大工程做多 provider 抽象。** 现有 Codex baseline 已覆盖 issue 执行、持久 thread、structured event、approval、interrupt、Sessions 页面和显式 `issue update` 回写；多 provider 现在应停留在 PoC 与接口边界验证。
 - **最小 MVP 应先做 “issue execution only”。** 不要第一版就接 Sessions 页面；Sessions 需要 list/read/resume/transcript/interrupt/approval/status 全链路一致，跨 provider 会立刻放大 UI 和数据模型差异。
 - **CLI-only provider 的第一版应更窄：只支持受控 subprocess 执行 issue。** 若不能稳定恢复 session/transcript，就只出现在 issue execution/run history，不进入 Sessions 页。
-- **first provider PoC 推荐：Claude Code。** 优先使用 Agent SDK，而不是只包 CLI；它最接近生产自动化需求，具备 SDK、streaming、session、permission/approval 体系。
+- **first provider PoC 推荐：Claude Code。** SDK 是目标集成面；本机当前已先用 CLI stream-json 完成最小 PoC，足以支撑 issue-execution-only 的下一步验证。
 - **接入难度排序（从低到高）：Claude Code < opencode < Kimi Code。** opencode 的 HTTP server/SDK 能力强，但运行模型更像“独立 backend”；Kimi Code 的 Wire 能力完整但标注为 experimental，需要先验证真实版本稳定性。
 
 ## 当前 Codex baseline
@@ -45,6 +45,38 @@ codex-issue-runner issue update --id <issue-id> --status failed --error "<失败
 | 显式回写 issue 状态 | 已实现，默认 prompt 要求执行 CLI | 可通过 prompt + PATH/ENV 注入；建议 SDK Stop hook 或 result 检查兜底 | 可通过 prompt + CLI 环境注入；server/permission 需允许执行 `codex-issue-runner` | 可通过 prompt + Shell 工具执行；需确认 yolo/approval 或 Wire approval 能让 CLI 命令通过 |
 | Sessions 页面接入成熟度 | **已接** | 可行，但要重建 session list/read 到现有 UI 的 adapter | 可行性高，server API 覆盖 session/message/status/abort/diff | 可行但风险较高：需要自维护 Wire/session 文件解析或 ACP client |
 
+
+## Claude Code provider PoC 结果（issue 47）
+
+> 验证时间：2026-05-24  
+> 隔离脚本：`scripts/experiments/claude-provider-poc.mjs`  
+> 本机版本：`claude 2.1.114 (Claude Code)`；Node SDK package `@anthropic-ai/claude-agent-sdk` 本仓库未安装。
+
+### 最小验证
+
+已在临时目录运行只读任务：脚本创建临时 `README.md`，用 Claude Code 读取 marker，并把 `stream-json` 原始输出转成紧凑事件摘要。最新验证命令：
+
+```bash
+node --check scripts/experiments/claude-provider-poc.mjs
+node scripts/experiments/claude-provider-poc.mjs --timeout-ms 60000
+```
+
+验证输出包含稳定 `session_id`（例如本次为 `f1a43266-d3a9-485a-9f64-8c0d592d4c98`）、`agent.turn.started`、`agent.tool.started`、`agent.tool.output`、`agent.message.delta`、`agent.turn.completed`，且 `result` 命中 `codex-issue-runner-claude-provider-poc`。
+
+### PoC 问题结论
+
+1. **cwd / model / permission**：可以。PoC 用子进程 `cwd` 指定工作目录，`--model sonnet` 映射到实际 `claude-sonnet-4-6`，`--permission-mode dontAsk` 生效；`--tools` / `--allowedTools` 可限制只读工具。SDK 文档和包形态也支持这些 option，但本仓库未安装 SDK，未做 SDK live run。
+2. **streaming assistant/tool/command events**：可以。CLI `-p --verbose --output-format stream-json` 输出 JSONL；PoC 已捕获 assistant 文本、Read tool use、tool result 和最终 result。若需要更细粒度 token delta，可加 `--include-partial-messages`，但会显著增加日志量。
+3. **中断**：部分可行。PoC 脚本支持 `--interrupt-after-ms` 通过宿主进程 SIGINT/SIGTERM 验证取消路径；尚未证明 Claude Code 有等价 Codex `turn/interrupt` 的稳定 API。生产第一版应按 subprocess kill/cancel 兜底。
+4. **恢复/读取历史 session**：部分可行。CLI help 暴露 `--resume` / `--continue` / `--session-id` / `--fork-session`，result 也返回 `session_id`；但本 PoC 没实现 session list/read/transcript adapter，因此不应接入 Sessions 页。
+5. **session id / turn id**：能拿到 `session_id` 和 result `uuid`。没有观察到 Codex 式独立 `turn_id`；可把 result `uuid` 作为 run/result event id，而不是假装为 turn id。
+6. **注入 issue update**：可通过 prompt + 环境/PATH + allowed Bash pattern 注入。PoC 额外验证过允许 `Bash(codex-issue-runner issue update:*)` 时 Claude 会执行 `codex-issue-runner issue update --id ... --status done --json`；真实 runner 仍需传 `CODEX_RUNNER_ADDR` / token 或 token file，且保持“未显式 terminal => failed”兜底。
+7. **错误/退出状态映射**：建议按 CLI 启动失败/认证失败/权限拒绝/中断/超时/模型错误/缺失显式回写分类。Claude CLI exit 0 只能表示 provider run completed，不能表示 issue done；必须复用现有 explicit status gate。
+
+### 是否适合作为 first non-Codex provider
+
+**适合做第一个非 Codex provider PoC，但不适合直接重构生产主链路。** CLI 当前已经足够证明：可指定 cwd/model/permission，可拿结构化 stream-json，可得到 session id，可让 agent 执行回写命令。下一步若要进入生产，应先实现 issue-execution-only subprocess adapter，并把 SDK 作为后续优化；Sessions/list/read/resume、approval UI 和 turn-level interrupt 等能力必须等单独 spike 通过后再接。
+
 ## 推荐接入顺序
 
 ### P0：保持 Codex 为唯一生产 provider
@@ -57,14 +89,14 @@ codex-issue-runner issue update --id <issue-id> --status failed --error "<失败
 
 推荐原因：
 
-- 官方 Agent SDK 面向生产自动化，支持内置读写/命令工具、sessions、permissions、hooks、streaming。
+- 官方 Agent SDK 面向生产自动化，支持内置读写/命令工具、sessions、permissions、hooks、streaming；本机未安装 SDK 时，CLI `stream-json` 也可作为先行 adapter 试验面。
 - session resume/fork 能力明确；CLI 也支持 `--resume`、`--continue`、`--session-id`、`--output-format stream-json`。
 - permission model 足够细：可先用 `dontAsk + allowed_tools` 做保守模式，或隔离环境里用更宽松模式。中断语义先按宿主进程取消兜底，不假设等价于 Codex `turn/interrupt`。
 
 主要风险：
 
 - 认证与商业/订阅限制需要用户侧配置；不应把 Claude login/token 管理塞进 runner 第一版。
-- SDK 是 Python/TS；Go 后端若直接集成，可能需要 helper 进程或先用 CLI PoC。
+- SDK 是 Python/TS；Go 后端若直接集成，可能需要 helper 进程。当前本机 Node SDK package 未安装，所以生产化前仍需单独 SDK live run。
 - Claude 的 permission/sandbox 语义不等于 Codex `approvalPolicy/sandbox`，只能做能力映射，不能假装完全等价。
 
 ### P2：opencode PoC（先 issue execution，再评估 Sessions）
