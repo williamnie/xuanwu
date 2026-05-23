@@ -18,6 +18,7 @@ type fakeCodex struct {
 	threadInputs []codex.ThreadInput
 	turnInputs   []codex.UserInput
 	turnOptions  []codex.TurnOptions
+	manualEvents bool
 }
 
 func (f *fakeCodex) Start(context.Context) error { return nil }
@@ -45,10 +46,12 @@ func (f *fakeCodex) ThreadSetName(_ context.Context, _ string, name string) erro
 func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInput, options codex.TurnOptions) (string, error) {
 	f.turnInputs = input
 	f.turnOptions = append(f.turnOptions, options)
-	go func() {
-		f.events <- codex.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
-		f.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
-	}()
+	if !f.manualEvents {
+		go func() {
+			f.events <- codex.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
+			f.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
+		}()
+	}
 	return "turn-1", nil
 }
 func (f *fakeCodex) InterruptTurn(context.Context, string, string) error { return nil }

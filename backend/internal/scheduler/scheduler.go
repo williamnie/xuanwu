@@ -70,7 +70,9 @@ func (s *Scheduler) runTask(ctx context.Context, task store.CronTask, dueAt time
 	}
 	s.recordPromotedIssues(ctx, issues)
 	for projectID := range affectedProjects(issues) {
-		_ = s.starter.StartProject(projectID)
+		if err := s.starter.StartProject(projectID); err != nil {
+			return err
+		}
 	}
 	if _, err = s.store.MarkCronTaskRan(ctx, task.ID, dueAt); err != nil {
 		return err

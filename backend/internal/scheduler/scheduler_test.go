@@ -12,11 +12,12 @@ import (
 
 type fakeStarter struct {
 	started []string
+	err     error
 }
 
 func (f *fakeStarter) StartProject(projectID string) error {
 	f.started = append(f.started, projectID)
-	return nil
+	return f.err
 }
 
 func TestRunDuePromotesTriageIssuesAndStartsProjects(t *testing.T) {
