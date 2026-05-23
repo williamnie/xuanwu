@@ -170,6 +170,8 @@ checksums.txt
 ./scripts/package-release.sh
 ```
 
+本地 release/package 会先做发布前门禁：`go test ./backend/...`、`frontend` 的 `npm run lint` / `npm run build`，然后再打包并校验产物；任一步失败都会直接退出并阻断发布。
+
 ## CLI 调用
 
 同一个二进制同时支持后端服务和短命令 CLI：

@@ -30,6 +30,16 @@ import {
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
 
+function parseEventPayload(event) {
+  if (!event?.payload) return {};
+  if (typeof event.payload !== 'string') return event.payload;
+  try {
+    return JSON.parse(event.payload);
+  } catch {
+    return { text: event.payload };
+  }
+}
+
 export default function IssueDetail({ issueId, navigateTo }) {
   const refreshAllData = useDataStore(selectRefreshAllData);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -214,16 +224,6 @@ ${error}` : error;
     setIsEditModalOpen(false);
     refreshAllData();
   }, [refreshAllData, updateDetailState]);
-
-  const parseEventPayload = (event) => {
-    if (!event?.payload) return {};
-    if (typeof event.payload !== 'string') return event.payload;
-    try {
-      return JSON.parse(event.payload);
-    } catch {
-      return { text: event.payload };
-    }
-  };
 
   if (loading && !issue) {
     return (

@@ -15,6 +15,15 @@ require_cmd() {
   fi
 }
 
+log() {
+  printf '[release] %s\n' "$*"
+}
+
+fail() {
+  printf '[release] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
 frontend_install() {
   if [ -d "$ROOT_DIR/frontend/node_modules" ]; then
     return
@@ -26,6 +35,23 @@ frontend_install() {
     echo "[release] npm ci failed, falling back to npm install..." >&2
   fi
   npm --prefix "$ROOT_DIR/frontend" install
+}
+
+run_step() {
+  local label="$1"
+  shift
+  log "preflight: $label"
+  if ! "$@"; then
+    fail "$label failed"
+  fi
+}
+
+run_preflight_checks() {
+  run_step "go test ./backend/..." go test ./backend/...
+  frontend_install
+  run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
+  run_step "frontend build" npm --prefix "$ROOT_DIR/frontend" run build
+  log "preflight summary: backend tests, frontend lint, frontend build"
 }
 
 prepare_embedded_web() {
@@ -41,12 +67,6 @@ cleanup_embedded_web() {
 cleanup_all() {
   cleanup_embedded_web
   rm -rf "$WORK_DIR"
-}
-
-build_frontend() {
-  frontend_install
-  npm --prefix "$ROOT_DIR/frontend" run build
-  prepare_embedded_web
 }
 
 package_target() {
@@ -69,6 +89,19 @@ package_target() {
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
 }
 
+verify_release_artifacts() {
+  local targets=("$@")
+  local target goos goarch asset
+  for target in "${targets[@]}"; do
+    goos="${target%/*}"
+    goarch="${target#*/}"
+    asset="codex-issue-runner_${goos}_${goarch}.tar.gz"
+    [ -s "$OUT_DIR/$asset" ] || fail "missing or empty release asset: $asset"
+  done
+  [ -s "$OUT_DIR/checksums.txt" ] || fail "missing or empty release checksum file: checksums.txt"
+  log "artifact summary: ${#targets[@]} tarballs plus checksums.txt"
+}
+
 write_checksums() {
   (
     cd "$OUT_DIR"
@@ -87,7 +120,8 @@ main() {
   rm -rf "$OUT_DIR"
   mkdir -p "$OUT_DIR" "$WORK_DIR"
   trap cleanup_all EXIT
-  build_frontend
+  run_preflight_checks
+  prepare_embedded_web
   local targets=("$@")
   if [ "${#targets[@]}" -eq 0 ]; then
     targets=("${DEFAULT_TARGETS[@]}")
@@ -96,6 +130,8 @@ main() {
     package_target "$target"
   done
   write_checksums
+  verify_release_artifacts "${targets[@]}"
+  log "release summary: preflight passed, packages built, checksums written"
   echo "[release] assets written to $OUT_DIR"
 }
 
