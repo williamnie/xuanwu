@@ -21,7 +21,10 @@ import (
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
-type noopCodex struct{ ch chan codex.Event }
+type noopCodex struct {
+	ch        chan codex.Event
+	listInput *codex.SessionListInput
+}
 
 func (n noopCodex) Start(context.Context) error { return nil }
 func (n noopCodex) Stop(context.Context) error  { return nil }
@@ -35,7 +38,10 @@ func (n noopCodex) ModelList(context.Context, codex.ModelListInput) (codex.Model
 		SupportedReasoningEfforts: []codex.ReasoningEffortOption{{ReasoningEffort: "xhigh", Description: "超高"}},
 	}}}, nil
 }
-func (n noopCodex) ThreadList(context.Context, codex.SessionListInput) (codex.SessionListResult, error) {
+func (n noopCodex) ThreadList(_ context.Context, input codex.SessionListInput) (codex.SessionListResult, error) {
+	if n.listInput != nil {
+		*n.listInput = input
+	}
 	return codex.SessionListResult{Data: []codex.Session{{ID: "thread-1", CWD: "/tmp/demo", Preview: "hello"}}, NextCursor: "next"}, nil
 }
 func (n noopCodex) ThreadRead(context.Context, string) (codex.Session, error) {
@@ -129,14 +135,18 @@ func TestIssueTemplateAPIAndIssueSelection(t *testing.T) {
 }
 
 func TestSessionAPI(t *testing.T) {
-	srv := newTestServer(t)
+	var listInput codex.SessionListInput
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event), listInput: &listInput})
 	models := getJSON[codex.ModelListResult](t, srv, "/api/codex/models")
 	if len(models.Data) != 1 || models.Data[0].ID != "gpt-5.5" {
 		t.Fatalf("unexpected models: %+v", models)
 	}
-	list := getJSON[codex.SessionListResult](t, srv, "/api/sessions?limit=20")
+	list := getJSON[codex.SessionListResult](t, srv, "/api/sessions?limit=20&cursor=abc")
 	if len(list.Data) != 1 || list.Data[0].ID != "thread-1" || list.NextCursor != "next" {
 		t.Fatalf("unexpected sessions: %+v", list)
+	}
+	if listInput.Limit != 20 || listInput.Cursor != "abc" {
+		t.Fatalf("session list input = %+v", listInput)
 	}
 	created := postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
 		"cwd": t.TempDir(), "prompt": "hello",
@@ -340,16 +350,21 @@ func newTestServerWithWeb(t *testing.T, webDir string) *Server {
 
 func newTestServerWithWebHandler(t *testing.T, web http.Handler) *Server {
 	t.Helper()
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
+	srv.web = web
+	return srv
+}
+
+func newTestServerWithCodex(t *testing.T, client codex.Client) *Server {
+	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	bus := events.NewBus()
-	r := runner.New(st, bus, noopCodex{ch: make(chan codex.Event)})
-	srv := NewServerWithWebDir(st, bus, r, "")
-	srv.web = web
-	return srv
+	r := runner.New(st, bus, client)
+	return NewServerWithWebDir(st, bus, r, "")
 }
 
 func assertBodyContains(t *testing.T, h http.Handler, path, want string) {

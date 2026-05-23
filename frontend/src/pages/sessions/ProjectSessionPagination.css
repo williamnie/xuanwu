@@ -1,0 +1,26 @@
+.project-group-load-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 10px);
+  min-height: 30px;
+  margin: 4px 0 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.project-group-load-more:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.project-group-load-more:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}

@@ -1,5 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2, GripVertical } from 'lucide-react';
+import {
+  nextProjectSessionVisibleCount,
+  PROJECT_SESSION_PAGE_SIZE,
+  projectSessionMoreState,
+  projectSessionVisibleCount,
+  visibleProjectSessions,
+} from './projectSessionPagination';
+import './ProjectSessionPagination.css';
 
 function projectNameFromPath(cwd) {
   const trimmed = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -65,6 +73,7 @@ export default function VirtualSessionList({
   onReorderProjects,
 }) {
   const [collapsed, setCollapsed] = useState({});
+  const [visibleCounts, setVisibleCounts] = useState({});
   const [dragProjectId, setDragProjectId] = useState('');
   const [dragOverProjectId, setDragOverProjectId] = useState('');
 
@@ -159,6 +168,24 @@ export default function VirtualSessionList({
     setDragOverProjectId(group.id);
   };
 
+  const handleProjectLoadMore = useCallback((group) => {
+    const current = projectSessionVisibleCount(group.id, visibleCounts);
+    if (group.sessions.length > current) {
+      setVisibleCounts((prev) => ({
+        ...prev,
+        [group.id]: nextProjectSessionVisibleCount(current, group.sessions.length),
+      }));
+      return;
+    }
+    if (hasMore && !loadingMore) {
+      setVisibleCounts((prev) => ({
+        ...prev,
+        [group.id]: current + PROJECT_SESSION_PAGE_SIZE,
+      }));
+      onLoadMore();
+    }
+  }, [hasMore, loadingMore, onLoadMore, visibleCounts]);
+
   const resetDragState = () => {
     setDragProjectId('');
     setDragOverProjectId('');
@@ -178,6 +205,11 @@ export default function VirtualSessionList({
         {groups.map((group) => {
           const isCollapsed = collapsed[group.id];
           const hasSessions = group.sessions.length > 0;
+          const visibleCount = projectSessionVisibleCount(group.id, visibleCounts);
+          const visibleSessions = visibleProjectSessions(group.sessions, visibleCount);
+          const moreState = projectSessionMoreState(group.sessions.length, visibleCount);
+          const canLoadFromCursor = hasMore && group.sessions.length >= PROJECT_SESSION_PAGE_SIZE;
+          const showLoadMore = moreState.canRevealLoaded || canLoadFromCursor;
 
           return (
             <div
@@ -212,7 +244,7 @@ export default function VirtualSessionList({
               {!isCollapsed && (
                 <div className="project-group-sessions animate-slide-down">
                   {hasSessions ? (
-                    group.sessions.map((session) => (
+                    visibleSessions.map((session) => (
                       <SessionItem
                         key={session.id}
                         session={session}
@@ -222,6 +254,17 @@ export default function VirtualSessionList({
                     ))
                   ) : (
                     <div className="project-group-empty">暂无对话</div>
+                  )}
+                  {hasSessions && showLoadMore && (
+                    <button
+                      type="button"
+                      className="project-group-load-more"
+                      onClick={() => handleProjectLoadMore(group)}
+                      disabled={loadingMore && !moreState.canRevealLoaded}
+                    >
+                      {loadingMore && !moreState.canRevealLoaded ? <Loader2 size={12} /> : null}
+                      <span>{moreState.canRevealLoaded ? `更多 ${Math.min(moreState.hiddenLoadedCount, PROJECT_SESSION_PAGE_SIZE)} 个` : '继续加载'}</span>
+                    </button>
                   )}
                 </div>
               )}
