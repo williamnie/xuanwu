@@ -18,6 +18,22 @@ const DefaultIssuePromptTemplate = `{{issue.content}}
 - Issue ID：{{issue.id}}
 - Issue 标题：{{issue.title}}
 
+执行契约（适用于所有 agent/provider）：
+- agent/provider 必须在完成直接相关验证后显式回写 issue 最终状态。
+- 优先使用 Runner CLI；如果当前 provider 不能执行 CLI，必须用 Runner HTTP API 做等价更新。
+- 不要硬编码或输出 token；优先使用 CODEX_RUNNER_AUTH_TOKEN，或通过 --token "$(cat <token-file>)" 传入。
+- token 文件优先来自 CODEX_RUNNER_AUTH_TOKEN_FILE；源码部署常见为 data/auth_token，release/其他项目使用对应 state/data 目录。
+
+Codex CLI 示例：
+codex-issue-runner issue update --id {{issue.id}} --status done --json
+codex-issue-runner issue update --id {{issue.id}} --status failed --error "<失败原因>" --json
+
+API 等价示例（仅在 CLI 不可用时使用，token 仍从环境或 token 文件读取）：
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/{{issue.id}}" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"done"}'
+
 要求：
 1. 先阅读相关代码确认根因。
 2. 只做和这个 issue 直接相关的最小修改。
@@ -25,6 +41,44 @@ const DefaultIssuePromptTemplate = `{{issue.content}}
 4. 如果需要运行测试，请运行最小必要验证。
 5. 完成后总结修改内容、验证结果、未验证风险。
 6. 不要提交 git commit，除非用户明确要求。
+7. 只有在你确认修改完成且验证通过后，最后按上述执行契约回写 done，例如：
+   codex-issue-runner issue update --id {{issue.id}} --status done --json
+8. 如果验证失败、需求无法完成或存在阻塞，不要标记 done；请说明失败原因，并按上述执行契约回写 failed，例如：
+   codex-issue-runner issue update --id {{issue.id}} --status failed --error "<失败原因>" --json
+`
+
+const previousDefaultIssuePromptTemplate = `{{issue.content}}
+
+执行上下文：
+- 项目路径：{{project.cwd}}
+- Issue ID：{{issue.id}}
+- Issue 标题：{{issue.title}}
+
+要求：
+1. 先阅读相关代码确认根因。
+2. 只做和这个 issue 直接相关的最小修改。
+3. 不要扩大改动范围。
+4. 如果需要运行测试，请运行最小必要验证。
+5. 完成后总结修改内容、验证结果、未验证风险。
+6. 不要提交 git commit，除非用户明确要求。
+7. 只有在你确认修改完成且验证通过后，最后执行：
+   codex-issue-runner issue update --id {{issue.id}} --status done --json
+8. 如果验证失败、需求无法完成或存在阻塞，不要标记 done；请说明失败原因，并执行：
+   codex-issue-runner issue update --id {{issue.id}} --status failed --error "<失败原因>" --json
+`
+
+const issueRunnerCommitDefaultIssuePromptTemplate = `{{issue.title}}
+
+Issue 描述：
+{{issue.description}}
+
+要求：
+1. 先阅读相关代码确认根因。
+2. 只做和这个 issue 直接相关的最小修改。
+3. 不要扩大改动范围。
+4. 如果需要运行测试，请运行最小必要验证。
+5. 完成后总结修改内容、验证结果、未验证风险。
+6. 提交 git commit。
 7. 只有在你确认修改完成且验证通过后，最后执行：
    codex-issue-runner issue update --id {{issue.id}} --status done --json
 8. 如果验证失败、需求无法完成或存在阻塞，不要标记 done；请说明失败原因，并执行：
@@ -173,10 +227,19 @@ func (s *Store) ensureSeedIssueTemplate() error {
 }
 
 func (s *Store) migrateSeedIssueTemplate(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `update issue_templates set content=?, updated_at=?
-		where id=? and content=?`, DefaultIssuePromptTemplate, now(),
-		DefaultIssueTemplateID, legacyDefaultIssuePromptTemplate)
-	return err
+	for _, legacy := range []string{
+		legacyDefaultIssuePromptTemplate,
+		previousDefaultIssuePromptTemplate,
+		issueRunnerCommitDefaultIssuePromptTemplate,
+	} {
+		_, err := s.db.ExecContext(ctx, `update issue_templates set content=?, updated_at=?
+			where id=? and content=?`, DefaultIssuePromptTemplate, now(),
+			DefaultIssueTemplateID, legacy)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) createDefaultIssueTemplate(ctx context.Context, tmpl IssueTemplate, timestamp string) (IssueTemplate, error) {

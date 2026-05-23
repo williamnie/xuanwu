@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -407,6 +408,31 @@ func TestIssueTemplateSelectionSnapshotsPromptTemplate(t *testing.T) {
 	}
 }
 
+func TestDefaultIssueTemplateSnapshotsProviderNeutralContract(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, err := st.CreateIssue(ctx, Issue{
+		ProjectID: "demo",
+		Title:     "验证默认模板",
+		Status:    StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	for _, want := range []string{
+		"适用于所有 agent/provider",
+		"CODEX_RUNNER_AUTH_TOKEN",
+		"--token \"$(cat <token-file>)\"",
+		"codex-issue-runner issue update --id {{issue.id}} --status done --json",
+		"Runner HTTP API 做等价更新",
+	} {
+		if !strings.Contains(issue.PromptTemplate, want) {
+			t.Fatalf("prompt template missing %q:\n%s", want, issue.PromptTemplate)
+		}
+	}
+}
+
 func TestCreateAndReadUpload(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()
@@ -522,6 +548,58 @@ func TestOpenMigratesLegacyDefaultIssueTemplate(t *testing.T) {
 	}
 	if tmpl.Content != DefaultIssuePromptTemplate {
 		t.Fatalf("legacy default template was not migrated:\n%s", tmpl.Content)
+	}
+}
+
+func TestOpenMigratesPreviousDefaultIssueTemplate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	_, err = st.db.Exec(`update issue_templates set content=? where id=?`,
+		previousDefaultIssuePromptTemplate, DefaultIssueTemplateID)
+	if closeErr := st.Close(); err != nil || closeErr != nil {
+		t.Fatalf("seed previous template: exec=%v close=%v", err, closeErr)
+	}
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	tmpl, err := st.GetIssueTemplate(context.Background(), DefaultIssueTemplateID)
+	if err != nil {
+		t.Fatalf("get template: %v", err)
+	}
+	if tmpl.Content != DefaultIssuePromptTemplate {
+		t.Fatalf("previous default template was not migrated:\n%s", tmpl.Content)
+	}
+}
+
+func TestOpenMigratesIssueRunnerCommitDefaultIssueTemplate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	_, err = st.db.Exec(`update issue_templates set content=? where id=?`,
+		issueRunnerCommitDefaultIssuePromptTemplate, DefaultIssueTemplateID)
+	if closeErr := st.Close(); err != nil || closeErr != nil {
+		t.Fatalf("seed commit template: exec=%v close=%v", err, closeErr)
+	}
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	tmpl, err := st.GetIssueTemplate(context.Background(), DefaultIssueTemplateID)
+	if err != nil {
+		t.Fatalf("get template: %v", err)
+	}
+	if tmpl.Content != DefaultIssuePromptTemplate {
+		t.Fatalf("commit default template was not migrated:\n%s", tmpl.Content)
 	}
 }
 

@@ -136,7 +136,7 @@ sequenceDiagram
   Codex-->>Adapter: turn id + notifications
   Runner->>DB: 保存 codex_turn_id，写 issue_events
   Runner->>SSE: issue.log / codex.event
-  Codex->>CLI: 执行 codex-issue-runner issue update
+  Codex->>CLI: agent/provider 执行状态回写
   CLI->>API: PATCH /api/issues/{id} status=done/failed
 ```
 
@@ -146,13 +146,17 @@ sequenceDiagram
 2. runner loop 只 claim `todo` issue；`triage` 默认不自动执行。
 3. 每个 issue 会创建一个独立 Codex thread，避免不同任务上下文互相污染。
 4. runner 会把 `codex_thread_id`、`codex_turn_id` 写回 issues 表，便于 UI 展示和取消。
-5. Codex 输出不会直接改 issue 状态；它必须在验证完成后执行 CLI：
+5. agent/provider 输出不会直接改 issue 状态；它必须在验证完成后按执行契约显式回写最终状态。优先执行 CLI：
 
 ```bash
 codex-issue-runner issue update --id <issue-id> --status done --json
 # 或
 codex-issue-runner issue update --id <issue-id> --status failed --error "<失败原因>" --json
 ```
+
+如果当前 provider 不能执行 CLI，必须通过 Runner HTTP API 做等价 `PATCH /api/issues/<issue-id>` 更新。token 不得硬编码或输出；优先使用 `CODEX_RUNNER_AUTH_TOKEN`，或 CLI 的 `--token "$(cat <token-file>)"`。token 文件优先来自 `CODEX_RUNNER_AUTH_TOKEN_FILE`，源码部署常见为 `data/auth_token`，release/其他项目使用对应 state/data 目录。
+
+更多 provider-neutral 契约见 `docs/agent-execution-contract.md`。
 
 如果 Codex turn 正常 `completed`，但 issue 仍不是 `done` / `failed` / `cancelled`，runner 会把 issue 标为 failed，并写入错误：
 
@@ -222,15 +226,24 @@ Codex adapter 会把 Codex notification 转成统一 `codex.Event`，再由 runn
 - `item/tool/call`：返回 `success=false`。
 - 未知 method：返回 JSON-RPC `-32601 unsupported server request`。
 
-## Codex 通过 CLI 反向更新 Runner
+## Agent/provider 通过 CLI 或 API 反向更新 Runner
 
-Codex 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`。如果服务启用了 API bearer token，CLI 支持 `--token` 或 `CODEX_RUNNER_AUTH_TOKEN`；遇到 `401 Unauthorized: unauthorized` 时，优先读取运行中服务配置的 token 文件：先看 `CODEX_RUNNER_AUTH_TOKEN_FILE`，源码部署默认是当前服务数据目录里的 `data/auth_token`，release/其他项目则来自对应 state/data 目录，不要假设都在当前仓库。
+agent/provider 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`。如果服务启用了 API bearer token，CLI 支持 `--token` 或 `CODEX_RUNNER_AUTH_TOKEN`；遇到 `401 Unauthorized: unauthorized` 时，优先读取运行中服务配置的 token 文件：先看 `CODEX_RUNNER_AUTH_TOKEN_FILE`，源码部署默认是当前服务数据目录里的 `data/auth_token`，release/其他项目则来自对应 state/data 目录，不要假设都在当前仓库。
 
 示例：
 
 ```bash
 codex-issue-runner issue status --id <issue-id> --token "$(cat data/auth_token)" --json
 CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)" codex-issue-runner issue update --id <issue-id> --status done --json
+```
+
+如果 CLI 不可用，provider 必须使用 API 等价更新：
+
+```bash
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"done"}'
 ```
 
 如果 `PATH` 里的 `codex-issue-runner` 版本过旧，可在本仓库优先用 `./dist/codex-issue-runner`，或重新安装 release/skill 后再试。
@@ -270,5 +283,5 @@ curl -H "Authorization: Bearer $(cat data/auth_token)" http://127.0.0.1:3008/api
 - Sessions 页 404：先确认当前运行的 Go 进程是最新代码，旧 `dev.sh` 或 launchd 进程常导致路由不存在。
 - Issue 不自动执行：先查 issue 是否是 `todo`；runner 不会自动 claim `triage`。
 - Issue 没有日志：查 `codex_thread_id` / `codex_turn_id` 是否写入，以及 Codex notification 的 `threadId/turnId` 是否匹配。
-- turn 已完成但 issue failed：通常是 Codex 没有执行 `codex-issue-runner issue update --status done/failed`，需要看默认 prompt 或 issue 模板是否被改掉。
+- turn 已完成但 issue failed：通常是 agent/provider 没有执行 `codex-issue-runner issue update --status done/failed` 或 API 等价更新，需要看默认 prompt 或 issue 模板是否被改掉。
 - 需要看实时事件：打开 `GET /api/events`，同时查看 `GET /api/issues/{id}/events`。

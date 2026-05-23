@@ -5,7 +5,7 @@ description: Create, enqueue, inspect, retry, cancel, or finish local Codex Issu
 
 # Codex Issue Runner
 
-Use the local `codex-issue-runner` CLI to hand bounded work from Codex to the local Issue Runner service.
+Use the local `codex-issue-runner` CLI to hand bounded work from an agent/provider to the local Issue Runner service.
 
 ## Preconditions
 
@@ -13,22 +13,28 @@ Use the local `codex-issue-runner` CLI to hand bounded work from Codex to the lo
 - The target repository should already be registered as a project. If not, register it first.
 - Prefer explicit project ids, short issue titles, and full markdown bodies in a temp file.
 
-## Authentication
+## CLI and Authentication
 
-If the CLI returns `401 Unauthorized: unauthorized`, the runner API requires its bearer token. Prefer the token file from the running service configuration:
-
-- Use `CODEX_RUNNER_AUTH_TOKEN_FILE` when it is set.
-- For this repository's source deploy, the default token file is `data/auth_token`.
-- For release installs or other projects, the token file lives under that runner's configured state/data directory; do not assume every runner uses the current repo path.
-
-Pass the token without hard-coding its value:
+Before running CLI commands, set the bearer token when the service is auth-protected. Do not paste, hard-code, print, or commit the token value.
 
 ```bash
-codex-issue-runner issue status --id <issue-id> --token "$(cat data/auth_token)" --json
-CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)" codex-issue-runner issue status --id <issue-id> --json
+if [ -z "${CODEX_RUNNER_AUTH_TOKEN:-}" ]; then
+  if [ -n "${CODEX_RUNNER_AUTH_TOKEN_FILE:-}" ] && [ -f "$CODEX_RUNNER_AUTH_TOKEN_FILE" ]; then
+    export CODEX_RUNNER_AUTH_TOKEN="$(cat "$CODEX_RUNNER_AUTH_TOKEN_FILE")"
+  elif [ -f data/auth_token ]; then
+    export CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)"
+  fi
+fi
 ```
 
-When working inside this repo and `codex-issue-runner` on `PATH` is older, prefer `./dist/codex-issue-runner` or reinstall the release/skill before retrying.
+Token lookup rules:
+
+- Prefer `CODEX_RUNNER_AUTH_TOKEN` when it is already set.
+- Prefer `CODEX_RUNNER_AUTH_TOKEN_FILE` when it is set.
+- For this repository's source deploy, the default token file is `data/auth_token`.
+- For release installs or other projects, the token file lives under that runner's configured state/data directory; do not assume every runner uses the current repo path.
+- If the CLI returns `401 Unauthorized: unauthorized`, retry only after setting `CODEX_RUNNER_AUTH_TOKEN` or passing `--token "$(cat <token-file>)"`.
+- When working inside this repo and `codex-issue-runner` on `PATH` is older, prefer `./dist/codex-issue-runner` or reinstall the release/skill before retrying.
 
 ## Register a Project
 
@@ -68,22 +74,34 @@ codex-issue-runner issue retry --id <issue-id> --json
 codex-issue-runner issue cancel --id <issue-id> --json
 ```
 
-## Finish an Issue
+## Agent Execution Contract
 
-After completing the requested work and running the directly relevant verification, update the runner issue explicitly:
+Every agent/provider that works on a runner issue must explicitly update the issue's final status after completing the directly relevant verification. A completed model turn, chat response, or local code change is not enough.
+
+Preferred success path:
 
 ```bash
 codex-issue-runner issue update --id <issue-id> --status done --json
 ```
 
-If the task cannot be completed, mark it failed with a concise reason:
+Failure/blocker path:
 
 ```bash
 codex-issue-runner issue update --id <issue-id> --status failed --error "<failure reason>" --json
 ```
 
+If a provider cannot execute the CLI, it must call the Runner HTTP API with equivalent `PATCH /api/issues/<issue-id>` semantics. Use `CODEX_RUNNER_AUTH_TOKEN` or `--token`; never hard-code or expose tokens.
+
+```bash
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"done"}'
+```
+
 ## Operating Rules
 
+- Run the token setup snippet once in the same shell before project/issue/status/update commands when auth may be enabled.
 - Do not enqueue vague planning discussion; ask or summarize into a concrete task first.
 - Put the full acceptance criteria and constraints in the body file, not only the title.
 - Report the created issue id and status back to the user.
