@@ -87,3 +87,16 @@ create table if not exists app_preferences (
   value text not null,
   updated_at text not null
 );`
+
+const projectHoldsSchema = `
+create table if not exists project_holds (
+  project_id text primary key,
+  reason text not null,
+  message text not null,
+  hold_since text not null,
+  next_check_at text not null default '',
+  last_check_at text not null default '',
+  last_check_error text not null default '',
+  updated_at text not null,
+  foreign key(project_id) references projects(id) on delete cascade
+);`

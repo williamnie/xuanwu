@@ -87,6 +87,35 @@ func TestProjectAndIssueAPI(t *testing.T) {
 	}
 }
 
+func TestProjectHoldStatusAPI(t *testing.T) {
+	srv := newTestServer(t)
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	held, err := srv.store.SetProjectHold(context.Background(), project.ID, store.ProjectHold{
+		Reason:         "usage_limit",
+		Message:        "Runner paused: usage limit reached",
+		NextCheckAt:    "2026-05-23T12:00:00Z",
+		LastCheckError: "still limited",
+	})
+	if err != nil || held.Hold == nil {
+		t.Fatalf("seed hold: %+v err=%v", held, err)
+	}
+
+	got := getJSON[store.Project](t, srv, "/api/projects/demo")
+	if got.Hold == nil || got.Hold.Reason != "usage_limit" || got.Hold.LastCheckError != "still limited" {
+		t.Fatalf("GET project should expose hold: %+v", got)
+	}
+	status := getJSON[store.ProjectHold](t, srv, "/api/projects/demo/hold/status")
+	if status.Message != "Runner paused: usage limit reached" {
+		t.Fatalf("hold status = %+v", status)
+	}
+	cleared := postJSON[store.Project](t, srv, "/api/projects/demo/hold/clear", map[string]any{})
+	if cleared.Hold != nil {
+		t.Fatalf("clear hold should return project without hold: %+v", cleared)
+	}
+}
+
 func TestProjectOrderAPI(t *testing.T) {
 	srv := newTestServer(t)
 	for _, id := range []string{"alpha", "beta", "gamma"} {

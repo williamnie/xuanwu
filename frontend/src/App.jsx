@@ -27,6 +27,10 @@ const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.error',
   'runner.started',
   'runner.stopped',
+  'runner.hold',
+  'runner.hold_active',
+  'runner.hold_check.failed',
+  'runner.hold_cleared',
   'cron_task.ran',
   'cron_task.error',
 ]);

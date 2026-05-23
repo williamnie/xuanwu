@@ -19,12 +19,19 @@ type fakeCodex struct {
 	turnInputs   []codex.UserInput
 	turnOptions  []codex.TurnOptions
 	manualEvents bool
+	autoTurns    int
+	startErr     error
+	threadErr    error
+	turnErr      error
 }
 
-func (f *fakeCodex) Start(context.Context) error { return nil }
+func (f *fakeCodex) Start(context.Context) error { return f.startErr }
 func (f *fakeCodex) Stop(context.Context) error  { return nil }
 func (f *fakeCodex) ThreadStart(_ context.Context, input codex.ThreadInput) (string, error) {
 	f.threadInputs = append(f.threadInputs, input)
+	if f.threadErr != nil {
+		return "", f.threadErr
+	}
 	return "thread-1", nil
 }
 func (f *fakeCodex) ModelList(context.Context, codex.ModelListInput) (codex.ModelListResult, error) {
@@ -46,7 +53,14 @@ func (f *fakeCodex) ThreadSetName(_ context.Context, _ string, name string) erro
 func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInput, options codex.TurnOptions) (string, error) {
 	f.turnInputs = input
 	f.turnOptions = append(f.turnOptions, options)
-	if !f.manualEvents {
+	if f.turnErr != nil {
+		return "", f.turnErr
+	}
+	shouldAutoComplete := !f.manualEvents || f.autoTurns > 0
+	if f.autoTurns > 0 {
+		f.autoTurns--
+	}
+	if shouldAutoComplete {
 		go func() {
 			f.events <- codex.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
 			f.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}

@@ -50,14 +50,14 @@ func selectTriageIssues(ctx context.Context, tx *sql.Tx, projectID string) ([]Is
 }
 
 func triageIssueQuery(projectID string) (string, []any) {
-	conds := []string{"status=?"}
+	conds := []string{"i.status=?", "h.project_id is null"}
 	args := []any{StatusTriage}
 	if projectID != "" {
-		conds = append(conds, "project_id=?")
+		conds = append(conds, "i.project_id=?")
 		args = append(args, projectID)
 	}
-	query := issueSelect + ` where ` + strings.Join(conds, " and ") +
-		` order by priority desc, created_at asc`
+	query := issueSelectWithAlias("i") + ` left join project_holds h on h.project_id=i.project_id where ` +
+		strings.Join(conds, " and ") + ` order by i.priority desc, i.created_at asc`
 	return query, args
 }
 

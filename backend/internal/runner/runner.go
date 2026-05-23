@@ -11,10 +11,12 @@ import (
 )
 
 type Runner struct {
-	store  *store.Store
-	bus    *events.Bus
-	codex  codex.Client
-	execMu sync.Mutex
+	store               *store.Store
+	bus                 *events.Bus
+	codex               codex.Client
+	execMu              sync.Mutex
+	healthCheckInterval time.Duration
+	healthCheckWait     time.Duration
 
 	eventOnce    sync.Once
 	eventMu      sync.Mutex
@@ -36,13 +38,22 @@ type runState struct {
 func New(st *store.Store, bus *events.Bus, client codex.Client) *Runner {
 	return &Runner{
 		store: st, bus: bus, codex: client, eventSubs: map[int]chan codex.Event{},
+		healthCheckInterval: defaultHoldCheckInterval, healthCheckWait: 20 * time.Second,
 		loops: map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
 	}
 }
 
 func (r *Runner) StartProject(projectID string) error {
-	if _, err := r.store.GetProject(context.Background(), projectID); err != nil {
+	project, err := r.store.GetProject(context.Background(), projectID)
+	if err != nil {
 		return err
+	}
+	if project.Hold != nil {
+		r.bus.Publish(events.AppEvent{
+			Type: "runner.hold_active", ProjectID: projectID,
+			Error: project.Hold.Message, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+		return nil
 	}
 	r.mu.Lock()
 	if _, ok := r.loops[projectID]; ok {
@@ -83,7 +94,7 @@ func (r *Runner) StartAutoProjects(ctx context.Context) error {
 		return err
 	}
 	for _, p := range projects {
-		if p.AutoRun == 1 {
+		if p.AutoRun == 1 && p.Hold == nil {
 			_ = r.StartProject(p.ID)
 		}
 	}
@@ -109,6 +120,14 @@ func (r *Runner) loop(projectID string, stop <-chan struct{}) {
 		case <-stop:
 			return
 		default:
+		}
+		project, err := r.store.GetProject(context.Background(), projectID)
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		if project.Hold != nil {
+			return
 		}
 		issue, ok, err := r.store.ClaimNextIssue(context.Background(), projectID)
 		if err != nil {

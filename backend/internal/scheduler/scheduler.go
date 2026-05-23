@@ -64,6 +64,19 @@ func (s *Scheduler) runTask(ctx context.Context, task store.CronTask, dueAt time
 	if task.Action != store.CronActionTriageToTodo {
 		return fmt.Errorf("unsupported cron action: %s", task.Action)
 	}
+	if task.ProjectID != "" {
+		project, err := s.store.GetProject(ctx, task.ProjectID)
+		if err != nil {
+			return err
+		}
+		if project.Hold != nil {
+			if _, err = s.store.MarkCronTaskRan(ctx, task.ID, dueAt); err != nil {
+				return err
+			}
+			s.publishTaskEvent("cron_task.ran", task, 0, project.Hold.Message)
+			return nil
+		}
+	}
 	issues, err := s.store.PromoteTriageToTodo(ctx, task.ProjectID)
 	if err != nil {
 		return err

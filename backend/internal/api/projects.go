@@ -19,6 +19,10 @@ func (s *Server) routeProjects(w http.ResponseWriter, r *http.Request, parts []s
 		s.syncCodexProjects(w, r)
 		return
 	}
+	if len(parts) == 4 && parts[2] == "hold" {
+		s.handleProjectHold(w, r, parts[1], parts[3])
+		return
+	}
 	if len(parts) == 4 && parts[2] == "loop" {
 		s.handleProjectLoop(w, r, parts[1], parts[3])
 		return
@@ -143,6 +147,36 @@ func (s *Server) handleProjectLoop(w http.ResponseWriter, r *http.Request, id, a
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": s.runner.LoopStatus(id)})
+}
+
+func (s *Server) handleProjectHold(w http.ResponseWriter, r *http.Request, id, action string) {
+	if action == "status" && requireMethod(w, r, http.MethodGet) {
+		project, err := s.store.GetProject(r.Context(), id)
+		if err != nil {
+			handleErr(w, err)
+			return
+		}
+		if project.Hold == nil {
+			writeJSON(w, http.StatusOK, store.ProjectHold{})
+			return
+		}
+		writeJSON(w, http.StatusOK, project.Hold)
+		return
+	}
+	if action == "clear" && requireMethod(w, r, http.MethodPost) {
+		project, err := s.store.ClearProjectHold(r.Context(), id)
+		if err != nil {
+			handleErr(w, err)
+			return
+		}
+		if project.AutoRun == 1 {
+			_ = s.runner.StartProject(id)
+		}
+		project.LoopStatus = s.runner.LoopStatus(id)
+		writeJSON(w, http.StatusOK, project)
+		return
+	}
+	writeError(w, http.StatusNotFound, "not found")
 }
 
 func (s *Server) writeProject(w http.ResponseWriter, r *http.Request, id string) {

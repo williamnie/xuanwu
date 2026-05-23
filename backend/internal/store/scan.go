@@ -13,12 +13,25 @@ type scanner interface {
 
 func scanProject(row scanner) (Project, error) {
 	var p Project
+	var holdReason, holdMessage, holdSince, nextCheckAt, lastCheckAt, lastCheckError sql.NullString
 	err := row.Scan(&p.ID, &p.Name, &p.CWD, &p.AutoRun, &p.Model,
-		&p.ApprovalPolicy, &p.Sandbox, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt)
+		&p.ApprovalPolicy, &p.Sandbox, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
+		&holdReason, &holdMessage, &holdSince, &nextCheckAt, &lastCheckAt, &lastCheckError)
 	if err == nil {
 		applyProjectDefaults(&p)
+		p.Hold = nullableProjectHold(holdReason, holdMessage, holdSince, nextCheckAt, lastCheckAt, lastCheckError)
 	}
 	return p, err
+}
+
+func nullableProjectHold(reason, message, since, nextAt, lastAt, lastErr sql.NullString) *ProjectHold {
+	if !reason.Valid {
+		return nil
+	}
+	return &ProjectHold{
+		Reason: reason.String, Message: message.String, HoldSince: since.String,
+		NextCheckAt: nextAt.String, LastCheckAt: lastAt.String, LastCheckError: lastErr.String,
+	}
 }
 
 func scanIssue(row scanner) (Issue, error) {

@@ -96,6 +96,104 @@ func TestProjectSortOrderDefaultsAndReorder(t *testing.T) {
 	assertProjectOrder(t, projects, []string{"gamma", "alpha", "beta", "delta"})
 }
 
+func TestProjectHoldStatusPersistsAndCanClear(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	held, err := st.SetProjectHold(ctx, "demo", ProjectHold{
+		Reason:         "usage_limit",
+		Message:        "Runner paused: usage limit reached",
+		NextCheckAt:    "2026-05-23T12:00:00Z",
+		LastCheckAt:    "2026-05-23T11:00:00Z",
+		LastCheckError: "still limited",
+	})
+	if err != nil {
+		t.Fatalf("set hold: %v", err)
+	}
+	if held.Hold == nil || held.Hold.Reason != "usage_limit" || held.Hold.NextCheckAt == "" {
+		t.Fatalf("hold not stored on project: %+v", held)
+	}
+	if closeErr := st.Close(); closeErr != nil {
+		t.Fatalf("close store: %v", closeErr)
+	}
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	reopened, err := st.GetProject(ctx, "demo")
+	if err != nil {
+		t.Fatalf("get reopened project: %v", err)
+	}
+	if reopened.Hold == nil || reopened.Hold.Message != "Runner paused: usage limit reached" {
+		t.Fatalf("hold should persist across reopen: %+v", reopened)
+	}
+	if _, err = st.ClearProjectHold(ctx, "demo"); err != nil {
+		t.Fatalf("clear hold: %v", err)
+	}
+	cleared, _ := st.GetProject(ctx, "demo")
+	if cleared.Hold != nil {
+		t.Fatalf("hold should be cleared: %+v", cleared)
+	}
+}
+
+func TestResetIssueForRunnerHoldMovesInProgressBackToTodo(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "task", Status: StatusTodo})
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	reset, err := st.ResetIssueForRunnerHold(ctx, claimed.ID, "Runner paused: authentication failed")
+	if err != nil {
+		t.Fatalf("reset for hold: %v", err)
+	}
+	if reset.Status != StatusTodo || reset.Error != "Runner paused: authentication failed" {
+		t.Fatalf("reset issue = %+v", reset)
+	}
+	if reset.AttemptCount != 1 {
+		t.Fatalf("attempt count should not increase on hold reset: %+v", reset)
+	}
+	if reset.ID != issue.ID {
+		t.Fatalf("reset wrong issue: %+v", reset)
+	}
+}
+
+func TestProjectHoldPreventsClaimAndTriagePromotion(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	todo, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "todo", Status: StatusTodo})
+	triage, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "triage", Status: StatusTriage})
+	_, _ = st.SetProjectHold(ctx, "demo", ProjectHold{
+		Reason:  "usage_limit",
+		Message: "Runner paused: usage limit reached",
+	})
+
+	if claimed, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || ok {
+		t.Fatalf("held project should not claim issues: ok=%v issue=%+v err=%v", ok, claimed, err)
+	}
+	promoted, err := st.PromoteTriageToTodo(ctx, "demo")
+	if err != nil {
+		t.Fatalf("promote triage: %v", err)
+	}
+	if len(promoted) != 0 {
+		t.Fatalf("held project should not promote triage: %+v", promoted)
+	}
+	gotTodo, _ := st.GetIssue(ctx, todo.ID)
+	gotTriage, _ := st.GetIssue(ctx, triage.ID)
+	if gotTodo.Status != StatusTodo || gotTriage.Status != StatusTriage {
+		t.Fatalf("held project statuses changed: todo=%+v triage=%+v", gotTodo, gotTriage)
+	}
+}
+
 func TestIssueEventsRoundTrip(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()

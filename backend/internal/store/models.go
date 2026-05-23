@@ -19,17 +19,27 @@ const (
 )
 
 type Project struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	CWD            string `json:"cwd"`
-	AutoRun        int    `json:"auto_run"`
-	Model          string `json:"model"`
-	ApprovalPolicy string `json:"approval_policy"`
-	Sandbox        string `json:"sandbox"`
-	SortOrder      int    `json:"sort_order"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
-	LoopStatus     string `json:"loop_status,omitempty"`
+	ID             string       `json:"id"`
+	Name           string       `json:"name"`
+	CWD            string       `json:"cwd"`
+	AutoRun        int          `json:"auto_run"`
+	Model          string       `json:"model"`
+	ApprovalPolicy string       `json:"approval_policy"`
+	Sandbox        string       `json:"sandbox"`
+	SortOrder      int          `json:"sort_order"`
+	CreatedAt      string       `json:"created_at"`
+	UpdatedAt      string       `json:"updated_at"`
+	LoopStatus     string       `json:"loop_status,omitempty"`
+	Hold           *ProjectHold `json:"hold,omitempty"`
+}
+
+type ProjectHold struct {
+	Reason         string `json:"reason"`
+	Message        string `json:"message"`
+	HoldSince      string `json:"hold_since"`
+	NextCheckAt    string `json:"next_check_at"`
+	LastCheckAt    string `json:"last_check_at"`
+	LastCheckError string `json:"last_check_error"`
 }
 
 type ProjectPatch struct {

@@ -42,8 +42,10 @@ func lastInsertID(ctx context.Context, db *sql.DB) (int64, error) {
 }
 
 func selectNextIssueID(ctx context.Context, tx *sql.Tx, projectID string) (int64, bool, error) {
-	row := tx.QueryRowContext(ctx, `select id from issues where project_id=? and status=?
-		order by priority desc, created_at asc limit 1`, projectID, StatusTodo)
+	row := tx.QueryRowContext(ctx, `select i.id from issues i
+		left join project_holds h on h.project_id=i.project_id
+		where i.project_id=? and i.status=? and h.project_id is null
+		order by i.priority desc, i.created_at asc limit 1`, projectID, StatusTodo)
 	var id int64
 	err := row.Scan(&id)
 	if err == sql.ErrNoRows {

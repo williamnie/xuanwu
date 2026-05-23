@@ -316,7 +316,8 @@ export default function Projects() {
               const activeCount = projIssues.filter(i => i.status === 'in_progress').length;
               const todoCount = projIssues.filter(i => i.status === 'todo').length;
 
-              const isLoopActive = proj.loop_status === 'running' || proj.auto_run === 1;
+              const isHeld = Boolean(proj.hold);
+              const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
 
               return (
                 <div key={proj.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px' }}>
@@ -340,7 +341,7 @@ export default function Projects() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span className={`status-dot ${activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`} style={{ width: '6px', height: '6px' }}></span>
                       <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        {activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
+                        {isHeld ? 'Hold' : activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
                       </span>
                     </div>
                   </div>
@@ -364,6 +365,19 @@ export default function Projects() {
                       <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--error)' }}>{failedCount}</div>
                     </div>
                   </div>
+
+                  {proj.hold && (
+                    <div style={{ border: '1px solid rgba(245, 158, 11, 0.25)', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: '8px', padding: '8px 10px', fontSize: '0.72rem', lineHeight: 1.45 }}>
+                      <strong>Runner hold</strong>
+                      <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{proj.hold.message}</div>
+                      {proj.hold.next_check_at && (
+                        <div style={{ color: 'var(--text-muted)', marginTop: '2px' }}>下次自检：{proj.hold.next_check_at}</div>
+                      )}
+                      {proj.hold.last_check_error && (
+                        <div style={{ color: 'var(--text-muted)', marginTop: '2px' }}>最近自检：{proj.hold.last_check_error}</div>
+                      )}
+                    </div>
+                  )}
 
                   {/* 开关与控制操作 */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>

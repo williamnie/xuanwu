@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
-	rows, err := s.db.QueryContext(ctx, projectSelect+` order by sort_order asc, created_at asc, id asc`)
+	rows, err := s.db.QueryContext(ctx, projectSelect+` order by p.sort_order asc, p.created_at asc, p.id asc`)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *Store) CreateProject(ctx context.Context, p Project) (Project, error) {
 }
 
 func (s *Store) GetProject(ctx context.Context, id string) (Project, error) {
-	row := s.db.QueryRowContext(ctx, projectSelect+` where id = ?`, id)
+	row := s.db.QueryRowContext(ctx, projectSelect+` where p.id = ?`, id)
 	p, err := scanProject(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, ErrNotFound
@@ -204,8 +204,10 @@ func (s *Store) nextProjectSortOrder(ctx context.Context) (int, error) {
 	return maxOrder + 1, nil
 }
 
-const projectSelect = `select id, name, cwd, auto_run, model, approval_policy,
-	sandbox, sort_order, created_at, updated_at from projects`
+const projectSelect = `select p.id, p.name, p.cwd, p.auto_run, p.model, p.approval_policy,
+	p.sandbox, p.sort_order, p.created_at, p.updated_at,
+	h.reason, h.message, h.hold_since, h.next_check_at, h.last_check_at, h.last_check_error
+	from projects p left join project_holds h on h.project_id=p.id`
 
 func projectNameFromCWD(cwd string) string {
 	trimmed := strings.TrimRight(strings.TrimSpace(cwd), string(filepath.Separator))

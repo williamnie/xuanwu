@@ -59,6 +59,36 @@ func TestRunDuePromotesTriageIssuesAndStartsProjects(t *testing.T) {
 	}
 }
 
+func TestRunDueSkipsHeldProjectWithoutPromotingIssues(t *testing.T) {
+	st := openSchedulerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	_, _ = st.SetProjectHold(ctx, "demo", store.ProjectHold{
+		Reason:  "usage_limit",
+		Message: "Runner paused: usage limit reached",
+	})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "queued later", Status: store.StatusTriage})
+	task := createDueCronTask(t, st, "demo")
+
+	starter := &fakeStarter{}
+	s := New(st, events.NewBus(), starter)
+	if err := s.RunDue(ctx, time.Now().UTC().Add(time.Hour)); err != nil {
+		t.Fatalf("run due: %v", err)
+	}
+
+	got, _ := st.GetIssue(ctx, issue.ID)
+	if got.Status != store.StatusTriage {
+		t.Fatalf("held project issue status = %s, want triage", got.Status)
+	}
+	ran, _ := st.GetCronTask(ctx, task.ID)
+	if ran.Status != store.CronStatusDone || ran.RunCount != 1 || ran.Error != "" {
+		t.Fatalf("held project cron should be recorded without error: %+v", ran)
+	}
+	if len(starter.started) != 0 {
+		t.Fatalf("held project should not start runner: %+v", starter.started)
+	}
+}
+
 func openSchedulerStore(t *testing.T) *store.Store {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))

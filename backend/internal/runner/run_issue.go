@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,15 @@ func (r *Runner) runIssue(issue store.Issue) {
 		return
 	}
 	if err := r.startCodexTurn(ctx, issue, project); err != nil {
+		var holdErr runnerHoldError
+		if errors.As(err, &holdErr) {
+			r.holdIssue(ctx, issue, holdErr.reason)
+			return
+		}
+		if reason, ok := isRunnerHoldError(err.Error()); ok {
+			r.holdIssue(ctx, issue, reason)
+			return
+		}
 		r.failIssue(ctx, issue.ID, err.Error())
 	}
 }
@@ -87,8 +97,7 @@ func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event code
 		if r.issueAlreadyTerminal(ctx, issueID) {
 			return true, nil
 		}
-		r.failIssue(ctx, issueID, event.Error)
-		return true, nil
+		return true, eventError(event.Error)
 	}
 	if event.Method != "turn/completed" {
 		return false, nil
@@ -116,6 +125,9 @@ func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event 
 	if event.Error == "" {
 		event.Error = "Codex turn ended with status: " + event.Status
 	}
+	if reason, ok := isRunnerHoldError(event.Error); ok {
+		return runnerHoldError{reason: reason}
+	}
 	r.failIssue(ctx, issueID, event.Error)
 	return nil
 }
@@ -136,6 +148,21 @@ func matches(event codex.Event, threadID, turnID string) bool {
 		return false
 	}
 	return event.TurnID == "" || event.TurnID == turnID
+}
+
+type eventError string
+
+func (e eventError) Error() string { return string(e) }
+
+type runnerHoldError struct {
+	reason holdReason
+}
+
+func (e runnerHoldError) Error() string { return e.reason.Message }
+
+func (e runnerHoldError) Is(target error) bool {
+	_, ok := target.(runnerHoldError)
+	return ok
 }
 
 func (r *Runner) publishLog(ctx context.Context, issueID int64, event codex.Event) {

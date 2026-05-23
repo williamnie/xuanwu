@@ -55,6 +55,7 @@ func runServer(args []string) {
 	if err := r.StartAutoProjects(context.Background()); err != nil {
 		log.Fatal(err)
 	}
+	r.StartHoldChecks(context.Background())
 	cronScheduler := scheduler.New(st, bus, r)
 	cronScheduler.Start(context.Background())
 	startSessionWatcher(context.Background(), cfg.CodexSessionsDir, bus)

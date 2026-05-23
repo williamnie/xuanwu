@@ -10,6 +10,7 @@ const PROJECT_FIELDS = [
   'created_at',
   'updated_at',
   'loop_status',
+  'hold',
 ];
 
 const ISSUE_FIELDS = [
@@ -57,7 +58,14 @@ const CRON_TASK_FIELDS = [
 export const RECONCILE_INTERVAL_MS = 30_000;
 
 function fieldSignature(item, fields) {
-  return fields.map(field => String(item?.[field] ?? '')).join('\u001f');
+  return fields.map(field => fieldValueSignature(item?.[field])).join('\u001f');
+}
+
+function fieldValueSignature(value) {
+  if (value && typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value ?? '');
 }
 
 function sameRecordByFields(current, next, fields) {

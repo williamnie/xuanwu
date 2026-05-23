@@ -131,6 +131,15 @@ func (s *Store) SetIssueStatus(ctx context.Context, id int64, status, errText st
 	return s.GetIssue(ctx, id)
 }
 
+func (s *Store) ResetIssueForRunnerHold(ctx context.Context, id int64, message string) (Issue, error) {
+	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?, updated_at=?
+		where id=? and status=?`, StatusTodo, message, now(), id, StatusInProgress)
+	if err != nil {
+		return Issue{}, err
+	}
+	return s.GetIssue(ctx, id)
+}
+
 func (s *Store) FailStaleIssues(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?, updated_at=? where status=?`,
 		StatusFailed, "Service restarted while issue was in progress", now(), StatusInProgress)
@@ -156,3 +165,13 @@ func issueListQuery(f IssueFilter) (string, []any) {
 const issueSelect = `select id, project_id, title, description, status, priority,
 	template_id, prompt_template, codex_thread_id, codex_turn_id, attempt_count,
 	error, created_at, updated_at from issues`
+
+func issueSelectWithAlias(alias string) string {
+	prefix := alias + "."
+	return `select ` + prefix + `id, ` + prefix + `project_id, ` + prefix + `title,
+		` + prefix + `description, ` + prefix + `status, ` + prefix + `priority,
+		` + prefix + `template_id, ` + prefix + `prompt_template,
+		` + prefix + `codex_thread_id, ` + prefix + `codex_turn_id,
+		` + prefix + `attempt_count, ` + prefix + `error, ` + prefix + `created_at,
+		` + prefix + `updated_at from issues ` + alias
+}
