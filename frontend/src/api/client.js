@@ -209,6 +209,11 @@ export const api = {
 
   getIssueEvents: (id) => request(`/api/issues/${id}/events`),
 
+  createIssueComment: (id, comment) => request(`/api/issues/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify(comment),
+  }),
+
   getSessions: ({ limit = 50, cursor = '' } = {}) => {
     const params = new URLSearchParams();
     if (limit) params.append('limit', String(limit));

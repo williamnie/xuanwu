@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
@@ -84,6 +85,70 @@ func TestProjectAndIssueAPI(t *testing.T) {
 	events := getJSON[[]store.IssueEvent](t, srv, "/api/issues/1/events")
 	if len(events) < 2 {
 		t.Fatalf("expected created/status events: %+v", events)
+	}
+}
+
+func TestIssueCommentAPIAppendsEvent(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Discuss task", "description": "keep me", "status": "triage",
+	})
+	ch, unsubscribe := srv.bus.Subscribe()
+	defer unsubscribe()
+
+	event := postJSON[store.IssueEvent](t, srv, "/api/issues/1/comments", map[string]any{
+		"body": "**验收**: 保留 description", "author": "user",
+	})
+	if event.Type != "issue.comment" || event.IssueID != issue.ID {
+		t.Fatalf("unexpected comment event: %+v", event)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+		t.Fatalf("decode payload: %v payload=%s", err, event.Payload)
+	}
+	if payload["author"] != "user" || payload["body"] != "**验收**: 保留 description" {
+		t.Fatalf("unexpected payload: %+v", payload)
+	}
+
+	updated := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if updated.Description != "keep me" {
+		t.Fatalf("comment must not overwrite description: %+v", updated)
+	}
+	issueEvents := getJSON[[]store.IssueEvent](t, srv, "/api/issues/1/events")
+	if issueEvents[len(issueEvents)-1].ID != event.ID || issueEvents[len(issueEvents)-1].Type != "issue.comment" {
+		t.Fatalf("comment not appended to events: %+v", issueEvents)
+	}
+
+	var published events.AppEvent
+	select {
+	case published = <-ch:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for issue.comment SSE event")
+	}
+	if published.Type != "issue.comment" || published.IssueID != issue.ID || published.Payload == "" {
+		t.Fatalf("unexpected SSE event: %+v", published)
+	}
+}
+
+func TestIssueCommentAPIRejectsEmptyBody(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Discuss task", "status": "triage",
+	})
+
+	b, _ := json.Marshal(map[string]any{"body": " \n\t ", "author": "user"})
+	req := httptest.NewRequest(http.MethodPost, "/api/issues/1/comments", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "评论内容不能为空") {
+		t.Fatalf("empty comment status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

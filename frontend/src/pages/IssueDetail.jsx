@@ -26,9 +26,17 @@ import {
   Play,
   UserCheck,
   Pencil,
+  MessageCircle,
+  Send,
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
+
+const COMMENT_AUTHOR_LABELS = {
+  user: 'User',
+  agent: 'Agent',
+  system: 'System',
+};
 
 function parseEventPayload(event) {
   if (!event?.payload) return {};
@@ -43,6 +51,9 @@ function parseEventPayload(event) {
 export default function IssueDetail({ issueId, navigateTo }) {
   const refreshAllData = useDataStore(selectRefreshAllData);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentError, setCommentError] = useState('');
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [detailState, updateDetailState] = useImmer({
     issue: null,
     project: null,
@@ -133,7 +144,7 @@ ${error}` : error;
             }
           }
 
-          // 追加事件到终端列表；重复的轮询/SSE 结果不再制造新数组。
+          // 追加到 issue 事件列表；重复的轮询/SSE 结果不再制造新数组。
           if (!hasIssueEvent(draft.events, data)) {
             draft.events.push(data);
           }
@@ -149,6 +160,12 @@ ${error}` : error;
       clearInterval(interval);
     };
   }, [issueId, loadIssueData, updateDetailState]);
+
+  useEffect(() => {
+    setCommentDraft('');
+    setCommentError('');
+    setCommentSubmitting(false);
+  }, [issueId]);
 
   const updateTerminalFollowState = useCallback(() => {
     const node = terminalRef.current;
@@ -213,6 +230,32 @@ ${error}` : error;
     }
   };
 
+  const handleSubmitComment = async (event) => {
+    event.preventDefault();
+    const body = commentDraft.trim();
+    if (!body) {
+      setCommentError('评论内容不能为空');
+      return;
+    }
+    setCommentSubmitting(true);
+    setCommentError('');
+    try {
+      const created = await api.createIssueComment(issueId, { body, author: 'user' });
+      updateDetailState(draft => {
+        if (!hasIssueEvent(draft.events, created)) {
+          draft.events.push(created);
+        }
+      });
+      setCommentDraft('');
+    } catch (err) {
+      const errorMessage = err.message || '提交评论失败';
+      setCommentError(errorMessage);
+      message.error('提交评论失败: ' + errorMessage);
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
   const closeEditModal = useCallback(() => {
     setIsEditModalOpen(false);
   }, []);
@@ -251,11 +294,15 @@ ${error}` : error;
 
   // 日志解析转换
   // 将 Go 传过来的原始 issue_events 处理成可在终端渲染的行
+  const commentEvents = events.filter(event => event.type === 'issue.comment');
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
       const merged = [];
       for (const event of events) {
+        if (event.type === 'issue.comment') {
+          continue;
+        }
         const payload = parseEventPayload(event);
         const isDelta = event.type === 'issue.log' && 
           (payload.codexMethod === 'item/agentMessage/delta' || 
@@ -467,6 +514,15 @@ ${error}` : error;
             )}
           </div>
 
+          <IssueDiscussion
+            events={commentEvents}
+            draft={commentDraft}
+            error={commentError}
+            submitting={commentSubmitting}
+            onDraftChange={setCommentDraft}
+            onSubmit={handleSubmitComment}
+          />
+
           {/* 实时终端控制台 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -595,5 +651,71 @@ ${error}` : error;
       )}
 
     </div>
+  );
+}
+
+function IssueDiscussion({ events, draft, error, submitting, onDraftChange, onSubmit }) {
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <MessageCircle size={18} color="var(--primary)" />
+        <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>讨论 / Discussion</h3>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
+        {events.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+            当前暂无讨论，适合补充背景、验收标准或澄清问题。
+          </p>
+        ) : (
+          events.map((event, index) => (
+            <IssueComment key={event.id || index} event={event} />
+          ))
+        )}
+      </div>
+
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <textarea
+          className="form-control"
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder="补充背景、验收标准或澄清问题，支持 Markdown..."
+          rows={4}
+          disabled={submitting}
+          style={{ width: '100%', resize: 'vertical' }}
+        />
+        {error && (
+          <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.8rem' }}>
+            {error}
+          </div>
+        )}
+        <button type="submit" className="btn btn-primary" disabled={submitting} style={{ alignSelf: 'flex-start' }}>
+          <Send size={14} /> {submitting ? '提交中...' : '发表评论'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function IssueComment({ event }) {
+  const payload = parseEventPayload(event);
+  const author = payload.author || 'user';
+  const body = payload.body || payload.text || '';
+  const createdAt = event.created_at ? new Date(event.created_at).toLocaleString() : '';
+
+  return (
+    <article style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px', background: 'rgba(0,0,0,0.025)', minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
+        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)' }}>
+          {COMMENT_AUTHOR_LABELS[author] || author}
+        </span>
+        {createdAt && (
+          <time style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            {createdAt}
+          </time>
+        )}
+      </div>
+      <MarkdownPreview text={body} />
+    </article>
   );
 }
