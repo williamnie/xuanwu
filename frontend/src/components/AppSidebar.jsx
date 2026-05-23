@@ -9,6 +9,7 @@ import {
   Sun,
   LayoutDashboard,
 } from 'lucide-react';
+import { APP_VERSION } from '../version';
 import {
   selectBackendOnline,
   selectCronTasks,
@@ -138,6 +139,7 @@ export default function AppSidebar({
             {theme === 'dark' ? <Sun size={14} color="#fbbf24" /> : <Moon size={14} color="var(--primary)" />}
           </button>
         </div>
+        <div className="sidebar-version">{APP_VERSION}</div>
       </div>
     </aside>
   );

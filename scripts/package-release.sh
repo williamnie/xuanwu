@@ -7,6 +7,7 @@ WORK_DIR="$OUT_DIR/.work"
 EMBED_WEB_DIR="$ROOT_DIR/backend/internal/web/dist"
 LDFLAGS="${CODEX_RUNNER_LDFLAGS:--s -w}"
 DEFAULT_TARGETS=(darwin/arm64 darwin/amd64 linux/arm64 linux/amd64)
+APP_VERSION=""
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -22,6 +23,26 @@ log() {
 fail() {
   printf '[release] ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+resolve_app_version() {
+  if [ -n "${CODEX_RUNNER_VERSION:-}" ]; then
+    printf '%s' "$CODEX_RUNNER_VERSION"
+    return
+  fi
+  if [ -n "${GITHUB_REF_NAME:-}" ]; then
+    printf '%s' "$GITHUB_REF_NAME"
+    return
+  fi
+  if command -v git >/dev/null 2>&1; then
+    local tag
+    tag="$(git -C "$ROOT_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    if [ -n "$tag" ]; then
+      printf '%s' "$tag"
+      return
+    fi
+  fi
+  printf '0.0.0-dev'
 }
 
 frontend_install() {
@@ -50,7 +71,9 @@ run_preflight_checks() {
   run_step "go test ./backend/..." go test ./backend/...
   frontend_install
   run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
-  run_step "frontend build" npm --prefix "$ROOT_DIR/frontend" run build
+  APP_VERSION="$(resolve_app_version)"
+  log "frontend version: $APP_VERSION"
+  run_step "frontend build" env VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
   log "preflight summary: backend tests, frontend lint, frontend build"
 }
 

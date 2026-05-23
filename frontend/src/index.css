@@ -351,6 +351,15 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
+.sidebar-version {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 0 8px;
+  overflow-wrap: anywhere;
+}
+
 /* Sub-items list (FOCUS & PROJECT) */
 .sub-filter-item {
   display: flex;
@@ -868,7 +877,7 @@ input:checked + .slider:before {
 
 @media (max-width: 768px) {
   .sidebar { width: 60px; padding: 16px 8px; }
-  .sidebar .logo-text, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar { display: none; }
+  .sidebar .logo-text, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar, .sidebar .sidebar-version { display: none; }
   .main-content { margin-left: 60px; padding: 16px; }
   :root { --sidebar-width: 60px; }
 }

@@ -15,6 +15,26 @@ require_cmd() {
 require_cmd go
 require_cmd npm
 
+resolve_app_version() {
+  if [ -n "${CODEX_RUNNER_VERSION:-}" ]; then
+    printf '%s' "$CODEX_RUNNER_VERSION"
+    return
+  fi
+  if [ -n "${GITHUB_REF_NAME:-}" ]; then
+    printf '%s' "$GITHUB_REF_NAME"
+    return
+  fi
+  if command -v git >/dev/null 2>&1; then
+    local tag
+    tag="$(git -C "$ROOT_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    if [ -n "$tag" ]; then
+      printf '%s' "$tag"
+      return
+    fi
+  fi
+  printf '0.0.0-dev'
+}
+
 prepare_embedded_web() {
   rm -rf "$EMBED_WEB_DIR"
   mkdir -p "$EMBED_WEB_DIR"
@@ -42,8 +62,9 @@ install_frontend_deps() {
 
 install_frontend_deps
 
-echo "[build] building frontend..."
-npm --prefix "$ROOT_DIR/frontend" run build
+APP_VERSION="$(resolve_app_version)"
+echo "[build] building frontend ($APP_VERSION)..."
+VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
 
 mkdir -p "$(dirname "$BINARY_PATH")"
 echo "[build] building single-binary release: $BINARY_PATH"
