@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/notifications"
@@ -24,6 +25,8 @@ type Server struct {
 	web              http.Handler
 	codexSessionsDir string
 	authToken        string
+	startedAt        time.Time
+	systemConfig     SystemConfig
 	usageCache       codexUsageCache
 	restart          func()
 	notifier         *notifications.Notifier
@@ -44,7 +47,10 @@ func NewServerWithWebDirAndSessionsDir(
 	webDir string,
 	codexSessionsDir string,
 ) *Server {
-	s := &Server{store: st, bus: bus, runner: runner, codexSessionsDir: codexSessionsDir}
+	s := &Server{
+		store: st, bus: bus, runner: runner, codexSessionsDir: codexSessionsDir,
+		startedAt: time.Now().UTC(),
+	}
 	s.web = newWebHandler(webDir)
 	s.notifier = notifications.New(st, bus, nil)
 	if runner != nil {

@@ -250,6 +250,56 @@ func TestSessionAPI(t *testing.T) {
 	}
 }
 
+func TestSystemStatusAPI(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 1,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": store.StatusInProgress,
+	})
+	srv.SetAuthToken("secret-token")
+	srv.SetSystemConfig(SystemConfig{
+		Addr: "127.0.0.1:3008", DBPath: "/tmp/app.db", CodexCmd: "missing-codex-for-test",
+		CodexSessionsDir: "/tmp/sessions", AuthEnabled: true, WebMode: "embedded",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	status := decodeResponse[systemStatus](t, srv, req, http.StatusOK)
+
+	if !status.Service.Alive || !status.DB.OK || !status.Config.AuthEnabled {
+		t.Fatalf("unexpected service/db/auth status: %+v", status)
+	}
+	if status.Config.DBPath != "/tmp/app.db" || status.Config.CodexCmd != "missing-codex-for-test" {
+		t.Fatalf("config leaked or missing fields: %+v", status.Config)
+	}
+	if status.Codex.CommandOK || status.Codex.CommandError == "" {
+		t.Fatalf("missing codex command should be explicit: %+v", status.Codex)
+	}
+	if status.Runner.AutoRunProjects != 1 || status.Runner.InProgressIssues != 1 {
+		t.Fatalf("runner counts mismatch: %+v", status.Runner)
+	}
+}
+
+func TestSystemStatusRouteAccessibleWithAuth(t *testing.T) {
+	srv := newTestServer(t)
+	srv.SetAuthToken("secret-token")
+	req := httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected auth guard, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rr = httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected auth success, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestSessionAPIRemembersLastProject(t *testing.T) {
 	srv := newTestServer(t)
 	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{

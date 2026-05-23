@@ -72,6 +72,20 @@ func (r *Runner) recordErrorEvent(ctx context.Context, issueID int64, message st
 	r.bus.Publish(events.AppEvent{ID: e.ID, Type: e.Type, IssueID: issueID, Error: message, CreatedAt: e.CreatedAt})
 }
 
+func (r *Runner) recordRecoveryEvent(ctx context.Context, issueID int64, typ string, payload map[string]string) {
+	body, _ := json.Marshal(payload)
+	e, err := r.store.AddIssueEvent(ctx, issueID, typ, string(body))
+	if err != nil {
+		return
+	}
+	event := events.AppEvent{ID: e.ID, Type: e.Type, IssueID: issueID, Payload: e.Payload, CreatedAt: e.CreatedAt}
+	if payload != nil {
+		event.Status = payload["status"]
+		event.Error = payload["error"]
+	}
+	r.bus.Publish(event)
+}
+
 func developerInstructions() string {
 	return "Codex Issue Runner 后台自动执行模式：保持改动最小，" +
 		"优先验证，完成后给出简短总结；不要主动提交 git commit。"

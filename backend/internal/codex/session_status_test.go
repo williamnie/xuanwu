@@ -13,6 +13,7 @@ func TestSessionStatusIsRunning(t *testing.T) {
 	}{
 		{name: "running type", raw: json.RawMessage(`{"type":"running"}`), want: true},
 		{name: "in progress state", raw: json.RawMessage(`{"state":"inProgress"}`), want: true},
+		{name: "active type", raw: json.RawMessage(`{"type":"active"}`), want: true},
 		{name: "idle", raw: json.RawMessage(`{"type":"idle"}`), want: false},
 		{name: "not loaded", raw: json.RawMessage(`{"type":"notLoaded"}`), want: false},
 	}

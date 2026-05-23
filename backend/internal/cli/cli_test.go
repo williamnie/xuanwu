@@ -112,6 +112,70 @@ func TestIssueStatusSendsAuthTokenFromEnv(t *testing.T) {
 	}
 }
 
+func TestSystemStatusGetsStatusWithToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/system/status" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer cli-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"service": map[string]any{"alive": true, "started_at": "2026-05-24T00:00:00Z"},
+			"config":  map[string]any{"auth_enabled": true, "codex_cmd": "codex"},
+			"db":      map[string]any{"ok": true},
+			"codex":   map[string]any{"command": "codex", "command_ok": true, "app_server": "not_checked", "model_list": "not_checked"},
+			"runner":  map[string]any{"running_loops": 2, "in_progress_issues": 1},
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"system", "status", "--addr", server.URL, "--token", "cli-token", "--json",
+	}, &stdout, &stderr, Options{})
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	var output map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("stdout is not JSON: %q err=%v", stdout.String(), err)
+	}
+	if output["service"].(map[string]any)["alive"] != true {
+		t.Fatalf("unexpected output: %+v", output)
+	}
+}
+
+func TestSystemStatusAliasDoctor(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		if r.URL.Path != "/api/system/status" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"service": map[string]any{"alive": true},
+			"config":  map[string]any{},
+			"db":      map[string]any{"ok": true},
+			"codex":   map[string]any{"command": "codex", "command_ok": true, "app_server": "not_checked", "model_list": "not_checked"},
+			"runner":  map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"doctor", "--addr", server.URL, "--json"}, &stdout, &stderr, Options{})
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if requestCount != 1 {
+		t.Fatalf("expected one request, got %d", requestCount)
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &map[string]any{}); err != nil {
+		t.Fatalf("stdout not json: %v", err)
+	}
+}
+
 func TestIssueUpdatePatchesStatusAndError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch || r.URL.Path != "/api/issues/7" {

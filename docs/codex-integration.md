@@ -255,6 +255,15 @@ codex-issue-runner issue retry --id <issue-id> --json
 codex-issue-runner issue cancel --id <issue-id> --json
 ```
 
+Runtime 状态：
+
+```bash
+codex-issue-runner system status --token "$(cat data/auth_token)" --json
+curl -H "Authorization: Bearer $(cat data/auth_token)" http://127.0.0.1:3008/api/system/status
+```
+
+`/api/system/status` 只返回只读健康摘要：API/DB、脱敏后的配置、Codex command 是否存在、runner loop/hold/in_progress 计数；不会返回 token 值，也不会为 status 主动拉起新的 Codex 深度探针。
+
 ## 排查建议
 
 - `GET /api/codex/models` 失败：优先确认 `CODEX_RUNNER_CODEX_CMD` 指向可执行的 `codex`，并且 `codex app-server --listen stdio://` 可启动。

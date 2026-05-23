@@ -23,6 +23,17 @@ func writeProject(out io.Writer, project projectDTO, asJSON bool) error {
 	return err
 }
 
+func writeSystemStatus(out io.Writer, status systemStatusDTO, asJSON bool) error {
+	if asJSON {
+		return writeJSON(out, status)
+	}
+	_, err := fmt.Fprintf(out, "API alive=%t db=%t codex_cmd=%t auth=%t loops=%d in_progress=%d\n",
+		status.Service.Alive, status.DB.OK, status.Codex.CommandOK,
+		status.Config.AuthEnabled, status.Runner.RunningLoops,
+		status.Runner.InProgressIssues)
+	return err
+}
+
 func writeEvents(out io.Writer, events []issueEventDTO, asJSON bool) error {
 	if asJSON {
 		return writeJSON(out, events)

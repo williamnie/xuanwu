@@ -99,6 +99,12 @@ func (r *Runner) LoopStatus(projectID string) string {
 	return "stopped"
 }
 
+func (r *Runner) Snapshot() (runningLoops int, runningIssues int, runningSessions int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.loops), len(r.running), len(r.sessions)
+}
+
 func (r *Runner) StartAutoProjects(ctx context.Context) error {
 	projects, err := r.store.ListProjects(ctx)
 	if err != nil {

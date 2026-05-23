@@ -118,6 +118,9 @@ http://127.0.0.1:3008/
 # 查看 launchd / 端口 / API 状态
 ./scripts/status-launchd.sh
 
+# 查看产品内 runtime doctor/status（需要 API token）
+codex-issue-runner system status --token "$(cat data/auth_token)" --json
+
 # 停止并移除后台服务
 ./scripts/uninstall-launchd.sh
 ```
@@ -201,6 +204,9 @@ codex-issue-runner issue logs --id 42
 codex-issue-runner issue update --id 42 --status done --json
 codex-issue-runner issue retry --id 42 --json
 codex-issue-runner issue cancel --id 42 --json
+
+# 查看 runner / DB / Codex command 只读健康摘要
+codex-issue-runner system status --json
 ```
 
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。

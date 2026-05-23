@@ -39,6 +39,12 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, opts Options
 	if args[0] == "project" {
 		return env.runProject(ctx, args[1:])
 	}
+	if args[0] == "system" {
+		return env.runSystem(ctx, args[1:])
+	}
+	if args[0] == "doctor" {
+		return env.getSystemStatus(ctx, args[1:])
+	}
 	return env.fail("unknown command: " + args[0])
 }
 

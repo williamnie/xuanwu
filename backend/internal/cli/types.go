@@ -42,3 +42,39 @@ type projectDTO struct {
 	Sandbox        string `json:"sandbox,omitempty"`
 	LoopStatus     string `json:"loop_status,omitempty"`
 }
+
+type systemStatusDTO struct {
+	Service struct {
+		Alive     bool   `json:"alive"`
+		Version   string `json:"version"`
+		StartedAt string `json:"started_at"`
+	} `json:"service"`
+	Config struct {
+		Addr             string `json:"addr"`
+		DBPath           string `json:"db_path"`
+		CodexCmd         string `json:"codex_cmd"`
+		CodexSessionsDir string `json:"codex_sessions_dir"`
+		AuthEnabled      bool   `json:"auth_enabled"`
+		WebMode          string `json:"web_mode"`
+	} `json:"config"`
+	DB struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error,omitempty"`
+	} `json:"db"`
+	Codex struct {
+		Command      string `json:"command"`
+		CommandOK    bool   `json:"command_ok"`
+		CommandPath  string `json:"command_path,omitempty"`
+		CommandError string `json:"command_error,omitempty"`
+		AppServer    string `json:"app_server"`
+		ModelList    string `json:"model_list"`
+	} `json:"codex"`
+	Runner struct {
+		AutoRunProjects  int `json:"auto_run_projects"`
+		RunningLoops     int `json:"running_loops"`
+		HeldProjects     int `json:"held_projects"`
+		InProgressIssues int `json:"in_progress_issues"`
+		RunningIssues    int `json:"running_issues"`
+		RunningSessions  int `json:"running_sessions"`
+	} `json:"runner"`
+}

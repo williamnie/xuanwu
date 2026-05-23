@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { RefreshCw, ServerCog } from 'lucide-react';
 import CronTasksPanel from '../components/CronTasksPanel';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
@@ -15,11 +15,78 @@ export default function Settings() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
+        <RuntimeStatusPanel />
         <RestartPanel />
         <NotificationSettingsPanel />
         <CronTasksPanel />
         <IssueTemplatesPanel />
       </div>
+    </div>
+  );
+}
+
+function RuntimeStatusPanel() {
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => { loadStatus(setStatus, setError, setLoading); }, []);
+
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ServerCog size={18} color="var(--primary)" /> Runtime Status
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+            只读状态检查，不启动新的 Codex 深度探针。
+          </p>
+        </div>
+        <button className="btn btn-secondary" onClick={() => loadStatus(setStatus, setError, setLoading)} disabled={loading}>
+          <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
+          刷新
+        </button>
+      </div>
+      {error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{error}</div>}
+      {!error && <RuntimeStatusBody status={status} loading={loading} />}
+    </section>
+  );
+}
+
+function loadStatus(setStatus, setError, setLoading) {
+  setLoading(true);
+  api.getSystemStatus()
+    .then(data => { setStatus(data); setError(''); })
+    .catch(err => setError(err.message || '读取 runtime status 失败'))
+    .finally(() => setLoading(false));
+}
+
+function RuntimeStatusBody({ status, loading }) {
+  if (loading && !status) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取状态...</div>;
+  }
+  if (!status) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无状态数据</div>;
+  }
+  const rows = [
+    ['API', status.service?.alive ? 'alive' : 'down', status.service?.alive],
+    ['DB', status.db?.ok ? 'ok' : status.db?.error || 'error', status.db?.ok],
+    ['Codex command', status.codex?.command_ok ? status.config?.codex_cmd : status.codex?.command_error || 'missing', status.codex?.command_ok],
+    ['Auth enabled', status.config?.auth_enabled ? 'enabled' : 'disabled', !status.config?.auth_enabled],
+    ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress`, true],
+  ];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+      {rows.map(([label, value, ok]) => (
+        <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '6px' }}>{label}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, wordBreak: 'break-word' }}>
+            <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
+            {value}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -22,3 +22,10 @@ func TestCommandModeRoutesIssueToCLI(t *testing.T) {
 		t.Fatalf("expected cli mode, serve=%v args=%v", serve, args)
 	}
 }
+
+func TestCommandModeRoutesSystemStatusToCLI(t *testing.T) {
+	serve, args := commandMode([]string{"system", "status"})
+	if serve || len(args) != 2 || args[0] != "system" {
+		t.Fatalf("expected cli mode, serve=%v args=%v", serve, args)
+	}
+}

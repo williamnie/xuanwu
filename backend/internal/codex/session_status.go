@@ -19,7 +19,7 @@ func SessionStatusIsRunning(raw json.RawMessage) bool {
 	}
 	for _, value := range []string{status.Type, status.State, status.Status} {
 		switch normalizeStatusValue(value) {
-		case "running", "inprogress", "in-progress", "streaming", "busy":
+		case "running", "inprogress", "in-progress", "streaming", "busy", "active":
 			return true
 		}
 	}

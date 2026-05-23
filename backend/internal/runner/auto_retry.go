@@ -3,7 +3,6 @@ package runner
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 
@@ -27,10 +26,10 @@ func (r *Runner) scheduleAutoRetryIfNeeded(ctx context.Context, issueID int64, e
 	if current.AttemptCount >= maxAutoRetryAttempts {
 		return false
 	}
-	nextAt := time.Now().UTC().Add(r.autoRetryDelay).Format(time.RFC3339)
+	nextAt := time.Now().UTC().Add(r.autoRetryDelay).Format(time.RFC3339Nano)
 	issue, scheduleErr := r.store.ScheduleIssueAutoRetry(ctx, issueID, err.Error(), nextAt)
 	if scheduleErr != nil {
-		return errors.Is(scheduleErr, store.ErrNotFound)
+		return false
 	}
 	r.recordStatusEvent(ctx, issueID, store.StatusTodo)
 	r.recordAutoRetryEvent(ctx, issueID, err.Error(), nextAt, issue.AttemptCount+1)

@@ -147,6 +147,8 @@ export const api = {
 
   getCodexUsage: () => request('/api/usage/codex'),
 
+  getSystemStatus: () => request('/api/system/status'),
+
   restartSystem: () => request('/api/system/restart', {
     method: 'POST',
     body: JSON.stringify({}),

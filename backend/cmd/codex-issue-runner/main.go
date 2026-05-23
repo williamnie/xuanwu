@@ -47,12 +47,12 @@ func runServer(args []string) {
 		log.Fatal(err)
 	}
 	defer st.Close()
-	if err := st.FailStaleIssues(context.Background()); err != nil {
-		log.Fatal(err)
-	}
 	bus := events.NewBus()
 	client := codex.NewAdapter(cfg.CodexCmd, cfg.CodexArgs)
 	r := runner.New(st, bus, client)
+	if err := r.RecoverInProgressIssues(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 	if err := r.StartAutoProjects(context.Background()); err != nil {
 		log.Fatal(err)
 	}
@@ -66,6 +66,11 @@ func runServer(args []string) {
 		log.Fatal(err)
 	}
 	srv.SetAuthToken(authToken)
+	srv.SetSystemConfig(api.SystemConfig{
+		Addr: cfg.Addr, DBPath: cfg.DBPath, CodexCmd: cfg.CodexCmd,
+		CodexSessionsDir: cfg.CodexSessionsDir, AuthEnabled: authToken != "",
+		WebMode: webMode(cfg.WebDir),
+	})
 	srv.SetRestartFunc(func() {
 		log.Print("restart requested; exiting for supervisor restart")
 		time.Sleep(300 * time.Millisecond)
@@ -76,6 +81,13 @@ func runServer(args []string) {
 	if err := http.ListenAndServe(cfg.Addr, srv); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func webMode(webDir string) string {
+	if strings.TrimSpace(webDir) != "" {
+		return "external"
+	}
+	return "embedded"
 }
 
 func startSessionWatcher(ctx context.Context, root string, bus *events.Bus) {
