@@ -68,6 +68,9 @@ func (s *Store) init() error {
 	if err := s.migrateIssueColumns(); err != nil {
 		return err
 	}
+	if err := s.migrateIssueRunColumns(); err != nil {
+		return err
+	}
 	return s.ensureSeedIssueTemplate()
 }
 
@@ -157,6 +160,35 @@ func (s *Store) migrateIssueColumns() error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) migrateIssueRunColumns() error {
+	columns, err := s.tableColumns("issue_runs")
+	if err != nil {
+		return err
+	}
+	additions := map[string]string{
+		"provider":            `alter table issue_runs add column provider text not null default 'codex'`,
+		"provider_session_id": `alter table issue_runs add column provider_session_id text not null default ''`,
+		"provider_turn_id":    `alter table issue_runs add column provider_turn_id text not null default ''`,
+	}
+	for name, stmt := range additions {
+		if columns[name] {
+			continue
+		}
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate issue_runs.%s: %w", name, err)
+		}
+	}
+	return s.backfillIssueRunProviderIDs()
+}
+
+func (s *Store) backfillIssueRunProviderIDs() error {
+	_, err := s.db.Exec(`update issue_runs set
+		provider=case when provider='' then 'codex' else provider end,
+		provider_session_id=case when provider_session_id='' then codex_thread_id else provider_session_id end,
+		provider_turn_id=case when provider_turn_id='' then codex_turn_id else provider_turn_id end`)
+	return err
 }
 
 func (s *Store) tableColumns(table string) (map[string]bool, error) {

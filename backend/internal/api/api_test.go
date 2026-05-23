@@ -236,7 +236,9 @@ func TestSessionAPI(t *testing.T) {
 		t.Fatalf("unexpected models: %+v", models)
 	}
 	list := getJSON[codex.SessionListResult](t, srv, "/api/sessions?limit=20&cursor=abc")
-	if len(list.Data) != 1 || list.Data[0].ID != "thread-1" || list.NextCursor != "next" {
+	if len(list.Data) != 1 || list.Data[0].ID != "codex:thread-1" ||
+		list.Data[0].Provider != store.ProviderCodex ||
+		list.Data[0].ProviderSessionID != "thread-1" || list.NextCursor != "next" {
 		t.Fatalf("unexpected sessions: %+v", list)
 	}
 	if listInput.Limit != 20 || listInput.Cursor != "abc" {
@@ -245,7 +247,9 @@ func TestSessionAPI(t *testing.T) {
 	created := postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
 		"cwd": t.TempDir(), "prompt": "hello",
 	})
-	if created.ThreadID != "thread-new" || created.TurnID != "turn-new" {
+	if created.ID != "codex:thread-new" || created.Provider != store.ProviderCodex ||
+		created.ProviderSessionID != "thread-new" || created.ProviderTurnID != "turn-new" ||
+		created.ThreadID != "thread-new" || created.TurnID != "turn-new" {
 		t.Fatalf("unexpected created session: %+v", created)
 	}
 }

@@ -177,6 +177,24 @@
   min-width: 32px;
 }
 
+.session-provider-pill {
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+[data-theme="dark"] .session-provider-pill {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .session-origin-dot {
   display: inline-flex;
   width: 7px;
@@ -227,6 +245,26 @@
 .session-origin-legend .session-origin-dot {
   width: 6px;
   height: 6px;
+}
+
+.session-runtime-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.session-runtime-header code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
 }
 
 .session-item-time {

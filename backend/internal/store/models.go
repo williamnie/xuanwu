@@ -9,6 +9,8 @@ const (
 	StatusCancelled  = "cancelled"
 )
 
+const ProviderCodex = "codex"
+
 const (
 	CronActionTriageToTodo = "triage_to_todo"
 	CronModeOnce           = "once"
@@ -97,16 +99,19 @@ type Issue struct {
 }
 
 type IssueRun struct {
-	ID            string `json:"id"`
-	IssueID       int64  `json:"issue_id"`
-	Attempt       int    `json:"attempt"`
-	Status        string `json:"status"`
-	CodexThreadID string `json:"codex_thread_id"`
-	CodexTurnID   string `json:"codex_turn_id"`
-	StartedAt     string `json:"started_at"`
-	EndedAt       string `json:"ended_at"`
-	ExitReason    string `json:"exit_reason"`
-	Error         string `json:"error"`
+	ID                string `json:"id"`
+	IssueID           int64  `json:"issue_id"`
+	Attempt           int    `json:"attempt"`
+	Status            string `json:"status"`
+	Provider          string `json:"provider"`
+	ProviderSessionID string `json:"provider_session_id"`
+	ProviderTurnID    string `json:"provider_turn_id"`
+	CodexThreadID     string `json:"codex_thread_id"`
+	CodexTurnID       string `json:"codex_turn_id"`
+	StartedAt         string `json:"started_at"`
+	EndedAt           string `json:"ended_at"`
+	ExitReason        string `json:"exit_reason"`
+	Error             string `json:"error"`
 }
 
 type IssuePatch struct {

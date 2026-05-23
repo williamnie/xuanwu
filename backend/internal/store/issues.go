@@ -124,8 +124,10 @@ func (s *Store) UpdateIssueRuntime(ctx context.Context, id int64, threadID, turn
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `update issue_runs set codex_thread_id=?,
-		codex_turn_id=? where issue_id=? and ended_at=''`, threadID, turnID, id)
+	_, err = s.db.ExecContext(ctx, `update issue_runs set provider=?,
+		provider_session_id=?, provider_turn_id=?, codex_thread_id=?,
+		codex_turn_id=? where issue_id=? and ended_at=''`,
+		ProviderCodex, threadID, turnID, threadID, turnID, id)
 	return err
 }
 

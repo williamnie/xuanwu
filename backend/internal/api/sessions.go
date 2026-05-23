@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
@@ -63,7 +64,11 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request, threadID 
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
-	session, err := s.runner.ReadSession(r.Context(), threadID)
+	ref, ok := parseSessionRef(w, threadID)
+	if !ok {
+		return
+	}
+	session, err := s.runner.ReadSession(r.Context(), ref.SessionID)
 	if err != nil {
 		handleErr(w, err)
 		return
@@ -75,11 +80,15 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request, thr
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
+	ref, ok := parseSessionRef(w, threadID)
+	if !ok {
+		return
+	}
 	switch action {
 	case "messages":
-		s.createSessionMessage(w, r, threadID)
+		s.createSessionMessage(w, r, ref.SessionID)
 	case "interrupt":
-		s.interruptSession(w, threadID)
+		s.interruptSession(w, ref.SessionID)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}
@@ -171,5 +180,35 @@ func toSessionTurnInput(req sessionMessageRequest) runner.SessionTurnInput {
 	return runner.SessionTurnInput{
 		Prompt: req.Prompt, Model: req.Model, ReasoningEffort: req.ReasoningEffort,
 		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox,
+	}
+}
+
+type sessionRef struct {
+	Provider  string
+	SessionID string
+}
+
+func parseSessionRef(w http.ResponseWriter, raw string) (sessionRef, bool) {
+	ref := parseSessionRefValue(raw)
+	if ref.SessionID == "" {
+		writeError(w, http.StatusBadRequest, "session id 不能为空")
+		return sessionRef{}, false
+	}
+	if ref.Provider != store.ProviderCodex {
+		writeError(w, http.StatusBadRequest, "session provider 暂不支持")
+		return sessionRef{}, false
+	}
+	return ref, true
+}
+
+func parseSessionRefValue(raw string) sessionRef {
+	value := strings.TrimSpace(raw)
+	provider, sessionID, ok := strings.Cut(value, ":")
+	if !ok {
+		return sessionRef{Provider: store.ProviderCodex, SessionID: value}
+	}
+	return sessionRef{
+		Provider:  strings.TrimSpace(provider),
+		SessionID: strings.TrimSpace(sessionID),
 	}
 }

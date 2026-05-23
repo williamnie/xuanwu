@@ -22,6 +22,7 @@ import './sessions/SessionsClient.css';
 const PAGE_SIZE = 50;
 const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
+const DEFAULT_SESSION_PROVIDER = 'codex';
 
 function textFromUserContent(content) {
   if (!Array.isArray(content)) return '';
@@ -116,7 +117,7 @@ export default function Sessions() {
       setCursor(result.nextCursor || '');
       setSelectedId((current) => current || data[0]?.id || '');
     } catch (err) {
-      toast.error(err.message || '加载 Codex sessions 失败');
+      toast.error(err.message || '加载 provider sessions 失败');
     } finally {
       setLoading(false);
     }
@@ -208,12 +209,14 @@ export default function Sessions() {
   }, [loadFirstPage]);
 
   const scheduleSelectedRefresh = useCallback((threadId) => {
-    if (!threadId || threadId !== selectedId) return;
+    const eventKey = providerSessionKey(DEFAULT_SESSION_PROVIDER, threadId);
+    if (!threadId || eventKey !== selectedId) return;
     window.clearTimeout(detailRefreshTimer.current);
     detailRefreshTimer.current = window.setTimeout(loadSelected, SESSION_DETAIL_REFRESH_DELAY_MS);
   }, [loadSelected, selectedId]);
 
   useEffect(() => api.subscribeToEvents((event) => {
+    const eventKey = eventSessionKey(event);
     if (isSessionFileEvent(event)) {
       scheduleListRefresh();
       scheduleSelectedRefresh(event.threadId);
@@ -225,12 +228,12 @@ export default function Sessions() {
       return;
     }
     if (event.threadId && isSessionStartEvent(event)) {
-      setSessions((prev) => setSessionRunningInList(prev, event.threadId, true));
+      setSessions((prev) => setSessionRunningInList(prev, eventKey, true));
     }
     if (event.threadId && isSessionStopEvent(event)) {
-      setSessions((prev) => setSessionRunningInList(prev, event.threadId, false));
+      setSessions((prev) => setSessionRunningInList(prev, eventKey, false));
     }
-    if (event.threadId !== selectedId) return;
+    if (eventKey !== selectedId) return;
     if (isSessionStartEvent(event)) {
       setLiveEvents([event]);
       setSessionRunning(true);
@@ -238,10 +241,10 @@ export default function Sessions() {
     }
     setLiveEvents((prev) => [...prev, event].slice(-200));
     if (isSessionStopEvent(event)) {
-      const stoppedThreadId = event.threadId;
+      const stoppedSessionId = eventKey;
       setSessionRunning(false);
       loadSelected().then(() => {
-        if (selectedIdRef.current === stoppedThreadId) setLiveEvents([]);
+        if (selectedIdRef.current === stoppedSessionId) setLiveEvents([]);
       });
       loadFirstPage();
     }
@@ -349,9 +352,10 @@ export default function Sessions() {
         approval_policy: sessionSettings.approvalPolicy,
         sandbox: sessionSettings.sandbox,
       });
-      setSelectedId(result.thread_id);
+      const newSessionId = sessionIDFromCreateResult(result);
+      setSelectedId(newSessionId);
       setSessionRunning(Boolean(result.turn_id));
-      setSessions((prev) => setSessionRunningInList(prev, result.thread_id, Boolean(result.turn_id)));
+      setSessions((prev) => setSessionRunningInList(prev, newSessionId, Boolean(result.turn_id)));
       setLiveEvents([]);
       setPrompt('');
       await loadFirstPage();
@@ -447,6 +451,7 @@ export default function Sessions() {
                 >
                   <span className="pinned-title" title={s.name || s.preview}>{s.name || s.preview || '未命名 Codex 会话'}</span>
                   <div className="pinned-actions">
+                    <span className="session-provider-pill">{providerLabel(s.provider)}</span>
                     <SessionOriginBadge origin={s.origin} />
                     <button 
                       className="pinned-action-btn" 
@@ -664,6 +669,38 @@ function isSessionStopEvent(event) {
     event?.method === 'error';
 }
 
+function providerSessionKey(provider = DEFAULT_SESSION_PROVIDER, sessionId = '') {
+  const normalizedProvider = String(provider || DEFAULT_SESSION_PROVIDER).trim().toLowerCase();
+  const normalizedSessionId = String(sessionId || '').trim();
+  if (!normalizedSessionId) return '';
+  if (normalizedSessionId.startsWith(`${normalizedProvider}:`)) return normalizedSessionId;
+  return `${normalizedProvider}:${normalizedSessionId}`;
+}
+
+function eventSessionKey(event) {
+  return providerSessionKey(event?.provider || DEFAULT_SESSION_PROVIDER, event?.threadId || '');
+}
+
+function sessionIDFromCreateResult(result) {
+  return result?.id ||
+    providerSessionKey(result?.provider || DEFAULT_SESSION_PROVIDER, result?.provider_session_id || result?.thread_id || '');
+}
+
+function providerLabel(provider) {
+  switch (String(provider || DEFAULT_SESSION_PROVIDER).toLowerCase()) {
+    case 'codex':
+      return 'Codex';
+    case 'claude':
+      return 'Claude';
+    case 'opencode':
+      return 'opencode';
+    case 'kimicode':
+      return 'kimicode';
+    default:
+      return provider || 'Unknown';
+  }
+}
+
 function SessionOriginBadge({ origin }) {
   const meta = sessionOriginMeta(origin);
   return <span className={`session-origin-dot ${meta.className}`} title={meta.title} />;
@@ -753,7 +790,7 @@ function LoadingState() {
 }
 
 function EmptyDetail() {
-  return <div className="session-empty">选择一个 Codex session 查看历史，或创建新 session。</div>;
+  return <div className="session-empty">选择一个 provider session 查看历史，或创建新 session。</div>;
 }
 
 function parseDiff(diffText) {
@@ -804,9 +841,15 @@ function projectNameFromPath(cwd) {
 function SessionDetail({ session, liveEvents, running }) {
   const turns = session?.turns || [];
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
+  const provider = providerLabel(session?.provider);
+  const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
 
   return (
     <div className="session-detail-body">
+      <div className="session-runtime-header">
+        <span>Provider: {provider}</span>
+        <code>{providerSessionId}</code>
+      </div>
       <div className="session-transcript">
         {turns.map((turn, index) => (
           <TurnItem key={turn.id || index} turn={turn} />

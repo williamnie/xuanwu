@@ -120,6 +120,9 @@ function issueRunSignature(run) {
     run?.id,
     run?.attempt,
     run?.status,
+    run?.provider,
+    run?.provider_session_id,
+    run?.provider_turn_id,
     run?.codex_thread_id,
     run?.codex_turn_id,
     run?.started_at,
@@ -127,6 +130,32 @@ function issueRunSignature(run) {
     run?.exit_reason,
     run?.error,
   ].join('\u001f');
+}
+
+function providerLabel(provider) {
+  switch (String(provider || 'codex').toLowerCase()) {
+    case 'codex':
+      return 'Codex';
+    case 'claude':
+      return 'Claude';
+    case 'opencode':
+      return 'opencode';
+    case 'kimicode':
+      return 'kimicode';
+    default:
+      return provider || 'Unknown';
+  }
+}
+
+function issueProviderIdentity(issue, runs) {
+  const latestRun = [...(runs || [])].reverse().find(run =>
+    run?.provider || run?.provider_session_id || run?.provider_turn_id
+  );
+  return {
+    provider: latestRun?.provider || 'codex',
+    sessionId: latestRun?.provider_session_id || issue?.codex_thread_id || '',
+    turnId: latestRun?.provider_turn_id || issue?.codex_turn_id || '',
+  };
 }
 
 export default function IssueDetail({ issueId, navigateTo }) {
@@ -405,6 +434,8 @@ ${error}` : error;
   const autoRetryNextAt = issue.auto_retry_next_at || autoRetryPayload?.next_retry_at || '';
   const autoRetryReason = issue.auto_retry_reason || autoRetryPayload?.reason || '';
   const isWaitingAutoRetry = issue.status === 'todo' && Boolean(autoRetryNextAt);
+  const runtimeIdentity = issueProviderIdentity(issue, runs);
+  const runtimeProvider = providerLabel(runtimeIdentity.provider);
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
@@ -654,7 +685,7 @@ ${error}` : error;
           {/* 实时终端控制台 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Terminal size={18} color="var(--primary)" /> Codex 智能代理工作终端 (实时)
+              <Terminal size={18} color="var(--primary)" /> Provider 代理工作终端 (实时)
             </h3>
             <div
               ref={terminalRef}
@@ -669,9 +700,11 @@ ${error}` : error;
                 <br />
                 项目路径: {project ? project.cwd : '加载中...'}
                 <br />
-                线程 ID: {issue.codex_thread_id || '暂无'}
+                Provider: {runtimeProvider}
                 <br />
-                回合 ID: {issue.codex_turn_id || '暂无'}
+                Session ID: {runtimeIdentity.sessionId || '暂无'}
+                <br />
+                Turn ID: {runtimeIdentity.turnId || '暂无'}
               </div>
 
               {renderTerminalLines()}
@@ -735,9 +768,21 @@ ${error}` : error;
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Codex 线程:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Provider:</span>
+                <span style={{ fontWeight: 600 }}>{runtimeProvider}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Session ID:</span>
                 <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {issue.codex_thread_id || '未开始分配'}
+                  {runtimeIdentity.sessionId || '未开始分配'}
+                </code>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Turn ID:</span>
+                <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {runtimeIdentity.turnId || '暂无'}
                 </code>
               </div>
 
@@ -896,8 +941,9 @@ function IssueRunCard({ run }) {
       </div>
 
       <RunField label="Run ID" value={run.id} mono />
-      <RunField label="Thread" value={run.codex_thread_id || '暂无'} mono />
-      <RunField label="Turn" value={run.codex_turn_id || '暂无'} mono />
+      <RunField label="Provider" value={providerLabel(run.provider)} />
+      <RunField label="Session" value={run.provider_session_id || run.codex_thread_id || '暂无'} mono />
+      <RunField label="Turn" value={run.provider_turn_id || run.codex_turn_id || '暂无'} mono />
       <RunField label="开始" value={formatDateTime(run.started_at)} />
       <RunField label="结束" value={running ? '运行中' : formatDateTime(run.ended_at)} />
       {run.exit_reason && <RunField label="退出原因" value={run.exit_reason} />}

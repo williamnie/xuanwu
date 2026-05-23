@@ -74,6 +74,8 @@ func TestIssueRunsAPI(t *testing.T) {
 
 	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
 	if len(runs) != 1 || runs[0].IssueID != issue.ID || runs[0].Status != store.StatusDone ||
+		runs[0].Provider != store.ProviderCodex ||
+		runs[0].ProviderSessionID != "thread-1" || runs[0].ProviderTurnID != "turn-1" ||
 		runs[0].CodexThreadID != "thread-1" || runs[0].CodexTurnID != "turn-1" ||
 		runs[0].StartedAt == "" || runs[0].EndedAt == "" {
 		t.Fatalf("unexpected runs response: %+v", runs)
@@ -82,17 +84,20 @@ func TestIssueRunsAPI(t *testing.T) {
 
 func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
-	session := getJSON[codex.Session](t, srv, "/api/sessions/thread-1")
-	if session.ID != "thread-1" || session.CWD != "/tmp/demo" {
+	session := getJSON[codex.Session](t, srv, "/api/sessions/codex:thread-1")
+	if session.ID != "codex:thread-1" || session.Provider != store.ProviderCodex ||
+		session.ProviderSessionID != "thread-1" || session.CWD != "/tmp/demo" {
 		t.Fatalf("unexpected session detail: %+v", session)
 	}
 	created := postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
 		"cwd": t.TempDir(), "prompt": "hello",
 	})
-	if created.ThreadID != "thread-new" || created.TurnID != "turn-new" {
+	if created.ID != "codex:thread-new" || created.Provider != store.ProviderCodex ||
+		created.ProviderSessionID != "thread-new" || created.ProviderTurnID != "turn-new" ||
+		created.ThreadID != "thread-new" || created.TurnID != "turn-new" {
 		t.Fatalf("unexpected created session: %+v", created)
 	}
-	message := postJSON[map[string]string](t, srv, "/api/sessions/thread-1/messages", map[string]any{
+	message := postJSON[map[string]string](t, srv, "/api/sessions/codex:thread-1/messages", map[string]any{
 		"prompt": "continue",
 	})
 	if message["thread_id"] != "thread-1" || message["turn_id"] != "turn-new" {

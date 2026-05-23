@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
@@ -20,8 +21,12 @@ type SessionCreateInput struct {
 }
 
 type SessionCreateResult struct {
-	ThreadID string `json:"thread_id"`
-	TurnID   string `json:"turn_id,omitempty"`
+	ID                string `json:"id"`
+	Provider          string `json:"provider"`
+	ProviderSessionID string `json:"provider_session_id"`
+	ProviderTurnID    string `json:"provider_turn_id,omitempty"`
+	ThreadID          string `json:"thread_id"`
+	TurnID            string `json:"turn_id,omitempty"`
 }
 
 type SessionTurnInput struct {
@@ -55,6 +60,7 @@ func (r *Runner) ListSessions(ctx context.Context, input codex.SessionListInput)
 	if err := r.applySessionOrigin(ctx, res.Data); err != nil {
 		return codex.SessionListResult{}, err
 	}
+	applyCodexSessionIdentity(res.Data)
 	return res, nil
 }
 
@@ -73,6 +79,7 @@ func (r *Runner) ReadSession(ctx context.Context, threadID string) (codex.Sessio
 	if err := r.applySessionOrigin(ctx, sessions); err != nil {
 		return codex.Session{}, err
 	}
+	applyCodexSessionIdentity(sessions)
 	res = sessions[0]
 	return res, nil
 }
@@ -179,7 +186,7 @@ func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) 
 }
 
 func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input SessionCreateInput) (SessionCreateResult, error) {
-	result := SessionCreateResult{ThreadID: threadID}
+	result := newCodexSessionCreateResult(threadID)
 	if strings.TrimSpace(input.Prompt) == "" {
 		return result, nil
 	}
@@ -188,6 +195,7 @@ func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input Se
 		return SessionCreateResult{}, err
 	}
 	result.TurnID = turnID
+	result.ProviderTurnID = turnID
 	return result, nil
 }
 
@@ -329,4 +337,37 @@ func sessionThreadID(session codex.Session, fallback string) string {
 		return session.ID
 	}
 	return fallback
+}
+
+func applyCodexSessionIdentity(sessions []codex.Session) {
+	for i := range sessions {
+		rawID := sessionThreadID(sessions[i], sessions[i].SessionID)
+		if rawID == "" {
+			continue
+		}
+		sessions[i].Provider = events.ProviderCodex
+		sessions[i].ProviderSessionID = rawID
+		if sessions[i].SessionID == "" {
+			sessions[i].SessionID = rawID
+		}
+		sessions[i].ID = providerSessionKey(events.ProviderCodex, rawID)
+	}
+}
+
+func newCodexSessionCreateResult(threadID string) SessionCreateResult {
+	return SessionCreateResult{
+		ID:                providerSessionKey(events.ProviderCodex, threadID),
+		Provider:          events.ProviderCodex,
+		ProviderSessionID: threadID,
+		ThreadID:          threadID,
+	}
+}
+
+func providerSessionKey(provider, sessionID string) string {
+	provider = strings.TrimSpace(provider)
+	sessionID = strings.TrimSpace(sessionID)
+	if provider == "" || sessionID == "" {
+		return sessionID
+	}
+	return provider + ":" + sessionID
 }

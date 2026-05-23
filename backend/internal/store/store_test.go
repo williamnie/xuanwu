@@ -48,7 +48,8 @@ func TestIssueRunHistoryLifecycle(t *testing.T) {
 		t.Fatalf("list runs after claim: %v", err)
 	}
 	if len(runs) != 1 || runs[0].IssueID != issue.ID || runs[0].Attempt != 1 ||
-		runs[0].Status != StatusInProgress || runs[0].StartedAt == "" || runs[0].EndedAt != "" {
+		runs[0].Status != StatusInProgress || runs[0].Provider != ProviderCodex ||
+		runs[0].StartedAt == "" || runs[0].EndedAt != "" {
 		t.Fatalf("unexpected first run after claim: %+v", runs)
 	}
 
@@ -64,6 +65,8 @@ func TestIssueRunHistoryLifecycle(t *testing.T) {
 		t.Fatalf("list runs after done: %v", err)
 	}
 	if len(runs) != 1 || runs[0].Status != StatusDone || runs[0].EndedAt == "" ||
+		runs[0].Provider != ProviderCodex ||
+		runs[0].ProviderSessionID != "thread-1" || runs[0].ProviderTurnID != "turn-1" ||
 		runs[0].CodexThreadID != "thread-1" || runs[0].CodexTurnID != "turn-1" ||
 		runs[0].ExitReason != "explicit_status_update" {
 		t.Fatalf("first run not closed with runtime ids: %+v", runs)
@@ -109,6 +112,8 @@ func TestFailStaleIssuesClosesOpenRuns(t *testing.T) {
 	}
 	if len(runs) != 1 || runs[0].Status != StatusFailed ||
 		runs[0].ExitReason != "service_restarted" || runs[0].EndedAt == "" ||
+		runs[0].Provider != ProviderCodex ||
+		runs[0].ProviderSessionID != "thread-stale" || runs[0].ProviderTurnID != "turn-stale" ||
 		runs[0].CodexThreadID != "thread-stale" || runs[0].CodexTurnID != "turn-stale" ||
 		runs[0].Error == "" {
 		t.Fatalf("stale run not closed correctly: %+v", runs)

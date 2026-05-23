@@ -123,6 +123,10 @@ func TestListSessionsMarksManualSessionRunning(t *testing.T) {
 	if len(list.Data) != 1 || !list.Data[0].IsRunning {
 		t.Fatalf("session should be running: %+v", list)
 	}
+	if list.Data[0].ID != "codex:thread-1" || list.Data[0].Provider != store.ProviderCodex ||
+		list.Data[0].ProviderSessionID != "thread-1" {
+		t.Fatalf("session identity = %+v, want codex namespaced id", list.Data[0])
+	}
 	if list.Data[0].Origin != codex.SessionOriginRunner {
 		t.Fatalf("session origin = %q, want runner", list.Data[0].Origin)
 	}
