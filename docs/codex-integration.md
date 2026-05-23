@@ -224,7 +224,16 @@ Codex adapter 会把 Codex notification 转成统一 `codex.Event`，再由 runn
 
 ## Codex 通过 CLI 反向更新 Runner
 
-Codex 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`。
+Codex 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`。如果服务启用了 API bearer token，CLI 支持 `--token` 或 `CODEX_RUNNER_AUTH_TOKEN`；遇到 `401 Unauthorized: unauthorized` 时，优先读取运行中服务配置的 token 文件：先看 `CODEX_RUNNER_AUTH_TOKEN_FILE`，源码部署默认是当前服务数据目录里的 `data/auth_token`，release/其他项目则来自对应 state/data 目录，不要假设都在当前仓库。
+
+示例：
+
+```bash
+codex-issue-runner issue status --id <issue-id> --token "$(cat data/auth_token)" --json
+CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)" codex-issue-runner issue update --id <issue-id> --status done --json
+```
+
+如果 `PATH` 里的 `codex-issue-runner` 版本过旧，可在本仓库优先用 `./dist/codex-issue-runner`，或重新安装 release/skill 后再试。
 
 推荐创建 issue：
 

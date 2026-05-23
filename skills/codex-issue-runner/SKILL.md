@@ -13,6 +13,23 @@ Use the local `codex-issue-runner` CLI to hand bounded work from Codex to the lo
 - The target repository should already be registered as a project. If not, register it first.
 - Prefer explicit project ids, short issue titles, and full markdown bodies in a temp file.
 
+## Authentication
+
+If the CLI returns `401 Unauthorized: unauthorized`, the runner API requires its bearer token. Prefer the token file from the running service configuration:
+
+- Use `CODEX_RUNNER_AUTH_TOKEN_FILE` when it is set.
+- For this repository's source deploy, the default token file is `data/auth_token`.
+- For release installs or other projects, the token file lives under that runner's configured state/data directory; do not assume every runner uses the current repo path.
+
+Pass the token without hard-coding its value:
+
+```bash
+codex-issue-runner issue status --id <issue-id> --token "$(cat data/auth_token)" --json
+CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)" codex-issue-runner issue status --id <issue-id> --json
+```
+
+When working inside this repo and `codex-issue-runner` on `PATH` is older, prefer `./dist/codex-issue-runner` or reinstall the release/skill before retrying.
+
 ## Register a Project
 
 ```bash
