@@ -219,7 +219,7 @@ export default function Sessions() {
       scheduleSelectedRefresh(event.threadId);
       return;
     }
-    if (event.type !== 'codex.event') return;
+    if (!isAgentEvent(event)) return;
     if (event.method === 'approval/requested') {
       setApprovalRequest(parseApprovalPayload(event.payload));
       return;
@@ -649,12 +649,19 @@ function isSessionFileEvent(event) {
   return event?.type === 'session.created' || event?.type === 'session.updated';
 }
 
+function isAgentEvent(event) {
+  return event?.type === 'agent.event' || event?.type === 'codex.event';
+}
+
 function isSessionStartEvent(event) {
-  return event?.method === 'turn/started';
+  return event?.agent_event_type === 'agent.turn.started' || event?.method === 'turn/started';
 }
 
 function isSessionStopEvent(event) {
-  return event?.method === 'turn/completed' || event?.method === 'error';
+  return event?.agent_event_type === 'agent.turn.completed' ||
+    event?.agent_event_type === 'agent.error' ||
+    event?.method === 'turn/completed' ||
+    event?.method === 'error';
 }
 
 function SessionOriginBadge({ origin }) {

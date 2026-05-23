@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 )
 
 type wireMessage struct {
@@ -35,14 +37,22 @@ func (a *Adapter) readLoop(r io.Reader) {
 func (a *Adapter) stderrLoop(r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		a.emit(Event{Method: "process/stderr", Text: scanner.Text()})
+		text := scanner.Text()
+		a.emit(Event{
+			Method: "process/stderr", AgentEventType: events.AgentError,
+			Provider: events.ProviderCodex, RawMethod: "process/stderr", Text: text, Error: text,
+		})
 	}
 }
 
 func (a *Adapter) handleLine(line []byte) {
 	var msg wireMessage
 	if err := json.Unmarshal(line, &msg); err != nil {
-		a.emit(Event{Method: "protocol/error", Error: err.Error(), Text: string(line)})
+		a.emit(Event{
+			Method: "protocol/error", AgentEventType: events.AgentError,
+			Provider: events.ProviderCodex, RawMethod: "protocol/error", RawPayload: string(line),
+			Error: err.Error(), Text: string(line),
+		})
 		return
 	}
 	if len(msg.ID) > 0 && msg.Method == "" {

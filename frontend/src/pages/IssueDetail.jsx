@@ -64,6 +64,43 @@ function latestAutoRetryEvent(events) {
   return null;
 }
 
+function legacyAgentEventType(method) {
+  if (method === 'item/agentMessage/delta') return 'agent.message.delta';
+  if (method === 'item/commandExecution/outputDelta') return 'agent.command.output_delta';
+  if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') return 'agent.file.patch';
+  if (method === 'turn/started') return 'agent.turn.started';
+  if (method === 'turn/completed') return 'agent.turn.completed';
+  if (method === 'error') return 'agent.error';
+  return '';
+}
+
+function issueLogAgentPayload(payload) {
+  const rawMethod = payload.raw_method || payload.codexMethod || '';
+  const text = payload.text || '';
+  let type = payload.type || payload.agent_event_type || legacyAgentEventType(rawMethod);
+  if (!type && rawMethod === 'item/started' && (payload.command || text.startsWith('$ '))) {
+    type = 'agent.command.started';
+  }
+  if (!type && rawMethod === 'item/completed' && text.startsWith('--- ')) {
+    type = 'agent.file.patch';
+  }
+  return {
+    type,
+    rawMethod,
+    text,
+    command: payload.command || '',
+    path: payload.path || '',
+    status: payload.status || '',
+    error: payload.error || '',
+  };
+}
+
+function commandLineText(agent) {
+  const text = agent.command || agent.text || '';
+  if (agent.text?.startsWith('! ')) return agent.text;
+  return text.startsWith('$ ') ? text.slice(2) : text;
+}
+
 function formatRetryTime(value) {
   if (!value) return '未知时间';
   const date = new Date(value);
@@ -377,18 +414,18 @@ ${error}` : error;
           continue;
         }
         const payload = parseEventPayload(event);
+        const agent = issueLogAgentPayload(payload);
         const isDelta = event.type === 'issue.log' && 
-          (payload.codexMethod === 'item/agentMessage/delta' || 
-           payload.codexMethod === 'item/commandExecution/outputDelta');
+          (agent.type === 'agent.message.delta' || agent.type === 'agent.command.output_delta');
         
         if (merged.length > 0) {
           const lastMerged = merged[merged.length - 1];
           const canMerge = isDelta && 
             lastMerged.type === 'issue.log' && 
-            lastMerged._payload?.codexMethod === payload.codexMethod;
+            lastMerged._agent?.type === agent.type;
             
           if (canMerge) {
-            const currentText = payload.text || event.text || '';
+            const currentText = agent.text || event.text || '';
             lastMerged._textMerged += currentText;
             continue;
           }
@@ -397,7 +434,8 @@ ${error}` : error;
         merged.push({
           ...event,
           _payload: payload,
-          _textMerged: payload.text || event.text || ''
+          _agent: agent,
+          _textMerged: agent.text || event.text || ''
         });
       }
       return merged;
@@ -457,12 +495,13 @@ ${error}` : error;
 
       // 4. Codex 日志事件 (有具体的 Codex 回合、线程或输出)
       if (event.type === 'issue.log') {
-        const method = payload.codexMethod || '';
+        const agent = event._agent || issueLogAgentPayload(payload);
+        const method = agent.rawMethod;
         // 优先使用外部已合并好的 _textMerged，若无则回退取原本事件文本
-        const text = event._textMerged || payload.text || event.text || '';
+        const text = event._textMerged || agent.text || event.text || '';
 
         // 根据不同的通知类型，渲染不同的极客控制台线条
-        if (method === 'item/agentMessage/delta') {
+        if (agent.type === 'agent.message.delta') {
           return (
             <div key={event.id || idx} className="terminal-line output" style={{ color: '#9ece6a' }}>
               {text}
@@ -470,7 +509,7 @@ ${error}` : error;
           );
         }
 
-        if (method === 'item/commandExecution/outputDelta') {
+        if (agent.type === 'agent.command.output_delta') {
           return (
             <div key={event.id || idx} className="terminal-line output">
               {text}
@@ -478,16 +517,16 @@ ${error}` : error;
           );
         }
 
-        if (method.includes('command')) {
+        if (agent.type === 'agent.command.started' || agent.type === 'agent.command.completed' || method.includes('command')) {
           return (
             <div key={event.id || idx} className="terminal-line info" style={{ fontWeight: 600 }}>
-              $ {text}
+              $ {commandLineText({ ...agent, text })}
             </div>
           );
         }
 
         // 文件修改 Patch 展现
-        if (method === 'item/fileChange/patchUpdated') {
+        if (agent.type === 'agent.file.patch') {
           const patchLines = text.split('\n');
           return (
             <div key={event.id || idx} className="diff-container">

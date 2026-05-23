@@ -49,7 +49,9 @@ func (r *Runner) fanoutCodexEvent(event codex.Event) {
 
 func (r *Runner) publishCodexEvent(event codex.Event) {
 	r.bus.Publish(events.AppEvent{
-		Type: "codex.event", ThreadID: event.ThreadID, TurnID: event.TurnID, Method: event.Method,
+		Type: "agent.event", ThreadID: event.ThreadID, TurnID: event.TurnID, Method: event.Method,
+		AgentEventType: event.AgentEventType, Provider: event.Provider, RawMethod: event.RawMethod,
+		RawPayload: event.RawPayload, Command: event.Command, Path: event.Path,
 		Status: event.Status, Text: event.Text, Error: event.Error, Payload: event.Payload,
 	})
 }

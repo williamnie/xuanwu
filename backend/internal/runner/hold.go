@@ -159,10 +159,10 @@ func (r *Runner) waitHealthTurn(ctx context.Context, threadID, turnID string, ev
 			if !matches(event, threadID, turnID) {
 				continue
 			}
-			if event.Method == "error" && event.Error != "" {
+			if isAgentError(event) && event.Error != "" {
 				return holdCheckErr(event.Error)
 			}
-			if event.Method != "turn/completed" {
+			if !isAgentTurnCompleted(event) {
 				continue
 			}
 			if event.Status == "completed" && event.Error == "" {

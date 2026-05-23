@@ -243,7 +243,7 @@ func (r *Runner) waitSessionTurn(threadID, turnID string, eventsCh <-chan codex.
 		if !matches(event, threadID, turnID) {
 			continue
 		}
-		if event.Method == "turn/completed" || event.Method == "error" {
+		if isAgentTurnCompleted(event) || isAgentError(event) {
 			r.clearSessionRunning(threadID, turnID)
 			return
 		}

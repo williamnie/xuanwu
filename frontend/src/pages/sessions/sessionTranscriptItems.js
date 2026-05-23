@@ -140,25 +140,29 @@ export function parseLiveSessionEvents(liveEvents) {
   let activeTool = null;
 
   for (const event of liveEvents || []) {
-    const method = event.method;
+    const type = agentEventType(event);
+    const method = event.raw_method || event.method;
     const text = event.text || '';
 
-    if (method === 'item/agentMessage/delta') {
+    if (type === 'agent.message.delta') {
       agentMessageText += text;
-    } else if (method === 'item/commandExecution/outputDelta') {
+    } else if (type === 'agent.command.output_delta') {
       if (activeTool && activeTool.type === 'commandExecution') {
         activeTool.text += text;
       }
-    } else if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') {
+    } else if (type === 'agent.file.patch') {
       if (activeTool && activeTool.type === 'fileChange') {
         activeTool.text += text;
+      } else {
+        const item = liveNormalizedItem(event);
+        if (item && isRenderableToolItem(item)) tools.push(item);
       }
-    } else if (method === 'item/started') {
+    } else if (type === 'agent.command.started' || method === 'item/started') {
       const item = liveEventItem(event);
       if (!item) continue;
       activeTool = liveToolFromItem(item);
       if (activeTool && isRenderableToolItem(activeTool)) tools.push(activeTool);
-    } else if (method === 'item/completed') {
+    } else if (type === 'agent.command.completed' || method === 'item/completed') {
       const item = liveEventItem(event);
       if (item && !updatesActiveTool(activeTool, item) && isRenderableToolItem(item)) {
         tools.push(item);
@@ -173,7 +177,21 @@ export function parseLiveSessionEvents(liveEvents) {
   return { tools, agentMessageText };
 }
 
+function agentEventType(event) {
+  if (event?.agent_event_type) return event.agent_event_type;
+  const method = event?.method || event?.raw_method || '';
+  if (method === 'item/agentMessage/delta') return 'agent.message.delta';
+  if (method === 'item/commandExecution/outputDelta') return 'agent.command.output_delta';
+  if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') return 'agent.file.patch';
+  if (method === 'turn/started') return 'agent.turn.started';
+  if (method === 'turn/completed') return 'agent.turn.completed';
+  if (method === 'error') return 'agent.error';
+  return '';
+}
+
 function liveEventItem(event) {
+  const normalized = liveNormalizedItem(event);
+  if (normalized) return normalized;
   try {
     const payload = JSON.parse(event.payload || '{}');
     return payload.item || null;
@@ -182,6 +200,32 @@ function liveEventItem(event) {
     if (event.payload?.includes('fileChange')) return { type: 'fileChange' };
     return null;
   }
+}
+
+function liveNormalizedItem(event) {
+  const type = agentEventType(event);
+  if (type === 'agent.command.started' || type === 'agent.command.completed') {
+    return {
+      type: 'commandExecution',
+      command: event.command || commandFromText(event.text),
+      text: type === 'agent.command.completed' ? event.text || '' : '',
+      status: event.status || (type === 'agent.command.completed' ? 'completed' : 'inProgress'),
+    };
+  }
+  if (type === 'agent.file.patch') {
+    return {
+      type: 'fileChange',
+      path: event.path || '',
+      text: event.text || '',
+      status: event.status || 'completed',
+    };
+  }
+  return null;
+}
+
+function commandFromText(text) {
+  if (!text) return '';
+  return text.startsWith('$ ') ? text.slice(2) : text;
 }
 
 function liveToolFromItem(item) {

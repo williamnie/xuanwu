@@ -26,13 +26,19 @@ type TurnOptions struct {
 }
 
 type Event struct {
-	Method   string
-	ThreadID string
-	TurnID   string
-	Text     string
-	Status   string
-	Error    string
-	Payload  string
+	Method         string
+	AgentEventType string
+	Provider       string
+	RawMethod      string
+	RawPayload     string
+	ThreadID       string
+	TurnID         string
+	Text           string
+	Command        string
+	Path           string
+	Status         string
+	Error          string
+	Payload        string
 }
 
 type UserInput struct {

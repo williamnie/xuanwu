@@ -96,16 +96,24 @@ func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event code
 	if event.Text != "" {
 		r.publishLog(ctx, issueID, event)
 	}
-	if event.Method == "error" && event.Error != "" {
+	if isAgentError(event) && event.Error != "" {
 		if r.issueAlreadyTerminal(ctx, issueID) {
 			return true, nil
 		}
 		return true, eventError(event.Error)
 	}
-	if event.Method != "turn/completed" {
+	if !isAgentTurnCompleted(event) {
 		return false, nil
 	}
 	return true, r.finishIssueAfterTurn(ctx, issueID, event)
+}
+
+func isAgentError(event codex.Event) bool {
+	return event.AgentEventType == events.AgentError || event.Method == "error"
+}
+
+func isAgentTurnCompleted(event codex.Event) bool {
+	return event.AgentEventType == events.AgentTurnCompleted || event.Method == "turn/completed"
 }
 
 func (r *Runner) issueAlreadyTerminal(ctx context.Context, issueID int64) bool {
@@ -172,12 +180,46 @@ func (e runnerHoldError) Is(target error) bool {
 }
 
 func (r *Runner) publishLog(ctx context.Context, issueID int64, event codex.Event) {
-	payload, _ := json.Marshal(map[string]any{"text": event.Text, "codexMethod": event.Method})
+	payload, _ := json.Marshal(issueLogPayload(event))
 	e, err := r.store.AddIssueEvent(ctx, issueID, "issue.log", string(payload))
 	if err != nil {
 		return
 	}
-	r.bus.Publish(events.AppEvent{ID: e.ID, Type: "issue.log", IssueID: issueID, Text: event.Text, Payload: e.Payload, CreatedAt: e.CreatedAt})
+	r.bus.Publish(events.AppEvent{
+		ID: e.ID, Type: "issue.log", IssueID: issueID, Text: event.Text, Payload: e.Payload,
+		AgentEventType: event.AgentEventType, Provider: event.Provider, RawMethod: rawMethod(event),
+		RawPayload: event.RawPayload, Command: event.Command, Path: event.Path, Status: event.Status,
+		Error: event.Error, CreatedAt: e.CreatedAt,
+	})
+}
+
+func issueLogPayload(event codex.Event) events.AgentEventPayload {
+	return events.AgentEventPayload{
+		Type: event.AgentEventType, Provider: event.Provider, RawMethod: rawMethod(event),
+		RawPayload: rawPayload(event), Text: event.Text, Command: event.Command, Path: event.Path,
+		Status: event.Status, Error: event.Error,
+	}
+}
+
+func rawMethod(event codex.Event) string {
+	if event.RawMethod != "" {
+		return event.RawMethod
+	}
+	return event.Method
+}
+
+func rawPayload(event codex.Event) json.RawMessage {
+	if json.Valid([]byte(event.RawPayload)) {
+		return json.RawMessage(event.RawPayload)
+	}
+	if json.Valid([]byte(event.Payload)) {
+		return json.RawMessage(event.Payload)
+	}
+	if event.RawPayload == "" && event.Payload == "" {
+		return nil
+	}
+	body, _ := json.Marshal(firstNonEmpty(event.RawPayload, event.Payload))
+	return body
 }
 
 func renderPrompt(project store.Project, issue store.Issue) string {

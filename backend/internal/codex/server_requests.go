@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 )
 
 func (a *Adapter) handleServerRequest(msg wireMessage) {
@@ -100,8 +102,10 @@ func approvalRequestedEvent(requestID, method string, params json.RawMessage) Ev
 		"params": decoded,
 	})
 	return Event{
-		Method: "approval/requested", ThreadID: stringField(decoded, "threadId"),
-		TurnID: stringField(decoded, "turnId"), Payload: string(payload),
+		Method: "approval/requested", AgentEventType: events.AgentApprovalRequested,
+		Provider: events.ProviderCodex, RawMethod: method, RawPayload: string(params),
+		ThreadID: stringField(decoded, "threadId"), TurnID: stringField(decoded, "turnId"),
+		Payload: string(payload),
 	}
 }
 

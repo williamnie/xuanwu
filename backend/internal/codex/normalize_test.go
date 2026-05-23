@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 )
 
 func TestNormalizeAgentDelta(t *testing.T) {
@@ -11,6 +13,10 @@ func TestNormalizeAgentDelta(t *testing.T) {
 	event := normalizeEvent("item/agentMessage/delta", raw)
 	if event.ThreadID != "t1" || event.TurnID != "u1" || event.Text != "hello" {
 		t.Fatalf("unexpected event: %+v", event)
+	}
+	if event.AgentEventType != events.AgentMessageDelta || event.Provider != events.ProviderCodex ||
+		event.RawMethod != "item/agentMessage/delta" || event.RawPayload != string(raw) {
+		t.Fatalf("normalized metadata missing: %+v", event)
 	}
 }
 
@@ -28,6 +34,10 @@ func TestNormalizeItemStartedCommandExecution(t *testing.T) {
 	if event.ThreadID != "t1" || event.TurnID != "u1" {
 		t.Fatalf("runtime ids not preserved: %+v", event)
 	}
+	if event.AgentEventType != events.AgentCommandStarted ||
+		event.Command != `/bin/zsh -lc "go test ./backend/..."` || event.Status != "inProgress" {
+		t.Fatalf("command event not normalized: %+v", event)
+	}
 	if event.Text != `$ /bin/zsh -lc "go test ./backend/..."` {
 		t.Fatalf("command text = %q", event.Text)
 	}
@@ -36,6 +46,9 @@ func TestNormalizeItemStartedCommandExecution(t *testing.T) {
 func TestNormalizeItemCompletedFileChange(t *testing.T) {
 	raw := json.RawMessage(`{"threadId":"t1","turnId":"u1","item":{"type":"fileChange","status":"completed","changes":[{"path":"/tmp/demo.go","diff":"@@ -1 +1 @@\n-old\n+new\n"}]}}`)
 	event := normalizeEvent("item/completed", raw)
+	if event.AgentEventType != events.AgentFilePatch || event.Path != "/tmp/demo.go" || event.Status != "completed" {
+		t.Fatalf("file change event not normalized: %+v", event)
+	}
 	if event.Text == "" || event.Text[:16] != "--- /tmp/demo.go" {
 		t.Fatalf("file change text not normalized: %+v", event)
 	}
