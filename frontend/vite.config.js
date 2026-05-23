@@ -7,6 +7,10 @@ export default defineConfig({
   server: {
     port: 3568,
     proxy: {
+      '/health': {
+        target: 'http://127.0.0.1:3008',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://127.0.0.1:3008',
         changeOrigin: true,
@@ -15,4 +19,3 @@ export default defineConfig({
     }
   }
 })
-

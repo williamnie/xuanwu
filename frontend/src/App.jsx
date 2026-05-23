@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from './api/client';
+import { getAuthToken } from './api/authToken';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import Issues from './pages/Issues';
@@ -18,6 +19,7 @@ import {
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Loader2, Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
+import AuthGate from './components/AuthGate';
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
@@ -64,6 +66,9 @@ export default function App() {
 
     // 侧边栏折叠状态
     sidebarCollapsed: localStorage.getItem('codex-sidebar-collapsed') === 'true',
+
+    // 远程访问 token 第一阶段：本地保存后才发起 API 请求
+    authReady: Boolean(getAuthToken()),
   }));
 
   const loading = useDataStore(selectLoading);
@@ -79,7 +84,14 @@ export default function App() {
     prefilledStatus,
     theme,
     sidebarCollapsed,
+    authReady,
   } = appState;
+
+  const setAuthReady = useCallback(() => {
+    updateAppState(draft => {
+      draft.authReady = true;
+    });
+  }, [updateAppState]);
 
   const setIsNewIssueOpen = useCallback((open) => {
     updateAppState(draft => {
@@ -149,6 +161,7 @@ export default function App() {
   }, [currentPage, refreshData, selectedIssueId]);
 
   useEffect(() => {
+    if (!authReady) return undefined;
     refreshVisibleData();
     // SSE 是主通道；低频 reconcile 只兜底补偿断线期间错过的事件。
     const slices = getReconcileSlices(currentPage, selectedIssueId);
@@ -156,7 +169,7 @@ export default function App() {
 
     const interval = setInterval(refreshVisibleData, RECONCILE_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [currentPage, refreshVisibleData, selectedIssueId]);
+  }, [authReady, currentPage, refreshVisibleData, selectedIssueId]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -167,6 +180,7 @@ export default function App() {
 
   // 订阅 SSE 实时变更，触发数据刷新
   useEffect(() => {
+    if (!authReady) return undefined;
     const unsubscribe = api.subscribeToEvents(
       (event) => {
         if (ACTIVE_RECONCILE_EVENT_TYPES.has(event.type)) {
@@ -177,7 +191,7 @@ export default function App() {
       () => setBackendOnline(true)
     );
     return () => unsubscribe();
-  }, [refreshVisibleData, setBackendOnline]);
+  }, [authReady, refreshVisibleData, setBackendOnline]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -189,6 +203,15 @@ export default function App() {
   };
 
 
+
+  if (!authReady) {
+    return (
+      <>
+        <ToastContainer />
+        <AuthGate onUnlock={setAuthReady} />
+      </>
+    );
+  }
 
   return (
     <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' ? 'in-sessions-page' : ''}`}>

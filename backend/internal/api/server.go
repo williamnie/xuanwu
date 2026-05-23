@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"io/fs"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ type Server struct {
 	runner           *runner.Runner
 	web              http.Handler
 	codexSessionsDir string
+	authToken        string
 	usageCache       codexUsageCache
 }
 
@@ -44,6 +46,10 @@ func NewServerWithWebDirAndSessionsDir(
 	return s
 }
 
+func (s *Server) SetAuthToken(token string) {
+	s.authToken = strings.TrimSpace(token)
+}
+
 func newWebHandler(webDir string) http.Handler {
 	if webDir != "" {
 		return spaHandler{root: webDir}
@@ -60,7 +66,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if r.URL.Path == "/health" {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
+		if !s.requireAuth(w, r) {
+			return
+		}
 		s.route(w, r)
 		return
 	}
@@ -110,6 +123,40 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeError(w, http.StatusNotFound, "not found")
+}
+
+func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) bool {
+	if s.authToken == "" {
+		return true
+	}
+	token := requestToken(r)
+	if token != "" && constantTimeEqual(token, s.authToken) {
+		return true
+	}
+	writeError(w, http.StatusUnauthorized, "unauthorized")
+	return false
+}
+
+func requestToken(r *http.Request) string {
+	header := strings.TrimSpace(r.Header.Get("Authorization"))
+	if token, ok := bearerToken(header); ok {
+		return token
+	}
+	if cookie, err := r.Cookie("codex_runner_token"); err == nil {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return ""
+}
+
+func bearerToken(header string) (string, bool) {
+	if len(header) < len("Bearer ") || !strings.EqualFold(header[:len("Bearer ")], "Bearer ") {
+		return "", false
+	}
+	return strings.TrimSpace(header[len("Bearer "):]), true
+}
+
+func constantTimeEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 func pathParts(path string) []string {

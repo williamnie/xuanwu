@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearAuthToken } from '../api/authToken';
 import { api } from '../api/client';
 import { sameCronTasks, sameIssueTemplates, sameIssues, sameProjects } from '../utils/stateGuards';
 
@@ -93,7 +94,12 @@ export const useDataStore = create((set, get) => ({
       if (Object.keys(patch).length > 0) {
         set(patch);
       }
-    } catch {
+    } catch (err) {
+      if (err.status === 401) {
+        clearAuthToken();
+        window.location.reload();
+        return;
+      }
       const current = get();
       const patch = {};
       if (current.backendOnline) {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const defaultAddr = "127.0.0.1:3008"
@@ -18,6 +19,8 @@ type commandEnv struct {
 	out    io.Writer
 	errOut io.Writer
 }
+
+type authTokenKey struct{}
 
 func Run(ctx context.Context, args []string, out, errOut io.Writer, opts Options) int {
 	env := commandEnv{client: opts.HTTPClient, env: opts.Env, out: out, errOut: errOut}
@@ -67,7 +70,16 @@ func (e commandEnv) fail(message string) int {
 func (e commandEnv) addCommonFlags(fs *flag.FlagSet) (*string, *bool) {
 	addr := fs.String("addr", e.defaultAddr(), "Codex Issue Runner API address")
 	asJSON := fs.Bool("json", false, "print JSON output")
+	fs.String("token", e.env("CODEX_RUNNER_AUTH_TOKEN"), "Codex Issue Runner API bearer token")
 	return addr, asJSON
+}
+
+func withFlagToken(ctx context.Context, fs *flag.FlagSet) context.Context {
+	flag := fs.Lookup("token")
+	if flag == nil || strings.TrimSpace(flag.Value.String()) == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, authTokenKey{}, flag.Value.String())
 }
 
 func (e commandEnv) defaultAddr() string {

@@ -10,6 +10,8 @@ INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
 DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/app.db}"
+AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
@@ -27,6 +29,8 @@ Useful environment variables:
   CODEX_RUNNER_INSTALL_DIR=~/.local/bin Binary install directory
   CODEX_RUNNER_STATE_DIR=~/.local/state/codex-issue-runner
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
+  CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
+  CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
 HELP
 }
 
@@ -101,7 +105,7 @@ download_binary() {
   curl -fL --retry 3 -o "$archive" "$url"
   LC_ALL=C tar -xzf "$archive" -C "$tmp"
   [ -x "$tmp/codex-issue-runner" ] || fail "release asset does not contain executable binary"
-  mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR"
+  mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   install -m 0755 "$tmp/codex-issue-runner" "$BIN_PATH"
   rm -rf "$tmp"
   log "installed binary: $BIN_PATH"
@@ -110,7 +114,7 @@ download_binary() {
 wait_until_ready() {
   local url="$1"
   for _ in {1..120}; do
-    if curl -fsS "$url/api/projects" >/dev/null 2>&1; then
+    if curl -fsS "$url/health" >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.5
@@ -137,6 +141,7 @@ write_macos_plist() {
     <string>$(xml_escape "$DB_PATH")</string>
     <string>--codex-cmd</string>
     <string>$(xml_escape "$codex_cmd")</string>
+$(auth_token_file_macos_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -156,6 +161,29 @@ write_macos_plist() {
 </dict>
 </plist>
 PLIST
+}
+
+auth_token_file_macos_args() {
+  if [ -n "$AUTH_TOKEN_FILE" ]; then
+    cat <<ARGS
+    <string>--auth-token-file</string>
+    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+ARGS
+  fi
+}
+
+auth_token_file_systemd_args() {
+  if [ -n "$AUTH_TOKEN_FILE" ]; then
+    printf ' --auth-token-file %q' "$AUTH_TOKEN_FILE"
+  fi
+}
+
+write_custom_auth_token_file() {
+  if [ -n "$AUTH_TOKEN" ]; then
+    mkdir -p "$(dirname "$AUTH_TOKEN_FILE")"
+    umask 077
+    printf '%s\n' "$AUTH_TOKEN" > "$AUTH_TOKEN_FILE"
+  fi
 }
 
 install_macos_launchd() {
@@ -192,7 +220,7 @@ Type=simple
 WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
-ExecStart=$BIN_PATH serve --addr $ADDR --db $DB_PATH --codex-cmd $codex_cmd
+ExecStart=$BIN_PATH serve --addr $ADDR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2
 
@@ -218,6 +246,7 @@ main() {
   local os arch
   read -r os arch < <(detect_platform)
   download_binary "$os" "$arch"
+  write_custom_auth_token_file
   case "$os" in
     darwin) install_macos_launchd ;;
     linux) install_linux_systemd ;;

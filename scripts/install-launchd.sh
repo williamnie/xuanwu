@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
 DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$ROOT_DIR/data/app.db}"
+AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$(dirname "$DB_PATH")/auth_token}"
+AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 WEB_DIR="${CODEX_RUNNER_WEB_DIR:-}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$ROOT_DIR/data/logs}"
@@ -39,13 +41,30 @@ ARGS
   fi
 }
 
+auth_token_file_args() {
+  if [ -n "$AUTH_TOKEN_FILE" ]; then
+    cat <<ARGS
+    <string>--auth-token-file</string>
+    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+ARGS
+  fi
+}
+
+write_custom_auth_token_file() {
+  if [ -n "$AUTH_TOKEN" ]; then
+    umask 077
+    printf '%s\n' "$AUTH_TOKEN" > "$AUTH_TOKEN_FILE"
+  fi
+}
+
 if [ -z "$CODEX_CMD" ]; then
   echo "[launchd] codex command not found; set CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex" >&2
   exit 1
 fi
 
 "$ROOT_DIR/scripts/build-release.sh"
-mkdir -p "$(dirname "$DB_PATH")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
+mkdir -p "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
+write_custom_auth_token_file
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -71,6 +90,7 @@ cat > "$PLIST" <<PLIST
     <string>--codex-cmd</string>
     <string>$(xml_escape "$CODEX_CMD")</string>
 $(web_dir_args)
+$(auth_token_file_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -99,7 +119,7 @@ launchctl kickstart -k "$DOMAIN/$LABEL"
 
 URL="$(service_url)"
 for _ in {1..120}; do
-  if curl -fsS "$URL/api/projects" >/dev/null 2>&1; then
+  if curl -fsS "$URL/health" >/dev/null 2>&1; then
     break
   fi
   sleep 0.5

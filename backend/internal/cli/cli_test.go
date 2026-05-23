@@ -88,6 +88,30 @@ func TestIssueStatusPrintsHumanSummary(t *testing.T) {
 	}
 }
 
+func TestIssueStatusSendsAuthTokenFromEnv(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer env-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"id": 7, "project_id": "demo", "title": "Fix it", "status": "todo",
+		})
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"issue", "status", "--id", "7", "--addr", server.URL},
+		&out, &errOut, Options{Env: func(key string) string {
+			if key == "CODEX_RUNNER_AUTH_TOKEN" {
+				return "env-token"
+			}
+			return ""
+		}})
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+}
+
 func TestIssueUpdatePatchesStatusAndError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch || r.URL.Path != "/api/issues/7" {

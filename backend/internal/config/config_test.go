@@ -1,8 +1,14 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParseUsesProvidedArgsWithoutGlobalFlagState(t *testing.T) {
+	t.Setenv("CODEX_RUNNER_AUTH_TOKEN", "")
+	t.Setenv("CODEX_RUNNER_AUTH_TOKEN_FILE", "")
 	cfg, err := Parse([]string{
 		"--addr", "127.0.0.1:3999",
 		"--db", "/tmp/runner.db",
@@ -10,6 +16,8 @@ func TestParseUsesProvidedArgsWithoutGlobalFlagState(t *testing.T) {
 		"--codex-args", "app-server --listen stdio://",
 		"--web-dir", "/tmp/web",
 		"--codex-sessions-dir", "/tmp/sessions",
+		"--auth-token", "custom-token",
+		"--auth-token-file", "/tmp/token",
 	})
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -26,7 +34,54 @@ func TestParseUsesProvidedArgsWithoutGlobalFlagState(t *testing.T) {
 	if cfg.CodexSessionsDir != "/tmp/sessions" {
 		t.Fatalf("codex sessions dir mismatch: %+v", cfg)
 	}
+	if cfg.AuthToken != "custom-token" {
+		t.Fatalf("auth token mismatch: %+v", cfg)
+	}
+	if cfg.AuthTokenFile != "/tmp/token" {
+		t.Fatalf("auth token file mismatch: %+v", cfg)
+	}
 	if got := cfg.CodexArgs; len(got) != 3 || got[0] != "app-server" || got[2] != "stdio://" {
 		t.Fatalf("codex args mismatch: %#v", got)
+	}
+}
+
+func TestParseDefaultsAuthTokenFileFromDBPath(t *testing.T) {
+	t.Setenv("CODEX_RUNNER_AUTH_TOKEN_FILE", "")
+	cfg, err := Parse([]string{"--db", filepath.Join(t.TempDir(), "runner.db")})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.AuthTokenFile != filepath.Join(filepath.Dir(cfg.DBPath), "auth_token") {
+		t.Fatalf("auth token file = %q", cfg.AuthTokenFile)
+	}
+}
+
+func TestResolveAuthTokenUsesProvidedTokenOrGeneratedFile(t *testing.T) {
+	if got, err := ResolveAuthToken(Config{AuthToken: " custom-token "}); err != nil || got != "custom-token" {
+		t.Fatalf("provided token = %q err=%v", got, err)
+	}
+
+	tokenFile := filepath.Join(t.TempDir(), "auth_token")
+	cfg := Config{AuthTokenFile: tokenFile}
+	first, err := ResolveAuthToken(cfg)
+	if err != nil {
+		t.Fatalf("resolve generated token: %v", err)
+	}
+	if len(first) < 32 {
+		t.Fatalf("generated token too short: %q", first)
+	}
+	second, err := ResolveAuthToken(cfg)
+	if err != nil {
+		t.Fatalf("resolve persisted token: %v", err)
+	}
+	if second != first {
+		t.Fatalf("generated token was not persisted: first=%q second=%q", first, second)
+	}
+	info, err := os.Stat(tokenFile)
+	if err != nil {
+		t.Fatalf("stat token file: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("token file mode = %v", info.Mode().Perm())
 	}
 }

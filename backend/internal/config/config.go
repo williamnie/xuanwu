@@ -13,6 +13,8 @@ type Config struct {
 	CodexArgs        []string
 	WebDir           string
 	CodexSessionsDir string
+	AuthToken        string
+	AuthTokenFile    string
 }
 
 func Load() Config {
@@ -31,12 +33,29 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.CodexCmd, "codex-cmd", cfg.CodexCmd, "Codex command path")
 	fs.StringVar(&cfg.WebDir, "web-dir", cfg.WebDir, "static web UI directory")
 	fs.StringVar(&cfg.CodexSessionsDir, "codex-sessions-dir", cfg.CodexSessionsDir, "Codex persisted sessions directory")
+	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "Bearer token for protected API requests; prefer env or token file to avoid shell history")
+	fs.StringVar(&cfg.AuthTokenFile, "auth-token-file", cfg.AuthTokenFile, "File path for generated or persisted API bearer token")
 	codexArgs := fs.String("codex-args", strings.Join(cfg.CodexArgs, " "), "Codex app-server args")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
 	cfg.CodexArgs = strings.Fields(*codexArgs)
+	cfg.AuthToken = strings.TrimSpace(cfg.AuthToken)
+	cfg.AuthTokenFile = strings.TrimSpace(cfg.AuthTokenFile)
+	applyAuthTokenEnv(&cfg)
 	return cfg, nil
+}
+
+func applyAuthTokenEnv(cfg *Config) {
+	if cfg.AuthToken == "" {
+		cfg.AuthToken = strings.TrimSpace(os.Getenv("CODEX_RUNNER_AUTH_TOKEN"))
+	}
+	if cfg.AuthTokenFile == "" {
+		cfg.AuthTokenFile = strings.TrimSpace(os.Getenv("CODEX_RUNNER_AUTH_TOKEN_FILE"))
+	}
+	if cfg.AuthTokenFile == "" {
+		cfg.AuthTokenFile = defaultAuthTokenFile(cfg.DBPath)
+	}
 }
 
 func defaultConfig() Config {

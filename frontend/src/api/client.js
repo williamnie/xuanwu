@@ -4,6 +4,7 @@
  * 这里不做本地假数据或 localStorage 降级：前端展示的数据必须来自 Go 后端。
  * 后端未连接时，请求会直接抛错，由页面显示 DISCONNECTED / 错误态。
  */
+import { authHeader } from './authToken';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -12,12 +13,13 @@ async function request(path, options = {}) {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...authHeader(),
       ...options.headers,
     },
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw await responseError(response);
   }
 
   if (response.status === 204) {
@@ -47,12 +49,19 @@ async function uploadImage(file) {
   formData.append('file', file);
   const response = await fetch(`${API_BASE}/api/uploads/images`, {
     method: 'POST',
+    headers: authHeader(),
     body: formData,
   });
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
+    throw await responseError(response);
   }
   return response.json();
+}
+
+async function responseError(response) {
+  const error = new Error(await readErrorMessage(response));
+  error.status = response.status;
+  return error;
 }
 
 function subscribeToEvents(onEvent, onError, onOpen) {

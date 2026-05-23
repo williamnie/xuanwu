@@ -28,8 +28,8 @@ echo "[status] listening sockets for port $PORT:"
 lsof -nP -iTCP:"$PORT" -sTCP:LISTEN || true
 
 URL="$(service_url)"
-echo "[status] health check: $URL/api/projects"
-if curl -fsS "$URL/api/projects" >/dev/null; then
+echo "[status] health check: $URL/health"
+if curl -fsS "$URL/health" >/dev/null; then
   echo "[status] API OK"
 else
   echo "[status] API not reachable"

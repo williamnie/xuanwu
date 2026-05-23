@@ -21,6 +21,7 @@ func (e commandEnv) createIssue(ctx context.Context, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
+	ctx = withFlagToken(ctx, fs)
 	description, err := readIssueBody(*body, *bodyFile)
 	if err != nil {
 		return e.fail(err.Error())
@@ -52,6 +53,7 @@ func (e commandEnv) getIssue(ctx context.Context, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
+	ctx = withFlagToken(ctx, fs)
 	id, err := parseID(*idRaw)
 	if err != nil {
 		return e.fail(err.Error())
@@ -75,6 +77,7 @@ func (e commandEnv) updateIssue(ctx context.Context, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
+	ctx = withFlagToken(ctx, fs)
 	id, err := parseID(*idRaw)
 	if err != nil {
 		return e.fail(err.Error())
@@ -100,6 +103,7 @@ func (e commandEnv) getIssueLogs(ctx context.Context, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
+	ctx = withFlagToken(ctx, fs)
 	id, err := parseID(*idRaw)
 	if err != nil {
 		return e.fail(err.Error())
@@ -121,6 +125,7 @@ func (e commandEnv) issueAction(ctx context.Context, action string, args []strin
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
+	ctx = withFlagToken(ctx, fs)
 	id, err := parseID(*idRaw)
 	if err != nil {
 		return e.fail(err.Error())

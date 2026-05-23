@@ -15,6 +15,7 @@ func getJSON(ctx context.Context, client *http.Client, addr, path string, out an
 	if err != nil {
 		return err
 	}
+	setAuthHeader(req)
 	return doJSON(client, req, out)
 }
 
@@ -28,6 +29,7 @@ func postJSON(ctx context.Context, client *http.Client, addr, path string, in, o
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setAuthHeader(req)
 	return doJSON(client, req, out)
 }
 
@@ -41,7 +43,16 @@ func patchJSON(ctx context.Context, client *http.Client, addr, path string, in, 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setAuthHeader(req)
 	return doJSON(client, req, out)
+}
+
+func setAuthHeader(req *http.Request) {
+	if value := req.Context().Value(authTokenKey{}); value != nil {
+		if token, ok := value.(string); ok && strings.TrimSpace(token) != "" {
+			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+		}
+	}
 }
 
 func doJSON(client *http.Client, req *http.Request, out any) error {

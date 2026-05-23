@@ -59,6 +59,11 @@ func runServer(args []string) {
 	cronScheduler.Start(context.Background())
 	startSessionWatcher(context.Background(), cfg.CodexSessionsDir, bus)
 	srv := api.NewServerWithWebDirAndSessionsDir(st, bus, r, cfg.WebDir, cfg.CodexSessionsDir)
+	authToken, err := config.ResolveAuthToken(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	srv.SetAuthToken(authToken)
 	go srv.WarmCodexUsageCache(context.Background())
 	log.Printf("Codex Issue Runner API listening on http://%s", cfg.Addr)
 	if err := http.ListenAndServe(cfg.Addr, srv); err != nil {

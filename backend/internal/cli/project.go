@@ -29,6 +29,7 @@ func (e commandEnv) createProject(ctx context.Context, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
+	ctx = withFlagToken(ctx, fs)
 	payload, err := projectPayload(*id, *name, *cwd, *autoRun, *model, *approval, *sandbox)
 	if err != nil {
 		return e.fail(err.Error())
