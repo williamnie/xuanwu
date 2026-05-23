@@ -15,6 +15,7 @@ import SessionComposer from './sessions/SessionComposer';
 import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
+import { isRenderableToolItem, parseLiveSessionEvents, toolDisplayForItem } from './sessions/sessionTranscriptItems';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -820,7 +821,7 @@ function TurnItem({ turn }) {
       } else {
         elements.push(<AgentMessageBubble key={item.id} item={item} />);
       }
-    } else {
+    } else if (isRenderableToolItem(item)) {
       currentTools.push(item);
     }
   }
@@ -989,9 +990,15 @@ function ToolDetailItem({ tool }) {
     );
   }
 
+  const display = toolDisplayForItem(tool);
+  if (!display) return null;
+
   return (
-    <div className="tool-detail-item unknown">
-      <code>{tool.type}: {tool.text}</code>
+    <div className={`tool-detail-item ${display.kind || 'generic'}`}>
+      <div className="generic-tool-card">
+        <div className="generic-tool-title">{display.title}</div>
+        <pre className="generic-tool-body">{display.body}</pre>
+      </div>
     </div>
   );
 }
@@ -1025,57 +1032,7 @@ function AgentMessageBubble({ item }) {
 }
 
 function LiveTurnItem({ liveEvents }) {
-  const parsed = useMemo(() => {
-    let agentMessageText = '';
-    const tools = [];
-    let activeTool = null;
-    
-    for (const event of liveEvents) {
-      const method = event.method;
-      const text = event.text || '';
-      
-      if (method === 'item/agentMessage/delta') {
-        agentMessageText += text;
-      } else if (method === 'item/commandExecution/outputDelta') {
-        if (activeTool && activeTool.type === 'commandExecution') {
-          activeTool.text += text;
-        }
-      } else if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') {
-        if (activeTool && activeTool.type === 'fileChange') {
-          activeTool.text += text;
-        }
-      } else if (method === 'item/started') {
-        let toolType = 'tool';
-        let command = '';
-        try {
-          const payload = JSON.parse(event.payload || '{}');
-          const item = payload.item || {};
-          toolType = item.type || 'tool';
-          command = item.command || '';
-        } catch {
-          if (event.payload?.includes('commandExecution')) toolType = 'commandExecution';
-          if (event.payload?.includes('fileChange')) toolType = 'fileChange';
-        }
-        
-        activeTool = {
-          type: toolType,
-          command: command,
-          text: '',
-          status: 'inProgress',
-        };
-        tools.push(activeTool);
-      } else if (method === 'item/completed') {
-        if (activeTool) {
-          activeTool.status = 'completed';
-        }
-      }
-    }
-    
-    return {
-      tools,
-      agentMessageText,
-    };
-  }, [liveEvents]);
+  const parsed = useMemo(() => parseLiveSessionEvents(liveEvents), [liveEvents]);
 
   const { tools, agentMessageText } = parsed;
 

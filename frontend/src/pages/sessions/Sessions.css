@@ -784,3 +784,35 @@
     min-height: 320px;
   }
 }
+
+.generic-tool-card {
+  width: 100%;
+  max-width: 800px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.generic-tool-title {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.generic-tool-body {
+  margin: 0;
+  padding: 12px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
