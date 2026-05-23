@@ -41,6 +41,13 @@ func TestProjectAPIFailurePaths(t *testing.T) {
 			path: "/api/projects", wantStatus: http.StatusMethodNotAllowed,
 			wantBody: "method not allowed",
 		},
+		{
+			name:   "rejects enabling auto-run for unsupported provider",
+			method: http.MethodPatch, path: "/api/projects/unsupported",
+			body: `{"auto_run":1}`, contentType: "application/json",
+			newServer:  newUnsupportedProviderProjectServer,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+		},
 	})
 }
 
@@ -61,6 +68,20 @@ func TestIssueAPIFailurePaths(t *testing.T) {
 			path: "/api/issues", wantStatus: http.StatusMethodNotAllowed,
 			wantBody: "method not allowed",
 		},
+		{
+			name:   "rejects todo create for unsupported project provider",
+			method: http.MethodPost, path: "/api/issues",
+			body:        `{"project_id":"unsupported","title":"blocked","status":"todo"}`,
+			contentType: "application/json", newServer: newUnsupportedProviderProjectServer,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+		},
+		{
+			name:   "rejects enqueue for unsupported project provider",
+			method: http.MethodPost, path: "/api/issues/1/enqueue",
+			body: `{}`, contentType: "application/json",
+			newServer:  newUnsupportedProviderIssueServer,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+		},
 	})
 }
 
@@ -80,6 +101,13 @@ func TestSessionAPIFailurePaths(t *testing.T) {
 			name: "rejects unsupported collection method", method: http.MethodDelete,
 			path: "/api/sessions", wantStatus: http.StatusMethodNotAllowed,
 			wantBody: "method not allowed",
+		},
+		{
+			name:   "rejects unsupported project provider for session create",
+			method: http.MethodPost, path: "/api/sessions",
+			body:        `{"project_id":"unsupported","prompt":"hello"}`,
+			contentType: "application/json", newServer: newUnsupportedProviderProjectServer,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
 		},
 	})
 }
@@ -171,4 +199,28 @@ func newSessionNotFoundTestServer(t *testing.T) *Server {
 
 func (c sessionNotFoundCodex) ThreadResume(context.Context, string) (codex.Session, error) {
 	return codex.Session{}, store.ErrNotFound
+}
+
+func newUnsupportedProviderProjectServer(t *testing.T) *Server {
+	t.Helper()
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "unsupported", "cwd": t.TempDir(),
+	})
+	provider := "claude"
+	if _, err := srv.store.UpdateProject(
+		context.Background(), project.ID, store.ProjectPatch{Provider: &provider},
+	); err != nil {
+		t.Fatalf("seed unsupported provider: %v", err)
+	}
+	return srv
+}
+
+func newUnsupportedProviderIssueServer(t *testing.T) *Server {
+	t.Helper()
+	srv := newUnsupportedProviderProjectServer(t)
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "unsupported", "title": "blocked", "status": store.StatusTriage,
+	})
+	return srv
 }

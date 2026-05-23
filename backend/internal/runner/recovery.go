@@ -72,6 +72,9 @@ func (r *Runner) resumeIssueTurn(ctx context.Context, issue store.Issue) error {
 	if err != nil {
 		return err
 	}
+	if err := ensureCodexProjectProvider(project); err != nil {
+		return err
+	}
 	eventsCh, unsubscribe, session, err := r.prepareRecoveredThread(ctx, issue.CodexThreadID)
 	if err != nil {
 		return err

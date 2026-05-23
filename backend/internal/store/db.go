@@ -95,13 +95,35 @@ func (s *Store) migrateProjectColumns() error {
 	if err != nil {
 		return err
 	}
+	if !columns["provider"] {
+		_, err := s.db.Exec(`alter table projects add column provider text not null default 'codex'`)
+		if err != nil {
+			return fmt.Errorf("migrate projects.provider: %w", err)
+		}
+	}
+	if !columns["provider_config_json"] {
+		_, err := s.db.Exec(`alter table projects add column provider_config_json text not null default '{}'`)
+		if err != nil {
+			return fmt.Errorf("migrate projects.provider_config_json: %w", err)
+		}
+	}
 	if !columns["sort_order"] {
 		_, err := s.db.Exec(`alter table projects add column sort_order integer not null default 0`)
 		if err != nil {
 			return fmt.Errorf("migrate projects.sort_order: %w", err)
 		}
 	}
+	if err := s.backfillProjectProvider(); err != nil {
+		return err
+	}
 	return s.backfillProjectSortOrder()
+}
+
+func (s *Store) backfillProjectProvider() error {
+	_, err := s.db.Exec(`update projects set
+		provider=case when provider='' then 'codex' else provider end,
+		provider_config_json=case when provider_config_json='' then '{}' else provider_config_json end`)
+	return err
 }
 
 func (s *Store) backfillProjectSortOrder() error {

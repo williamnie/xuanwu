@@ -41,9 +41,10 @@ func (s *Store) CreateProject(ctx context.Context, p Project) (Project, error) {
 	}
 	p.SortOrder = nextOrder
 	_, err = s.db.ExecContext(ctx, `insert into projects
-		(id, name, cwd, auto_run, model, approval_policy, sandbox, sort_order, created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Name, p.CWD, p.AutoRun, p.Model, p.ApprovalPolicy, p.Sandbox, p.SortOrder, t, t)
+		(id, name, cwd, provider, provider_config_json, auto_run, model, approval_policy, sandbox, sort_order, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Name, p.CWD, p.Provider, p.ProviderConfig, p.AutoRun, p.Model,
+		p.ApprovalPolicy, p.Sandbox, p.SortOrder, t, t)
 	if err != nil {
 		return Project{}, err
 	}
@@ -66,9 +67,11 @@ func (s *Store) UpdateProject(ctx context.Context, id string, patch ProjectPatch
 	}
 	patch = applyProjectPatchDefaults(&p, patch)
 	applyProjectPatch(&p, patch)
-	_, err = s.db.ExecContext(ctx, `update projects set name=?, cwd=?, auto_run=?,
+	_, err = s.db.ExecContext(ctx, `update projects set name=?, cwd=?, provider=?,
+		provider_config_json=?, auto_run=?,
 		model=?, approval_policy=?, sandbox=?, updated_at=? where id=?`,
-		p.Name, p.CWD, p.AutoRun, p.Model, p.ApprovalPolicy, p.Sandbox, now(), id)
+		p.Name, p.CWD, p.Provider, p.ProviderConfig, p.AutoRun,
+		p.Model, p.ApprovalPolicy, p.Sandbox, now(), id)
 	if err != nil {
 		return Project{}, err
 	}
@@ -148,6 +151,8 @@ func (s *Store) DeleteProject(ctx context.Context, id string) error {
 
 func applyProjectDefaults(p *Project) {
 	p.CWD = strings.TrimSpace(p.CWD)
+	p.Provider = normalizeProjectProvider(p.Provider)
+	p.ProviderConfig = normalizeProjectProviderConfig(p.ProviderConfig)
 	if strings.TrimSpace(p.Name) == "" {
 		p.Name = projectNameFromCWD(p.CWD)
 	}
@@ -171,6 +176,14 @@ func applyProjectPatchDefaults(p *Project, patch ProjectPatch) ProjectPatch {
 		model := normalizeProjectModel(*patch.Model)
 		patch.Model = &model
 	}
+	if patch.Provider != nil {
+		provider := normalizeProjectProvider(*patch.Provider)
+		patch.Provider = &provider
+	}
+	if patch.ProviderConfig != nil {
+		config := normalizeProjectProviderConfig(*patch.ProviderConfig)
+		patch.ProviderConfig = &config
+	}
 	return patch
 }
 
@@ -180,6 +193,12 @@ func applyProjectPatch(p *Project, patch ProjectPatch) {
 	}
 	if patch.CWD != nil {
 		p.CWD = strings.TrimSpace(*patch.CWD)
+	}
+	if patch.Provider != nil {
+		p.Provider = normalizeProjectProvider(*patch.Provider)
+	}
+	if patch.ProviderConfig != nil {
+		p.ProviderConfig = normalizeProjectProviderConfig(*patch.ProviderConfig)
 	}
 	if patch.AutoRun != nil {
 		p.AutoRun = *patch.AutoRun
@@ -204,7 +223,8 @@ func (s *Store) nextProjectSortOrder(ctx context.Context) (int, error) {
 	return maxOrder + 1, nil
 }
 
-const projectSelect = `select p.id, p.name, p.cwd, p.auto_run, p.model, p.approval_policy,
+const projectSelect = `select p.id, p.name, p.cwd, p.provider, p.provider_config_json,
+	p.auto_run, p.model, p.approval_policy,
 	p.sandbox, p.sort_order, p.created_at, p.updated_at,
 	h.reason, h.message, h.hold_since, h.next_check_at, h.last_check_at, h.last_check_error
 	from projects p left join project_holds h on h.project_id=p.id`
@@ -224,4 +244,20 @@ func normalizeProjectModel(model string) string {
 		return "codex-default"
 	}
 	return model
+}
+
+func normalizeProjectProvider(provider string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		return ProviderCodex
+	}
+	return provider
+}
+
+func normalizeProjectProviderConfig(config string) string {
+	config = strings.TrimSpace(config)
+	if config == "" {
+		return "{}"
+	}
+	return config
 }

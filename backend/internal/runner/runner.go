@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -66,6 +67,9 @@ func (r *Runner) StartProject(projectID string) error {
 		})
 		return nil
 	}
+	if err := ensureCodexProjectProvider(project); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	if _, ok := r.loops[projectID]; ok {
 		r.mu.Unlock()
@@ -77,6 +81,13 @@ func (r *Runner) StartProject(projectID string) error {
 	go r.loop(projectID, stop)
 	r.bus.Publish(events.AppEvent{Type: "runner.started", ProjectID: projectID})
 	return nil
+}
+
+func ensureCodexProjectProvider(project store.Project) error {
+	if project.Provider == "" || project.Provider == store.ProviderCodex {
+		return nil
+	}
+	return fmt.Errorf("project %s provider %q 暂不支持，当前只支持 codex", project.ID, project.Provider)
 }
 
 func (r *Runner) StopProject(projectID string) {

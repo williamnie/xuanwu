@@ -14,8 +14,8 @@ type scanner interface {
 func scanProject(row scanner) (Project, error) {
 	var p Project
 	var holdReason, holdMessage, holdSince, nextCheckAt, lastCheckAt, lastCheckError sql.NullString
-	err := row.Scan(&p.ID, &p.Name, &p.CWD, &p.AutoRun, &p.Model,
-		&p.ApprovalPolicy, &p.Sandbox, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
+	err := row.Scan(&p.ID, &p.Name, &p.CWD, &p.Provider, &p.ProviderConfig,
+		&p.AutoRun, &p.Model, &p.ApprovalPolicy, &p.Sandbox, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
 		&holdReason, &holdMessage, &holdSince, &nextCheckAt, &lastCheckAt, &lastCheckError)
 	if err == nil {
 		applyProjectDefaults(&p)

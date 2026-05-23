@@ -13,6 +13,21 @@
 
 Go 后端启动时会创建 Codex adapter，但不会立刻拉起 Codex app-server；第一次需要 Codex 能力时才 lazy start。
 
+## 项目级 provider 配置 v1
+
+`projects` 表保存项目级 provider 选择，v1 字段为：
+
+- `provider`：非空，默认 `codex`。
+- `provider_config_json`：非空，默认 `{}`，为后续 provider runtime 配置预留。
+
+现阶段只实现 Codex provider。旧数据库打开时会自动补齐这两个字段，已有项目迁移后等价于 `provider=codex`，`project_id -> cwd` 的确定性路由不变。
+`model`、`approval_policy`、`sandbox` 暂时仍作为 shared runtime defaults 保留在项目上，不拆分 provider-specific schema。
+
+如果某个 project 被手工改成非 `codex` provider：
+
+- `POST /api/sessions` 传入该 `project_id` 会返回“provider 暂不支持”，不会创建假 session。
+- issue runner / auto-run 启动会明确返回或记录 unsupported provider 错误，不会假装用 Codex 执行。
+
 默认配置来自 `backend/internal/config/config.go`：
 
 ```txt
@@ -180,7 +195,7 @@ HTTP API 与 Codex RPC 对应关系：
 | `POST /api/sessions/{threadId}/messages` | `StartSessionTurn` | `thread/resume` + `turn/start` |
 | `POST /api/sessions/{threadId}/interrupt` | `InterruptSession` | `turn/interrupt` |
 
-Session 创建时可以指定 `project_id`，后端会读取 project 的 `cwd/model/approval_policy/sandbox` 作为默认 Codex 配置；也可以直接传 `cwd/model/reasoning_effort/approval_policy/sandbox` 覆盖。
+Session 创建时可以指定 `project_id`，后端会读取 project 的 `provider/cwd/model/approval_policy/sandbox` 作为默认配置；v1 仅支持 `provider=codex`，也可以直接传 `cwd/model/reasoning_effort/approval_policy/sandbox` 覆盖 Codex runtime 参数。
 
 ## 事件流与日志
 

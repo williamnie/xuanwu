@@ -4,6 +4,7 @@ import {
   APPROVAL_OPTIONS,
   REASONING_EFFORT_OPTIONS,
   SANDBOX_OPTIONS,
+  providerLabel,
   modelLabel,
   supportedEffortValues,
 } from './sessionOptions';
@@ -77,7 +78,11 @@ function ProjectFields({ projects, projectId, cwd, selectedProject, onProjectCha
         {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
       </select>
       <input className="form-control" value={cwd} onChange={(e) => onCwdChange(e.target.value)} placeholder="/absolute/project/path" />
-      {selectedProject && <small>默认带入项目配置，可在下方对本次 session 覆盖。</small>}
+      {selectedProject && (
+        <small>
+          Provider: {providerLabel(selectedProject.provider)}；默认带入项目配置，可在下方对本次 session 覆盖。
+        </small>
+      )}
     </section>
   );
 }

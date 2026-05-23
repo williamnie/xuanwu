@@ -147,6 +147,9 @@ func (r *Runner) sessionProject(ctx context.Context, id string) (*store.Project,
 	if err != nil {
 		return nil, err
 	}
+	if err := ensureCodexProjectProvider(project); err != nil {
+		return nil, err
+	}
 	return &project, nil
 }
 

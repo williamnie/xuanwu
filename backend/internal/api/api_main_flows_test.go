@@ -16,14 +16,17 @@ func TestProjectAPIReadUpdateFlow(t *testing.T) {
 	if created.ID != "demo" {
 		t.Fatalf("unexpected created project: %+v", created)
 	}
+	if created.Provider != store.ProviderCodex {
+		t.Fatalf("project provider = %q, want codex", created.Provider)
+	}
 	patched := patchJSON[store.Project](t, srv, "/api/projects/demo", map[string]any{
-		"name": "Demo Renamed",
+		"name": "Demo Renamed", "provider": "codex",
 	})
-	if patched.Name != "Demo Renamed" {
+	if patched.Name != "Demo Renamed" || patched.Provider != store.ProviderCodex {
 		t.Fatalf("unexpected patched project: %+v", patched)
 	}
 	got := getJSON[store.Project](t, srv, "/api/projects/demo")
-	if got.ID != "demo" || got.Name != "Demo Renamed" {
+	if got.ID != "demo" || got.Name != "Demo Renamed" || got.Provider != store.ProviderCodex {
 		t.Fatalf("unexpected fetched project: %+v", got)
 	}
 }

@@ -19,6 +19,22 @@ export const SANDBOX_OPTIONS = [
   { value: 'danger-full-access', label: 'Danger full access' },
 ];
 
+export const PROVIDER_OPTIONS = [
+  { value: 'codex', label: 'Codex', enabled: true },
+  { value: 'claude', label: 'Claude Code（未启用）', enabled: false },
+  { value: 'opencode', label: 'opencode（未启用）', enabled: false },
+  { value: 'kimicode', label: 'Kimi Code（未启用）', enabled: false },
+];
+
+export function providerValue(project) {
+  return project?.provider || '';
+}
+
+export function providerLabel(value) {
+  const option = PROVIDER_OPTIONS.find((item) => item.value === value);
+  return option?.label || value || '未配置';
+}
+
 export function modelValueFromProject(project) {
   if (!project || !project.model || project.model === 'codex-default') {
     return '';
@@ -28,6 +44,7 @@ export function modelValueFromProject(project) {
 
 export function defaultSessionSettings(project) {
   return {
+    provider: providerValue(project),
     model: modelValueFromProject(project),
     reasoningEffort: '',
     approvalPolicy: project?.approval_policy || 'never',

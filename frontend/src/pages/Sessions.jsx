@@ -12,7 +12,12 @@ import { selectProjects, selectSetProjects, useDataStore } from '../store/dataSt
 import ApprovalDialog from './sessions/ApprovalDialog';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
 import SessionComposer from './sessions/SessionComposer';
-import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
+import {
+  defaultMessageSettings,
+  defaultSessionSettings,
+  modelLabel,
+  providerLabel as projectProviderLabel,
+} from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessions/sessionTranscriptItems';
@@ -618,6 +623,14 @@ export default function Sessions() {
                     {projects.map((project) => (
                       <option key={project.id} value={project.id}>{project.name}</option>
                     ))}
+                  </select>
+                </div>
+
+                <div className="bottom-tag-select">
+                  <SlidersHorizontal size={13} />
+                  <span>Provider: {projectProviderLabel(sessionSettings.provider)}</span>
+                  <select value={sessionSettings.provider} disabled>
+                    <option value={sessionSettings.provider}>{projectProviderLabel(sessionSettings.provider)}</option>
                   </select>
                 </div>
 

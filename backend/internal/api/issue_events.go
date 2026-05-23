@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
@@ -25,7 +26,12 @@ func (s *Server) recordIssueEvent(r *http.Request, issueID int64, typ string, pa
 func (s *Server) kickAutoProject(r *http.Request, projectID string) {
 	project, err := s.store.GetProject(r.Context(), projectID)
 	if err == nil && project.AutoRun == 1 {
-		_ = s.runner.StartProject(projectID)
+		if err := s.runner.StartProject(projectID); err != nil {
+			s.bus.Publish(events.AppEvent{
+				Type: "runner.start_failed", ProjectID: projectID,
+				Error: err.Error(), CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			})
+		}
 	}
 }
 

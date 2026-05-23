@@ -36,6 +36,8 @@ type projectDTO struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	CWD            string `json:"cwd"`
+	Provider       string `json:"provider,omitempty"`
+	ProviderConfig string `json:"provider_config_json,omitempty"`
 	AutoRun        int    `json:"auto_run"`
 	Model          string `json:"model,omitempty"`
 	ApprovalPolicy string `json:"approval_policy,omitempty"`

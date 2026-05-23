@@ -2,6 +2,8 @@ const PROJECT_FIELDS = [
   'id',
   'name',
   'cwd',
+  'provider',
+  'provider_config_json',
   'auto_run',
   'model',
   'approval_policy',

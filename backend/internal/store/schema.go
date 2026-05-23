@@ -5,6 +5,8 @@ create table if not exists projects (
   id text primary key,
   name text not null,
   cwd text not null unique,
+  provider text not null default 'codex',
+  provider_config_json text not null default '{}',
   auto_run integer not null default 0,
   model text not null default '',
   approval_policy text not null default 'never',

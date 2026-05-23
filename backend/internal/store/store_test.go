@@ -170,15 +170,21 @@ func TestProjectNameAndModelDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	if project.Name != "mindnote" || project.Model != "codex-default" {
+	if project.Name != "mindnote" || project.Model != "codex-default" ||
+		project.Provider != ProviderCodex || project.ProviderConfig != "{}" {
 		t.Fatalf("defaults not applied: %+v", project)
 	}
 	nextCWD := filepath.Join(t.TempDir(), "movo-web")
-	updated, err := st.UpdateProject(ctx, "mindnote", ProjectPatch{CWD: &nextCWD})
+	provider := "CLAUDE"
+	providerConfig := `{"runtime":"future"}`
+	updated, err := st.UpdateProject(ctx, "mindnote", ProjectPatch{
+		CWD: &nextCWD, Provider: &provider, ProviderConfig: &providerConfig,
+	})
 	if err != nil {
 		t.Fatalf("update project: %v", err)
 	}
-	if updated.Name != "movo-web" || updated.CWD != nextCWD {
+	if updated.Name != "movo-web" || updated.CWD != nextCWD ||
+		updated.Provider != "claude" || updated.ProviderConfig != providerConfig {
 		t.Fatalf("path-derived name not updated: %+v", updated)
 	}
 }
@@ -520,6 +526,13 @@ func TestOpenMigratesExistingIssuesWithTemplates(t *testing.T) {
 	issue, err := st.GetIssue(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("get migrated issue: %v", err)
+	}
+	project, err := st.GetProject(context.Background(), "demo")
+	if err != nil {
+		t.Fatalf("get migrated project: %v", err)
+	}
+	if project.Provider != ProviderCodex || project.ProviderConfig != "{}" {
+		t.Fatalf("legacy project provider not backfilled: %+v", project)
 	}
 	if issue.TemplateID != "" || issue.PromptTemplate != "" {
 		t.Fatalf("legacy issue should keep empty snapshot: %+v", issue)

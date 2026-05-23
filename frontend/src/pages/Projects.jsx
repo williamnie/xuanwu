@@ -20,9 +20,11 @@ import {
   X,
   AlertCircle
 } from 'lucide-react';
+import { PROVIDER_OPTIONS, providerLabel } from './sessions/sessionOptions';
 
 const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
+const DEFAULT_PROVIDER = 'codex';
 
 const CODEX_MODEL_OPTIONS = [
   { value: DEFAULT_CODEX_MODEL, label: '系统默认模型' },
@@ -63,6 +65,8 @@ export default function Projects() {
     modalMode: 'create', // 'create' | 'edit'
     selectedProjectId: null,
     formCwd: '',
+    formProvider: DEFAULT_PROVIDER,
+    formProviderConfig: '{}',
     formAutoRun: false,
     formModel: DEFAULT_CODEX_MODEL,
     formApproval: 'never',
@@ -77,6 +81,8 @@ export default function Projects() {
     modalMode,
     selectedProjectId,
     formCwd,
+    formProvider,
+    formProviderConfig,
     formAutoRun,
     formModel,
     formApproval,
@@ -123,6 +129,8 @@ export default function Projects() {
       draft.modalMode = 'create';
       draft.selectedProjectId = null;
       draft.formCwd = '';
+      draft.formProvider = DEFAULT_PROVIDER;
+      draft.formProviderConfig = '{}';
       draft.formAutoRun = false;
       draft.formModel = DEFAULT_CODEX_MODEL;
       draft.formApproval = 'never';
@@ -137,6 +145,8 @@ export default function Projects() {
       draft.modalMode = 'edit';
       draft.selectedProjectId = proj.id;
       draft.formCwd = proj.cwd;
+      draft.formProvider = proj.provider;
+      draft.formProviderConfig = proj.provider_config_json || '{}';
       draft.formAutoRun = proj.auto_run === 1;
       draft.formModel = normalizeCodexModel(proj.model || DEFAULT_CODEX_MODEL);
       draft.formApproval = proj.approval_policy || 'never';
@@ -159,6 +169,8 @@ export default function Projects() {
     const payload = {
       name: projectName,
       cwd: formCwd,
+      provider: formProvider,
+      provider_config_json: formProviderConfig,
       auto_run: formAutoRun ? 1 : 0,
       model: normalizeCodexModel(formModel),
       approval_policy: formApproval,
@@ -366,6 +378,11 @@ export default function Projects() {
                     </div>
                   </div>
 
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    <span>Provider</span>
+                    <strong style={{ color: 'var(--text-primary)' }}>{providerLabel(proj.provider)}</strong>
+                  </div>
+
                   {proj.hold && (
                     <div style={{ border: '1px solid rgba(245, 158, 11, 0.25)', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: '8px', padding: '8px 10px', fontSize: '0.72rem', lineHeight: 1.45 }}>
                       <strong>Runner hold</strong>
@@ -469,6 +486,24 @@ export default function Projects() {
                 />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   展示名会自动使用路径最后一级：{formCwd.trim() ? projectNameFromPath(formCwd) : '—'}
+                </span>
+              </div>
+
+              <div className="form-group">
+                <label>Provider</label>
+                <select
+                  className="form-control"
+                  value={formProvider}
+                  onChange={(e) => setFormField('formProvider', e.target.value)}
+                >
+                  {PROVIDER_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value} disabled={!option.enabled}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  v1 仅启用 Codex；其他 provider 会被明确阻止运行。
                 </span>
               </div>
 

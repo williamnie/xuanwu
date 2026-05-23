@@ -62,6 +62,9 @@ func (s *Server) createIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
+	if issue.Status == store.StatusTodo && !s.ensureIssueProjectRunnable(w, r, issue.ProjectID) {
+		return
+	}
 	created, err := s.store.CreateIssue(r.Context(), issue)
 	if err != nil {
 		handleErr(w, err)
@@ -78,6 +81,20 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 	if err := decodeJSON(r, &patch); err != nil {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
+	}
+	if patch.Status != nil && *patch.Status == store.StatusTodo {
+		current := before
+		if current.ID == 0 {
+			var err error
+			current, err = s.store.GetIssue(r.Context(), id)
+			if err != nil {
+				handleErr(w, err)
+				return
+			}
+		}
+		if !s.ensureIssueProjectRunnable(w, r, current.ProjectID) {
+			return
+		}
 	}
 	updated, err := s.store.UpdateIssue(r.Context(), id, patch)
 	if err != nil {
@@ -178,6 +195,14 @@ func (s *Server) runIssueAction(w http.ResponseWriter, r *http.Request, id int64
 }
 
 func (s *Server) setIssueQueued(w http.ResponseWriter, r *http.Request, id int64) {
+	current, err := s.store.GetIssue(r.Context(), id)
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
+	if !s.ensureIssueProjectRunnable(w, r, current.ProjectID) {
+		return
+	}
 	issue, err := s.store.UpdateIssue(r.Context(), id, store.IssuePatch{
 		Status: ptr(store.StatusTodo), Error: ptr(""), CodexThreadID: ptr(""), CodexTurnID: ptr(""),
 	})
@@ -188,6 +213,19 @@ func (s *Server) setIssueQueued(w http.ResponseWriter, r *http.Request, id int64
 	s.recordIssueEvent(r, id, "issue.status_changed", map[string]string{"status": store.StatusTodo})
 	s.kickAutoProject(r, issue.ProjectID)
 	writeJSON(w, http.StatusOK, issue)
+}
+
+func (s *Server) ensureIssueProjectRunnable(w http.ResponseWriter, r *http.Request, projectID string) bool {
+	project, err := s.store.GetProject(r.Context(), projectID)
+	if err != nil {
+		handleErr(w, err)
+		return false
+	}
+	if project.Provider != store.ProviderCodex {
+		writeError(w, http.StatusBadRequest, "project "+project.ID+" provider \""+project.Provider+"\" 暂不支持，当前只支持 codex")
+		return false
+	}
+	return true
 }
 
 func (s *Server) cancelIssue(w http.ResponseWriter, r *http.Request, id int64) {

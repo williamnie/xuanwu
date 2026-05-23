@@ -24,6 +24,10 @@ func (r *Runner) runIssue(issue store.Issue) {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
+	if err := ensureCodexProjectProvider(project); err != nil {
+		r.failIssue(ctx, issue.ID, err.Error())
+		return
+	}
 	if err := r.startCodexTurn(ctx, issue, project); err != nil {
 		var holdErr runnerHoldError
 		if errors.As(err, &holdErr) {

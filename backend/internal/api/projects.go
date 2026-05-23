@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -90,13 +91,20 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
+	if p.AutoRun == 1 && normalizedProjectProvider(p.Provider) != store.ProviderCodex {
+		writeError(w, http.StatusBadRequest, "project "+p.ID+" provider \""+p.Provider+"\" 暂不支持，当前只支持 codex")
+		return
+	}
 	created, err := s.store.CreateProject(r.Context(), p)
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
 	if created.AutoRun == 1 {
-		_ = s.runner.StartProject(created.ID)
+		if err := s.runner.StartProject(created.ID); err != nil {
+			handleErr(w, err)
+			return
+		}
 	}
 	created.LoopStatus = s.runner.LoopStatus(created.ID)
 	writeJSON(w, http.StatusCreated, created)
@@ -108,14 +116,57 @@ func (s *Server) patchProject(w http.ResponseWriter, r *http.Request, id string)
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
+	if !s.projectPatchCanAutoRun(w, r, id, patch) {
+		return
+	}
 	updated, err := s.store.UpdateProject(r.Context(), id, patch)
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
-	s.applyAutoRun(id, updated.AutoRun)
+	if err := s.applyAutoRun(id, updated.AutoRun); err != nil {
+		handleErr(w, err)
+		return
+	}
 	updated.LoopStatus = s.runner.LoopStatus(id)
 	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) projectPatchCanAutoRun(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	patch store.ProjectPatch,
+) bool {
+	if patch.AutoRun == nil && patch.Provider == nil {
+		return true
+	}
+	current, err := s.store.GetProject(r.Context(), id)
+	if err != nil {
+		handleErr(w, err)
+		return false
+	}
+	provider := current.Provider
+	if patch.Provider != nil {
+		provider = *patch.Provider
+	}
+	autoRun := current.AutoRun
+	if patch.AutoRun != nil {
+		autoRun = *patch.AutoRun
+	}
+	if autoRun == 1 && normalizedProjectProvider(provider) != store.ProviderCodex {
+		writeError(w, http.StatusBadRequest, "project "+id+" provider \""+provider+"\" 暂不支持，当前只支持 codex")
+		return false
+	}
+	return true
+}
+
+func normalizedProjectProvider(provider string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		return store.ProviderCodex
+	}
+	return provider
 }
 
 func (s *Server) handleProjectLoop(w http.ResponseWriter, r *http.Request, id, action string) {
@@ -195,10 +246,10 @@ func (s *Server) attachLoopStatus(projects []store.Project) {
 	}
 }
 
-func (s *Server) applyAutoRun(id string, autoRun int) {
+func (s *Server) applyAutoRun(id string, autoRun int) error {
 	if autoRun == 1 {
-		_ = s.runner.StartProject(id)
-		return
+		return s.runner.StartProject(id)
 	}
 	s.runner.StopProject(id)
+	return nil
 }

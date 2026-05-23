@@ -24,6 +24,8 @@ type Project struct {
 	ID             string       `json:"id"`
 	Name           string       `json:"name"`
 	CWD            string       `json:"cwd"`
+	Provider       string       `json:"provider"`
+	ProviderConfig string       `json:"provider_config_json"`
 	AutoRun        int          `json:"auto_run"`
 	Model          string       `json:"model"`
 	ApprovalPolicy string       `json:"approval_policy"`
@@ -47,6 +49,8 @@ type ProjectHold struct {
 type ProjectPatch struct {
 	Name           *string `json:"name"`
 	CWD            *string `json:"cwd"`
+	Provider       *string `json:"provider"`
+	ProviderConfig *string `json:"provider_config_json"`
 	AutoRun        *int    `json:"auto_run"`
 	Model          *string `json:"model"`
 	ApprovalPolicy *string `json:"approval_policy"`

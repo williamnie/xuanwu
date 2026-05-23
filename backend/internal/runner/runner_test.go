@@ -42,6 +42,31 @@ func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	}
 }
 
+func TestRunnerFailsIssueForUnsupportedProjectProvider(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{
+		ID: "demo", Name: "Demo", CWD: t.TempDir(), Provider: "claude", AutoRun: 1,
+	})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
+	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+	if err := r.StartProject("demo"); err == nil || !strings.Contains(err.Error(), `provider "claude" 暂不支持`) {
+		t.Fatalf("start project err = %v, want unsupported provider", err)
+	}
+	r.runIssue(issue)
+	got, err := st.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("get issue: %v", err)
+	}
+	if got.Status != store.StatusFailed || !strings.Contains(got.Error, `provider "claude" 暂不支持`) {
+		t.Fatalf("unsupported provider should fail clearly: %+v", got)
+	}
+	if len(fake.threadInputs) != 0 {
+		t.Fatalf("unsupported provider must not start codex: %+v", fake.threadInputs)
+	}
+}
+
 func TestRenderPromptUsesIssueTemplate(t *testing.T) {
 	project := store.Project{ID: "demo", Name: "Demo", CWD: "/tmp/demo"}
 	issue := store.Issue{
