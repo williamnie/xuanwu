@@ -31,6 +31,11 @@ import {
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
+import {
+  REFINEMENT_FIELDS,
+  issueRefinementReadiness,
+  parseIssueRefinement,
+} from '../utils/issueRefinement';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -206,12 +211,22 @@ ${error}` : error;
     }
   }, [events]);
 
-  const handleEnqueue = async () => {
+  const confirmRefinementReady = () => {
+    const { refinement } = parseIssueRefinement(issue?.description);
+    const readiness = issueRefinementReadiness(refinement);
+    return readiness.ready ||
+      window.confirm(`Refinement 还缺：${readiness.missing.join('、')}。\n仍要 Move to Todo 吗？`);
+  };
+
+  const handleMoveToTodo = async () => {
+    if (issue?.status === 'triage' && !confirmRefinementReady()) {
+      return;
+    }
     try {
-      await api.enqueueIssue(issueId);
+      await api.updateIssue(issueId, { status: 'todo' });
       loadIssueData();
     } catch (err) {
-      message.error('加入队列失败: ' + err.message);
+      message.error('移动到 Todo 失败: ' + err.message);
     }
   };
 
@@ -311,6 +326,10 @@ ${error}` : error;
 
   // 日志解析转换
   // 将 Go 传过来的原始 issue_events 处理成可在终端渲染的行
+  const parsedDescription = parseIssueRefinement(issue.description);
+  const issueBody = parsedDescription.body;
+  const refinement = parsedDescription.refinement;
+  const refinementReadiness = issueRefinementReadiness(refinement);
   const commentEvents = events.filter(event => event.type === 'issue.comment');
   const autoRetryPayload = latestAutoRetryEvent(events);
   const autoRetryNextAt = issue.auto_retry_next_at || autoRetryPayload?.next_retry_at || '';
@@ -490,8 +509,8 @@ ${error}` : error;
               <button className="btn btn-secondary" onClick={() => setIsEditModalOpen(true)}>
                 <Pencil size={14} /> 编辑内容
               </button>
-              <button className="btn btn-success" onClick={handleEnqueue}>
-                <Play size={14} /> 启动运行
+              <button className="btn btn-success" onClick={handleMoveToTodo}>
+                <Play size={14} /> Move to Todo
               </button>
             </>
           )}
@@ -535,13 +554,21 @@ ${error}` : error;
               </span>
             </div>
 
-            {issue.description && (
+            {issueBody && (
               <div style={{ marginTop: '20px', background: 'rgba(0,0,0,0.03)', padding: '16px', borderRadius: '10px', fontSize: '0.9rem', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>任务描述</div>
-                <MarkdownPreview text={issue.description} />
+                <MarkdownPreview text={issueBody} />
               </div>
             )}
           </div>
+
+          <IssueRefinement
+            issue={issue}
+            refinement={refinement}
+            readiness={refinementReadiness}
+            onEdit={() => setIsEditModalOpen(true)}
+            onMoveToTodo={handleMoveToTodo}
+          />
 
           <IssueDiscussion
             events={commentEvents}
@@ -695,6 +722,63 @@ ${error}` : error;
         />
       )}
 
+    </div>
+  );
+}
+
+function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo }) {
+  const canEdit = canEditIssue(issue);
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>Refinement</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+            把 triage 输入整理成执行规格；Acceptance criteria 与 Verification plan 是 Ready 条件。
+          </p>
+        </div>
+        <span className={`status-badge ${readiness.ready ? 'done' : 'triage'}`}>
+          {readiness.ready ? 'ready' : 'needs refinement'}
+        </span>
+      </div>
+
+      {!readiness.ready && (
+        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
+          Move to Todo 前建议补齐：{readiness.missing.join('、')}。不会阻断拖拽流转，但详情页操作会先确认。
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+        {REFINEMENT_FIELDS.map(field => (
+          <RefinementItem key={field.id} label={field.label} value={refinement[field.id]} />
+        ))}
+      </div>
+
+      {canEdit && (
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={onEdit}>
+            <Pencil size={14} /> 编辑 Refinement
+          </button>
+          <button className="btn btn-success" onClick={onMoveToTodo}>
+            <Play size={14} /> Move to Todo
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RefinementItem({ label, value }) {
+  return (
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px', background: 'rgba(0,0,0,0.025)', minWidth: 0 }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
+        {label}
+      </div>
+      {value ? (
+        <MarkdownPreview text={value} />
+      ) : (
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>未填写</span>
+      )}
     </div>
   );
 }

@@ -8,6 +8,10 @@ import {
   issueToEditDraft,
   validateIssueDraft,
 } from '../utils/issueEdit';
+import {
+  REFINEMENT_FIELDS,
+  issueRefinementReadiness,
+} from '../utils/issueRefinement';
 
 const PRIORITY_OPTIONS = [
   { value: '0', label: '普通优先级' },
@@ -28,6 +32,13 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
 
   const setField = (field, value) => {
     setDraft(current => ({ ...current, [field]: value }));
+  };
+
+  const setRefinementField = (field, value) => {
+    setDraft(current => ({
+      ...current,
+      refinement: { ...current.refinement, [field]: value },
+    }));
   };
 
   const submitEdit = async (event) => {
@@ -58,6 +69,7 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
           {error && <EditError message={error} />}
           <TitleField value={draft.title} onChange={(value) => setField('title', value)} />
           <DescriptionField value={draft.description} onChange={(value) => setField('description', value)} />
+          <RefinementFields draft={draft.refinement} onChange={setRefinementField} />
           <PriorityField value={draft.priority} onChange={(value) => setField('priority', value)} />
           <ModalActions saving={saving} onClose={onClose} />
         </form>
@@ -112,11 +124,55 @@ function DescriptionField({ value, onChange }) {
         placeholder="更新要 Codex 执行的完整内容，例如复现路径、期望改动和验证方式..."
         value={value}
         onChange={onChange}
-        minHeight={220}
+        minHeight={160}
         hideToolbar={true}
       />
     </div>
   );
+}
+
+function RefinementFields({ draft, onChange }) {
+  const readiness = issueRefinementReadiness(draft);
+  return (
+    <section style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div>
+        <label style={{ display: 'block', marginBottom: '4px' }}>Refinement</label>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
+          保存后会写入 Issue 描述的 Markdown 区块，后续执行 prompt 会带上这些规格。
+        </p>
+      </div>
+      {!readiness.ready && (
+        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem' }}>
+          Ready 条件：至少补齐 {readiness.missing.join('、')}。
+        </div>
+      )}
+      {REFINEMENT_FIELDS.map(field => (
+        <div className="form-group" key={field.id}>
+          <label>{field.label}</label>
+          <textarea
+            className="form-control"
+            value={draft?.[field.id] || ''}
+            rows={field.id === 'context' ? 3 : 2}
+            onChange={(event) => onChange(field.id, event.target.value)}
+            placeholder={refinementPlaceholder(field.id)}
+            style={{ resize: 'vertical' }}
+          />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function refinementPlaceholder(field) {
+  const placeholders = {
+    problem: '要解决的问题是什么？当前行为 vs 期望行为是什么？',
+    context: '相关路径、入口、API、日志或运行态证据，一行一个。',
+    acceptanceCriteria: '可验收的结果，一行一条。',
+    verificationPlan: '最小验证命令或手工验证步骤，一行一条。',
+    nonGoals: '明确不做的范围，避免执行时扩大。',
+    risks: '风险、待澄清问题或阻塞条件。',
+  };
+  return placeholders[field] || '';
 }
 
 function PriorityField({ value, onChange }) {
