@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { mergeAttributes } from '@tiptap/core';
-import Image from '@tiptap/extension-image';
-import Link from '@tiptap/extension-link';
-import Placeholder from '@tiptap/extension-placeholder';
-import { Markdown } from '@tiptap/markdown';
 import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 import {
   Bold,
   Code,
@@ -19,16 +13,9 @@ import {
   Quote,
 } from 'lucide-react';
 import { api } from '../../api/client';
-import { resolveAttachmentSrc } from './attachments';
+import { getPromptEditorExtensions } from './promptEditorCore';
 import { message } from '../../store/toastStore';
 import './PromptEditor.css';
-
-const AttachmentImage = Image.extend({
-  renderHTML({ HTMLAttributes }) {
-    const attrs = { ...HTMLAttributes, src: resolveAttachmentSrc(HTMLAttributes.src) };
-    return ['img', mergeAttributes(this.options.HTMLAttributes, attrs)];
-  },
-});
 
 export default function PromptEditor({
   value,
@@ -106,13 +93,7 @@ export default function PromptEditor({
 
 function usePromptEditor(value, onChange, placeholder, uploadFiles) {
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ link: false }),
-      AttachmentImage.configure({ allowBase64: false }),
-      Link.configure({ openOnClick: false, autolink: true, defaultProtocol: 'https' }),
-      Placeholder.configure({ placeholder }),
-      Markdown,
-    ],
+    extensions: getPromptEditorExtensions(placeholder),
     content: '',
     immediatelyRender: false,
     editorProps: {

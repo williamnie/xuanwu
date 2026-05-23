@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
-  AlertCircle, ChevronDown, ChevronRight, FileCode, Loader2, Plus, Settings,
+  ChevronDown, ChevronRight, FileCode, Loader2, Plus, Settings,
   Pin, Search, MessageSquarePlus,
-  SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder, Volume2
+  SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder
 } from 'lucide-react';
 import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
@@ -582,9 +582,7 @@ export default function Sessions() {
                       </select>
                     </div>
 
-                    <button type="button" className="composer-icon-btn" title="语音输入">
-                      <Volume2 size={16} />
-                    </button>
+
 
                     <button 
                       type="button" 

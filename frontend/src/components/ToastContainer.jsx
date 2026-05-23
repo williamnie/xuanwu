@@ -11,8 +11,8 @@ export default function ToastContainer() {
   return (
     <div className="codex-toast-container">
       {toasts.map((toast) => {
-        let Icon = Info;
-        let iconColor = 'var(--primary)';
+        let Icon;
+        let iconColor;
         
         switch (toast.type) {
           case 'success':

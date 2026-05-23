@@ -1,9 +1,10 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { resolveAttachmentSrc } from './attachments';
+import { remarkPlainLocalDocSelfLinks } from './localDocLinks';
 import './PromptEditor.css';
 
-const markdownPlugins = [remarkGfm];
+const markdownPlugins = [remarkGfm, remarkPlainLocalDocSelfLinks];
 
 export default function MarkdownPreview({ text = '', className = '' }) {
   return (
