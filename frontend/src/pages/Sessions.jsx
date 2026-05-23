@@ -15,7 +15,7 @@ import SessionComposer from './sessions/SessionComposer';
 import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
-import { isRenderableToolItem, parseLiveSessionEvents, toolDisplayForItem } from './sessions/sessionTranscriptItems';
+import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessions/sessionTranscriptItems';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -231,13 +231,18 @@ export default function Sessions() {
       setSessions((prev) => setSessionRunningInList(prev, event.threadId, false));
     }
     if (event.threadId !== selectedId) return;
-    setLiveEvents((prev) => [...prev, event].slice(-200));
     if (isSessionStartEvent(event)) {
+      setLiveEvents([event]);
       setSessionRunning(true);
+      return;
     }
+    setLiveEvents((prev) => [...prev, event].slice(-200));
     if (isSessionStopEvent(event)) {
+      const stoppedThreadId = event.threadId;
       setSessionRunning(false);
-      loadSelected();
+      loadSelected().then(() => {
+        if (selectedIdRef.current === stoppedThreadId) setLiveEvents([]);
+      });
       loadFirstPage();
     }
   }), [loadFirstPage, loadSelected, scheduleListRefresh, scheduleSelectedRefresh, selectedId]);
@@ -490,7 +495,7 @@ export default function Sessions() {
                   <span>正在加载会话详情...</span>
                 </div>
               ) : selectedSession ? (
-                <SessionDetail session={selectedSession} liveEvents={liveEvents} />
+                <SessionDetail session={selectedSession} liveEvents={liveEvents} running={sessionRunning} />
               ) : (
                 <EmptyDetail />
               )}
@@ -789,8 +794,9 @@ function projectNameFromPath(cwd) {
   return trimmed.split(/[\\/]/).pop() || 'No project';
 }
 
-function SessionDetail({ session, liveEvents }) {
+function SessionDetail({ session, liveEvents, running }) {
   const turns = session?.turns || [];
+  const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
 
   return (
     <div className="session-detail-body">
@@ -798,9 +804,7 @@ function SessionDetail({ session, liveEvents }) {
         {turns.map((turn, index) => (
           <TurnItem key={turn.id || index} turn={turn} />
         ))}
-        {liveEvents && liveEvents.length > 0 && (
-          <LiveTurnItem liveEvents={liveEvents} />
-        )}
+        {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} />}
       </div>
     </div>
   );

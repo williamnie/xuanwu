@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isRenderableToolItem, parseLiveSessionEvents, toolDisplayForItem } from './sessionTranscriptItems.js';
+import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessionTranscriptItems.js';
 
 test('empty reasoning items are not rendered as blank transcript rows', () => {
   assert.equal(isRenderableToolItem({ type: 'reasoning', summary: [] }), false);
@@ -82,4 +82,12 @@ test('live stream parser keeps SSE errors visible', () => {
   const display = toolDisplayForItem(parsed.tools[0]);
   assert.equal(display.title, 'error');
   assert.equal(display.body, 'boom');
+});
+
+test('live transcript is only rendered while the selected session is running', () => {
+  const liveEvents = [{ method: 'item/agentMessage/delta', text: 'final response' }];
+
+  assert.equal(shouldRenderLiveTurn(liveEvents, true), true);
+  assert.equal(shouldRenderLiveTurn(liveEvents, false), false);
+  assert.equal(shouldRenderLiveTurn([], true), false);
 });

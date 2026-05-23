@@ -130,6 +130,10 @@ function isEmptyArray(value) {
   return Array.isArray(value) && value.length === 0;
 }
 
+export function shouldRenderLiveTurn(liveEvents, running) {
+  return Boolean(running && liveEvents?.length > 0);
+}
+
 export function parseLiveSessionEvents(liveEvents) {
   let agentMessageText = '';
   const tools = [];
