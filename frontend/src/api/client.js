@@ -147,6 +147,11 @@ export const api = {
 
   getCodexUsage: () => request('/api/usage/codex'),
 
+  restartSystem: () => request('/api/system/restart', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getCronTasks: () => request('/api/cron-tasks'),
 
   createCronTask: (task) => request('/api/cron-tasks', {

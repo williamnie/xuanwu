@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/api"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/cli"
@@ -65,6 +66,11 @@ func runServer(args []string) {
 		log.Fatal(err)
 	}
 	srv.SetAuthToken(authToken)
+	srv.SetRestartFunc(func() {
+		log.Print("restart requested; exiting for supervisor restart")
+		time.Sleep(300 * time.Millisecond)
+		os.Exit(0)
+	})
 	go srv.WarmCodexUsageCache(context.Background())
 	log.Printf("Codex Issue Runner API listening on http://%s", cfg.Addr)
 	if err := http.ListenAndServe(cfg.Addr, srv); err != nil {

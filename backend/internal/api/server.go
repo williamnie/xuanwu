@@ -24,6 +24,7 @@ type Server struct {
 	codexSessionsDir string
 	authToken        string
 	usageCache       codexUsageCache
+	restart          func()
 }
 
 func NewServer(st *store.Store, bus *events.Bus, runner *runner.Runner) *Server {
@@ -48,6 +49,10 @@ func NewServerWithWebDirAndSessionsDir(
 
 func (s *Server) SetAuthToken(token string) {
 	s.authToken = strings.TrimSpace(token)
+}
+
+func (s *Server) SetRestartFunc(restart func()) {
+	s.restart = restart
 }
 
 func newWebHandler(webDir string) http.Handler {
@@ -120,6 +125,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) > 0 && parts[0] == "usage" {
 		s.routeUsage(w, r, parts)
+		return
+	}
+	if len(parts) > 0 && parts[0] == "system" {
+		s.routeSystem(w, r, parts)
 		return
 	}
 	writeError(w, http.StatusNotFound, "not found")
