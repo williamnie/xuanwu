@@ -384,7 +384,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
   };
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div className="issue-detail-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
       {/* 头部返回与快速操作 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -419,10 +419,10 @@ export default function IssueDetail({ issueId, navigateTo }) {
       </div>
 
       {/* 主面板内容 */}
-      <div className="grid-cols-3" style={{ gridTemplateColumns: '2fr 1fr', alignItems: 'start' }}>
+      <div className="issue-detail-grid grid-cols-3">
 
         {/* 左侧：任务细节与极客终端 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="issue-detail-main" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
           <div className="glass-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
@@ -481,15 +481,15 @@ export default function IssueDetail({ issueId, navigateTo }) {
         </div>
 
         {/* 右侧：元数据信息与运行设置 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="issue-detail-side" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
           {/* 故障错误警报栏 */}
           {issue.error && (
-            <div className="glass-card" style={{ background: 'var(--error-bg)', borderColor: 'rgba(244,63,94,0.3)', borderLeft: '4px solid var(--error)' }}>
+            <div className="issue-error-card glass-card" style={{ background: 'var(--error-bg)', borderColor: 'rgba(244,63,94,0.3)', borderLeft: '4px solid var(--error)' }}>
               <h4 style={{ color: 'var(--error)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <AlertTriangle size={18} /> 执行失败阻断
               </h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', wordBreak: 'break-all', fontFamily: 'var(--font-mono)' }}>
+              <p className="issue-error-text" style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                 {issue.error}
               </p>
             </div>

@@ -767,6 +767,34 @@ input:checked + .slider:before {
 .status-dot.idle { background-color: #64748b; }
 .status-dot.running { background-color: #3b82f6; }
 
+/* Issue Detail */
+.issue-detail-page,
+.issue-detail-grid,
+.issue-detail-main,
+.issue-detail-side {
+  min-width: 0;
+}
+
+.issue-detail-grid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.issue-error-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.issue-error-text {
+  max-width: 100%;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  user-select: text;
+}
+
 /* Terminal Styles */
 .terminal-view {
   background: var(--bg-terminal);
@@ -778,10 +806,18 @@ input:checked + .slider:before {
   color: #cbd5e1;
   line-height: 1.5;
   max-height: 500px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
   overflow-y: auto;
 }
 
-.terminal-line { margin-bottom: 4px; white-space: pre-wrap; }
+.terminal-line {
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .terminal-line.info { color: #60a5fa; }
 .terminal-line.success { color: #34d399; }
 .terminal-line.warning { color: #fbbf24; }
@@ -789,8 +825,8 @@ input:checked + .slider:before {
 .terminal-line.output { color: #94a3b8; border-left: 2px solid #334155; padding-left: 6px; margin-left: 2px; }
 .terminal-line.header { color: #c084fc; font-weight: 600; border-bottom: 1px dashed rgba(192, 132, 252, 0.2); padding-bottom: 2px; margin-top: 10px; }
 
-.diff-container { background: #020617; border-radius: 4px; margin: 4px 0; border: 1px solid #1e293b; }
-.diff-line { padding: 1px 6px; }
+.diff-container { background: #020617; border-radius: 4px; margin: 4px 0; border: 1px solid #1e293b; max-width: 100%; overflow-x: auto; }
+.diff-line { padding: 1px 6px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
 .diff-line.added { background: rgba(52, 211, 153, 0.1); color: #34d399; }
 .diff-line.removed { background: rgba(248, 113, 113, 0.1); color: #f87171; }
 
