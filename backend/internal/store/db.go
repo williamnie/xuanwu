@@ -54,6 +54,9 @@ func (s *Store) init() error {
 			return fmt.Errorf("init sqlite: %w", err)
 		}
 	}
+	if err := s.migrateProjectColumns(); err != nil {
+		return err
+	}
 	if err := s.migrateIssueColumns(); err != nil {
 		return err
 	}
@@ -74,6 +77,56 @@ func dataDir(path string) string {
 
 func now() string {
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+func (s *Store) migrateProjectColumns() error {
+	columns, err := s.tableColumns("projects")
+	if err != nil {
+		return err
+	}
+	if !columns["sort_order"] {
+		_, err := s.db.Exec(`alter table projects add column sort_order integer not null default 0`)
+		if err != nil {
+			return fmt.Errorf("migrate projects.sort_order: %w", err)
+		}
+	}
+	return s.backfillProjectSortOrder()
+}
+
+func (s *Store) backfillProjectSortOrder() error {
+	var zeroCount int
+	if err := s.db.QueryRow(`select count(*) from projects where sort_order=0`).Scan(&zeroCount); err != nil {
+		return err
+	}
+	if zeroCount == 0 {
+		return nil
+	}
+
+	rows, err := s.db.Query(`select id from projects
+		order by case when sort_order=0 then 1 else 0 end, sort_order asc, created_at desc, id asc`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for index, id := range ids {
+		if _, err := s.db.Exec(`update projects set sort_order=? where id=?`, index+1, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) migrateIssueColumns() error {

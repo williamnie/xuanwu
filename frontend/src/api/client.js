@@ -101,6 +101,11 @@ export const api = {
     body: JSON.stringify(updates),
   }),
 
+  reorderProjects: (projectIds) => request('/api/projects', {
+    method: 'PATCH',
+    body: JSON.stringify({ project_ids: projectIds }),
+  }),
+
   deleteProject: (id) => request(`/api/projects/${id}`, {
     method: 'DELETE',
   }),

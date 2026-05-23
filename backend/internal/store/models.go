@@ -26,6 +26,7 @@ type Project struct {
 	Model          string `json:"model"`
 	ApprovalPolicy string `json:"approval_policy"`
 	Sandbox        string `json:"sandbox"`
+	SortOrder      int    `json:"sort_order"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 	LoopStatus     string `json:"loop_status,omitempty"`

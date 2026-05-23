@@ -38,9 +38,28 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, projects)
 	case http.MethodPost:
 		s.createProject(w, r)
+	case http.MethodPatch:
+		s.reorderProjects(w, r)
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func (s *Server) reorderProjects(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProjectIDs []string `json:"project_ids"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
+		return
+	}
+	projects, err := s.store.ReorderProjects(r.Context(), req.ProjectIDs)
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
+	s.attachLoopStatus(projects)
+	writeJSON(w, http.StatusOK, projects)
 }
 
 func (s *Server) handleProject(w http.ResponseWriter, r *http.Request, id string) {

@@ -6,6 +6,7 @@ const PROJECT_FIELDS = [
   'model',
   'approval_policy',
   'sandbox',
+  'sort_order',
   'created_at',
   'updated_at',
   'loop_status',

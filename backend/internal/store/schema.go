@@ -9,6 +9,7 @@ create table if not exists projects (
   model text not null default '',
   approval_policy text not null default 'never',
   sandbox text not null default 'workspace-write',
+  sort_order integer not null default 0,
   created_at text not null,
   updated_at text not null
 );`

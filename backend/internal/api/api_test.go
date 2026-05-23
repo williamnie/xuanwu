@@ -81,6 +81,23 @@ func TestProjectAndIssueAPI(t *testing.T) {
 	}
 }
 
+func TestProjectOrderAPI(t *testing.T) {
+	srv := newTestServer(t)
+	for _, id := range []string{"alpha", "beta", "gamma"} {
+		postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+			"id": id, "name": id, "cwd": filepath.Join(t.TempDir(), id),
+		})
+	}
+
+	ordered := patchJSON[[]store.Project](t, srv, "/api/projects", map[string]any{
+		"project_ids": []string{"gamma", "alpha", "beta"},
+	})
+	assertAPIProjectOrder(t, ordered, []string{"gamma", "alpha", "beta"})
+
+	listed := getJSON[[]store.Project](t, srv, "/api/projects")
+	assertAPIProjectOrder(t, listed, []string{"gamma", "alpha", "beta"})
+}
+
 func TestIssueTemplateAPIAndIssueSelection(t *testing.T) {
 	srv := newTestServer(t)
 	templates := getJSON[[]store.IssueTemplate](t, srv, "/api/issue-templates")
@@ -290,6 +307,26 @@ func writeCodexState(t *testing.T, path, existingPath, newPath, missingPath stri
 	if err := os.WriteFile(path, body, 0o644); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
+}
+
+func assertAPIProjectOrder(t *testing.T, projects []store.Project, want []string) {
+	t.Helper()
+	if len(projects) != len(want) {
+		t.Fatalf("project count = %d, want %d: %+v", len(projects), len(want), projects)
+	}
+	for index, project := range projects {
+		if project.ID != want[index] {
+			t.Fatalf("project order = %+v, want %v", apiProjectIDs(projects), want)
+		}
+	}
+}
+
+func apiProjectIDs(projects []store.Project) []string {
+	ids := make([]string, 0, len(projects))
+	for _, project := range projects {
+		ids = append(ids, project.ID)
+	}
+	return ids
 }
 
 func newTestServer(t *testing.T) *Server {

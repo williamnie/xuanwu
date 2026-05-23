@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2, GripVertical } from 'lucide-react';
 
 function projectNameFromPath(cwd) {
   const trimmed = String(cwd || '').trim().replace(/[\\/]+$/, '');
@@ -53,8 +53,20 @@ const SessionItem = memo(function SessionItem({ session, active, onSelect }) {
   );
 });
 
-export default function VirtualSessionList({ sessions, projects = [], selectedId, hasMore, loadingMore, onSelect, onLoadMore }) {
+export default function VirtualSessionList({
+  sessions,
+  projects = [],
+  selectedId,
+  hasMore,
+  loadingMore,
+  savingOrder = false,
+  onSelect,
+  onLoadMore,
+  onReorderProjects,
+}) {
   const [collapsed, setCollapsed] = useState({});
+  const [dragProjectId, setDragProjectId] = useState('');
+  const [dragOverProjectId, setDragOverProjectId] = useState('');
 
   const projectsByCwd = useMemo(() => new Map(projects.map((project) => [project.cwd, project])), [projects]);
 
@@ -93,28 +105,13 @@ export default function VirtualSessionList({ sessions, projects = [], selectedId
       }
     }
 
-    const allGroups = [
+    const virtualProjectGroups = Array.from(virtualGroups.values());
+    virtualProjectGroups.sort((a, b) => a.name.localeCompare(b.name));
+
+    return [
       ...Array.from(groupMap.values()),
-      ...Array.from(virtualGroups.values())
+      ...virtualProjectGroups,
     ];
-
-    for (const g of allGroups) {
-      let maxTime = 0;
-      for (const s of g.sessions) {
-        const t = s.updatedAt || s.createdAt || 0;
-        if (t > maxTime) maxTime = t;
-      }
-      g.maxTime = maxTime;
-    }
-
-    allGroups.sort((a, b) => {
-      if (b.maxTime !== a.maxTime) {
-        return b.maxTime - a.maxTime;
-      }
-      return a.name.localeCompare(b.name);
-    });
-
-    return allGroups;
   }, [sessions, projects, projectsByCwd]);
 
   // 自动展开激活 Session 所在的项目组
@@ -145,6 +142,36 @@ export default function VirtualSessionList({ sessions, projects = [], selectedId
     }
   }, [hasMore, loadingMore, onLoadMore]);
 
+  const handleDragStart = (event, group) => {
+    if (group.isVirtual || savingOrder) {
+      event.preventDefault();
+      return;
+    }
+    setDragProjectId(group.id);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', group.id);
+  };
+
+  const handleDragOver = (event, group) => {
+    if (group.isVirtual || savingOrder || !dragProjectId || dragProjectId === group.id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragOverProjectId(group.id);
+  };
+
+  const resetDragState = () => {
+    setDragProjectId('');
+    setDragOverProjectId('');
+  };
+
+  const handleDrop = (event, group) => {
+    event.preventDefault();
+    if (!group.isVirtual && dragProjectId && dragProjectId !== group.id) {
+      onReorderProjects?.(dragProjectId, group.id);
+    }
+    resetDragState();
+  };
+
   return (
     <div className="session-list-viewport" onScroll={handleScroll}>
       <div className="project-session-groups">
@@ -153,11 +180,25 @@ export default function VirtualSessionList({ sessions, projects = [], selectedId
           const hasSessions = group.sessions.length > 0;
 
           return (
-            <div key={group.id} className="project-group-container">
-              <button 
-                className="project-group-header" 
+            <div
+              key={group.id}
+              className={`project-group-container ${dragOverProjectId === group.id ? 'drag-over' : ''}`}
+              draggable={!group.isVirtual && !savingOrder}
+              onDragStart={(event) => handleDragStart(event, group)}
+              onDragOver={(event) => handleDragOver(event, group)}
+              onDragEnd={resetDragState}
+              onDrop={(event) => handleDrop(event, group)}
+            >
+              <button
+                className="project-group-header"
                 onClick={() => toggleCollapse(group.id)}
+                aria-label={`${group.name} project sessions`}
               >
+                {!group.isVirtual && (
+                  <span className="project-group-drag-handle" title="拖动调整项目顺序">
+                    <GripVertical size={13} />
+                  </span>
+                )}
                 <span className="project-group-chevron">
                   {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                 </span>
@@ -165,6 +206,7 @@ export default function VirtualSessionList({ sessions, projects = [], selectedId
                   {isCollapsed ? <Folder size={14} /> : <FolderOpen size={14} />}
                 </span>
                 <span className="project-group-name" title={group.cwd}>{group.name}</span>
+                {savingOrder && dragProjectId === group.id && <Loader2 className="project-order-saving" size={13} />}
               </button>
 
               {!isCollapsed && (

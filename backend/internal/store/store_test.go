@@ -55,6 +55,47 @@ func TestProjectNameAndModelDefaults(t *testing.T) {
 	}
 }
 
+func TestProjectSortOrderDefaultsAndReorder(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	for _, id := range []string{"alpha", "beta", "gamma"} {
+		if _, err := st.CreateProject(ctx, Project{ID: id, Name: id, CWD: filepath.Join(t.TempDir(), id)}); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+
+	projects, err := st.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("list projects: %v", err)
+	}
+	assertProjectOrder(t, projects, []string{"alpha", "beta", "gamma"})
+	if projects[0].SortOrder != 1 || projects[2].SortOrder != 3 {
+		t.Fatalf("unexpected default sort order: %+v", projects)
+	}
+
+	projects, err = st.ReorderProjects(ctx, []string{"gamma", "alpha", "beta"})
+	if err != nil {
+		t.Fatalf("reorder projects: %v", err)
+	}
+	assertProjectOrder(t, projects, []string{"gamma", "alpha", "beta"})
+
+	projects, err = st.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("list reordered projects: %v", err)
+	}
+	assertProjectOrder(t, projects, []string{"gamma", "alpha", "beta"})
+
+	created, err := st.CreateProject(ctx, Project{ID: "delta", Name: "delta", CWD: filepath.Join(t.TempDir(), "delta")})
+	if err != nil {
+		t.Fatalf("create delta: %v", err)
+	}
+	if created.SortOrder != 4 {
+		t.Fatalf("new project should append at tail: %+v", created)
+	}
+	projects, _ = st.ListProjects(ctx)
+	assertProjectOrder(t, projects, []string{"gamma", "alpha", "beta", "delta"})
+}
+
 func TestIssueEventsRoundTrip(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()
@@ -262,6 +303,26 @@ func TestOpenMigratesLegacyDefaultIssueTemplate(t *testing.T) {
 	if tmpl.Content != DefaultIssuePromptTemplate {
 		t.Fatalf("legacy default template was not migrated:\n%s", tmpl.Content)
 	}
+}
+
+func assertProjectOrder(t *testing.T, projects []Project, want []string) {
+	t.Helper()
+	if len(projects) != len(want) {
+		t.Fatalf("project count = %d, want %d: %+v", len(projects), len(want), projects)
+	}
+	for index, project := range projects {
+		if project.ID != want[index] {
+			t.Fatalf("project order = %+v, want %v", projectIDs(projects), want)
+		}
+	}
+}
+
+func projectIDs(projects []Project) []string {
+	ids := make([]string, 0, len(projects))
+	for _, project := range projects {
+		ids = append(ids, project.ID)
+	}
+	return ids
 }
 
 func openTestStore(t *testing.T) *Store {

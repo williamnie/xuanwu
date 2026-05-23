@@ -14,7 +14,7 @@ type scanner interface {
 func scanProject(row scanner) (Project, error) {
 	var p Project
 	err := row.Scan(&p.ID, &p.Name, &p.CWD, &p.AutoRun, &p.Model,
-		&p.ApprovalPolicy, &p.Sandbox, &p.CreatedAt, &p.UpdatedAt)
+		&p.ApprovalPolicy, &p.Sandbox, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt)
 	if err == nil {
 		applyProjectDefaults(&p)
 	}

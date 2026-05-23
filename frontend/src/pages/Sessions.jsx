@@ -8,12 +8,13 @@ import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
-import { selectProjects, useDataStore } from '../store/dataStore';
+import { selectProjects, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
 import SessionComposer from './sessions/SessionComposer';
 import { defaultMessageSettings, defaultSessionSettings, modelLabel } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
+import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -41,6 +42,7 @@ function compactModelName(value) {
 
 export default function Sessions() {
   const projects = useDataStore(selectProjects);
+  const setProjects = useDataStore(selectSetProjects);
   const [sessions, setSessions] = useState([]);
   const [cursor, setCursor] = useState('');
   const [selectedId, setSelectedId] = useState('');
@@ -63,6 +65,7 @@ export default function Sessions() {
   const [sessionRunning, setSessionRunning] = useState(false);
   const [approvalRequest, setApprovalRequest] = useState(null);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [savingProjectOrder, setSavingProjectOrder] = useState(false);
   const detailRefreshTimer = useRef(null);
   const listRefreshTimer = useRef(null);
   const selectedIdRef = useRef(selectedId);
@@ -249,6 +252,23 @@ export default function Sessions() {
     setCwd(project?.cwd || cwd);
     setSessionSettings(defaultSessionSettings(project));
   };
+
+  const handleReorderProjects = useCallback(async (sourceId, targetId) => {
+    const nextProjects = orderedProjectsAfterMove(projects, sourceId, targetId);
+    if (nextProjects === projects) return;
+
+    setSavingProjectOrder(true);
+    setProjects(nextProjects);
+    try {
+      const updated = await api.reorderProjects(nextProjects.map((project) => project.id));
+      setProjects(updated || nextProjects);
+    } catch (err) {
+      setProjects(projects);
+      toast.error(err.message || '保存项目顺序失败');
+    } finally {
+      setSavingProjectOrder(false);
+    }
+  }, [projects, setProjects]);
 
   const handleSettingChange = (field, value) => {
     setSessionSettings((current) => ({ ...current, [field]: value }));
@@ -446,8 +466,10 @@ export default function Sessions() {
             selectedId={selectedId}
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
+            savingOrder={savingProjectOrder}
             onSelect={selectSession}
             onLoadMore={loadMore}
+            onReorderProjects={handleReorderProjects}
           />
         </div>
 

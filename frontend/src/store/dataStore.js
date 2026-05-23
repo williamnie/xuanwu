@@ -67,6 +67,10 @@ export const useDataStore = create((set, get) => ({
     set({ backendOnline: online });
   },
 
+  setProjects: (projects) => {
+    set({ projects: Array.isArray(projects) ? projects : [] });
+  },
+
   refreshData: async (slices = ALL_DATA_SLICES) => {
     const selectedSlices = uniqueSlices(slices);
     if (selectedSlices.length === 0) {
@@ -116,3 +120,4 @@ export const selectLoading = (state) => state.loading;
 export const selectRefreshData = (state) => state.refreshData;
 export const selectRefreshAllData = (state) => state.refreshAllData;
 export const selectSetBackendOnline = (state) => state.setBackendOnline;
+export const selectSetProjects = (state) => state.setProjects;
