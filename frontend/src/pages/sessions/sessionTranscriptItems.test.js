@@ -84,10 +84,58 @@ test('live stream parser keeps SSE errors visible', () => {
   assert.equal(display.body, 'boom');
 });
 
-test('live transcript is only rendered while the selected session is running', () => {
+test('turn start renders a live thinking placeholder before assistant text', () => {
+  const parsed = parseLiveSessionEvents([{ method: 'turn/started', status: 'inProgress' }]);
+
+  assert.equal(parsed.activity, 'thinking');
+  assert.equal(parsed.agentMessageText, '');
+  assert.equal(parsed.tools.length, 0);
+  assert.equal(shouldRenderLiveTurn([{ method: 'turn/started' }], true), true);
+});
+
+test('live stream parser keeps command output delta readable without started item', () => {
+  const parsed = parseLiveSessionEvents([
+    { method: 'item/commandExecution/outputDelta', text: 'PASS\n' },
+  ]);
+
+  assert.equal(parsed.activity, 'command');
+  assert.equal(parsed.tools.length, 1);
+  assert.equal(parsed.tools[0].type, 'commandExecution');
+  assert.equal(parsed.tools[0].text, 'PASS\n');
+});
+
+test('live stream parser keeps reasoning deltas readable', () => {
+  const parsed = parseLiveSessionEvents([
+    { method: 'item/reasoning/summaryDelta', payload: '{"delta":"检查运行态。"}' },
+  ]);
+
+  assert.equal(parsed.reasoningText, '检查运行态。');
+});
+
+test('live stream parser exposes pending approval events', () => {
+  const parsed = parseLiveSessionEvents([
+    {
+      method: 'approval/requested',
+      payload: JSON.stringify({
+        id: 'approval-1',
+        method: 'item/commandExecution/requestApproval',
+        params: { command: 'npm test', cwd: '/tmp/demo' },
+      }),
+    },
+  ]);
+
+  assert.equal(parsed.activity, 'approval');
+  assert.equal(parsed.approvalPending, true);
+  assert.equal(parsed.tools.length, 1);
+  assert.equal(toolDisplayForItem(parsed.tools[0]).title, '等待审批');
+  assert.match(toolDisplayForItem(parsed.tools[0]).body, /npm test/);
+  assert.equal(shouldRenderLiveTurn([{ method: 'approval/requested' }], false), true);
+});
+
+test('live transcript is rendered while running and closes after normal completion', () => {
   const liveEvents = [{ method: 'item/agentMessage/delta', text: 'final response' }];
 
   assert.equal(shouldRenderLiveTurn(liveEvents, true), true);
   assert.equal(shouldRenderLiveTurn(liveEvents, false), false);
-  assert.equal(shouldRenderLiveTurn([], true), false);
+  assert.equal(shouldRenderLiveTurn([], true), true);
 });

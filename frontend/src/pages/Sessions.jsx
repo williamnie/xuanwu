@@ -72,6 +72,7 @@ export default function Sessions() {
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
   const [approvalRequest, setApprovalRequest] = useState(null);
+  const [approvalNotice, setApprovalNotice] = useState(null);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [savingProjectOrder, setSavingProjectOrder] = useState(false);
   const detailRefreshTimer = useRef(null);
@@ -234,8 +235,14 @@ export default function Sessions() {
     }
     if (!isAgentEvent(event)) return;
     if (event.method === 'approval/requested') {
-      setApprovalRequest(parseApprovalPayload(event.payload));
-      return;
+      const request = parseApprovalPayload(event.payload);
+      const requestSessionKey = eventKey || eventSessionKeyFromPayload(request);
+      setApprovalNotice({ request, sessionId: requestSessionKey });
+      if (!requestSessionKey || requestSessionKey === selectedIdRef.current) {
+        setApprovalRequest(request);
+      } else {
+        toast.info('Codex 正在等待审批，切回对应 session 后可处理。');
+      }
     }
     if (event.threadId && isSessionStartEvent(event)) {
       setSessions((prev) => setSessionRunningInList(prev, eventKey, true));
@@ -253,6 +260,13 @@ export default function Sessions() {
     if (isSessionStopEvent(event)) {
       const stoppedSessionId = eventKey;
       setSessionRunning(false);
+      setApprovalNotice((current) => current?.sessionId === stoppedSessionId ? null : current);
+      setApprovalRequest((current) => {
+        if (!current) return current;
+        const currentSessionId = eventSessionKeyFromPayload(current);
+        if (!currentSessionId || currentSessionId === stoppedSessionId) return null;
+        return current;
+      });
       loadSelected().then(() => {
         if (selectedIdRef.current === stoppedSessionId) setLiveEvents([]);
       });
@@ -303,6 +317,7 @@ export default function Sessions() {
     try {
       await api.resolveCodexApproval(approvalRequest.id, { decision, scope });
       setApprovalRequest(null);
+      setApprovalNotice(null);
     } catch (err) {
       toast.error(err.message || '提交授权决策失败');
     } finally {
@@ -401,7 +416,8 @@ export default function Sessions() {
     setActiveView('chat');
     setLiveEvents([]);
     setSessionRunning(isSessionRunning(nextSession));
-  }, [sessions]);
+    setApprovalRequest(approvalNotice?.sessionId === id ? approvalNotice.request : null);
+  }, [approvalNotice, sessions]);
 
   if (loading && sessions.length === 0) {
     return <LoadingState />;
@@ -510,7 +526,12 @@ export default function Sessions() {
                   <span>正在加载会话详情...</span>
                 </div>
               ) : selectedSession ? (
-                <SessionDetail session={selectedSession} liveEvents={liveEvents} running={sessionRunning} />
+                <SessionDetail
+                  session={selectedSession}
+                  liveEvents={liveEvents}
+                  running={sessionRunning}
+                  pendingApproval={approvalNotice?.sessionId === selectedId}
+                />
               ) : (
                 <EmptyDetail />
               )}
@@ -662,10 +683,15 @@ export default function Sessions() {
 
 function parseApprovalPayload(payload) {
   try {
-    return JSON.parse(payload || '{}');
+    const request = JSON.parse(payload || '{}');
+    return { id: request.id || '', method: request.method || 'approval/requested', params: request.params || {} };
   } catch {
     return { id: '', method: 'approval/requested', params: {} };
   }
+}
+
+function eventSessionKeyFromPayload(request) {
+  return providerSessionKey(DEFAULT_SESSION_PROVIDER, request?.params?.threadId || '');
 }
 
 function isSessionFileEvent(event) {
@@ -856,7 +882,7 @@ function projectNameFromPath(cwd) {
   return trimmed.split(/[\\/]/).pop() || 'No project';
 }
 
-function SessionDetail({ session, liveEvents, running }) {
+function SessionDetail({ session, liveEvents, running, pendingApproval }) {
   const turns = session?.turns || [];
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
@@ -867,6 +893,7 @@ function SessionDetail({ session, liveEvents, running }) {
       <div className="session-runtime-header">
         <span>Provider: {provider}</span>
         <code>{providerSessionId}</code>
+        <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
       </div>
       <div className="session-transcript">
         {turns.map((turn, index) => (
@@ -875,6 +902,17 @@ function SessionDetail({ session, liveEvents, running }) {
         {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} />}
       </div>
     </div>
+  );
+}
+
+function RuntimeStatusPill({ running, pendingApproval }) {
+  const status = pendingApproval ? 'approval' : running ? 'running' : 'idle';
+  const label = pendingApproval ? '等待审批' : running ? 'Agent is running · 正在思考' : 'Idle';
+  return (
+    <span className={`runtime-status-pill ${status}`}>
+      <span className="runtime-status-dot" />
+      {label}
+    </span>
   );
 }
 
@@ -1106,15 +1144,37 @@ function AgentMessageBubble({ item }) {
 function LiveTurnItem({ liveEvents }) {
   const parsed = useMemo(() => parseLiveSessionEvents(liveEvents), [liveEvents]);
 
-  const { tools, agentMessageText } = parsed;
+  const { tools, agentMessageText, reasoningText, errorText, approvalPending, activity } = parsed;
+  const showThinking = !agentMessageText && !errorText;
 
   return (
     <div className="turn-container active-live">
+      <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} />
       {tools.length > 0 && <ToolsCollapsible tools={tools} isLive={true} />}
       
+      {reasoningText && (
+        <div className="live-reasoning-card">
+          <span>Reasoning summary</span>
+          <p>{reasoningText}</p>
+        </div>
+      )}
+
+      {showThinking && (
+        <div className="chat-bubble-container agent streaming">
+          <div className="chat-bubble-avatar agent-logo live-pulse">A</div>
+          <div className="chat-bubble-content">
+            <div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking...</span></div>
+            <div className="chat-bubble-body thinking-placeholder">
+              <span>正在思考中</span>
+              <span className="typing-dots"><i></i><i></i><i></i></span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {agentMessageText && (
         <div className="chat-bubble-container agent streaming">
-          <div className="chat-bubble-avatar agent-logo">A</div>
+          <div className="chat-bubble-avatar agent-logo live-pulse">A</div>
           <div className="chat-bubble-content">
             <div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking...</span></div>
             <div className="chat-bubble-body">
@@ -1125,6 +1185,26 @@ function LiveTurnItem({ liveEvents }) {
       )}
     </div>
   );
+}
+
+function LiveActivityBanner({ activity, approvalPending, errorText }) {
+  if (errorText) return <div className="live-activity-banner error">Codex 运行出错：{errorText}</div>;
+  if (approvalPending) return <div className="live-activity-banner approval">Codex 已暂停，正在等待网页审批。</div>;
+  const label = liveActivityLabel(activity);
+  return <div className="live-activity-banner"><Loader2 size={13} className="spin-animation" /> {label}</div>;
+}
+
+function liveActivityLabel(activity) {
+  switch (activity) {
+    case 'streaming':
+      return 'Codex is working · 正在输出回复';
+    case 'command':
+      return 'Codex is working · 正在运行命令';
+    case 'file-change':
+      return 'Codex is working · 正在整理文件改动';
+    default:
+      return 'Agent is running · 正在思考';
+  }
 }
 
 function MarkdownText({ text }) {

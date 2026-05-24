@@ -12,6 +12,9 @@ export function toolDisplayForItem(item) {
   if (item.type === 'reasoning') {
     return reasoningDisplay(item);
   }
+  if (item.type === 'approvalRequest') {
+    return approvalDisplay(item);
+  }
   if (isToolCall(item.type)) {
     return toolCallDisplay(item);
   }
@@ -25,6 +28,14 @@ function reasoningDisplay(item) {
   const body = firstNonEmpty(extractText(item.summary), extractText(item.content), item.text);
   if (!body) return null;
   return { kind: 'reasoning', title: 'Reasoning', body };
+}
+
+function approvalDisplay(item) {
+  return {
+    kind: 'approval',
+    title: '等待审批',
+    body: firstNonEmpty(item.text, detailJSON(item)),
+  };
 }
 
 function toolCallDisplay(item) {
@@ -131,50 +142,92 @@ function isEmptyArray(value) {
 }
 
 export function shouldRenderLiveTurn(liveEvents, running) {
-  return Boolean(running && liveEvents?.length > 0);
+  return Boolean(running || hasLiveError(liveEvents) || hasPendingApproval(liveEvents));
 }
 
 export function parseLiveSessionEvents(liveEvents) {
   let agentMessageText = '';
-  const tools = [];
-  let activeTool = null;
+  let reasoningText = '';
+  let errorText = '';
+  let approvalPending = false;
+  let activity = 'thinking';
+  const state = { tools: [], activeTool: null };
 
   for (const event of liveEvents || []) {
     const type = agentEventType(event);
     const method = event.raw_method || event.method;
-    const text = event.text || '';
+    const payload = eventPayload(event);
+    const text = firstNonEmpty(event.text, payload.delta, payload.text);
 
     if (type === 'agent.message.delta') {
       agentMessageText += text;
+      activity = 'streaming';
+    } else if (type === 'agent.reasoning.delta') {
+      reasoningText += text;
     } else if (type === 'agent.command.output_delta') {
-      if (activeTool && activeTool.type === 'commandExecution') {
-        activeTool.text += text;
-      }
+      appendCommandDelta(state, event, text);
+      activity = 'command';
     } else if (type === 'agent.file.patch') {
-      if (activeTool && activeTool.type === 'fileChange') {
-        activeTool.text += text;
-      } else {
-        const item = liveNormalizedItem(event);
-        if (item && isRenderableToolItem(item)) tools.push(item);
-      }
+      appendFilePatch(state, event, text);
+      activity = 'file-change';
     } else if (type === 'agent.command.started' || method === 'item/started') {
-      const item = liveEventItem(event);
-      if (!item) continue;
-      activeTool = liveToolFromItem(item);
-      if (activeTool && isRenderableToolItem(activeTool)) tools.push(activeTool);
+      activity = startLiveItem(state, event, activity);
     } else if (type === 'agent.command.completed' || method === 'item/completed') {
-      const item = liveEventItem(event);
-      if (item && !updatesActiveTool(activeTool, item) && isRenderableToolItem(item)) {
-        tools.push(item);
-      }
-      if (activeTool) activeTool.status = 'completed';
+      completeLiveItem(state, event);
+    } else if (type === 'agent.approval.requested' || event.method === 'approval/requested') {
+      approvalPending = true;
+      activity = 'approval';
+      state.tools.push(approvalItem(event));
+    } else if (type === 'agent.error' || event.method === 'error') {
+      errorText = firstNonEmpty(event.error, text, payload.error?.message, event.payload);
+      appendFallbackItem(state, event);
+    } else if (type === 'agent.turn.started' || type === 'agent.turn.completed') {
+      // Lifecycle events drive the live banner; avoid noisy detail rows.
     } else {
-      const item = liveFallbackItem(event);
-      if (item) tools.push(item);
+      appendFallbackItem(state, event);
     }
   }
 
-  return { tools, agentMessageText };
+  return { tools: state.tools, agentMessageText, reasoningText, errorText, approvalPending, activity };
+}
+
+function appendCommandDelta(state, event, text) {
+  if (state.activeTool?.type === 'commandExecution') {
+    state.activeTool.text += text;
+  } else if (text) {
+    state.activeTool = { type: 'commandExecution', command: event.command || '', text, status: 'streaming' };
+    state.tools.push(state.activeTool);
+  }
+}
+
+function appendFilePatch(state, event, text) {
+  if (state.activeTool?.type === 'fileChange') {
+    state.activeTool.text += text;
+    return;
+  }
+  const item = liveNormalizedItem(event);
+  if (item && isRenderableToolItem(item)) state.tools.push(item);
+}
+
+function startLiveItem(state, event, activity) {
+  const item = liveEventItem(event);
+  if (!item) return activity;
+  state.activeTool = liveToolFromItem(item);
+  if (state.activeTool && isRenderableToolItem(state.activeTool)) state.tools.push(state.activeTool);
+  return state.activeTool?.type === 'commandExecution' ? 'command' : activity;
+}
+
+function completeLiveItem(state, event) {
+  const item = liveEventItem(event);
+  if (item && !updatesActiveTool(state.activeTool, item) && isRenderableToolItem(item)) {
+    state.tools.push(item);
+  }
+  if (state.activeTool) state.activeTool.status = 'completed';
+}
+
+function appendFallbackItem(state, event) {
+  const item = liveFallbackItem(event);
+  if (item) state.tools.push(item);
 }
 
 function agentEventType(event) {
@@ -183,10 +236,16 @@ function agentEventType(event) {
   if (method === 'item/agentMessage/delta') return 'agent.message.delta';
   if (method === 'item/commandExecution/outputDelta') return 'agent.command.output_delta';
   if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') return 'agent.file.patch';
+  if (isReasoningMethod(method)) return 'agent.reasoning.delta';
+  if (method === 'approval/requested') return 'agent.approval.requested';
   if (method === 'turn/started') return 'agent.turn.started';
   if (method === 'turn/completed') return 'agent.turn.completed';
   if (method === 'error') return 'agent.error';
   return '';
+}
+
+function isReasoningMethod(method) {
+  return /reasoning|thinking/i.test(method || '');
 }
 
 function liveEventItem(event) {
@@ -204,19 +263,21 @@ function liveEventItem(event) {
 
 function liveNormalizedItem(event) {
   const type = agentEventType(event);
+  const payload = eventPayload(event);
   if (type === 'agent.command.started' || type === 'agent.command.completed') {
     return {
       type: 'commandExecution',
-      command: event.command || commandFromText(event.text),
+      command: event.command || commandFromPayload(payload) || commandFromText(event.text),
       text: type === 'agent.command.completed' ? event.text || '' : '',
-      status: event.status || (type === 'agent.command.completed' ? 'completed' : 'inProgress'),
+      status: event.status || payload.item?.status || (type === 'agent.command.completed' ? 'completed' : 'inProgress'),
+      cwd: payload.cwd || payload.item?.cwd || '',
     };
   }
   if (type === 'agent.file.patch') {
     return {
       type: 'fileChange',
-      path: event.path || '',
-      text: event.text || '',
+      path: event.path || payload.path || '',
+      text: event.text || patchTextFromPayload(payload),
       status: event.status || 'completed',
     };
   }
@@ -240,11 +301,71 @@ function liveToolFromItem(item) {
 }
 
 function liveFallbackItem(event) {
-  const body = firstNonEmpty(event.text, event.error, event.status, event.payload);
-  if (!event.method || !body) return null;
-  return { type: event.method, text: body };
+  const method = event.method || event.raw_method;
+  const body = firstNonEmpty(event.text, event.error, event.status, event.payload, event.raw_payload);
+  if (!method || !body) return null;
+  return { type: method, text: summarizeBody(body), status: event.status || '' };
 }
 
 function updatesActiveTool(activeTool, item) {
   return Boolean(activeTool && item && activeTool.type === item.type && ['commandExecution', 'fileChange'].includes(item.type));
+}
+
+function eventPayload(event) {
+  for (const value of [event?.payload, event?.raw_payload]) {
+    if (!value || typeof value !== 'string') continue;
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      // Ignore malformed provider payloads; raw text remains visible via fallback.
+    }
+  }
+  return {};
+}
+
+function commandFromPayload(payload) {
+  const command = payload.command || payload.item?.command;
+  if (Array.isArray(command)) return command.join(' ');
+  return typeof command === 'string' ? command : '';
+}
+
+function patchTextFromPayload(payload) {
+  if (typeof payload.delta === 'string') return payload.delta;
+  if (!Array.isArray(payload.changes)) return '';
+  return payload.changes.map((change) => `--- ${change.path || ''}\n${change.diff || ''}`).join('\n');
+}
+
+function approvalItem(event) {
+  const payload = eventPayload(event);
+  const params = payload.params || {};
+  return {
+    type: 'approvalRequest',
+    method: payload.method || event.raw_method || '',
+    text: approvalSummary(payload.method || event.raw_method, params),
+    status: 'pending',
+    command: commandFromPayload(params),
+    cwd: params.cwd || '',
+  };
+}
+
+function approvalSummary(method, params) {
+  const lines = [`${method || 'approval/requested'} 正在等待用户决策。`];
+  const command = commandFromPayload(params);
+  if (command) lines.push(`Command: ${command}`);
+  if (params.cwd) lines.push(`cwd: ${params.cwd}`);
+  return lines.join('\n');
+}
+
+function summarizeBody(value) {
+  const text = String(value);
+  return text.length > 2400 ? `${text.slice(0, 2400)}\n…` : text;
+}
+
+function hasLiveError(liveEvents) {
+  return (liveEvents || []).some((event) => agentEventType(event) === 'agent.error' || event?.method === 'error');
+}
+
+function hasPendingApproval(liveEvents) {
+  return (liveEvents || []).some((event) => agentEventType(event) === 'agent.approval.requested' || event?.method === 'approval/requested');
 }

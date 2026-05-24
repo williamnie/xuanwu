@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -276,6 +277,7 @@ func (r *Runner) waitSessionTurn(threadID, turnID string, eventsCh <-chan agent.
 			continue
 		}
 		if isAgentTurnCompleted(event) || isAgentError(event) {
+			r.publishSessionTerminalEvent(event)
 			r.clearSessionRunning(threadID, turnID)
 			return
 		}
@@ -337,6 +339,23 @@ func (r *Runner) isThreadRunning(threadID string) bool {
 		return false
 	}
 	return r.runningThreadIDs()[threadID]
+}
+
+func (r *Runner) publishSessionTerminalEvent(event agent.Event) {
+	if event.ThreadID == "" {
+		return
+	}
+	payload, _ := json.Marshal(issueLogPayload(event))
+	rawPayload := event.ProviderPayload()
+	if rawPayload == "" {
+		rawPayload = string(eventPayload(event))
+	}
+	r.bus.Publish(events.AppEvent{
+		Type: "codex.event", ThreadID: event.ThreadID, TurnID: event.TurnID, Text: event.Text,
+		Payload: string(payload), AgentEventType: event.NormalizedType(), Provider: event.Provider,
+		RawMethod: rawMethod(event), RawPayload: rawPayload, Command: event.Command,
+		Path: event.Path, Status: event.Status, Error: event.Error,
+	})
 }
 
 func (r *Runner) runningThreadIDs() map[string]bool {

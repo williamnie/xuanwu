@@ -242,8 +242,8 @@ func (r *Runner) publishLog(ctx context.Context, issueID int64, event agent.Even
 func issueLogPayload(event agent.Event) events.AgentEventPayload {
 	return events.AgentEventPayload{
 		Type: event.NormalizedType(), Provider: event.Provider, RawMethod: rawMethod(event),
-		RawPayload: rawPayload(event), Text: event.Text, Command: event.Command, Path: event.Path,
-		Status: event.Status, Error: event.Error,
+		RawPayload: rawPayload(event), Payload: eventPayload(event), Text: event.Text,
+		Command: event.Command, Path: event.Path, Status: event.Status, Error: event.Error,
 	}
 }
 
@@ -255,16 +255,25 @@ func rawMethod(event agent.Event) string {
 }
 
 func rawPayload(event agent.Event) json.RawMessage {
-	if json.Valid([]byte(event.ProviderPayload())) {
-		return json.RawMessage(event.ProviderPayload())
+	payload := event.ProviderPayload()
+	if payload == "" {
+		return nil
+	}
+	if json.Valid([]byte(payload)) {
+		return json.RawMessage(payload)
+	}
+	body, _ := json.Marshal(payload)
+	return body
+}
+
+func eventPayload(event agent.Event) json.RawMessage {
+	if event.Payload == "" {
+		return nil
 	}
 	if json.Valid([]byte(event.Payload)) {
 		return json.RawMessage(event.Payload)
 	}
-	if event.ProviderPayload() == "" && event.Payload == "" {
-		return nil
-	}
-	body, _ := json.Marshal(firstNonEmpty(event.ProviderPayload(), event.Payload))
+	body, _ := json.Marshal(event.Payload)
 	return body
 }
 

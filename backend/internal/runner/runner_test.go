@@ -135,6 +135,39 @@ func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {
 	}
 }
 
+func TestSessionTurnPublishesTerminalEventAfterWatcherStarts(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+	bus := events.NewBus()
+	ch, unsubscribe := bus.Subscribe()
+	defer unsubscribe()
+	r := New(st, bus, fake)
+
+	turnID, err := r.StartSessionTurn(context.Background(), "thread-1", SessionTurnInput{Prompt: "follow up"})
+	if err != nil {
+		t.Fatalf("start session turn: %v", err)
+	}
+	if turnID != "turn-1" {
+		t.Fatalf("turn id = %q", turnID)
+	}
+	fake.events <- agent.Event{
+		Type: events.AgentTurnCompleted, Method: "turn/completed",
+		ThreadID: "thread-1", TurnID: "turn-1", Status: "completed",
+	}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case event := <-ch:
+			if event.ThreadID == "thread-1" && event.AgentEventType == events.AgentTurnCompleted {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for session terminal SSE event")
+		}
+	}
+}
+
 func TestListSessionsMarksManualSessionRunning(t *testing.T) {
 	st := openRunnerStore(t)
 	fake := &fakeCodex{events: make(chan agent.Event, 4)}

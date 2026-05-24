@@ -64,7 +64,7 @@ function approvalDetail(request) {
   return {
     subtitle: subtitleForMethod(request.method),
     reason: params.reason || '',
-    command: params.command || commandFromLegacy(params),
+    command: commandFromLegacy(params),
     cwd: params.cwd || '',
     paths: pathsFromParams(params),
   };

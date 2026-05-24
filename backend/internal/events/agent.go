@@ -23,6 +23,7 @@ type AgentEventPayload struct {
 	Provider   string          `json:"provider,omitempty"`
 	RawMethod  string          `json:"raw_method,omitempty"`
 	RawPayload json.RawMessage `json:"raw_payload,omitempty"`
+	Payload    json.RawMessage `json:"payload,omitempty"`
 	Text       string          `json:"text,omitempty"`
 	Command    string          `json:"command,omitempty"`
 	Path       string          `json:"path,omitempty"`

@@ -69,7 +69,13 @@ func (f *fakeCodex) StartTurn(_ context.Context, _ string, input []agent.UserInp
 	if shouldAutoComplete {
 		go func() {
 			f.events <- agent.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
-			f.events <- agent.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
+			f.events <- agent.Event{
+				Type:     "agent.turn.completed",
+				Method:   "turn/completed",
+				ThreadID: "thread-1",
+				TurnID:   "turn-1",
+				Status:   "completed",
+			}
 		}()
 	}
 	return "turn-1", nil
@@ -83,4 +89,10 @@ func (f *fakeCodex) InterruptTurn(_ context.Context, threadID, turnID string) er
 func (f *fakeCodex) ResolveApproval(context.Context, string, agent.ApprovalDecision) error {
 	return nil
 }
-func (f *fakeCodex) Events() <-chan agent.Event { return f.events }
+
+func (f *fakeCodex) Events() <-chan agent.Event {
+	if f.events == nil {
+		f.events = make(chan agent.Event)
+	}
+	return f.events
+}
