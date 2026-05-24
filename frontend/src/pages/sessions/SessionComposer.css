@@ -103,6 +103,103 @@
   transform: translateY(-1px);
 }
 
+.session-composer-circle.secondary {
+  background: #eef2f7;
+  color: #334155;
+}
+
+.session-composer-circle.secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.session-message-queue-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.session-message-queue-hint {
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 251, 235, 0.9);
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.session-message-queue-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-message-queue-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 7px 9px;
+  background: rgba(248, 250, 252, 0.86);
+}
+
+.session-message-queue-item.failed {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.session-message-queue-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-message-queue-badge {
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.session-message-queue-text {
+  overflow: hidden;
+  color: #334155;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-message-queue-error {
+  color: #dc2626;
+  font-size: 0.74rem;
+}
+
+.session-message-queue-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.session-message-queue-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(226, 232, 240, 0.9);
+  color: #475569;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.session-message-queue-actions button:hover {
+  background: #cbd5e1;
+  color: #0f172a;
+}
+
 .session-composer-circle:disabled,
 .session-composer-select select:disabled {
   opacity: 0.45;
@@ -145,6 +242,45 @@
 [data-theme="dark"] .session-composer-circle {
   background: #f8fafc;
   color: #020617;
+}
+
+[data-theme="dark"] .session-composer-circle.secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .session-composer-circle.secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme="dark"] .session-message-queue-hint {
+  border-color: rgba(251, 191, 36, 0.28);
+  background: rgba(146, 64, 14, 0.24);
+  color: #facc15;
+}
+
+[data-theme="dark"] .session-message-queue-item {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.76);
+}
+
+[data-theme="dark"] .session-message-queue-item.failed {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(127, 29, 29, 0.24);
+}
+
+[data-theme="dark"] .session-message-queue-text {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .session-message-queue-actions button {
+  background: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .session-message-queue-actions button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #f8fafc;
 }
 
 @media (max-width: 760px) {

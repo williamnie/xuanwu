@@ -26,17 +26,27 @@ export default function SessionComposer({
   sending,
   running,
   selectedId,
+  queuedMessages = [],
   onSubmit,
   onStop,
+  onCancelQueuedMessage,
+  onRetryQueuedMessage,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
   const effectiveModel = selectedModel || defaultModel;
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
-  const canSubmitMessage = Boolean(selectedId && value.trim() && !sending && !running);
+  const hasQueuedMessages = queuedMessages.length > 0;
+  const canSubmitMessage = Boolean(selectedId && value.trim() && !sending);
   const submitFromEditor = () => onSubmit({ preventDefault() {} });
   return (
     <form className="session-composer" onSubmit={onSubmit}>
+      <QueueStatus
+        running={running}
+        queuedMessages={queuedMessages}
+        onCancel={onCancelQueuedMessage}
+        onRetry={onRetryQueuedMessage}
+      />
       <PromptEditor
         value={value}
         onChange={onChange}
@@ -55,9 +65,50 @@ export default function SessionComposer({
           />
         )}
         onSubmitKey={canSubmitMessage ? submitFromEditor : null}
-        actions={<ComposerActions sending={sending} running={running} selectedId={selectedId} canSend={Boolean(value.trim())} onStop={onStop} />}
+        actions={(
+          <ComposerActions
+            sending={sending}
+            running={running}
+            selectedId={selectedId}
+            canSend={Boolean(value.trim())}
+            hasQueuedMessages={hasQueuedMessages}
+            onStop={onStop}
+          />
+        )}
       />
     </form>
+  );
+}
+
+function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
+  if (!running && queuedMessages.length === 0) return null;
+  return (
+    <div className="session-message-queue-panel">
+      {running && (
+        <div className="session-message-queue-hint">
+          当前 Codex 正在运行；发送会排队为下一条消息，不会引导当前响应。
+        </div>
+      )}
+      {queuedMessages.length > 0 && (
+        <ol className="session-message-queue-list" aria-label="排队消息">
+          {queuedMessages.map((item, index) => (
+            <li key={item.id} className={`session-message-queue-item ${item.status}`}>
+              <div className="session-message-queue-main">
+                <span className="session-message-queue-badge">{queueStatusLabel(item.status, index)}</span>
+                <span className="session-message-queue-text">{item.prompt}</span>
+                {item.error && <span className="session-message-queue-error">{item.error}</span>}
+              </div>
+              <div className="session-message-queue-actions">
+                {item.status === 'failed' && (
+                  <button type="button" onClick={() => onRetry?.(item.id)}>重试</button>
+                )}
+                <button type="button" onClick={() => onCancel?.(item.id)}>取消</button>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -128,19 +179,30 @@ function CompactSelect({ className, icon, value, displayLabel, onChange, title, 
   );
 }
 
-function ComposerActions({ sending, running, selectedId, canSend, onStop }) {
-  if (running || sending) {
+function ComposerActions({ sending, running, selectedId, canSend, hasQueuedMessages, onStop }) {
+  if (running) {
     return (
-      <button type="button" className="session-composer-circle" onClick={onStop} disabled={!selectedId} title="停止">
-        {sending ? <Loader2 className="animate-spin" size={17} /> : <Square size={14} fill="currentColor" />}
-      </button>
+      <>
+        <button type="button" className="session-composer-circle secondary" onClick={onStop} disabled={!selectedId} title="停止">
+          <Square size={14} fill="currentColor" />
+        </button>
+        <button className="session-composer-circle" disabled={!selectedId || !canSend || sending} title="排队为下一条消息">
+          {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
+        </button>
+      </>
     );
   }
   return (
-    <button className="session-composer-circle" disabled={!selectedId || !canSend} title="发送">
-      <ArrowUp size={18} strokeWidth={2.4} />
+    <button className="session-composer-circle" disabled={!selectedId || !canSend || sending} title={hasQueuedMessages ? '追加到队列' : '发送'}>
+      {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
     </button>
   );
+}
+
+function queueStatusLabel(status, index) {
+  if (status === 'sending') return '发送中';
+  if (status === 'failed') return '待重试';
+  return `排队 ${index + 1}`;
 }
 
 function visibleEffortOptions(model, selectedValue) {

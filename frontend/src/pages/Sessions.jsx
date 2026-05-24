@@ -17,6 +17,16 @@ import {
   removeApprovalRequest,
   removeApprovalsForSession,
 } from './sessions/approvalQueue';
+import {
+  createQueuedSessionMessage,
+  enqueueQueuedSessionMessage,
+  markQueuedSessionMessageFailed,
+  markQueuedSessionMessageSending,
+  nextPendingQueuedSessionMessage,
+  normalizeQueuedSessionMessages,
+  removeQueuedSessionMessage,
+  retryQueuedSessionMessage,
+} from './sessions/sessionMessageQueue';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
 import SessionComposer from './sessions/SessionComposer';
 import {
@@ -44,6 +54,7 @@ const SESSION_SIDEBAR_MAX_WIDTH = 420;
 const SESSION_DETAIL_MIN_WIDTH = 420;
 const SESSION_RESIZE_HANDLE_WIDTH = 8;
 const SESSION_SIDEBAR_KEY_STEP = 16;
+const MESSAGE_QUEUE_STORAGE_KEY = 'codex-session-message-queue';
 
 function clampSessionSidebarWidth(width, containerWidth = 0) {
   const fallback = SESSION_SIDEBAR_DEFAULT_WIDTH;
@@ -70,6 +81,28 @@ function persistSessionSidebarWidth(width) {
   } catch {
     // localStorage 不可用时忽略，拖拽本身仍可用。
   }
+}
+
+function readQueuedSessionMessages() {
+  try {
+    return normalizeQueuedSessionMessages(JSON.parse(window.localStorage.getItem(MESSAGE_QUEUE_STORAGE_KEY) || '[]'));
+  } catch {
+    return [];
+  }
+}
+
+function persistQueuedSessionMessages(queue) {
+  try {
+    const active = normalizeQueuedSessionMessages(queue);
+    window.localStorage.setItem(MESSAGE_QUEUE_STORAGE_KEY, JSON.stringify(active));
+  } catch {
+    // localStorage 不可用时仅保留当前页面内队列。
+  }
+}
+
+function queuedMessageId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function textFromUserContent(content) {
@@ -113,6 +146,7 @@ export default function Sessions() {
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
+  const [messageQueue, setMessageQueue] = useState(readQueuedSessionMessages);
   const [approvalQueue, setApprovalQueue] = useState([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [savingProjectOrder, setSavingProjectOrder] = useState(false);
@@ -120,6 +154,8 @@ export default function Sessions() {
   const listRefreshTimer = useRef(null);
   const selectedIdRef = useRef(selectedId);
   const lastSelectedIdRef = useRef(selectedId);
+  const messageQueueRef = useRef(messageQueue);
+  const activeQueuedSendsRef = useRef(new Set());
   const containerRef = useRef(null);
   const resizingSidebarRef = useRef(false);
   const [sessionSidebarWidth, setSessionSidebarWidth] = useState(readSessionSidebarWidth);
@@ -132,6 +168,16 @@ export default function Sessions() {
 
   const currentApprovals = useMemo(() => approvalsForSession(approvalQueue, selectedId), [approvalQueue, selectedId]);
   const approvalRequest = currentApprovals[0]?.request || null;
+  const currentQueuedMessages = useMemo(
+    () => messageQueue.filter((item) => item.sessionId === selectedId),
+    [messageQueue, selectedId],
+  );
+  const selectedDetailReady = selectedSession?.id === selectedId;
+
+  useEffect(() => {
+    messageQueueRef.current = messageQueue;
+    persistQueuedSessionMessages(messageQueue);
+  }, [messageQueue]);
 
   const applySessionSidebarWidth = useCallback((width) => {
     const nextWidth = Math.round(width);
@@ -439,22 +485,62 @@ export default function Sessions() {
     }
   };
 
+  const startSessionMessage = useCallback(async (sessionId, promptText, settings) => {
+    await api.sendSessionMessage(sessionId, {
+      prompt: promptText,
+      model: settings.model,
+      reasoning_effort: settings.reasoningEffort,
+      approval_policy: settings.approvalPolicy,
+      sandbox: settings.sandbox,
+    });
+    setSessionRunning(true);
+    setSessions((prev) => setSessionRunningInList(prev, sessionId, true));
+    setLiveEvents([]);
+  }, []);
+
+  const sendQueuedMessage = useCallback(async (sessionId) => {
+    const queued = nextPendingQueuedSessionMessage(messageQueueRef.current, sessionId);
+    if (!queued || activeQueuedSendsRef.current.has(queued.id)) return;
+    activeQueuedSendsRef.current.add(queued.id);
+    setSending(true);
+    setMessageQueue((current) => markQueuedSessionMessageSending(current, queued.id));
+    try {
+      await startSessionMessage(sessionId, queued.prompt, queued.settings);
+      setMessageQueue((current) => removeQueuedSessionMessage(current, queued.id));
+    } catch (err) {
+      setMessageQueue((current) => markQueuedSessionMessageFailed(current, queued.id, err.message || '发送排队消息失败'));
+      toast.error(err.message || '发送排队消息失败');
+    } finally {
+      activeQueuedSendsRef.current.delete(queued.id);
+      setSending(false);
+    }
+  }, [startSessionMessage]);
+
+  useEffect(() => {
+    if (!selectedId || !selectedDetailReady || sessionRunning || sending) return;
+    sendQueuedMessage(selectedId);
+  }, [selectedId, selectedDetailReady, sessionRunning, sending, messageQueue, sendQueuedMessage]);
+
   const sendMessage = async (event) => {
     event.preventDefault();
-    if (!selectedId || !message.trim()) return;
+    const promptText = message.trim();
+    if (!selectedId || !promptText || sending) return;
+    if (sessionRunning || currentQueuedMessages.length > 0) {
+      const queued = createQueuedSessionMessage({
+        id: queuedMessageId(),
+        sessionId: selectedId,
+        prompt: promptText,
+        settings: messageSettings,
+      });
+      setMessageQueue((current) => enqueueQueuedSessionMessage(current, queued));
+      setMessage('');
+      toast.info(sessionRunning ? '已排队为下一条消息，当前响应不会被引导。' : '已追加到消息队列。');
+      return;
+    }
     setSending(true);
     try {
-      await api.sendSessionMessage(selectedId, {
-        prompt: message,
-        model: messageSettings.model,
-        reasoning_effort: messageSettings.reasoningEffort,
-        approval_policy: messageSettings.approvalPolicy,
-        sandbox: messageSettings.sandbox,
-      });
-      setSessionRunning(true);
-      setSessions((prev) => setSessionRunningInList(prev, selectedId, true));
+      await startSessionMessage(selectedId, promptText, messageSettings);
       setMessage('');
-      setLiveEvents([]);
     } catch (err) {
       toast.error(err.message || '发送消息失败');
     } finally {
@@ -467,6 +553,14 @@ export default function Sessions() {
     await api.interruptSession(selectedId);
     setSessionRunning(false);
     setSessions((prev) => setSessionRunningInList(prev, selectedId, false));
+  };
+
+  const cancelQueuedMessage = (id) => {
+    setMessageQueue((current) => removeQueuedSessionMessage(current, id));
+  };
+
+  const retryQueuedMessage = (id) => {
+    setMessageQueue((current) => retryQueuedSessionMessage(current, id));
   };
 
   // 新建并启动会话
@@ -688,8 +782,11 @@ export default function Sessions() {
                   sending={sending}
                   running={sessionRunning}
                   selectedId={selectedId}
+                  queuedMessages={currentQueuedMessages}
                   onSubmit={sendMessage}
                   onStop={interrupt}
+                  onCancelQueuedMessage={cancelQueuedMessage}
+                  onRetryQueuedMessage={retryQueuedMessage}
                 />
               </div>
             </div>
