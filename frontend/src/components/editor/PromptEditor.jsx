@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import {
   Bold,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api/client';
 import { getPromptEditorExtensions } from './promptEditorCore';
+import { handlePromptEditorSubmitKey } from './promptEditorKeyHandling';
 import { message } from '../../store/toastStore';
 import './PromptEditor.css';
 
@@ -26,11 +27,17 @@ export default function PromptEditor({
   footerControls = null,
   actions = null,
   hideToolbar = false, // 新增参数：是否隐藏顶部工具条
+  onSubmitKey = null,
 }) {
   const fileInputRef = useRef(null);
+  const submitKeyRef = useRef(onSubmitKey);
   const [uploading, setUploading] = useState(false);
-  const editor = usePromptEditor(value, onChange, placeholder, uploadFiles);
+  const editor = usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef);
   const isComposer = variant === 'composer';
+
+  useLayoutEffect(() => {
+    submitKeyRef.current = onSubmitKey;
+  }, [onSubmitKey]);
 
   async function uploadFiles(files) {
     const images = Array.from(files).filter(file => file.type.startsWith('image/'));
@@ -91,12 +98,13 @@ export default function PromptEditor({
   );
 }
 
-function usePromptEditor(value, onChange, placeholder, uploadFiles) {
+function usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef) {
   const editor = useEditor({
     extensions: getPromptEditorExtensions(placeholder),
     content: '',
     immediatelyRender: false,
     editorProps: {
+      handleKeyDown: (_view, event) => handlePromptEditorSubmitKey(event, submitKeyRef.current),
       handlePaste: (_view, event) => handleImageFiles(event.clipboardData?.files, uploadFiles),
       handleDrop: (_view, event) => handleImageFiles(event.dataTransfer?.files, uploadFiles),
       attributes: { 'aria-label': placeholder || 'Markdown editor' },

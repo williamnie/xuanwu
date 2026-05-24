@@ -33,6 +33,8 @@ export default function SessionComposer({
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
   const effectiveModel = selectedModel || defaultModel;
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
+  const canSubmitMessage = Boolean(selectedId && value.trim() && !sending && !running);
+  const submitFromEditor = () => onSubmit({ preventDefault() {} });
   return (
     <form className="session-composer" onSubmit={onSubmit}>
       <PromptEditor
@@ -52,6 +54,7 @@ export default function SessionComposer({
             effectiveModel={effectiveModel}
           />
         )}
+        onSubmitKey={canSubmitMessage ? submitFromEditor : null}
         actions={<ComposerActions sending={sending} running={running} selectedId={selectedId} canSend={Boolean(value.trim())} onStop={onStop} />}
       />
     </form>
