@@ -134,6 +134,7 @@ export default function Sessions() {
     const rect = containerRef.current?.getBoundingClientRect();
     const nextWidth = clampSessionSidebarWidth(clientX - (rect?.left || 0), rect?.width || 0);
     applySessionSidebarWidth(nextWidth);
+    return nextWidth;
   }, [applySessionSidebarWidth]);
 
   const finishSessionSidebarResize = useCallback((event) => {
@@ -154,7 +155,7 @@ export default function Sessions() {
     resizingSidebarRef.current = true;
     setIsResizingSidebar(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    updateSessionSidebarWidthFromPointer(event.clientX);
+    setSessionSidebarWidth(updateSessionSidebarWidthFromPointer(event.clientX));
   }, [updateSessionSidebarWidthFromPointer]);
 
   const handleSessionSidebarResizeMove = useCallback((event) => {
@@ -183,7 +184,7 @@ export default function Sessions() {
   useEffect(() => {
     const clampToContainer = () => {
       const containerWidth = containerRef.current?.getBoundingClientRect().width || 0;
-      if (window.innerWidth <= 960) return;
+      if (window.matchMedia('(max-width: 960px)').matches) return;
       const nextWidth = clampSessionSidebarWidth(sessionSidebarWidthRef.current, containerWidth);
       if (nextWidth === sessionSidebarWidthRef.current) return;
       applySessionSidebarWidth(nextWidth);
