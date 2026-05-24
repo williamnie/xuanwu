@@ -21,6 +21,7 @@ import {
 } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
+import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessions/sessionTranscriptItems';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
@@ -887,6 +888,26 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
+  const lastLiveEvent = liveEvents[liveEvents.length - 1];
+  const autoScrollWatchKey = [
+    session?.updatedAt || '',
+    turns.length,
+    liveEvents.length,
+    lastLiveEvent?.method || lastLiveEvent?.agent_event_type || '',
+    lastLiveEvent?.payload || lastLiveEvent?.text || lastLiveEvent?.error || '',
+    running ? 'running' : 'idle',
+    pendingApproval ? 'approval' : '',
+  ].join(':');
+  const {
+    scrollRef,
+    contentRef,
+    showScrollButton,
+    handleScroll,
+    scrollToLatest,
+  } = useSmartAutoScroll({
+    resetKey: session?.id || providerSessionId,
+    watchKey: autoScrollWatchKey,
+  });
 
   return (
     <div className="session-detail-body">
@@ -895,12 +916,20 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
         <code>{providerSessionId}</code>
         <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
       </div>
-      <div className="session-transcript">
-        {turns.map((turn, index) => (
-          <TurnItem key={turn.id || index} turn={turn} />
-        ))}
-        {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} />}
+      <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>
+        <div className="session-transcript-content" ref={contentRef}>
+          {turns.map((turn, index) => (
+            <TurnItem key={turn.id || index} turn={turn} />
+          ))}
+          {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} />}
+        </div>
       </div>
+      {showScrollButton && (
+        <button type="button" className="session-scroll-bottom-button" onClick={scrollToLatest}>
+          <ChevronDown size={14} />
+          回到底部
+        </button>
+      )}
     </div>
   );
 }

@@ -362,6 +362,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
+  position: relative;
 }
 
 .session-transcript {
@@ -369,10 +370,37 @@
   min-height: 0;
   overflow-y: auto;
   padding: 24px;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.session-transcript-content {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  background: rgba(255, 255, 255, 0.01);
+  min-height: 100%;
+}
+
+.session-scroll-bottom-button {
+  position: absolute;
+  right: 32px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--primary);
+  background: var(--bg-card);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  font-size: 0.78rem;
+  font-weight: 750;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.session-scroll-bottom-button:hover {
+  background: var(--primary-glow);
 }
 
 /* Turn Container 按回合渲染 */
