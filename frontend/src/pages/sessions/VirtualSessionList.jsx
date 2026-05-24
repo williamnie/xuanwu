@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2, GripVertical } from 'lucide-react';
+import { Folder, FolderOpen, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import {
   nextProjectSessionVisibleCount,
   PROJECT_SESSION_PAGE_SIZE,
@@ -246,11 +246,6 @@ export default function VirtualSessionList({
                 onClick={() => toggleCollapse(group.id)}
                 aria-label={`${group.name} project sessions`}
               >
-                {!group.isVirtual && (
-                  <span className="project-group-drag-handle" title="拖动调整项目顺序">
-                    <GripVertical size={13} />
-                  </span>
-                )}
                 <span className="project-group-chevron">
                   {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                 </span>
