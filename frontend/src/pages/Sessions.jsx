@@ -505,6 +505,7 @@ export default function Sessions() {
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
             savingOrder={savingProjectOrder}
+            autoCollapseEmptyProjects={!searchTerm.trim()}
             onSelect={selectSession}
             onLoadMore={loadMore}
             onReorderProjects={handleReorderProjects}

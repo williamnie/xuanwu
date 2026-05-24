@@ -7,6 +7,7 @@ import {
   projectSessionVisibleCount,
   visibleProjectSessions,
 } from './projectSessionPagination';
+import { isProjectSessionGroupCollapsed } from './projectSessionCollapse';
 import { providerSupports } from './sessionOptions';
 import './ProjectSessionPagination.css';
 
@@ -86,6 +87,7 @@ export default function VirtualSessionList({
   hasMore,
   loadingMore,
   savingOrder = false,
+  autoCollapseEmptyProjects = true,
   onSelect,
   onLoadMore,
   onReorderProjects,
@@ -159,8 +161,8 @@ export default function VirtualSessionList({
     });
   }, [selectedId, sessions, projectsByCwd]);
 
-  const toggleCollapse = (id) => {
-    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleCollapse = (group, isCollapsed) => {
+    setCollapsed((prev) => ({ ...prev, [group.id]: !isCollapsed }));
   };
 
   const handleScroll = useCallback((event) => {
@@ -222,7 +224,9 @@ export default function VirtualSessionList({
     <div className="session-list-viewport" onScroll={handleScroll}>
       <div className="project-session-groups">
         {groups.map((group) => {
-          const isCollapsed = collapsed[group.id];
+          const isCollapsed = isProjectSessionGroupCollapsed(group, collapsed, {
+            autoCollapseEmptyProjects,
+          });
           const hasSessions = group.sessions.length > 0;
           const isUnsupported = !group.isVirtual && !group.sessionsSupported;
           const visibleCount = projectSessionVisibleCount(group.id, visibleCounts);
@@ -243,7 +247,7 @@ export default function VirtualSessionList({
             >
               <button
                 className="project-group-header"
-                onClick={() => toggleCollapse(group.id)}
+                onClick={() => toggleCollapse(group, isCollapsed)}
                 aria-label={`${group.name} project sessions`}
               >
                 <span className="project-group-chevron">
