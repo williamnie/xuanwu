@@ -31,7 +31,7 @@ Go 后端启动时会创建 Codex adapter，但不会立刻拉起 Codex app-serv
 默认配置来自 `backend/internal/config/config.go`：
 
 ```txt
-CODEX_RUNNER_ADDR       默认 127.0.0.1:3008
+CODEX_RUNNER_ADDR       默认 0.0.0.0:3008
 CODEX_RUNNER_DB         默认 data/app.db
 CODEX_RUNNER_CODEX_CMD  默认 codex
 CODEX_RUNNER_WEB_DIR    默认空，使用二进制内嵌前端；设置后改为托管外部目录
@@ -42,7 +42,7 @@ CODEX_RUNNER_WEB_DIR    默认空，使用二进制内嵌前端；设置后改�
 
 ```bash
 codex-issue-runner serve \
-  --addr 127.0.0.1:3008 \
+  --addr 0.0.0.0:3008 \
   --db data/app.db \
   --codex-cmd codex \
   --codex-args 'app-server --listen stdio://'

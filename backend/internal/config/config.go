@@ -66,7 +66,7 @@ func applyAuthTokenEnv(cfg *Config) {
 
 func defaultConfig() Config {
 	return Config{
-		Addr:             env("CODEX_RUNNER_ADDR", "127.0.0.1:3008"),
+		Addr:             env("CODEX_RUNNER_ADDR", "0.0.0.0:3008"),
 		DBPath:           env("CODEX_RUNNER_DB", "data/app.db"),
 		CodexCmd:         env("CODEX_RUNNER_CODEX_CMD", "codex"),
 		CodexArgs:        []string{"app-server", "--listen", "stdio://"},

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
-ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
+ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$ROOT_DIR/data/app.db}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$(dirname "$DB_PATH")/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
@@ -25,6 +25,10 @@ xml_escape() {
 }
 
 service_url() {
+  if [[ "$ADDR" == 0.0.0.0:* ]]; then
+    printf 'http://127.0.0.1:%s' "${ADDR##*:}"
+    return
+  fi
   if [[ "$ADDR" == :* ]]; then
     printf 'http://127.0.0.1%s' "$ADDR"
   else

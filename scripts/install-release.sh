@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
 VERSION="${CODEX_RUNNER_VERSION:-latest}"
-ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
+ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
@@ -25,7 +25,7 @@ Usage:
 
 Useful environment variables:
   CODEX_RUNNER_VERSION=v0.1.0          Install a fixed release tag instead of latest
-  CODEX_RUNNER_ADDR=127.0.0.1:3008     Service listen address
+  CODEX_RUNNER_ADDR=0.0.0.0:3008       Service listen address
   CODEX_RUNNER_INSTALL_DIR=~/.local/bin Binary install directory
   CODEX_RUNNER_STATE_DIR=~/.local/state/codex-issue-runner
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
@@ -53,6 +53,10 @@ xml_escape() {
 }
 
 service_url() {
+  if [[ "$ADDR" == 0.0.0.0:* ]]; then
+    printf 'http://127.0.0.1:%s' "${ADDR##*:}"
+    return
+  fi
   if [[ "$ADDR" == :* ]]; then
     printf 'http://127.0.0.1%s' "$ADDR"
   else

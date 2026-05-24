@@ -2,10 +2,14 @@
 set -euo pipefail
 
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
-ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
+ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 DOMAIN="gui/$(id -u)"
 
 service_url() {
+  if [[ "$ADDR" == 0.0.0.0:* ]]; then
+    printf 'http://127.0.0.1:%s' "${ADDR##*:}"
+    return
+  fi
   if [[ "$ADDR" == :* ]]; then
     printf 'http://127.0.0.1%s' "$ADDR"
   else

@@ -4,7 +4,7 @@
 
 第一版目标见 [`docs/design.md`](docs/design.md)；Go 后端与 Codex app-server 的运行时对接见 [`docs/codex-integration.md`](docs/codex-integration.md)。当前已具备：
 
-- Go API Server（默认 `127.0.0.1:3008`）
+- Go API Server（默认 `0.0.0.0:3008`，支持局域网访问）
 - SQLite 持久化（默认 `data/app.db`）
 - Projects / Issues REST API
 - 全局 SSE：`GET /api/events`
@@ -29,7 +29,7 @@ Dashboard 会从本机 Codex session JSONL 里的 `token_count` 事件聚合用�
 ./dev.sh
 ```
 
-后端默认启动在 `http://127.0.0.1:3008`，前端默认启动在 `http://127.0.0.1:3568`。
+后端默认监听 `0.0.0.0:3008`，前端默认监听 `0.0.0.0:3568`；本机可访问 `http://127.0.0.1:3008` / `http://127.0.0.1:3568`，局域网设备可用本机 LAN IP 访问。
 `./dev.sh` 是前台开发模式：终端退出后服务会停止，不适合作为长期后台服务。
 
 也可以分别启动。后端：
@@ -48,7 +48,7 @@ npm run dev
 可选后端配置：
 
 ```bash
-CODEX_RUNNER_ADDR=127.0.0.1:3008 \
+CODEX_RUNNER_ADDR=0.0.0.0:3008 \
 CODEX_RUNNER_DB=data/app.db \
 CODEX_RUNNER_CODEX_CMD=codex \
 go run ./backend/cmd/codex-issue-runner
@@ -60,7 +60,7 @@ go run ./backend/cmd/codex-issue-runner
 cd frontend && npm run build
 cd ..
 go run ./backend/cmd/codex-issue-runner serve \
-  --addr 127.0.0.1:3008 \
+  --addr 0.0.0.0:3008 \
   --db data/app.db \
   --web-dir frontend/dist
 ```
@@ -83,7 +83,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 常用覆盖项：
 
 ```bash
-export CODEX_RUNNER_ADDR=127.0.0.1:3018
+export CODEX_RUNNER_ADDR=0.0.0.0:3018
 export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
 export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
 export CODEX_RUNNER_AUTH_TOKEN=your_custom_token  # 自定义 API 访问令牌 (可选)
@@ -95,7 +95,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 ```txt
 二进制: ~/.local/bin/codex-issue-runner
 数据:   ~/.local/state/codex-issue-runner/app.db
-访问:   http://127.0.0.1:3008/
+访问:   http://127.0.0.1:3008/（局域网使用 http://<本机LAN-IP>:3008/）
 ```
 
 ## 从源码后台部署（macOS launchd）
@@ -109,7 +109,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 部署后访问：
 
 ```txt
-http://127.0.0.1:3008/
+http://127.0.0.1:3008/（局域网使用 http://<本机LAN-IP>:3008/）
 ```
 
 常用运维命令：
@@ -129,7 +129,7 @@ codex-issue-runner system status --token "$(cat data/auth_token)" --json
 
 ```txt
 服务名: com.xiaobei.codex-issue-runner
-监听:   127.0.0.1:3008
+监听:   0.0.0.0:3008
 DB:     data/app.db
 Web:    内嵌在二进制中（可用 CODEX_RUNNER_WEB_DIR 覆盖）
 二进制: dist/codex-issue-runner
@@ -140,7 +140,7 @@ Token:  默认在服务首次启动时自动生成并写入 data/auth_token 文�
 可通过环境变量覆盖：
 
 ```bash
-CODEX_RUNNER_ADDR=127.0.0.1:3018 \
+CODEX_RUNNER_ADDR=0.0.0.0:3018 \
 CODEX_RUNNER_DEPLOY_DB=/absolute/path/app.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
 CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
@@ -181,7 +181,7 @@ checksums.txt
 
 ```bash
 # 后台服务；不写子命令时也保持兼容，默认等价于 serve
-go run ./backend/cmd/codex-issue-runner serve --addr 127.0.0.1:3008 --db data/app.db
+go run ./backend/cmd/codex-issue-runner serve --addr 0.0.0.0:3008 --db data/app.db
 
 # 创建项目并开启 auto-run
 codex-issue-runner project create \

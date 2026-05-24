@@ -56,6 +56,17 @@ func TestParseDefaultsAuthTokenFileFromDBPath(t *testing.T) {
 	}
 }
 
+func TestParseDefaultAddrAllowsLANAccess(t *testing.T) {
+	t.Setenv("CODEX_RUNNER_ADDR", "")
+	cfg, err := Parse(nil)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.Addr != "0.0.0.0:3008" {
+		t.Fatalf("default addr = %q, want LAN listener", cfg.Addr)
+	}
+}
+
 func TestParseProviderCommandSettings(t *testing.T) {
 	t.Setenv("CODEX_RUNNER_CLAUDE_CMD", "")
 	t.Setenv("CODEX_RUNNER_OPENCODE_CMD", "")
