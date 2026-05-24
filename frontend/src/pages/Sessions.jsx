@@ -30,6 +30,40 @@ const PAGE_SIZE = 50;
 const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
 const DEFAULT_SESSION_PROVIDER = 'codex';
+const SESSION_SIDEBAR_WIDTH_KEY = 'codex-session-sidebar-width';
+const SESSION_SIDEBAR_DEFAULT_WIDTH = 260;
+const SESSION_SIDEBAR_MIN_WIDTH = 220;
+const SESSION_SIDEBAR_MAX_WIDTH = 420;
+const SESSION_DETAIL_MIN_WIDTH = 420;
+const SESSION_RESIZE_HANDLE_WIDTH = 8;
+const SESSION_SIDEBAR_KEY_STEP = 16;
+
+function clampSessionSidebarWidth(width, containerWidth = 0) {
+  const fallback = SESSION_SIDEBAR_DEFAULT_WIDTH;
+  const parsedWidth = width == null || (typeof width === 'string' && width.trim() === '') ? NaN : Number(width);
+  const resolved = Number.isFinite(parsedWidth) ? parsedWidth : fallback;
+  const availableMax = containerWidth > 0
+    ? containerWidth - SESSION_DETAIL_MIN_WIDTH - SESSION_RESIZE_HANDLE_WIDTH
+    : SESSION_SIDEBAR_MAX_WIDTH;
+  const maxWidth = Math.min(SESSION_SIDEBAR_MAX_WIDTH, Math.max(SESSION_SIDEBAR_MIN_WIDTH, availableMax));
+  return Math.round(Math.min(Math.max(resolved, SESSION_SIDEBAR_MIN_WIDTH), maxWidth));
+}
+
+function readSessionSidebarWidth() {
+  try {
+    return clampSessionSidebarWidth(window.localStorage.getItem(SESSION_SIDEBAR_WIDTH_KEY));
+  } catch {
+    return SESSION_SIDEBAR_DEFAULT_WIDTH;
+  }
+}
+
+function persistSessionSidebarWidth(width) {
+  try {
+    window.localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(Math.round(width)));
+  } catch {
+    // localStorage 不可用时忽略，拖拽本身仍可用。
+  }
+}
 
 function textFromUserContent(content) {
   if (!Array.isArray(content)) return '';
@@ -80,10 +114,85 @@ export default function Sessions() {
   const listRefreshTimer = useRef(null);
   const selectedIdRef = useRef(selectedId);
   const lastSelectedIdRef = useRef(selectedId);
+  const containerRef = useRef(null);
+  const resizingSidebarRef = useRef(false);
+  const [sessionSidebarWidth, setSessionSidebarWidth] = useState(readSessionSidebarWidth);
+  const sessionSidebarWidthRef = useRef(sessionSidebarWidth);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  const applySessionSidebarWidth = useCallback((width) => {
+    const nextWidth = Math.round(width);
+    sessionSidebarWidthRef.current = nextWidth;
+    containerRef.current?.style.setProperty('--sessions-sidebar-width', `${nextWidth}px`);
+  }, []);
+
+  const updateSessionSidebarWidthFromPointer = useCallback((clientX) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    const nextWidth = clampSessionSidebarWidth(clientX - (rect?.left || 0), rect?.width || 0);
+    applySessionSidebarWidth(nextWidth);
+  }, [applySessionSidebarWidth]);
+
+  const finishSessionSidebarResize = useCallback((event) => {
+    if (!resizingSidebarRef.current) return;
+    resizingSidebarRef.current = false;
+    setIsResizingSidebar(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const nextWidth = sessionSidebarWidthRef.current;
+    setSessionSidebarWidth(nextWidth);
+    persistSessionSidebarWidth(nextWidth);
+  }, []);
+
+  const handleSessionSidebarResizeStart = useCallback((event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    resizingSidebarRef.current = true;
+    setIsResizingSidebar(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateSessionSidebarWidthFromPointer(event.clientX);
+  }, [updateSessionSidebarWidthFromPointer]);
+
+  const handleSessionSidebarResizeMove = useCallback((event) => {
+    if (!resizingSidebarRef.current) return;
+    event.preventDefault();
+    updateSessionSidebarWidthFromPointer(event.clientX);
+  }, [updateSessionSidebarWidthFromPointer]);
+
+  const handleSessionSidebarResizeKeyDown = useCallback((event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const containerWidth = containerRef.current?.getBoundingClientRect().width || 0;
+    const current = sessionSidebarWidthRef.current;
+    const target = {
+      ArrowLeft: current - SESSION_SIDEBAR_KEY_STEP,
+      ArrowRight: current + SESSION_SIDEBAR_KEY_STEP,
+      Home: SESSION_SIDEBAR_MIN_WIDTH,
+      End: SESSION_SIDEBAR_MAX_WIDTH,
+    }[event.key];
+    const nextWidth = clampSessionSidebarWidth(target, containerWidth);
+    applySessionSidebarWidth(nextWidth);
+    setSessionSidebarWidth(nextWidth);
+    persistSessionSidebarWidth(nextWidth);
+  }, [applySessionSidebarWidth]);
+
+  useEffect(() => {
+    const clampToContainer = () => {
+      const containerWidth = containerRef.current?.getBoundingClientRect().width || 0;
+      if (window.innerWidth <= 960) return;
+      const nextWidth = clampSessionSidebarWidth(sessionSidebarWidthRef.current, containerWidth);
+      if (nextWidth === sessionSidebarWidthRef.current) return;
+      applySessionSidebarWidth(nextWidth);
+      setSessionSidebarWidth(nextWidth);
+    };
+    clampToContainer();
+    window.addEventListener('resize', clampToContainer);
+    return () => window.removeEventListener('resize', clampToContainer);
+  }, [applySessionSidebarWidth]);
 
   // 客户端风格路由、置顶与搜索状态
   const [activeView, setActiveView] = useState('chat');
@@ -425,7 +534,11 @@ export default function Sessions() {
   }
 
   return (
-    <div className="sessions-client-container client-animate-fade-in">
+    <div
+      ref={containerRef}
+      className={`sessions-client-container client-animate-fade-in${isResizingSidebar ? ' resizing-session-sidebar' : ''}`}
+      style={{ '--sessions-sidebar-width': `${sessionSidebarWidth}px` }}
+    >
       {/* 左侧 macOS 风格侧边栏 */}
       <aside className="sessions-client-sidebar">
 
@@ -514,6 +627,22 @@ export default function Sessions() {
 
 
       </aside>
+
+      <div
+        className="sessions-sidebar-resize-handle"
+        role="separator"
+        aria-label="调整 session 列表宽度"
+        aria-orientation="vertical"
+        aria-valuemin={SESSION_SIDEBAR_MIN_WIDTH}
+        aria-valuemax={SESSION_SIDEBAR_MAX_WIDTH}
+        aria-valuenow={sessionSidebarWidth}
+        tabIndex={0}
+        onPointerDown={handleSessionSidebarResizeStart}
+        onPointerMove={handleSessionSidebarResizeMove}
+        onPointerUp={finishSessionSidebarResize}
+        onPointerCancel={finishSessionSidebarResize}
+        onKeyDown={handleSessionSidebarResizeKeyDown}
+      />
 
       {/* 右侧主工作区 */}
       <main className="sessions-client-main">

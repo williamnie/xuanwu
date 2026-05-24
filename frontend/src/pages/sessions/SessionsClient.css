@@ -13,8 +13,10 @@
 
 /* 左侧 macOS 风格侧边栏 */
 .sessions-client-sidebar {
-  width: 260px;
-  flex-shrink: 0;
+  width: var(--sessions-sidebar-width, 260px);
+  flex: 0 0 var(--sessions-sidebar-width, 260px);
+  min-width: 220px;
+  max-width: 420px;
   background-color: #f3f3f5; /* macOS 经典侧边栏灰 */
   border-right: 1px solid #e0e0e2;
   display: flex;
@@ -23,6 +25,43 @@
   padding: 12px 14px 16px 14px;
   user-select: none;
   transition: background-color 0.3s, border-color 0.3s;
+}
+
+.sessions-sidebar-resize-handle {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 100%;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  outline: none;
+  z-index: 2;
+}
+
+.sessions-sidebar-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: var(--border-color);
+  opacity: 0.55;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.sessions-sidebar-resize-handle:hover::after,
+.sessions-sidebar-resize-handle:focus-visible::after,
+.resizing-session-sidebar .sessions-sidebar-resize-handle::after {
+  background: var(--primary);
+  opacity: 1;
+}
+
+.resizing-session-sidebar,
+.resizing-session-sidebar * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 [data-theme="dark"] .sessions-client-sidebar {
@@ -741,6 +780,35 @@
 /* 当主侧边栏折叠时，在 Sessions 页面的左边栏上空出间距，避免浮动的展开按钮盖住快捷项 */
 .sidebar-collapsed .sessions-client-sidebar {
   padding-top: 56px !important;
+}
+
+@media (max-width: 960px) {
+  .sessions-client-container {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .sessions-client-sidebar {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    flex: 0 0 auto;
+    height: auto;
+    max-height: 42vh;
+  }
+
+  .sidebar-scroll-area {
+    min-height: 160px;
+  }
+
+  .sessions-sidebar-resize-handle {
+    display: none;
+  }
+
+  .sessions-client-main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }
 
 /* ==========================================================================
