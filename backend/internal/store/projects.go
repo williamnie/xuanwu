@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 )
 
 func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
@@ -260,4 +262,23 @@ func normalizeProjectProviderConfig(config string) string {
 		return "{}"
 	}
 	return config
+}
+
+func AttachProjectCapabilities(projects []Project) {
+	for i := range projects {
+		AttachProjectCapability(&projects[i])
+	}
+}
+
+func AttachProjectCapability(project *Project) {
+	project.ProviderCapabilities = ProjectProviderCapabilities(project.Provider)
+}
+
+func ProjectProviderCapabilities(provider string) []string {
+	capabilities := agent.CapabilitiesForProviderID(provider)
+	result := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		result = append(result, string(capability))
+	}
+	return result
 }

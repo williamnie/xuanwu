@@ -7,6 +7,7 @@ import {
   projectSessionVisibleCount,
   visibleProjectSessions,
 } from './projectSessionPagination';
+import { providerSupports } from './sessionOptions';
 import './ProjectSessionPagination.css';
 
 function projectNameFromPath(cwd) {
@@ -106,6 +107,7 @@ export default function VirtualSessionList({
         cwd: project.cwd,
         sessions: [],
         isVirtual: false,
+        sessionsSupported: providerSupports(project, 'sessions'),
       });
     }
 
@@ -222,6 +224,7 @@ export default function VirtualSessionList({
         {groups.map((group) => {
           const isCollapsed = collapsed[group.id];
           const hasSessions = group.sessions.length > 0;
+          const isUnsupported = !group.isVirtual && !group.sessionsSupported;
           const visibleCount = projectSessionVisibleCount(group.id, visibleCounts);
           const visibleSessions = visibleProjectSessions(group.sessions, visibleCount);
           const moreState = projectSessionMoreState(group.sessions.length, visibleCount);
@@ -260,7 +263,9 @@ export default function VirtualSessionList({
 
               {!isCollapsed && (
                 <div className="project-group-sessions animate-slide-down">
-                  {hasSessions ? (
+                  {isUnsupported ? (
+                    <div className="project-group-empty unsupported">Provider 不支持 Sessions</div>
+                  ) : hasSessions ? (
                     visibleSessions.map((session) => (
                       <SessionItem
                         key={session.id}

@@ -21,10 +21,21 @@ export const SANDBOX_OPTIONS = [
 
 export const PROVIDER_OPTIONS = [
   { value: 'codex', label: 'Codex', enabled: true },
+  { value: 'fake-execution-only', label: 'Fake execution-only', enabled: true },
   { value: 'claude', label: 'Claude Code（未启用）', enabled: false },
   { value: 'opencode', label: 'opencode（未启用）', enabled: false },
   { value: 'kimicode', label: 'Kimi Code（未启用）', enabled: false },
 ];
+
+export const CAPABILITY_LABELS = {
+  issue_execution: 'Issue 执行',
+  sessions: 'Sessions',
+  resume_session: '恢复会话',
+  interrupt: '中断',
+  approvals: '审批',
+  model_list: '模型列表',
+  transcript_export: '导出记录',
+};
 
 export function providerValue(project) {
   return project?.provider || '';
@@ -33,6 +44,20 @@ export function providerValue(project) {
 export function providerLabel(value) {
   const option = PROVIDER_OPTIONS.find((item) => item.value === value);
   return option?.label || value || '未配置';
+}
+
+export function providerCapabilities(project) {
+  return Array.isArray(project?.provider_capabilities) ? project.provider_capabilities : [];
+}
+
+export function providerSupports(project, capability) {
+  return providerCapabilities(project).includes(capability);
+}
+
+export function capabilitySummary(project) {
+  const capabilities = providerCapabilities(project);
+  if (!capabilities.length) return '暂无 capability 声明';
+  return capabilities.map((item) => CAPABILITY_LABELS[item] || item).join(' / ');
 }
 
 export function modelValueFromProject(project) {

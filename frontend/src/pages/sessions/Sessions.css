@@ -289,6 +289,11 @@
   font-style: italic;
 }
 
+.project-group-empty.unsupported {
+  opacity: 0.78;
+  font-style: normal;
+}
+
 .session-list-loading {
   color: var(--text-muted);
   font-size: 0.8rem;

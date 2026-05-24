@@ -21,6 +21,8 @@ func New(client codexclient.Client) *Provider {
 
 func (p *Provider) Name() string { return events.ProviderCodex }
 
+func (p *Provider) Capabilities() agent.Capabilities { return agent.CodexCapabilities() }
+
 func (p *Provider) Start(ctx context.Context) error { return p.client.Start(ctx) }
 
 func (p *Provider) Stop(ctx context.Context) error { return p.client.Stop(ctx) }

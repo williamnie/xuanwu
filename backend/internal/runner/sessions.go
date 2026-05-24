@@ -38,6 +38,9 @@ type SessionTurnInput struct {
 }
 
 func (r *Runner) ListModels(ctx context.Context) (agent.ModelListResult, error) {
+	if err := r.requireCapability(agent.CapabilityModelList); err != nil {
+		return agent.ModelListResult{}, err
+	}
 	if err := r.prepareCodex(ctx); err != nil {
 		return agent.ModelListResult{}, err
 	}
@@ -45,10 +48,16 @@ func (r *Runner) ListModels(ctx context.Context) (agent.ModelListResult, error) 
 }
 
 func (r *Runner) ResolveApproval(ctx context.Context, requestID string, decision agent.ApprovalDecision) error {
+	if err := r.requireCapability(agent.CapabilityApprovals); err != nil {
+		return err
+	}
 	return r.resolveApproval(ctx, requestID, decision)
 }
 
 func (r *Runner) ListSessions(ctx context.Context, input agent.SessionListInput) (agent.SessionListResult, error) {
+	if err := r.requireCapability(agent.CapabilitySessions); err != nil {
+		return agent.SessionListResult{}, err
+	}
 	if err := r.prepareCodex(ctx); err != nil {
 		return agent.SessionListResult{}, err
 	}
@@ -65,6 +74,9 @@ func (r *Runner) ListSessions(ctx context.Context, input agent.SessionListInput)
 }
 
 func (r *Runner) ReadSession(ctx context.Context, threadID string) (agent.Session, error) {
+	if err := r.requireCapability(agent.CapabilityResumeSession); err != nil {
+		return agent.Session{}, err
+	}
 	if err := r.prepareCodex(ctx); err != nil {
 		return agent.Session{}, err
 	}
@@ -89,10 +101,13 @@ func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (S
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
+	if err := r.requireCapability(agent.CapabilitySessions); err != nil {
+		return SessionCreateResult{}, err
+	}
 	if err := r.prepareCodex(ctx); err != nil {
 		return SessionCreateResult{}, err
 	}
-	threadID, err := r.agent.StartThread(ctx, threadInput)
+	threadID, err := r.startThread(ctx, threadInput)
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
@@ -102,6 +117,9 @@ func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (S
 func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input SessionTurnInput) (string, error) {
 	if strings.TrimSpace(input.Prompt) == "" {
 		return "", errors.New("消息内容不能为空")
+	}
+	if err := r.requireCapability(agent.CapabilityResumeSession); err != nil {
+		return "", err
 	}
 	if err := r.prepareCodex(ctx); err != nil {
 		return "", err
@@ -113,6 +131,9 @@ func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input Se
 }
 
 func (r *Runner) InterruptSession(threadID string) bool {
+	if err := r.requireCapability(agent.CapabilityInterrupt); err != nil {
+		return false
+	}
 	r.mu.Lock()
 	state := r.sessions[threadID]
 	r.mu.Unlock()
@@ -147,7 +168,7 @@ func (r *Runner) sessionProject(ctx context.Context, id string) (*store.Project,
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureCodexProjectProvider(project); err != nil {
+	if err := r.ensureSessionProjectProvider(project); err != nil {
 		return nil, err
 	}
 	return &project, nil
@@ -209,7 +230,7 @@ func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prom
 		unsubscribe()
 		return "", err
 	}
-	turnID, err := r.agent.StartTurn(ctx, threadID, input, options)
+	turnID, err := r.startTurn(ctx, threadID, input, options)
 	if err != nil {
 		unsubscribe()
 		return "", err

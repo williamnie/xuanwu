@@ -30,7 +30,11 @@ func (r *Runner) unsubscribeCodexEvents(id int) {
 }
 
 func (r *Runner) dispatchCodexEvents() {
-	for event := range r.agent.Events() {
+	streamer, ok := r.agent.(agent.EventStreamer)
+	if !ok {
+		return
+	}
+	for event := range streamer.Events() {
 		r.publishCodexEvent(event)
 		r.fanoutCodexEvent(event)
 	}

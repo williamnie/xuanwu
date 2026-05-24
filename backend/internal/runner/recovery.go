@@ -72,7 +72,7 @@ func (r *Runner) resumeIssueTurn(ctx context.Context, issue store.Issue) error {
 	if err != nil {
 		return err
 	}
-	if err := ensureCodexProjectProvider(project); err != nil {
+	if err := r.ensureSessionProjectProvider(project); err != nil {
 		return err
 	}
 	eventsCh, unsubscribe, session, err := r.prepareRecoveredThread(ctx, issue.CodexThreadID)
@@ -132,7 +132,7 @@ func (r *Runner) startRecoveryTurn(
 	if err != nil {
 		return err
 	}
-	turnID, err := r.agent.StartTurn(ctx, threadID, input, agent.TurnOptions{})
+	turnID, err := r.startTurn(ctx, threadID, input, agent.TurnOptions{})
 	if err != nil {
 		return err
 	}

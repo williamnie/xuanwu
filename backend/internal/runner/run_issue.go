@@ -24,11 +24,11 @@ func (r *Runner) runIssue(issue store.Issue) {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
-	if err := ensureCodexProjectProvider(project); err != nil {
+	if err := r.ensureRunnableProjectProvider(project); err != nil {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
-	if err := r.startCodexTurn(ctx, issue, project); err != nil {
+	if err := r.startIssueRun(ctx, issue, project); err != nil {
 		var holdErr runnerHoldError
 		if errors.As(err, &holdErr) {
 			r.holdIssue(ctx, issue, holdErr.reason)
@@ -45,12 +45,54 @@ func (r *Runner) runIssue(issue store.Issue) {
 	}
 }
 
+func (r *Runner) startIssueRun(ctx context.Context, issue store.Issue, project store.Project) error {
+	if issueRunner, ok := r.agent.(agent.IssueRunner); ok {
+		return r.runProviderIssue(ctx, issueRunner, issue, project)
+	}
+	return r.startCodexTurn(ctx, issue, project)
+}
+
+func (r *Runner) runProviderIssue(
+	ctx context.Context,
+	provider agent.IssueRunner,
+	issue store.Issue,
+	project store.Project,
+) error {
+	result, err := provider.RunIssue(ctx, agent.IssueRunInput{
+		IssueID:   issue.ID,
+		ProjectID: project.ID,
+		CWD:       project.CWD,
+		Prompt:    renderPrompt(project, issue),
+		Model:     project.Model,
+		Log: func(event agent.Event) {
+			r.publishLog(ctx, issue.ID, event)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	r.updateRuntime(ctx, issue.ID, result.ProviderSessionID, result.ProviderTurnID)
+	return r.finishIssueAfterProviderRun(ctx, issue.ID)
+}
+
+func (r *Runner) finishIssueAfterProviderRun(ctx context.Context, issueID int64) error {
+	current, err := r.store.GetIssue(ctx, issueID)
+	if err != nil {
+		return err
+	}
+	if isTerminalStatus(current.Status) {
+		return nil
+	}
+	r.failIssue(ctx, issueID, missingExplicitStatusMessage())
+	return nil
+}
+
 func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project store.Project) error {
 	if err := r.agent.Start(ctx); err != nil {
 		return err
 	}
 	r.ensureCodexEventPump()
-	threadID, err := r.agent.StartThread(ctx, agent.ThreadInput{
+	threadID, err := r.startThread(ctx, agent.ThreadInput{
 		CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy,
 		Sandbox: project.Sandbox, DeveloperInstructions: developerInstructions(),
 		ThreadSource: agent.ThreadSourceSubagent,
@@ -66,7 +108,7 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 	if err != nil {
 		return err
 	}
-	turnID, err := r.agent.StartTurn(ctx, threadID, input, agent.TurnOptions{})
+	turnID, err := r.startTurn(ctx, threadID, input, agent.TurnOptions{})
 	if err != nil {
 		return err
 	}

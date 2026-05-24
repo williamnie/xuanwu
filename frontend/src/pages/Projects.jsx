@@ -20,7 +20,7 @@ import {
   X,
   AlertCircle
 } from 'lucide-react';
-import { PROVIDER_OPTIONS, providerLabel } from './sessions/sessionOptions';
+import { PROVIDER_OPTIONS, capabilitySummary, providerLabel } from './sessions/sessionOptions';
 
 const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
@@ -382,6 +382,10 @@ export default function Projects() {
                     <span>Provider</span>
                     <strong style={{ color: 'var(--text-primary)' }}>{providerLabel(proj.provider)}</strong>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    <span>Capabilities</span>
+                    <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{capabilitySummary(proj)}</span>
+                  </div>
 
                   {proj.hold && (
                     <div style={{ border: '1px solid rgba(245, 158, 11, 0.25)', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: '8px', padding: '8px 10px', fontSize: '0.72rem', lineHeight: 1.45 }}>
@@ -503,7 +507,7 @@ export default function Projects() {
                   ))}
                 </select>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  v1 仅启用 Codex；其他 provider 会被明确阻止运行。
+                  capability 摘要会随项目 API 返回；execution-only provider 不会进入 Sessions。
                 </span>
               </div>
 

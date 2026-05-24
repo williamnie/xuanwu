@@ -40,6 +40,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.attachLoopStatus(projects)
+		store.AttachProjectCapabilities(projects)
 		writeJSON(w, http.StatusOK, projects)
 	case http.MethodPost:
 		s.createProject(w, r)
@@ -64,6 +65,7 @@ func (s *Server) reorderProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.attachLoopStatus(projects)
+	store.AttachProjectCapabilities(projects)
 	writeJSON(w, http.StatusOK, projects)
 }
 
@@ -107,6 +109,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	created.LoopStatus = s.runner.LoopStatus(created.ID)
+	store.AttachProjectCapability(&created)
 	writeJSON(w, http.StatusCreated, created)
 }
 
@@ -129,6 +132,7 @@ func (s *Server) patchProject(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	updated.LoopStatus = s.runner.LoopStatus(id)
+	store.AttachProjectCapability(&updated)
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -237,6 +241,7 @@ func (s *Server) writeProject(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	p.LoopStatus = s.runner.LoopStatus(id)
+	store.AttachProjectCapability(&p)
 	writeJSON(w, http.StatusOK, p)
 }
 

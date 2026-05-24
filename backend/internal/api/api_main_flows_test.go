@@ -19,6 +19,9 @@ func TestProjectAPIReadUpdateFlow(t *testing.T) {
 	if created.Provider != store.ProviderCodex {
 		t.Fatalf("project provider = %q, want codex", created.Provider)
 	}
+	if !hasCapability(created.ProviderCapabilities, string(agent.CapabilitySessions)) {
+		t.Fatalf("created project capabilities = %+v, want sessions", created.ProviderCapabilities)
+	}
 	patched := patchJSON[store.Project](t, srv, "/api/projects/demo", map[string]any{
 		"name": "Demo Renamed", "provider": "codex",
 	})
@@ -29,6 +32,18 @@ func TestProjectAPIReadUpdateFlow(t *testing.T) {
 	if got.ID != "demo" || got.Name != "Demo Renamed" || got.Provider != store.ProviderCodex {
 		t.Fatalf("unexpected fetched project: %+v", got)
 	}
+	if !hasCapability(got.ProviderCapabilities, string(agent.CapabilityModelList)) {
+		t.Fatalf("fetched project capabilities = %+v, want model_list", got.ProviderCapabilities)
+	}
+}
+
+func hasCapability(capabilities []string, want string) bool {
+	for _, capability := range capabilities {
+		if capability == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestIssueAPIListReadUpdateFlow(t *testing.T) {

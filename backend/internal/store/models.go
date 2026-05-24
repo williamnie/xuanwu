@@ -21,20 +21,21 @@ const (
 )
 
 type Project struct {
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	CWD            string       `json:"cwd"`
-	Provider       string       `json:"provider"`
-	ProviderConfig string       `json:"provider_config_json"`
-	AutoRun        int          `json:"auto_run"`
-	Model          string       `json:"model"`
-	ApprovalPolicy string       `json:"approval_policy"`
-	Sandbox        string       `json:"sandbox"`
-	SortOrder      int          `json:"sort_order"`
-	CreatedAt      string       `json:"created_at"`
-	UpdatedAt      string       `json:"updated_at"`
-	LoopStatus     string       `json:"loop_status,omitempty"`
-	Hold           *ProjectHold `json:"hold,omitempty"`
+	ID                   string       `json:"id"`
+	Name                 string       `json:"name"`
+	CWD                  string       `json:"cwd"`
+	Provider             string       `json:"provider"`
+	ProviderCapabilities []string     `json:"provider_capabilities,omitempty"`
+	ProviderConfig       string       `json:"provider_config_json"`
+	AutoRun              int          `json:"auto_run"`
+	Model                string       `json:"model"`
+	ApprovalPolicy       string       `json:"approval_policy"`
+	Sandbox              string       `json:"sandbox"`
+	SortOrder            int          `json:"sort_order"`
+	CreatedAt            string       `json:"created_at"`
+	UpdatedAt            string       `json:"updated_at"`
+	LoopStatus           string       `json:"loop_status,omitempty"`
+	Hold                 *ProjectHold `json:"hold,omitempty"`
 }
 
 type ProjectHold struct {

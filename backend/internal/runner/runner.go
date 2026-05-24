@@ -67,7 +67,7 @@ func (r *Runner) StartProject(projectID string) error {
 		})
 		return nil
 	}
-	if err := ensureCodexProjectProvider(project); err != nil {
+	if err := r.ensureRunnableProjectProvider(project); err != nil {
 		return err
 	}
 	r.mu.Lock()
@@ -83,11 +83,28 @@ func (r *Runner) StartProject(projectID string) error {
 	return nil
 }
 
-func ensureCodexProjectProvider(project store.Project) error {
-	if project.Provider == "" || project.Provider == store.ProviderCodex {
+func (r *Runner) ensureRunnableProjectProvider(project store.Project) error {
+	if project.Provider == "" || project.Provider == r.agent.Name() {
+		return r.requireCapability(agent.CapabilityIssueExecution)
+	}
+	return providerMismatchError(project, r.agent.Name())
+}
+
+func (r *Runner) ensureSessionProjectProvider(project store.Project) error {
+	if project.Provider == "" || project.Provider == r.agent.Name() {
+		return r.requireCapability(agent.CapabilitySessions)
+	}
+	return providerMismatchError(project, r.agent.Name())
+}
+
+func providerMismatchError(project store.Project, activeProvider string) error {
+	if project.Provider == "" || project.Provider == activeProvider {
 		return nil
 	}
-	return fmt.Errorf("project %s provider %q 暂不支持，当前只支持 codex", project.ID, project.Provider)
+	if len(agent.CapabilitiesForProviderID(project.Provider)) == 0 {
+		return fmt.Errorf("project %s provider %q 暂不支持", project.ID, project.Provider)
+	}
+	return fmt.Errorf("project %s provider %q 当前 runner 未注册，active provider %q", project.ID, project.Provider, activeProvider)
 }
 
 func (r *Runner) StopProject(projectID string) {

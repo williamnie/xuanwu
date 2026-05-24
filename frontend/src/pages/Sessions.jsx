@@ -16,6 +16,7 @@ import {
   defaultMessageSettings,
   defaultSessionSettings,
   modelLabel,
+  providerSupports,
   providerLabel as projectProviderLabel,
 } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
@@ -107,7 +108,11 @@ export default function Sessions() {
     }
   }, [selectedId]);
 
-  const selectedProject = projects.find((project) => project.id === projectId);
+  const sessionProjects = useMemo(
+    () => projects.filter((project) => providerSupports(project, 'sessions')),
+    [projects],
+  );
+  const selectedProject = sessionProjects.find((project) => project.id === projectId);
   const selectedSessionProject = useMemo(() => {
     const sessionCwd = selectedSession?.cwd || selectedSession?.path || '';
     return projects.find((project) => project.cwd === sessionCwd) || null;
@@ -192,12 +197,12 @@ export default function Sessions() {
 
   useEffect(() => {
     if (projectId || !lastProjectId) return;
-    const project = resolveLastSessionProject(projects, lastProjectId);
+    const project = resolveLastSessionProject(sessionProjects, lastProjectId);
     if (!project) return;
     setProjectId(project.id);
     setCwd(project.cwd);
     setSessionSettings(defaultSessionSettings(project));
-  }, [lastProjectId, projectId, projects]);
+  }, [lastProjectId, projectId, sessionProjects]);
   
   useEffect(() => {
     const isSwitching = lastSelectedIdRef.current !== selectedId;
@@ -261,7 +266,7 @@ export default function Sessions() {
   }, []);
 
   const handleProjectChange = (id) => {
-    const project = projects.find((item) => item.id === id) || null;
+    const project = sessionProjects.find((item) => item.id === id) || null;
     setProjectId(id);
     setCwd(project?.cwd || cwd);
     setSessionSettings(defaultSessionSettings(project));
@@ -339,9 +344,9 @@ export default function Sessions() {
   const handleCreateNewSession = async (e) => {
     if (e) e.preventDefault();
     if (sending) return;
-    const guard = canCreateSession({ projectId, cwd, prompt });
+    const guard = canCreateSession({ projectId, cwd, prompt, selectedProject });
     if (!guard.ok) {
-      if (guard.reason === 'missing_project') {
+      if (guard.reason === 'missing_project' || guard.reason === 'unsupported_provider') {
         toast.error(guard.message || PROJECT_REQUIRED_MESSAGE);
       }
       return;
@@ -620,7 +625,7 @@ export default function Sessions() {
                   <span>项目: {selectedProject?.name || '未选择'}</span>
                   <select value={projectId} onChange={(e) => handleProjectChange(e.target.value)}>
                     <option value="">选择项目</option>
-                    {projects.map((project) => (
+                    {sessionProjects.map((project) => (
                       <option key={project.id} value={project.id}>{project.name}</option>
                     ))}
                   </select>

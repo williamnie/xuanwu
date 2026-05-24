@@ -126,7 +126,7 @@ func (r *Runner) healthCheckProject(ctx context.Context, project store.Project) 
 		return err
 	}
 	defer cleanup()
-	threadID, err := r.agent.StartThread(ctx, agent.ThreadInput{
+	threadID, err := r.startThread(ctx, agent.ThreadInput{
 		CWD: cwd, Model: project.Model, ApprovalPolicy: "never", Sandbox: "read-only",
 		DeveloperInstructions: "Codex Issue Runner health check only. Do not modify files.",
 		ThreadSource:          agent.ThreadSourceSubagent,
@@ -136,7 +136,7 @@ func (r *Runner) healthCheckProject(ctx context.Context, project store.Project) 
 	}
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
 	defer unsubscribe()
-	turnID, err := r.agent.StartTurn(ctx, threadID, []agent.UserInput{{
+	turnID, err := r.startTurn(ctx, threadID, []agent.UserInput{{
 		Type: "text", Text: "Codex Issue Runner health check. Reply with ok only.",
 	}}, agent.TurnOptions{ApprovalPolicy: "never", Sandbox: "read-only"})
 	if err != nil {
