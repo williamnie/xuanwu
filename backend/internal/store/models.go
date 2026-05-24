@@ -131,6 +131,14 @@ type IssuePatch struct {
 	Error           *string `json:"error"`
 }
 
+type IssueRunClosePatch struct {
+	IssueID    int64
+	Patch      IssuePatch
+	RunStatus  string
+	ExitReason string
+	Error      string
+}
+
 type IssueEvent struct {
 	ID        int64  `json:"id"`
 	IssueID   int64  `json:"issue_id"`

@@ -88,7 +88,7 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request, thr
 	case "messages":
 		s.createSessionMessage(w, r, ref.SessionID)
 	case "interrupt":
-		s.interruptSession(w, ref.SessionID)
+		s.interruptSession(w, r, ref.SessionID)
 	default:
 		writeError(w, http.StatusNotFound, "not found")
 	}
@@ -150,12 +150,13 @@ func (s *Server) createSessionMessage(w http.ResponseWriter, r *http.Request, th
 	writeJSON(w, http.StatusCreated, map[string]string{"thread_id": threadID, "turn_id": turnID})
 }
 
-func (s *Server) interruptSession(w http.ResponseWriter, threadID string) {
-	if !s.runner.InterruptSession(threadID) {
-		writeJSON(w, http.StatusOK, map[string]bool{"interrupted": false})
+func (s *Server) interruptSession(w http.ResponseWriter, r *http.Request, threadID string) {
+	result, err := s.runner.InterruptSession(r.Context(), threadID)
+	if err != nil {
+		handleErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"interrupted": true})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func parseSessionLimit(r *http.Request) int {

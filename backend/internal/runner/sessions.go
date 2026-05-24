@@ -131,20 +131,6 @@ func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input Se
 	return r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, sessionTurnOptions(input))
 }
 
-func (r *Runner) InterruptSession(threadID string) bool {
-	if err := r.requireCapability(agent.CapabilityInterrupt); err != nil {
-		return false
-	}
-	r.mu.Lock()
-	state := r.sessions[threadID]
-	r.mu.Unlock()
-	if state == nil || state.turnID == "" {
-		return false
-	}
-	go r.interruptTurn(context.Background(), threadID, state.turnID)
-	return true
-}
-
 func (r *Runner) prepareCodex(ctx context.Context) error {
 	if err := r.agent.Start(ctx); err != nil {
 		return err

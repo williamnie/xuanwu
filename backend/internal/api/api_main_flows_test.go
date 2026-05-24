@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
@@ -100,6 +102,157 @@ func TestIssueRunsAPI(t *testing.T) {
 	}
 }
 
+func TestIssueStatusChangeFromInProgressInterruptsLinkedTurn(t *testing.T) {
+	interrupts := make(chan [2]string, 1)
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:  noopCodex{ch: make(chan agent.Event)},
+		interrupts: interrupts,
+	})
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-active", "turn-active"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	updated := patchJSON[store.Issue](t, srv, "/api/issues/1", map[string]any{
+		"status": store.StatusTriage,
+	})
+	if updated.Status != store.StatusTriage {
+		t.Fatalf("issue status = %q, want triage", updated.Status)
+	}
+	if got := readAPIInterrupt(t, interrupts); got != [2]string{"thread-active", "turn-active"} {
+		t.Fatalf("interrupt = %v, want active provider turn", got)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].Status != store.StatusCancelled ||
+		runs[0].ExitReason != "interrupted_by_status_change" || runs[0].EndedAt == "" {
+		t.Fatalf("run should close as interrupted cancellation: %+v", runs)
+	}
+	assertAPIEvent(t, srv, 1, "issue.interrupt_requested")
+	assertAPIEvent(t, srv, 1, "issue.interrupted")
+	assertAPIEvent(t, srv, 1, "issue.status_changed")
+}
+
+func TestSessionInterruptLinkedIssueCancelsIssueRun(t *testing.T) {
+	interrupts := make(chan [2]string, 1)
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:  noopCodex{ch: make(chan agent.Event)},
+		interrupts: interrupts,
+	})
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-linked", "turn-linked"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	result := postJSON[runner.SessionInterruptResult](t, srv, "/api/sessions/codex:thread-linked/interrupt", map[string]any{})
+	if !result.Interrupted {
+		t.Fatalf("interrupt response = %+v, want interrupted", result)
+	}
+	if got := readAPIInterrupt(t, interrupts); got != [2]string{"thread-linked", "turn-linked"} {
+		t.Fatalf("interrupt = %v, want linked issue turn", got)
+	}
+	issue := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if issue.Status != store.StatusCancelled {
+		t.Fatalf("linked issue status = %q, want cancelled", issue.Status)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].Status != store.StatusCancelled ||
+		runs[0].ExitReason != "session_interrupt" || runs[0].EndedAt == "" {
+		t.Fatalf("linked issue run should close as session interrupt: %+v", runs)
+	}
+	assertAPIEvent(t, srv, 1, "issue.interrupt_requested")
+	assertAPIEvent(t, srv, 1, "issue.interrupted")
+	assertAPIEvent(t, srv, 1, "issue.status_changed")
+}
+
+func TestSessionInterruptManualSessionDoesNotTouchIssue(t *testing.T) {
+	interrupts := make(chan [2]string, 1)
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:  noopCodex{ch: make(chan agent.Event)},
+		interrupts: interrupts,
+	})
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "backlog", "status": store.StatusTriage,
+	})
+	created := postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
+		"cwd": t.TempDir(), "prompt": "hello",
+	})
+
+	result := postJSON[runner.SessionInterruptResult](t, srv, "/api/sessions/"+created.ID+"/interrupt", map[string]any{})
+	if !result.Interrupted {
+		t.Fatalf("interrupt response = %+v, want interrupted", result)
+	}
+	if got := readAPIInterrupt(t, interrupts); got != [2]string{"thread-new", "turn-new"} {
+		t.Fatalf("manual session interrupt = %v, want thread-new/turn-new", got)
+	}
+	issue := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if issue.Status != store.StatusTriage {
+		t.Fatalf("manual session interrupt must not touch issue: %+v", issue)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 0 {
+		t.Fatalf("manual session interrupt must not create issue runs: %+v", runs)
+	}
+}
+
+func TestRecoveryIgnoresInterruptedStatusChangeRun(t *testing.T) {
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:  noopCodex{ch: make(chan agent.Event)},
+		interrupts: make(chan [2]string, 1),
+	})
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-active", "turn-active"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	patchJSON[store.Issue](t, srv, "/api/issues/1", map[string]any{
+		"status": store.StatusTriage,
+	})
+
+	if err := srv.runner.RecoverInProgressIssues(ctx); err != nil {
+		t.Fatalf("recover in-progress issues: %v", err)
+	}
+	issue := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if issue.Status != store.StatusTriage {
+		t.Fatalf("interrupted status-change issue should stay triage after recovery: %+v", issue)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].ExitReason != "interrupted_by_status_change" {
+		t.Fatalf("interrupted run should remain traceable after recovery: %+v", runs)
+	}
+}
+
 func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
 	session := getJSON[agent.Session](t, srv, "/api/sessions/codex:thread-1")
@@ -121,4 +274,38 @@ func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	if message["thread_id"] != "thread-1" || message["turn_id"] != "turn-new" {
 		t.Fatalf("unexpected session message: %+v", message)
 	}
+}
+
+type interruptCaptureCodex struct {
+	noopCodex
+	interrupts chan [2]string
+}
+
+func (c interruptCaptureCodex) InterruptTurn(_ context.Context, threadID, turnID string) error {
+	if c.interrupts != nil {
+		c.interrupts <- [2]string{threadID, turnID}
+	}
+	return nil
+}
+
+func readAPIInterrupt(t *testing.T, interrupts <-chan [2]string) [2]string {
+	t.Helper()
+	select {
+	case got := <-interrupts:
+		return got
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for provider interrupt")
+		return [2]string{}
+	}
+}
+
+func assertAPIEvent(t *testing.T, srv *Server, issueID int64, typ string) {
+	t.Helper()
+	events := getJSON[[]store.IssueEvent](t, srv, "/api/issues/1/events")
+	for _, event := range events {
+		if event.IssueID == issueID && event.Type == typ {
+			return
+		}
+	}
+	t.Fatalf("missing event %s: %+v", typ, events)
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
@@ -96,7 +97,7 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 			return
 		}
 	}
-	updated, err := s.store.UpdateIssue(r.Context(), id, patch)
+	updated, err := s.updateIssueWithLifecycle(r, id, before, patch)
 	if err != nil {
 		handleErr(w, err)
 		return
@@ -106,6 +107,57 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 		s.notifyTerminalIssue(r, before.Status, updated)
 	}
 	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) updateIssueWithLifecycle(
+	r *http.Request,
+	id int64,
+	before store.Issue,
+	patch store.IssuePatch,
+) (store.Issue, error) {
+	if patch.Status == nil || before.Status != store.StatusInProgress ||
+		*patch.Status == store.StatusInProgress || *patch.Status == store.StatusDone ||
+		*patch.Status == store.StatusFailed || *patch.Status == store.StatusCancelled ||
+		before.CodexThreadID == "" || before.CodexTurnID == "" {
+		return s.store.UpdateIssue(r.Context(), id, patch)
+	}
+	return s.interruptIssueForStatusChange(r, before, patch)
+}
+
+func (s *Server) interruptIssueForStatusChange(
+	r *http.Request,
+	before store.Issue,
+	patch store.IssuePatch,
+) (store.Issue, error) {
+	status := *patch.Status
+	errText := ""
+	if patch.Error != nil {
+		errText = *patch.Error
+	}
+	result, err := s.runner.InterruptIssue(r.Context(), runner.IssueInterruptRequest{
+		IssueID: before.ID, Status: status, RunStatus: store.StatusCancelled,
+		ExitReason: "interrupted_by_status_change", EventType: "issue.interrupt_requested",
+		ErrorMessage: errText,
+	})
+	if err != nil {
+		return store.Issue{}, err
+	}
+	return s.applyNonLifecycleIssuePatch(r, result.Issue, patch)
+}
+
+func (s *Server) applyNonLifecycleIssuePatch(
+	r *http.Request,
+	issue store.Issue,
+	patch store.IssuePatch,
+) (store.Issue, error) {
+	patch.Status = nil
+	patch.Error = nil
+	if patch.Title == nil && patch.Description == nil && patch.Priority == nil &&
+		patch.CodexThreadID == nil && patch.CodexTurnID == nil &&
+		patch.AutoRetryNextAt == nil && patch.AutoRetryReason == nil {
+		return issue, nil
+	}
+	return s.store.UpdateIssue(r.Context(), issue.ID, patch)
 }
 
 func (s *Server) handleIssueAction(w http.ResponseWriter, r *http.Request, id int64, action string) {

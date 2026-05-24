@@ -87,6 +87,46 @@ func (s *Store) UpdateIssue(ctx context.Context, id int64, patch IssuePatch) (Is
 	return s.GetIssue(ctx, id)
 }
 
+func (s *Store) UpdateIssueClosingRunAs(
+	ctx context.Context,
+	id int64,
+	patch IssuePatch,
+	runStatus string,
+	exitReason string,
+	errText string,
+) (Issue, error) {
+	return s.UpdateIssueAndCloseRun(ctx, IssueRunClosePatch{
+		IssueID: id, Patch: patch, RunStatus: runStatus, ExitReason: exitReason, Error: errText,
+	})
+}
+
+func (s *Store) UpdateIssueAndCloseRun(ctx context.Context, req IssueRunClosePatch) (Issue, error) {
+	id := req.IssueID
+	i, err := s.GetIssue(ctx, id)
+	if err != nil {
+		return Issue{}, err
+	}
+	applyIssuePatch(&i, req.Patch)
+	if req.Patch.Status != nil {
+		i.AutoRetryNextAt = ""
+		i.AutoRetryReason = ""
+	}
+	_, err = s.db.ExecContext(ctx, `update issues set title=?, description=?, status=?,
+		priority=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
+		auto_retry_reason=?, error=?, updated_at=? where id=?`,
+		i.Title, i.Description, i.Status, i.Priority, i.CodexThreadID,
+		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, now(), id)
+	if err != nil {
+		return Issue{}, err
+	}
+	if req.Patch.Status != nil {
+		if err := s.closeOpenIssueRun(ctx, id, req.RunStatus, req.ExitReason, req.Error); err != nil {
+			return Issue{}, err
+		}
+	}
+	return s.GetIssue(ctx, id)
+}
+
 func (s *Store) ClaimNextIssue(ctx context.Context, projectID string) (Issue, bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
