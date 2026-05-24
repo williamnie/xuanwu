@@ -255,6 +255,49 @@ func TestSessionAPI(t *testing.T) {
 	}
 }
 
+func TestSessionDetailIncludesLinkedIssueAndMetadata(t *testing.T) {
+	root := t.TempDir()
+	sessionPath := filepath.Join(root, "session.jsonl")
+	if err := os.WriteFile(sessionPath, []byte(strings.Join([]string{
+		`{"timestamp":"2026-05-22T08:00:00Z","type":"turn_context","payload":{"model":"gpt-5.5"}}`,
+		`{"timestamp":"2026-05-22T08:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":120},"last_token_usage":{"total_tokens":40},"model_context_window":258400}}}`,
+	}, "\n")+"\n"), 0o644); err != nil {
+		t.Fatalf("write session jsonl: %v", err)
+	}
+	srv := newTestServerWithCodex(t, sessionDetailCodex{
+		noopCodex: noopCodex{ch: make(chan agent.Event)},
+		path:      sessionPath,
+	})
+	srv.codexSessionsDir = root
+	if _, err := srv.store.CreateProject(context.Background(), store.Project{ID: "demo", CWD: t.TempDir()}); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	issue, err := srv.store.CreateIssue(context.Background(), store.Issue{
+		ProjectID: "demo", Title: "Session info", Status: store.StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	if err := srv.store.UpdateIssueRuntime(context.Background(), issue.ID, "thread-1", "turn-1"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	detail := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-1")
+	if detail.Model != "gpt-5.5" || detail.TokenUsage == nil ||
+		detail.TokenUsage.TotalTokenUsage.TotalTokens != 120 {
+		t.Fatalf("missing session metadata: %+v", detail)
+	}
+	if detail.LinkedIssue == nil || detail.LinkedIssue.ID != issue.ID ||
+		detail.LinkedIssue.Title != "Session info" || detail.LinkedIssue.Status != store.StatusTodo {
+		t.Fatalf("missing linked issue: %+v", detail.LinkedIssue)
+	}
+
+	unlinked := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-free")
+	if unlinked.LinkedIssue != nil || unlinked.TokenUsage != nil || unlinked.Model != "" {
+		t.Fatalf("unlinked session should degrade cleanly: %+v", unlinked)
+	}
+}
+
 func TestSystemStatusAPI(t *testing.T) {
 	srv := newTestServer(t)
 	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
@@ -285,6 +328,19 @@ func TestSystemStatusAPI(t *testing.T) {
 	if status.Runner.AutoRunProjects != 1 || status.Runner.InProgressIssues != 1 {
 		t.Fatalf("runner counts mismatch: %+v", status.Runner)
 	}
+}
+
+type sessionDetailCodex struct {
+	noopCodex
+	path string
+}
+
+func (c sessionDetailCodex) ResumeThread(_ context.Context, threadID string) (agent.Session, error) {
+	path := ""
+	if threadID == "thread-1" {
+		path = c.path
+	}
+	return agent.Session{ID: threadID, CWD: "/tmp/demo", Path: path}, nil
 }
 
 func TestSystemStatusRouteAccessibleWithAuth(t *testing.T) {

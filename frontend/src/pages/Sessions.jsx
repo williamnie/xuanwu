@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
-  ChevronDown, ChevronRight, FileCode, Loader2, Plus, Settings,
+  ChevronDown, ChevronRight, FileCode, Info, Loader2, Plus, Settings,
   Pin, Search, MessageSquarePlus,
   SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder
 } from 'lucide-react';
@@ -747,6 +747,32 @@ function providerLabel(provider) {
   }
 }
 
+function displayValue(value, fallback = '未提供') {
+  const text = String(value || '').trim();
+  return text || fallback;
+}
+
+function formatTokenNumber(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? new Intl.NumberFormat('zh-CN').format(number) : '0';
+}
+
+function tokenSummary(usage) {
+  const total = usage?.total_token_usage || {};
+  const last = usage?.last_token_usage || {};
+  if (!usage || (!total.total_tokens && !last.total_tokens)) {
+    return null;
+  }
+  return {
+    total: formatTokenNumber(total.total_tokens),
+    last: formatTokenNumber(last.total_tokens),
+    input: formatTokenNumber(total.input_tokens),
+    output: formatTokenNumber(total.output_tokens),
+    reasoning: formatTokenNumber(total.reasoning_output_tokens),
+    capturedAt: usage.captured_at || '',
+  };
+}
+
 function SessionOriginBadge({ origin }) {
   const meta = sessionOriginMeta(origin);
   return <span className={`session-origin-dot ${meta.className}`} title={meta.title} />;
@@ -889,6 +915,7 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
+  const model = session?.model || '';
   const lastLiveEvent = liveEvents[liveEvents.length - 1];
   const autoScrollWatchKey = [
     session?.updatedAt || '',
@@ -916,6 +943,12 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
         <span>Provider: {provider}</span>
         <code>{providerSessionId}</code>
         <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
+        <SessionInfoPopover
+          session={session}
+          provider={provider}
+          sessionId={providerSessionId}
+          model={model}
+        />
       </div>
       <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>
         <div className="session-transcript-content" ref={contentRef}>
@@ -931,6 +964,60 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
           回到底部
         </button>
       )}
+    </div>
+  );
+}
+
+function SessionInfoPopover({ session, provider, sessionId, model }) {
+  const linkedIssue = session?.linked_issue || null;
+  const tokens = tokenSummary(session?.token_usage);
+  return (
+    <details className="session-info-popover">
+      <summary className="session-info-trigger" title="查看会话信息" aria-label="查看会话信息">
+        <Info size={14} />
+      </summary>
+      <div className="session-info-panel">
+        <div className="session-info-section">
+          <span className="session-info-section-title">Session</span>
+          <InfoRow label="ID" value={<code>{displayValue(sessionId)}</code>} />
+          <InfoRow label="Provider" value={displayValue(provider)} />
+          <InfoRow label="Model" value={displayValue(model, '未提供')} />
+        </div>
+        <div className="session-info-section">
+          <span className="session-info-section-title">关联 Issue</span>
+          {linkedIssue ? (
+            <>
+              <InfoRow label="Issue" value={`#${linkedIssue.id} ${linkedIssue.title || '未命名'}`} />
+              <InfoRow label="Status" value={displayValue(linkedIssue.status)} />
+            </>
+          ) : (
+            <div className="session-info-empty">未关联</div>
+          )}
+        </div>
+        <div className="session-info-section">
+          <span className="session-info-section-title">Token 使用</span>
+          {tokens ? (
+            <>
+              <InfoRow label="Total" value={tokens.total} />
+              <InfoRow label="Last turn" value={tokens.last} />
+              <InfoRow label="Input / Output" value={`${tokens.input} / ${tokens.output}`} />
+              <InfoRow label="Reasoning" value={tokens.reasoning} />
+              {tokens.capturedAt && <InfoRow label="Updated" value={tokens.capturedAt} />}
+            </>
+          ) : (
+            <div className="session-info-empty">暂无 token 数据</div>
+          )}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="session-info-row">
+      <span className="session-info-label">{label}</span>
+      <span className="session-info-value">{value}</span>
     </div>
   );
 }

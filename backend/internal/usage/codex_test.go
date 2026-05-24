@@ -38,6 +38,27 @@ func TestReadCodexUsageAggregatesTokenCountEvents(t *testing.T) {
 	}
 }
 
+func TestReadSessionMetadataExtractsModelAndLatestTokenUsage(t *testing.T) {
+	root := t.TempDir()
+	writeJSONL(t, root, "session.jsonl", []string{
+		`{"timestamp":"2026-05-22T08:00:00Z","type":"turn_context","payload":{"model":"gpt-5.5"}}`,
+		`{"timestamp":"2026-05-22T08:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":120},"last_token_usage":{"input_tokens":100,"output_tokens":20,"total_tokens":120},"model_context_window":258400}}}`,
+		`{"timestamp":"2026-05-22T08:02:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":180},"last_token_usage":{"input_tokens":50,"output_tokens":10,"total_tokens":60},"model_context_window":258400}}}`,
+	})
+
+	meta, err := ReadSessionMetadata(context.Background(), filepath.Join(root, "session.jsonl"))
+	if err != nil {
+		t.Fatalf("ReadSessionMetadata error: %v", err)
+	}
+	if meta.Model != "gpt-5.5" {
+		t.Fatalf("model = %q, want gpt-5.5", meta.Model)
+	}
+	if meta.TokenUsage == nil || meta.TokenUsage.TotalTokenUsage.TotalTokens != 180 ||
+		meta.TokenUsage.LastTokenUsage.TotalTokens != 60 {
+		t.Fatalf("token usage not latest: %+v", meta.TokenUsage)
+	}
+}
+
 func writeJSONL(t *testing.T, root, name string, lines []string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

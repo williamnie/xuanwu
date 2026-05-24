@@ -3,12 +3,14 @@ package api
 import (
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
+	codexusage "github.com/xiaobei/codex-issue-runner/backend/internal/usage"
 )
 
 type createSessionRequest struct {
@@ -27,6 +29,19 @@ type sessionMessageRequest struct {
 	ReasoningEffort string `json:"reasoning_effort"`
 	ApprovalPolicy  string `json:"approval_policy"`
 	Sandbox         string `json:"sandbox"`
+}
+
+type sessionDetailResponse struct {
+	agent.Session
+	Model       string                    `json:"model,omitempty"`
+	LinkedIssue *linkedSessionIssue       `json:"linked_issue,omitempty"`
+	TokenUsage  *codexusage.UsageSnapshot `json:"token_usage,omitempty"`
+}
+
+type linkedSessionIssue struct {
+	ID     int64  `json:"id"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
 }
 
 func (s *Server) routeSessions(w http.ResponseWriter, r *http.Request, parts []string) {
@@ -73,7 +88,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request, threadID 
 		handleErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, session)
+	writeJSON(w, http.StatusOK, s.enrichSessionDetail(r, session))
 }
 
 func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request, threadID, action string) {
@@ -212,4 +227,44 @@ func parseSessionRefValue(raw string) sessionRef {
 		Provider:  strings.TrimSpace(provider),
 		SessionID: strings.TrimSpace(sessionID),
 	}
+}
+
+func (s *Server) enrichSessionDetail(r *http.Request, session agent.Session) sessionDetailResponse {
+	meta, _ := codexusage.ReadSessionMetadata(r.Context(), s.sessionMetadataPath(session.Path))
+	return sessionDetailResponse{
+		Session:     session,
+		Model:       meta.Model,
+		LinkedIssue: s.linkedIssue(r, session.ProviderSessionID),
+		TokenUsage:  meta.TokenUsage,
+	}
+}
+
+func (s *Server) linkedIssue(r *http.Request, threadID string) *linkedSessionIssue {
+	issue, err := s.store.GetIssueByCodexThreadID(r.Context(), threadID)
+	if err != nil {
+		return nil
+	}
+	return &linkedSessionIssue{ID: issue.ID, Title: issue.Title, Status: issue.Status}
+}
+
+func (s *Server) sessionMetadataPath(sessionPath string) string {
+	if strings.TrimSpace(s.codexSessionsDir) == "" {
+		return ""
+	}
+	if strings.TrimSpace(sessionPath) == "" {
+		return ""
+	}
+	root, err := filepath.Abs(s.codexSessionsDir)
+	if err != nil {
+		return ""
+	}
+	target, err := filepath.Abs(strings.TrimSpace(sessionPath))
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+		return ""
+	}
+	return target
 }
