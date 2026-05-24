@@ -1197,7 +1197,7 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
           {turns.map((turn, index) => (
             <TurnItem key={turn.id || index} turn={turn} />
           ))}
-          {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} />}
+          {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} persistedTurns={turns} />}
         </div>
       </div>
       {showScrollButton && (
@@ -1500,11 +1500,11 @@ function AgentMessageBubble({ item }) {
   );
 }
 
-function LiveTurnItem({ liveEvents }) {
-  const parsed = useMemo(() => parseLiveSessionEvents(liveEvents), [liveEvents]);
+function LiveTurnItem({ liveEvents, persistedTurns }) {
+  const parsed = useMemo(() => parseLiveSessionEvents(liveEvents, persistedTurns), [liveEvents, persistedTurns]);
 
-  const { tools, agentMessageText, reasoningText, errorText, approvalPending, activity } = parsed;
-  const showThinking = !agentMessageText && !errorText;
+  const { tools, agentMessageText, agentMessageDeduped, reasoningText, errorText, approvalPending, activity } = parsed;
+  const showThinking = !agentMessageDeduped && !agentMessageText && !errorText;
 
   return (
     <div className="turn-container active-live">

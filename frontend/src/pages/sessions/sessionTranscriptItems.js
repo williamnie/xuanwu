@@ -145,7 +145,7 @@ export function shouldRenderLiveTurn(liveEvents, running) {
   return Boolean(running || hasLiveError(liveEvents) || hasPendingApproval(liveEvents));
 }
 
-export function parseLiveSessionEvents(liveEvents) {
+export function parseLiveSessionEvents(liveEvents, persistedTurns = []) {
   let agentMessageText = '';
   let reasoningText = '';
   let errorText = '';
@@ -188,7 +188,38 @@ export function parseLiveSessionEvents(liveEvents) {
     }
   }
 
-  return { tools: state.tools, agentMessageText, reasoningText, errorText, approvalPending, activity };
+  const rawAgentMessageText = agentMessageText;
+  agentMessageText = dedupePersistedLiveAgentText(agentMessageText, persistedTurns);
+  const agentMessageDeduped = Boolean(rawAgentMessageText.trim()) && !agentMessageText.trim();
+
+  return {
+    tools: state.tools, agentMessageText, agentMessageDeduped, reasoningText,
+    errorText, approvalPending, activity,
+  };
+}
+
+export function dedupePersistedLiveAgentText(liveText, persistedTurns = []) {
+  const text = String(liveText || '');
+  if (!text.trim()) return text;
+  const persistedText = latestPersistedAgentText(persistedTurns);
+  if (!persistedText) return text;
+  return normalizeMessageText(persistedText) === normalizeMessageText(text) ? '' : text;
+}
+
+function latestPersistedAgentText(turns = []) {
+  if (!Array.isArray(turns)) return '';
+  for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex--) {
+    const items = turns[turnIndex]?.items || [];
+    for (let itemIndex = items.length - 1; itemIndex >= 0; itemIndex--) {
+      const item = items[itemIndex];
+      if (item?.type === 'agentMessage') return String(item.text || '');
+    }
+  }
+  return '';
+}
+
+function normalizeMessageText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function appendCommandDelta(state, event, text) {

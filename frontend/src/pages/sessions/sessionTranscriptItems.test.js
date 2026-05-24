@@ -132,6 +132,34 @@ test('live stream parser exposes pending approval events', () => {
   assert.equal(shouldRenderLiveTurn([{ method: 'approval/requested' }], false), true);
 });
 
+
+test('live stream parser suppresses assistant draft already persisted in transcript', () => {
+  const persistedTurns = [
+    { items: [{ type: 'agentMessage', text: '同一段 Agent 回复\n已经落库。' }] },
+  ];
+  const parsed = parseLiveSessionEvents([
+    { method: 'item/commandExecution/outputDelta', text: 'npm test\n' },
+    { method: 'item/agentMessage/delta', text: '同一段 Agent 回复\n' },
+    { method: 'item/agentMessage/delta', text: '已经落库。' },
+  ], persistedTurns);
+
+  assert.equal(parsed.agentMessageText, '');
+  assert.equal(parsed.agentMessageDeduped, true);
+  assert.equal(parsed.tools.length, 1);
+  assert.equal(parsed.tools[0].type, 'commandExecution');
+});
+
+test('live stream parser keeps distinct assistant draft while persisted transcript exists', () => {
+  const persistedTurns = [
+    { items: [{ type: 'agentMessage', text: '上一条回复' }] },
+  ];
+  const parsed = parseLiveSessionEvents([
+    { method: 'item/agentMessage/delta', text: '新的流式回复' },
+  ], persistedTurns);
+
+  assert.equal(parsed.agentMessageText, '新的流式回复');
+});
+
 test('live transcript is rendered while running and closes after normal completion', () => {
   const liveEvents = [{ method: 'item/agentMessage/delta', text: 'final response' }];
 
