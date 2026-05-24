@@ -56,6 +56,36 @@ func TestParseDefaultsAuthTokenFileFromDBPath(t *testing.T) {
 	}
 }
 
+func TestParseProviderCommandSettings(t *testing.T) {
+	t.Setenv("CODEX_RUNNER_CLAUDE_CMD", "")
+	t.Setenv("CODEX_RUNNER_OPENCODE_CMD", "")
+	cfg, err := Parse([]string{"--claude-cmd", "/opt/bin/claude", "--opencode-cmd", "/opt/bin/opencode"})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.ClaudeCmd != "/opt/bin/claude" || cfg.OpencodeCmd != "/opt/bin/opencode" {
+		t.Fatalf("provider commands mismatch: %+v", cfg)
+	}
+}
+
+func TestProviderStatusesExposeOnlySecretPresence(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret-value")
+	statuses := ProviderStatuses(ProviderSettingsConfig{ClaudeCmd: "missing-claude-for-test"})
+	claude := providerStatusForTest(statuses, "claude")
+	if !claude.Secrets["api_key"].Configured {
+		t.Fatalf("claude api key should be configured: %+v", claude.Secrets)
+	}
+}
+
+func providerStatusForTest(statuses []ProviderStatus, id string) ProviderStatus {
+	for _, status := range statuses {
+		if status.ID == id {
+			return status
+		}
+	}
+	return ProviderStatus{}
+}
+
 func TestResolveAuthTokenUsesProvidedTokenOrGeneratedFile(t *testing.T) {
 	if got, err := ResolveAuthToken(Config{AuthToken: " custom-token "}); err != nil || got != "custom-token" {
 		t.Fatalf("provided token = %q err=%v", got, err)

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -143,6 +144,36 @@ func TestSystemStatusGetsStatusWithToken(t *testing.T) {
 	}
 	if output["service"].(map[string]any)["alive"] != true {
 		t.Fatalf("unexpected output: %+v", output)
+	}
+}
+
+func TestSystemStatusPlainOutputListsProviders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"service": map[string]any{"alive": true},
+			"config":  map[string]any{},
+			"db":      map[string]any{"ok": true},
+			"codex":   map[string]any{"command": "codex", "command_ok": true, "app_server": "not_checked", "model_list": "not_checked"},
+			"providers": []map[string]any{
+				{
+					"id": "codex", "status": "available",
+					"cli":     map[string]any{"available": true},
+					"secrets": map[string]any{"api_key": map[string]any{"configured": true}},
+				},
+			},
+			"runner": map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"doctor", "--addr", server.URL}, &stdout, &stderr, Options{})
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "provider codex status=available") ||
+		!strings.Contains(stdout.String(), "api_key:configured") {
+		t.Fatalf("provider status missing from output: %s", stdout.String())
 	}
 }
 

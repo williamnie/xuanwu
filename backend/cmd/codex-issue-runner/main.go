@@ -70,6 +70,7 @@ func runServer(args []string) {
 	srv.SetAuthToken(authToken)
 	srv.SetSystemConfig(api.SystemConfig{
 		Addr: cfg.Addr, DBPath: cfg.DBPath, CodexCmd: cfg.CodexCmd,
+		ClaudeCmd: cfg.ClaudeCmd, OpencodeCmd: cfg.OpencodeCmd,
 		CodexSessionsDir: cfg.CodexSessionsDir, AuthEnabled: authToken != "",
 		WebMode: webMode(cfg.WebDir),
 	})

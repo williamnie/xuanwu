@@ -31,6 +31,16 @@ func writeSystemStatus(out io.Writer, status systemStatusDTO, asJSON bool) error
 		status.Service.Alive, status.DB.OK, status.Codex.CommandOK,
 		status.Config.AuthEnabled, status.Runner.RunningLoops,
 		status.Runner.InProgressIssues)
+	if err != nil {
+		return err
+	}
+	for _, provider := range status.Providers {
+		if _, err := fmt.Fprintf(out, "provider %s status=%s cli=%t secrets=%s\n",
+			provider.ID, provider.Status, provider.CLI.Available,
+			secretSummary(provider.Secrets)); err != nil {
+			return err
+		}
+	}
 	return err
 }
 
@@ -50,6 +60,21 @@ func writeJSON(out io.Writer, value any) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(value)
+}
+
+func secretSummary(secrets map[string]secretStatusDTO) string {
+	if len(secrets) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(secrets))
+	for name, status := range secrets {
+		value := "missing"
+		if status.Configured {
+			value = "configured"
+		}
+		parts = append(parts, name+":"+value)
+	}
+	return strings.Join(parts, ",")
 }
 
 func eventText(event issueEventDTO) string {

@@ -3,7 +3,7 @@
 > 调研时间：2026-05-24
 > 范围：只判断 Codex / Claude Code / opencode / Kimi Code 作为 `codex-issue-runner` 底层 code agent provider 的接入优先级；不做实现、不设计插件市场。
 >
-> CLI-only subprocess 细化设计见 `docs/cli-provider-adapter.md`。
+> CLI-only subprocess 细化设计见 `docs/cli-provider-adapter.md`。Provider settings / secrets v1 见 `docs/provider-settings.md`。
 
 ## 明确结论
 

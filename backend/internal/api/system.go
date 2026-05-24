@@ -3,10 +3,10 @@ package api
 import (
 	"context"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/xiaobei/codex-issue-runner/backend/internal/config"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
@@ -14,17 +14,20 @@ type SystemConfig struct {
 	Addr             string
 	DBPath           string
 	CodexCmd         string
+	ClaudeCmd        string
+	OpencodeCmd      string
 	CodexSessionsDir string
 	AuthEnabled      bool
 	WebMode          string
 }
 
 type systemStatus struct {
-	Service systemServiceStatus `json:"service"`
-	Config  systemConfigStatus  `json:"config"`
-	DB      checkStatus         `json:"db"`
-	Codex   systemCodexStatus   `json:"codex"`
-	Runner  systemRunnerStatus  `json:"runner"`
+	Service   systemServiceStatus `json:"service"`
+	Config    systemConfigStatus  `json:"config"`
+	DB        checkStatus         `json:"db"`
+	Codex     systemCodexStatus   `json:"codex"`
+	Providers []providerStatus    `json:"providers"`
+	Runner    systemRunnerStatus  `json:"runner"`
 }
 
 type systemServiceStatus struct {
@@ -55,6 +58,8 @@ type systemCodexStatus struct {
 	AppServer    string `json:"app_server"`
 	ModelList    string `json:"model_list"`
 }
+
+type providerStatus = config.ProviderStatus
 
 type systemRunnerStatus struct {
 	AutoRunProjects  int `json:"auto_run_projects"`
@@ -105,6 +110,8 @@ func (s *Server) SetSystemConfig(cfg SystemConfig) {
 	cfg.Addr = strings.TrimSpace(cfg.Addr)
 	cfg.DBPath = strings.TrimSpace(cfg.DBPath)
 	cfg.CodexCmd = strings.TrimSpace(cfg.CodexCmd)
+	cfg.ClaudeCmd = strings.TrimSpace(cfg.ClaudeCmd)
+	cfg.OpencodeCmd = strings.TrimSpace(cfg.OpencodeCmd)
 	cfg.CodexSessionsDir = strings.TrimSpace(cfg.CodexSessionsDir)
 	cfg.WebMode = strings.TrimSpace(cfg.WebMode)
 	s.systemConfig = cfg
@@ -123,12 +130,14 @@ func (s *Server) buildSystemStatus(ctx context.Context) systemStatus {
 	if cfg.AuthEnabled != (s.authToken != "") {
 		cfg.AuthEnabled = s.authToken != ""
 	}
+	providers := config.ProviderStatuses(providerSettingsConfig(cfg))
 	return systemStatus{
-		Service: s.serviceStatus(),
-		Config:  configStatus(cfg),
-		DB:      s.dbStatus(ctx),
-		Codex:   codexStatus(cfg.CodexCmd),
-		Runner:  s.runnerStatus(ctx),
+		Service:   s.serviceStatus(),
+		Config:    configStatus(cfg),
+		DB:        s.dbStatus(ctx),
+		Codex:     codexStatusFromProviders(cfg.CodexCmd, providers),
+		Providers: providers,
+		Runner:    s.runnerStatus(ctx),
 	}
 }
 
@@ -155,21 +164,34 @@ func (s *Server) dbStatus(ctx context.Context) checkStatus {
 	return checkStatus{OK: true}
 }
 
-func codexStatus(command string) systemCodexStatus {
+func codexStatusFromProviders(command string, providers []providerStatus) systemCodexStatus {
 	command = strings.TrimSpace(command)
 	status := systemCodexStatus{Command: command, AppServer: "not_checked", ModelList: "not_checked"}
-	if command == "" {
-		status.CommandError = "codex command is empty"
+	codex, ok := providerByID(providers, "codex")
+	if !ok {
+		status.CommandError = "codex provider status missing"
 		return status
 	}
-	path, err := exec.LookPath(command)
-	if err != nil {
-		status.CommandError = err.Error()
-		return status
-	}
-	status.CommandOK = true
-	status.CommandPath = path
+	status.Command = codex.CLI.Command
+	status.CommandOK = codex.CLI.Available
+	status.CommandPath = codex.CLI.Path
+	status.CommandError = codex.CLI.Error
 	return status
+}
+
+func providerSettingsConfig(cfg SystemConfig) config.ProviderSettingsConfig {
+	return config.ProviderSettingsConfig{
+		CodexCmd: cfg.CodexCmd, ClaudeCmd: cfg.ClaudeCmd, OpencodeCmd: cfg.OpencodeCmd,
+	}
+}
+
+func providerByID(providers []providerStatus, id string) (providerStatus, bool) {
+	for _, provider := range providers {
+		if provider.ID == id {
+			return provider, true
+		}
+	}
+	return providerStatus{}, false
 }
 
 func (s *Server) runnerStatus(ctx context.Context) systemRunnerStatus {

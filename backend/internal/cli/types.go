@@ -71,7 +71,8 @@ type systemStatusDTO struct {
 		AppServer    string `json:"app_server"`
 		ModelList    string `json:"model_list"`
 	} `json:"codex"`
-	Runner struct {
+	Providers []providerStatusDTO `json:"providers"`
+	Runner    struct {
 		AutoRunProjects  int `json:"auto_run_projects"`
 		RunningLoops     int `json:"running_loops"`
 		HeldProjects     int `json:"held_projects"`
@@ -79,4 +80,25 @@ type systemStatusDTO struct {
 		RunningIssues    int `json:"running_issues"`
 		RunningSessions  int `json:"running_sessions"`
 	} `json:"runner"`
+}
+
+type providerStatusDTO struct {
+	ID        string                     `json:"id"`
+	Label     string                     `json:"label"`
+	Status    string                     `json:"status"`
+	Available bool                       `json:"available"`
+	Enabled   bool                       `json:"enabled"`
+	CLI       providerCLIStatusDTO       `json:"cli"`
+	Secrets   map[string]secretStatusDTO `json:"secrets,omitempty"`
+}
+
+type providerCLIStatusDTO struct {
+	Command   string `json:"command"`
+	Available bool   `json:"available"`
+	Path      string `json:"path,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type secretStatusDTO struct {
+	Configured bool `json:"configured"`
 }
