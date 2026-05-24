@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	agentcodex "github.com/xiaobei/codex-issue-runner/backend/internal/agent/providers/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/api"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/cli"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
@@ -49,7 +50,8 @@ func runServer(args []string) {
 	defer st.Close()
 	bus := events.NewBus()
 	client := codex.NewAdapter(cfg.CodexCmd, cfg.CodexArgs)
-	r := runner.New(st, bus, client)
+	provider := agentcodex.New(client)
+	r := runner.New(st, bus, provider)
 	if err := r.RecoverInProgressIssues(context.Background()); err != nil {
 		log.Fatal(err)
 	}

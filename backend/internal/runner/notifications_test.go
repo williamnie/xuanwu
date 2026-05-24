@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/notifications"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
@@ -36,7 +36,7 @@ func TestRunnerFailureSendsWebhookNotification(t *testing.T) {
 	}
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "runner failure", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	bus := events.NewBus()
 	r := New(st, bus, fake)
 	r.SetIssueNotifier(notifications.New(st, bus, nil))

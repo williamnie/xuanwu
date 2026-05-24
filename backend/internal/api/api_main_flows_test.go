@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -86,8 +86,8 @@ func TestIssueRunsAPI(t *testing.T) {
 }
 
 func TestSessionAPIReadAndMessageFlow(t *testing.T) {
-	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
-	session := getJSON[codex.Session](t, srv, "/api/sessions/codex:thread-1")
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
+	session := getJSON[agent.Session](t, srv, "/api/sessions/codex:thread-1")
 	if session.ID != "codex:thread-1" || session.Provider != store.ProviderCodex ||
 		session.ProviderSessionID != "thread-1" || session.CWD != "/tmp/demo" {
 		t.Fatalf("unexpected session detail: %+v", session)

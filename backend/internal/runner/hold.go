@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -117,7 +117,7 @@ func (r *Runner) checkHeldProject(ctx context.Context, project store.Project) {
 }
 
 func (r *Runner) healthCheckProject(ctx context.Context, project store.Project) error {
-	if err := r.codex.Start(ctx); err != nil {
+	if err := r.agent.Start(ctx); err != nil {
 		return err
 	}
 	r.ensureCodexEventPump()
@@ -126,26 +126,26 @@ func (r *Runner) healthCheckProject(ctx context.Context, project store.Project) 
 		return err
 	}
 	defer cleanup()
-	threadID, err := r.codex.ThreadStart(ctx, codex.ThreadInput{
+	threadID, err := r.agent.StartThread(ctx, agent.ThreadInput{
 		CWD: cwd, Model: project.Model, ApprovalPolicy: "never", Sandbox: "read-only",
 		DeveloperInstructions: "Codex Issue Runner health check only. Do not modify files.",
-		ThreadSource:          codex.ThreadSourceSubagent,
+		ThreadSource:          agent.ThreadSourceSubagent,
 	})
 	if err != nil {
 		return err
 	}
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
 	defer unsubscribe()
-	turnID, err := r.codex.TurnStart(ctx, threadID, []codex.UserInput{{
+	turnID, err := r.agent.StartTurn(ctx, threadID, []agent.UserInput{{
 		Type: "text", Text: "Codex Issue Runner health check. Reply with ok only.",
-	}}, codex.TurnOptions{ApprovalPolicy: "never", Sandbox: "read-only"})
+	}}, agent.TurnOptions{ApprovalPolicy: "never", Sandbox: "read-only"})
 	if err != nil {
 		return err
 	}
 	return r.waitHealthTurn(ctx, threadID, turnID, eventsCh)
 }
 
-func (r *Runner) waitHealthTurn(ctx context.Context, threadID, turnID string, eventsCh <-chan codex.Event) error {
+func (r *Runner) waitHealthTurn(ctx context.Context, threadID, turnID string, eventsCh <-chan agent.Event) error {
 	timer := time.NewTimer(r.healthCheckWait)
 	defer timer.Stop()
 	for {
@@ -153,7 +153,7 @@ func (r *Runner) waitHealthTurn(ctx context.Context, threadID, turnID string, ev
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			_ = r.codex.InterruptTurn(context.Background(), threadID, turnID)
+			_ = r.interruptTurn(context.Background(), threadID, turnID)
 			return context.DeadlineExceeded
 		case event := <-eventsCh:
 			if !matches(event, threadID, turnID) {

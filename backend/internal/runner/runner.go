@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -14,7 +14,7 @@ import (
 type Runner struct {
 	store               *store.Store
 	bus                 *events.Bus
-	codex               codex.Client
+	agent               agent.AgentProvider
 	notifier            IssueNotifier
 	execMu              sync.Mutex
 	healthCheckInterval time.Duration
@@ -24,7 +24,7 @@ type Runner struct {
 	eventOnce    sync.Once
 	eventMu      sync.Mutex
 	nextEventSub int
-	eventSubs    map[int]chan codex.Event
+	eventSubs    map[int]chan agent.Event
 
 	mu       sync.Mutex
 	loops    map[string]chan struct{}
@@ -46,9 +46,9 @@ func (r *Runner) SetIssueNotifier(notifier IssueNotifier) {
 	r.notifier = notifier
 }
 
-func New(st *store.Store, bus *events.Bus, client codex.Client) *Runner {
+func New(st *store.Store, bus *events.Bus, provider agent.AgentProvider) *Runner {
 	return &Runner{
-		store: st, bus: bus, codex: client, eventSubs: map[int]chan codex.Event{},
+		store: st, bus: bus, agent: provider, eventSubs: map[int]chan agent.Event{},
 		healthCheckInterval: defaultHoldCheckInterval, healthCheckWait: 20 * time.Second,
 		autoRetryDelay: defaultAutoRetryDelay,
 		loops:          map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
@@ -138,7 +138,7 @@ func (r *Runner) CancelIssue(issueID int64) {
 	}
 	state.cancel()
 	if state.threadID != "" && state.turnID != "" {
-		go r.codex.InterruptTurn(context.Background(), state.threadID, state.turnID)
+		go r.interruptTurn(context.Background(), state.threadID, state.turnID)
 	}
 }
 

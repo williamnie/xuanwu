@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -17,7 +17,7 @@ func TestRunnerWaitsForExplicitIssueUpdateAfterClaiming(t *testing.T) {
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 
 	if err := r.StartProject("demo"); err != nil {
@@ -31,7 +31,7 @@ func TestRunnerWaitsForExplicitIssueUpdateAfterClaiming(t *testing.T) {
 	}
 	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
 	explicitlyCompleteIssue(t, st, issue.ID)
-	fake.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
+	fake.events <- agent.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
 
 	waitIssueNotRunning(t, r, issue.ID)
 	got, _ := st.GetIssue(ctx, issue.ID)
@@ -46,7 +46,7 @@ func TestRunnerHoldsProjectAndStopsClaimingOnUsageLimit(t *testing.T) {
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	first, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "limited", Status: store.StatusTodo, Priority: 2})
 	second, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "must wait", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 
 	if err := r.StartProject("demo"); err != nil {
@@ -54,7 +54,7 @@ func TestRunnerHoldsProjectAndStopsClaimingOnUsageLimit(t *testing.T) {
 	}
 	defer r.StopProject("demo")
 	waitIssueRuntime(t, st, first.ID, "thread-1", "turn-1")
-	fake.events <- codex.Event{
+	fake.events <- agent.Event{
 		Method: "error", ThreadID: "thread-1", TurnID: "turn-1",
 		Error: `API returned 429: {"error":{"type":"usage_limit_reached","message":"The usage limit has been reached","resets_in_seconds":3600}}`,
 	}
@@ -79,7 +79,7 @@ func TestRunnerHoldsProjectWhenTurnStartReturnsAuthError(t *testing.T) {
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "auth", Status: store.StatusTodo})
 	fake := &fakeCodex{
-		events:       make(chan codex.Event, 8),
+		events:       make(chan agent.Event, 8),
 		manualEvents: true,
 		turnErr:      errors.New("API returned 401: invalid bearer token"),
 	}
@@ -105,7 +105,7 @@ func TestRunnerSchedulesAutoRetryForTransientCodexError(t *testing.T) {
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 	r.autoRetryDelay = 5 * time.Second
 
@@ -116,7 +116,7 @@ func TestRunnerSchedulesAutoRetryForTransientCodexError(t *testing.T) {
 
 	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
 	reason := "Reconnecting... 1/5 stream disconnected before completion: Transport error: network error: error decoding response body"
-	fake.events <- codex.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
+	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
 
 	waiting := waitIssueAutoRetry(t, st, issue.ID)
 	if waiting.Status != store.StatusTodo || waiting.AttemptCount != 1 {
@@ -133,7 +133,7 @@ func TestRunnerDoesNotAutoRetryPermissionDeniedError(t *testing.T) {
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "denied", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 
 	if err := r.StartProject("demo"); err != nil {
@@ -142,7 +142,7 @@ func TestRunnerDoesNotAutoRetryPermissionDeniedError(t *testing.T) {
 	defer r.StopProject("demo")
 
 	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
-	fake.events <- codex.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: "approval denied: permission denied"}
+	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: "approval denied: permission denied"}
 
 	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
 	if got.AutoRetryNextAt != "" || got.AutoRetryReason != "" {
@@ -156,7 +156,7 @@ func TestRunnerFailsTransientErrorAfterMaxAutoRetryAttempts(t *testing.T) {
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "max retry", Status: store.StatusTodo})
 	advanceIssueAttempts(t, st, issue.ID, 2)
-	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 
 	if err := r.StartProject("demo"); err != nil {
@@ -166,7 +166,7 @@ func TestRunnerFailsTransientErrorAfterMaxAutoRetryAttempts(t *testing.T) {
 
 	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
 	reason := "Transport error: connection reset by peer"
-	fake.events <- codex.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
+	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
 
 	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
 	if got.AttemptCount != 3 || got.Error != reason ||
@@ -184,7 +184,7 @@ func TestRunnerHealthCheckClearsHoldAndResumesQueue(t *testing.T) {
 		Reason:  HoldReasonAuthentication,
 		Message: "Runner paused: authentication failed",
 	})
-	fake := &fakeCodex{events: make(chan codex.Event, 8), manualEvents: true}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 
 	fake.startErr = errors.New("API returned 401: expired token")

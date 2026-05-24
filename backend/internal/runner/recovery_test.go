@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -17,8 +17,8 @@ func TestRecoverInProgressIssuesAttachesToActiveTurn(t *testing.T) {
 	ctx := context.Background()
 	issue := createRecoverableIssue(t, st, "recover", "thread-live", "turn-live")
 	fake := &fakeCodex{
-		events: make(chan codex.Event, 8),
-		resumeSession: codex.Session{
+		events: make(chan agent.Event, 8),
+		resumeSession: agent.Session{
 			ID:     "thread-live",
 			Status: json.RawMessage(`{"type":"active","activeFlags":[]}`),
 			Turns:  json.RawMessage(`[{"id":"turn-live","status":"inProgress"}]`),
@@ -48,8 +48,8 @@ func TestRecoverInProgressIssuesStartsContinueTurnWhenThreadIdle(t *testing.T) {
 	ctx := context.Background()
 	issue := createRecoverableIssue(t, st, "recover idle", "thread-idle", "turn-done")
 	fake := &fakeCodex{
-		events: make(chan codex.Event, 8),
-		resumeSession: codex.Session{
+		events: make(chan agent.Event, 8),
+		resumeSession: agent.Session{
 			ID:     "thread-idle",
 			Status: json.RawMessage(`{"type":"idle"}`),
 			Turns:  json.RawMessage(`[{"id":"turn-done","status":"completed"}]`),
@@ -76,7 +76,7 @@ func TestRecoverInProgressIssuesFailsWithoutThreadID(t *testing.T) {
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "broken", Status: store.StatusInProgress})
-	fake := &fakeCodex{events: make(chan codex.Event, 8)}
+	fake := &fakeCodex{events: make(chan agent.Event, 8)}
 	r := New(st, events.NewBus(), fake)
 
 	if err := r.RecoverInProgressIssues(ctx); err != nil {
@@ -97,8 +97,8 @@ func TestRecoveryTurnRequiresExplicitIssueStatusUpdate(t *testing.T) {
 	ctx := context.Background()
 	issue := createRecoverableIssue(t, st, "recover missing status", "thread-idle", "turn-done")
 	fake := &fakeCodex{
-		events: make(chan codex.Event, 8),
-		resumeSession: codex.Session{
+		events: make(chan agent.Event, 8),
+		resumeSession: agent.Session{
 			ID:     "thread-idle",
 			Status: json.RawMessage(`{"type":"idle"}`),
 			Turns:  json.RawMessage(`[{"id":"turn-done","status":"completed"}]`),
@@ -111,7 +111,7 @@ func TestRecoveryTurnRequiresExplicitIssueStatusUpdate(t *testing.T) {
 		t.Fatalf("recover in-progress issues: %v", err)
 	}
 	waitIssueRuntime(t, st, issue.ID, "thread-idle", "turn-1")
-	fake.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-idle", TurnID: "turn-1", Status: "completed"}
+	fake.events <- agent.Event{Method: "turn/completed", ThreadID: "thread-idle", TurnID: "turn-1", Status: "completed"}
 
 	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
 	if !strings.Contains(got.Error, "explicit issue status update") {
@@ -125,9 +125,9 @@ func TestCancelRecoveryInterruptsRecoveredTurn(t *testing.T) {
 	issue := createRecoverableIssue(t, st, "recover cancel", "thread-live", "turn-live")
 	interrupts := make(chan [2]string, 1)
 	fake := &fakeCodex{
-		events:     make(chan codex.Event, 8),
+		events:     make(chan agent.Event, 8),
 		interrupts: interrupts,
-		resumeSession: codex.Session{
+		resumeSession: agent.Session{
 			ID:     "thread-live",
 			Status: json.RawMessage(`{"type":"active"}`),
 			Turns:  json.RawMessage(`[{"id":"turn-live","status":"inProgress"}]`),
@@ -222,7 +222,7 @@ func waitInterrupt(t *testing.T, interrupts <-chan [2]string) [2]string {
 	}
 }
 
-func stringFromUserInputs(inputs []codex.UserInput) string {
+func stringFromUserInputs(inputs []agent.UserInput) string {
 	var b strings.Builder
 	for _, input := range inputs {
 		if input.Type == "text" {

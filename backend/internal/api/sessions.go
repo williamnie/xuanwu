@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -95,7 +95,7 @@ func (s *Server) handleSessionAction(w http.ResponseWriter, r *http.Request, thr
 }
 
 func (s *Server) listSessions(w http.ResponseWriter, r *http.Request) {
-	input := codex.SessionListInput{Cursor: r.URL.Query().Get("cursor"), Limit: parseSessionLimit(r)}
+	input := agent.SessionListInput{Cursor: r.URL.Query().Get("cursor"), Limit: parseSessionLimit(r)}
 	result, err := s.runner.ListSessions(r.Context(), input)
 	if err != nil {
 		handleErr(w, err)

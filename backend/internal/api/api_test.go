@@ -16,50 +16,51 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
 type noopCodex struct {
-	ch        chan codex.Event
-	listInput *codex.SessionListInput
+	ch        chan agent.Event
+	listInput *agent.SessionListInput
 }
 
+func (n noopCodex) Name() string                { return "codex" }
 func (n noopCodex) Start(context.Context) error { return nil }
 func (n noopCodex) Stop(context.Context) error  { return nil }
-func (n noopCodex) ThreadStart(context.Context, codex.ThreadInput) (string, error) {
+func (n noopCodex) StartThread(context.Context, agent.ThreadInput) (string, error) {
 	return "thread-new", nil
 }
-func (n noopCodex) ModelList(context.Context, codex.ModelListInput) (codex.ModelListResult, error) {
-	return codex.ModelListResult{Data: []codex.Model{{
+func (n noopCodex) ListModels(context.Context, agent.ModelListInput) (agent.ModelListResult, error) {
+	return agent.ModelListResult{Data: []agent.Model{{
 		ID: "gpt-5.5", Model: "gpt-5.5", DisplayName: "GPT-5.5",
 		DefaultReasoningEffort:    "xhigh",
-		SupportedReasoningEfforts: []codex.ReasoningEffortOption{{ReasoningEffort: "xhigh", Description: "超高"}},
+		SupportedReasoningEfforts: []agent.ReasoningEffortOption{{ReasoningEffort: "xhigh", Description: "超高"}},
 	}}}, nil
 }
-func (n noopCodex) ThreadList(_ context.Context, input codex.SessionListInput) (codex.SessionListResult, error) {
+func (n noopCodex) ListThreads(_ context.Context, input agent.SessionListInput) (agent.SessionListResult, error) {
 	if n.listInput != nil {
 		*n.listInput = input
 	}
-	return codex.SessionListResult{Data: []codex.Session{{ID: "thread-1", CWD: "/tmp/demo", Preview: "hello"}}, NextCursor: "next"}, nil
+	return agent.SessionListResult{Data: []agent.Session{{ID: "thread-1", CWD: "/tmp/demo", Preview: "hello"}}, NextCursor: "next"}, nil
 }
-func (n noopCodex) ThreadRead(context.Context, string) (codex.Session, error) {
-	return codex.Session{ID: "thread-1", CWD: "/tmp/demo", Preview: "hello"}, nil
+func (n noopCodex) ReadThread(context.Context, string) (agent.Session, error) {
+	return agent.Session{ID: "thread-1", CWD: "/tmp/demo", Preview: "hello"}, nil
 }
-func (n noopCodex) ThreadResume(context.Context, string) (codex.Session, error) {
-	return codex.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
+func (n noopCodex) ResumeThread(context.Context, string) (agent.Session, error) {
+	return agent.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
 }
-func (n noopCodex) ThreadSetName(context.Context, string, string) error { return nil }
-func (n noopCodex) TurnStart(context.Context, string, []codex.UserInput, codex.TurnOptions) (string, error) {
+func (n noopCodex) SetThreadName(context.Context, string, string) error { return nil }
+func (n noopCodex) StartTurn(context.Context, string, []agent.UserInput, agent.TurnOptions) (string, error) {
 	return "turn-new", nil
 }
 func (n noopCodex) InterruptTurn(context.Context, string, string) error { return nil }
-func (n noopCodex) ResolveApproval(context.Context, string, codex.ApprovalDecision) error {
+func (n noopCodex) ResolveApproval(context.Context, string, agent.ApprovalDecision) error {
 	return nil
 }
-func (n noopCodex) Events() <-chan codex.Event { return n.ch }
+func (n noopCodex) Events() <-chan agent.Event { return n.ch }
 
 func TestProjectAndIssueAPI(t *testing.T) {
 	srv := newTestServer(t)
@@ -229,13 +230,13 @@ func TestIssueTemplateAPIAndIssueSelection(t *testing.T) {
 }
 
 func TestSessionAPI(t *testing.T) {
-	var listInput codex.SessionListInput
-	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event), listInput: &listInput})
-	models := getJSON[codex.ModelListResult](t, srv, "/api/codex/models")
+	var listInput agent.SessionListInput
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event), listInput: &listInput})
+	models := getJSON[agent.ModelListResult](t, srv, "/api/codex/models")
 	if len(models.Data) != 1 || models.Data[0].ID != "gpt-5.5" {
 		t.Fatalf("unexpected models: %+v", models)
 	}
-	list := getJSON[codex.SessionListResult](t, srv, "/api/sessions?limit=20&cursor=abc")
+	list := getJSON[agent.SessionListResult](t, srv, "/api/sessions?limit=20&cursor=abc")
 	if len(list.Data) != 1 || list.Data[0].ID != "codex:thread-1" ||
 		list.Data[0].Provider != store.ProviderCodex ||
 		list.Data[0].ProviderSessionID != "thread-1" || list.NextCursor != "next" {
@@ -498,12 +499,12 @@ func newTestServerWithWeb(t *testing.T, webDir string) *Server {
 
 func newTestServerWithWebHandler(t *testing.T, web http.Handler) *Server {
 	t.Helper()
-	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
 	srv.web = web
 	return srv
 }
 
-func newTestServerWithCodex(t *testing.T, client codex.Client) *Server {
+func newTestServerWithCodex(t *testing.T, provider agent.AgentProvider) *Server {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "app.db"))
 	if err != nil {
@@ -511,7 +512,7 @@ func newTestServerWithCodex(t *testing.T, client codex.Client) *Server {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	bus := events.NewBus()
-	r := runner.New(st, bus, client)
+	r := runner.New(st, bus, provider)
 	return NewServerWithWebDir(st, bus, r, "")
 }
 

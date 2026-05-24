@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 )
 
@@ -9,13 +9,13 @@ func (r *Runner) ensureCodexEventPump() {
 	r.eventOnce.Do(func() { go r.dispatchCodexEvents() })
 }
 
-func (r *Runner) subscribeCodexEvents() (<-chan codex.Event, func()) {
+func (r *Runner) subscribeCodexEvents() (<-chan agent.Event, func()) {
 	r.ensureCodexEventPump()
 	r.eventMu.Lock()
 	defer r.eventMu.Unlock()
 	r.nextEventSub++
 	id := r.nextEventSub
-	ch := make(chan codex.Event, 128)
+	ch := make(chan agent.Event, 128)
 	r.eventSubs[id] = ch
 	return ch, func() { r.unsubscribeCodexEvents(id) }
 }
@@ -30,13 +30,13 @@ func (r *Runner) unsubscribeCodexEvents(id int) {
 }
 
 func (r *Runner) dispatchCodexEvents() {
-	for event := range r.codex.Events() {
+	for event := range r.agent.Events() {
 		r.publishCodexEvent(event)
 		r.fanoutCodexEvent(event)
 	}
 }
 
-func (r *Runner) fanoutCodexEvent(event codex.Event) {
+func (r *Runner) fanoutCodexEvent(event agent.Event) {
 	r.eventMu.Lock()
 	defer r.eventMu.Unlock()
 	for _, ch := range r.eventSubs {
@@ -47,11 +47,11 @@ func (r *Runner) fanoutCodexEvent(event codex.Event) {
 	}
 }
 
-func (r *Runner) publishCodexEvent(event codex.Event) {
+func (r *Runner) publishCodexEvent(event agent.Event) {
 	r.bus.Publish(events.AppEvent{
 		Type: "agent.event", ThreadID: event.ThreadID, TurnID: event.TurnID, Method: event.Method,
-		AgentEventType: event.AgentEventType, Provider: event.Provider, RawMethod: event.RawMethod,
-		RawPayload: event.RawPayload, Command: event.Command, Path: event.Path,
+		AgentEventType: event.NormalizedType(), Provider: event.Provider, RawMethod: event.ProviderMethod(),
+		RawPayload: event.ProviderPayload(), Command: event.Command, Path: event.Path,
 		Status: event.Status, Text: event.Text, Error: event.Error, Payload: event.Payload,
 	})
 }

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 )
 
 type resolveApprovalRequest struct {
@@ -44,7 +44,7 @@ func (s *Server) resolveCodexApproval(w http.ResponseWriter, r *http.Request, re
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
-	decision := codex.ApprovalDecision{Decision: req.Decision, Scope: req.Scope}
+	decision := agent.ApprovalDecision{Decision: req.Decision, Scope: req.Scope}
 	if err := s.runner.ResolveApproval(r.Context(), requestID, decision); err != nil {
 		handleErr(w, err)
 		return

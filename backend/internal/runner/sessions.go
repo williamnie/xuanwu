@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -37,47 +37,47 @@ type SessionTurnInput struct {
 	Sandbox         string
 }
 
-func (r *Runner) ListModels(ctx context.Context) (codex.ModelListResult, error) {
+func (r *Runner) ListModels(ctx context.Context) (agent.ModelListResult, error) {
 	if err := r.prepareCodex(ctx); err != nil {
-		return codex.ModelListResult{}, err
+		return agent.ModelListResult{}, err
 	}
-	return r.codex.ModelList(ctx, codex.ModelListInput{})
+	return r.listModels(ctx)
 }
 
-func (r *Runner) ResolveApproval(ctx context.Context, requestID string, decision codex.ApprovalDecision) error {
-	return r.codex.ResolveApproval(ctx, requestID, decision)
+func (r *Runner) ResolveApproval(ctx context.Context, requestID string, decision agent.ApprovalDecision) error {
+	return r.resolveApproval(ctx, requestID, decision)
 }
 
-func (r *Runner) ListSessions(ctx context.Context, input codex.SessionListInput) (codex.SessionListResult, error) {
+func (r *Runner) ListSessions(ctx context.Context, input agent.SessionListInput) (agent.SessionListResult, error) {
 	if err := r.prepareCodex(ctx); err != nil {
-		return codex.SessionListResult{}, err
+		return agent.SessionListResult{}, err
 	}
-	res, err := r.codex.ThreadList(ctx, input)
+	res, err := r.listThreads(ctx, input)
 	if err != nil {
-		return codex.SessionListResult{}, err
+		return agent.SessionListResult{}, err
 	}
 	r.applyRunningSessionState(res.Data)
 	if err := r.applySessionOrigin(ctx, res.Data); err != nil {
-		return codex.SessionListResult{}, err
+		return agent.SessionListResult{}, err
 	}
 	applyCodexSessionIdentity(res.Data)
 	return res, nil
 }
 
-func (r *Runner) ReadSession(ctx context.Context, threadID string) (codex.Session, error) {
+func (r *Runner) ReadSession(ctx context.Context, threadID string) (agent.Session, error) {
 	if err := r.prepareCodex(ctx); err != nil {
-		return codex.Session{}, err
+		return agent.Session{}, err
 	}
-	res, err := r.codex.ThreadResume(ctx, threadID)
+	res, err := r.resumeThread(ctx, threadID)
 	if err != nil {
-		return codex.Session{}, err
+		return agent.Session{}, err
 	}
-	if r.isThreadRunning(sessionThreadID(res, threadID)) || codex.SessionStatusIsRunning(res.Status) {
+	if r.isThreadRunning(sessionThreadID(res, threadID)) || agent.SessionStatusIsRunning(res.Status) {
 		res.IsRunning = true
 	}
-	sessions := []codex.Session{res}
+	sessions := []agent.Session{res}
 	if err := r.applySessionOrigin(ctx, sessions); err != nil {
-		return codex.Session{}, err
+		return agent.Session{}, err
 	}
 	applyCodexSessionIdentity(sessions)
 	res = sessions[0]
@@ -92,7 +92,7 @@ func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (S
 	if err := r.prepareCodex(ctx); err != nil {
 		return SessionCreateResult{}, err
 	}
-	threadID, err := r.codex.ThreadStart(ctx, threadInput)
+	threadID, err := r.agent.StartThread(ctx, threadInput)
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
@@ -106,7 +106,7 @@ func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input Se
 	if err := r.prepareCodex(ctx); err != nil {
 		return "", err
 	}
-	if _, err := r.codex.ThreadResume(ctx, threadID); err != nil {
+	if _, err := r.resumeThread(ctx, threadID); err != nil {
 		return "", err
 	}
 	return r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, sessionTurnOptions(input))
@@ -119,22 +119,22 @@ func (r *Runner) InterruptSession(threadID string) bool {
 	if state == nil || state.turnID == "" {
 		return false
 	}
-	go r.codex.InterruptTurn(context.Background(), threadID, state.turnID)
+	go r.interruptTurn(context.Background(), threadID, state.turnID)
 	return true
 }
 
 func (r *Runner) prepareCodex(ctx context.Context) error {
-	if err := r.codex.Start(ctx); err != nil {
+	if err := r.agent.Start(ctx); err != nil {
 		return err
 	}
 	r.ensureCodexEventPump()
 	return nil
 }
 
-func (r *Runner) threadInputForSession(ctx context.Context, input SessionCreateInput) (codex.ThreadInput, error) {
+func (r *Runner) threadInputForSession(ctx context.Context, input SessionCreateInput) (agent.ThreadInput, error) {
 	project, err := r.sessionProject(ctx, input.ProjectID)
 	if err != nil {
-		return codex.ThreadInput{}, err
+		return agent.ThreadInput{}, err
 	}
 	return mergeSessionThreadInput(project, input)
 }
@@ -153,22 +153,22 @@ func (r *Runner) sessionProject(ctx context.Context, id string) (*store.Project,
 	return &project, nil
 }
 
-func mergeSessionThreadInput(project *store.Project, input SessionCreateInput) (codex.ThreadInput, error) {
-	threadInput := codex.ThreadInput{
+func mergeSessionThreadInput(project *store.Project, input SessionCreateInput) (agent.ThreadInput, error) {
+	threadInput := agent.ThreadInput{
 		CWD: input.CWD, Model: input.Model, ReasoningEffort: input.ReasoningEffort,
 		ApprovalPolicy: input.ApprovalPolicy, Sandbox: input.Sandbox,
 	}
 	if project != nil {
-		threadInput = codex.ThreadInput{CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy, Sandbox: project.Sandbox}
+		threadInput = agent.ThreadInput{CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy, Sandbox: project.Sandbox}
 	}
 	applySessionOverrides(&threadInput, input)
 	if strings.TrimSpace(threadInput.CWD) == "" {
-		return codex.ThreadInput{}, errors.New("cwd 不能为空")
+		return agent.ThreadInput{}, errors.New("cwd 不能为空")
 	}
 	return threadInput, nil
 }
 
-func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) {
+func applySessionOverrides(target *agent.ThreadInput, input SessionCreateInput) {
 	if input.CWD != "" {
 		target.CWD = input.CWD
 	}
@@ -185,7 +185,7 @@ func applySessionOverrides(target *codex.ThreadInput, input SessionCreateInput) 
 		target.Sandbox = input.Sandbox
 	}
 	target.DeveloperInstructions = developerInstructions()
-	target.ThreadSource = codex.ThreadSourceUser
+	target.ThreadSource = agent.ThreadSourceUser
 }
 
 func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input SessionCreateInput) (SessionCreateResult, error) {
@@ -202,14 +202,14 @@ func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input Se
 	return result, nil
 }
 
-func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prompt string, options codex.TurnOptions) (string, error) {
+func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prompt string, options agent.TurnOptions) (string, error) {
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
 	input, err := buildTurnInput(ctx, r.store, prompt)
 	if err != nil {
 		unsubscribe()
 		return "", err
 	}
-	turnID, err := r.codex.TurnStart(ctx, threadID, input, options)
+	turnID, err := r.agent.StartTurn(ctx, threadID, input, options)
 	if err != nil {
 		unsubscribe()
 		return "", err
@@ -219,16 +219,16 @@ func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prom
 	return turnID, nil
 }
 
-func sessionCreateTurnOptions(input SessionCreateInput) codex.TurnOptions {
+func sessionCreateTurnOptions(input SessionCreateInput) agent.TurnOptions {
 	return turnOptionsFromFields(input.Model, input.ReasoningEffort, input.ApprovalPolicy, input.Sandbox)
 }
 
-func sessionTurnOptions(input SessionTurnInput) codex.TurnOptions {
+func sessionTurnOptions(input SessionTurnInput) agent.TurnOptions {
 	return turnOptionsFromFields(input.Model, input.ReasoningEffort, input.ApprovalPolicy, input.Sandbox)
 }
 
-func turnOptionsFromFields(model, reasoningEffort, approvalPolicy, sandbox string) codex.TurnOptions {
-	return codex.TurnOptions{
+func turnOptionsFromFields(model, reasoningEffort, approvalPolicy, sandbox string) agent.TurnOptions {
+	return agent.TurnOptions{
 		Model: model, ReasoningEffort: reasoningEffort,
 		ApprovalPolicy: approvalPolicy, Sandbox: sandbox,
 	}
@@ -248,7 +248,7 @@ func (r *Runner) clearSessionRunning(threadID, turnID string) {
 	}
 }
 
-func (r *Runner) waitSessionTurn(threadID, turnID string, eventsCh <-chan codex.Event, unsubscribe func()) {
+func (r *Runner) waitSessionTurn(threadID, turnID string, eventsCh <-chan agent.Event, unsubscribe func()) {
 	defer unsubscribe()
 	for event := range eventsCh {
 		if !matches(event, threadID, turnID) {
@@ -261,10 +261,10 @@ func (r *Runner) waitSessionTurn(threadID, turnID string, eventsCh <-chan codex.
 	}
 }
 
-func (r *Runner) applyRunningSessionState(sessions []codex.Session) {
+func (r *Runner) applyRunningSessionState(sessions []agent.Session) {
 	runningIDs := r.runningThreadIDs()
 	for i := range sessions {
-		if sessions[i].IsRunning || codex.SessionStatusIsRunning(sessions[i].Status) {
+		if sessions[i].IsRunning || agent.SessionStatusIsRunning(sessions[i].Status) {
 			sessions[i].IsRunning = true
 			continue
 		}
@@ -274,7 +274,7 @@ func (r *Runner) applyRunningSessionState(sessions []codex.Session) {
 	}
 }
 
-func (r *Runner) applySessionOrigin(ctx context.Context, sessions []codex.Session) error {
+func (r *Runner) applySessionOrigin(ctx context.Context, sessions []agent.Session) error {
 	issueThreadIDs, err := r.store.ListIssueThreadIDs(ctx)
 	if err != nil {
 		return err
@@ -282,15 +282,15 @@ func (r *Runner) applySessionOrigin(ctx context.Context, sessions []codex.Sessio
 	knownRunnerThreadIDs := r.runningThreadIDs()
 	for i := range sessions {
 		if isRunnerSession(sessions[i], issueThreadIDs, knownRunnerThreadIDs) {
-			sessions[i].Origin = codex.SessionOriginRunner
+			sessions[i].Origin = agent.SessionOriginRunner
 		} else {
-			sessions[i].Origin = codex.SessionOriginCodexApp
+			sessions[i].Origin = agent.SessionOriginCodexApp
 		}
 	}
 	return nil
 }
 
-func isRunnerSession(session codex.Session, issueThreadIDs, knownRunnerThreadIDs map[string]bool) bool {
+func isRunnerSession(session agent.Session, issueThreadIDs, knownRunnerThreadIDs map[string]bool) bool {
 	if knownRunnerThreadIDs[session.ID] {
 		return true
 	}
@@ -335,14 +335,14 @@ func (r *Runner) runningThreadIDs() map[string]bool {
 	return ids
 }
 
-func sessionThreadID(session codex.Session, fallback string) string {
+func sessionThreadID(session agent.Session, fallback string) string {
 	if session.ID != "" {
 		return session.ID
 	}
 	return fallback
 }
 
-func applyCodexSessionIdentity(sessions []codex.Session) {
+func applyCodexSessionIdentity(sessions []agent.Session) {
 	for i := range sessions {
 		rawID := sessionThreadID(sessions[i], sessions[i].SessionID)
 		if rawID == "" {

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -46,14 +46,14 @@ func (r *Runner) runIssue(issue store.Issue) {
 }
 
 func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project store.Project) error {
-	if err := r.codex.Start(ctx); err != nil {
+	if err := r.agent.Start(ctx); err != nil {
 		return err
 	}
 	r.ensureCodexEventPump()
-	threadID, err := r.codex.ThreadStart(ctx, codex.ThreadInput{
+	threadID, err := r.agent.StartThread(ctx, agent.ThreadInput{
 		CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy,
 		Sandbox: project.Sandbox, DeveloperInstructions: developerInstructions(),
-		ThreadSource: codex.ThreadSourceSubagent,
+		ThreadSource: agent.ThreadSourceSubagent,
 	})
 	if err != nil {
 		return err
@@ -66,7 +66,7 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 	if err != nil {
 		return err
 	}
-	turnID, err := r.codex.TurnStart(ctx, threadID, input, codex.TurnOptions{})
+	turnID, err := r.agent.StartTurn(ctx, threadID, input, agent.TurnOptions{})
 	if err != nil {
 		return err
 	}
@@ -76,11 +76,11 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 
 func (r *Runner) setCodexThreadName(ctx context.Context, threadID string, issue store.Issue) {
 	if name := strings.TrimSpace(issue.Title); name != "" {
-		_ = r.codex.ThreadSetName(ctx, threadID, name)
+		_ = r.setThreadName(ctx, threadID, name)
 	}
 }
 
-func (r *Runner) consumeEvents(ctx context.Context, issueID int64, threadID, turnID string, eventsCh <-chan codex.Event) error {
+func (r *Runner) consumeEvents(ctx context.Context, issueID int64, threadID, turnID string, eventsCh <-chan agent.Event) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -96,7 +96,7 @@ func (r *Runner) consumeEvents(ctx context.Context, issueID int64, threadID, tur
 	}
 }
 
-func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event codex.Event) (bool, error) {
+func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event agent.Event) (bool, error) {
 	if event.Text != "" {
 		r.publishLog(ctx, issueID, event)
 	}
@@ -112,12 +112,12 @@ func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event code
 	return true, r.finishIssueAfterTurn(ctx, issueID, event)
 }
 
-func isAgentError(event codex.Event) bool {
-	return event.AgentEventType == events.AgentError || event.Method == "error"
+func isAgentError(event agent.Event) bool {
+	return event.NormalizedType() == events.AgentError || event.Method == "error"
 }
 
-func isAgentTurnCompleted(event codex.Event) bool {
-	return event.AgentEventType == events.AgentTurnCompleted || event.Method == "turn/completed"
+func isAgentTurnCompleted(event agent.Event) bool {
+	return event.NormalizedType() == events.AgentTurnCompleted || event.Method == "turn/completed"
 }
 
 func (r *Runner) issueAlreadyTerminal(ctx context.Context, issueID int64) bool {
@@ -125,7 +125,7 @@ func (r *Runner) issueAlreadyTerminal(ctx context.Context, issueID int64) bool {
 	return err == nil && isTerminalStatus(current.Status)
 }
 
-func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event codex.Event) error {
+func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event agent.Event) error {
 	current, err := r.store.GetIssue(ctx, issueID)
 	if err != nil {
 		return err
@@ -158,7 +158,7 @@ func missingExplicitStatusMessage() string {
 	return "Codex turn completed without explicit issue status update; expected Codex to run codex-issue-runner issue update after verification"
 }
 
-func matches(event codex.Event, threadID, turnID string) bool {
+func matches(event agent.Event, threadID, turnID string) bool {
 	if event.ThreadID == "" {
 		return false
 	}
@@ -183,7 +183,7 @@ func (e runnerHoldError) Is(target error) bool {
 	return ok
 }
 
-func (r *Runner) publishLog(ctx context.Context, issueID int64, event codex.Event) {
+func (r *Runner) publishLog(ctx context.Context, issueID int64, event agent.Event) {
 	payload, _ := json.Marshal(issueLogPayload(event))
 	e, err := r.store.AddIssueEvent(ctx, issueID, "issue.log", string(payload))
 	if err != nil {
@@ -191,38 +191,38 @@ func (r *Runner) publishLog(ctx context.Context, issueID int64, event codex.Even
 	}
 	r.bus.Publish(events.AppEvent{
 		ID: e.ID, Type: "issue.log", IssueID: issueID, Text: event.Text, Payload: e.Payload,
-		AgentEventType: event.AgentEventType, Provider: event.Provider, RawMethod: rawMethod(event),
-		RawPayload: event.RawPayload, Command: event.Command, Path: event.Path, Status: event.Status,
+		AgentEventType: event.NormalizedType(), Provider: event.Provider, RawMethod: rawMethod(event),
+		RawPayload: event.ProviderPayload(), Command: event.Command, Path: event.Path, Status: event.Status,
 		Error: event.Error, CreatedAt: e.CreatedAt,
 	})
 }
 
-func issueLogPayload(event codex.Event) events.AgentEventPayload {
+func issueLogPayload(event agent.Event) events.AgentEventPayload {
 	return events.AgentEventPayload{
-		Type: event.AgentEventType, Provider: event.Provider, RawMethod: rawMethod(event),
+		Type: event.NormalizedType(), Provider: event.Provider, RawMethod: rawMethod(event),
 		RawPayload: rawPayload(event), Text: event.Text, Command: event.Command, Path: event.Path,
 		Status: event.Status, Error: event.Error,
 	}
 }
 
-func rawMethod(event codex.Event) string {
-	if event.RawMethod != "" {
-		return event.RawMethod
+func rawMethod(event agent.Event) string {
+	if event.ProviderMethod() != "" {
+		return event.ProviderMethod()
 	}
 	return event.Method
 }
 
-func rawPayload(event codex.Event) json.RawMessage {
-	if json.Valid([]byte(event.RawPayload)) {
-		return json.RawMessage(event.RawPayload)
+func rawPayload(event agent.Event) json.RawMessage {
+	if json.Valid([]byte(event.ProviderPayload())) {
+		return json.RawMessage(event.ProviderPayload())
 	}
 	if json.Valid([]byte(event.Payload)) {
 		return json.RawMessage(event.Payload)
 	}
-	if event.RawPayload == "" && event.Payload == "" {
+	if event.ProviderPayload() == "" && event.Payload == "" {
 		return nil
 	}
-	body, _ := json.Marshal(firstNonEmpty(event.RawPayload, event.Payload))
+	body, _ := json.Marshal(firstNonEmpty(event.ProviderPayload(), event.Payload))
 	return body
 }
 

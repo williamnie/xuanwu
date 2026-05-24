@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -17,7 +17,7 @@ func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 	if err := r.StartProject("demo"); err != nil {
 		t.Fatalf("start project: %v", err)
@@ -33,7 +33,7 @@ func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	if fake.setName != "task" {
 		t.Fatalf("thread name = %q, want issue title", fake.setName)
 	}
-	if len(fake.threadInputs) != 1 || fake.threadInputs[0].ThreadSource != codex.ThreadSourceSubagent {
+	if len(fake.threadInputs) != 1 || fake.threadInputs[0].ThreadSource != agent.ThreadSourceSubagent {
 		t.Fatalf("issue thread source = %+v, want subagent", fake.threadInputs)
 	}
 	events, _ := st.ListIssueEvents(ctx, issue.ID)
@@ -49,7 +49,7 @@ func TestRunnerFailsIssueForUnsupportedProjectProvider(t *testing.T) {
 		ID: "demo", Name: "Demo", CWD: t.TempDir(), Provider: "claude", AutoRun: 1,
 	})
 	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 	if err := r.StartProject("demo"); err == nil || !strings.Contains(err.Error(), `provider "claude" 暂不支持`) {
 		t.Fatalf("start project err = %v, want unsupported provider", err)
@@ -98,7 +98,7 @@ func TestRenderPromptDefaultStartsWithIssueContent(t *testing.T) {
 
 func TestCreateSessionPassesModelEffortAndPermissions(t *testing.T) {
 	st := openRunnerStore(t)
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 	_, err := r.CreateSession(context.Background(), SessionCreateInput{
 		CWD: t.TempDir(), Prompt: "hello", Model: "gpt-5.5",
@@ -118,7 +118,7 @@ func TestCreateSessionPassesModelEffortAndPermissions(t *testing.T) {
 
 func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {
 	st := openRunnerStore(t)
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 	_, err := r.StartSessionTurn(context.Background(), "thread-1", SessionTurnInput{
 		Prompt: "follow up", Model: "gpt-5.4",
@@ -137,11 +137,11 @@ func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {
 
 func TestListSessionsMarksManualSessionRunning(t *testing.T) {
 	st := openRunnerStore(t)
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 	r.setSessionRunning("thread-1", "turn-1")
 
-	list, err := r.ListSessions(context.Background(), codex.SessionListInput{})
+	list, err := r.ListSessions(context.Background(), agent.SessionListInput{})
 	if err != nil {
 		t.Fatalf("list sessions: %v", err)
 	}
@@ -152,39 +152,39 @@ func TestListSessionsMarksManualSessionRunning(t *testing.T) {
 		list.Data[0].ProviderSessionID != "thread-1" {
 		t.Fatalf("session identity = %+v, want codex namespaced id", list.Data[0])
 	}
-	if list.Data[0].Origin != codex.SessionOriginRunner {
+	if list.Data[0].Origin != agent.SessionOriginRunner {
 		t.Fatalf("session origin = %q, want runner", list.Data[0].Origin)
 	}
 }
 
 func TestListSessionsMarksIssueRunnerThreadRunning(t *testing.T) {
 	st := openRunnerStore(t)
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 	r.setRunning(7, &runState{threadID: "thread-1", turnID: "turn-1"})
 
-	list, err := r.ListSessions(context.Background(), codex.SessionListInput{})
+	list, err := r.ListSessions(context.Background(), agent.SessionListInput{})
 	if err != nil {
 		t.Fatalf("list sessions: %v", err)
 	}
 	if len(list.Data) != 1 || !list.Data[0].IsRunning {
 		t.Fatalf("issue runner session should be running: %+v", list)
 	}
-	if list.Data[0].Origin != codex.SessionOriginRunner {
+	if list.Data[0].Origin != agent.SessionOriginRunner {
 		t.Fatalf("session origin = %q, want runner", list.Data[0].Origin)
 	}
 }
 
 func TestListSessionsMarksCodexAppOriginByDefault(t *testing.T) {
 	st := openRunnerStore(t)
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 
-	list, err := r.ListSessions(context.Background(), codex.SessionListInput{})
+	list, err := r.ListSessions(context.Background(), agent.SessionListInput{})
 	if err != nil {
 		t.Fatalf("list sessions: %v", err)
 	}
-	if len(list.Data) != 1 || list.Data[0].Origin != codex.SessionOriginCodexApp {
+	if len(list.Data) != 1 || list.Data[0].Origin != agent.SessionOriginCodexApp {
 		t.Fatalf("session should be codex app origin: %+v", list)
 	}
 }
@@ -197,14 +197,14 @@ func TestListSessionsMarksPersistedIssueThreadAsRunnerOrigin(t *testing.T) {
 	if err := st.UpdateIssueRuntime(ctx, issue.ID, "thread-1", "turn-1"); err != nil {
 		t.Fatalf("update runtime: %v", err)
 	}
-	fake := &fakeCodex{events: make(chan codex.Event, 4)}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 
-	list, err := r.ListSessions(ctx, codex.SessionListInput{})
+	list, err := r.ListSessions(ctx, agent.SessionListInput{})
 	if err != nil {
 		t.Fatalf("list sessions: %v", err)
 	}
-	if len(list.Data) != 1 || list.Data[0].Origin != codex.SessionOriginRunner {
+	if len(list.Data) != 1 || list.Data[0].Origin != agent.SessionOriginRunner {
 		t.Fatalf("session should be persisted runner origin: %+v", list)
 	}
 }

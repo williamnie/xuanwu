@@ -3,16 +3,16 @@ package runner
 import (
 	"context"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 )
 
 type fakeCodex struct {
-	events        chan codex.Event
+	events        chan agent.Event
 	setName       string
-	threadInputs  []codex.ThreadInput
-	turnInputs    []codex.UserInput
-	turnOptions   []codex.TurnOptions
-	resumeSession codex.Session
+	threadInputs  []agent.ThreadInput
+	turnInputs    []agent.UserInput
+	turnOptions   []agent.TurnOptions
+	resumeSession agent.Session
 	manualEvents  bool
 	autoTurns     int
 	startErr      error
@@ -23,39 +23,40 @@ type fakeCodex struct {
 	resumeCalls   int
 }
 
+func (f *fakeCodex) Name() string                { return "codex" }
 func (f *fakeCodex) Start(context.Context) error { return f.startErr }
 func (f *fakeCodex) Stop(context.Context) error  { return nil }
-func (f *fakeCodex) ThreadStart(_ context.Context, input codex.ThreadInput) (string, error) {
+func (f *fakeCodex) StartThread(_ context.Context, input agent.ThreadInput) (string, error) {
 	f.threadInputs = append(f.threadInputs, input)
 	if f.threadErr != nil {
 		return "", f.threadErr
 	}
 	return "thread-1", nil
 }
-func (f *fakeCodex) ModelList(context.Context, codex.ModelListInput) (codex.ModelListResult, error) {
-	return codex.ModelListResult{}, nil
+func (f *fakeCodex) ListModels(context.Context, agent.ModelListInput) (agent.ModelListResult, error) {
+	return agent.ModelListResult{}, nil
 }
-func (f *fakeCodex) ThreadList(context.Context, codex.SessionListInput) (codex.SessionListResult, error) {
-	return codex.SessionListResult{Data: []codex.Session{{ID: "thread-1", CWD: "/tmp/demo"}}}, nil
+func (f *fakeCodex) ListThreads(context.Context, agent.SessionListInput) (agent.SessionListResult, error) {
+	return agent.SessionListResult{Data: []agent.Session{{ID: "thread-1", CWD: "/tmp/demo"}}}, nil
 }
-func (f *fakeCodex) ThreadRead(context.Context, string) (codex.Session, error) {
-	return codex.Session{}, nil
+func (f *fakeCodex) ReadThread(context.Context, string) (agent.Session, error) {
+	return agent.Session{}, nil
 }
-func (f *fakeCodex) ThreadResume(context.Context, string) (codex.Session, error) {
+func (f *fakeCodex) ResumeThread(context.Context, string) (agent.Session, error) {
 	f.resumeCalls++
 	if f.resumeErr != nil {
-		return codex.Session{}, f.resumeErr
+		return agent.Session{}, f.resumeErr
 	}
 	if f.resumeSession.ID != "" {
 		return f.resumeSession, nil
 	}
-	return codex.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
+	return agent.Session{ID: "thread-1", CWD: "/tmp/demo"}, nil
 }
-func (f *fakeCodex) ThreadSetName(_ context.Context, _ string, name string) error {
+func (f *fakeCodex) SetThreadName(_ context.Context, _ string, name string) error {
 	f.setName = name
 	return nil
 }
-func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInput, options codex.TurnOptions) (string, error) {
+func (f *fakeCodex) StartTurn(_ context.Context, _ string, input []agent.UserInput, options agent.TurnOptions) (string, error) {
 	f.turnInputs = input
 	f.turnOptions = append(f.turnOptions, options)
 	if f.turnErr != nil {
@@ -67,8 +68,8 @@ func (f *fakeCodex) TurnStart(_ context.Context, _ string, input []codex.UserInp
 	}
 	if shouldAutoComplete {
 		go func() {
-			f.events <- codex.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
-			f.events <- codex.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
+			f.events <- agent.Event{Method: "item/agentMessage/delta", ThreadID: "thread-1", TurnID: "turn-1", Text: "working"}
+			f.events <- agent.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
 		}()
 	}
 	return "turn-1", nil
@@ -79,7 +80,7 @@ func (f *fakeCodex) InterruptTurn(_ context.Context, threadID, turnID string) er
 	}
 	return nil
 }
-func (f *fakeCodex) ResolveApproval(context.Context, string, codex.ApprovalDecision) error {
+func (f *fakeCodex) ResolveApproval(context.Context, string, agent.ApprovalDecision) error {
 	return nil
 }
-func (f *fakeCodex) Events() <-chan codex.Event { return f.events }
+func (f *fakeCodex) Events() <-chan agent.Event { return f.events }

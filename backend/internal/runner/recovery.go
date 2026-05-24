@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
@@ -87,16 +87,16 @@ func (r *Runner) resumeIssueTurn(ctx context.Context, issue store.Issue) error {
 	return r.startRecoveryTurn(ctx, issue, project, session, turnID, eventsCh)
 }
 
-func (r *Runner) prepareRecoveredThread(ctx context.Context, threadID string) (<-chan codex.Event, func(), codex.Session, error) {
-	if err := r.codex.Start(ctx); err != nil {
-		return nil, nil, codex.Session{}, err
+func (r *Runner) prepareRecoveredThread(ctx context.Context, threadID string) (<-chan agent.Event, func(), agent.Session, error) {
+	if err := r.agent.Start(ctx); err != nil {
+		return nil, nil, agent.Session{}, err
 	}
 	r.ensureCodexEventPump()
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
-	session, err := r.codex.ThreadResume(ctx, threadID)
+	session, err := r.resumeThread(ctx, threadID)
 	if err != nil {
 		unsubscribe()
-		return nil, nil, codex.Session{}, err
+		return nil, nil, agent.Session{}, err
 	}
 	return eventsCh, unsubscribe, session, nil
 }
@@ -104,9 +104,9 @@ func (r *Runner) prepareRecoveredThread(ctx context.Context, threadID string) (<
 func (r *Runner) attachRecoveredTurn(
 	ctx context.Context,
 	issue store.Issue,
-	session codex.Session,
+	session agent.Session,
 	turnID string,
-	eventsCh <-chan codex.Event,
+	eventsCh <-chan agent.Event,
 ) error {
 	threadID := r.updateRecoveredIssueRuntime(ctx, issue, session, turnID)
 	r.recordRecoveryEvent(ctx, issue.ID, "issue.recovery_attached", map[string]string{
@@ -120,9 +120,9 @@ func (r *Runner) startRecoveryTurn(
 	ctx context.Context,
 	issue store.Issue,
 	project store.Project,
-	session codex.Session,
+	session agent.Session,
 	previousTurnID string,
-	eventsCh <-chan codex.Event,
+	eventsCh <-chan agent.Event,
 ) error {
 	threadID := r.updateRecoveredIssueRuntime(ctx, issue, session, previousTurnID)
 	if err := r.setRecoveredThreadName(ctx, threadID, issue); err != nil {
@@ -132,7 +132,7 @@ func (r *Runner) startRecoveryTurn(
 	if err != nil {
 		return err
 	}
-	turnID, err := r.codex.TurnStart(ctx, threadID, input, codex.TurnOptions{})
+	turnID, err := r.agent.StartTurn(ctx, threadID, input, agent.TurnOptions{})
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (r *Runner) startRecoveryTurn(
 func (r *Runner) updateRecoveredIssueRuntime(
 	ctx context.Context,
 	issue store.Issue,
-	session codex.Session,
+	session agent.Session,
 	turnID string,
 ) string {
 	threadID := firstNonEmpty(issue.CodexThreadID, session.ID)
@@ -160,7 +160,7 @@ func (r *Runner) setRecoveredThreadName(ctx context.Context, threadID string, is
 	if strings.TrimSpace(issue.Title) == "" {
 		return nil
 	}
-	return r.codex.ThreadSetName(ctx, threadID, issue.Title)
+	return r.setThreadName(ctx, threadID, issue.Title)
 }
 
 func resumePrompt(project store.Project, issue store.Issue) string {
@@ -205,12 +205,12 @@ func lastTurnState(raw json.RawMessage) (string, string) {
 	return strings.TrimSpace(last.ID), strings.TrimSpace(last.Status)
 }
 
-func recoveredTurn(session codex.Session, fallbackTurnID string) (string, bool) {
+func recoveredTurn(session agent.Session, fallbackTurnID string) (string, bool) {
 	turnID, status := lastTurnState(session.Turns)
 	turnID = firstNonEmpty(turnID, fallbackTurnID)
 	if turnID == "" {
 		return "", false
 	}
-	active := strings.EqualFold(status, "inProgress") || codex.SessionStatusIsRunning(session.Status)
+	active := strings.EqualFold(status, "inProgress") || agent.SessionStatusIsRunning(session.Status)
 	return turnID, active
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/xiaobei/codex-issue-runner/backend/internal/codex"
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
@@ -193,17 +193,17 @@ type sessionNotFoundCodex struct {
 
 func newSessionNotFoundTestServer(t *testing.T) *Server {
 	t.Helper()
-	client := sessionNotFoundCodex{noopCodex{ch: make(chan codex.Event)}}
+	client := sessionNotFoundCodex{noopCodex{ch: make(chan agent.Event)}}
 	return newTestServerWithCodex(t, client)
 }
 
-func (c sessionNotFoundCodex) ThreadResume(context.Context, string) (codex.Session, error) {
-	return codex.Session{}, store.ErrNotFound
+func (c sessionNotFoundCodex) ResumeThread(context.Context, string) (agent.Session, error) {
+	return agent.Session{}, store.ErrNotFound
 }
 
 func newUnsupportedProviderProjectServer(t *testing.T) *Server {
 	t.Helper()
-	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan codex.Event)})
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
 	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
 		"id": "unsupported", "cwd": t.TempDir(),
 	})
