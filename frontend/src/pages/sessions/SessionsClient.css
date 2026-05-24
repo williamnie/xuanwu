@@ -693,6 +693,9 @@
 .client-chat-composer-section {
   padding: 16px 40px 24px 40px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 
@@ -808,6 +811,10 @@
   .sessions-client-main {
     flex: 1 1 auto;
     min-height: 0;
+  }
+
+  .client-chat-composer-section {
+    padding: 12px;
   }
 }
 

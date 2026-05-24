@@ -1,23 +1,34 @@
+import { useEffect, useRef } from 'react';
 import { Check, Clock, ShieldAlert, X } from 'lucide-react';
 import './ApprovalDialog.css';
 
-export default function ApprovalDialog({ request, submitting, onResolve }) {
+export default function ApprovalDialog({ request, submitting, queueCount = 0, onResolve }) {
+  const firstActionRef = useRef(null);
+  useApprovalFocusAndEscape(request, submitting, onResolve, firstActionRef);
+
   if (!request) return null;
   const title = approvalTitle(request.method);
   const detail = approvalDetail(request);
+
   return (
-    <div className="approval-overlay">
-      <section className="approval-card" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="approval-popover" aria-live="polite">
+      <section
+        className="approval-card"
+        role="dialog"
+        aria-modal="false"
+        aria-label={title}
+      >
         <header className="approval-header">
           <div className="approval-mark"><ShieldAlert size={19} /></div>
           <div>
             <h3>{title}</h3>
             <p>{detail.subtitle}</p>
+            {queueCount > 1 && <p className="approval-queue-note">当前显示第 1 个，另有 {queueCount - 1} 个请求排队。</p>}
           </div>
         </header>
         <ApprovalBody detail={detail} />
         <div className="approval-actions">
-          <button type="button" className="approval-btn ghost" disabled={submitting} onClick={() => onResolve('deny')}>
+          <button ref={firstActionRef} type="button" className="approval-btn ghost" disabled={submitting} onClick={() => onResolve('deny')}>
             <X size={15} /> 拒绝
           </button>
           <button type="button" className="approval-btn secondary" disabled={submitting} onClick={() => onResolve('approve_session', 'session')}>
@@ -30,6 +41,25 @@ export default function ApprovalDialog({ request, submitting, onResolve }) {
       </section>
     </div>
   );
+}
+
+function useApprovalFocusAndEscape(request, submitting, onResolve, actionRef) {
+  const requestId = request?.id || '';
+  const visible = Boolean(request);
+  useEffect(() => {
+    if (visible) actionRef.current?.focus();
+  }, [actionRef, requestId, visible]);
+
+  useEffect(() => {
+    if (!visible || submitting) return undefined;
+    const handleWindowKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onResolve('deny');
+    };
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [onResolve, submitting, visible]);
 }
 
 function ApprovalBody({ detail }) {

@@ -10,6 +10,13 @@ import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
 import { selectProjects, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
+import {
+  approvalsForSession,
+  enqueueApprovalNotice,
+  hasApprovalForSession,
+  removeApprovalRequest,
+  removeApprovalsForSession,
+} from './sessions/approvalQueue';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
 import SessionComposer from './sessions/SessionComposer';
 import {
@@ -106,8 +113,7 @@ export default function Sessions() {
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
-  const [approvalRequest, setApprovalRequest] = useState(null);
-  const [approvalNotice, setApprovalNotice] = useState(null);
+  const [approvalQueue, setApprovalQueue] = useState([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [savingProjectOrder, setSavingProjectOrder] = useState(false);
   const detailRefreshTimer = useRef(null);
@@ -123,6 +129,9 @@ export default function Sessions() {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  const currentApprovals = useMemo(() => approvalsForSession(approvalQueue, selectedId), [approvalQueue, selectedId]);
+  const approvalRequest = currentApprovals[0]?.request || null;
 
   const applySessionSidebarWidth = useCallback((width) => {
     const nextWidth = Math.round(width);
@@ -347,19 +356,21 @@ export default function Sessions() {
     if (!isAgentEvent(event)) return;
     if (event.method === 'approval/requested') {
       const request = parseApprovalPayload(event.payload);
-      const requestSessionKey = eventKey || eventSessionKeyFromPayload(request);
-      setApprovalNotice({ request, sessionId: requestSessionKey });
-      if (!requestSessionKey || requestSessionKey === selectedIdRef.current) {
-        setApprovalRequest(request);
-      } else {
+      const requestSessionKey = eventKey || eventSessionKeyFromPayload(request) || selectedIdRef.current;
+      setApprovalQueue((current) => enqueueApprovalNotice(current, { request, sessionId: requestSessionKey }));
+      if (requestSessionKey && requestSessionKey !== selectedIdRef.current) {
         toast.info('Codex 正在等待审批，切回对应 session 后可处理。');
       }
+    }
+    if (event.method === 'approval/resolved') {
+      setApprovalQueue((current) => removeApprovalRequest(current, parseApprovalResolvedPayload(event.payload)));
     }
     if (event.threadId && isSessionStartEvent(event)) {
       setSessions((prev) => setSessionRunningInList(prev, eventKey, true));
     }
     if (event.threadId && isSessionStopEvent(event)) {
       setSessions((prev) => setSessionRunningInList(prev, eventKey, false));
+      setApprovalQueue((current) => removeApprovalsForSession(current, eventKey));
     }
     if (eventKey !== selectedId) return;
     if (isSessionStartEvent(event)) {
@@ -371,13 +382,6 @@ export default function Sessions() {
     if (isSessionStopEvent(event)) {
       const stoppedSessionId = eventKey;
       setSessionRunning(false);
-      setApprovalNotice((current) => current?.sessionId === stoppedSessionId ? null : current);
-      setApprovalRequest((current) => {
-        if (!current) return current;
-        const currentSessionId = eventSessionKeyFromPayload(current);
-        if (!currentSessionId || currentSessionId === stoppedSessionId) return null;
-        return current;
-      });
       loadSelected().then(() => {
         if (selectedIdRef.current === stoppedSessionId) setLiveEvents([]);
       });
@@ -427,8 +431,7 @@ export default function Sessions() {
     setApprovalSubmitting(true);
     try {
       await api.resolveCodexApproval(approvalRequest.id, { decision, scope });
-      setApprovalRequest(null);
-      setApprovalNotice(null);
+      setApprovalQueue((current) => removeApprovalRequest(current, approvalRequest));
     } catch (err) {
       toast.error(err.message || '提交授权决策失败');
     } finally {
@@ -527,8 +530,7 @@ export default function Sessions() {
     setActiveView('chat');
     setLiveEvents([]);
     setSessionRunning(isSessionRunning(nextSession));
-    setApprovalRequest(approvalNotice?.sessionId === id ? approvalNotice.request : null);
-  }, [approvalNotice, sessions]);
+  }, [sessions]);
 
   if (loading && sessions.length === 0) {
     return <LoadingState />;
@@ -662,13 +664,19 @@ export default function Sessions() {
                   session={selectedSession}
                   liveEvents={liveEvents}
                   running={sessionRunning}
-                  pendingApproval={approvalNotice?.sessionId === selectedId}
+                  pendingApproval={hasApprovalForSession(approvalQueue, selectedId)}
                 />
               ) : (
                 <EmptyDetail />
               )}
               
               <div className="client-chat-composer-section">
+                <ApprovalDialog
+                  request={approvalRequest}
+                  submitting={approvalSubmitting}
+                  queueCount={currentApprovals.length}
+                  onResolve={resolveApproval}
+                />
                 <SessionComposer
                   value={message}
                   onChange={setMessage}
@@ -807,8 +815,6 @@ export default function Sessions() {
         )}
 
       </main>
-
-      <ApprovalDialog request={approvalRequest} submitting={approvalSubmitting} onResolve={resolveApproval} />
     </div>
   );
 }
@@ -819,6 +825,15 @@ function parseApprovalPayload(payload) {
     return { id: request.id || '', method: request.method || 'approval/requested', params: request.params || {} };
   } catch {
     return { id: '', method: 'approval/requested', params: {} };
+  }
+}
+
+function parseApprovalResolvedPayload(payload) {
+  try {
+    const request = JSON.parse(payload || '{}');
+    return { id: request.id || '' };
+  } catch {
+    return { id: '' };
   }
 }
 
