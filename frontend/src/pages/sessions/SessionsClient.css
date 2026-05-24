@@ -611,9 +611,7 @@
 .client-chat-area .session-transcript {
   background: transparent;
   padding: 30px 40px;
-  max-width: 1180px;
   width: 100%;
-  margin: 0 auto;
 }
 
 /* 精美聊天气泡样式改造 */
@@ -655,9 +653,7 @@
 /* 输入框在聊天区的位置 */
 .client-chat-composer-section {
   padding: 16px 40px 24px 40px;
-  max-width: 1180px;
   width: 100%;
-  margin: 0 auto;
   flex-shrink: 0;
 }
 
