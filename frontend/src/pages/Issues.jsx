@@ -43,6 +43,7 @@ export default function Issues({
   isNewIssueOpen,
   setIsNewIssueOpen,
   prefilledStatus,
+  sourceMetadata,
   handleOpenNewIssue,
   navigateTo,
 }) {
@@ -161,12 +162,12 @@ export default function Issues({
   // 当模态框打开时重置表单输入内容，防止共享项目列表更新时清空用户输入
   useEffect(() => {
     if (isNewIssueOpen) {
-      setFormTitle('');
-      setFormDescription('');
+      setFormTitle(sourceMetadata?.suggested_title || '');
+      setFormDescription(sourceMetadata?.source_excerpt || '');
       setFormPriority(0);
       setFormError('');
     }
-  }, [isNewIssueOpen]);
+  }, [isNewIssueOpen, sourceMetadata]);
 
   useEffect(() => {
     if (!isNewIssueOpen) return;
@@ -183,6 +184,10 @@ export default function Issues({
     if (isNewIssueOpen) {
       setFormProjectId(prev => {
         if (projects && projects.length > 0) {
+          const sourceProjectId = sourceMetadata?.project_id || '';
+          if (sourceProjectId && projects.some(p => p.id === sourceProjectId)) {
+            return sourceProjectId;
+          }
           if (prev && projects.some(p => p.id === prev)) {
             return prev;
           }
@@ -191,7 +196,7 @@ export default function Issues({
         return '';
       });
     }
-  }, [isNewIssueOpen, projects]);
+  }, [isNewIssueOpen, projects, sourceMetadata]);
 
   // 相对时间计算函数，完美还原截图如 "19h"、"2d" 等显示
   const getRelativeTime = (dateStr) => {
@@ -233,6 +238,7 @@ export default function Issues({
       status: prefilledStatus || 'triage',
       template_id: formTemplateId,
     };
+    addIssueSource(payload, sourceMetadata);
 
     try {
       await api.createIssue(payload);
@@ -505,6 +511,13 @@ export default function Issues({
                 </div>
               )}
 
+              {sourceMetadata?.source_session_id && (
+                <div style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '10px 14px', borderRadius: '6px', fontSize: '0.78rem', border: '1px solid var(--border-color)' }}>
+                  来源 Session：<code>{sourceMetadata.source_session_id}</code>
+                  {sourceMetadata.source_turn_id && <> · Turn：<code>{sourceMetadata.source_turn_id}</code></>}
+                </div>
+              )}
+
               {issueTemplates.length > 0 && (
                 <div className="form-group">
                   <label>Issue 执行模板</label>
@@ -601,6 +614,17 @@ function IssueFailureSummary({ reason }) {
       <span>{reason}</span>
     </div>
   );
+}
+
+function addIssueSource(payload, sourceMetadata) {
+  if (!sourceMetadata?.source_session_id) return;
+  payload.source_session_id = sourceMetadata.source_session_id;
+  if (sourceMetadata.source_turn_id) {
+    payload.source_turn_id = sourceMetadata.source_turn_id;
+  }
+  if (sourceMetadata.source_excerpt) {
+    payload.source_excerpt = sourceMetadata.source_excerpt;
+  }
 }
 
 function IssueRunSummary({ issue, run }) {

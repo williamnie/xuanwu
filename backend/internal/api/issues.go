@@ -31,7 +31,11 @@ func (s *Server) routeIssues(w http.ResponseWriter, r *http.Request, parts []str
 func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		filter := store.IssueFilter{ProjectID: r.URL.Query().Get("projectId"), Status: r.URL.Query().Get("status")}
+		filter := store.IssueFilter{
+			ProjectID:       r.URL.Query().Get("projectId"),
+			Status:          r.URL.Query().Get("status"),
+			SourceSessionID: sourceSessionQuery(r),
+		}
 		issues, err := s.store.ListIssues(r.Context(), filter)
 		if err != nil {
 			handleErr(w, err)
@@ -43,6 +47,13 @@ func (s *Server) handleIssues(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func sourceSessionQuery(r *http.Request) string {
+	if value := r.URL.Query().Get("sourceSessionId"); value != "" {
+		return value
+	}
+	return r.URL.Query().Get("source_session_id")
 }
 
 func (s *Server) handleIssue(w http.ResponseWriter, r *http.Request, id int64) {

@@ -180,6 +180,30 @@ func TestIssueCommentAPIAppendsEvent(t *testing.T) {
 	}
 }
 
+func TestIssueAPIPersistsSourceSessionMetadata(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Follow up", "description": "从讨论创建",
+		"status": "triage", "source_session_id": "codex:thread-source",
+		"source_turn_id": "turn-source", "source_excerpt": "讨论摘录",
+		"codex_thread_id": "must-not-be-runtime",
+	})
+	if issue.SourceSessionID != "thread-source" || issue.SourceTurnID != "turn-source" ||
+		issue.SourceExcerpt != "讨论摘录" {
+		t.Fatalf("source metadata mismatch: %+v", issue)
+	}
+	if issue.CodexThreadID != "" {
+		t.Fatalf("source create must not populate execution runtime: %+v", issue)
+	}
+	listed := getJSON[[]store.Issue](t, srv, "/api/issues?sourceSessionId=codex:thread-source")
+	if len(listed) != 1 || listed[0].ID != issue.ID {
+		t.Fatalf("source session filter mismatch: %+v", listed)
+	}
+}
+
 func TestIssueCommentAPIRejectsEmptyBody(t *testing.T) {
 	srv := newTestServer(t)
 	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
@@ -390,6 +414,43 @@ func TestSessionDetailIncludesLinkedIssueAndMetadata(t *testing.T) {
 	unlinked := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-free")
 	if unlinked.LinkedIssue != nil || unlinked.TokenUsage != nil || unlinked.Model != "" {
 		t.Fatalf("unlinked session should degrade cleanly: %+v", unlinked)
+	}
+}
+
+func TestSessionDetailSeparatesSourceIssuesFromLinkedIssue(t *testing.T) {
+	srv := newTestServerWithCodex(t, sessionDetailCodex{
+		noopCodex: noopCodex{ch: make(chan agent.Event)},
+	})
+	if _, err := srv.store.CreateProject(context.Background(), store.Project{ID: "demo", CWD: t.TempDir()}); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	sourceIssue, err := srv.store.CreateIssue(context.Background(), store.Issue{
+		ProjectID: "demo", Title: "Follow-up issue", Status: store.StatusTriage,
+		SourceSessionID: "thread-1", SourceTurnID: "turn-discussion", SourceExcerpt: "讨论摘录",
+	})
+	if err != nil {
+		t.Fatalf("create source issue: %v", err)
+	}
+	linkedIssue, err := srv.store.CreateIssue(context.Background(), store.Issue{
+		ProjectID: "demo", Title: "Runner issue", Status: store.StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("create linked issue: %v", err)
+	}
+	if err := srv.store.UpdateIssueRuntime(context.Background(), linkedIssue.ID, "thread-1", "turn-run"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	detail := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-1")
+	if detail.LinkedIssue == nil || detail.LinkedIssue.ID != linkedIssue.ID {
+		t.Fatalf("linked issue should still mean execution session: %+v", detail.LinkedIssue)
+	}
+	if len(detail.SourceIssues) != 1 || detail.SourceIssues[0].ID != sourceIssue.ID {
+		t.Fatalf("source issues not returned separately: %+v", detail.SourceIssues)
+	}
+	if detail.SourceIssues[0].SourceTurnID != "turn-discussion" ||
+		detail.SourceIssues[0].SourceExcerpt != "讨论摘录" {
+		t.Fatalf("source issue metadata missing: %+v", detail.SourceIssues[0])
 	}
 }
 

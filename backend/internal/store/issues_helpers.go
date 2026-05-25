@@ -64,6 +64,9 @@ func selectNextIssueID(ctx context.Context, tx *sql.Tx, projectID, dueAt string)
 func normalizeIssueForCreate(issue *Issue) error {
 	issue.Title = strings.TrimSpace(issue.Title)
 	issue.Description = strings.TrimSpace(issue.Description)
+	issue.SourceSessionID = normalizeIssueSourceSessionID(issue.SourceSessionID)
+	issue.SourceTurnID = strings.TrimSpace(issue.SourceTurnID)
+	issue.SourceExcerpt = strings.TrimSpace(issue.SourceExcerpt)
 	if issue.Title == "" {
 		issue.Title = deriveIssueTitle(issue.Description)
 	}
@@ -71,6 +74,15 @@ func normalizeIssueForCreate(issue *Issue) error {
 		return ErrIssueContentRequired
 	}
 	return nil
+}
+
+func normalizeIssueSourceSessionID(value string) string {
+	value = strings.TrimSpace(value)
+	provider, sessionID, ok := strings.Cut(value, ":")
+	if ok && strings.EqualFold(strings.TrimSpace(provider), ProviderCodex) {
+		return strings.TrimSpace(sessionID)
+	}
+	return value
 }
 
 func deriveIssueTitle(content string) string {

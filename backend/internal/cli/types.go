@@ -8,20 +8,23 @@ type Options struct {
 }
 
 type issueDTO struct {
-	ID             int64  `json:"id"`
-	ProjectID      string `json:"project_id"`
-	Title          string `json:"title"`
-	Description    string `json:"description,omitempty"`
-	Status         string `json:"status"`
-	Priority       int    `json:"priority,omitempty"`
-	TemplateID     string `json:"template_id,omitempty"`
-	PromptTemplate string `json:"prompt_template,omitempty"`
-	CodexThreadID  string `json:"codex_thread_id,omitempty"`
-	CodexTurnID    string `json:"codex_turn_id,omitempty"`
-	AttemptCount   int    `json:"attempt_count,omitempty"`
-	Error          string `json:"error,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	UpdatedAt      string `json:"updated_at,omitempty"`
+	ID              int64  `json:"id"`
+	ProjectID       string `json:"project_id"`
+	Title           string `json:"title"`
+	Description     string `json:"description,omitempty"`
+	Status          string `json:"status"`
+	Priority        int    `json:"priority,omitempty"`
+	TemplateID      string `json:"template_id,omitempty"`
+	PromptTemplate  string `json:"prompt_template,omitempty"`
+	SourceSessionID string `json:"source_session_id,omitempty"`
+	SourceTurnID    string `json:"source_turn_id,omitempty"`
+	SourceExcerpt   string `json:"source_excerpt,omitempty"`
+	CodexThreadID   string `json:"codex_thread_id,omitempty"`
+	CodexTurnID     string `json:"codex_turn_id,omitempty"`
+	AttemptCount    int    `json:"attempt_count,omitempty"`
+	Error           string `json:"error,omitempty"`
+	CreatedAt       string `json:"created_at,omitempty"`
+	UpdatedAt       string `json:"updated_at,omitempty"`
 }
 
 type issueEventDTO struct {

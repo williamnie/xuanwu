@@ -31,6 +31,11 @@ func TestIssueCreateRunsAndPrintsJSON(t *testing.T) {
 			if payload["description"] != "修复自动化入口\n\n请保持最小改动。" {
 				t.Fatalf("description not read from file: %+v", payload)
 			}
+			if payload["source_session_id"] != "thread-discuss" ||
+				payload["source_turn_id"] != "turn-discuss" ||
+				payload["source_excerpt"] != "从 Session 讨论创建" {
+				t.Fatalf("source metadata missing from create payload: %+v", payload)
+			}
 			writeTestJSON(w, http.StatusCreated, map[string]any{
 				"id": float64(42), "project_id": "demo", "title": "创建 CLI", "status": "triage",
 			})
@@ -49,7 +54,9 @@ func TestIssueCreateRunsAndPrintsJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"issue", "create", "--addr", server.URL, "--project", "demo",
-		"--title", "创建 CLI", "--body-file", bodyPath, "--run", "--json",
+		"--title", "创建 CLI", "--body-file", bodyPath,
+		"--source-session", "thread-discuss", "--source-turn", "turn-discuss",
+		"--source-excerpt", "从 Session 讨论创建", "--run", "--json",
 	}, &stdout, &stderr, Options{})
 	if code != 0 {
 		t.Fatalf("exit=%d stderr=%s", code, stderr.String())

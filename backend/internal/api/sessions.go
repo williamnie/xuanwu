@@ -33,15 +33,18 @@ type sessionMessageRequest struct {
 
 type sessionDetailResponse struct {
 	agent.Session
-	Model       string                    `json:"model,omitempty"`
-	LinkedIssue *linkedSessionIssue       `json:"linked_issue,omitempty"`
-	TokenUsage  *codexusage.UsageSnapshot `json:"token_usage,omitempty"`
+	Model        string                    `json:"model,omitempty"`
+	LinkedIssue  *linkedSessionIssue       `json:"linked_issue,omitempty"`
+	SourceIssues []linkedSessionIssue      `json:"source_issues,omitempty"`
+	TokenUsage   *codexusage.UsageSnapshot `json:"token_usage,omitempty"`
 }
 
 type linkedSessionIssue struct {
-	ID     int64  `json:"id"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	Status        string `json:"status"`
+	SourceTurnID  string `json:"source_turn_id,omitempty"`
+	SourceExcerpt string `json:"source_excerpt,omitempty"`
 }
 
 func (s *Server) routeSessions(w http.ResponseWriter, r *http.Request, parts []string) {
@@ -232,10 +235,11 @@ func parseSessionRefValue(raw string) sessionRef {
 func (s *Server) enrichSessionDetail(r *http.Request, session agent.Session) sessionDetailResponse {
 	meta, _ := codexusage.ReadSessionMetadata(r.Context(), s.sessionMetadataPath(session.Path))
 	return sessionDetailResponse{
-		Session:     session,
-		Model:       meta.Model,
-		LinkedIssue: s.linkedIssue(r, session.ProviderSessionID),
-		TokenUsage:  meta.TokenUsage,
+		Session:      session,
+		Model:        meta.Model,
+		LinkedIssue:  s.linkedIssue(r, session.ProviderSessionID),
+		SourceIssues: s.sourceIssues(r, session.ProviderSessionID),
+		TokenUsage:   meta.TokenUsage,
 	}
 }
 
@@ -245,6 +249,21 @@ func (s *Server) linkedIssue(r *http.Request, threadID string) *linkedSessionIss
 		return nil
 	}
 	return &linkedSessionIssue{ID: issue.ID, Title: issue.Title, Status: issue.Status}
+}
+
+func (s *Server) sourceIssues(r *http.Request, threadID string) []linkedSessionIssue {
+	issues, err := s.store.ListIssues(r.Context(), store.IssueFilter{SourceSessionID: threadID})
+	if err != nil || len(issues) == 0 {
+		return nil
+	}
+	items := make([]linkedSessionIssue, 0, len(issues))
+	for _, issue := range issues {
+		items = append(items, linkedSessionIssue{
+			ID: issue.ID, Title: issue.Title, Status: issue.Status,
+			SourceTurnID: issue.SourceTurnID, SourceExcerpt: issue.SourceExcerpt,
+		})
+	}
+	return items
 }
 
 func (s *Server) sessionMetadataPath(sessionPath string) string {

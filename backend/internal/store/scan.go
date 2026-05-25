@@ -37,8 +37,9 @@ func nullableProjectHold(reason, message, since, nextAt, lastAt, lastErr sql.Nul
 func scanIssue(row scanner) (Issue, error) {
 	var i Issue
 	err := row.Scan(&i.ID, &i.ProjectID, &i.Title, &i.Description, &i.Status,
-		&i.Priority, &i.TemplateID, &i.PromptTemplate, &i.CodexThreadID,
-		&i.CodexTurnID, &i.AttemptCount, &i.CommentCount, &i.AutoRetryNextAt,
+		&i.Priority, &i.TemplateID, &i.PromptTemplate, &i.SourceSessionID,
+		&i.SourceTurnID, &i.SourceExcerpt, &i.CodexThreadID, &i.CodexTurnID,
+		&i.AttemptCount, &i.CommentCount, &i.AutoRetryNextAt,
 		&i.AutoRetryReason, &i.Error, &i.CreatedAt, &i.UpdatedAt)
 	return i, err
 }

@@ -29,6 +29,7 @@ import {
   MessageCircle,
   Send,
   History,
+  ExternalLink,
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
@@ -806,18 +807,42 @@ ${error}` : error;
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Session ID:</span>
+                <span style={{ color: 'var(--text-muted)' }}>执行 Session ID:</span>
                 <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {runtimeIdentity.sessionId || '未开始分配'}
                 </code>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Turn ID:</span>
+                <span style={{ color: 'var(--text-muted)' }}>执行 Turn ID:</span>
                 <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {runtimeIdentity.turnId || '暂无'}
                 </code>
               </div>
+
+              {issue.source_session_id && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>来源 Session:</span>
+                  <button
+                    type="button"
+                    className="kanban-card-action-btn"
+                    style={{ alignSelf: 'flex-start' }}
+                    onClick={() => navigateTo('sessions', null, issueSourceSessionRef(issue))}
+                  >
+                    <ExternalLink size={12} /> {issue.source_session_id}
+                  </button>
+                  {issue.source_turn_id && (
+                    <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Turn: {issue.source_turn_id}
+                    </code>
+                  )}
+                  {issue.source_excerpt && (
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.78rem', overflowWrap: 'anywhere' }}>
+                      {summarize(issue.source_excerpt, 180)}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ color: 'var(--text-muted)' }}>最后更新时间:</span>
@@ -1016,6 +1041,12 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function issueSourceSessionRef(issue) {
+  const sessionId = String(issue?.source_session_id || '').trim();
+  if (!sessionId) return '';
+  return sessionId.startsWith('codex:') ? sessionId : `codex:${sessionId}`;
 }
 
 function summarize(value, maxLength) {

@@ -414,6 +414,39 @@ func TestCreateIssueDerivesTitleFromDescription(t *testing.T) {
 	}
 }
 
+func TestCreateIssuePersistsSourceSessionMetadata(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, err := st.CreateIssue(ctx, Issue{
+		ProjectID:       "demo",
+		Title:           "follow up",
+		Status:          StatusTriage,
+		SourceSessionID: "thread-source",
+		SourceTurnID:    "turn-source",
+		SourceExcerpt:   "原始讨论摘录",
+		CodexThreadID:   "thread-runner",
+		CodexTurnID:     "turn-runner",
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	if issue.SourceSessionID != "thread-source" || issue.SourceTurnID != "turn-source" ||
+		issue.SourceExcerpt != "原始讨论摘录" {
+		t.Fatalf("source metadata not persisted: %+v", issue)
+	}
+	if issue.CodexThreadID != "" || issue.CodexTurnID != "" {
+		t.Fatalf("create must not treat execution runtime as source metadata: %+v", issue)
+	}
+	issues, err := st.ListIssues(ctx, IssueFilter{SourceSessionID: "thread-source"})
+	if err != nil {
+		t.Fatalf("list issues by source: %v", err)
+	}
+	if len(issues) != 1 || issues[0].ID != issue.ID {
+		t.Fatalf("source session list mismatch: %+v", issues)
+	}
+}
+
 func TestIssueTemplateSelectionSnapshotsPromptTemplate(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()

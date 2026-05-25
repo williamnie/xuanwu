@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
-  ChevronDown, ChevronRight, FileCode, Info, Loader2, Plus, Settings,
+  ChevronDown, ChevronRight, ExternalLink, FileCode, Info, Loader2, Plus, Settings,
   Pin, Search, MessageSquarePlus,
   SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder
 } from 'lucide-react';
@@ -123,7 +123,7 @@ function compactModelName(value) {
     .trim();
 }
 
-export default function Sessions({ selectedSessionId = '' }) {
+export default function Sessions({ selectedSessionId = '', handleOpenNewIssue, navigateTo }) {
   const projects = useDataStore(selectProjects);
   const setProjects = useDataStore(selectSetProjects);
   const [sessions, setSessions] = useState([]);
@@ -762,9 +762,12 @@ export default function Sessions({ selectedSessionId = '' }) {
               ) : selectedSession ? (
                 <SessionDetail
                   session={selectedSession}
+                  project={selectedSessionProject}
                   liveEvents={liveEvents}
                   running={sessionRunning}
                   pendingApproval={hasApprovalForSession(approvalQueue, selectedId)}
+                  handleOpenNewIssue={handleOpenNewIssue}
+                  navigateTo={navigateTo}
                 />
               ) : (
                 <EmptyDetail />
@@ -1158,7 +1161,7 @@ function projectNameFromPath(cwd) {
   return trimmed.split(/[\\/]/).pop() || 'No project';
 }
 
-function SessionDetail({ session, liveEvents, running, pendingApproval }) {
+function SessionDetail({ session, project, liveEvents, running, pendingApproval, handleOpenNewIssue, navigateTo }) {
   const turns = session?.turns || [];
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
@@ -1191,11 +1194,19 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
         <span>Provider: {provider}</span>
         <code>{providerSessionId}</code>
         <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
+        <button
+          type="button"
+          className="session-source-issue-button"
+          onClick={() => openSourceIssue(handleOpenNewIssue, session, project)}
+        >
+          <Plus size={13} /> 创建 Issue
+        </button>
         <SessionInfoPopover
           session={session}
           provider={provider}
           sessionId={providerSessionId}
           model={model}
+          navigateTo={navigateTo}
         />
       </div>
       <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>
@@ -1216,8 +1227,9 @@ function SessionDetail({ session, liveEvents, running, pendingApproval }) {
   );
 }
 
-function SessionInfoPopover({ session, provider, sessionId, model }) {
+function SessionInfoPopover({ session, provider, sessionId, model, navigateTo }) {
   const linkedIssue = session?.linked_issue || null;
+  const sourceIssues = session?.source_issues || [];
   const tokens = tokenSummary(session?.token_usage);
   return (
     <details className="session-info-popover">
@@ -1243,6 +1255,24 @@ function SessionInfoPopover({ session, provider, sessionId, model }) {
           )}
         </div>
         <div className="session-info-section">
+          <span className="session-info-section-title">由此讨论创建</span>
+          {sourceIssues.length > 0 ? (
+            sourceIssues.map((issue) => (
+              <button
+                key={issue.id}
+                type="button"
+                className="session-source-issue-link"
+                onClick={() => navigateTo?.('issues', issue.id)}
+              >
+                <span>#{issue.id} {issue.title || '未命名'}</span>
+                <ExternalLink size={12} />
+              </button>
+            ))
+          ) : (
+            <div className="session-info-empty">暂无来源型 Issue</div>
+          )}
+        </div>
+        <div className="session-info-section">
           <span className="session-info-section-title">Token 使用</span>
           {tokens ? (
             <>
@@ -1259,6 +1289,40 @@ function SessionInfoPopover({ session, provider, sessionId, model }) {
       </div>
     </details>
   );
+}
+
+function openSourceIssue(handleOpenNewIssue, session, project) {
+  if (!handleOpenNewIssue) return;
+  handleOpenNewIssue('triage', buildSourceIssueMetadata(session, project));
+}
+
+function buildSourceIssueMetadata(session, project) {
+  const sourceTurn = latestUserTurn(session);
+  return {
+    project_id: project?.id || '',
+    source_session_id: session?.provider_session_id || session?.sessionId || session?.id || '',
+    source_turn_id: sourceTurn.id,
+    source_excerpt: sourceTurn.text,
+    suggested_title: '从 Session 讨论创建 Issue',
+  };
+}
+
+function latestUserTurn(session) {
+  const turns = Array.isArray(session?.turns) ? session.turns : [];
+  for (let idx = turns.length - 1; idx >= 0; idx -= 1) {
+    const text = userTurnText(turns[idx]);
+    if (text) return { id: turns[idx]?.id || '', text };
+  }
+  return { id: '', text: session?.preview || '' };
+}
+
+function userTurnText(turn) {
+  for (const item of (turn?.items || [])) {
+    if (item.type !== 'userMessage') continue;
+    const text = textFromUserContent(item.content).trim();
+    if (text) return text;
+  }
+  return '';
 }
 
 function InfoRow({ label, value }) {

@@ -98,6 +98,9 @@ type Issue struct {
 	Priority        int       `json:"priority"`
 	TemplateID      string    `json:"template_id"`
 	PromptTemplate  string    `json:"prompt_template"`
+	SourceSessionID string    `json:"source_session_id"`
+	SourceTurnID    string    `json:"source_turn_id"`
+	SourceExcerpt   string    `json:"source_excerpt"`
 	CodexThreadID   string    `json:"codex_thread_id"`
 	CodexTurnID     string    `json:"codex_turn_id"`
 	AttemptCount    int       `json:"attempt_count"`
@@ -202,6 +205,7 @@ type Upload struct {
 }
 
 type IssueFilter struct {
-	ProjectID string
-	Status    string
+	ProjectID       string
+	Status          string
+	SourceSessionID string
 }

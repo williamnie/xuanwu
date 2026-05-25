@@ -75,6 +75,11 @@ codex-issue-runner issue create \
 - The default status is `triage`, but pass `--status triage` explicitly for backlog/triage creation.
 - Omit `--run` when the user only wants a Triage/backlog item.
 - The returned JSON contains the runner issue `id`; keep it for status/log follow-up.
+- When creating from a Codex Session discussion, the CLI automatically uses
+  `CODEX_THREAD_ID` / `CODEX_TURN_ID` as source metadata when present. To set
+  it explicitly, add `--source-session <session-id>`, `--source-turn <turn-id>`,
+  and optionally `--source-excerpt "<short excerpt>"`. This source metadata is
+  separate from the issue execution session (`codex_thread_id`).
 
 To create and immediately enqueue an executable issue, add `--run`:
 

@@ -66,6 +66,7 @@ export default function App() {
     // 新增 Issue 弹窗的全局状态（可以从侧边栏 + 看板列头触发）
     isNewIssueOpen: false,
     prefilledStatus: 'triage',
+    newIssueSource: null,
 
     // 主题状态 (默认亮色以匹配截图，支持一键切换)
     theme: localStorage.getItem('codex-theme') || 'light',
@@ -89,6 +90,7 @@ export default function App() {
     focusFilter,
     isNewIssueOpen,
     prefilledStatus,
+    newIssueSource,
     theme,
     sidebarCollapsed,
     authReady,
@@ -106,6 +108,9 @@ export default function App() {
       if (draft.isNewIssueOpen !== nextOpen) {
         draft.isNewIssueOpen = nextOpen;
       }
+      if (!nextOpen) {
+        draft.newIssueSource = null;
+      }
     });
   }, [updateAppState]);
 
@@ -121,14 +126,6 @@ export default function App() {
     updateAppState(draft => {
       if (draft.filterProject !== value) {
         draft.filterProject = value;
-      }
-    });
-  }, [updateAppState]);
-
-  const setPrefilledStatus = useCallback((status) => {
-    updateAppState(draft => {
-      if (draft.prefilledStatus !== status) {
-        draft.prefilledStatus = status;
       }
     });
   }, [updateAppState]);
@@ -210,9 +207,14 @@ export default function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const handleOpenNewIssue = (status = 'triage') => {
-    setPrefilledStatus(status);
-    setIsNewIssueOpen(true);
+  const handleOpenNewIssue = (status = 'triage', source = null) => {
+    updateAppState(draft => {
+      draft.prefilledStatus = status;
+      draft.newIssueSource = source || null;
+      draft.isNewIssueOpen = true;
+      draft.currentPage = 'issues';
+      draft.selectedIssueId = null;
+    });
   };
 
 
@@ -269,11 +271,13 @@ export default function App() {
               isNewIssueOpen={isNewIssueOpen}
               setIsNewIssueOpen={setIsNewIssueOpen}
               prefilledStatus={prefilledStatus}
+              sourceMetadata={newIssueSource}
               handleOpenNewIssue={handleOpenNewIssue}
               navigateTo={navigateTo}
             />
           ) : currentPage === 'sessions' ? (
             <Sessions
+              handleOpenNewIssue={handleOpenNewIssue}
               navigateTo={navigateTo}
               selectedSessionId={selectedSessionId}
               theme={theme}

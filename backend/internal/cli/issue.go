@@ -17,6 +17,9 @@ func (e commandEnv) createIssue(ctx context.Context, args []string) int {
 	status := fs.String("status", "triage", "initial issue status")
 	priority := fs.Int("priority", 0, "issue priority")
 	templateID := fs.String("template", "", "issue template id")
+	sourceSessionID := fs.String("source-session", e.env("CODEX_THREAD_ID"), "source session id")
+	sourceTurnID := fs.String("source-turn", e.env("CODEX_TURN_ID"), "source turn id")
+	sourceExcerpt := fs.String("source-excerpt", "", "source excerpt")
 	run := fs.Bool("run", false, "enqueue issue after creation")
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
@@ -26,7 +29,11 @@ func (e commandEnv) createIssue(ctx context.Context, args []string) int {
 	if err != nil {
 		return e.fail(err.Error())
 	}
-	payload, err := createPayload(*projectID, *title, description, *status, *priority, *templateID)
+	payload, err := createPayload(issueCreateInput{
+		projectID: *projectID, title: *title, body: description, status: *status,
+		priority: *priority, templateID: *templateID, sourceSessionID: *sourceSessionID,
+		sourceTurnID: *sourceTurnID, sourceExcerpt: *sourceExcerpt,
+	})
 	if err != nil {
 		return e.fail(err.Error())
 	}
@@ -152,10 +159,20 @@ func readIssueBody(body, bodyFile string) (string, error) {
 	return strings.TrimSpace(string(content)), nil
 }
 
-func createPayload(projectID, title, body, status string, priority int, templateID string) (issueDTO, error) {
-	issue := issueDTO{ProjectID: strings.TrimSpace(projectID), Title: strings.TrimSpace(title),
-		Description: strings.TrimSpace(body), Status: strings.TrimSpace(status), Priority: priority,
-		TemplateID: strings.TrimSpace(templateID)}
+type issueCreateInput struct {
+	projectID, title, body, status string
+	priority                       int
+	templateID                     string
+	sourceSessionID                string
+	sourceTurnID                   string
+	sourceExcerpt                  string
+}
+
+func createPayload(input issueCreateInput) (issueDTO, error) {
+	issue := issueDTO{ProjectID: strings.TrimSpace(input.projectID), Title: strings.TrimSpace(input.title),
+		Description: strings.TrimSpace(input.body), Status: strings.TrimSpace(input.status), Priority: input.priority,
+		TemplateID: strings.TrimSpace(input.templateID), SourceSessionID: strings.TrimSpace(input.sourceSessionID),
+		SourceTurnID: strings.TrimSpace(input.sourceTurnID), SourceExcerpt: strings.TrimSpace(input.sourceExcerpt)}
 	if issue.ProjectID == "" {
 		return issue, fmt.Errorf("--project is required")
 	}

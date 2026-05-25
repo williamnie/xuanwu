@@ -173,6 +173,9 @@ func (s *Store) migrateIssueColumns() error {
 	additions := map[string]string{
 		"template_id":        `alter table issues add column template_id text not null default ''`,
 		"prompt_template":    `alter table issues add column prompt_template text not null default ''`,
+		"source_session_id":  `alter table issues add column source_session_id text not null default ''`,
+		"source_turn_id":     `alter table issues add column source_turn_id text not null default ''`,
+		"source_excerpt":     `alter table issues add column source_excerpt text not null default ''`,
 		"auto_retry_next_at": `alter table issues add column auto_retry_next_at text not null default ''`,
 		"auto_retry_reason":  `alter table issues add column auto_retry_reason text not null default ''`,
 	}
