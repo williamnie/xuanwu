@@ -7,7 +7,6 @@ import {
 import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
-import { localImagePathToAttachmentMarkdown } from '../components/editor/attachments';
 import { selectProjects, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
 import {
@@ -40,6 +39,7 @@ import VirtualSessionList from './sessions/VirtualSessionList';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessions/sessionTranscriptItems';
+import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -105,16 +105,6 @@ function queuedMessageId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function textFromUserContent(content) {
-  if (!Array.isArray(content)) return '';
-  return content.map((item) => {
-    if (item.type === 'text' || item.type === 'input_text') return item.text || '';
-    if (item.type === 'localImage') return localImagePathToAttachmentMarkdown(item.path);
-    if (item.type === 'image' || item.type === 'input_image') return `![image](${item.url || item.image_url || ''})`;
-    return '';
-  }).filter(Boolean).join('\n\n');
-}
-
 function compactModelName(value) {
   return String(value || '')
     .replace(/^gpt[-\s]*/i, '')
@@ -123,7 +113,7 @@ function compactModelName(value) {
     .trim();
 }
 
-export default function Sessions({ selectedSessionId = '', handleOpenNewIssue, navigateTo }) {
+export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const projects = useDataStore(selectProjects);
   const setProjects = useDataStore(selectSetProjects);
   const [sessions, setSessions] = useState([]);
@@ -766,7 +756,6 @@ export default function Sessions({ selectedSessionId = '', handleOpenNewIssue, n
                   liveEvents={liveEvents}
                   running={sessionRunning}
                   pendingApproval={hasApprovalForSession(approvalQueue, selectedId)}
-                  handleOpenNewIssue={handleOpenNewIssue}
                   navigateTo={navigateTo}
                 />
               ) : (
@@ -1161,7 +1150,7 @@ function projectNameFromPath(cwd) {
   return trimmed.split(/[\\/]/).pop() || 'No project';
 }
 
-function SessionDetail({ session, project, liveEvents, running, pendingApproval, handleOpenNewIssue, navigateTo }) {
+function SessionDetail({ session, project, liveEvents, running, pendingApproval, navigateTo }) {
   const turns = session?.turns || [];
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
@@ -1194,13 +1183,7 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
         <span>Provider: {provider}</span>
         <code>{providerSessionId}</code>
         <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
-        <button
-          type="button"
-          className="session-source-issue-button"
-          onClick={() => openSourceIssue(handleOpenNewIssue, session, project)}
-        >
-          <Plus size={13} /> 创建 Issue
-        </button>
+        <CreateSessionIssueButton session={session} project={project} navigateTo={navigateTo} />
         <SessionInfoPopover
           session={session}
           provider={provider}
@@ -1291,38 +1274,40 @@ function SessionInfoPopover({ session, provider, sessionId, model, navigateTo })
   );
 }
 
-function openSourceIssue(handleOpenNewIssue, session, project) {
-  if (!handleOpenNewIssue) return;
-  handleOpenNewIssue('triage', buildSourceIssueMetadata(session, project));
-}
+function CreateSessionIssueButton({ session, project, navigateTo }) {
+  const [creating, setCreating] = useState(false);
 
-function buildSourceIssueMetadata(session, project) {
-  const sourceTurn = latestUserTurn(session);
-  return {
-    project_id: project?.id || '',
-    source_session_id: session?.provider_session_id || session?.sessionId || session?.id || '',
-    source_turn_id: sourceTurn.id,
-    source_excerpt: sourceTurn.text,
-    suggested_title: '从 Session 讨论创建 Issue',
+  const createIssue = async () => {
+    if (creating) return;
+    if (!project?.id) {
+      toast.error('未找到当前 Session 对应的 Runner 项目，无法创建 Issue。');
+      return;
+    }
+    setCreating(true);
+    try {
+      const selectedText = window.getSelection?.().toString() || '';
+      const issue = await api.createIssue(buildSessionIssuePayload(session, project, { selectedText }));
+      toast.success(`已创建 triage Issue #${issue.id}`);
+      navigateTo?.('issues', issue.id);
+    } catch (err) {
+      toast.error(err.message || '从 Session 创建 Issue 失败');
+    } finally {
+      setCreating(false);
+    }
   };
-}
 
-function latestUserTurn(session) {
-  const turns = Array.isArray(session?.turns) ? session.turns : [];
-  for (let idx = turns.length - 1; idx >= 0; idx -= 1) {
-    const text = userTurnText(turns[idx]);
-    if (text) return { id: turns[idx]?.id || '', text };
-  }
-  return { id: '', text: session?.preview || '' };
-}
-
-function userTurnText(turn) {
-  for (const item of (turn?.items || [])) {
-    if (item.type !== 'userMessage') continue;
-    const text = textFromUserContent(item.content).trim();
-    if (text) return text;
-  }
-  return '';
+  return (
+    <button
+      type="button"
+      className="session-source-issue-button"
+      onClick={createIssue}
+      disabled={creating}
+      title="Create issue from session"
+    >
+      {creating ? <Loader2 className="animate-spin" size={13} /> : <Plus size={13} />}
+      Create issue from session
+    </button>
+  );
 }
 
 function InfoRow({ label, value }) {
