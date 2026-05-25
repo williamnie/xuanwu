@@ -205,8 +205,8 @@
 }
 
 .session-origin-dot.runner {
-  background: #0ea5e9;
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.14);
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
 }
 
 .session-origin-dot.codex-app {
@@ -215,8 +215,8 @@
 }
 
 [data-theme="dark"] .session-origin-dot.runner {
-  background: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+  background: #fbbf24;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
 }
 
 [data-theme="dark"] .session-origin-dot.codex-app {
@@ -413,11 +413,11 @@
 }
 
 .session-item-active-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #0ea5e9;
-  box-shadow: 0 0 8px #0ea5e9;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow), 0 0 8px var(--primary);
 }
 
 .project-group-empty {
