@@ -41,6 +41,13 @@ import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessions/sessionTranscriptItems';
 import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
+import {
+  interruptCompletionNotice,
+  interruptFailureNotice,
+  interruptRequestNotice,
+  isInterruptPendingForSession,
+  isSessionStopEvent,
+} from './sessions/sessionInterrupt';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -137,6 +144,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
+  const [interruptState, setInterruptState] = useState(null);
   const [messageQueue, setMessageQueue] = useState(readQueuedSessionMessages);
   const [approvalQueue, setApprovalQueue] = useState([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
@@ -145,6 +153,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const listRefreshTimer = useRef(null);
   const selectedIdRef = useRef(selectedId);
   const lastSelectedIdRef = useRef(selectedId);
+  const interruptStateRef = useRef(interruptState);
   const messageQueueRef = useRef(messageQueue);
   const activeQueuedSendsRef = useRef(new Set());
   const containerRef = useRef(null);
@@ -156,6 +165,15 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    interruptStateRef.current = interruptState;
+  }, [interruptState]);
+
+  const applyInterruptNotice = useCallback((notice) => {
+    interruptStateRef.current = notice;
+    setInterruptState(notice);
+  }, []);
 
   useEffect(() => {
     if (selectedSessionId && selectedSessionId !== selectedIdRef.current) {
@@ -423,6 +441,11 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     if (event.threadId && isSessionStopEvent(event)) {
       setSessions((prev) => setSessionRunningInList(prev, eventKey, false));
       setApprovalQueue((current) => removeApprovalsForSession(current, eventKey));
+      if (isInterruptPendingForSession(interruptStateRef.current, eventKey)) {
+        const notice = interruptCompletionNotice(eventKey, event);
+        applyInterruptNotice(notice);
+        showToastNotice(notice);
+      }
     }
     if (eventKey !== selectedId) return;
     if (isSessionStartEvent(event)) {
@@ -446,6 +469,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     scheduleListRefresh,
     scheduleSelectedRefresh,
     selectedId,
+    applyInterruptNotice,
   ]);
 
   useEffect(() => () => {
@@ -531,13 +555,14 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
 
   useEffect(() => {
     if (!selectedId || !selectedDetailReady || sessionRunning || sending) return;
+    if (isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
     sendQueuedMessage(selectedId);
   }, [selectedId, selectedDetailReady, sessionRunning, sending, messageQueue, sendQueuedMessage]);
 
   const sendMessage = async (event) => {
     event.preventDefault();
     const promptText = message.trim();
-    if (!selectedId || !promptText || sending) return;
+    if (!selectedId || !promptText || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
     if (sessionRunning || currentQueuedMessages.length > 0) {
       const queued = createQueuedSessionMessage({
         id: queuedMessageId(),
@@ -562,10 +587,32 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   };
 
   const interrupt = async () => {
-    if (!selectedId) return;
-    await api.interruptSession(selectedId);
-    setSessionRunning(false);
-    setSessions((prev) => setSessionRunningInList(prev, selectedId, false));
+    if (!selectedId || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
+    const requestId = selectedId;
+    applyInterruptNotice({
+      sessionId: requestId,
+      status: 'pending',
+      tone: 'info',
+      text: '正在发送中断请求...',
+    });
+    try {
+      const result = await api.interruptSession(requestId);
+      const notice = interruptRequestNotice(requestId, result);
+      if (isInterruptPendingForSession(interruptStateRef.current, requestId)) {
+        applyInterruptNotice(notice);
+        showToastNotice(notice);
+      }
+      if (!result?.interrupted) {
+        setSessionRunning(false);
+        setSessions((prev) => setSessionRunningInList(prev, requestId, false));
+      }
+    } catch (err) {
+      const notice = interruptFailureNotice(requestId, err);
+      if (isInterruptPendingForSession(interruptStateRef.current, requestId)) {
+        applyInterruptNotice(notice);
+        showToastNotice(notice);
+      }
+    }
   };
 
   const cancelQueuedMessage = (id) => {
@@ -796,6 +843,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   modelsError={modelsError}
                   sending={sending}
                   running={sessionRunning}
+                  interruptState={interruptState}
                   selectedId={selectedId}
                   queuedMessages={currentQueuedMessages}
                   onSubmit={sendMessage}
@@ -976,13 +1024,6 @@ function isSessionStartEvent(event) {
   return event?.agent_event_type === 'agent.turn.started' || event?.method === 'turn/started';
 }
 
-function isSessionStopEvent(event) {
-  return event?.agent_event_type === 'agent.turn.completed' ||
-    event?.agent_event_type === 'agent.error' ||
-    event?.method === 'turn/completed' ||
-    event?.method === 'error';
-}
-
 function providerSessionKey(provider = DEFAULT_SESSION_PROVIDER, sessionId = '') {
   const normalizedProvider = String(provider || DEFAULT_SESSION_PROVIDER).trim().toLowerCase();
   const normalizedSessionId = String(sessionId || '').trim();
@@ -1018,6 +1059,20 @@ function providerLabel(provider) {
 function displayValue(value, fallback = '未提供') {
   const text = String(value || '').trim();
   return text || fallback;
+}
+
+function showToastNotice(notice) {
+  if (!notice?.text) return;
+  const tone = notice.tone || 'info';
+  if (tone === 'success') {
+    toast.success(notice.text);
+  } else if (tone === 'error') {
+    toast.error(notice.text);
+  } else if (tone === 'warning') {
+    toast.warning(notice.text);
+  } else {
+    toast.info(notice.text);
+  }
 }
 
 function formatTokenNumber(value) {

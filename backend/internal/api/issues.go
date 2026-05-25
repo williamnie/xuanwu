@@ -249,13 +249,34 @@ func (s *Server) ensureIssueProjectRunnable(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) cancelIssue(w http.ResponseWriter, r *http.Request, id int64) {
+	current, err := s.store.GetIssue(r.Context(), id)
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
+	if current.Status == store.StatusInProgress && current.CodexThreadID != "" && current.CodexTurnID != "" {
+		result, err := s.runner.InterruptIssue(r.Context(), runner.IssueInterruptRequest{
+			IssueID: id, Status: store.StatusCancelled, RunStatus: store.StatusCancelled,
+			ExitReason: "issue_cancel", EventType: "issue.interrupt_requested",
+			RecordStatusEvent: true,
+		})
+		if err != nil {
+			handleErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result.Issue)
+		return
+	}
 	s.runner.CancelIssue(id)
 	issue, err := s.store.SetIssueStatus(r.Context(), id, store.StatusCancelled, "")
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
-	s.recordIssueEvent(r, id, "issue.status_changed", map[string]string{"status": store.StatusCancelled})
+	s.recordIssueEvent(r, id, "issue.status_changed", map[string]string{
+		"status": store.StatusCancelled,
+		"reason": "issue_cancel",
+	})
 	writeJSON(w, http.StatusOK, issue)
 }
 

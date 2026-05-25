@@ -31,13 +31,28 @@ func (r *Runner) InterruptIssue(ctx context.Context, req IssueInterruptRequest) 
 		return IssueInterruptResult{}, err
 	}
 	if strings.TrimSpace(issue.CodexThreadID) == "" || strings.TrimSpace(issue.CodexTurnID) == "" {
+		r.recordInterruptEvent(ctx, issue.ID, interruptIssueEvent{
+			Type: req.EventType, Reason: req.ExitReason,
+		})
 		updated, updateErr := r.updateInterruptedIssue(ctx, req, issue)
-		return IssueInterruptResult{Issue: updated}, updateErr
+		if updateErr != nil {
+			return IssueInterruptResult{Issue: updated}, updateErr
+		}
+		if req.RecordStatusEvent {
+			r.recordStatusEvent(ctx, issue.ID, updated.Status)
+		}
+		r.recordInterruptEvent(ctx, issue.ID, interruptIssueEvent{
+			Type: "issue.interrupted", Reason: req.ExitReason,
+		})
+		return IssueInterruptResult{Issue: updated}, nil
 	}
-	r.recordInterruptEvent(ctx, issue.ID, req.EventType, issue.CodexThreadID, issue.CodexTurnID)
+	r.recordInterruptEvent(ctx, issue.ID, interruptIssueEvent{
+		Type: req.EventType, ThreadID: issue.CodexThreadID, TurnID: issue.CodexTurnID,
+		Reason: req.ExitReason,
+	})
 	r.cancelRunningIssue(issue.ID)
 	if err := r.interruptTurn(ctx, issue.CodexThreadID, issue.CodexTurnID); err != nil {
-		r.recordInterruptFailed(ctx, issue.ID, issue.CodexThreadID, issue.CodexTurnID, err.Error())
+		r.recordInterruptFailed(ctx, issue.ID, issue.CodexThreadID, issue.CodexTurnID, req.ExitReason, err.Error())
 		return IssueInterruptResult{}, err
 	}
 	updated, err := r.updateInterruptedIssue(ctx, req, issue)
@@ -47,7 +62,10 @@ func (r *Runner) InterruptIssue(ctx context.Context, req IssueInterruptRequest) 
 	if req.RecordStatusEvent {
 		r.recordStatusEvent(ctx, issue.ID, updated.Status)
 	}
-	r.recordInterruptEvent(ctx, issue.ID, "issue.interrupted", issue.CodexThreadID, issue.CodexTurnID)
+	r.recordInterruptEvent(ctx, issue.ID, interruptIssueEvent{
+		Type: "issue.interrupted", ThreadID: issue.CodexThreadID, TurnID: issue.CodexTurnID,
+		Reason: req.ExitReason,
+	})
 	return IssueInterruptResult{Issue: updated, Interrupted: true}, nil
 }
 
@@ -122,24 +140,36 @@ func (r *Runner) sessionRunState(threadID string) *runState {
 	return r.sessions[threadID]
 }
 
-func (r *Runner) recordInterruptEvent(ctx context.Context, issueID int64, typ, threadID, turnID string) {
-	if typ == "" {
+type interruptIssueEvent struct {
+	Type     string
+	ThreadID string
+	TurnID   string
+	Reason   string
+}
+
+func (r *Runner) recordInterruptEvent(ctx context.Context, issueID int64, event interruptIssueEvent) {
+	if event.Type == "" {
 		return
 	}
-	payload, _ := json.Marshal(map[string]string{"thread_id": threadID, "turn_id": turnID})
-	e, err := r.store.AddIssueEvent(ctx, issueID, typ, string(payload))
+	payload, _ := json.Marshal(map[string]string{
+		"thread_id": event.ThreadID,
+		"turn_id":   event.TurnID,
+		"reason":    firstNonEmpty(event.Reason, "interrupted"),
+	})
+	e, err := r.store.AddIssueEvent(ctx, issueID, event.Type, string(payload))
 	if err != nil {
 		return
 	}
 	r.bus.Publish(events.AppEvent{
 		ID: e.ID, Type: e.Type, IssueID: issueID,
-		ThreadID: threadID, TurnID: turnID, Payload: e.Payload, CreatedAt: e.CreatedAt,
+		ThreadID: event.ThreadID, TurnID: event.TurnID, Payload: e.Payload, CreatedAt: e.CreatedAt,
 	})
 }
 
-func (r *Runner) recordInterruptFailed(ctx context.Context, issueID int64, threadID, turnID, message string) {
+func (r *Runner) recordInterruptFailed(ctx context.Context, issueID int64, threadID, turnID, reason, message string) {
 	payload, _ := json.Marshal(map[string]string{
-		"thread_id": threadID, "turn_id": turnID, "error": message,
+		"thread_id": threadID, "turn_id": turnID,
+		"reason": firstNonEmpty(reason, "interrupted"), "error": message,
 	})
 	e, err := r.store.AddIssueEvent(ctx, issueID, "issue.interrupt_failed", string(payload))
 	if err != nil {

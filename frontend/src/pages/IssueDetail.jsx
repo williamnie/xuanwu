@@ -111,6 +111,20 @@ function formatRetryTime(value) {
   return date.toLocaleString();
 }
 
+function interruptEventLabel(type) {
+  if (type === 'issue.interrupt_requested') return '已请求中断 Codex turn';
+  if (type === 'issue.interrupted') return '中断回收完成';
+  if (type === 'issue.interrupt_failed') return '中断请求失败';
+  return '中断事件';
+}
+
+function interruptReasonLabel(reason) {
+  if (reason === 'session_interrupt') return '来自 Session interrupt';
+  if (reason === 'issue_cancel') return '来自 Issue cancel';
+  if (reason === 'interrupted_by_status_change') return '状态变更触发中断';
+  return reason || 'interrupted';
+}
+
 function sameIssueRuns(current = [], next = []) {
   if (current === next) return true;
   if (!Array.isArray(current) || !Array.isArray(next)) return false;
@@ -520,9 +534,10 @@ ${error}` : error;
       // 1. 系统状态变更
       if (event.type === 'issue.status_changed') {
         const status = event.status || payload.status || 'unknown';
+        const reason = payload.reason ? `（原因：${interruptReasonLabel(payload.reason)}）` : '';
         return (
           <div key={event.id || idx} className="terminal-line header">
-            &gt;&gt; [{timestamp}] 系统状态变更为: {status.toUpperCase()}
+            &gt;&gt; [{timestamp}] 系统状态变更为: {status.toUpperCase()}{reason}
           </div>
         );
       }
@@ -551,6 +566,15 @@ ${error}` : error;
         return (
           <div key={event.id || idx} className="terminal-line header">
             &gt;&gt; [{timestamp}] 已安排自动重试 #{payload.attempt || '?'}，下次时间: {formatRetryTime(payload.next_retry_at)}，原因: {payload.reason || 'transient transport error'}
+          </div>
+        );
+      }
+
+      if (event.type === 'issue.interrupt_requested' || event.type === 'issue.interrupted' || event.type === 'issue.interrupt_failed') {
+        const error = event.error || payload.error || '';
+        return (
+          <div key={event.id || idx} className={`terminal-line ${event.type === 'issue.interrupt_failed' ? 'error' : 'info'}`}>
+            &gt;&gt; [{timestamp}] {interruptEventLabel(event.type)}；原因: {interruptReasonLabel(payload.reason)}；Thread: {payload.thread_id || event.threadId || '未知'}；Turn: {payload.turn_id || event.turnId || '未知'}{error ? `；错误: ${error}` : ''}
           </div>
         );
       }

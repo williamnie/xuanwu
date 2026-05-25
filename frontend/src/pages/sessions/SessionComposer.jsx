@@ -25,6 +25,7 @@ export default function SessionComposer({
   modelsError,
   sending,
   running,
+  interruptState,
   selectedId,
   queuedMessages = [],
   onSubmit,
@@ -37,7 +38,8 @@ export default function SessionComposer({
   const effectiveModel = selectedModel || defaultModel;
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
   const hasQueuedMessages = queuedMessages.length > 0;
-  const canSubmitMessage = Boolean(selectedId && value.trim() && !sending);
+  const interrupting = isInterruptPending(interruptState, selectedId);
+  const canSubmitMessage = Boolean(selectedId && value.trim() && !sending && !interrupting);
   const submitFromEditor = () => onSubmit({ preventDefault() {} });
   return (
     <form className="session-composer" onSubmit={onSubmit}>
@@ -47,6 +49,7 @@ export default function SessionComposer({
         onCancel={onCancelQueuedMessage}
         onRetry={onRetryQueuedMessage}
       />
+      <InterruptStatus interruptState={interruptState} selectedId={selectedId} />
       <PromptEditor
         value={value}
         onChange={onChange}
@@ -69,6 +72,7 @@ export default function SessionComposer({
           <ComposerActions
             sending={sending}
             running={running}
+            interrupting={interrupting}
             selectedId={selectedId}
             canSend={Boolean(value.trim())}
             hasQueuedMessages={hasQueuedMessages}
@@ -77,6 +81,16 @@ export default function SessionComposer({
         )}
       />
     </form>
+  );
+}
+
+function InterruptStatus({ interruptState, selectedId }) {
+  if (!interruptState || interruptState.sessionId !== selectedId) return null;
+  return (
+    <div className={`session-interrupt-status ${interruptState.tone || 'info'}`} role="status">
+      {interruptState.status === 'pending' && <Loader2 className="animate-spin" size={14} />}
+      <span>{interruptState.text}</span>
+    </div>
   );
 }
 
@@ -179,24 +193,28 @@ function CompactSelect({ className, icon, value, displayLabel, onChange, title, 
   );
 }
 
-function ComposerActions({ sending, running, selectedId, canSend, hasQueuedMessages, onStop }) {
+function ComposerActions({ sending, running, interrupting, selectedId, canSend, hasQueuedMessages, onStop }) {
   if (running) {
     return (
       <>
-        <button type="button" className="session-composer-circle secondary" onClick={onStop} disabled={!selectedId} title="停止">
-          <Square size={14} fill="currentColor" />
+        <button type="button" className="session-composer-circle secondary" onClick={onStop} disabled={!selectedId || interrupting} title={interrupting ? '正在中断...' : '停止'}>
+          {interrupting ? <Loader2 className="animate-spin" size={14} /> : <Square size={14} fill="currentColor" />}
         </button>
-        <button className="session-composer-circle" disabled={!selectedId || !canSend || sending} title="排队为下一条消息">
+        <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title="排队为下一条消息">
           {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
         </button>
       </>
     );
   }
   return (
-    <button className="session-composer-circle" disabled={!selectedId || !canSend || sending} title={hasQueuedMessages ? '追加到队列' : '发送'}>
+    <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title={hasQueuedMessages ? '追加到队列' : '发送'}>
       {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
     </button>
   );
+}
+
+function isInterruptPending(interruptState, selectedId) {
+  return interruptState?.sessionId === selectedId && interruptState?.status === 'pending';
 }
 
 function queueStatusLabel(status, index) {

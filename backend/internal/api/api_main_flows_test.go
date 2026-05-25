@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -188,6 +189,7 @@ func TestSessionInterruptLinkedIssueCancelsIssueRun(t *testing.T) {
 	assertAPIEvent(t, srv, 1, "issue.interrupt_requested")
 	assertAPIEvent(t, srv, 1, "issue.interrupted")
 	assertAPIEvent(t, srv, 1, "issue.status_changed")
+	assertAPIEventReason(t, srv, 1, "issue.interrupted", "session_interrupt")
 }
 
 func TestSessionInterruptManualSessionDoesNotTouchIssue(t *testing.T) {
@@ -221,6 +223,45 @@ func TestSessionInterruptManualSessionDoesNotTouchIssue(t *testing.T) {
 	if len(runs) != 0 {
 		t.Fatalf("manual session interrupt must not create issue runs: %+v", runs)
 	}
+}
+
+func TestIssueCancelInProgressInterruptsLinkedTurn(t *testing.T) {
+	interrupts := make(chan [2]string, 1)
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:  noopCodex{ch: make(chan agent.Event)},
+		interrupts: interrupts,
+	})
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-cancel", "turn-cancel"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	issue := postJSON[store.Issue](t, srv, "/api/issues/1/cancel", map[string]any{})
+	if issue.Status != store.StatusCancelled {
+		t.Fatalf("cancelled issue status = %q, want cancelled", issue.Status)
+	}
+	if got := readAPIInterrupt(t, interrupts); got != [2]string{"thread-cancel", "turn-cancel"} {
+		t.Fatalf("interrupt = %v, want linked issue turn", got)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].Status != store.StatusCancelled ||
+		runs[0].ExitReason != "issue_cancel" || runs[0].EndedAt == "" {
+		t.Fatalf("cancelled issue run should close as issue_cancel: %+v", runs)
+	}
+	assertAPIEvent(t, srv, 1, "issue.interrupt_requested")
+	assertAPIEvent(t, srv, 1, "issue.interrupted")
+	assertAPIEvent(t, srv, 1, "issue.status_changed")
+	assertAPIEventReason(t, srv, 1, "issue.interrupted", "issue_cancel")
 }
 
 func TestRecoveryIgnoresInterruptedStatusChangeRun(t *testing.T) {
@@ -312,6 +353,25 @@ func assertAPIEvent(t *testing.T, srv *Server, issueID int64, typ string) {
 		if event.IssueID == issueID && event.Type == typ {
 			return
 		}
+	}
+	t.Fatalf("missing event %s: %+v", typ, events)
+}
+
+func assertAPIEventReason(t *testing.T, srv *Server, issueID int64, typ, reason string) {
+	t.Helper()
+	events := getJSON[[]store.IssueEvent](t, srv, "/api/issues/1/events")
+	for _, event := range events {
+		if event.IssueID != issueID || event.Type != typ {
+			continue
+		}
+		var payload map[string]string
+		if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+			t.Fatalf("decode event payload: %v payload=%q", err, event.Payload)
+		}
+		if payload["reason"] == reason {
+			return
+		}
+		t.Fatalf("event %s reason = %q, want %q: %+v", typ, payload["reason"], reason, events)
 	}
 	t.Fatalf("missing event %s: %+v", typ, events)
 }
