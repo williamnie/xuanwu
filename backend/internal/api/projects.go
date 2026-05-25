@@ -231,6 +231,24 @@ func (s *Server) handleProjectHold(w http.ResponseWriter, r *http.Request, id, a
 		writeJSON(w, http.StatusOK, project)
 		return
 	}
+	if action == "resume" && requireMethod(w, r, http.MethodPost) {
+		project, err := s.runner.ResumeHeldProject(r.Context(), id)
+		if err != nil && project.ID == "" {
+			handleErr(w, err)
+			return
+		}
+		project.LoopStatus = s.runner.LoopStatus(id)
+		store.AttachProjectCapability(&project)
+		if err != nil {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"message": err.Error(),
+				"project": project,
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, project)
+		return
+	}
 	writeError(w, http.StatusNotFound, "not found")
 }
 

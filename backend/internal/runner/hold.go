@@ -93,27 +93,48 @@ func (r *Runner) checkDueHeldProjects(ctx context.Context) error {
 }
 
 func (r *Runner) checkHeldProject(ctx context.Context, project store.Project) {
+	_, _ = r.resumeHeldProject(ctx, project)
+}
+
+func (r *Runner) ResumeHeldProject(ctx context.Context, projectID string) (store.Project, error) {
+	project, err := r.store.GetProject(ctx, projectID)
+	if err != nil {
+		return store.Project{}, err
+	}
+	if project.Hold == nil {
+		return project, nil
+	}
+	return r.resumeHeldProject(ctx, project)
+}
+
+func (r *Runner) resumeHeldProject(ctx context.Context, project store.Project) (store.Project, error) {
 	checkedAt := time.Now().UTC()
 	if err := r.healthCheckProject(ctx, project); err != nil {
 		next := checkedAt.Add(r.healthCheckInterval).Format(time.RFC3339)
-		_, _ = r.store.UpdateProjectHoldCheck(ctx, project.ID, checkedAt.Format(time.RFC3339), next, err.Error())
+		updated, updateErr := r.store.UpdateProjectHoldCheck(ctx, project.ID, checkedAt.Format(time.RFC3339), next, err.Error())
 		r.bus.Publish(events.AppEvent{
 			Type: "runner.hold_check.failed", ProjectID: project.ID,
 			Error: err.Error(), CreatedAt: checkedAt.Format(time.RFC3339),
 		})
-		return
+		if updateErr != nil {
+			return store.Project{}, updateErr
+		}
+		return updated, err
 	}
 	cleared, err := r.store.ClearProjectHold(ctx, project.ID)
 	if err != nil {
-		return
+		return store.Project{}, err
 	}
 	r.bus.Publish(events.AppEvent{
 		Type: "runner.hold_cleared", ProjectID: project.ID,
 		CreatedAt: checkedAt.Format(time.RFC3339),
 	})
 	if cleared.AutoRun == 1 {
-		_ = r.StartProject(project.ID)
+		if err := r.StartProject(project.ID); err != nil {
+			return cleared, err
+		}
 	}
+	return cleared, nil
 }
 
 func (r *Runner) healthCheckProject(ctx context.Context, project store.Project) error {

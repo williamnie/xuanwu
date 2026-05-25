@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -61,6 +62,48 @@ func (n noopCodex) ResolveApproval(context.Context, string, agent.ApprovalDecisi
 	return nil
 }
 func (n noopCodex) Events() <-chan agent.Event { return n.ch }
+
+type holdResumeCodex struct {
+	events       chan agent.Event
+	autoComplete bool
+	startErr     error
+}
+
+type projectHoldResumeConflict struct {
+	Message string        `json:"message"`
+	Project store.Project `json:"project"`
+}
+
+func (h *holdResumeCodex) Name() string { return "codex" }
+func (h *holdResumeCodex) Start(context.Context) error {
+	return h.startErr
+}
+func (h *holdResumeCodex) StartThread(context.Context, agent.ThreadInput) (string, error) {
+	return "thread-hold", nil
+}
+func (h *holdResumeCodex) StartTurn(
+	_ context.Context,
+	threadID string,
+	_ []agent.UserInput,
+	_ agent.TurnOptions,
+) (string, error) {
+	turnID := "turn-hold"
+	if h.autoComplete {
+		go func() {
+			h.events <- agent.Event{
+				Type: events.AgentTurnCompleted, ThreadID: threadID,
+				TurnID: turnID, Status: "completed",
+			}
+		}()
+	}
+	return turnID, nil
+}
+func (h *holdResumeCodex) Events() <-chan agent.Event {
+	if h.events == nil {
+		h.events = make(chan agent.Event, 4)
+	}
+	return h.events
+}
 
 func TestProjectAndIssueAPI(t *testing.T) {
 	srv := newTestServer(t)
@@ -179,6 +222,55 @@ func TestProjectHoldStatusAPI(t *testing.T) {
 	cleared := postJSON[store.Project](t, srv, "/api/projects/demo/hold/clear", map[string]any{})
 	if cleared.Hold != nil {
 		t.Fatalf("clear hold should return project without hold: %+v", cleared)
+	}
+}
+
+func TestProjectHoldResumeAPIHealthChecksBeforeClearing(t *testing.T) {
+	provider := &holdResumeCodex{events: make(chan agent.Event, 4), autoComplete: true}
+	srv := newTestServerWithCodex(t, provider)
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	one := 1
+	if _, err := srv.store.UpdateProject(context.Background(), project.ID, store.ProjectPatch{AutoRun: &one}); err != nil {
+		t.Fatalf("enable auto run: %v", err)
+	}
+	_, err := srv.store.SetProjectHold(context.Background(), project.ID, store.ProjectHold{
+		Reason: "authentication", Message: "Runner paused: authentication failed",
+	})
+	if err != nil {
+		t.Fatalf("seed hold: %v", err)
+	}
+	t.Cleanup(func() { srv.runner.StopProject(project.ID) })
+
+	resumed := postJSON[store.Project](t, srv, "/api/projects/demo/hold/resume", map[string]any{})
+	if resumed.Hold != nil || resumed.LoopStatus != "running" {
+		t.Fatalf("resume should clear hold and restart auto loop: %+v", resumed)
+	}
+}
+
+func TestProjectHoldResumeAPIKeepsHoldWhenHealthCheckFails(t *testing.T) {
+	provider := &holdResumeCodex{
+		events:   make(chan agent.Event, 4),
+		startErr: errors.New("API returned 401: expired token"),
+	}
+	srv := newTestServerWithCodex(t, provider)
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	_, err := srv.store.SetProjectHold(context.Background(), project.ID, store.ProjectHold{
+		Reason: "authentication", Message: "Runner paused: authentication failed",
+	})
+	if err != nil {
+		t.Fatalf("seed hold: %v", err)
+	}
+
+	body := postProjectHoldResumeConflict(t, srv, "/api/projects/demo/hold/resume")
+	if !strings.Contains(body.Message, "expired token") {
+		t.Fatalf("resume conflict should expose failure reason: %+v", body)
+	}
+	if body.Project.Hold == nil || !strings.Contains(body.Project.Hold.LastCheckError, "expired token") {
+		t.Fatalf("failed resume should keep hold with check error: %+v", body.Project)
 	}
 }
 
@@ -602,6 +694,14 @@ func patchJSON[T any](t *testing.T, h http.Handler, path string, body any) T {
 	req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	return decodeResponse[T](t, h, req, http.StatusOK)
+}
+
+func postProjectHoldResumeConflict(t *testing.T, h http.Handler, path string) projectHoldResumeConflict {
+	t.Helper()
+	b, _ := json.Marshal(map[string]any{})
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	return decodeResponse[projectHoldResumeConflict](t, h, req, http.StatusConflict)
 }
 
 func decodeResponse[T any](t *testing.T, h http.Handler, req *http.Request, ok ...int) T {

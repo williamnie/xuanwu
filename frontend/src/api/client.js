@@ -129,6 +129,11 @@ export const api = {
 
   getProjectLoopStatus: (id) => request(`/api/projects/${id}/loop/status`),
 
+  resumeProjectHold: (id) => request(`/api/projects/${id}/hold/resume`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getIssueTemplates: () => request('/api/issue-templates'),
 
   createIssueTemplate: (template) => request('/api/issue-templates', {

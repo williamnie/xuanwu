@@ -20,6 +20,7 @@ import {
   X,
   AlertCircle
 } from 'lucide-react';
+import ProjectHoldNotice from './ProjectHoldNotice';
 import { PROVIDER_OPTIONS, capabilitySummary, providerLabel } from './sessions/sessionOptions';
 
 const DEFAULT_PROJECT_NAME = 'project';
@@ -72,6 +73,7 @@ export default function Projects() {
     formApproval: 'never',
     formSandbox: 'workspace-write',
     formError: '',
+    resumingHoldProjectId: '',
   });
 
   const {
@@ -88,6 +90,7 @@ export default function Projects() {
     formApproval,
     formSandbox,
     formError,
+    resumingHoldProjectId,
   } = ui;
 
   const closeModal = () => {
@@ -231,6 +234,23 @@ export default function Projects() {
       refreshAllData();
     } catch (err) {
       message.error('停止 Loop 失败: ' + err.message);
+    }
+  };
+
+  const handleResumeHold = async (id) => {
+    updateUi(draft => {
+      draft.resumingHoldProjectId = id;
+    });
+    try {
+      await api.resumeProjectHold(id);
+      message.success('项目 hold 已恢复');
+    } catch (err) {
+      message.error('恢复失败，hold 已保留: ' + err.message);
+    } finally {
+      updateUi(draft => {
+        draft.resumingHoldProjectId = '';
+      });
+      refreshAllData();
     }
   };
 
@@ -387,18 +407,11 @@ export default function Projects() {
                     <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{capabilitySummary(proj)}</span>
                   </div>
 
-                  {proj.hold && (
-                    <div style={{ border: '1px solid rgba(245, 158, 11, 0.25)', background: 'var(--warning-bg)', color: 'var(--warning)', borderRadius: '8px', padding: '8px 10px', fontSize: '0.72rem', lineHeight: 1.45 }}>
-                      <strong>Runner hold</strong>
-                      <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{proj.hold.message}</div>
-                      {proj.hold.next_check_at && (
-                        <div style={{ color: 'var(--text-muted)', marginTop: '2px' }}>下次自检：{proj.hold.next_check_at}</div>
-                      )}
-                      {proj.hold.last_check_error && (
-                        <div style={{ color: 'var(--text-muted)', marginTop: '2px' }}>最近自检：{proj.hold.last_check_error}</div>
-                      )}
-                    </div>
-                  )}
+                  <ProjectHoldNotice
+                    hold={proj.hold}
+                    onResume={() => handleResumeHold(proj.id)}
+                    resuming={resumingHoldProjectId === proj.id}
+                  />
 
                   {/* 开关与控制操作 */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>

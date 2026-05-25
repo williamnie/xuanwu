@@ -308,6 +308,13 @@ func TestProjectHoldStatusPersistsAndCanClear(t *testing.T) {
 	if reopened.Hold == nil || reopened.Hold.Message != "Runner paused: usage limit reached" {
 		t.Fatalf("hold should persist across reopen: %+v", reopened)
 	}
+	heldProjects, err := st.ListHeldProjects(ctx)
+	if err != nil {
+		t.Fatalf("list held projects: %v", err)
+	}
+	if len(heldProjects) != 1 || heldProjects[0].ID != "demo" || heldProjects[0].Hold == nil {
+		t.Fatalf("held project query mismatch: %+v", heldProjects)
+	}
 	if _, err = st.ClearProjectHold(ctx, "demo"); err != nil {
 		t.Fatalf("clear hold: %v", err)
 	}
