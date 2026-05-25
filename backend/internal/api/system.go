@@ -31,9 +31,10 @@ type systemStatus struct {
 }
 
 type systemServiceStatus struct {
-	Alive     bool   `json:"alive"`
-	Version   string `json:"version"`
-	StartedAt string `json:"started_at"`
+	Alive     bool              `json:"alive"`
+	Version   string            `json:"version"`
+	StartedAt string            `json:"started_at"`
+	Build     systemBuildStatus `json:"build"`
 }
 
 type systemConfigStatus struct {
@@ -70,7 +71,7 @@ type systemRunnerStatus struct {
 	RunningSessions  int `json:"running_sessions"`
 }
 
-const appVersion = ""
+var appVersion = ""
 
 func (s *Server) routeSystem(w http.ResponseWriter, r *http.Request, parts []string) {
 	if len(parts) == 2 && parts[1] == "status" {
@@ -142,9 +143,11 @@ func (s *Server) buildSystemStatus(ctx context.Context) systemStatus {
 }
 
 func (s *Server) serviceStatus() systemServiceStatus {
+	build := buildStatus()
 	return systemServiceStatus{
 		Alive:     true,
-		Version:   appVersion,
+		Version:   build.Version,
+		Build:     build,
 		StartedAt: s.startedAt.Format(time.RFC3339),
 	}
 }

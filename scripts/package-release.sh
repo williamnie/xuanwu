@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${CODEX_RUNNER_RELEASE_DIR:-$ROOT_DIR/dist/release}"
 WORK_DIR="$OUT_DIR/.work"
 EMBED_WEB_DIR="$ROOT_DIR/backend/internal/web/dist"
+API_PKG="github.com/xiaobei/codex-issue-runner/backend/internal/api"
 LDFLAGS="${CODEX_RUNNER_LDFLAGS:--s -w}"
 DEFAULT_TARGETS=(darwin/arm64 darwin/amd64 linux/arm64 linux/amd64)
 APP_VERSION=""
@@ -45,6 +46,23 @@ resolve_app_version() {
   printf '0.0.0-dev'
 }
 
+resolve_build_stamp() {
+  local revision dirty
+  revision="nogit"
+  dirty="clean"
+  if command -v git >/dev/null 2>&1 && git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    revision="$(git -C "$ROOT_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'nogit')"
+    if [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal -- . ':!dist' ':!frontend/dist')" ]; then
+      dirty="dirty"
+    fi
+  fi
+  printf '%s-%s-%s' "$(date -u '+%Y%m%dT%H%M%SZ')" "$revision" "$dirty"
+}
+
+ldflags_for_build() {
+  printf '%s' "$LDFLAGS -X $API_PKG.appVersion=$APP_VERSION -X $API_PKG.buildStamp=$BUILD_STAMP"
+}
+
 frontend_install() {
   if [ -d "$ROOT_DIR/frontend/node_modules" ]; then
     return
@@ -72,7 +90,9 @@ run_preflight_checks() {
   frontend_install
   run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
   APP_VERSION="$(resolve_app_version)"
+  BUILD_STAMP="$(resolve_build_stamp)"
   log "frontend version: $APP_VERSION"
+  log "build stamp: $BUILD_STAMP"
   run_step "frontend build" env VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
   log "preflight summary: backend tests, frontend lint, frontend build"
 }
@@ -104,9 +124,10 @@ package_target() {
   (
     cd "$ROOT_DIR"
     CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-      go build -tags release -trimpath -ldflags "$LDFLAGS" \
+      go build -tags release -trimpath -ldflags "$(ldflags_for_build)" \
       -o "$pkg_dir/codex-issue-runner" ./backend/cmd/codex-issue-runner
   )
+  printf '%s\n' "$BUILD_STAMP" > "$pkg_dir/codex-issue-runner.build.stamp"
   cp "$ROOT_DIR/README.md" "$pkg_dir/README.md"
   cp "$ROOT_DIR/scripts/install-release.sh" "$pkg_dir/install-release.sh"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)

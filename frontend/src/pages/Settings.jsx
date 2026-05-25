@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, ServerCog } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ServerCog } from 'lucide-react';
 import CronTasksPanel from '../components/CronTasksPanel';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
+import { APP_VERSION, buildVersionSummary } from '../version';
 
 export default function Settings() {
   return (
@@ -79,17 +80,55 @@ function RuntimeStatusBody({ status, loading }) {
     ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress`, true],
   ];
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-      {rows.map(([label, value, ok]) => (
-        <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '6px' }}>{label}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, wordBreak: 'break-word' }}>
-            <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
-            {value}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <VersionSummaryCard summary={buildVersionSummary(APP_VERSION, status)} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+        {rows.map(([label, value, ok]) => (
+          <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '6px' }}>{label}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, wordBreak: 'break-word' }}>
+              <span className={`status-dot ${ok ? 'active' : 'idle'}`} style={{ width: '7px', height: '7px' }}></span>
+              {value}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
+  );
+}
+
+function VersionSummaryCard({ summary }) {
+  const tone = summary.ok ? 'var(--success)' : 'var(--warning)';
+  const background = summary.ok ? 'var(--success-glow)' : 'var(--warning-bg)';
+  return (
+    <div style={{ border: `1px solid ${tone}`, borderRadius: '14px', padding: '12px', background }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+        {!summary.ok && <AlertTriangle size={16} color="var(--warning)" />}
+        版本摘要
+      </div>
+      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '8px', fontSize: '0.86rem' }}>
+        <span>Frontend: <strong>{summary.frontendVersion}</strong></span>
+        <span>Backend: <strong>{summary.backendVersion}</strong></span>
+        <span>Build stamp: <strong>{summary.distStampStatus}</strong></span>
+      </div>
+      {summary.buildStamp && (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '6px', wordBreak: 'break-all' }}>
+          Runtime stamp: {summary.buildStamp}
+        </div>
+      )}
+      <VersionWarnings warnings={summary.warnings} />
+    </div>
+  );
+}
+
+function VersionWarnings({ warnings }) {
+  if (warnings.length === 0) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px' }}>前后端版本与 build stamp 未发现明显 mismatch。</div>;
+  }
+  return (
+    <ul style={{ margin: '8px 0 0 18px', color: 'var(--warning)', fontSize: '0.8rem' }}>
+      {warnings.map(warning => <li key={warning}>{warning}</li>)}
+    </ul>
   );
 }
 

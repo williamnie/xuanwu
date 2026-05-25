@@ -47,9 +47,10 @@ type projectDTO struct {
 
 type systemStatusDTO struct {
 	Service struct {
-		Alive     bool   `json:"alive"`
-		Version   string `json:"version"`
-		StartedAt string `json:"started_at"`
+		Alive     bool           `json:"alive"`
+		Version   string         `json:"version"`
+		StartedAt string         `json:"started_at"`
+		Build     map[string]any `json:"build,omitempty"`
 	} `json:"service"`
 	Config struct {
 		Addr             string `json:"addr"`

@@ -62,6 +62,12 @@ func TestSystemStatusIncludesProviderAvailabilityWithoutSecrets(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &status); err != nil {
 		t.Fatalf("decode system status: %v", err)
 	}
+	if status.Service.Version == "" || status.Service.Build.Version == "" {
+		t.Fatalf("system status missing build version: %+v", status.Service)
+	}
+	if status.Service.Build.DistStampStatus == "" {
+		t.Fatalf("system status missing build stamp status: %+v", status.Service.Build)
+	}
 	providers := providerStatusByID(status.Providers)
 	if !providers["codex"].Available || !providers["codex"].CLI.Available {
 		t.Fatalf("codex provider should be available: %+v", providers["codex"])
