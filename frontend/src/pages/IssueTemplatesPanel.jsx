@@ -7,6 +7,7 @@ import {
   useDataStore,
 } from '../store/dataStore';
 import { FileText, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
+import { extractIssueTemplateVariables } from '../utils/issuePromptTemplate';
 
 const EMPTY_MODAL = {
   open: false,
@@ -186,6 +187,8 @@ function TemplateCard({ template, onEdit, onSetDefault, onDelete }) {
 }
 
 function TemplateModal({ modal, onClose, onField, onSubmit }) {
+  const unknownVariables = extractIssueTemplateVariables(modal.content).unknown;
+
   return (
     <div className="modal-overlay">
       <div className="glass-card modal-content" style={{ maxWidth: '720px', padding: '28px' }}>
@@ -222,6 +225,11 @@ function TemplateModal({ modal, onClose, onField, onSubmit }) {
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
               可用占位符：{'{{project.id}}'}、{'{{project.name}}'}、{'{{project.cwd}}'}、{'{{issue.id}}'}、{'{{issue.content}}'}、{'{{issue.title}}'}、{'{{issue.description}}'}、{'{{issue.priority}}'}
             </span>
+            {unknownVariables.length > 0 && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--warning)' }}>
+                未识别变量：{unknownVariables.map(name => `{{${name}}}`).join('、')}。保存不会被阻塞，执行时会原样保留。
+              </span>
+            )}
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem' }}>

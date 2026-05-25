@@ -27,6 +27,10 @@ import {
   triageReadinessMoveToTodoMessage,
 } from '../utils/issueRefinement';
 import {
+  extractIssueTemplateVariables,
+  renderIssuePromptTemplate,
+} from '../utils/issuePromptTemplate';
+import {
   issueFailureReason,
   issueRunExitText,
   issueRunSessionId,
@@ -95,6 +99,19 @@ export default function Issues({
       navigateTo('sessions', null, sessionRef);
     }
   };
+
+  const selectedTemplate = issueTemplates.find(template => template.id === formTemplateId) || null;
+  const selectedProject = projects.find(project => project.id === formProjectId) || projects[0] || null;
+  const promptTemplatePreview = selectedTemplate ? renderIssuePromptTemplate(selectedTemplate.content, {
+    project: selectedProject,
+    issue: {
+      id: '保存后生成',
+      title: formTitle,
+      description: formDescription,
+      priority: formPriority,
+    },
+  }) : '';
+  const templateVariables = selectedTemplate ? extractIssueTemplateVariables(selectedTemplate.content) : { unknown: [] };
 
   // 拖拽开始：记录被拖拽的任务 ID 与当前状态，并设置拖拽状态
   const handleDragStart = (e, issueId, currentStatus) => {
@@ -560,6 +577,14 @@ export default function Issues({
                 />
               </div>
 
+
+              {selectedTemplate && (
+                <IssueTemplatePreview
+                  preview={promptTemplatePreview}
+                  unknownVariables={templateVariables.unknown}
+                />
+              )}
+
               <div className="form-group">
                 <label>任务优先级</label>
                 <select
@@ -588,6 +613,32 @@ export default function Issues({
         </div>
       )}
 
+    </div>
+  );
+}
+
+function IssueTemplatePreview({ preview, unknownVariables }) {
+  return (
+    <div className="form-group" style={{ gap: '8px' }}>
+      <label>模板渲染预览</label>
+      {unknownVariables.length > 0 && (
+        <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.76rem', border: '1px solid rgba(245, 158, 11, 0.18)' }}>
+          未识别变量：{unknownVariables.map(name => `{{${name}}}`).join('、')}。保存不会被阻塞，执行时这些占位符会原样保留。
+        </div>
+      )}
+      <pre style={{
+        margin: 0,
+        maxHeight: '220px',
+        overflow: 'auto',
+        whiteSpace: 'pre-wrap',
+        color: 'var(--text-secondary)',
+        background: 'rgba(0,0,0,0.04)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '8px',
+        padding: '10px',
+        fontSize: '0.74rem',
+        lineHeight: 1.5,
+      }}>{preview || '（模板为空或当前内容为空）'}</pre>
     </div>
   );
 }
