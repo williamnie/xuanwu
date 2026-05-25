@@ -39,7 +39,15 @@ import {
 import VirtualSessionList from './sessions/VirtualSessionList';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
-import { isRenderableToolItem, parseLiveSessionEvents, shouldRenderLiveTurn, toolDisplayForItem } from './sessions/sessionTranscriptItems';
+import {
+  countSearchMatchesInText,
+  isRenderableToolItem,
+  nextTranscriptSearchIndex,
+  parseLiveSessionEvents,
+  shouldRenderLiveTurn,
+  splitTextBySearchQuery,
+  toolDisplayForItem,
+} from './sessions/sessionTranscriptItems';
 import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
 import {
   interruptCompletionNotice,
@@ -1235,12 +1243,179 @@ function projectNameFromPath(cwd) {
   return trimmed.split(/[\\/]/).pop() || 'No project';
 }
 
+function searchKey(...parts) {
+  return parts.filter((part) => part !== undefined && part !== null && part !== '').join(':');
+}
+
+function matchSearchKey(baseKey, index) {
+  return `${baseKey}:match:${index}`;
+}
+
+function textNodeSearchKeys(key, text, query) {
+  return Array.from(
+    { length: countSearchMatchesInText(text, query) },
+    (_, index) => matchSearchKey(key, index),
+  );
+}
+
+function fileNameFromPath(path) {
+  const value = String(path || '');
+  return value.split(/[\\/]/).pop() || value;
+}
+
+function filesFromFileChangeTool(tool) {
+  if (Array.isArray(tool.changes) && tool.changes.length > 0) {
+    return tool.changes.map((change) => {
+      const diffText = change.diff || '';
+      const lines = diffText.split('\n');
+      let added = 0;
+      let removed = 0;
+      for (const line of lines) {
+        if (line.startsWith('+') && !line.startsWith('+++')) added++;
+        else if (line.startsWith('-') && !line.startsWith('---')) removed++;
+      }
+      return {
+        path: change.path || '',
+        name: fileNameFromPath(change.path),
+        added,
+        removed,
+        lines,
+      };
+    });
+  }
+  return parseDiff(tool.text || '');
+}
+
+function fileChangeSearchKeys(tool, prefix, query) {
+  const files = filesFromFileChangeTool(tool);
+  if (files.length === 0) return textNodeSearchKeys(searchKey(prefix, 'diff'), tool.text || '', query);
+  const keys = [];
+  files.forEach((file, fileIndex) => {
+    keys.push(...textNodeSearchKeys(searchKey(prefix, 'change', fileIndex, 'path'), file.name, query));
+    file.lines.forEach((line, lineIndex) => {
+      keys.push(...textNodeSearchKeys(searchKey(prefix, 'change', fileIndex, 'diff', lineIndex), line, query));
+    });
+  });
+  return keys;
+}
+
+function toolSearchKeys(tool, prefix, query) {
+  if (!query) return [];
+  if (tool.type === 'commandExecution') {
+    const commandText = tool.command || tool.text;
+    const outputText = tool.text && tool.text !== tool.command ? tool.text : '';
+    return [
+      ...textNodeSearchKeys(searchKey(prefix, 'command'), commandText, query),
+      ...textNodeSearchKeys(searchKey(prefix, 'output'), outputText, query),
+    ];
+  }
+
+  if (tool.type === 'fileChange') {
+    return fileChangeSearchKeys(tool, prefix, query);
+  }
+
+  const display = toolDisplayForItem(tool);
+  const keys = [
+    ...textNodeSearchKeys(searchKey(prefix, 'title'), display?.title || '', query),
+    ...textNodeSearchKeys(searchKey(prefix, 'body'), display?.body || '', query),
+  ];
+  return keys;
+}
+
+function turnSearchKeys(turn, turnIndex, query) {
+  if (!query) return [];
+  const keys = [];
+  let toolGroupIndex = 0;
+  let toolIndex = 0;
+  let itemIndex = 0;
+  let hasToolsInGroup = false;
+
+  for (const item of (turn.items || [])) {
+    const itemKey = item.id || `${turnIndex}-${itemIndex}`;
+    itemIndex += 1;
+    if (item.type === 'userMessage') {
+      if (hasToolsInGroup) {
+        toolGroupIndex += 1;
+        toolIndex = 0;
+        hasToolsInGroup = false;
+      }
+      keys.push(...textNodeSearchKeys(searchKey('turn', turn.id || turnIndex, itemKey, 'user'), textFromUserContent(item.content), query));
+      continue;
+    }
+    if (item.type === 'agentMessage') {
+      if (hasToolsInGroup) {
+        toolGroupIndex += 1;
+        toolIndex = 0;
+        hasToolsInGroup = false;
+      }
+      keys.push(...textNodeSearchKeys(searchKey('turn', turn.id || turnIndex, itemKey, 'agent'), item.text || '', query));
+      continue;
+    }
+    if (isRenderableToolItem(item)) {
+      keys.push(...toolSearchKeys(item, searchKey('turn', turn.id || turnIndex, 'tools', toolGroupIndex, toolIndex), query));
+      toolIndex += 1;
+      hasToolsInGroup = true;
+    }
+  }
+
+  return keys;
+}
+
+function liveTurnSearchKeys(liveEvents, persistedTurns, query) {
+  if (!query) return [];
+  const parsed = parseLiveSessionEvents(liveEvents, persistedTurns);
+  const keys = [];
+  parsed.tools.forEach((tool, index) => {
+    keys.push(...toolSearchKeys(tool, searchKey('live', 'tools', index), query));
+  });
+  keys.push(...textNodeSearchKeys('live:reasoning', parsed.reasoningText || '', query));
+  keys.push(...textNodeSearchKeys('live:error', parsed.errorText || '', query));
+  keys.push(...textNodeSearchKeys('live:agent', parsed.agentMessageText || '', query));
+  return keys;
+}
+
+function buildTranscriptSearchTargets({ turns, liveEvents, showLiveTurn, query }) {
+  if (!query) return [];
+  const targets = [];
+  turns.forEach((turn, turnIndex) => {
+    turnSearchKeys(turn, turnIndex, query).forEach((key) => targets.push({ key }));
+  });
+  if (showLiveTurn) {
+    liveTurnSearchKeys(liveEvents, turns, query).forEach((key) => targets.push({ key }));
+  }
+  return targets;
+}
+
+function TextWithSearchHighlights({ text, query, baseKey, activeSearchKey }) {
+  if (!query) return text || '';
+  const parts = splitTextBySearchQuery(text, query);
+  let matchIndex = 0;
+
+  return parts.map((part, index) => {
+    if (!part.match) return <span key={index}>{part.text}</span>;
+    const currentKey = matchSearchKey(baseKey, matchIndex);
+    matchIndex += 1;
+    return (
+      <mark
+        key={index}
+        className={`transcript-search-hit ${currentKey === activeSearchKey ? 'active' : ''}`}
+        data-search-key={currentKey}
+      >
+        {part.text}
+      </mark>
+    );
+  });
+}
+
 function SessionDetail({ session, project, liveEvents, running, pendingApproval, navigateTo }) {
-  const turns = session?.turns || [];
+  const turns = useMemo(() => session?.turns || [], [session?.turns]);
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
   const model = session?.model || '';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
+  const searchScrollPendingRef = useRef(false);
   const lastLiveEvent = liveEvents[liveEvents.length - 1];
   const autoScrollWatchKey = [
     session?.updatedAt || '',
@@ -1261,6 +1436,56 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
     resetKey: session?.id || providerSessionId,
     watchKey: autoScrollWatchKey,
   });
+  const trimmedSearchQuery = searchQuery.trim();
+  const searchTargets = useMemo(() => buildTranscriptSearchTargets({
+    turns,
+    liveEvents,
+    showLiveTurn,
+    query: trimmedSearchQuery,
+  }), [turns, liveEvents, showLiveTurn, trimmedSearchQuery]);
+  const activeSearchKey = searchTargets[activeSearchIndex]?.key || '';
+  const searchStatus = trimmedSearchQuery
+    ? `${searchTargets.length > 0 ? activeSearchIndex + 1 : 0} / ${searchTargets.length}`
+    : '';
+
+  useEffect(() => {
+    searchScrollPendingRef.current = false;
+    setSearchQuery('');
+    setActiveSearchIndex(-1);
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!trimmedSearchQuery || searchTargets.length === 0) {
+      setActiveSearchIndex(-1);
+      return;
+    }
+    setActiveSearchIndex((current) => {
+      if (current >= 0 && current < searchTargets.length) return current;
+      return 0;
+    });
+  }, [trimmedSearchQuery, searchTargets.length]);
+
+  useEffect(() => {
+    if (!activeSearchKey) {
+      searchScrollPendingRef.current = false;
+      return;
+    }
+    if (!searchScrollPendingRef.current) return;
+    searchScrollPendingRef.current = false;
+    const escapedKey = window.CSS?.escape ? window.CSS.escape(activeSearchKey) : activeSearchKey.replace(/["\\]/g, '\\$&');
+    const element = contentRef.current?.querySelector(`[data-search-key="${escapedKey}"]`);
+    element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeSearchKey, contentRef]);
+
+  const handleSearchQueryChange = useCallback((event) => {
+    searchScrollPendingRef.current = true;
+    setSearchQuery(event.target.value);
+  }, []);
+
+  const moveSearchResult = useCallback((direction) => {
+    searchScrollPendingRef.current = true;
+    setActiveSearchIndex((current) => nextTranscriptSearchIndex(current, searchTargets.length, direction));
+  }, [searchTargets.length]);
 
   return (
     <div className="session-detail-body">
@@ -1277,12 +1502,52 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
           navigateTo={navigateTo}
         />
       </div>
+      <div className="session-transcript-search" role="search">
+        <Search size={14} />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={handleSearchQueryChange}
+          placeholder="搜索当前 transcript"
+          aria-label="搜索当前 transcript"
+        />
+        <span className="session-transcript-search-count">{searchStatus || '仅当前已加载'}</span>
+        <button
+          type="button"
+          onClick={() => moveSearchResult(-1)}
+          disabled={searchTargets.length === 0}
+          aria-label="上一条匹配"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          onClick={() => moveSearchResult(1)}
+          disabled={searchTargets.length === 0}
+          aria-label="下一条匹配"
+        >
+          ↓
+        </button>
+      </div>
       <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>
         <div className="session-transcript-content" ref={contentRef}>
           {turns.map((turn, index) => (
-            <TurnItem key={turn.id || index} turn={turn} />
+            <TurnItem
+              key={turn.id || index}
+              turn={turn}
+              turnIndex={index}
+              searchQuery={trimmedSearchQuery}
+              activeSearchKey={activeSearchKey}
+            />
           ))}
-          {showLiveTurn && <LiveTurnItem liveEvents={liveEvents} persistedTurns={turns} />}
+          {showLiveTurn && (
+            <LiveTurnItem
+              liveEvents={liveEvents}
+              persistedTurns={turns}
+              searchQuery={trimmedSearchQuery}
+              activeSearchKey={activeSearchKey}
+            />
+          )}
         </div>
       </div>
       {showScrollButton && (
@@ -1415,28 +1680,68 @@ function RuntimeStatusPill({ running, pendingApproval }) {
   );
 }
 
-function TurnItem({ turn }) {
+function TurnItem({ turn, turnIndex, searchQuery, activeSearchKey }) {
   const elements = [];
   let currentTools = [];
+  let toolGroupIndex = 0;
+  let toolIndex = 0;
+  let itemIndex = 0;
 
   for (const item of (turn.items || [])) {
+    const itemKey = item.id || `${turnIndex}-${itemIndex}`;
+    itemIndex += 1;
     if (item.type === 'userMessage' || item.type === 'agentMessage') {
       if (currentTools.length > 0) {
-        elements.push(<ToolsCollapsible key={`${currentTools[0].id || 'tools'}-collapsible`} tools={currentTools} />);
+        elements.push(
+          <ToolsCollapsible
+            key={`${currentTools[0].item?.id || 'tools'}-${toolGroupIndex}-collapsible`}
+            tools={currentTools}
+            searchQuery={searchQuery}
+            activeSearchKey={activeSearchKey}
+            searchKeyPrefix={searchKey('turn', turn.id || turnIndex, 'tools', toolGroupIndex)}
+          />,
+        );
         currentTools = [];
+        toolGroupIndex += 1;
+        toolIndex = 0;
       }
       if (item.type === 'userMessage') {
-        elements.push(<UserMessageBubble key={item.id} item={item} />);
+        elements.push(
+          <UserMessageBubble
+            key={item.id}
+            item={item}
+            searchQuery={searchQuery}
+            activeSearchKey={activeSearchKey}
+            searchKeyPrefix={searchKey('turn', turn.id || turnIndex, itemKey, 'user')}
+          />,
+        );
       } else {
-        elements.push(<AgentMessageBubble key={item.id} item={item} />);
+        elements.push(
+          <AgentMessageBubble
+            key={item.id}
+            item={item}
+            searchQuery={searchQuery}
+            activeSearchKey={activeSearchKey}
+            searchKeyPrefix={searchKey('turn', turn.id || turnIndex, itemKey, 'agent')}
+          />,
+        );
       }
     } else if (isRenderableToolItem(item)) {
-      currentTools.push(item);
+      currentTools.push({ item, searchKeyPrefix: searchKey('turn', turn.id || turnIndex, 'tools', toolGroupIndex, toolIndex) });
+      toolIndex += 1;
     }
   }
 
   if (currentTools.length > 0) {
-    elements.push(<ToolsCollapsible key={`${currentTools[0].id || 'tools'}-collapsible`} tools={currentTools} />);
+    elements.push(
+      <ToolsCollapsible
+        key={`${currentTools[0].item?.id || 'tools'}-${toolGroupIndex}-collapsible`}
+        tools={currentTools}
+        searchQuery={searchQuery}
+        activeSearchKey={activeSearchKey}
+        searchKeyPrefix={searchKey('turn', turn.id || turnIndex, 'tools', toolGroupIndex)}
+      />,
+    );
   }
 
   return (
@@ -1446,11 +1751,18 @@ function TurnItem({ turn }) {
   );
 }
 
-function ToolsCollapsible({ tools, isLive }) {
+function ToolsCollapsible({ tools, isLive, searchQuery, activeSearchKey, searchKeyPrefix }) {
   const [isOpen, setIsOpen] = useState(false);
+  const normalizedTools = tools.map((tool, index) => {
+    if (tool?.item) return tool;
+    return { item: tool, searchKeyPrefix: searchKey(searchKeyPrefix, index) };
+  });
 
-  const commandCount = tools.filter(t => t.type === 'commandExecution').length;
-  const fileCount = tools.filter(t => t.type === 'fileChange').length;
+  const commandCount = normalizedTools.filter(({ item }) => item.type === 'commandExecution').length;
+  const fileCount = normalizedTools.filter(({ item }) => item.type === 'fileChange').length;
+  const hasSearchMatch = searchQuery && normalizedTools.some(({ item, searchKeyPrefix: prefix }) => (
+    toolSearchKeys(item, prefix, searchQuery).length > 0
+  ));
   
   let summary = '执行了辅助工具';
   if (commandCount > 0 && fileCount > 0) {
@@ -1464,6 +1776,10 @@ function ToolsCollapsible({ tools, isLive }) {
   if (isLive) {
     summary = '正在执行工具以解决问题...';
   }
+
+  useEffect(() => {
+    if (hasSearchMatch) setIsOpen(true);
+  }, [hasSearchMatch]);
 
   return (
     <div className="tools-collapsible-wrapper">
@@ -1484,8 +1800,14 @@ function ToolsCollapsible({ tools, isLive }) {
 
       {isOpen && (
         <div className="tools-details-content animate-slide-down">
-          {tools.map((tool, idx) => (
-            <ToolDetailItem key={idx} tool={tool} />
+          {normalizedTools.map(({ item, searchKeyPrefix: prefix }, idx) => (
+            <ToolDetailItem
+              key={item.id || idx}
+              tool={item}
+              searchQuery={searchQuery}
+              activeSearchKey={activeSearchKey}
+              searchKeyPrefix={prefix}
+            />
           ))}
         </div>
       )}
@@ -1493,7 +1815,7 @@ function ToolsCollapsible({ tools, isLive }) {
   );
 }
 
-function ToolDetailItem({ tool }) {
+function ToolDetailItem({ tool, searchQuery, activeSearchKey, searchKeyPrefix }) {
   if (tool.type === 'commandExecution') {
     return (
       <div className="tool-detail-item command">
@@ -1509,10 +1831,24 @@ function ToolDetailItem({ tool }) {
           <div className="terminal-body">
             <div className="terminal-prompt-line">
               <span className="terminal-prompt">macbook %</span>{' '}
-              <span className="terminal-command-text">{tool.command || tool.text}</span>
+              <span className="terminal-command-text">
+                <TextWithSearchHighlights
+                  text={tool.command || tool.text}
+                  query={searchQuery}
+                  baseKey={searchKey(searchKeyPrefix, 'command')}
+                  activeSearchKey={activeSearchKey}
+                />
+              </span>
             </div>
             {tool.text && tool.text !== tool.command && (
-              <pre className="terminal-output">{tool.text}</pre>
+              <pre className="terminal-output">
+                <TextWithSearchHighlights
+                  text={tool.text}
+                  query={searchQuery}
+                  baseKey={searchKey(searchKeyPrefix, 'output')}
+                  activeSearchKey={activeSearchKey}
+                />
+              </pre>
             )}
           </div>
         </div>
@@ -1521,31 +1857,7 @@ function ToolDetailItem({ tool }) {
   }
 
   if (tool.type === 'fileChange') {
-    let files;
-    if (Array.isArray(tool.changes) && tool.changes.length > 0) {
-      files = tool.changes.map((c) => {
-        const fullPath = c.path || '';
-        const name = fullPath.split('/').pop() || fullPath;
-        const diffText = c.diff || '';
-        const lines = diffText.split('\n');
-        let added = 0;
-        let removed = 0;
-        for (const line of lines) {
-          if (line.startsWith('+') && !line.startsWith('+++')) added++;
-          else if (line.startsWith('-') && !line.startsWith('---')) removed++;
-        }
-        return {
-          path: fullPath,
-          name: name,
-          added,
-          removed,
-          lines,
-        };
-      });
-    } else {
-      const diffText = tool.text || '';
-      files = parseDiff(diffText);
-    }
+    const files = filesFromFileChangeTool(tool);
 
     if (files.length === 0) {
       const diffText = tool.text || '';
@@ -1558,7 +1870,14 @@ function ToolDetailItem({ tool }) {
             </div>
             <div className="diff-file-body" style={{ padding: '12px 14px' }}>
               {diffText ? (
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>{diffText}</pre>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                  <TextWithSearchHighlights
+                    text={diffText}
+                    query={searchQuery}
+                    baseKey={searchKey(searchKeyPrefix, 'diff')}
+                    activeSearchKey={activeSearchKey}
+                  />
+                </pre>
               ) : (
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontStyle: 'italic' }}>无具体的代码差异（可能是新增空白文件、修改文件属性或未完成保存）</span>
               )}
@@ -1574,7 +1893,14 @@ function ToolDetailItem({ tool }) {
           <div key={fIdx} className="diff-file-card">
             <div className="diff-file-header">
               <span className="diff-file-icon"><FileCode size={14} /></span>
-              <span className="diff-file-path" title={file.path}>{file.name}</span>
+              <span className="diff-file-path" title={file.path}>
+                <TextWithSearchHighlights
+                  text={file.name}
+                  query={searchQuery}
+                  baseKey={searchKey(searchKeyPrefix, 'change', fIdx, 'path')}
+                  activeSearchKey={activeSearchKey}
+                />
+              </span>
               <div className="diff-file-badges">
                 <span className="diff-badge added">+{file.added}</span>
                 <span className="diff-badge removed">-{file.removed}</span>
@@ -1588,7 +1914,12 @@ function ToolDetailItem({ tool }) {
                 else if (line.startsWith('@@')) lineClass += ' meta';
                 return (
                   <div key={lIdx} className={lineClass}>
-                    {line}
+                    <TextWithSearchHighlights
+                      text={line}
+                      query={searchQuery}
+                      baseKey={searchKey(searchKeyPrefix, 'change', fIdx, 'diff', lIdx)}
+                      activeSearchKey={activeSearchKey}
+                    />
                   </div>
                 );
               })}
@@ -1605,27 +1936,46 @@ function ToolDetailItem({ tool }) {
   return (
     <div className={`tool-detail-item ${display.kind || 'generic'}`}>
       <div className="generic-tool-card">
-        <div className="generic-tool-title">{display.title}</div>
-        <pre className="generic-tool-body">{display.body}</pre>
+        <div className="generic-tool-title">
+          <TextWithSearchHighlights
+            text={display.title}
+            query={searchQuery}
+            baseKey={searchKey(searchKeyPrefix, 'title')}
+            activeSearchKey={activeSearchKey}
+          />
+        </div>
+        <pre className="generic-tool-body">
+          <TextWithSearchHighlights
+            text={display.body}
+            query={searchQuery}
+            baseKey={searchKey(searchKeyPrefix, 'body')}
+            activeSearchKey={activeSearchKey}
+          />
+        </pre>
       </div>
     </div>
   );
 }
 
-function UserMessageBubble({ item }) {
+function UserMessageBubble({ item, searchQuery, activeSearchKey, searchKeyPrefix }) {
   const text = textFromUserContent(item.content);
   return (
     <div className="chat-bubble-container user">
       <div className="chat-bubble-content">
         <div className="chat-bubble-body">
-          <MarkdownText text={text} />
+          <MarkdownText
+            text={text}
+            searchQuery={searchQuery}
+            searchKeyPrefix={searchKeyPrefix}
+            activeSearchKey={activeSearchKey}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function AgentMessageBubble({ item }) {
+function AgentMessageBubble({ item, searchQuery, activeSearchKey, searchKeyPrefix }) {
   const text = item.text || '';
   return (
     <div className="chat-bubble-container agent animate-fade-in">
@@ -1633,14 +1983,19 @@ function AgentMessageBubble({ item }) {
       <div className="chat-bubble-content">
         <div className="chat-bubble-sender">Agent</div>
         <div className="chat-bubble-body">
-          <MarkdownText text={text} />
+          <MarkdownText
+            text={text}
+            searchQuery={searchQuery}
+            searchKeyPrefix={searchKeyPrefix}
+            activeSearchKey={activeSearchKey}
+          />
         </div>
       </div>
     </div>
   );
 }
 
-function LiveTurnItem({ liveEvents, persistedTurns }) {
+function LiveTurnItem({ liveEvents, persistedTurns, searchQuery, activeSearchKey }) {
   const parsed = useMemo(() => parseLiveSessionEvents(liveEvents, persistedTurns), [liveEvents, persistedTurns]);
 
   const { tools, agentMessageText, agentMessageDeduped, reasoningText, errorText, approvalPending, activity } = parsed;
@@ -1649,12 +2004,27 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
   return (
     <div className="turn-container active-live">
       <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} />
-      {tools.length > 0 && <ToolsCollapsible tools={tools} isLive={true} />}
+      {tools.length > 0 && (
+        <ToolsCollapsible
+          tools={tools}
+          isLive={true}
+          searchQuery={searchQuery}
+          activeSearchKey={activeSearchKey}
+          searchKeyPrefix={searchKey('live', 'tools')}
+        />
+      )}
       
       {reasoningText && (
         <div className="live-reasoning-card">
           <span>Reasoning summary</span>
-          <p>{reasoningText}</p>
+          <p>
+            <TextWithSearchHighlights
+              text={reasoningText}
+              query={searchQuery}
+              baseKey="live:reasoning"
+              activeSearchKey={activeSearchKey}
+            />
+          </p>
         </div>
       )}
 
@@ -1677,10 +2047,26 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
           <div className="chat-bubble-content">
             <div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking...</span></div>
             <div className="chat-bubble-body">
-              <MarkdownText text={agentMessageText} />
+              <MarkdownText
+                text={agentMessageText}
+                searchQuery={searchQuery}
+                searchKeyPrefix="live:agent"
+                activeSearchKey={activeSearchKey}
+              />
             </div>
           </div>
         </div>
+      )}
+
+      {errorText && (
+        <span className="sr-only">
+          <TextWithSearchHighlights
+            text={errorText}
+            query={searchQuery}
+            baseKey="live:error"
+            activeSearchKey={activeSearchKey}
+          />
+        </span>
       )}
     </div>
   );
@@ -1706,6 +2092,18 @@ function liveActivityLabel(activity) {
   }
 }
 
-function MarkdownText({ text }) {
+function MarkdownText({ text, searchQuery, searchKeyPrefix, activeSearchKey }) {
+  if (searchQuery) {
+    return (
+      <div className="session-markdown session-markdown-search-text">
+        <TextWithSearchHighlights
+          text={text || ''}
+          query={searchQuery}
+          baseKey={searchKeyPrefix}
+          activeSearchKey={activeSearchKey}
+        />
+      </div>
+    );
+  }
   return <MarkdownPreview text={text || ''} className="session-markdown" />;
 }

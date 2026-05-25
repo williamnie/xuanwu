@@ -653,6 +653,11 @@
   width: 100%;
 }
 
+.client-chat-area .session-transcript-search {
+  padding: 10px 40px;
+  background: var(--bg-primary);
+}
+
 /* 精美聊天气泡样式改造 */
 .client-chat-area .chat-bubble-body {
   border-radius: 0 !important;
