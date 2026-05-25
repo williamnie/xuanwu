@@ -150,7 +150,10 @@ export const api = {
     method: 'DELETE',
   }),
 
-  getCodexUsage: () => request('/api/usage/codex'),
+  getCodexUsage: (limit = 0) => {
+    const query = limit > 0 ? `?limit=${encodeURIComponent(limit)}` : '';
+    return request(`/api/usage/codex${query}`);
+  },
 
   getSystemStatus: () => request('/api/system/status'),
 

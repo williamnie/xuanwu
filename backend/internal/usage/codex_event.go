@@ -22,7 +22,22 @@ type tokenInfo struct {
 	ModelContextWindow int64      `json:"model_context_window"`
 }
 
-var tokenCountMarker = []byte(`"type":"token_count"`)
+type sessionMetaEvent struct {
+	Type    string `json:"type"`
+	Payload struct {
+		ID  string `json:"id"`
+		CWD string `json:"cwd"`
+	} `json:"payload"`
+}
+
+var (
+	tokenCountMarker  = []byte(`"type":"token_count"`)
+	sessionMetaMarker = []byte(`"type":"session_meta"`)
+)
+
+func isUsageCandidate(line []byte) bool {
+	return isTokenCountCandidate(line) || bytes.Contains(line, sessionMetaMarker)
+}
 
 func isTokenCountCandidate(line []byte) bool {
 	return bytes.Contains(line, tokenCountMarker)
@@ -37,6 +52,17 @@ func parseTokenEvent(line []byte) (tokenEvent, bool) {
 		return tokenEvent{}, false
 	}
 	return event, event.Type == "event_msg" && event.Payload.Type == "token_count"
+}
+
+func parseSessionMetaEvent(line []byte) (sessionMetaEvent, bool) {
+	if !bytes.Contains(line, sessionMetaMarker) {
+		return sessionMetaEvent{}, false
+	}
+	var event sessionMetaEvent
+	if err := json.Unmarshal(line, &event); err != nil {
+		return sessionMetaEvent{}, false
+	}
+	return event, event.Type == "session_meta"
 }
 
 func (e tokenEvent) timestamp() time.Time {

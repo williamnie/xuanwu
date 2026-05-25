@@ -38,6 +38,69 @@ func TestReadCodexUsageAggregatesTokenCountEvents(t *testing.T) {
 	}
 }
 
+func TestReadCodexUsageAggregatesMetadataDimensions(t *testing.T) {
+	root := t.TempDir()
+	projectCWD := filepath.Join(root, "demo")
+	writeJSONL(t, root, "2026/05/22/session.jsonl", []string{
+		`{"timestamp":"2026-05-22T07:59:00Z","type":"session_meta","payload":{"id":"thread-demo","cwd":"` + projectCWD + `"}}`,
+		`{"timestamp":"2026-05-22T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":20,"total_tokens":120}}}}`,
+	})
+	writeJSONL(t, root, "2026/05/22/unknown.jsonl", []string{
+		`{"timestamp":"2026-05-22T09:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":30,"output_tokens":10,"total_tokens":40}}}}`,
+	})
+
+	report, err := ReadCodexUsageWithOptions(context.Background(), CodexUsageReadRequest{
+		Root: root,
+		Now:  time.Date(2026, 5, 22, 12, 0, 0, 0, time.UTC),
+		Options: CodexUsageOptions{
+			Projects: []UsageProjectRef{{ID: "demo", Name: "Demo", CWD: projectCWD}},
+			Issues:   []UsageIssueRef{{ID: 7, ProjectID: "demo", SessionID: "thread-demo", Title: "Fix bug", Status: "done"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ReadCodexUsageWithOptions error: %v", err)
+	}
+
+	if len(report.ProjectUsage) != 2 {
+		t.Fatalf("project usage count = %d, want 2: %+v", len(report.ProjectUsage), report.ProjectUsage)
+	}
+	demo := findProjectUsage(report.ProjectUsage, "demo")
+	if demo.Usage.TotalTokens != 120 || demo.Percent <= 0 || demo.Unknown {
+		t.Fatalf("demo project usage mismatch: %+v", demo)
+	}
+	if len(demo.Sessions) != 1 || demo.Sessions[0].ID != "thread-demo" || demo.Sessions[0].Usage.TotalTokens != 120 {
+		t.Fatalf("session drilldown mismatch: %+v", demo.Sessions)
+	}
+	if len(demo.Issues) != 1 || demo.Issues[0].ID != 7 || demo.Issues[0].Usage.TotalTokens != 120 {
+		t.Fatalf("issue drilldown mismatch: %+v", demo.Issues)
+	}
+	unknown := findProjectUsage(report.ProjectUsage, UnknownUsageKey)
+	if !unknown.Unknown || unknown.Usage.TotalTokens != 40 {
+		t.Fatalf("unknown project usage mismatch: %+v", unknown)
+	}
+}
+
+func TestReadCodexUsageAppliesLimitFilterBeforeAggregating(t *testing.T) {
+	root := t.TempDir()
+	writeJSONL(t, root, "2026/05/22/session.jsonl", []string{
+		`{"timestamp":"2026-05-22T07:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":10}}}}`,
+		`{"timestamp":"2026-05-22T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":20}}}}`,
+		`{"timestamp":"2026-05-22T09:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":30}}}}`,
+	})
+
+	report, err := ReadCodexUsageWithOptions(context.Background(), CodexUsageReadRequest{
+		Root:    root,
+		Now:     time.Date(2026, 5, 22, 12, 0, 0, 0, time.UTC),
+		Options: CodexUsageOptions{Limit: 2},
+	})
+	if err != nil {
+		t.Fatalf("ReadCodexUsageWithOptions error: %v", err)
+	}
+	if report.EventsScanned != 2 || report.Summary.AllTime.TotalTokens != 50 {
+		t.Fatalf("limit aggregation mismatch: events=%d total=%d", report.EventsScanned, report.Summary.AllTime.TotalTokens)
+	}
+}
+
 func TestReadSessionMetadataExtractsModelAndLatestTokenUsage(t *testing.T) {
 	root := t.TempDir()
 	writeJSONL(t, root, "session.jsonl", []string{
@@ -79,4 +142,13 @@ func assertTokens(t *testing.T, label string, got int64, want int64) {
 	if got != want {
 		t.Fatalf("%s tokens = %d, want %d", label, got, want)
 	}
+}
+
+func findProjectUsage(items []UsageProjectAggregate, id string) UsageProjectAggregate {
+	for _, item := range items {
+		if item.ID == id {
+			return item
+		}
+	}
+	return UsageProjectAggregate{}
 }

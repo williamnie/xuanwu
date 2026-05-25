@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, Gauge, RefreshCw, Zap } from 'lucide-react';
 import { api } from '../api/client';
+import CodexUsageBreakdown from './CodexUsageBreakdown';
+
+const USAGE_LIMITS = [
+  { value: 0, label: '全部事件' },
+  { value: 50, label: '最近 50 条' },
+  { value: 200, label: '最近 200 条' },
+  { value: 500, label: '最近 500 条' },
+];
 
 export default function CodexUsagePanel() {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
+  const [limit, setLimit] = useState(0);
 
   const loadUsage = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await api.getCodexUsage();
+      const data = await api.getCodexUsage(limit);
       setState({ loading: false, data, error: '' });
     } catch (err) {
       setState({ loading: false, data: null, error: err.message || '读取 Codex 用量失败' });
     }
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
     loadUsage();
@@ -25,13 +34,13 @@ export default function CodexUsagePanel() {
 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      <UsageHeader loading={loading} onRefresh={loadUsage} />
+      <UsageHeader loading={loading} limit={limit} onLimitChange={setLimit} onRefresh={loadUsage} />
       {error ? <UsageError message={error} /> : <UsageContent data={data} loading={loading} />}
     </section>
   );
 }
 
-function UsageHeader({ loading, onRefresh }) {
+function UsageHeader({ loading, limit, onLimitChange, onRefresh }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
       <div>
@@ -42,9 +51,14 @@ function UsageHeader({ loading, onRefresh }) {
           从本机 Codex session 事件统计，展示每日、周、月 token 量与最新 5 小时/周限额。
         </p>
       </div>
-      <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} style={{ padding: '7px 12px', fontSize: '0.8rem' }}>
-        <RefreshCw size={14} /> {loading ? '刷新中' : '刷新'}
-      </button>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <select className="form-control" value={limit} onChange={(event) => onLimitChange(Number(event.target.value))} style={{ width: '130px', padding: '7px 10px', fontSize: '0.8rem' }}>
+          {USAGE_LIMITS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} style={{ padding: '7px 12px', fontSize: '0.8rem' }}>
+          <RefreshCw size={14} /> {loading ? '刷新中' : '刷新'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -60,6 +74,7 @@ function UsageContent({ data, loading }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <SummaryGrid summary={data.summary} eventsScanned={data.events_scanned} />
       <LimitGrid limits={data.rate_limits} />
+      <CodexUsageBreakdown projects={data.project_usage || []} />
       <div className="grid-cols-2" style={{ alignItems: 'stretch' }}>
         <DailyBars periods={data.daily || []} />
         <PeriodLists weekly={data.weekly || []} monthly={data.monthly || []} source={data.source} />

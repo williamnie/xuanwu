@@ -4,12 +4,10 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 )
 
@@ -68,16 +66,23 @@ type UsageSummary struct {
 	AllTime   TokenUsage `json:"all_time"`
 }
 
+type CodexUsageReadRequest struct {
+	Root    string
+	Now     time.Time
+	Options CodexUsageOptions
+}
+
 type CodexUsageReport struct {
-	Source        string         `json:"source"`
-	GeneratedAt   string         `json:"generated_at"`
-	EventsScanned int            `json:"events_scanned"`
-	LatestUsage   *UsageSnapshot `json:"latest_usage,omitempty"`
-	RateLimits    *RateLimits    `json:"rate_limits,omitempty"`
-	Summary       UsageSummary   `json:"summary"`
-	Daily         []UsagePeriod  `json:"daily"`
-	Weekly        []UsagePeriod  `json:"weekly"`
-	Monthly       []UsagePeriod  `json:"monthly"`
+	Source        string                  `json:"source"`
+	GeneratedAt   string                  `json:"generated_at"`
+	EventsScanned int                     `json:"events_scanned"`
+	LatestUsage   *UsageSnapshot          `json:"latest_usage,omitempty"`
+	RateLimits    *RateLimits             `json:"rate_limits,omitempty"`
+	Summary       UsageSummary            `json:"summary"`
+	Daily         []UsagePeriod           `json:"daily"`
+	Weekly        []UsagePeriod           `json:"weekly"`
+	Monthly       []UsagePeriod           `json:"monthly"`
+	ProjectUsage  []UsageProjectAggregate `json:"project_usage,omitempty"`
 }
 
 type accumulator struct {
@@ -88,26 +93,36 @@ type accumulator struct {
 	report      CodexUsageReport
 	latestUsage time.Time
 	latestLimit time.Time
+	records     []usageRecord
+	dimensions  dimensionAccumulator
 }
 
 func ReadCodexUsage(ctx context.Context, root string, now time.Time) (CodexUsageReport, error) {
-	if root == "" {
+	return ReadCodexUsageWithOptions(ctx, CodexUsageReadRequest{Root: root, Now: now})
+}
+
+func ReadCodexUsageWithOptions(
+	ctx context.Context,
+	req CodexUsageReadRequest,
+) (CodexUsageReport, error) {
+	if req.Root == "" {
 		return CodexUsageReport{}, ErrNoCodexSessionsDir
 	}
-	acc := newAccumulator(root, now)
-	if err := filepath.WalkDir(root, acc.visit(ctx)); err != nil {
+	acc := newAccumulator(req.Root, req.Now, req.Options)
+	if err := filepath.WalkDir(req.Root, acc.visit(ctx)); err != nil {
 		return CodexUsageReport{}, err
 	}
 	acc.finish()
 	return acc.report, nil
 }
 
-func newAccumulator(root string, now time.Time) *accumulator {
+func newAccumulator(root string, now time.Time, options CodexUsageOptions) *accumulator {
 	return &accumulator{
-		now:     now.Local(),
-		daily:   map[string]TokenUsage{},
-		weekly:  map[string]TokenUsage{},
-		monthly: map[string]TokenUsage{},
+		now:        now.Local(),
+		daily:      map[string]TokenUsage{},
+		weekly:     map[string]TokenUsage{},
+		monthly:    map[string]TokenUsage{},
+		dimensions: newDimensionAccumulator(options),
 		report: CodexUsageReport{
 			Source:      root,
 			GeneratedAt: now.UTC().Format(time.RFC3339),
@@ -138,11 +153,12 @@ func (a *accumulator) scanFile(path string) error {
 
 	reader := bufio.NewReaderSize(file, 256*1024)
 	var candidate []byte
+	meta := usageSessionMetadata{}
 	for {
 		chunk, readErr := reader.ReadSlice('\n')
 		candidate = appendCandidate(candidate, chunk, readErr)
 		if isCompleteLine(readErr) {
-			a.handleLine(candidate)
+			a.handleLine(candidate, &meta)
 			candidate = nil
 		}
 		if readErr == nil || readErr == bufio.ErrBufferFull {
@@ -156,7 +172,7 @@ func (a *accumulator) scanFile(path string) error {
 }
 
 func appendCandidate(candidate, chunk []byte, err error) []byte {
-	if len(candidate) == 0 && !isTokenCountCandidate(chunk) {
+	if len(candidate) == 0 && !isUsageCandidate(chunk) {
 		return nil
 	}
 	return append(candidate, chunk...)
@@ -166,19 +182,17 @@ func isCompleteLine(err error) bool {
 	return err == nil || err == io.EOF
 }
 
-func (a *accumulator) handleLine(line []byte) {
+func (a *accumulator) handleLine(line []byte, meta *usageSessionMetadata) {
+	if session, ok := parseSessionMetaEvent(line); ok {
+		meta.ID = session.Payload.ID
+		meta.CWD = session.Payload.CWD
+		return
+	}
 	event, ok := parseTokenEvent(line)
 	if !ok {
 		return
 	}
-	a.report.EventsScanned++
-	if event.Payload.Info != nil {
-		a.addUsage(event.timestamp(), event.Payload.Info.LastTokenUsage)
-		a.captureLatestUsage(event)
-	}
-	if event.Payload.RateLimits != nil {
-		a.captureLatestLimits(event)
-	}
+	a.records = append(a.records, usageRecord{Event: event, Session: *meta})
 }
 
 func (a *accumulator) addUsage(ts time.Time, usage TokenUsage) {
@@ -229,9 +243,22 @@ func (a *accumulator) captureLatestLimits(event tokenEvent) {
 }
 
 func (a *accumulator) finish() {
+	for _, record := range filteredUsageRecords(a.records, a.dimensions.options.Limit) {
+		a.report.EventsScanned++
+		if record.Event.Payload.Info != nil {
+			usage := record.Event.Payload.Info.LastTokenUsage
+			a.addUsage(record.Event.timestamp(), usage)
+			a.captureLatestUsage(record.Event)
+			a.dimensions.add(record, usage)
+		}
+		if record.Event.Payload.RateLimits != nil {
+			a.captureLatestLimits(record.Event)
+		}
+	}
 	a.report.Daily = periodsFromMap(a.daily, maxDailyPeriods)
 	a.report.Weekly = periodsFromMap(a.weekly, maxWeeklyPeriods)
 	a.report.Monthly = periodsFromMap(a.monthly, maxMonthlyPeriods)
+	a.report.ProjectUsage = a.dimensions.finish(a.report.Summary.AllTime.TotalTokens)
 }
 
 func (u *TokenUsage) add(other TokenUsage) {
@@ -246,49 +273,4 @@ func addToMap(values map[string]TokenUsage, key string, usage TokenUsage) {
 	current := values[key]
 	current.add(usage)
 	values[key] = current
-}
-
-func normalizeWindow(window *LimitWindow) {
-	if window == nil {
-		return
-	}
-	remaining := 100 - window.UsedPercent
-	if remaining < 0 {
-		remaining = 0
-	}
-	window.RemainingPercent = remaining
-	if window.ResetsAt > 0 {
-		window.ResetsAtISO = time.Unix(window.ResetsAt, 0).UTC().Format(time.RFC3339)
-	}
-}
-
-func periodsFromMap(values map[string]TokenUsage, max int) []UsagePeriod {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	if len(keys) > max {
-		keys = keys[len(keys)-max:]
-	}
-	periods := make([]UsagePeriod, 0, len(keys))
-	for _, key := range keys {
-		periods = append(periods, UsagePeriod{Key: key, Label: key, Usage: values[key]})
-	}
-	return periods
-}
-
-func isoWeekKey(t time.Time) string {
-	year, week := t.ISOWeek()
-	return fmt.Sprintf("%04d-W%02d", year, week)
-}
-
-func sameDay(a, b time.Time) bool {
-	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
-}
-
-func sameISOWeek(a, b time.Time) bool {
-	aYear, aWeek := a.ISOWeek()
-	bYear, bWeek := b.ISOWeek()
-	return aYear == bYear && aWeek == bWeek
 }
