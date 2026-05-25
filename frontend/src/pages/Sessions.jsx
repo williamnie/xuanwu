@@ -37,6 +37,7 @@ import {
   providerLabel as projectProviderLabel,
 } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
+import { SESSION_LIST_FILTER_ALL, SESSION_LIST_FILTER_RECENT, SESSION_LIST_FILTER_RUNNING } from './sessions/sessionListFilters';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import {
@@ -276,6 +277,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   // 客户端风格路由、置顶与搜索状态
   const [activeView, setActiveView] = useState('chat');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sessionListFilter, setSessionListFilter] = useState(SESSION_LIST_FILTER_ALL);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(() => {
     const stored = localStorage.getItem('codex-pinned-sessions');
     return stored ? JSON.parse(stored) : [];
@@ -667,20 +669,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
   };
 
-  // 标题中项目名的过滤
-  const filteredSessions = useMemo(() => {
-    let result = sessions;
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(
-        (s) => 
-          (s.name && s.name.toLowerCase().includes(term)) || 
-          (s.preview && s.preview.toLowerCase().includes(term))
-      );
-    }
-    return result;
-  }, [sessions, searchTerm]);
-
   // 已置顶的会话
   const pinnedSessions = useMemo(() => {
     return sessions.filter((s) => pinnedSessionIds.includes(s.id));
@@ -730,14 +718,13 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
 
         {/* 搜索框 */}
         {activeView === 'search' && (
-          <div style={{ padding: '0 4px 10px 4px' }}>
+          <div className="session-list-search">
             <input
               type="text"
               className="form-control"
-              placeholder="搜索历史会话..."
+              placeholder="搜索标题 / thread / 项目..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ height: '32px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.1)', padding: '0 10px', width: '100%', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
               autoFocus
             />
           </div>
@@ -775,15 +762,18 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
         {/* 项目会话列表 */}
         <SessionOriginLegend />
         <div className="sidebar-section-title">项目</div>
+        <SessionListFilterTabs value={sessionListFilter} onChange={setSessionListFilter} />
         <div className="sidebar-scroll-area">
           <VirtualSessionList
-            sessions={filteredSessions}
+            sessions={sessions}
             projects={projects}
             selectedId={selectedId}
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
             savingOrder={savingProjectOrder}
-            autoCollapseEmptyProjects={!searchTerm.trim()}
+            autoCollapseEmptyProjects={!searchTerm.trim() && sessionListFilter === SESSION_LIST_FILTER_ALL}
+            searchTerm={searchTerm}
+            filterMode={sessionListFilter}
             onSelect={selectSession}
             onLoadMore={loadMore}
             onReorderProjects={handleReorderProjects}
@@ -1125,6 +1115,29 @@ function SessionOriginLegend() {
       <span className="session-origin-legend-item">
         <span className="session-origin-dot runner" /> Runner
       </span>
+    </div>
+  );
+}
+
+function SessionListFilterTabs({ value, onChange }) {
+  const filters = [
+    { value: SESSION_LIST_FILTER_ALL, label: 'All' },
+    { value: SESSION_LIST_FILTER_RUNNING, label: 'Running' },
+    { value: SESSION_LIST_FILTER_RECENT, label: 'Recent' },
+  ];
+
+  return (
+    <div className="session-list-filter-tabs" aria-label="Session 状态筛选">
+      {filters.map((filter) => (
+        <button
+          key={filter.value}
+          type="button"
+          className={`session-list-filter-tab ${value === filter.value ? 'active' : ''}`}
+          onClick={() => onChange(filter.value)}
+        >
+          {filter.label}
+        </button>
+      ))}
     </div>
   );
 }

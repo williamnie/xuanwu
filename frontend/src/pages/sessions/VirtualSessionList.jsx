@@ -8,6 +8,7 @@ import {
   visibleProjectSessions,
 } from './projectSessionPagination';
 import { isProjectSessionGroupCollapsed } from './projectSessionCollapse';
+import { filterProjectSessionGroups, isSessionListFilterActive } from './sessionListFilters';
 import { providerSupports } from './sessionOptions';
 import './ProjectSessionPagination.css';
 
@@ -91,6 +92,8 @@ export default function VirtualSessionList({
   onSelect,
   onLoadMore,
   onReorderProjects,
+  searchTerm = '',
+  filterMode = 'all',
 }) {
   const [collapsed, setCollapsed] = useState({});
   const [visibleCounts, setVisibleCounts] = useState({});
@@ -143,6 +146,11 @@ export default function VirtualSessionList({
       ...virtualProjectGroups,
     ];
   }, [sessions, projects, projectsByCwd]);
+
+  const filteredGroups = useMemo(() => (
+    filterProjectSessionGroups(groups, { query: searchTerm, mode: filterMode })
+  ), [groups, searchTerm, filterMode]);
+  const hasActiveFilter = isSessionListFilterActive({ query: searchTerm, mode: filterMode });
 
   // 自动展开激活 Session 所在的项目组
   useEffect(() => {
@@ -223,7 +231,18 @@ export default function VirtualSessionList({
   return (
     <div className="session-list-viewport" onScroll={handleScroll}>
       <div className="project-session-groups">
-        {groups.map((group) => {
+        {hasActiveFilter && filteredGroups.length === 0 && (
+          <div className="session-list-empty-state">
+            <strong>没有匹配的 session</strong>
+            <span>请换个关键词，或继续加载更多已存在的 provider sessions。</span>
+            {hasMore && (
+              <button type="button" className="project-group-load-more" onClick={onLoadMore} disabled={loadingMore}>
+                {loadingMore ? <Loader2 size={12} /> : null}<span>继续加载</span>
+              </button>
+            )}
+          </div>
+        )}
+        {filteredGroups.map((group) => {
           const isCollapsed = isProjectSessionGroupCollapsed(group, collapsed, {
             autoCollapseEmptyProjects,
           });

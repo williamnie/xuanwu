@@ -31,6 +31,70 @@
   padding: 12px 14px;
 }
 
+
+.session-list-search {
+  padding: 0 4px 10px;
+}
+
+.session-list-search .form-control {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.session-list-filter-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 6px;
+}
+
+.session-list-filter-tab {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-list-filter-tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.session-list-filter-tab.active {
+  background: var(--primary-glow);
+  color: var(--primary);
+}
+
+.session-list-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.session-list-empty-state strong {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.session-list-empty-state span {
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 /* 按项目分组与折叠样式 */
 .project-session-groups {
   display: flex;
