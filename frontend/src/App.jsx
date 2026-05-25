@@ -25,6 +25,7 @@ const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
   'issue.status_changed',
   'issue.error',
+  'issue.runtime_updated',
   'runner.started',
   'runner.stopped',
   'runner.hold',
@@ -58,6 +59,7 @@ export default function App() {
     // 路由与过滤状态
     currentPage: 'dashboard', // 默认进入 Dashboard
     selectedIssueId: null,
+    selectedSessionId: '',
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
 
@@ -82,6 +84,7 @@ export default function App() {
   const {
     currentPage,
     selectedIssueId,
+    selectedSessionId,
     filterProject,
     focusFilter,
     isNewIssueOpen,
@@ -147,13 +150,19 @@ export default function App() {
     });
   }, [updateAppState]);
 
-  const navigateTo = useCallback((page, issueId = null) => {
+  const navigateTo = useCallback((page, issueId = null, sessionId = '') => {
     updateAppState(draft => {
       if (draft.currentPage !== page) {
         draft.currentPage = page;
       }
       if (draft.selectedIssueId !== issueId) {
         draft.selectedIssueId = issueId;
+      }
+      if (page === 'sessions') {
+        const nextSessionId = sessionId || '';
+        if (draft.selectedSessionId !== nextSessionId) {
+          draft.selectedSessionId = nextSessionId;
+        }
       }
     });
   }, [updateAppState]);
@@ -266,6 +275,7 @@ export default function App() {
           ) : currentPage === 'sessions' ? (
             <Sessions
               navigateTo={navigateTo}
+              selectedSessionId={selectedSessionId}
               theme={theme}
               toggleTheme={toggleTheme}
             />

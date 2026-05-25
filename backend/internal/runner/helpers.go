@@ -28,6 +28,7 @@ func (r *Runner) updateRuntime(ctx context.Context, issueID int64, threadID, tur
 		state.turnID = turnID
 	}
 	r.mu.Unlock()
+	r.bus.Publish(events.AppEvent{Type: "issue.runtime_updated", IssueID: issueID, ThreadID: threadID, TurnID: turnID})
 }
 
 func (r *Runner) publishStatus(issueID int64, status string) {

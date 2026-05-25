@@ -909,3 +909,127 @@ input:checked + .slider:before {
   transform: scale(0.98);
   box-shadow: none !important;
 }
+
+.kanban-card-failure {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.kanban-card-failure svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.kanban-card-run {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 9px;
+  background: rgba(15, 23, 42, 0.025);
+  min-width: 0;
+}
+
+[data-theme="dark"] .kanban-card-run {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.kanban-card-run-header,
+.kanban-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kanban-card-run-header {
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.kanban-card-run-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.kanban-card-run-field {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.kanban-card-run-field code {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-family: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanban-card-run-field code.mono {
+  font-family: var(--font-mono);
+}
+
+.kanban-card-run-exit {
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.035);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+[data-theme="dark"] .kanban-card-run-exit {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.kanban-card-actions {
+  flex-wrap: wrap;
+}
+
+.kanban-card-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kanban-card-action-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-color-hover);
+  background: var(--bg-card-hover);
+}
+
+.kanban-card-action-btn.retry {
+  color: var(--primary);
+  border-color: var(--primary-glow);
+}
+
+.kanban-card-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

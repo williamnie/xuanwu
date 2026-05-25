@@ -27,6 +27,60 @@ func (s *Store) ListIssueRuns(ctx context.Context, issueID int64) ([]IssueRun, e
 	return runs, rows.Err()
 }
 
+func (s *Store) withLatestIssueRuns(ctx context.Context, issues []Issue) ([]Issue, error) {
+	if len(issues) == 0 {
+		return issues, nil
+	}
+	args := issueRunIDArgs(issues)
+	query := latestIssueRunsQuery(len(args))
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	latest, err := scanLatestIssueRuns(rows)
+	if err != nil {
+		return nil, err
+	}
+	for idx := range issues {
+		if run, ok := latest[issues[idx].ID]; ok {
+			issues[idx].LatestRun = &run
+		}
+	}
+	return issues, nil
+}
+
+func latestIssueRunsQuery(count int) string {
+	placeholders := strings.TrimRight(strings.Repeat("?,", count), ",")
+	return `select ir.id, ir.issue_id, ir.attempt, ir.status,
+		ir.provider, ir.provider_session_id, ir.provider_turn_id,
+		ir.codex_thread_id, ir.codex_turn_id, ir.started_at, ir.ended_at,
+		ir.exit_reason, ir.error from issue_runs ir
+		join (select issue_id, max(attempt) as attempt from issue_runs
+		where issue_id in (` + placeholders + `) group by issue_id) latest
+		on latest.issue_id=ir.issue_id and latest.attempt=ir.attempt`
+}
+
+func issueRunIDArgs(issues []Issue) []any {
+	args := make([]any, 0, len(issues))
+	for _, issue := range issues {
+		args = append(args, issue.ID)
+	}
+	return args
+}
+
+func scanLatestIssueRuns(rows *sql.Rows) (map[int64]IssueRun, error) {
+	runs := map[int64]IssueRun{}
+	for rows.Next() {
+		run, err := scanIssueRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		runs[run.IssueID] = run
+	}
+	return runs, rows.Err()
+}
+
 func currentIssueAttempt(ctx context.Context, tx *sql.Tx, issueID int64) (int, error) {
 	var attempt int
 	err := tx.QueryRowContext(ctx, `select attempt_count from issues where id=?`, issueID).Scan(&attempt)

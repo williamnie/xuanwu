@@ -100,6 +100,12 @@ func TestIssueRunsAPI(t *testing.T) {
 		runs[0].StartedAt == "" || runs[0].EndedAt == "" {
 		t.Fatalf("unexpected runs response: %+v", runs)
 	}
+
+	listed := getJSON[[]store.Issue](t, srv, "/api/issues?projectId=demo")
+	if len(listed) != 1 || listed[0].LatestRun == nil || listed[0].LatestRun.ID != runs[0].ID ||
+		listed[0].LatestRun.ProviderSessionID != "thread-1" || listed[0].LatestRun.ExitReason == "" {
+		t.Fatalf("issue list should expose latest run summary: %+v", listed)
+	}
 }
 
 func TestIssueStatusChangeFromInProgressInterruptsLinkedTurn(t *testing.T) {

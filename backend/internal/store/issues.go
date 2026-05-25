@@ -22,7 +22,10 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]Issue, error) 
 		}
 		issues = append(issues, i)
 	}
-	return issues, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return s.withLatestIssueRuns(ctx, issues)
 }
 
 func (s *Store) CreateIssue(ctx context.Context, i Issue) (Issue, error) {

@@ -13,11 +13,25 @@ import {
   X,
   Clock,
   Sparkles,
-  Link2
+  Link2,
+  AlertTriangle,
+  ExternalLink,
+  RotateCw,
+  Terminal,
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
 import CronTasksPanel from '../components/CronTasksPanel';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
+import {
+  issueFailureReason,
+  issueRunExitText,
+  issueRunSessionId,
+  issueRunSessionRef,
+  issueRunTurnId,
+  latestIssueRun,
+  providerLabel,
+  shortId,
+} from '../utils/issueRuns';
 
 export default function Issues({
   filterProject,
@@ -45,6 +59,37 @@ export default function Issues({
   // 拖拽相关的局部交互状态
   const [draggingIssueId, setDraggingIssueId] = useState(null);
   const [draggedOverColumnId, setDraggedOverColumnId] = useState(null);
+  const [retryingIssueId, setRetryingIssueId] = useState(null);
+
+  const stopCardAction = (event) => {
+    event.stopPropagation();
+  };
+
+  const handleRetryIssue = async (event, issueId) => {
+    stopCardAction(event);
+    setRetryingIssueId(issueId);
+    try {
+      await api.retryIssue(issueId);
+      message.success(`Issue #${issueId} 已重新加入队列`);
+      refreshAllData();
+    } catch (err) {
+      message.error(`重新执行失败: ${err.message || '网络异常'}`);
+    } finally {
+      setRetryingIssueId(null);
+    }
+  };
+
+  const handleOpenIssueLog = (event, issueId) => {
+    stopCardAction(event);
+    navigateTo('issues', issueId);
+  };
+
+  const handleOpenSession = (event, sessionRef) => {
+    stopCardAction(event);
+    if (sessionRef) {
+      navigateTo('sessions', null, sessionRef);
+    }
+  };
 
   // 拖拽开始：记录被拖拽的任务 ID 与当前状态，并设置拖拽状态
   const handleDragStart = (e, issueId, currentStatus) => {
@@ -328,6 +373,10 @@ export default function Issues({
               ) : (
                 col.issues.map(issue => {
                   const proj = projects.find(p => p.id === issue.project_id);
+                  const run = latestIssueRun(issue);
+                  const sessionRef = issueRunSessionRef(issue, run);
+                  const hasRuntime = Boolean(sessionRef || issueRunTurnId(issue, run));
+                  const failureReason = issueFailureReason(issue, run);
                   return (
                     <div
                       key={issue.id}
@@ -341,6 +390,22 @@ export default function Issues({
                       <div className="kanban-card-title">
                         #{issue.id} {issue.title}
                       </div>
+
+                      {issue.status === 'failed' && failureReason && (
+                        <IssueFailureSummary reason={failureReason} />
+                      )}
+
+                      <IssueRunSummary issue={issue} run={run} />
+
+                      <IssueQuickActions
+                        issue={issue}
+                        hasRuntime={hasRuntime}
+                        sessionRef={sessionRef}
+                        retrying={retryingIssueId === issue.id}
+                        onOpenLog={handleOpenIssueLog}
+                        onOpenSession={handleOpenSession}
+                        onRetry={handleRetryIssue}
+                      />
 
                       {/* 底部属性与微标 */}
                       <div className="kanban-card-footer">
@@ -498,6 +563,77 @@ export default function Issues({
         </div>
       )}
 
+    </div>
+  );
+}
+
+function IssueFailureSummary({ reason }) {
+  return (
+    <div className="kanban-card-failure" title={reason}>
+      <AlertTriangle size={13} />
+      <span>{reason}</span>
+    </div>
+  );
+}
+
+function IssueRunSummary({ issue, run }) {
+  if (!run) {
+    return null;
+  }
+  const sessionId = issueRunSessionId(issue, run);
+  const turnId = issueRunTurnId(issue, run);
+  const exitText = issueRunExitText(run);
+  return (
+    <div className="kanban-card-run">
+      <div className="kanban-card-run-header">
+        <span>Run #{run.attempt || issue.attempt_count || 1}</span>
+        <span className={`status-badge ${run.status}`}>{run.status || 'unknown'}</span>
+      </div>
+      <div className="kanban-card-run-grid">
+        <RunMiniField label="Provider" value={providerLabel(run.provider)} />
+        <RunMiniField label="Session" value={shortId(sessionId) || '暂无'} mono />
+        <RunMiniField label="Turn" value={shortId(turnId) || '暂无'} mono />
+      </div>
+      {exitText && <div className="kanban-card-run-exit" title={exitText}>{exitText}</div>}
+    </div>
+  );
+}
+
+function RunMiniField({ label, value, mono = false }) {
+  return (
+    <div className="kanban-card-run-field">
+      <span>{label}</span>
+      <code className={mono ? 'mono' : ''}>{value}</code>
+    </div>
+  );
+}
+
+function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRetry }) {
+  const showRetry = issue.status === 'failed';
+  const showLog = issue.status === 'in_progress' || hasRuntime;
+  if (!showRetry && !showLog && !sessionRef) return null;
+  return (
+    <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
+      {sessionRef && (
+        <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenSession(event, sessionRef)}>
+          <ExternalLink size={12} /> Session
+        </button>
+      )}
+      {showLog && (
+        <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenLog(event, issue.id)}>
+          <Terminal size={12} /> Logs
+        </button>
+      )}
+      {showRetry && (
+        <button
+          type="button"
+          className="kanban-card-action-btn retry"
+          disabled={retrying}
+          onClick={(event) => onRetry(event, issue.id)}
+        >
+          <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
+        </button>
+      )}
     </div>
   );
 }

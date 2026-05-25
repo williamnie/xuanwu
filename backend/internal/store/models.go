@@ -85,22 +85,23 @@ type IssueTemplatePatch struct {
 }
 
 type Issue struct {
-	ID              int64  `json:"id"`
-	ProjectID       string `json:"project_id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Status          string `json:"status"`
-	Priority        int    `json:"priority"`
-	TemplateID      string `json:"template_id"`
-	PromptTemplate  string `json:"prompt_template"`
-	CodexThreadID   string `json:"codex_thread_id"`
-	CodexTurnID     string `json:"codex_turn_id"`
-	AttemptCount    int    `json:"attempt_count"`
-	AutoRetryNextAt string `json:"auto_retry_next_at"`
-	AutoRetryReason string `json:"auto_retry_reason"`
-	Error           string `json:"error"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
+	ID              int64     `json:"id"`
+	ProjectID       string    `json:"project_id"`
+	Title           string    `json:"title"`
+	Description     string    `json:"description"`
+	Status          string    `json:"status"`
+	Priority        int       `json:"priority"`
+	TemplateID      string    `json:"template_id"`
+	PromptTemplate  string    `json:"prompt_template"`
+	CodexThreadID   string    `json:"codex_thread_id"`
+	CodexTurnID     string    `json:"codex_turn_id"`
+	AttemptCount    int       `json:"attempt_count"`
+	LatestRun       *IssueRun `json:"latest_run,omitempty"`
+	AutoRetryNextAt string    `json:"auto_retry_next_at"`
+	AutoRetryReason string    `json:"auto_retry_reason"`
+	Error           string    `json:"error"`
+	CreatedAt       string    `json:"created_at"`
+	UpdatedAt       string    `json:"updated_at"`
 }
 
 type IssueRun struct {

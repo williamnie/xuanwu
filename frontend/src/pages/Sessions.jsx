@@ -123,7 +123,7 @@ function compactModelName(value) {
     .trim();
 }
 
-export default function Sessions() {
+export default function Sessions({ selectedSessionId = '' }) {
   const projects = useDataStore(selectProjects);
   const setProjects = useDataStore(selectSetProjects);
   const [sessions, setSessions] = useState([]);
@@ -165,6 +165,12 @@ export default function Sessions() {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    if (selectedSessionId && selectedSessionId !== selectedIdRef.current) {
+      setSelectedId(selectedSessionId);
+    }
+  }, [selectedSessionId]);
 
   const currentApprovals = useMemo(() => approvalsForSession(approvalQueue, selectedId), [approvalQueue, selectedId]);
   const approvalRequest = currentApprovals[0]?.request || null;
