@@ -261,26 +261,49 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issu
   -d '{"status":"done"}'
 ```
 
-如果 `PATH` 里的 `codex-issue-runner` 版本过旧，可在本仓库优先用 `./dist/codex-issue-runner`，或重新安装 release/skill 后再试。
+如果 `PATH` 里的 `codex-issue-runner` 版本过旧，可在本仓库优先用 `./dist/codex-issue-runner`，或重新安装 release/skill 后再试。当前 CLI 子命令不实现 `--help`：例如 `project --help` 会被当作未知 project command；以本文档、源码或 CLI 测试为准。
 
-推荐创建 issue：
+确认 project id 时，当前 CLI 没有 `project list`，直接查 API：
+
+```bash
+curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/projects"
+```
+
+推荐创建 Triage/backlog issue（不自动运行）：
 
 ```bash
 codex-issue-runner issue create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
   --project <project-id> \
   --title "<一句话标题>" \
   --body-file /tmp/codex-issue.md \
+  --status triage \
+  --json
+```
+
+创建并立即 enqueue 可执行 issue 时，显式使用 `todo` 并加 `--run`：
+
+```bash
+codex-issue-runner issue create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
+  --project <project-id> \
+  --title "<一句话标题>" \
+  --body-file /tmp/codex-issue.md \
+  --status todo \
   --run \
   --json
 ```
 
+`--json` 输出的是完整 JSON 文档，可能跨多行 pretty-print；脚本里应整体解析 stdout，不要当作 NDJSON 逐行解析。
+
 常用状态命令：
 
 ```bash
-codex-issue-runner issue status --id <issue-id> --json
-codex-issue-runner issue logs --id <issue-id>
-codex-issue-runner issue retry --id <issue-id> --json
-codex-issue-runner issue cancel --id <issue-id> --json
+codex-issue-runner issue status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
+codex-issue-runner issue logs --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id>
+codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
+codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 ```
 
 Runtime 状态：

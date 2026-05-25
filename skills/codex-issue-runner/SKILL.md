@@ -35,11 +35,14 @@ Token lookup rules:
 - For release installs or other projects, the token file lives under that runner's configured state/data directory; do not assume every runner uses the current repo path.
 - If the CLI returns `401 Unauthorized: unauthorized`, retry only after setting `CODEX_RUNNER_AUTH_TOKEN` or passing `--token "$(cat <token-file>)"`.
 - When working inside this repo and `codex-issue-runner` on `PATH` is older, prefer `./dist/codex-issue-runner` or reinstall the release/skill before retrying.
+- Current subcommands do not implement `--help`; `project --help` is parsed as an unknown project command. Use this skill, repo docs, or source/tests as the CLI reference instead of probing subcommand help.
+- `--json` prints a complete JSON document and may be pretty-printed across multiple lines. Parse the whole stdout; do not treat it as newline-delimited JSON.
 
 ## Register a Project
 
 ```bash
 codex-issue-runner project create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
   --id <project-id> \
   --cwd <absolute-repo-path> \
   --auto-run \
@@ -48,30 +51,53 @@ codex-issue-runner project create \
 
 Use `--auto-run` when newly created `todo` issues should be picked up automatically.
 
-## Create and Enqueue an Issue
+If you need to confirm a registered project id, the CLI currently has no `project list` command; call the API directly:
+
+```bash
+curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/projects"
+```
+
+## Create an Issue
 
 Write the complete task to a temp markdown file, then run:
 
 ```bash
 codex-issue-runner issue create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
   --project <project-id> \
   --title "<short title>" \
   --body-file /tmp/codex-issue.md \
+  --status triage \
+  --json
+```
+
+- The default status is `triage`, but pass `--status triage` explicitly for backlog/triage creation.
+- Omit `--run` when the user only wants a Triage/backlog item.
+- The returned JSON contains the runner issue `id`; keep it for status/log follow-up.
+
+To create and immediately enqueue an executable issue, add `--run`:
+
+```bash
+codex-issue-runner issue create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
+  --project <project-id> \
+  --title "<short title>" \
+  --body-file /tmp/codex-issue.md \
+  --status todo \
   --run \
   --json
 ```
 
-- `--run` creates the issue and then calls the enqueue endpoint.
-- The returned JSON contains the runner issue `id`; keep it for status/log follow-up.
-- If the user only wants a backlog item, omit `--run`.
+- `--run` creates the issue and then calls the enqueue endpoint; runner loops claim `todo` issues, not `triage`.
 
 ## Inspect or Control an Issue
 
 ```bash
-codex-issue-runner issue status --id <issue-id> --json
-codex-issue-runner issue logs --id <issue-id>
-codex-issue-runner issue retry --id <issue-id> --json
-codex-issue-runner issue cancel --id <issue-id> --json
+codex-issue-runner issue status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
+codex-issue-runner issue logs --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id>
+codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
+codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 ```
 
 ## Agent Execution Contract

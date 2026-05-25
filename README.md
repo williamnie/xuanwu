@@ -185,31 +185,44 @@ go run ./backend/cmd/codex-issue-runner serve --addr 0.0.0.0:3008 --db data/app.
 
 # 创建项目并开启 auto-run
 codex-issue-runner project create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
   --id movo-web \
   --cwd /Users/xiaobei/Documents/rcrai/movo-web \
   --auto-run \
   --json
 
-# 创建 issue，并立即 enqueue 进入自动化执行
+# 创建 Triage/backlog issue；不加 --run 时不会自动执行
 codex-issue-runner issue create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
   --project movo-web \
   --title "修复 ChatInput Stop 按钮" \
   --body-file /tmp/issue.md \
+  --status triage \
+  --json
+
+# 创建 issue，并立即 enqueue 进入自动化执行
+codex-issue-runner issue create \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
+  --project movo-web \
+  --title "修复 ChatInput Stop 按钮" \
+  --body-file /tmp/issue.md \
+  --status todo \
   --run \
   --json
 
 # 查询状态 / 日志 / 重试 / 取消
-codex-issue-runner issue status --id 42
-codex-issue-runner issue logs --id 42
-codex-issue-runner issue update --id 42 --status done --json
-codex-issue-runner issue retry --id 42 --json
-codex-issue-runner issue cancel --id 42 --json
+codex-issue-runner issue status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42
+codex-issue-runner issue logs --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42
+codex-issue-runner issue update --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --status done --json
+codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --json
+codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --json
 
 # 查看 runner / DB / Codex command 只读健康摘要
-codex-issue-runner system status --json
+codex-issue-runner system status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --json
 ```
 
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
+当前 CLI 子命令不实现 `--help`，`--json` 输出是完整 JSON 文档且可能跨多行。
 
 ## Codex Skill（可选）
 
