@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -12,6 +14,7 @@ import (
 type Adapter struct {
 	command string
 	args    []string
+	env     []string
 
 	mu               sync.Mutex
 	started          bool
@@ -34,6 +37,12 @@ func NewAdapter(command string, args []string) *Adapter {
 		command: command, args: args, pending: map[int64]chan rpcResponse{},
 		pendingApprovals: map[string]chan ApprovalDecision{}, events: make(chan Event, 256),
 	}
+}
+
+func (a *Adapter) SetEnv(env []string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.env = append([]string(nil), env...)
 }
 
 func (a *Adapter) Start(ctx context.Context) error {
@@ -120,6 +129,9 @@ func (a *Adapter) Events() <-chan Event {
 
 func (a *Adapter) startLocked(ctx context.Context) error {
 	a.cmd = exec.CommandContext(ctx, a.command, a.args...)
+	if len(a.env) > 0 {
+		a.cmd.Env = mergeEnv(os.Environ(), a.env)
+	}
 	stdout, err := a.cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -138,6 +150,32 @@ func (a *Adapter) startLocked(ctx context.Context) error {
 	go a.readLoop(stdout)
 	go a.stderrLoop(stderr)
 	return nil
+}
+
+func mergeEnv(base, overrides []string) []string {
+	merged := append([]string(nil), base...)
+	index := map[string]int{}
+	for i, item := range merged {
+		index[envKey(item)] = i
+	}
+	for _, item := range overrides {
+		key := envKey(item)
+		if key == "" {
+			continue
+		}
+		if i, ok := index[key]; ok {
+			merged[i] = item
+			continue
+		}
+		index[key] = len(merged)
+		merged = append(merged, item)
+	}
+	return merged
+}
+
+func envKey(item string) string {
+	key, _, _ := strings.Cut(item, "=")
+	return key
 }
 
 func (a *Adapter) request(ctx context.Context, method string, params any) (json.RawMessage, error) {

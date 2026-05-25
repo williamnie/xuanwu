@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -49,7 +50,12 @@ func runServer(args []string) {
 	}
 	defer st.Close()
 	bus := events.NewBus()
+	authToken, err := config.ResolveAuthToken(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	client := codex.NewAdapter(cfg.CodexCmd, cfg.CodexArgs)
+	client.SetEnv(runnerCallbackEnv(cfg, authToken))
 	provider := agentcodex.New(client)
 	r := runner.New(st, bus, provider)
 	if err := r.RecoverInProgressIssues(context.Background()); err != nil {
@@ -63,10 +69,6 @@ func runServer(args []string) {
 	cronScheduler.Start(context.Background())
 	startSessionWatcher(context.Background(), cfg.CodexSessionsDir, bus)
 	srv := api.NewServerWithWebDirAndSessionsDir(st, bus, r, cfg.WebDir, cfg.CodexSessionsDir)
-	authToken, err := config.ResolveAuthToken(cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
 	srv.SetAuthToken(authToken)
 	srv.SetSystemConfig(api.SystemConfig{
 		Addr: cfg.Addr, DBPath: cfg.DBPath, CodexCmd: cfg.CodexCmd,
@@ -84,6 +86,38 @@ func runServer(args []string) {
 	if err := http.ListenAndServe(cfg.Addr, srv); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func runnerCallbackEnv(cfg config.Config, authToken string) []string {
+	env := []string{"CODEX_RUNNER_ADDR=" + runnerCallbackAddr(cfg.Addr)}
+	if strings.TrimSpace(cfg.AuthToken) != "" {
+		return append(env, "CODEX_RUNNER_AUTH_TOKEN="+strings.TrimSpace(authToken))
+	}
+	if file := strings.TrimSpace(cfg.AuthTokenFile); file != "" {
+		return append(env, "CODEX_RUNNER_AUTH_TOKEN_FILE="+file)
+	}
+	if token := strings.TrimSpace(authToken); token != "" {
+		env = append(env, "CODEX_RUNNER_AUTH_TOKEN="+token)
+	}
+	return env
+}
+
+func runnerCallbackAddr(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return "127.0.0.1:3008"
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		if strings.HasPrefix(addr, ":") {
+			return "127.0.0.1" + addr
+		}
+		return addr
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return net.JoinHostPort("127.0.0.1", port)
+	}
+	return addr
 }
 
 func webMode(webDir string) string {

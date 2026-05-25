@@ -113,6 +113,34 @@ func TestIssueStatusSendsAuthTokenFromEnv(t *testing.T) {
 	}
 }
 
+func TestIssueStatusSendsAuthTokenFromTokenFileEnv(t *testing.T) {
+	tokenFile := filepath.Join(t.TempDir(), "auth_token")
+	if err := os.WriteFile(tokenFile, []byte("file-token\n"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer file-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"id": 7, "project_id": "demo", "title": "Fix it", "status": "todo",
+		})
+	}))
+	defer server.Close()
+
+	var out, errOut bytes.Buffer
+	code := Run(context.Background(), []string{"issue", "status", "--id", "7", "--addr", server.URL},
+		&out, &errOut, Options{Env: func(key string) string {
+			if key == "CODEX_RUNNER_AUTH_TOKEN_FILE" {
+				return tokenFile
+			}
+			return ""
+		}})
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, errOut.String())
+	}
+}
+
 func TestSystemStatusGetsStatusWithToken(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/system/status" {

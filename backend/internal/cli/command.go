@@ -77,15 +77,38 @@ func (e commandEnv) addCommonFlags(fs *flag.FlagSet) (*string, *bool) {
 	addr := fs.String("addr", e.defaultAddr(), "Codex Issue Runner API address")
 	asJSON := fs.Bool("json", false, "print JSON output")
 	fs.String("token", e.env("CODEX_RUNNER_AUTH_TOKEN"), "Codex Issue Runner API bearer token")
+	fs.String("token-file", e.env("CODEX_RUNNER_AUTH_TOKEN_FILE"), "Codex Issue Runner API bearer token file")
 	return addr, asJSON
 }
 
 func withFlagToken(ctx context.Context, fs *flag.FlagSet) context.Context {
-	flag := fs.Lookup("token")
-	if flag == nil || strings.TrimSpace(flag.Value.String()) == "" {
+	token := commonFlagValue(fs, "token")
+	if token == "" {
+		token = tokenFromFlagFile(commonFlagValue(fs, "token-file"))
+	}
+	if token == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, authTokenKey{}, flag.Value.String())
+	return context.WithValue(ctx, authTokenKey{}, token)
+}
+
+func commonFlagValue(fs *flag.FlagSet, name string) string {
+	flag := fs.Lookup(name)
+	if flag == nil {
+		return ""
+	}
+	return strings.TrimSpace(flag.Value.String())
+}
+
+func tokenFromFlagFile(path string) string {
+	if path == "" {
+		return ""
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
 }
 
 func (e commandEnv) defaultAddr() string {
