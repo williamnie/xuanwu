@@ -46,6 +46,17 @@ export function issueRefinementReadiness(refinement) {
   return { ready: missing.length === 0, missing };
 }
 
+export function refinementDraftToIssueRefinement(draft) {
+  return normalizeRefinement({
+    problem: draft?.problem,
+    context: draft?.context,
+    acceptanceCriteria: draft?.acceptanceCriteria ?? draft?.acceptance_criteria,
+    verificationPlan: draft?.verificationPlan ?? draft?.verification_plan,
+    nonGoals: draft?.nonGoals ?? draft?.non_goals,
+    risks: draft?.risks ?? draft?.risksQuestions ?? draft?.risks_questions,
+  });
+}
+
 function parseRefinementBlock(block) {
   const refinement = emptyIssueRefinement();
   const labels = new Map(REFINEMENT_FIELDS.map(field => [normalizeLabel(field.label), field.id]));

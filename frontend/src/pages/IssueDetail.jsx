@@ -36,6 +36,7 @@ import {
   REFINEMENT_FIELDS,
   issueRefinementReadiness,
   parseIssueRefinement,
+  refinementDraftToIssueRefinement,
 } from '../utils/issueRefinement';
 
 const COMMENT_AUTHOR_LABELS = {
@@ -164,6 +165,9 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [refinementDraft, setRefinementDraft] = useState(null);
+  const [refinementDraftError, setRefinementDraftError] = useState('');
+  const [refinementDraftGenerating, setRefinementDraftGenerating] = useState(false);
   const [detailState, updateDetailState] = useImmer({
     issue: null,
     project: null,
@@ -286,6 +290,9 @@ ${error}` : error;
     setCommentDraft('');
     setCommentError('');
     setCommentSubmitting(false);
+    setRefinementDraft(null);
+    setRefinementDraftError('');
+    setRefinementDraftGenerating(false);
   }, [issueId]);
 
   const updateTerminalFollowState = useCallback(() => {
@@ -387,7 +394,25 @@ ${error}` : error;
     }
   };
 
+  const handleGenerateRefinementDraft = async () => {
+    setRefinementDraftGenerating(true);
+    setRefinementDraftError('');
+    try {
+      const result = await api.generateIssueRefinementDraft(issueId);
+      const nextDraft = refinementDraftToIssueRefinement(result?.draft);
+      setRefinementDraft(nextDraft);
+      setIsEditModalOpen(true);
+    } catch (err) {
+      const errorMessage = err.message || '生成 refinement 草稿失败';
+      setRefinementDraftError(errorMessage);
+      message.error('生成 refinement 草稿失败: ' + errorMessage);
+    } finally {
+      setRefinementDraftGenerating(false);
+    }
+  };
+
   const closeEditModal = useCallback(() => {
+    setRefinementDraft(null);
     setIsEditModalOpen(false);
   }, []);
 
@@ -395,6 +420,8 @@ ${error}` : error;
     updateDetailState(draft => {
       draft.issue = updatedIssue;
     });
+    setRefinementDraft(null);
+    setRefinementDraftError('');
     setIsEditModalOpen(false);
     refreshAllData();
   }, [refreshAllData, updateDetailState]);
@@ -671,6 +698,9 @@ ${error}` : error;
             readiness={refinementReadiness}
             onEdit={() => setIsEditModalOpen(true)}
             onMoveToTodo={handleMoveToTodo}
+            onGenerateDraft={handleGenerateRefinementDraft}
+            draftError={refinementDraftError}
+            draftGenerating={refinementDraftGenerating}
           />
 
           <IssueDiscussion
@@ -836,6 +866,7 @@ ${error}` : error;
       {isEditModalOpen && (
         <IssueEditModal
           issue={issue}
+          initialRefinement={refinementDraft}
           onClose={closeEditModal}
           onSaved={handleIssueSaved}
         />
@@ -845,7 +876,7 @@ ${error}` : error;
   );
 }
 
-function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo }) {
+function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo, onGenerateDraft, draftError, draftGenerating }) {
   const canEdit = canEditIssue(issue);
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -875,12 +906,20 @@ function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo })
 
       {canEdit && (
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={onGenerateDraft} disabled={draftGenerating}>
+            <RotateCw size={14} /> {draftGenerating ? '生成中...' : '生成 Refinement 草稿'}
+          </button>
           <button className="btn btn-secondary" onClick={onEdit}>
             <Pencil size={14} /> 编辑 Refinement
           </button>
           <button className="btn btn-success" onClick={onMoveToTodo}>
             <Play size={14} /> Move to Todo
           </button>
+        </div>
+      )}
+      {draftError && (
+        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.8rem' }}>
+          {draftError}
         </div>
       )}
     </section>

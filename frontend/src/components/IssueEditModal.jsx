@@ -19,16 +19,16 @@ const PRIORITY_OPTIONS = [
   { value: '2', label: '紧急插队 (High)' },
 ];
 
-export default function IssueEditModal({ issue, onClose, onSaved }) {
-  const [draft, setDraft] = useState(() => issueToEditDraft(issue));
+export default function IssueEditModal({ issue, initialRefinement, onClose, onSaved }) {
+  const [draft, setDraft] = useState(() => issueToEditDraftWithRefinement(issue, initialRefinement));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft(issueToEditDraft(issue));
+    setDraft(issueToEditDraftWithRefinement(issue, initialRefinement));
     setError('');
     setSaving(false);
-  }, [issue]);
+  }, [issue, initialRefinement]);
 
   const setField = (field, value) => {
     setDraft(current => ({ ...current, [field]: value }));
@@ -76,6 +76,12 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
       </div>
     </div>
   );
+}
+
+function issueToEditDraftWithRefinement(issue, refinement) {
+  const draft = issueToEditDraft(issue);
+  if (!refinement) return draft;
+  return { ...draft, refinement: { ...draft.refinement, ...refinement } };
 }
 
 function editValidationError(issue, draft) {
