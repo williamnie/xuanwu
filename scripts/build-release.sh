@@ -75,11 +75,12 @@ trap cleanup_embedded_web EXIT
   go build -tags release -o "$BINARY_PATH" ./backend/cmd/codex-issue-runner
 )
 
-# 针对 macOS 系统进行本地 Ad-Hoc 签名，并启用 Hardened Runtime。
+# 针对 macOS 系统进行本地 Ad-Hoc 签名；本地 LaunchAgent 使用普通 ad-hoc
+# 签名即可，避免 Hardened Runtime 下 launchd 启动卡在 dyld 早期。
 if [[ "$OSTYPE" == "darwin"* ]]; then
   if command -v codesign >/dev/null 2>&1; then
     echo "[build] codesigning binary for macOS..."
-    codesign --force --options runtime --sign - "$BINARY_PATH"
+    codesign --force --sign - "$BINARY_PATH"
   fi
 fi
 
