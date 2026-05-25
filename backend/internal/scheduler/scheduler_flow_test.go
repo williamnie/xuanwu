@@ -60,6 +60,9 @@ func TestRunDueRecordsStarterFailure(t *testing.T) {
 	if gotTask.RunCount != 0 || gotTask.Error != "runner unavailable" {
 		t.Fatalf("task should record starter error without marking ran: %+v", gotTask)
 	}
+	if gotTask.LastStatus != store.CronLastStatusFailed || gotTask.LastRunAt == "" {
+		t.Fatalf("task failure result not recorded: %+v", gotTask)
+	}
 }
 
 func createDueCronTask(t *testing.T, st *store.Store, projectID string) store.CronTask {

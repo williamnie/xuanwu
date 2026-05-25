@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
@@ -11,6 +12,7 @@ import (
 )
 
 const defaultInterval = 30 * time.Second
+const promotedIssueSummaryLimit = 3
 
 type ProjectStarter interface {
 	StartProject(projectID string) error
@@ -38,8 +40,8 @@ func (s *Scheduler) RunDue(ctx context.Context, dueAt time.Time) error {
 	}
 	for _, task := range tasks {
 		if err := s.runTask(ctx, task, dueAt); err != nil {
-			_ = s.store.MarkCronTaskError(ctx, task.ID, err.Error())
-			s.publishTaskEvent("cron_task.error", task, 0, err.Error())
+			_ = s.store.MarkCronTaskError(ctx, task.ID, dueAt, err.Error())
+			s.publishTaskEvent("cron_task.error", task, 0, err.Error(), "")
 		}
 	}
 	return nil
@@ -70,10 +72,15 @@ func (s *Scheduler) runTask(ctx context.Context, task store.CronTask, dueAt time
 			return err
 		}
 		if project.Hold != nil {
-			if _, err = s.store.MarkCronTaskRan(ctx, task.ID, dueAt); err != nil {
+			record := store.CronTaskRunRecord{
+				RanAt:      dueAt,
+				LastStatus: store.CronLastStatusSkipped,
+				LastResult: project.Hold.Message,
+			}
+			if _, err = s.store.MarkCronTaskRan(ctx, task.ID, record); err != nil {
 				return err
 			}
-			s.publishTaskEvent("cron_task.ran", task, 0, project.Hold.Message)
+			s.publishTaskEvent("cron_task.ran", task, 0, "", project.Hold.Message)
 			return nil
 		}
 	}
@@ -87,10 +94,12 @@ func (s *Scheduler) runTask(ctx context.Context, task store.CronTask, dueAt time
 			return err
 		}
 	}
-	if _, err = s.store.MarkCronTaskRan(ctx, task.ID, dueAt); err != nil {
+	result := promotedIssuesResult(issues)
+	record := store.CronTaskRunRecord{RanAt: dueAt, LastResult: result}
+	if _, err = s.store.MarkCronTaskRan(ctx, task.ID, record); err != nil {
 		return err
 	}
-	s.publishTaskEvent("cron_task.ran", task, len(issues), "")
+	s.publishTaskEvent("cron_task.ran", task, len(issues), "", result)
 	return nil
 }
 
@@ -109,13 +118,36 @@ func (s *Scheduler) recordPromotedIssues(ctx context.Context, issues []store.Iss
 	}
 }
 
-func (s *Scheduler) publishTaskEvent(typ string, task store.CronTask, count int, errText string) {
-	payload := map[string]any{"task_id": task.ID, "promoted": count}
+func (s *Scheduler) publishTaskEvent(typ string, task store.CronTask, count int, errText string, result string) {
+	payload := map[string]any{"task_id": task.ID, "promoted": count, "result": result}
 	s.bus.Publish(events.AppEvent{
 		Type: typ, ProjectID: task.ProjectID, Status: task.Status,
-		Text: fmt.Sprintf("%d issue(s) promoted", count), Error: errText,
+		Text: result, Error: errText,
 		Payload: mustJSON(payload), CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func promotedIssuesResult(issues []store.Issue) string {
+	if len(issues) == 0 {
+		return "没有匹配的 Triage issue"
+	}
+	refs := promotedIssueRefs(issues, promotedIssueSummaryLimit)
+	if len(issues) == 1 {
+		return "已转入 Todo: " + refs[0]
+	}
+	return fmt.Sprintf("已转入 Todo: %s（共 %d 个）", strings.Join(refs, "、"), len(issues))
+}
+
+func promotedIssueRefs(issues []store.Issue, limit int) []string {
+	refs := []string{}
+	for index, issue := range issues {
+		if index >= limit {
+			refs = append(refs, fmt.Sprintf("+%d more", len(issues)-limit))
+			return refs
+		}
+		refs = append(refs, fmt.Sprintf("#%d", issue.ID))
+	}
+	return refs
 }
 
 func affectedProjects(issues []store.Issue) map[string]bool {

@@ -88,27 +88,34 @@ func (s *Store) DeleteCronTask(ctx context.Context, id int64) error {
 	return requireAffected(res)
 }
 
-func (s *Store) MarkCronTaskRan(ctx context.Context, id int64, ranAt time.Time) (CronTask, error) {
+func (s *Store) MarkCronTaskRan(ctx context.Context, id int64, record CronTaskRunRecord) (CronTask, error) {
 	task, err := s.GetCronTask(ctx, id)
 	if err != nil {
 		return CronTask{}, err
 	}
-	nextRun, status, err := nextCronRunAfter(task, ranAt)
+	nextRun, status, err := nextCronRunAfter(task, record.RanAt)
 	if err != nil {
 		return CronTask{}, err
 	}
+	lastStatus := strings.TrimSpace(record.LastStatus)
+	if lastStatus == "" {
+		lastStatus = CronLastStatusSuccess
+	}
 	_, err = s.db.ExecContext(ctx, `update cron_tasks set last_run_at=?,
-		next_run_at=?, status=?, run_count=run_count+1, error='', updated_at=?
-		where id=?`, ranAt.UTC().Format(time.RFC3339), nextRun, status, now(), id)
+		next_run_at=?, status=?, run_count=run_count+1, error='',
+		last_status=?, last_result=?, updated_at=? where id=?`,
+		record.RanAt.UTC().Format(time.RFC3339), nextRun, status,
+		lastStatus, strings.TrimSpace(record.LastResult), now(), id)
 	if err != nil {
 		return CronTask{}, err
 	}
 	return s.GetCronTask(ctx, id)
 }
 
-func (s *Store) MarkCronTaskError(ctx context.Context, id int64, errText string) error {
-	_, err := s.db.ExecContext(ctx, `update cron_tasks set error=?, updated_at=? where id=?`,
-		strings.TrimSpace(errText), now(), id)
+func (s *Store) MarkCronTaskError(ctx context.Context, id int64, ranAt time.Time, errText string) error {
+	_, err := s.db.ExecContext(ctx, `update cron_tasks set last_run_at=?,
+		last_status='failed', last_result='', error=?, updated_at=? where id=?`,
+		ranAt.UTC().Format(time.RFC3339), strings.TrimSpace(errText), now(), id)
 	return err
 }
 
@@ -275,5 +282,5 @@ func defaultCronTaskName(task *CronTask) string {
 }
 
 const cronTaskSelect = `select id, name, project_id, action, mode, time_of_day,
-	next_run_at, last_run_at, status, run_count, error, created_at, updated_at
-	from cron_tasks`
+	next_run_at, last_run_at, last_status, last_result, status, run_count,
+	error, created_at, updated_at from cron_tasks`

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Pause, Play, Trash2, X } from 'lucide-react';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
+import { buildCronRunSummary } from '../utils/cronTaskSummary';
 import {
   selectCronTasks,
   selectProjects,
@@ -211,7 +212,7 @@ function renderTaskList({ tasks, projects, handleToggleStatus, handleDelete }) {
             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>
               {projectLabel(projects, task.project_id)} · {modeLabel(task.mode)} · 下次：{formatDateTime(task.next_run_at)} · 已运行 {task.run_count} 次
             </div>
-            {task.error && <div style={{ color: 'var(--error)', fontSize: '0.74rem', marginTop: '4px' }}>{task.error}</div>}
+            <TaskRunSummary task={task} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className={`status-badge ${task.status === 'active' ? 'todo' : 'cancelled'}`}>{statusLabel(task.status)}</span>
@@ -226,6 +227,37 @@ function renderTaskList({ tasks, projects, handleToggleStatus, handleDelete }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function TaskRunSummary({ task }) {
+  const summary = buildCronRunSummary(task);
+  const lineClampStyle = {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflowWrap: 'anywhere',
+  };
+  return (
+    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span>最近：{formatDateTime(summary.lastRunAt)}</span>
+        <span className={`status-badge ${summary.badgeClass}`} style={{ padding: '2px 6px', fontSize: '0.66rem' }}>
+          {summary.statusLabel}
+        </span>
+      </div>
+      {summary.result && (
+        <div title={summary.result} style={{ ...lineClampStyle, color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+          结果：{summary.result}
+        </div>
+      )}
+      {summary.error && (
+        <div title={summary.error} style={{ ...lineClampStyle, color: 'var(--error)', fontSize: '0.74rem' }}>
+          最近错误：{summary.error}
+        </div>
+      )}
     </div>
   );
 }

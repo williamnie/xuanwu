@@ -54,6 +54,9 @@ func TestRunDuePromotesTriageIssuesAndStartsProjects(t *testing.T) {
 	if done.Status != store.CronStatusDone || done.RunCount != 1 {
 		t.Fatalf("task not completed: %+v", done)
 	}
+	if done.LastStatus != store.CronLastStatusSuccess || done.LastResult != "已转入 Todo: #1" {
+		t.Fatalf("task last result not recorded: %+v", done)
+	}
 	if len(starter.started) != 1 || starter.started[0] != "demo" {
 		t.Fatalf("started projects: %+v", starter.started)
 	}
@@ -83,6 +86,9 @@ func TestRunDueSkipsHeldProjectWithoutPromotingIssues(t *testing.T) {
 	ran, _ := st.GetCronTask(ctx, task.ID)
 	if ran.Status != store.CronStatusDone || ran.RunCount != 1 || ran.Error != "" {
 		t.Fatalf("held project cron should be recorded without error: %+v", ran)
+	}
+	if ran.LastStatus != store.CronLastStatusSkipped || ran.LastResult == "" {
+		t.Fatalf("held project skip result not recorded: %+v", ran)
 	}
 	if len(starter.started) != 0 {
 		t.Fatalf("held project should not start runner: %+v", starter.started)

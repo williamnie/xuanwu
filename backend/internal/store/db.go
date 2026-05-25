@@ -71,6 +71,9 @@ func (s *Store) init() error {
 	if err := s.migrateIssueRunColumns(); err != nil {
 		return err
 	}
+	if err := s.migrateCronTaskColumns(); err != nil {
+		return err
+	}
 	return s.ensureSeedIssueTemplate()
 }
 
@@ -211,6 +214,26 @@ func (s *Store) backfillIssueRunProviderIDs() error {
 		provider_session_id=case when provider_session_id='' then codex_thread_id else provider_session_id end,
 		provider_turn_id=case when provider_turn_id='' then codex_turn_id else provider_turn_id end`)
 	return err
+}
+
+func (s *Store) migrateCronTaskColumns() error {
+	columns, err := s.tableColumns("cron_tasks")
+	if err != nil {
+		return err
+	}
+	additions := map[string]string{
+		"last_status": `alter table cron_tasks add column last_status text not null default ''`,
+		"last_result": `alter table cron_tasks add column last_result text not null default ''`,
+	}
+	for name, stmt := range additions {
+		if columns[name] {
+			continue
+		}
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate cron_tasks.%s: %w", name, err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) tableColumns(table string) (map[string]bool, error) {

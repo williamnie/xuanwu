@@ -1,5 +1,7 @@
 package store
 
+import "time"
+
 const (
 	StatusTriage     = "triage"
 	StatusTodo       = "todo"
@@ -18,6 +20,9 @@ const (
 	CronStatusActive       = "active"
 	CronStatusPaused       = "paused"
 	CronStatusDone         = "done"
+	CronLastStatusSuccess  = "success"
+	CronLastStatusSkipped  = "skipped"
+	CronLastStatusFailed   = "failed"
 )
 
 type Project struct {
@@ -149,19 +154,28 @@ type IssueEvent struct {
 }
 
 type CronTask struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	ProjectID string `json:"project_id"`
-	Action    string `json:"action"`
-	Mode      string `json:"mode"`
-	TimeOfDay string `json:"time_of_day"`
-	NextRunAt string `json:"next_run_at"`
-	LastRunAt string `json:"last_run_at"`
-	Status    string `json:"status"`
-	RunCount  int    `json:"run_count"`
-	Error     string `json:"error"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	ProjectID  string `json:"project_id"`
+	Action     string `json:"action"`
+	Mode       string `json:"mode"`
+	TimeOfDay  string `json:"time_of_day"`
+	NextRunAt  string `json:"next_run_at"`
+	LastRunAt  string `json:"last_run_at"`
+	LastStatus string `json:"last_status"`
+	LastResult string `json:"last_result"`
+	Status     string `json:"status"`
+	RunCount   int    `json:"run_count"`
+	Error      string `json:"error"`
+	LastError  string `json:"last_error"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+}
+
+type CronTaskRunRecord struct {
+	RanAt      time.Time
+	LastStatus string
+	LastResult string
 }
 
 type CronTaskPatch struct {

@@ -69,8 +69,11 @@ func scanCronTask(row scanner) (CronTask, error) {
 	var task CronTask
 	err := row.Scan(&task.ID, &task.Name, &task.ProjectID, &task.Action,
 		&task.Mode, &task.TimeOfDay, &task.NextRunAt, &task.LastRunAt,
-		&task.Status, &task.RunCount, &task.Error, &task.CreatedAt,
-		&task.UpdatedAt)
+		&task.LastStatus, &task.LastResult, &task.Status, &task.RunCount,
+		&task.Error, &task.CreatedAt, &task.UpdatedAt)
+	if err == nil {
+		task.LastError = task.Error
+	}
 	return task, err
 }
 

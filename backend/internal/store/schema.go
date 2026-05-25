@@ -85,6 +85,8 @@ create table if not exists cron_tasks (
   time_of_day text not null default '',
   next_run_at text not null default '',
   last_run_at text not null default '',
+  last_status text not null default '',
+  last_result text not null default '',
   status text not null,
   run_count integer not null default 0,
   error text not null default '',
