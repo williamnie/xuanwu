@@ -46,6 +46,43 @@ export function issueRefinementReadiness(refinement) {
   return { ready: missing.length === 0, missing };
 }
 
+export function deriveTriageReadiness({ issue, refinement, commentEvents } = {}) {
+  if (issue?.status !== 'triage') {
+    return null;
+  }
+  const cleanRefinement = normalizeRefinement(
+    refinement || parseIssueRefinement(issue?.description).refinement
+  );
+  const readiness = issueRefinementReadiness(cleanRefinement);
+  const hasRefinement = hasAnyRefinementContent(cleanRefinement);
+  const discussionCount = issueDiscussionCount(issue, commentEvents);
+  const state = triageReadinessState(readiness, hasRefinement, discussionCount);
+  return {
+    state,
+    ready: state === 'ready',
+    missing: readiness.missing,
+    hasDiscussion: discussionCount > 0,
+    hasRefinement,
+    discussionCount,
+    source: triageReadinessSource(state, readiness.missing, discussionCount),
+  };
+}
+
+export function triageReadinessMoveToTodoMessage(readiness) {
+  if (!readiness) {
+    return '仍要移动到 Todo 吗？';
+  }
+  const lines = [
+    `当前 Triage readiness: ${readiness.state}`,
+    readiness.source,
+  ];
+  if (readiness.missing.length > 0) {
+    lines.push(`缺少：${readiness.missing.join('、')}`);
+  }
+  lines.push('仍要移动到 Todo 吗？');
+  return lines.join('\n');
+}
+
 export function refinementDraftToIssueRefinement(draft) {
   return normalizeRefinement({
     problem: draft?.problem,
@@ -93,6 +130,34 @@ function normalizeRefinement(refinement) {
 
 function hasAnyRefinementContent(refinement) {
   return REFINEMENT_FIELDS.some(field => refinement[field.id]);
+}
+
+function triageReadinessState(readiness, hasRefinement, discussionCount) {
+  if (readiness.ready) return 'ready';
+  if (hasRefinement) return 'refined';
+  if (discussionCount > 0) return 'discussing';
+  return 'raw';
+}
+
+function triageReadinessSource(state, missing, discussionCount) {
+  if (state === 'ready') {
+    return 'Refinement 已包含 Acceptance criteria 与 Verification plan。';
+  }
+  if (state === 'refined') {
+    return `已有 refinement 内容，仍缺：${missing.join('、')}。`;
+  }
+  if (state === 'discussing') {
+    return `已有 ${discussionCount} 条讨论，但还没有 refinement 草稿。`;
+  }
+  return '还没有 discussion comment 或 refinement 内容。';
+}
+
+function issueDiscussionCount(issue, commentEvents) {
+  if (Array.isArray(commentEvents)) {
+    return commentEvents.length;
+  }
+  const count = Number(issue?.comment_count ?? issue?.commentCount ?? 0);
+  return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
 function cleanText(value) {

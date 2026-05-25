@@ -34,9 +34,10 @@ import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
 import {
   REFINEMENT_FIELDS,
-  issueRefinementReadiness,
+  deriveTriageReadiness,
   parseIssueRefinement,
   refinementDraftToIssueRefinement,
+  triageReadinessMoveToTodoMessage,
 } from '../utils/issueRefinement';
 
 const COMMENT_AUTHOR_LABELS = {
@@ -317,15 +318,17 @@ ${error}` : error;
     }
   }, [events]);
 
-  const confirmRefinementReady = () => {
-    const { refinement } = parseIssueRefinement(issue?.description);
-    const readiness = issueRefinementReadiness(refinement);
-    return readiness.ready ||
-      window.confirm(`Refinement 还缺：${readiness.missing.join('、')}。\n仍要 Move to Todo 吗？`);
+  const confirmTriageReady = () => {
+    const readiness = deriveTriageReadiness({
+      issue,
+      commentEvents: events.filter(event => event.type === 'issue.comment'),
+    });
+    return !readiness || readiness.ready ||
+      window.confirm(triageReadinessMoveToTodoMessage(readiness));
   };
 
   const handleMoveToTodo = async () => {
-    if (issue?.status === 'triage' && !confirmRefinementReady()) {
+    if (issue?.status === 'triage' && !confirmTriageReady()) {
       return;
     }
     try {
@@ -455,8 +458,8 @@ ${error}` : error;
   const parsedDescription = parseIssueRefinement(issue.description);
   const issueBody = parsedDescription.body;
   const refinement = parsedDescription.refinement;
-  const refinementReadiness = issueRefinementReadiness(refinement);
   const commentEvents = events.filter(event => event.type === 'issue.comment');
+  const triageReadiness = deriveTriageReadiness({ issue, refinement, commentEvents });
   const autoRetryPayload = latestAutoRetryEvent(events);
   const autoRetryNextAt = issue.auto_retry_next_at || autoRetryPayload?.next_retry_at || '';
   const autoRetryReason = issue.auto_retry_reason || autoRetryPayload?.reason || '';
@@ -695,7 +698,7 @@ ${error}` : error;
           <IssueRefinement
             issue={issue}
             refinement={refinement}
-            readiness={refinementReadiness}
+            readiness={triageReadiness}
             onEdit={() => setIsEditModalOpen(true)}
             onMoveToTodo={handleMoveToTodo}
             onGenerateDraft={handleGenerateRefinementDraft}
@@ -887,14 +890,16 @@ function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo, o
             把 triage 输入整理成执行规格；Acceptance criteria 与 Verification plan 是 Ready 条件。
           </p>
         </div>
-        <span className={`status-badge ${readiness.ready ? 'done' : 'triage'}`}>
-          {readiness.ready ? 'ready' : 'needs refinement'}
-        </span>
+        {readiness && (
+          <span className={`triage-readiness-badge ${readiness.state}`} title={readiness.source}>
+            {readiness.state}
+          </span>
+        )}
       </div>
 
-      {!readiness.ready && (
+      {readiness && !readiness.ready && (
         <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
-          Move to Todo 前建议补齐：{readiness.missing.join('、')}。不会阻断拖拽流转，但详情页操作会先确认。
+          {readiness.source} Move to Todo 前会先确认，但不会阻断手动流转。
         </div>
       )}
 

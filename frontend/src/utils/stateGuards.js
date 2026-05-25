@@ -27,6 +27,7 @@ const ISSUE_FIELDS = [
   'codex_thread_id',
   'codex_turn_id',
   'attempt_count',
+  'comment_count',
   'latest_run',
   'error',
   'created_at',

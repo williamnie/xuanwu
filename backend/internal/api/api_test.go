@@ -161,6 +161,9 @@ func TestIssueCommentAPIAppendsEvent(t *testing.T) {
 	if updated.Description != "keep me" {
 		t.Fatalf("comment must not overwrite description: %+v", updated)
 	}
+	if updated.CommentCount != 1 {
+		t.Fatalf("expected comment_count=1 after comment, got %+v", updated)
+	}
 	issueEvents := getJSON[[]store.IssueEvent](t, srv, "/api/issues/1/events")
 	if issueEvents[len(issueEvents)-1].ID != event.ID || issueEvents[len(issueEvents)-1].Type != "issue.comment" {
 		t.Fatalf("comment not appended to events: %+v", issueEvents)

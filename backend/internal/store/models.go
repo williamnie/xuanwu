@@ -101,6 +101,7 @@ type Issue struct {
 	CodexThreadID   string    `json:"codex_thread_id"`
 	CodexTurnID     string    `json:"codex_turn_id"`
 	AttemptCount    int       `json:"attempt_count"`
+	CommentCount    int       `json:"comment_count"`
 	LatestRun       *IssueRun `json:"latest_run,omitempty"`
 	AutoRetryNextAt string    `json:"auto_retry_next_at"`
 	AutoRetryReason string    `json:"auto_retry_reason"`

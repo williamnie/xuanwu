@@ -23,6 +23,10 @@ import PromptEditor from '../components/editor/PromptEditor';
 import CronTasksPanel from '../components/CronTasksPanel';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
 import {
+  deriveTriageReadiness,
+  triageReadinessMoveToTodoMessage,
+} from '../utils/issueRefinement';
+import {
   issueFailureReason,
   issueRunExitText,
   issueRunSessionId,
@@ -135,6 +139,11 @@ export default function Issues({
       const { issueId, currentStatus } = JSON.parse(dataStr);
 
       if (currentStatus === targetStatus) {
+        return;
+      }
+
+      const draggedIssue = issues.find(issue => issue.id === issueId);
+      if (currentStatus === 'triage' && targetStatus === 'todo' && !confirmTriageMoveToTodo(draggedIssue)) {
         return;
       }
 
@@ -377,6 +386,7 @@ export default function Issues({
                   const sessionRef = issueRunSessionRef(issue, run);
                   const hasRuntime = Boolean(sessionRef || issueRunTurnId(issue, run));
                   const failureReason = issueFailureReason(issue, run);
+                  const triageReadiness = deriveTriageReadiness({ issue });
                   return (
                     <div
                       key={issue.id}
@@ -390,6 +400,8 @@ export default function Issues({
                       <div className="kanban-card-title">
                         #{issue.id} {issue.title}
                       </div>
+
+                      <TriageReadinessBadge readiness={triageReadiness} />
 
                       {issue.status === 'failed' && failureReason && (
                         <IssueFailureSummary reason={failureReason} />
@@ -564,6 +576,21 @@ export default function Issues({
       )}
 
     </div>
+  );
+}
+
+function confirmTriageMoveToTodo(issue) {
+  const readiness = deriveTriageReadiness({ issue });
+  if (!readiness || readiness.ready) return true;
+  return window.confirm(triageReadinessMoveToTodoMessage(readiness));
+}
+
+function TriageReadinessBadge({ readiness }) {
+  if (!readiness) return null;
+  return (
+    <span className={`triage-readiness-badge ${readiness.state}`} title={readiness.source}>
+      {readiness.state}
+    </span>
   );
 }
 

@@ -262,6 +262,7 @@ func issueListQuery(f IssueFilter) (string, []any) {
 
 const issueSelect = `select id, project_id, title, description, status, priority,
 	template_id, prompt_template, codex_thread_id, codex_turn_id, attempt_count,
+	(select count(*) from issue_events where issue_id=issues.id and type='issue.comment') as comment_count,
 	auto_retry_next_at, auto_retry_reason, error, created_at, updated_at from issues`
 
 func issueSelectWithAlias(alias string) string {
@@ -270,7 +271,9 @@ func issueSelectWithAlias(alias string) string {
 		` + prefix + `description, ` + prefix + `status, ` + prefix + `priority,
 		` + prefix + `template_id, ` + prefix + `prompt_template,
 		` + prefix + `codex_thread_id, ` + prefix + `codex_turn_id,
-		` + prefix + `attempt_count, ` + prefix + `auto_retry_next_at,
+		` + prefix + `attempt_count, (select count(*) from issue_events
+		where issue_id=` + prefix + `id and type='issue.comment') as comment_count,
+		` + prefix + `auto_retry_next_at,
 		` + prefix + `auto_retry_reason, ` + prefix + `error, ` + prefix + `created_at,
 		` + prefix + `updated_at from issues ` + alias
 }
