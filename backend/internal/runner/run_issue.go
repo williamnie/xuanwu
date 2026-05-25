@@ -28,6 +28,10 @@ func (r *Runner) runIssue(issue store.Issue) {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
+	if err := r.ensureCleanWorktree(ctx, project.CWD); err != nil {
+		r.failIssue(ctx, issue.ID, err.Error())
+		return
+	}
 	if err := r.startIssueRun(ctx, issue, project); err != nil {
 		var holdErr runnerHoldError
 		if errors.As(err, &holdErr) {

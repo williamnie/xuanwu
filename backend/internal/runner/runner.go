@@ -20,6 +20,7 @@ type Runner struct {
 	healthCheckInterval time.Duration
 	healthCheckWait     time.Duration
 	autoRetryDelay      time.Duration
+	dirtyWorktreeCheck  bool
 
 	eventOnce    sync.Once
 	eventMu      sync.Mutex
@@ -50,9 +51,13 @@ func New(st *store.Store, bus *events.Bus, provider agent.AgentProvider) *Runner
 	return &Runner{
 		store: st, bus: bus, agent: provider, eventSubs: map[int]chan agent.Event{},
 		healthCheckInterval: defaultHoldCheckInterval, healthCheckWait: 20 * time.Second,
-		autoRetryDelay: defaultAutoRetryDelay,
-		loops:          map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
+		autoRetryDelay: defaultAutoRetryDelay, dirtyWorktreeCheck: true,
+		loops: map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
 	}
+}
+
+func (r *Runner) SetDirtyWorktreeCheckEnabled(enabled bool) {
+	r.dirtyWorktreeCheck = enabled
 }
 
 func (r *Runner) StartProject(projectID string) error {

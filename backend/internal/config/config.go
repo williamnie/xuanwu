@@ -17,6 +17,7 @@ type Config struct {
 	CodexSessionsDir string
 	AuthToken        string
 	AuthTokenFile    string
+	SkipDirtyCheck   bool
 }
 
 func Load() Config {
@@ -39,6 +40,7 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.CodexSessionsDir, "codex-sessions-dir", cfg.CodexSessionsDir, "Codex persisted sessions directory")
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "Bearer token for protected API requests; prefer env or token file to avoid shell history")
 	fs.StringVar(&cfg.AuthTokenFile, "auth-token-file", cfg.AuthTokenFile, "File path for generated or persisted API bearer token")
+	fs.BoolVar(&cfg.SkipDirtyCheck, "skip-dirty-worktree-check", cfg.SkipDirtyCheck, "Allow issue execution to start when the target git worktree is dirty")
 	codexArgs := fs.String("codex-args", strings.Join(cfg.CodexArgs, " "), "Codex app-server args")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -74,6 +76,7 @@ func defaultConfig() Config {
 		OpencodeCmd:      env("CODEX_RUNNER_OPENCODE_CMD", "opencode"),
 		WebDir:           env("CODEX_RUNNER_WEB_DIR", ""),
 		CodexSessionsDir: env("CODEX_RUNNER_CODEX_SESSIONS_DIR", defaultCodexSessionsDir()),
+		SkipDirtyCheck:   boolEnv("CODEX_RUNNER_SKIP_DIRTY_WORKTREE_CHECK"),
 	}
 }
 
@@ -90,4 +93,9 @@ func env(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func boolEnv(key string) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	return value == "1" || value == "true" || value == "yes"
 }

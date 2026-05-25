@@ -79,6 +79,34 @@ func TestParseProviderCommandSettings(t *testing.T) {
 	}
 }
 
+func TestParseDirtyWorktreeCheckSkipFlagAndEnv(t *testing.T) {
+	t.Setenv("CODEX_RUNNER_SKIP_DIRTY_WORKTREE_CHECK", "")
+	defaultCfg, err := Parse(nil)
+	if err != nil {
+		t.Fatalf("parse default: %v", err)
+	}
+	if defaultCfg.SkipDirtyCheck {
+		t.Fatalf("dirty worktree check should be enabled by default")
+	}
+
+	flagCfg, err := Parse([]string{"--skip-dirty-worktree-check"})
+	if err != nil {
+		t.Fatalf("parse flag: %v", err)
+	}
+	if !flagCfg.SkipDirtyCheck {
+		t.Fatalf("skip flag should disable dirty worktree protection")
+	}
+
+	t.Setenv("CODEX_RUNNER_SKIP_DIRTY_WORKTREE_CHECK", "true")
+	envCfg, err := Parse(nil)
+	if err != nil {
+		t.Fatalf("parse env: %v", err)
+	}
+	if !envCfg.SkipDirtyCheck {
+		t.Fatalf("env should disable dirty worktree protection")
+	}
+}
+
 func TestProviderStatusesExposeOnlySecretPresence(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret-value")
 	statuses := ProviderStatuses(ProviderSettingsConfig{ClaudeCmd: "missing-claude-for-test"})

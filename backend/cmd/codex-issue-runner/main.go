@@ -58,6 +58,7 @@ func runServer(args []string) {
 	client.SetEnv(runnerCallbackEnv(cfg, authToken))
 	provider := agentcodex.New(client)
 	r := runner.New(st, bus, provider)
+	r.SetDirtyWorktreeCheckEnabled(!cfg.SkipDirtyCheck)
 	if err := r.RecoverInProgressIssues(context.Background()); err != nil {
 		log.Fatal(err)
 	}
