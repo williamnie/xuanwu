@@ -52,7 +52,7 @@ func selectNextIssueID(ctx context.Context, tx *sql.Tx, projectID, dueAt string)
 		left join project_holds h on h.project_id=i.project_id
 		where i.project_id=? and i.status=? and h.project_id is null
 			and (i.auto_retry_next_at='' or julianday(i.auto_retry_next_at)<=julianday(?))
-		order by i.priority desc, i.created_at asc limit 1`, projectID, StatusTodo, dueAt)
+		order by i.priority desc, i.created_at asc, i.id asc limit 1`, projectID, StatusTodo, dueAt)
 	var id int64
 	err := row.Scan(&id)
 	if err == sql.ErrNoRows {

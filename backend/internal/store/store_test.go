@@ -33,6 +33,47 @@ func TestProjectIssueQueueLifecycle(t *testing.T) {
 	}
 }
 
+func TestClaimNextIssueUsesIDAsStableTieBreaker(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	createDescendingTieIndex(t, st)
+
+	first, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "first", Status: StatusTodo})
+	_, _ = st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "second", Status: StatusTodo})
+	_, _ = st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "third", Status: StatusTodo})
+	setSameIssueCreatedAt(t, st, "2026-01-01T00:00:00Z")
+
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	if claimed.ID != first.ID {
+		t.Fatalf("claimed issue id = %d, want stable oldest id %d", claimed.ID, first.ID)
+	}
+}
+
+func TestPromoteTriageToTodoUsesIDAsStableTieBreaker(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	createDescendingTieIndex(t, st)
+
+	first, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "first", Status: StatusTriage})
+	second, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "second", Status: StatusTriage})
+	third, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "third", Status: StatusTriage})
+	setSameIssueCreatedAt(t, st, "2026-01-01T00:00:00Z")
+
+	promoted, err := st.PromoteTriageToTodo(ctx, "demo")
+	if err != nil {
+		t.Fatalf("promote triage: %v", err)
+	}
+	want := []int64{first.ID, second.ID, third.ID}
+	if got := issueIDs(promoted); !int64SlicesEqual(got, want) {
+		t.Fatalf("promoted order = %v, want %v", got, want)
+	}
+}
+
 func TestIssueRunHistoryLifecycle(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()
@@ -639,6 +680,43 @@ func projectIDs(projects []Project) []string {
 		ids = append(ids, project.ID)
 	}
 	return ids
+}
+
+func issueIDs(issues []Issue) []int64 {
+	ids := make([]int64, 0, len(issues))
+	for _, issue := range issues {
+		ids = append(ids, issue.ID)
+	}
+	return ids
+}
+
+func int64SlicesEqual(a, b []int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for idx := range a {
+		if a[idx] != b[idx] {
+			return false
+		}
+	}
+	return true
+}
+
+func createDescendingTieIndex(t *testing.T, st *Store) {
+	t.Helper()
+	_, err := st.db.Exec(`create index idx_test_issue_queue_tie_desc
+		on issues(project_id, status, priority desc, created_at asc, id desc)`)
+	if err != nil {
+		t.Fatalf("create tie index: %v", err)
+	}
+}
+
+func setSameIssueCreatedAt(t *testing.T, st *Store, createdAt string) {
+	t.Helper()
+	_, err := st.db.Exec(`update issues set created_at=?`, createdAt)
+	if err != nil {
+		t.Fatalf("set same created_at: %v", err)
+	}
 }
 
 func openTestStore(t *testing.T) *Store {

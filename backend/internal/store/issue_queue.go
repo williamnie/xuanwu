@@ -57,7 +57,7 @@ func triageIssueQuery(projectID string) (string, []any) {
 		args = append(args, projectID)
 	}
 	query := issueSelectWithAlias("i") + ` left join project_holds h on h.project_id=i.project_id where ` +
-		strings.Join(conds, " and ") + ` order by i.priority desc, i.created_at asc`
+		strings.Join(conds, " and ") + ` order by i.priority desc, i.created_at asc, i.id asc`
 	return query, args
 }
 
