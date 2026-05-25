@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
 import CodexUsagePanel from '../components/CodexUsagePanel';
+import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import {
   selectBackendOnline,
   selectIssues,
@@ -88,6 +89,8 @@ export default function Dashboard({
           </button>
         </div>
       )}
+
+      <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
 
       {/* 统计指标网格 */}
       <div className="grid-cols-3">
