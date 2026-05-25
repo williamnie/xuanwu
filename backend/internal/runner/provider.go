@@ -101,3 +101,11 @@ func (r *Runner) resolveApproval(
 	}
 	return capability.ResolveApproval(ctx, requestID, decision)
 }
+
+func (r *Runner) pendingApprovals(ctx context.Context) ([]agent.PendingApproval, error) {
+	capability, ok := r.agent.(agent.ApprovalLister)
+	if !ok {
+		return nil, agent.ErrCapabilityUnsupported
+	}
+	return capability.PendingApprovals(ctx)
+}

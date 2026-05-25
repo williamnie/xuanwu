@@ -81,6 +81,14 @@ type ApprovalDecision struct {
 	Scope    string `json:"scope,omitempty"`
 }
 
+type PendingApproval struct {
+	ID       string         `json:"id"`
+	Method   string         `json:"method"`
+	Params   map[string]any `json:"params"`
+	ThreadID string         `json:"thread_id,omitempty"`
+	TurnID   string         `json:"turn_id,omitempty"`
+}
+
 type Client interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -92,6 +100,7 @@ type Client interface {
 	ThreadSetName(ctx context.Context, threadID, name string) error
 	TurnStart(ctx context.Context, threadID string, input []UserInput, options TurnOptions) (string, error)
 	InterruptTurn(ctx context.Context, threadID, turnID string) error
+	PendingApprovals(ctx context.Context) ([]PendingApproval, error)
 	ResolveApproval(ctx context.Context, requestID string, decision ApprovalDecision) error
 	Events() <-chan Event
 }

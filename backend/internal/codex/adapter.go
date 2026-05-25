@@ -24,6 +24,7 @@ type Adapter struct {
 	stdin            io.WriteCloser
 	pending          map[int64]chan rpcResponse
 	pendingApprovals map[string]chan ApprovalDecision
+	approvalRecords  map[string]approvalRecord
 	events           chan Event
 }
 
@@ -32,10 +33,16 @@ type rpcResponse struct {
 	Err    error
 }
 
+type approvalRecord struct {
+	seq      int64
+	approval PendingApproval
+}
+
 func NewAdapter(command string, args []string) *Adapter {
 	return &Adapter{
 		command: command, args: args, pending: map[int64]chan rpcResponse{},
-		pendingApprovals: map[string]chan ApprovalDecision{}, events: make(chan Event, 256),
+		pendingApprovals: map[string]chan ApprovalDecision{}, approvalRecords: map[string]approvalRecord{},
+		events: make(chan Event, 256),
 	}
 }
 

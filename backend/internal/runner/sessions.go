@@ -70,6 +70,9 @@ func (r *Runner) ListSessions(ctx context.Context, input agent.SessionListInput)
 	if err := r.applySessionOrigin(ctx, res.Data); err != nil {
 		return agent.SessionListResult{}, err
 	}
+	if err := r.applyPendingApprovalState(ctx, res.Data); err != nil {
+		return agent.SessionListResult{}, err
+	}
 	applyCodexSessionIdentity(res.Data)
 	return res, nil
 }
@@ -90,6 +93,9 @@ func (r *Runner) ReadSession(ctx context.Context, threadID string) (agent.Sessio
 	}
 	sessions := []agent.Session{res}
 	if err := r.applySessionOrigin(ctx, sessions); err != nil {
+		return agent.Session{}, err
+	}
+	if err := r.applyPendingApprovalState(ctx, sessions); err != nil {
 		return agent.Session{}, err
 	}
 	applyCodexSessionIdentity(sessions)
@@ -297,6 +303,36 @@ func (r *Runner) applySessionOrigin(ctx context.Context, sessions []agent.Sessio
 		}
 	}
 	return nil
+}
+
+func (r *Runner) applyPendingApprovalState(ctx context.Context, sessions []agent.Session) error {
+	pending, err := r.pendingApprovals(ctx)
+	if err != nil {
+		if errors.Is(err, agent.ErrCapabilityUnsupported) {
+			return nil
+		}
+		return err
+	}
+	byThread := pendingApprovalsByThread(pending)
+	for i := range sessions {
+		threadID := sessionThreadID(sessions[i], sessions[i].ProviderSessionID)
+		if approvals := byThread[threadID]; len(approvals) > 0 {
+			sessions[i].PendingApprovals = approvals
+			sessions[i].IsRunning = true
+		}
+	}
+	return nil
+}
+
+func pendingApprovalsByThread(pending []agent.PendingApproval) map[string][]agent.PendingApproval {
+	byThread := map[string][]agent.PendingApproval{}
+	for _, approval := range pending {
+		if approval.ThreadID == "" {
+			continue
+		}
+		byThread[approval.ThreadID] = append(byThread[approval.ThreadID], approval)
+	}
+	return byThread
 }
 
 func isRunnerSession(session agent.Session, issueThreadIDs, knownRunnerThreadIDs map[string]bool) bool {

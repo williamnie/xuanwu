@@ -15,6 +15,14 @@ export function removeApprovalsForSession(queue, sessionId) {
   return queue.filter((item) => item.sessionId !== sessionId);
 }
 
+export function syncApprovalsForSession(queue, sessionId, requests) {
+  const withoutSession = removeApprovalsForSession(queue, sessionId);
+  return (requests || []).reduce(
+    (next, request) => enqueueApprovalNotice(next, { sessionId, request }),
+    withoutSession,
+  );
+}
+
 export function approvalsForSession(queue, sessionId) {
   return queue.filter((item) => item.sessionId === sessionId);
 }

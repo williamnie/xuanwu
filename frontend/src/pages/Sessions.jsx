@@ -15,6 +15,7 @@ import {
   hasApprovalForSession,
   removeApprovalRequest,
   removeApprovalsForSession,
+  syncApprovalsForSession,
 } from './sessions/approvalQueue';
 import {
   createQueuedSessionMessage,
@@ -324,6 +325,11 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setSelectedSession(detail);
       setSessionRunning(running);
       setSessions((prev) => syncSessionRuntimeInList(prev, detail, running));
+      setApprovalQueue((current) => syncApprovalsForSession(
+        current,
+        requestId,
+        normalizePendingApprovals(detail.pending_approvals),
+      ));
     } catch (err) {
       if (selectedIdRef.current !== requestId) return;
       toast.error(err.message || '读取 session 详情失败');
@@ -388,6 +394,10 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     detailRefreshTimer.current = window.setTimeout(loadSelected, SESSION_DETAIL_REFRESH_DELAY_MS);
   }, [loadSelected, selectedId]);
 
+  const refreshSelectedApprovals = useCallback(() => {
+    if (selectedIdRef.current) loadSelected(false);
+  }, [loadSelected]);
+
   useEffect(() => api.subscribeToEvents((event) => {
     const eventKey = eventSessionKey(event);
     if (isSessionFileEvent(event)) {
@@ -429,7 +439,14 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       });
       loadFirstPage();
     }
-  }), [loadFirstPage, loadSelected, scheduleListRefresh, scheduleSelectedRefresh, selectedId]);
+  }, undefined, refreshSelectedApprovals), [
+    loadFirstPage,
+    loadSelected,
+    refreshSelectedApprovals,
+    scheduleListRefresh,
+    scheduleSelectedRefresh,
+    selectedId,
+  ]);
 
   useEffect(() => () => {
     window.clearTimeout(detailRefreshTimer.current);
@@ -923,6 +940,17 @@ function parseApprovalPayload(payload) {
   }
 }
 
+function normalizePendingApprovals(requests) {
+  if (!Array.isArray(requests)) return [];
+  return requests
+    .map((request) => ({
+      id: request?.id || '',
+      method: request?.method || 'approval/requested',
+      params: request?.params || {},
+    }))
+    .filter((request) => request.id);
+}
+
 function parseApprovalResolvedPayload(payload) {
   try {
     const request = JSON.parse(payload || '{}');
@@ -1045,6 +1073,7 @@ function mergeSessions(prev, next) {
 
 function isSessionRunning(session) {
   if (!session) return false;
+  if (normalizePendingApprovals(session.pending_approvals).length > 0) return true;
   if (session.isRunning) return true;
   const value = sessionStatusValue(session.status);
   return ['running', 'inprogress', 'in-progress', 'streaming', 'busy'].includes(value);
@@ -1091,6 +1120,7 @@ function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detai
       status: detail.status ?? session.status,
       origin: detail.origin ?? session.origin,
       updatedAt: detail.updatedAt ?? session.updatedAt,
+      pending_approvals: detail.pending_approvals || [],
       isRunning: running,
     };
   });

@@ -7,20 +7,21 @@ import (
 )
 
 type fakeCodex struct {
-	events        chan agent.Event
-	setName       string
-	threadInputs  []agent.ThreadInput
-	turnInputs    []agent.UserInput
-	turnOptions   []agent.TurnOptions
-	resumeSession agent.Session
-	manualEvents  bool
-	autoTurns     int
-	startErr      error
-	threadErr     error
-	resumeErr     error
-	turnErr       error
-	interrupts    chan [2]string
-	resumeCalls   int
+	events           chan agent.Event
+	setName          string
+	threadInputs     []agent.ThreadInput
+	turnInputs       []agent.UserInput
+	turnOptions      []agent.TurnOptions
+	resumeSession    agent.Session
+	pendingApprovals []agent.PendingApproval
+	manualEvents     bool
+	autoTurns        int
+	startErr         error
+	threadErr        error
+	resumeErr        error
+	turnErr          error
+	interrupts       chan [2]string
+	resumeCalls      int
 }
 
 func (f *fakeCodex) Name() string                { return "codex" }
@@ -88,6 +89,9 @@ func (f *fakeCodex) InterruptTurn(_ context.Context, threadID, turnID string) er
 }
 func (f *fakeCodex) ResolveApproval(context.Context, string, agent.ApprovalDecision) error {
 	return nil
+}
+func (f *fakeCodex) PendingApprovals(context.Context) ([]agent.PendingApproval, error) {
+	return f.pendingApprovals, nil
 }
 
 func (f *fakeCodex) Events() <-chan agent.Event {

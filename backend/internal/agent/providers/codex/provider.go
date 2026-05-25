@@ -82,6 +82,11 @@ func (p *Provider) ResolveApproval(
 	return p.client.ResolveApproval(ctx, requestID, toCodexApprovalDecision(decision))
 }
 
+func (p *Provider) PendingApprovals(ctx context.Context) ([]agent.PendingApproval, error) {
+	pending, err := p.client.PendingApprovals(ctx)
+	return fromCodexPendingApprovals(pending), err
+}
+
 func (p *Provider) Events() <-chan agent.Event {
 	p.once.Do(func() { go p.convertEvents() })
 	return p.events

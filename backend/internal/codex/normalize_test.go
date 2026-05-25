@@ -140,3 +140,31 @@ func TestResolveApprovalDeliversPendingDecision(t *testing.T) {
 	}
 	adapter.unregisterApproval(requestID)
 }
+
+func TestPendingApprovalsListsRuntimeRequestsAndDropsResolved(t *testing.T) {
+	adapter := NewAdapter("", nil)
+	firstID, _ := adapter.registerApproval("item/commandExecution/requestApproval",
+		json.RawMessage(`{"threadId":"t1","turnId":"u1","command":"go test ./..."}`))
+	secondID, _ := adapter.registerApproval("item/fileChange/requestApproval",
+		json.RawMessage(`{"threadId":"t2","turnId":"u2","changes":[{"path":"demo.go"}]}`))
+
+	pending, err := adapter.PendingApprovals(context.Background())
+	if err != nil {
+		t.Fatalf("pending approvals: %v", err)
+	}
+	if len(pending) != 2 || pending[0].ID != firstID || pending[1].ID != secondID ||
+		pending[0].ThreadID != "t1" || pending[1].TurnID != "u2" {
+		t.Fatalf("pending approvals snapshot = %+v", pending)
+	}
+
+	if err := adapter.ResolveApproval(context.Background(), firstID, ApprovalDecision{Decision: "deny"}); err != nil {
+		t.Fatalf("resolve first approval: %v", err)
+	}
+	pending, err = adapter.PendingApprovals(context.Background())
+	if err != nil {
+		t.Fatalf("pending approvals after resolve: %v", err)
+	}
+	if len(pending) != 1 || pending[0].ID != secondID {
+		t.Fatalf("pending approvals after resolve = %+v", pending)
+	}
+}

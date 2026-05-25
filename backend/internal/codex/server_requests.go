@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 )
@@ -33,16 +34,31 @@ func (a *Adapter) handleApprovalRequest(msg wireMessage) {
 func (a *Adapter) ResolveApproval(ctx context.Context, requestID string, decision ApprovalDecision) error {
 	a.mu.Lock()
 	ch := a.pendingApprovals[requestID]
-	a.mu.Unlock()
 	if ch == nil {
+		a.mu.Unlock()
 		return fmt.Errorf("approval request %q not found", requestID)
 	}
 	select {
 	case <-ctx.Done():
+		a.mu.Unlock()
 		return ctx.Err()
 	case ch <- decision:
+		delete(a.pendingApprovals, requestID)
+		delete(a.approvalRecords, requestID)
+		a.mu.Unlock()
 		return nil
 	}
+}
+
+func (a *Adapter) PendingApprovals(ctx context.Context) ([]PendingApproval, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return approvalSnapshot(a.approvalRecords), nil
 }
 
 func (a *Adapter) registerApproval(method string, params json.RawMessage) (string, chan ApprovalDecision) {
@@ -51,6 +67,9 @@ func (a *Adapter) registerApproval(method string, params json.RawMessage) (strin
 	requestID := fmt.Sprintf("approval-%d", a.nextApprovalID)
 	ch := make(chan ApprovalDecision, 1)
 	a.pendingApprovals[requestID] = ch
+	a.approvalRecords[requestID] = approvalRecord{
+		seq: a.nextApprovalID, approval: pendingApproval(requestID, method, params),
+	}
 	a.mu.Unlock()
 	a.emit(approvalRequestedEvent(requestID, method, params))
 	return requestID, ch
@@ -59,7 +78,21 @@ func (a *Adapter) registerApproval(method string, params json.RawMessage) (strin
 func (a *Adapter) unregisterApproval(requestID string) {
 	a.mu.Lock()
 	delete(a.pendingApprovals, requestID)
+	delete(a.approvalRecords, requestID)
 	a.mu.Unlock()
+}
+
+func approvalSnapshot(records map[string]approvalRecord) []PendingApproval {
+	items := make([]approvalRecord, 0, len(records))
+	for _, record := range records {
+		items = append(items, record)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].seq < items[j].seq })
+	pending := make([]PendingApproval, len(items))
+	for i := range items {
+		pending[i] = items[i].approval
+	}
+	return pending
 }
 
 func staticServerRequestResult(method string) (map[string]any, bool) {
@@ -106,6 +139,15 @@ func approvalRequestedEvent(requestID, method string, params json.RawMessage) Ev
 		Provider: events.ProviderCodex, RawMethod: method, RawPayload: string(params),
 		ThreadID: stringField(decoded, "threadId"), TurnID: stringField(decoded, "turnId"),
 		Payload: string(payload),
+	}
+}
+
+func pendingApproval(requestID, method string, params json.RawMessage) PendingApproval {
+	var decoded map[string]any
+	_ = json.Unmarshal(params, &decoded)
+	return PendingApproval{
+		ID: requestID, Method: method, Params: decoded,
+		ThreadID: stringField(decoded, "threadId"), TurnID: stringField(decoded, "turnId"),
 	}
 }
 

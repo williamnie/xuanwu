@@ -24,8 +24,9 @@ import (
 )
 
 type noopCodex struct {
-	ch        chan agent.Event
-	listInput *agent.SessionListInput
+	ch               chan agent.Event
+	listInput        *agent.SessionListInput
+	pendingApprovals []agent.PendingApproval
 }
 
 func (n noopCodex) Name() string                { return "codex" }
@@ -60,6 +61,9 @@ func (n noopCodex) StartTurn(context.Context, string, []agent.UserInput, agent.T
 func (n noopCodex) InterruptTurn(context.Context, string, string) error { return nil }
 func (n noopCodex) ResolveApproval(context.Context, string, agent.ApprovalDecision) error {
 	return nil
+}
+func (n noopCodex) PendingApprovals(context.Context) ([]agent.PendingApproval, error) {
+	return n.pendingApprovals, nil
 }
 func (n noopCodex) Events() <-chan agent.Event { return n.ch }
 
@@ -371,6 +375,22 @@ func TestSessionAPI(t *testing.T) {
 		created.ProviderSessionID != "thread-new" || created.ProviderTurnID != "turn-new" ||
 		created.ThreadID != "thread-new" || created.TurnID != "turn-new" {
 		t.Fatalf("unexpected created session: %+v", created)
+	}
+}
+
+func TestSessionDetailIncludesPendingApprovals(t *testing.T) {
+	srv := newTestServerWithCodex(t, noopCodex{
+		ch: make(chan agent.Event),
+		pendingApprovals: []agent.PendingApproval{{
+			ID: "approval-1", Method: "item/commandExecution/requestApproval",
+			ThreadID: "thread-1", TurnID: "turn-1", Params: map[string]any{"command": "go test ./..."},
+		}},
+	})
+
+	detail := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-1")
+	if len(detail.PendingApprovals) != 1 || detail.PendingApprovals[0].ID != "approval-1" ||
+		detail.PendingApprovals[0].ThreadID != "thread-1" || !detail.IsRunning {
+		t.Fatalf("session detail pending approvals = %+v", detail)
 	}
 }
 

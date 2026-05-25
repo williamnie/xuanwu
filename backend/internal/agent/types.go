@@ -68,6 +68,14 @@ type ApprovalDecision struct {
 	Scope    string `json:"scope,omitempty"`
 }
 
+type PendingApproval struct {
+	ID       string         `json:"id"`
+	Method   string         `json:"method"`
+	Params   map[string]any `json:"params"`
+	ThreadID string         `json:"thread_id,omitempty"`
+	TurnID   string         `json:"turn_id,omitempty"`
+}
+
 type SessionListInput struct {
 	Cursor string
 	Limit  int
@@ -80,27 +88,28 @@ type SessionListResult struct {
 }
 
 type Session struct {
-	ID                string          `json:"id"`
-	SessionID         string          `json:"sessionId,omitempty"`
-	Provider          string          `json:"provider,omitempty"`
-	ProviderSessionID string          `json:"provider_session_id,omitempty"`
-	ForkedFromID      *string         `json:"forkedFromId,omitempty"`
-	Preview           string          `json:"preview,omitempty"`
-	Ephemeral         bool            `json:"ephemeral"`
-	ModelProvider     string          `json:"modelProvider,omitempty"`
-	CreatedAt         int64           `json:"createdAt,omitempty"`
-	UpdatedAt         int64           `json:"updatedAt,omitempty"`
-	Status            json.RawMessage `json:"status,omitempty"`
-	Path              string          `json:"path,omitempty"`
-	CWD               string          `json:"cwd,omitempty"`
-	CLIVersion        string          `json:"cliVersion,omitempty"`
-	Source            string          `json:"source,omitempty"`
-	ThreadSource      *string         `json:"threadSource,omitempty"`
-	AgentNickname     *string         `json:"agentNickname,omitempty"`
-	AgentRole         *string         `json:"agentRole,omitempty"`
-	GitInfo           json.RawMessage `json:"gitInfo,omitempty"`
-	Name              *string         `json:"name,omitempty"`
-	Turns             json.RawMessage `json:"turns,omitempty"`
-	IsRunning         bool            `json:"isRunning,omitempty"`
-	Origin            string          `json:"origin,omitempty"`
+	ID                string            `json:"id"`
+	SessionID         string            `json:"sessionId,omitempty"`
+	Provider          string            `json:"provider,omitempty"`
+	ProviderSessionID string            `json:"provider_session_id,omitempty"`
+	ForkedFromID      *string           `json:"forkedFromId,omitempty"`
+	Preview           string            `json:"preview,omitempty"`
+	Ephemeral         bool              `json:"ephemeral"`
+	ModelProvider     string            `json:"modelProvider,omitempty"`
+	CreatedAt         int64             `json:"createdAt,omitempty"`
+	UpdatedAt         int64             `json:"updatedAt,omitempty"`
+	Status            json.RawMessage   `json:"status,omitempty"`
+	Path              string            `json:"path,omitempty"`
+	CWD               string            `json:"cwd,omitempty"`
+	CLIVersion        string            `json:"cliVersion,omitempty"`
+	Source            string            `json:"source,omitempty"`
+	ThreadSource      *string           `json:"threadSource,omitempty"`
+	AgentNickname     *string           `json:"agentNickname,omitempty"`
+	AgentRole         *string           `json:"agentRole,omitempty"`
+	GitInfo           json.RawMessage   `json:"gitInfo,omitempty"`
+	Name              *string           `json:"name,omitempty"`
+	Turns             json.RawMessage   `json:"turns,omitempty"`
+	IsRunning         bool              `json:"isRunning,omitempty"`
+	Origin            string            `json:"origin,omitempty"`
+	PendingApprovals  []PendingApproval `json:"pending_approvals,omitempty"`
 }

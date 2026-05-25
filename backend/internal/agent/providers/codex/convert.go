@@ -41,6 +41,17 @@ func toCodexApprovalDecision(decision agent.ApprovalDecision) codexclient.Approv
 	return codexclient.ApprovalDecision{Decision: decision.Decision, Scope: decision.Scope}
 }
 
+func fromCodexPendingApprovals(pending []codexclient.PendingApproval) []agent.PendingApproval {
+	out := make([]agent.PendingApproval, len(pending))
+	for i := range pending {
+		out[i] = agent.PendingApproval{
+			ID: pending[i].ID, Method: pending[i].Method, Params: pending[i].Params,
+			ThreadID: pending[i].ThreadID, TurnID: pending[i].TurnID,
+		}
+	}
+	return out
+}
+
 func fromCodexModelListResult(result codexclient.ModelListResult) agent.ModelListResult {
 	models := make([]agent.Model, len(result.Data))
 	for i := range result.Data {

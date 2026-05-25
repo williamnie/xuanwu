@@ -96,3 +96,7 @@ type ApprovalResolver interface {
 		decision ApprovalDecision,
 	) error
 }
+
+type ApprovalLister interface {
+	PendingApprovals(ctx context.Context) ([]PendingApproval, error)
+}

@@ -7,6 +7,7 @@ import {
   hasApprovalForSession,
   removeApprovalRequest,
   removeApprovalsForSession,
+  syncApprovalsForSession,
 } from './approvalQueue.js';
 
 test('approval queue keeps requests FIFO per session and deduplicates ids', () => {
@@ -36,4 +37,16 @@ test('approval queue removes one resolved request or a stopped session', () => {
   const afterStop = removeApprovalsForSession(afterResolve, 'codex:a');
   assert.equal(hasApprovalForSession(afterStop, 'codex:a'), false);
   assert.deepEqual(afterStop.map((item) => item.request.id), ['b-1']);
+});
+
+test('approval queue sync replaces only the selected session snapshot', () => {
+  const queue = [
+    { sessionId: 'codex:a', request: { id: 'stale-a' } },
+    { sessionId: 'codex:b', request: { id: 'keep-b' } },
+  ];
+
+  const synced = syncApprovalsForSession(queue, 'codex:a', [{ id: 'fresh-a' }, { id: 'fresh-a' }]);
+
+  assert.deepEqual(approvalsForSession(synced, 'codex:a').map((item) => item.request.id), ['fresh-a']);
+  assert.deepEqual(approvalsForSession(synced, 'codex:b').map((item) => item.request.id), ['keep-b']);
 });

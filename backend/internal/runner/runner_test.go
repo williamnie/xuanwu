@@ -190,6 +190,27 @@ func TestListSessionsMarksManualSessionRunning(t *testing.T) {
 	}
 }
 
+func TestListSessionsIncludesPendingApprovals(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{
+		events: make(chan agent.Event, 4),
+		pendingApprovals: []agent.PendingApproval{{
+			ID: "approval-1", Method: "item/commandExecution/requestApproval",
+			ThreadID: "thread-1", TurnID: "turn-1", Params: map[string]any{"command": "go test ./..."},
+		}},
+	}
+	r := New(st, events.NewBus(), fake)
+
+	list, err := r.ListSessions(context.Background(), agent.SessionListInput{})
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(list.Data) != 1 || len(list.Data[0].PendingApprovals) != 1 ||
+		list.Data[0].PendingApprovals[0].ID != "approval-1" || !list.Data[0].IsRunning {
+		t.Fatalf("session pending approvals = %+v", list.Data)
+	}
+}
+
 func TestListSessionsMarksIssueRunnerThreadRunning(t *testing.T) {
 	st := openRunnerStore(t)
 	fake := &fakeCodex{events: make(chan agent.Event, 4)}
