@@ -120,24 +120,37 @@ func TestCreateSessionPassesModelEffortAndPermissions(t *testing.T) {
 
 func TestCreateSessionIncludesReferenceSummaryAndPersistsMetadata(t *testing.T) {
 	st := openRunnerStore(t)
+	ctx := context.Background()
 	projectRoot := t.TempDir()
 	if err := os.WriteFile(filepath.Join(projectRoot, "notes.md"), []byte("context"), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
-	project, err := st.CreateProject(context.Background(), store.Project{ID: "demo", CWD: projectRoot})
+	project, err := st.CreateProject(ctx, store.Project{ID: "demo", CWD: projectRoot})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	issue, err := st.CreateIssue(context.Background(), store.Issue{
+	issue, err := st.CreateIssue(ctx, store.Issue{
 		ProjectID: project.ID, Title: "Fix composer refs", Status: store.StatusTodo,
+		Description:     "让 @issue 注入真实 issue 描述",
+		SourceSessionID: "codex:thread-source", SourceTurnID: "turn-source",
 	})
 	if err != nil {
 		t.Fatalf("create issue: %v", err)
 	}
+	claimed, ok, err := st.ClaimNextIssue(ctx, project.ID)
+	if err != nil || !ok || claimed.ID != issue.ID {
+		t.Fatalf("claim issue: issue=%+v ok=%v err=%v", claimed, ok, err)
+	}
+	if err := st.UpdateIssueRuntime(ctx, issue.ID, "thread-ref", "turn-ref"); err != nil {
+		t.Fatalf("update issue runtime: %v", err)
+	}
+	if _, err := st.SetIssueStatus(ctx, issue.ID, store.StatusFailed, "runner boom"); err != nil {
+		t.Fatalf("set issue failed: %v", err)
+	}
 	fake := &fakeCodex{events: make(chan agent.Event, 4)}
 	r := New(st, events.NewBus(), fake)
 
-	_, err = r.CreateSession(context.Background(), SessionCreateInput{
+	_, err = r.CreateSession(ctx, SessionCreateInput{
 		ProjectID: project.ID,
 		Prompt:    "继续处理",
 		References: []SessionReference{
@@ -153,6 +166,10 @@ func TestCreateSessionIncludesReferenceSummaryAndPersistsMetadata(t *testing.T) 
 		"附加上下文引用",
 		"issue #" + fmt.Sprint(issue.ID),
 		"Fix composer refs",
+		"让 @issue 注入真实 issue 描述",
+		"latest run: failed",
+		"error: runner boom",
+		"source session: thread-source",
 		"file notes.md",
 		"用户输入：\n继续处理",
 	} {
@@ -166,6 +183,50 @@ func TestCreateSessionIncludesReferenceSummaryAndPersistsMetadata(t *testing.T) 
 	}
 	if len(records) != 1 || !strings.Contains(records[0].ReferencesJSON, "Fix composer refs") {
 		t.Fatalf("reference metadata not persisted: %+v", records)
+	}
+}
+
+func TestProjectReferenceAddsContextWithoutSwitchingExecutionProject(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	execRoot := t.TempDir()
+	contextRoot := t.TempDir()
+	execProject, err := st.CreateProject(ctx, store.Project{ID: "runner", CWD: execRoot})
+	if err != nil {
+		t.Fatalf("create exec project: %v", err)
+	}
+	contextProject, err := st.CreateProject(ctx, store.Project{ID: "movo", Name: "Movo Web", CWD: contextRoot})
+	if err != nil {
+		t.Fatalf("create context project: %v", err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	_, err = r.CreateSession(ctx, SessionCreateInput{
+		ProjectID: execProject.ID,
+		Prompt:    "对比项目上下文",
+		References: []SessionReference{
+			{Type: "project", ID: contextProject.ID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if len(fake.threadInputs) != 1 || fake.threadInputs[0].CWD != execRoot {
+		t.Fatalf("@project reference must not switch execution cwd: %+v", fake.threadInputs)
+	}
+	prompt := stringFromUserInputs(fake.turnInputs)
+	for _, want := range []string{
+		"project movo",
+		"Movo Web",
+		"context only",
+		"不切换执行项目",
+		"provider: codex",
+		"capabilities:",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("project reference summary missing %q:\n%s", want, prompt)
+		}
 	}
 }
 

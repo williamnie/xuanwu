@@ -20,6 +20,23 @@ test('builds slash commands and readable project/issue references', () => {
   assert.match(issueSuggestion.searchText, /issue 69 #69/);
 });
 
+test('prioritizes issues before projects for empty @ suggestions', () => {
+  const projects = Array.from({ length: 9 }, (_, index) => ({
+    id: `project-${index + 1}`,
+    name: `Project ${index + 1}`,
+    cwd: `/repo/${index + 1}`,
+  }));
+  const suggestions = buildSessionComposerSuggestions({
+    projects,
+    issues: [{ id: 92, title: '真实上下文引用', status: 'triage', project_id: 'runner' }],
+  });
+
+  const mentionLabels = suggestions.filter((item) => item.trigger === '@').map((item) => item.label);
+
+  assert.equal(mentionLabels[0], '#92 真实上下文引用');
+  assert.match(mentionLabels[1], /@project Project 1/);
+});
+
 test('slash suggestions expose structured command payloads', () => {
   const suggestions = buildSessionComposerSuggestions({
     currentProject: { id: 'runner', name: 'Codex Runner' },

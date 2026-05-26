@@ -87,8 +87,8 @@ func (r *Runner) resolveIssueReference(ctx context.Context, ref SessionReference
 	}
 	return ResolvedSessionReference{
 		Type: "issue", ID: fmt.Sprint(issue.ID), Label: issue.Title,
-		Summary:  fmt.Sprintf("issue #%d [%s] %s (project: %s)", issue.ID, issue.Status, issue.Title, issue.ProjectID),
-		Metadata: map[string]any{"project_id": issue.ProjectID, "status": issue.Status},
+		Summary:  issueReferenceSummary(issue, latestIssueRun(ctx, r.store, issue.ID)),
+		Metadata: issueReferenceMetadata(issue),
 	}, nil
 }
 
@@ -106,8 +106,8 @@ func (r *Runner) resolveProjectReference(ctx context.Context, ref SessionReferen
 	}
 	return ResolvedSessionReference{
 		Type: "project", ID: project.ID, Label: project.Name,
-		Summary:  fmt.Sprintf("project %s (%s)", project.ID, project.CWD),
-		Metadata: map[string]any{"cwd": project.CWD, "provider": project.Provider},
+		Summary:  projectReferenceSummary(project),
+		Metadata: projectReferenceMetadata(project),
 	}, nil
 }
 

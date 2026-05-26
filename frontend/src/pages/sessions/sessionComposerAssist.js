@@ -6,8 +6,8 @@ export function buildSessionComposerSuggestions({ projects = [], issues = [], cu
     buildStatusCommand(linkedIssues),
     buildIssueCommand(currentProject),
     buildRunCommand(linkedIssues),
-    ...projectReferenceSuggestions(projects),
     ...issueReferenceSuggestions(issues),
+    ...projectReferenceSuggestions(projects),
   ];
 }
 
