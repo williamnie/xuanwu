@@ -33,6 +33,10 @@ export default function SessionComposer({
   onCancelQueuedMessage,
   onRetryQueuedMessage,
   suggestions = [],
+  referenceDetails = [],
+  onAttachReference = null,
+  onRemoveReference = null,
+  hasInvalidReferences = false,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
@@ -40,7 +44,8 @@ export default function SessionComposer({
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
   const hasQueuedMessages = queuedMessages.length > 0;
   const interrupting = isInterruptPending(interruptState, selectedId);
-  const canSubmitMessage = Boolean(selectedId && value.trim() && !sending && !interrupting);
+  const hasContent = Boolean(value.trim() || referenceDetails.length);
+  const canSubmitMessage = Boolean(selectedId && hasContent && !hasInvalidReferences && !sending && !interrupting);
   const submitFromEditor = () => onSubmit({ preventDefault() {} });
   return (
     <form className="session-composer" onSubmit={onSubmit}>
@@ -70,13 +75,16 @@ export default function SessionComposer({
         )}
         onSubmitKey={canSubmitMessage ? submitFromEditor : null}
         suggestions={suggestions}
+        referenceDetails={referenceDetails}
+        onAttachReference={onAttachReference}
+        onRemoveReference={onRemoveReference}
         actions={(
           <ComposerActions
             sending={sending}
             running={running}
             interrupting={interrupting}
             selectedId={selectedId}
-            canSend={Boolean(value.trim())}
+            canSend={hasContent && !hasInvalidReferences}
             hasQueuedMessages={hasQueuedMessages}
             onStop={onStop}
           />
@@ -111,7 +119,7 @@ function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
             <li key={item.id} className={`session-message-queue-item ${item.status}`}>
               <div className="session-message-queue-main">
                 <span className="session-message-queue-badge">{queueStatusLabel(item.status, index)}</span>
-                <span className="session-message-queue-text">{item.prompt}</span>
+                <span className="session-message-queue-text">{queueMessagePreview(item)}</span>
                 {item.error && <span className="session-message-queue-error">{item.error}</span>}
               </div>
               <div className="session-message-queue-actions">
@@ -126,6 +134,13 @@ function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
       )}
     </div>
   );
+}
+
+function queueMessagePreview(item) {
+  const text = String(item?.prompt || '').trim();
+  if (text) return text;
+  const refs = Array.isArray(item?.references) ? item.references : [];
+  return refs.length ? `已附加 ${refs.length} 个 references` : '';
 }
 
 function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, effectiveModel }) {

@@ -3,6 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -321,6 +325,68 @@ func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	if message["thread_id"] != "thread-1" || message["turn_id"] != "turn-new" {
 		t.Fatalf("unexpected session message: %+v", message)
 	}
+}
+
+func TestSessionAPIReferencesFlow(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "notes.md"), []byte("context"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	provider := &sessionReferenceAPICodex{
+		noopCodex: noopCodex{ch: make(chan agent.Event)},
+		cwd:       projectRoot,
+	}
+	srv := newTestServerWithCodex(t, provider)
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": projectRoot, "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": project.ID, "title": "API refs", "status": store.StatusTodo,
+	})
+	issueID := strconv.FormatInt(issue.ID, 10)
+
+	created := postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
+		"project_id": project.ID,
+		"prompt":     "继续处理",
+		"references": []map[string]any{
+			{"type": "issue", "id": issueID},
+			{"type": "file", "path": "notes.md"},
+		},
+	})
+	if created.TurnID == "" || !strings.Contains(apiUserInputText(provider.turnInput), "API refs") {
+		t.Fatalf("create references not passed to Codex: result=%+v prompt=%s", created, apiUserInputText(provider.turnInput))
+	}
+	records, err := srv.store.ListSessionTurnReferences(context.Background(), created.ProviderSessionID, created.ProviderTurnID)
+	if err != nil || len(records) != 1 {
+		t.Fatalf("create references metadata = %+v err=%v", records, err)
+	}
+
+	provider.turnInput = nil
+	message := postJSON[map[string]string](t, srv, "/api/sessions/codex:thread-1/messages", map[string]any{
+		"prompt": "继续消息",
+		"references": []map[string]any{
+			{"type": "issue", "id": issueID},
+			{"type": "file", "path": "notes.md"},
+		},
+	})
+	if message["turn_id"] == "" || !strings.Contains(apiUserInputText(provider.turnInput), "file notes.md") {
+		t.Fatalf("message references not passed to Codex: result=%+v prompt=%s", message, apiUserInputText(provider.turnInput))
+	}
+}
+
+type sessionReferenceAPICodex struct {
+	noopCodex
+	cwd       string
+	turnInput []agent.UserInput
+}
+
+func (c *sessionReferenceAPICodex) ResumeThread(context.Context, string) (agent.Session, error) {
+	return agent.Session{ID: "thread-1", CWD: c.cwd}, nil
+}
+
+func (c *sessionReferenceAPICodex) StartTurn(_ context.Context, _ string, input []agent.UserInput, _ agent.TurnOptions) (string, error) {
+	c.turnInput = input
+	return "turn-new", nil
 }
 
 type interruptCaptureCodex struct {

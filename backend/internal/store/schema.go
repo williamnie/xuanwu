@@ -78,6 +78,16 @@ create table if not exists issue_runs (
   foreign key(issue_id) references issues(id) on delete cascade
 );`
 
+const sessionTurnReferencesSchema = `
+create table if not exists session_turn_references (
+  id integer primary key autoincrement,
+  provider text not null default 'codex',
+  provider_session_id text not null,
+  provider_turn_id text not null,
+  references_json text not null default '[]',
+  created_at text not null
+);`
+
 const cronTasksSchema = `
 create table if not exists cron_tasks (
   id integer primary key autoincrement,

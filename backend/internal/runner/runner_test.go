@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,6 +116,164 @@ func TestCreateSessionPassesModelEffortAndPermissions(t *testing.T) {
 		fake.turnOptions[0].ApprovalPolicy != "danger-only" || fake.turnOptions[0].Sandbox != "read-only" {
 		t.Fatalf("turn options = %+v", fake.turnOptions)
 	}
+}
+
+func TestCreateSessionIncludesReferenceSummaryAndPersistsMetadata(t *testing.T) {
+	st := openRunnerStore(t)
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "notes.md"), []byte("context"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	project, err := st.CreateProject(context.Background(), store.Project{ID: "demo", CWD: projectRoot})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	issue, err := st.CreateIssue(context.Background(), store.Issue{
+		ProjectID: project.ID, Title: "Fix composer refs", Status: store.StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	_, err = r.CreateSession(context.Background(), SessionCreateInput{
+		ProjectID: project.ID,
+		Prompt:    "继续处理",
+		References: []SessionReference{
+			{Type: "issue", ID: fmt.Sprint(issue.ID)},
+			{Type: "file", Path: "notes.md"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	prompt := stringFromUserInputs(fake.turnInputs)
+	for _, want := range []string{
+		"附加上下文引用",
+		"issue #" + fmt.Sprint(issue.ID),
+		"Fix composer refs",
+		"file notes.md",
+		"用户输入：\n继续处理",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("reference summary missing %q:\n%s", want, prompt)
+		}
+	}
+	records, err := st.ListSessionTurnReferences(context.Background(), "thread-1", "turn-1")
+	if err != nil {
+		t.Fatalf("list references: %v", err)
+	}
+	if len(records) != 1 || !strings.Contains(records[0].ReferencesJSON, "Fix composer refs") {
+		t.Fatalf("reference metadata not persisted: %+v", records)
+	}
+}
+
+func TestStartSessionTurnIncludesReferenceSummaryAndPersistsMetadata(t *testing.T) {
+	st := openRunnerStore(t)
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "notes.md"), []byte("context"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	project, err := st.CreateProject(context.Background(), store.Project{ID: "demo", CWD: projectRoot})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	issue, err := st.CreateIssue(context.Background(), store.Issue{
+		ProjectID: project.ID, Title: "Message refs", Status: store.StatusTodo,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	fake := &fakeCodex{
+		events:        make(chan agent.Event, 4),
+		resumeSession: agent.Session{ID: "thread-1", CWD: projectRoot},
+	}
+	r := New(st, events.NewBus(), fake)
+
+	_, err = r.StartSessionTurn(context.Background(), "thread-1", SessionTurnInput{
+		Prompt: "继续消息",
+		References: []SessionReference{
+			{Type: "issue", ID: fmt.Sprint(issue.ID)},
+			{Type: "file", Path: "notes.md"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("start session turn: %v", err)
+	}
+	prompt := stringFromUserInputs(fake.turnInputs)
+	for _, want := range []string{"附加上下文引用", "Message refs", "file notes.md", "用户输入：\n继续消息"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("reference summary missing %q:\n%s", want, prompt)
+		}
+	}
+	records, err := st.ListSessionTurnReferences(context.Background(), "thread-1", "turn-1")
+	if err != nil {
+		t.Fatalf("list references: %v", err)
+	}
+	if len(records) != 1 || !strings.Contains(records[0].ReferencesJSON, "Message refs") {
+		t.Fatalf("reference metadata not persisted: %+v", records)
+	}
+}
+
+func TestSessionReferenceValidationFailures(t *testing.T) {
+	t.Run("rejects invalid path traversal", func(t *testing.T) {
+		st := openRunnerStore(t)
+		project, err := st.CreateProject(context.Background(), store.Project{ID: "demo", CWD: t.TempDir()})
+		if err != nil {
+			t.Fatalf("create project: %v", err)
+		}
+		fake := &fakeCodex{events: make(chan agent.Event, 4)}
+		r := New(st, events.NewBus(), fake)
+
+		_, err = r.CreateSession(context.Background(), SessionCreateInput{
+			ProjectID: project.ID,
+			Prompt:    "hello",
+			References: []SessionReference{
+				{Type: "file", Path: "../secret.txt"},
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "不在当前项目 cwd 内") {
+			t.Fatalf("err = %v, want cwd boundary error", err)
+		}
+		if len(fake.threadInputs) != 0 || len(fake.turnInputs) != 0 {
+			t.Fatalf("invalid references must block before codex: threads=%+v turns=%+v", fake.threadInputs, fake.turnInputs)
+		}
+	})
+
+	t.Run("rejects unknown type", func(t *testing.T) {
+		st := openRunnerStore(t)
+		fake := &fakeCodex{events: make(chan agent.Event, 4)}
+		r := New(st, events.NewBus(), fake)
+
+		_, err := r.CreateSession(context.Background(), SessionCreateInput{
+			CWD:    t.TempDir(),
+			Prompt: "hello",
+			References: []SessionReference{
+				{Type: "unknown", ID: "x"},
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "type \"unknown\" 不支持") {
+			t.Fatalf("err = %v, want unknown type error", err)
+		}
+	})
+
+	t.Run("rejects missing issue", func(t *testing.T) {
+		st := openRunnerStore(t)
+		fake := &fakeCodex{events: make(chan agent.Event, 4)}
+		r := New(st, events.NewBus(), fake)
+
+		_, err := r.CreateSession(context.Background(), SessionCreateInput{
+			CWD:    t.TempDir(),
+			Prompt: "hello",
+			References: []SessionReference{
+				{Type: "issue", ID: "404"},
+			},
+		})
+		if err == nil || !strings.Contains(err.Error(), "issue 404 不存在") {
+			t.Fatalf("err = %v, want missing issue error", err)
+		}
+	})
 }
 
 func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {

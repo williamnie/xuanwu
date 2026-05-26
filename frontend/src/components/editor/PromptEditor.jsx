@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
-import {
-  Bold,
-  Code,
-  Heading2,
-  ImagePlus,
-  Italic,
-  Link as LinkIcon,
-  List,
-  ListOrdered,
-  Plus,
-  Quote,
-} from 'lucide-react';
+import { ImagePlus, Plus } from 'lucide-react';
 import { api } from '../../api/client';
 import { getPromptEditorExtensions } from './promptEditorCore';
 import { handlePromptEditorSubmitKey } from './promptEditorKeyHandling';
@@ -19,13 +8,17 @@ import {
   detectPromptSuggestionContext,
   filterPromptSuggestionItems,
   insertPromptSuggestion,
+  removePromptSuggestionTrigger,
   nextPromptSuggestionIndex,
   promptSuggestionKeyAction,
   samePromptSuggestionContext,
 } from './promptEditorSuggestions';
 import { message } from '../../store/toastStore';
 import './PromptEditor.css';
+import PromptEditorReferences from './PromptEditorReferences';
+import PromptEditorToolbar from './PromptEditorToolbar';
 import './PromptEditorSuggestions.css';
+import './PromptEditorReferences.css';
 
 export default function PromptEditor({
   value,
@@ -38,10 +31,14 @@ export default function PromptEditor({
   hideToolbar = false, // 新增参数：是否隐藏顶部工具条
   onSubmitKey = null,
   suggestions = [],
+  referenceDetails = [],
+  onAttachReference = null,
+  onRemoveReference = null,
 }) {
   const fileInputRef = useRef(null);
   const submitKeyRef = useRef(onSubmitKey);
   const suggestionsRef = useRef([]);
+  const attachReferenceRef = useRef(onAttachReference);
   const suggestionMenuRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [suggestionMenu, setSuggestionMenuState] = useState(null);
@@ -56,6 +53,7 @@ export default function PromptEditor({
 
   const editor = usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, {
     suggestionsRef,
+    attachReferenceRef,
     suggestionMenuRef,
     setSuggestionMenu,
   });
@@ -68,6 +66,10 @@ export default function PromptEditor({
   useLayoutEffect(() => {
     suggestionsRef.current = Array.isArray(suggestions) ? suggestions : [];
   }, [suggestions]);
+
+  useLayoutEffect(() => {
+    attachReferenceRef.current = onAttachReference;
+  }, [onAttachReference]);
 
   const visibleSuggestions = useMemo(
     () => filterPromptSuggestionItems(suggestions, suggestionMenu?.context),
@@ -104,16 +106,24 @@ export default function PromptEditor({
 
   return (
     <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''} ${editor.isFocused ? 'focused' : ''}`}>
-      {!isComposer && !hideToolbar && <PromptToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
+      {!isComposer && !hideToolbar && <PromptEditorToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
       <EditorContent editor={editor} className={`prompt-editor-content ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />
       {suggestionMenu && visibleSuggestions.length > 0 && (
         <PromptSuggestionMenu
           activeIndex={Math.min(suggestionMenu.activeIndex, visibleSuggestions.length - 1)}
           items={visibleSuggestions}
           onPick={(item) => {
-            insertPromptSuggestion(editor, suggestionMenu.context, item);
+            applyPromptSuggestion(editor, suggestionMenu.context, item, {
+              attachReference: attachReferenceRef.current,
+            });
             setSuggestionMenu(null);
           }}
+        />
+      )}
+      {isComposer && (
+        <PromptEditorReferences
+          details={referenceDetails}
+          onRemove={onRemoveReference}
         />
       )}
       {isComposer && (
@@ -191,7 +201,9 @@ function handlePromptEditorKeyDown(event, onSubmitKey, suggestionState) {
     if (action === 'previous') setPromptSuggestionIndex(suggestionState, -1, items.length);
     if (action === 'close') suggestionState.setSuggestionMenu(null);
     if (action === 'pick') {
-      insertPromptSuggestion(menu.editor, menu.context, items[Math.min(menu.activeIndex, items.length - 1)]);
+      applyPromptSuggestion(menu.editor, menu.context, items[Math.min(menu.activeIndex, items.length - 1)], {
+        attachReference: suggestionState.attachReferenceRef.current,
+      });
       suggestionState.setSuggestionMenu(null);
     }
     return true;
@@ -212,6 +224,15 @@ function updatePromptSuggestionMenu(editor, suggestionState) {
   }
   if (samePromptSuggestionContext(suggestionState.suggestionMenuRef.current?.context, context)) return;
   suggestionState.setSuggestionMenu({ context, activeIndex: 0, editor });
+}
+
+function applyPromptSuggestion(editor, context, item, { attachReference } = {}) {
+  if (item?.reference && attachReference) {
+    removePromptSuggestionTrigger(editor, context);
+    attachReference(item.reference);
+    return true;
+  }
+  return insertPromptSuggestion(editor, context, item);
 }
 
 function setPromptSuggestionIndex(suggestionState, delta, count) {
@@ -250,38 +271,4 @@ function handleImageFiles(files, uploadFiles) {
   if (!images.length) return false;
   uploadFiles(images);
   return true;
-}
-
-function PromptToolbar({ editor, onPickImage, uploading }) {
-  const button = (label, icon, active, onClick) => (
-    <button type="button" className={`prompt-tool ${active ? 'active' : ''}`} onClick={onClick} title={label}>
-      {icon}
-    </button>
-  );
-  return (
-    <div className="prompt-toolbar">
-      {button('标题', <Heading2 size={15} />, editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
-      {button('加粗', <Bold size={15} />, editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
-      {button('斜体', <Italic size={15} />, editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
-      {button('行内代码', <Code size={15} />, editor.isActive('code'), () => editor.chain().focus().toggleCode().run())}
-      {button('列表', <List size={15} />, editor.isActive('bulletList'), () => editor.chain().focus().toggleBulletList().run())}
-      {button('有序列表', <ListOrdered size={15} />, editor.isActive('orderedList'), () => editor.chain().focus().toggleOrderedList().run())}
-      {button('引用', <Quote size={15} />, editor.isActive('blockquote'), () => editor.chain().focus().toggleBlockquote().run())}
-      {button('链接', <LinkIcon size={15} />, editor.isActive('link'), () => setLink(editor))}
-      <button type="button" className="prompt-tool image" onClick={onPickImage} disabled={uploading} title="上传图片">
-        <ImagePlus size={15} /> {uploading ? '上传中' : '图片'}
-      </button>
-    </div>
-  );
-}
-
-function setLink(editor) {
-  const previous = editor.getAttributes('link').href || '';
-  const href = window.prompt('输入链接 URL', previous);
-  if (href === null) return;
-  if (href === '') {
-    editor.chain().focus().extendMarkRange('link').unsetLink().run();
-    return;
-  }
-  editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
 }

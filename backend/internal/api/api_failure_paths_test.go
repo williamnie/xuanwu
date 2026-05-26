@@ -109,6 +109,27 @@ func TestSessionAPIFailurePaths(t *testing.T) {
 			contentType: "application/json", newServer: newUnsupportedProviderProjectServer,
 			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
 		},
+		{
+			name:   "rejects unknown session reference type",
+			method: http.MethodPost, path: "/api/sessions",
+			body:        `{"project_id":"demo","prompt":"hello","references":[{"type":"unknown","id":"x"}]}`,
+			contentType: "application/json", newServer: newSessionReferenceFailureServer,
+			wantStatus: http.StatusBadRequest, wantBody: `type \"unknown\" 不支持`,
+		},
+		{
+			name:   "rejects session reference path traversal",
+			method: http.MethodPost, path: "/api/sessions",
+			body:        `{"project_id":"demo","prompt":"hello","references":[{"type":"file","path":"../secret.txt"}]}`,
+			contentType: "application/json", newServer: newSessionReferenceFailureServer,
+			wantStatus: http.StatusBadRequest, wantBody: "不在当前项目 cwd 内",
+		},
+		{
+			name:   "rejects missing session issue reference",
+			method: http.MethodPost, path: "/api/sessions",
+			body:        `{"project_id":"demo","prompt":"hello","references":[{"type":"issue","id":"404"}]}`,
+			contentType: "application/json", newServer: newSessionReferenceFailureServer,
+			wantStatus: http.StatusBadRequest, wantBody: "issue 404 不存在",
+		},
 	})
 }
 
@@ -221,6 +242,15 @@ func newUnsupportedProviderIssueServer(t *testing.T) *Server {
 	srv := newUnsupportedProviderProjectServer(t)
 	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
 		"project_id": "unsupported", "title": "blocked", "status": store.StatusTriage,
+	})
+	return srv
+}
+
+func newSessionReferenceFailureServer(t *testing.T) *Server {
+	t.Helper()
+	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
 	})
 	return srv
 }

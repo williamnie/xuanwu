@@ -51,6 +51,14 @@ import {
   toolDisplayForItem,
 } from './sessions/sessionTranscriptItems';
 import { buildSessionComposerSuggestions } from './sessions/sessionComposerAssist';
+import {
+  addSessionReference,
+  buildReferenceDetails,
+  hasComposerContent,
+  referenceValidation,
+  removeSessionReference,
+  sessionPayloadWithReferences,
+} from './sessions/sessionReferences';
 import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
 import {
   interruptCompletionNotice,
@@ -199,12 +207,14 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [cwd, setCwd] = useState('');
   const [lastProjectId, setLastProjectId] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [promptReferences, setPromptReferences] = useState([]);
   const [sessionSettings, setSessionSettings] = useState(() => defaultSessionSettings(null));
   const [messageSettings, setMessageSettings] = useState(() => defaultMessageSettings(null));
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
   const [message, setMessage] = useState('');
+  const [messageReferences, setMessageReferences] = useState([]);
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
@@ -377,6 +387,20 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     currentProject: selectedSessionProject,
     linkedIssues: selectedSession?.source_issues || [],
   }), [issues, projects, selectedSession?.source_issues, selectedSessionProject]);
+  const newSessionReferenceDetails = useMemo(() => buildReferenceDetails(promptReferences, {
+    issues, projects, currentProjectId: projectId,
+  }), [issues, projectId, projects, promptReferences]);
+  const messageReferenceDetails = useMemo(() => buildReferenceDetails(messageReferences, {
+    issues, projects, currentProjectId: selectedSessionProject?.id || '',
+  }), [issues, messageReferences, projects, selectedSessionProject?.id]);
+  const newSessionReferenceValidation = useMemo(
+    () => referenceValidation(newSessionReferenceDetails),
+    [newSessionReferenceDetails],
+  );
+  const messageReferenceValidation = useMemo(
+    () => referenceValidation(messageReferenceDetails),
+    [messageReferenceDetails],
+  );
 
   useEffect(() => {
     refreshData(['projects', 'issues']);
@@ -605,14 +629,13 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
   };
 
-  const startSessionMessage = useCallback(async (sessionId, promptText, settings) => {
-    await api.sendSessionMessage(sessionId, {
-      prompt: promptText,
+  const startSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
+    await api.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
       model: settings.model,
       reasoning_effort: settings.reasoningEffort,
       approval_policy: settings.approvalPolicy,
       sandbox: settings.sandbox,
-    });
+    }, references));
     setSessionRunning(true);
     setSessions((prev) => setSessionRunningInList(prev, sessionId, true));
     setLiveEvents([]);
@@ -625,7 +648,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     setSending(true);
     setMessageQueue((current) => markQueuedSessionMessageSending(current, queued.id));
     try {
-      await startSessionMessage(sessionId, queued.prompt, queued.settings);
+      await startSessionMessage(sessionId, queued.prompt, queued.settings, queued.references);
       setMessageQueue((current) => removeQueuedSessionMessage(current, queued.id));
     } catch (err) {
       setMessageQueue((current) => markQueuedSessionMessageFailed(current, queued.id, err.message || '发送排队消息失败'));
@@ -645,23 +668,31 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const sendMessage = async (event) => {
     event.preventDefault();
     const promptText = message.trim();
-    if (!selectedId || !promptText || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
+    if (!selectedId || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
+    if (!hasComposerContent(promptText, messageReferences)) return;
+    if (messageReferenceValidation.hasErrors) {
+      toast.error(messageReferenceValidation.message);
+      return;
+    }
     if (sessionRunning || currentQueuedMessages.length > 0) {
       const queued = createQueuedSessionMessage({
         id: queuedMessageId(),
         sessionId: selectedId,
         prompt: promptText,
+        references: messageReferences,
         settings: messageSettings,
       });
       setMessageQueue((current) => enqueueQueuedSessionMessage(current, queued));
       setMessage('');
+      setMessageReferences([]);
       toast.info(sessionRunning ? '已排队为下一条消息，当前响应不会被引导。' : '已追加到消息队列。');
       return;
     }
     setSending(true);
     try {
-      await startSessionMessage(selectedId, promptText, messageSettings);
+      await startSessionMessage(selectedId, promptText, messageSettings, messageReferences);
       setMessage('');
+      setMessageReferences([]);
     } catch (err) {
       toast.error(err.message || '发送消息失败');
     } finally {
@@ -710,30 +741,34 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const handleCreateNewSession = async (e) => {
     if (e) e.preventDefault();
     if (sending) return;
-    const guard = canCreateSession({ projectId, cwd, prompt, selectedProject });
+    const guard = canCreateSession({ projectId, cwd, prompt, selectedProject, references: promptReferences });
     if (!guard.ok) {
       if (guard.reason === 'missing_project' || guard.reason === 'unsupported_provider') {
         toast.error(guard.message || PROJECT_REQUIRED_MESSAGE);
       }
       return;
     }
+    if (newSessionReferenceValidation.hasErrors) {
+      toast.error(newSessionReferenceValidation.message);
+      return;
+    }
     setSending(true);
     try {
-      const result = await api.createSession({
+      const result = await api.createSession(sessionPayloadWithReferences(prompt.trim(), {
         project_id: projectId,
         cwd,
-        prompt: prompt,
         model: sessionSettings.model,
         reasoning_effort: sessionSettings.reasoningEffort,
         approval_policy: sessionSettings.approvalPolicy,
         sandbox: sessionSettings.sandbox,
-      });
+      }, promptReferences));
       const newSessionId = sessionIDFromCreateResult(result);
       setSelectedId(newSessionId);
       setSessionRunning(Boolean(result.turn_id));
       setSessions((prev) => setSessionRunningInList(prev, newSessionId, Boolean(result.turn_id)));
       setLiveEvents([]);
       setPrompt('');
+      setPromptReferences([]);
       await loadFirstPage();
     } catch (err) {
       toast.error(err.message || '创建 session 失败');
@@ -927,6 +962,10 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   selectedId={selectedId}
                   queuedMessages={currentQueuedMessages}
                   suggestions={sessionComposerSuggestions}
+                  referenceDetails={messageReferenceDetails}
+                  onAttachReference={(reference) => setMessageReferences((current) => addSessionReference(current, reference))}
+                  onRemoveReference={(key) => setMessageReferences((current) => removeSessionReference(current, key))}
+                  hasInvalidReferences={messageReferenceValidation.hasErrors}
                   onSubmit={sendMessage}
                   onStop={interrupt}
                   onCancelQueuedMessage={cancelQueuedMessage}
@@ -954,7 +993,10 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   minHeight={80}
                   variant="composer"
                   suggestions={sessionComposerSuggestions}
-                  onSubmitKey={!sending && prompt.trim() ? handleCreateNewSession : null}
+                  referenceDetails={newSessionReferenceDetails}
+                  onAttachReference={(reference) => setPromptReferences((current) => addSessionReference(current, reference))}
+                  onRemoveReference={(key) => setPromptReferences((current) => removeSessionReference(current, key))}
+                  onSubmitKey={!sending && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors ? handleCreateNewSession : null}
                   footerControls={(
                     <NewSessionPermissionControl
                       settings={sessionSettings}
@@ -966,7 +1008,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                       settings={sessionSettings}
                       models={models}
                       sending={sending}
-                      canSubmit={Boolean(prompt.trim())}
+                      canSubmit={hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
                       onModelChange={(value) => handleSettingChange('model', value)}
                       onSubmit={handleCreateNewSession}
                     />

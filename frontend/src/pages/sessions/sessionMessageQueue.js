@@ -1,12 +1,16 @@
+import { normalizeReferences } from './sessionReferences.js';
+
 const ACTIVE_STATUSES = new Set(['pending', 'sending', 'failed']);
 
-export function createQueuedSessionMessage({ id, sessionId, prompt, settings = {}, createdAt }) {
+export function createQueuedSessionMessage({ id, sessionId, prompt, settings = {}, references = [], createdAt }) {
   const text = String(prompt || '').trim();
-  if (!id || !sessionId || !text) return null;
+  const refs = normalizeReferences(references);
+  if (!id || !sessionId || (!text && refs.length === 0)) return null;
   return {
     id,
     sessionId,
     prompt: text,
+    references: refs,
     settings: copyMessageSettings(settings),
     status: 'pending',
     createdAt: createdAt || new Date().toISOString(),
@@ -17,7 +21,7 @@ export function createQueuedSessionMessage({ id, sessionId, prompt, settings = {
 export function normalizeQueuedSessionMessages(queue) {
   if (!Array.isArray(queue)) return [];
   return queue
-    .filter((item) => item?.id && item?.sessionId && String(item.prompt || '').trim())
+    .filter((item) => item?.id && item?.sessionId && (String(item.prompt || '').trim() || normalizeReferences(item.references).length > 0))
     .map((item) => normalizeQueuedMessage(item));
 }
 
@@ -54,6 +58,7 @@ function normalizeQueuedMessage(item) {
     return {
       ...item,
       settings: copyMessageSettings(item.settings),
+      references: normalizeReferences(item.references),
       status: 'failed',
       error: item.error || '页面刷新时消息正在发送，已暂停以避免重复发送。',
     };
@@ -62,6 +67,7 @@ function normalizeQueuedMessage(item) {
     ...item,
     prompt: String(item.prompt || '').trim(),
     settings: copyMessageSettings(item.settings),
+    references: normalizeReferences(item.references),
     status,
     error: item.error || '',
   };

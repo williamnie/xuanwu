@@ -14,21 +14,23 @@ import (
 )
 
 type createSessionRequest struct {
-	ProjectID       string `json:"project_id"`
-	CWD             string `json:"cwd"`
-	Model           string `json:"model"`
-	ReasoningEffort string `json:"reasoning_effort"`
-	ApprovalPolicy  string `json:"approval_policy"`
-	Sandbox         string `json:"sandbox"`
-	Prompt          string `json:"prompt"`
+	ProjectID       string                    `json:"project_id"`
+	CWD             string                    `json:"cwd"`
+	Model           string                    `json:"model"`
+	ReasoningEffort string                    `json:"reasoning_effort"`
+	ApprovalPolicy  string                    `json:"approval_policy"`
+	Sandbox         string                    `json:"sandbox"`
+	Prompt          string                    `json:"prompt"`
+	References      []runner.SessionReference `json:"references"`
 }
 
 type sessionMessageRequest struct {
-	Prompt          string `json:"prompt"`
-	Model           string `json:"model"`
-	ReasoningEffort string `json:"reasoning_effort"`
-	ApprovalPolicy  string `json:"approval_policy"`
-	Sandbox         string `json:"sandbox"`
+	Prompt          string                    `json:"prompt"`
+	Model           string                    `json:"model"`
+	ReasoningEffort string                    `json:"reasoning_effort"`
+	ApprovalPolicy  string                    `json:"approval_policy"`
+	Sandbox         string                    `json:"sandbox"`
+	References      []runner.SessionReference `json:"references"`
 }
 
 type sessionDetailResponse struct {
@@ -192,13 +194,14 @@ func toSessionCreateInput(req createSessionRequest) runner.SessionCreateInput {
 	return runner.SessionCreateInput{
 		ProjectID: req.ProjectID, CWD: req.CWD, Model: req.Model, ReasoningEffort: req.ReasoningEffort,
 		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox, Prompt: req.Prompt,
+		References: req.References,
 	}
 }
 
 func toSessionTurnInput(req sessionMessageRequest) runner.SessionTurnInput {
 	return runner.SessionTurnInput{
 		Prompt: req.Prompt, Model: req.Model, ReasoningEffort: req.ReasoningEffort,
-		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox,
+		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox, References: req.References,
 	}
 }
 

@@ -1,8 +1,8 @@
 export const PROJECT_REQUIRED_MESSAGE = '需要先选择项目';
 export const SESSIONS_UNSUPPORTED_MESSAGE = '所选 provider 不支持 Sessions，请改用 Issue 执行';
 
-export function canCreateSession({ projectId, cwd, prompt, selectedProject }) {
-  if (!String(prompt || '').trim()) {
+export function canCreateSession({ projectId, cwd, prompt, selectedProject, references = [] }) {
+  if (!String(prompt || '').trim() && (!Array.isArray(references) || references.length === 0)) {
     return { ok: false, reason: 'empty_prompt' };
   }
   if (!String(projectId || '').trim() || !String(cwd || '').trim()) {

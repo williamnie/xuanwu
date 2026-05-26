@@ -19,6 +19,7 @@ type SessionCreateInput struct {
 	ApprovalPolicy  string
 	Sandbox         string
 	Prompt          string
+	References      []SessionReference
 }
 
 type SessionCreateResult struct {
@@ -36,6 +37,7 @@ type SessionTurnInput struct {
 	ReasoningEffort string
 	ApprovalPolicy  string
 	Sandbox         string
+	References      []SessionReference
 }
 
 func (r *Runner) ListModels(ctx context.Context) (agent.ModelListResult, error) {
@@ -108,6 +110,10 @@ func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (S
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
+	refs, err := r.resolveSessionReferences(ctx, threadInput.CWD, input.References)
+	if err != nil {
+		return SessionCreateResult{}, err
+	}
 	if err := r.requireCapability(agent.CapabilitySessions); err != nil {
 		return SessionCreateResult{}, err
 	}
@@ -118,11 +124,11 @@ func (r *Runner) CreateSession(ctx context.Context, input SessionCreateInput) (S
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
-	return r.startInitialTurn(ctx, threadID, input)
+	return r.startInitialTurn(ctx, threadID, input, refs)
 }
 
 func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input SessionTurnInput) (string, error) {
-	if strings.TrimSpace(input.Prompt) == "" {
+	if strings.TrimSpace(input.Prompt) == "" && len(input.References) == 0 {
 		return "", errors.New("消息内容不能为空")
 	}
 	if err := r.requireCapability(agent.CapabilityResumeSession); err != nil {
@@ -131,10 +137,15 @@ func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input Se
 	if err := r.prepareCodex(ctx); err != nil {
 		return "", err
 	}
-	if _, err := r.resumeThread(ctx, threadID); err != nil {
+	session, err := r.resumeThread(ctx, threadID)
+	if err != nil {
 		return "", err
 	}
-	return r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, sessionTurnOptions(input))
+	refs, err := r.resolveSessionReferences(ctx, session.CWD, input.References)
+	if err != nil {
+		return "", err
+	}
+	return r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, refs, sessionTurnOptions(input))
 }
 
 func (r *Runner) prepareCodex(ctx context.Context) error {
@@ -202,12 +213,17 @@ func applySessionOverrides(target *agent.ThreadInput, input SessionCreateInput) 
 	target.ThreadSource = agent.ThreadSourceUser
 }
 
-func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input SessionCreateInput) (SessionCreateResult, error) {
+func (r *Runner) startInitialTurn(
+	ctx context.Context,
+	threadID string,
+	input SessionCreateInput,
+	refs []ResolvedSessionReference,
+) (SessionCreateResult, error) {
 	result := newCodexSessionCreateResult(threadID)
-	if strings.TrimSpace(input.Prompt) == "" {
+	if strings.TrimSpace(input.Prompt) == "" && len(refs) == 0 {
 		return result, nil
 	}
-	turnID, err := r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, sessionCreateTurnOptions(input))
+	turnID, err := r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, refs, sessionCreateTurnOptions(input))
 	if err != nil {
 		return SessionCreateResult{}, err
 	}
@@ -216,9 +232,15 @@ func (r *Runner) startInitialTurn(ctx context.Context, threadID string, input Se
 	return result, nil
 }
 
-func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prompt string, options agent.TurnOptions) (string, error) {
+func (r *Runner) startSessionTurnWithOptions(
+	ctx context.Context,
+	threadID string,
+	prompt string,
+	refs []ResolvedSessionReference,
+	options agent.TurnOptions,
+) (string, error) {
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
-	input, err := buildTurnInput(ctx, r.store, prompt)
+	input, err := buildTurnInput(ctx, r.store, assembleSessionPrompt(prompt, refs))
 	if err != nil {
 		unsubscribe()
 		return "", err
@@ -228,6 +250,7 @@ func (r *Runner) startSessionTurnWithOptions(ctx context.Context, threadID, prom
 		unsubscribe()
 		return "", err
 	}
+	r.saveSessionTurnReferences(ctx, threadID, turnID, refs)
 	r.setSessionRunning(threadID, turnID)
 	go r.waitSessionTurn(threadID, turnID, eventsCh, unsubscribe)
 	return turnID, nil

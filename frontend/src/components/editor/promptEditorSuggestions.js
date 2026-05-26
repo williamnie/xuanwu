@@ -55,6 +55,14 @@ export function insertPromptSuggestion(editor, context, item) {
   return true;
 }
 
+export function removePromptSuggestionTrigger(editor, context) {
+  if (!editor || !context) return false;
+  const tr = editor.state.tr.delete(context.from, context.to);
+  editor.view.dispatch(tr.scrollIntoView());
+  editor.commands.focus();
+  return true;
+}
+
 function contextFromPlainTrigger(textBefore, from) {
   const match = /(^|[\s([{])([/@])([^\s/@]*)$/.exec(textBefore);
   if (!match) return null;

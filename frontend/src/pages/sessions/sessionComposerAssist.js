@@ -63,6 +63,12 @@ function projectReferenceSuggestions(projects) {
     label: `@project ${cleanInline(project.name) || project.id}`,
     description: cleanInline(project.cwd) || '已注册 project',
     insertText: projectReferenceText(project),
+    reference: {
+      type: 'project',
+      id: cleanInline(project.id),
+      label: cleanInline(project.name) || cleanInline(project.id),
+      metadata: { cwd: cleanInline(project.cwd) },
+    },
     searchText: `project ${project.id || ''} ${project.name || ''} ${project.cwd || ''}`,
   }));
 }
@@ -74,6 +80,12 @@ function issueReferenceSuggestions(issues) {
     label: issueReferenceText(issue),
     description: [issue.status, issue.project_id].filter(Boolean).join(' · '),
     insertText: issueReferenceText(issue),
+    reference: {
+      type: 'issue',
+      id: cleanInline(issue.id),
+      label: cleanInline(issue.title) || `#${issue.id}`,
+      metadata: { project_id: cleanInline(issue.project_id), status: cleanInline(issue.status) },
+    },
     searchText: `issue ${issue.id || ''} #${issue.id || ''} ${issue.title || ''} ${issue.status || ''} ${issue.project_id || ''}`,
   }));
 }
