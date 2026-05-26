@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
@@ -67,7 +68,7 @@ func TestRunnerBlocksDirtyWorktreeBeforeStartingIssue(t *testing.T) {
 	if len(fake.threadInputs) != 0 || len(fake.turnInputs) != 0 {
 		t.Fatalf("dirty worktree must block before codex turn: threads=%+v turns=%+v", fake.threadInputs, fake.turnInputs)
 	}
-	assertIssueErrorEventMentionsDirtyWorktree(t, st, issue.ID, secret)
+	waitIssueErrorEventMentionsDirtyWorktree(t, st, issue.ID, secret)
 }
 
 func TestRunnerCanSkipDirtyWorktreeCheck(t *testing.T) {
@@ -107,28 +108,35 @@ func initGitRepo(t *testing.T) string {
 	return dir
 }
 
-func assertIssueErrorEventMentionsDirtyWorktree(
+func waitIssueErrorEventMentionsDirtyWorktree(
 	t *testing.T,
 	st *store.Store,
 	issueID int64,
 	secret string,
 ) {
 	t.Helper()
-	issueEvents, err := st.ListIssueEvents(context.Background(), issueID)
-	if err != nil {
-		t.Fatalf("list issue events: %v", err)
+	deadline := time.After(2 * time.Second)
+	for {
+		issueEvents, err := st.ListIssueEvents(context.Background(), issueID)
+		if err != nil {
+			t.Fatalf("list issue events: %v", err)
+		}
+		for _, event := range issueEvents {
+			if event.Type != "issue.error" {
+				continue
+			}
+			if !strings.Contains(event.Payload, "未提交修改") || !strings.Contains(event.Payload, "scratch.txt") {
+				t.Fatalf("issue.error should mention dirty worktree, got %q", event.Payload)
+			}
+			if strings.Contains(event.Payload, secret) {
+				t.Fatalf("issue.error leaked file content: %q", event.Payload)
+			}
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("missing issue.error event: %+v", issueEvents)
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
-	for _, event := range issueEvents {
-		if event.Type != "issue.error" {
-			continue
-		}
-		if !strings.Contains(event.Payload, "未提交修改") || !strings.Contains(event.Payload, "scratch.txt") {
-			t.Fatalf("issue.error should mention dirty worktree, got %q", event.Payload)
-		}
-		if strings.Contains(event.Payload, secret) {
-			t.Fatalf("issue.error leaked file content: %q", event.Payload)
-		}
-		return
-	}
-	t.Fatalf("missing issue.error event: %+v", issueEvents)
 }

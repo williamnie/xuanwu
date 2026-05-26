@@ -9,6 +9,7 @@ AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$(dirname "$DB_PATH")/auth_toke
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 WEB_DIR="${CODEX_RUNNER_WEB_DIR:-}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
+LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$ROOT_DIR/data/bin/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$ROOT_DIR/data/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
@@ -61,6 +62,15 @@ write_custom_auth_token_file() {
   fi
 }
 
+stage_launchd_binary() {
+  mkdir -p "$(dirname "$LAUNCHD_BINARY_PATH")"
+  cp "$BINARY_PATH" "$LAUNCHD_BINARY_PATH"
+  chmod +x "$LAUNCHD_BINARY_PATH"
+  if [ -f "$BINARY_PATH.build.stamp" ]; then
+    cp "$BINARY_PATH.build.stamp" "$LAUNCHD_BINARY_PATH.build.stamp"
+  fi
+}
+
 if [ -z "$CODEX_CMD" ]; then
   echo "[launchd] codex command not found; set CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex" >&2
   exit 1
@@ -68,6 +78,7 @@ fi
 
 "$ROOT_DIR/scripts/build-release.sh"
 mkdir -p "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
+stage_launchd_binary
 write_custom_auth_token_file
 
 cat > "$PLIST" <<PLIST
@@ -78,14 +89,10 @@ cat > "$PLIST" <<PLIST
   <key>Label</key>
   <string>$(xml_escape "$LABEL")</string>
   <key>Program</key>
-  <string>/bin/bash</string>
+  <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>-c</string>
-    <string>exec "\$@"</string>
-    <string>$(xml_escape "$LABEL.exec")</string>
-    <string>$(xml_escape "$BINARY_PATH")</string>
+    <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
     <string>serve</string>
     <string>--addr</string>
     <string>$(xml_escape "$ADDR")</string>
@@ -136,4 +143,5 @@ if [ -n "$WEB_DIR" ]; then
 else
   echo "[launchd] web: embedded in binary"
 fi
+echo "[launchd] binary: $LAUNCHD_BINARY_PATH"
 echo "[launchd] logs: $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"

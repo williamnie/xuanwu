@@ -390,39 +390,23 @@
 /* 一体化输入框容器 */
 .new-session-composer-wrapper {
   width: 100%;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.new-session-composer-wrapper:focus-within {
+.new-session-composer-wrapper .prompt-editor-shell.composer {
+  width: 100%;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+}
+
+.new-session-composer-wrapper .prompt-editor-shell.composer.focused {
   border-color: rgba(59, 130, 246, 0.5);
   box-shadow: 0 10px 30px rgba(59, 130, 246, 0.06);
 }
 
-/* 输入框大文本域 */
-.new-session-textarea {
-  width: 100%;
-  min-height: 80px;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
+.new-session-composer-wrapper .prompt-editor-content.composer {
   font-size: 1rem;
   line-height: 1.5;
-  resize: none;
-  outline: none;
-  padding: 0 4px;
-}
-
-.new-session-textarea::placeholder {
-  color: var(--text-muted);
-  opacity: 0.8;
+  padding: 16px 20px 8px;
 }
 
 /* 输入框底部控件排版 */

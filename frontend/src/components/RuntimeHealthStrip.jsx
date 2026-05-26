@@ -55,7 +55,7 @@ function HealthPill({ item }) {
     <span style={pillStyle(item.ok)} title={`${item.label}: ${item.value}`}>
       <span className={`status-dot ${item.ok ? 'active' : 'idle'}`} style={{ width: '6px', height: '6px', flex: '0 0 auto' }}></span>
       <span>{item.label}</span>
-      <strong style={{ color: 'var(--text-primary)', overflowWrap: 'anywhere' }}>{item.value}</strong>
+      <strong style={{ color: 'var(--text-primary)' }}>{item.value}</strong>
     </span>
   );
 }
@@ -64,8 +64,8 @@ function stripStyle(ok) {
   return {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '14px',
+    justifyContent: 'flex-start',
+    gap: '24px',
     padding: '12px 16px',
     borderLeft: `4px solid ${ok ? 'var(--success)' : 'var(--warning)'}`,
     background: ok ? 'var(--success-bg)' : 'var(--warning-bg)',
@@ -77,7 +77,7 @@ function pillStyle(ok) {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    maxWidth: '260px',
+    whiteSpace: 'nowrap',
     border: '1px solid var(--border-color)',
     borderRadius: '999px',
     padding: '5px 9px',

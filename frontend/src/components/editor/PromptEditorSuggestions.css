@@ -1,13 +1,14 @@
 .prompt-editor-shell.composer {
   position: relative;
+  overflow: visible;
 }
 
 .prompt-suggestion-menu {
   position: absolute;
   left: 14px;
   right: 14px;
-  bottom: 46px;
-  z-index: 8;
+  bottom: calc(100% + 8px);
+  z-index: 30;
   display: grid;
   gap: 2px;
   max-height: 245px;

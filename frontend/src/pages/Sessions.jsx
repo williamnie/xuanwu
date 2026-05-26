@@ -7,6 +7,7 @@ import {
 import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
+import PromptEditor from '../components/editor/PromptEditor';
 import { selectIssues, selectProjects, selectRefreshData, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
 import {
@@ -131,6 +132,57 @@ function compactModelName(value) {
     .trim();
 }
 
+function NewSessionPermissionControl({ settings, onSettingChange }) {
+  return (
+    <div className="composer-embedded-select danger">
+      <ShieldAlert size={13} />
+      <span>{settings.approvalPolicy === 'never' ? '完全访问权限' : '工作区写入'}</span>
+      <select
+        value={`${settings.sandbox}|${settings.approvalPolicy}`}
+        onChange={(e) => {
+          const [sandbox, approvalPolicy] = e.target.value.split('|');
+          onSettingChange('sandbox', sandbox);
+          onSettingChange('approvalPolicy', approvalPolicy);
+        }}
+      >
+        <option value="danger-full-access|never">完全访问权限</option>
+        <option value="workspace-write|never">工作区写入</option>
+        <option value="workspace-write|danger-only">按需授权</option>
+        <option value="workspace-write|always">每次授权</option>
+        <option value="read-only|always">只读模式</option>
+      </select>
+    </div>
+  );
+}
+
+function NewSessionComposerActions({ settings, models, sending, canSubmit, onModelChange, onSubmit }) {
+  return (
+    <>
+      <div className="composer-embedded-select">
+        <Brain size={13} />
+        <span>{settings.model ? compactModelName(settings.model) : '5.5 超高'}</span>
+        <select value={settings.model} onChange={(e) => onModelChange(e.target.value)}>
+          <option value="">Codex 默认</option>
+          {models.map((model) => (
+            <option key={model.id || model.model} value={model.id || model.model}>
+              {compactModelName(modelLabel(model))}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        className="composer-circle-submit"
+        disabled={sending || !canSubmit}
+        onClick={onSubmit}
+        title="发送并新建会话"
+      >
+        {sending ? <Loader2 className="animate-spin" size={16} /> : <ArrowUp size={16} strokeWidth={2.4} />}
+      </button>
+    </>
+  );
+}
+
 export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
@@ -165,6 +217,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const listRefreshTimer = useRef(null);
   const selectedIdRef = useRef(selectedId);
   const lastSelectedIdRef = useRef(selectedId);
+  const ignorePropSelectionRef = useRef(false);
+  const autoSelectFirstSessionRef = useRef(true);
   const interruptStateRef = useRef(interruptState);
   const messageQueueRef = useRef(messageQueue);
   const activeQueuedSendsRef = useRef(new Set());
@@ -188,6 +242,11 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   }, []);
 
   useEffect(() => {
+    if (ignorePropSelectionRef.current && !selectedSessionId) {
+      ignorePropSelectionRef.current = false;
+      return;
+    }
+    if (ignorePropSelectionRef.current) return;
     if (selectedSessionId && selectedSessionId !== selectedIdRef.current) {
       setSelectedId(selectedSessionId);
     }
@@ -330,7 +389,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       const data = result.data || [];
       setSessions(data);
       setCursor(result.nextCursor || '');
-      setSelectedId((current) => current || data[0]?.id || '');
+      setSelectedId((current) => current || (autoSelectFirstSessionRef.current ? data[0]?.id || '' : ''));
+      autoSelectFirstSessionRef.current = false;
     } catch (err) {
       toast.error(err.message || '加载 provider sessions 失败');
     } finally {
@@ -689,6 +749,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
 
   const selectSession = useCallback((id) => {
     const nextSession = sessions.find((item) => item.id === id);
+    ignorePropSelectionRef.current = false;
     setSelectedId(id);
     setActiveView('chat');
     setLiveEvents([]);
@@ -713,7 +774,15 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
         <div className="sidebar-shortcut-items">
           <button 
             className={`sidebar-shortcut-item ${activeView === 'new' ? 'active' : ''}`}
-            onClick={() => { setSelectedId(''); setActiveView('new'); setPrompt(''); setSessionRunning(false); }}
+            onClick={() => {
+              ignorePropSelectionRef.current = true;
+              autoSelectFirstSessionRef.current = false;
+              navigateTo?.('sessions');
+              setSelectedId('');
+              setActiveView('new');
+              setPrompt('');
+              setSessionRunning(false);
+            }}
           >
             <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
             <span>新对话</span>
@@ -878,77 +947,31 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
               </h1>
 
               <div className="new-session-composer-wrapper">
-                <textarea
-                  className="new-session-textarea"
-                  placeholder="尽管问"
+                <PromptEditor
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleCreateNewSession();
-                    }
-                  }}
+                  onChange={setPrompt}
+                  placeholder="尽管问"
+                  minHeight={80}
+                  variant="composer"
+                  suggestions={sessionComposerSuggestions}
+                  onSubmitKey={!sending && prompt.trim() ? handleCreateNewSession : null}
+                  footerControls={(
+                    <NewSessionPermissionControl
+                      settings={sessionSettings}
+                      onSettingChange={handleSettingChange}
+                    />
+                  )}
+                  actions={(
+                    <NewSessionComposerActions
+                      settings={sessionSettings}
+                      models={models}
+                      sending={sending}
+                      canSubmit={Boolean(prompt.trim())}
+                      onModelChange={(value) => handleSettingChange('model', value)}
+                      onSubmit={handleCreateNewSession}
+                    />
+                  )}
                 />
-
-                <div className="new-session-composer-footer">
-                  <div className="new-session-composer-left">
-                    <button type="button" className="composer-icon-btn" title="添加文件附件">
-                      <Plus size={16} />
-                    </button>
-                    
-                    {/* 精致的审批权限配置 */}
-                    <div className="composer-embedded-select danger">
-                      <ShieldAlert size={13} />
-                      <span>{sessionSettings.approvalPolicy === 'never' ? '完全访问权限' : '工作区写入'}</span>
-                      <select 
-                        value={`${sessionSettings.sandbox}|${sessionSettings.approvalPolicy}`} 
-                        onChange={(e) => {
-                          const [sandbox, approvalPolicy] = e.target.value.split('|');
-                          handleSettingChange('sandbox', sandbox);
-                          handleSettingChange('approvalPolicy', approvalPolicy);
-                        }}
-                      >
-                        <option value="danger-full-access|never">完全访问权限</option>
-                        <option value="workspace-write|never">工作区写入</option>
-                        <option value="workspace-write|danger-only">按需授权</option>
-                        <option value="workspace-write|always">每次授权</option>
-                        <option value="read-only|always">只读模式</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="new-session-composer-right">
-                    {/* 精致推理模型配置 */}
-                    <div className="composer-embedded-select">
-                      <Brain size={13} />
-                      <span>{sessionSettings.model ? compactModelName(sessionSettings.model) : '5.5 超高'}</span>
-                      <select 
-                        value={sessionSettings.model} 
-                        onChange={(e) => handleSettingChange('model', e.target.value)}
-                      >
-                        <option value="">Codex 默认</option>
-                        {models.map((model) => (
-                          <option key={model.id || model.model} value={model.id || model.model}>
-                            {compactModelName(modelLabel(model))}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-
-
-                    <button 
-                      type="button" 
-                      className="composer-circle-submit" 
-                      disabled={sending || !prompt.trim()} 
-                      onClick={handleCreateNewSession}
-                      title="发送并新建会话"
-                    >
-                      {sending ? <Loader2 className="animate-spin" size={16} /> : <ArrowUp size={16} strokeWidth={2.4} />}
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* 输入框正下方的圆角配置标签 */}

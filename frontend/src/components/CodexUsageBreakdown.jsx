@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const ROW_STYLE = {
   display: 'grid',
   gridTemplateColumns: 'minmax(140px, 1fr) 96px 64px',
@@ -7,6 +9,8 @@ const ROW_STYLE = {
 };
 
 export default function CodexUsageBreakdown({ projects = [] }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!projects.length) {
     return (
       <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '14px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
@@ -16,23 +20,48 @@ export default function CodexUsageBreakdown({ projects = [] }) {
   }
   const max = Math.max(1, ...projects.map(project => project.usage?.total_tokens || 0));
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <BreakdownHeader />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {projects.map(project => <ProjectUsageRow key={project.id} project={project} max={max} />)}
-      </div>
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: expanded ? '12px' : 0 }}>
+      <BreakdownHeader expanded={expanded} projectCount={projects.length} onToggle={() => setExpanded(value => !value)} />
+      {expanded ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {projects.map(project => <ProjectUsageRow key={project.id} project={project} max={max} />)}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function BreakdownHeader() {
+function BreakdownHeader({ expanded, projectCount, onToggle }) {
   return (
-    <div>
-      <h4 style={{ fontSize: '0.95rem', marginBottom: '4px' }}>Project 用量占比</h4>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-        按 Codex session metadata 的 cwd 关联项目；无法关联的数据单独显示为 unknown。
-      </p>
-    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      style={{
+        width: '100%',
+        border: 0,
+        padding: 0,
+        background: 'transparent',
+        color: 'inherit',
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: '16px',
+        alignItems: 'center',
+        textAlign: 'left',
+        cursor: 'pointer',
+      }}
+    >
+      <span>
+        <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>Project 用量占比</span>
+        <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '4px' }}>
+          {projectCount} 个 project，按 Codex session metadata 的 cwd 关联；点击{expanded ? '收起' : '展开'}明细。
+        </span>
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.8rem', flexShrink: 0 }}>
+        {expanded ? '收起' : '展开'}
+        <span style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}>⌄</span>
+      </span>
+    </button>
   );
 }
 
