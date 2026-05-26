@@ -7,7 +7,7 @@ import {
 import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
-import { selectProjects, selectSetProjects, useDataStore } from '../store/dataStore';
+import { selectIssues, selectProjects, selectRefreshData, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
 import {
   approvalsForSession,
@@ -49,6 +49,7 @@ import {
   splitTextBySearchQuery,
   toolDisplayForItem,
 } from './sessions/sessionTranscriptItems';
+import { buildSessionComposerSuggestions } from './sessions/sessionComposerAssist';
 import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
 import {
   interruptCompletionNotice,
@@ -132,6 +133,8 @@ function compactModelName(value) {
 
 export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const projects = useDataStore(selectProjects);
+  const issues = useDataStore(selectIssues);
+  const refreshData = useDataStore(selectRefreshData);
   const setProjects = useDataStore(selectSetProjects);
   const [sessions, setSessions] = useState([]);
   const [cursor, setCursor] = useState('');
@@ -309,6 +312,16 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     const sessionCwd = selectedSession?.cwd || selectedSession?.path || '';
     return projects.find((project) => project.cwd === sessionCwd) || null;
   }, [projects, selectedSession]);
+  const sessionComposerSuggestions = useMemo(() => buildSessionComposerSuggestions({
+    projects,
+    issues,
+    currentProject: selectedSessionProject,
+    linkedIssues: selectedSession?.source_issues || [],
+  }), [issues, projects, selectedSession?.source_issues, selectedSessionProject]);
+
+  useEffect(() => {
+    refreshData(['projects', 'issues']);
+  }, [refreshData]);
 
   const loadFirstPage = useCallback(async () => {
     setLoading(true);
@@ -844,6 +857,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   interruptState={interruptState}
                   selectedId={selectedId}
                   queuedMessages={currentQueuedMessages}
+                  suggestions={sessionComposerSuggestions}
                   onSubmit={sendMessage}
                   onStop={interrupt}
                   onCancelQueuedMessage={cancelQueuedMessage}

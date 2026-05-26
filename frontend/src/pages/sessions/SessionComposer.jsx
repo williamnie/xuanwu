@@ -32,6 +32,7 @@ export default function SessionComposer({
   onStop,
   onCancelQueuedMessage,
   onRetryQueuedMessage,
+  suggestions = [],
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
@@ -68,6 +69,7 @@ export default function SessionComposer({
           />
         )}
         onSubmitKey={canSubmitMessage ? submitFromEditor : null}
+        suggestions={suggestions}
         actions={(
           <ComposerActions
             sending={sending}
@@ -152,7 +154,9 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
         onChange={(value) => onSettingChange('reasoningEffort', value)}
         title="推理强度"
       >
-        {effortOptions.map((option) => <option key={option.value || 'inherit'} value={option.value}>{option.shortLabel || option.label}</option>)}
+        {effortOptions.map((option) => (
+          <option key={effortOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
+        ))}
       </CompactSelect>
     </>
   );
@@ -247,6 +251,10 @@ function modelDisplayLabel(value, effectiveModel, models) {
   if (selected) return compactModelName(modelLabel(selected));
   if (value) return compactModelName(value);
   return modelPlaceholder(false, '', effectiveModel);
+}
+
+function effortOptionKey(option) {
+  return `${option.value || 'inherit'}:${option.label || ''}:${option.shortLabel || ''}`;
 }
 
 function effortDisplayLabel(options, value) {
