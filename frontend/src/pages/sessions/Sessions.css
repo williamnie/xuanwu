@@ -369,6 +369,32 @@
   background: var(--primary-glow);
 }
 
+.session-export-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.session-export-actions button {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.session-export-actions button:hover {
+  color: var(--primary);
+  border-color: rgba(14, 165, 233, 0.24);
+  background: var(--primary-glow);
+}
+
 .runtime-status-dot {
   width: 7px;
   height: 7px;

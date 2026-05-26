@@ -64,6 +64,7 @@ import {
   sessionPayloadWithReferences,
 } from './sessions/sessionReferences';
 import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
+import { buildSessionResumeCommand, markdownFilenameForSession, sessionToMarkdown } from './sessions/sessionMarkdownExport.js';
 import {
   interruptCompletionNotice,
   interruptFailureNotice,
@@ -1312,6 +1313,39 @@ function showToastNotice(notice) {
   }
 }
 
+async function copyTextToClipboard(text) {
+  if (window.navigator?.clipboard?.writeText) {
+    try {
+      await window.navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // 部分自动化/非安全上下文会拒绝 Clipboard API，继续走 textarea fallback。
+    }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!ok) throw new Error('当前浏览器不支持复制到剪贴板');
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(url);
+}
+
 function formatTokenNumber(value) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? new Intl.NumberFormat('zh-CN').format(number) : '0';
@@ -1739,12 +1773,51 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
     setActiveSearchIndex((current) => nextTranscriptSearchIndex(current, searchTargets.length, direction));
   }, [searchTargets.length]);
 
+  const copyResumeCommand = useCallback(async () => {
+    const resume = buildSessionResumeCommand(session);
+    if (!resume.command) {
+      toast.warning(resume.note);
+      return;
+    }
+    try {
+      await copyTextToClipboard(resume.command);
+      toast.success('已复制 Codex-only resume command');
+    } catch (err) {
+      toast.error(err.message || '复制 resume command 失败');
+    }
+  }, [session]);
+
+  const copyMarkdown = useCallback(async () => {
+    try {
+      await copyTextToClipboard(sessionToMarkdown(session, { project, running }));
+      toast.success('已复制 Markdown transcript');
+    } catch (err) {
+      toast.error(err.message || '复制 Markdown 失败');
+    }
+  }, [project, running, session]);
+
+  const downloadMarkdown = useCallback(() => {
+    try {
+      downloadTextFile(markdownFilenameForSession(session), sessionToMarkdown(session, { project, running }));
+      toast.success('已下载 Markdown transcript');
+    } catch (err) {
+      toast.error(err.message || '下载 Markdown 失败');
+    }
+  }, [project, running, session]);
+
   return (
     <div className="session-detail-body">
       <div className="session-runtime-header">
         <span>Provider: {provider}</span>
         <code>{providerSessionId}</code>
         <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
+        <div className="session-export-actions">
+          <button type="button" onClick={copyResumeCommand} title="Codex-only: 复制 codex resume 命令">
+            Copy resume command
+          </button>
+          <button type="button" onClick={copyMarkdown}>Copy Markdown</button>
+          <button type="button" onClick={downloadMarkdown}>Download Markdown</button>
+        </div>
         <CreateSessionIssueButton session={session} project={project} navigateTo={navigateTo} />
         <SessionInfoPopover
           session={session}
