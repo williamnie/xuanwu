@@ -423,8 +423,18 @@ func TestSessionAPIReferencesFlow(t *testing.T) {
 		"id": "demo", "cwd": projectRoot, "auto_run": 0,
 	})
 	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
-		"project_id": project.ID, "title": "API refs", "status": store.StatusTodo,
+		"project_id": project.ID, "title": "API refs", "description": "Issue description must be injected", "status": store.StatusTodo,
 	})
+	claimed, ok, err := srv.store.ClaimNextIssue(context.Background(), project.ID)
+	if err != nil || !ok {
+		t.Fatalf("claim issue for latest run: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(context.Background(), claimed.ID, "thread-ref", "turn-ref"); err != nil {
+		t.Fatalf("update issue runtime: %v", err)
+	}
+	if _, err := srv.store.UpdateIssue(context.Background(), claimed.ID, store.IssuePatch{Status: ptr(store.StatusFailed), Error: ptr("latest run failure")}); err != nil {
+		t.Fatalf("close issue run: %v", err)
+	}
 	issueID := strconv.FormatInt(issue.ID, 10)
 
 	created := postJSON[runner.SessionCreateResult](t, srv, "/api/sessions", map[string]any{
@@ -435,8 +445,11 @@ func TestSessionAPIReferencesFlow(t *testing.T) {
 			{"type": "file", "path": "notes.md"},
 		},
 	})
-	if created.TurnID == "" || !strings.Contains(apiUserInputText(provider.turnInput), "API refs") {
-		t.Fatalf("create references not passed to Codex: result=%+v prompt=%s", created, apiUserInputText(provider.turnInput))
+	createPrompt := apiUserInputText(provider.turnInput)
+	for _, want := range []string{"API refs", "Issue description must be injected", "latest run: failed", "latest run failure", "file notes.md", "context"} {
+		if created.TurnID == "" || !strings.Contains(createPrompt, want) {
+			t.Fatalf("create references missing %q: result=%+v prompt=%s", want, created, createPrompt)
+		}
 	}
 	records, err := srv.store.ListSessionTurnReferences(context.Background(), created.ProviderSessionID, created.ProviderTurnID)
 	if err != nil || len(records) != 1 {

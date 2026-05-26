@@ -6,6 +6,7 @@ import {
   supportedEffortValues,
 } from './sessionOptions';
 import SessionCommandPanel from './SessionCommandPanel';
+import { COMPOSER_HELP_ITEMS } from './sessionComposerHelp';
 import './SessionComposer.css';
 
 const PERMISSION_PRESETS = [
@@ -75,6 +76,7 @@ export default function SessionComposer({
         onExecute={onExecuteCommand}
         onCancel={onCancelCommand}
       />
+      <ComposerHelp />
       <PromptEditor
         value={value}
         onChange={onChange}
@@ -111,6 +113,15 @@ export default function SessionComposer({
         )}
       />
     </form>
+  );
+}
+
+
+function ComposerHelp() {
+  return (
+    <div className="session-composer-help" aria-label="Composer v2 help">
+      {COMPOSER_HELP_ITEMS.map((item) => <span key={item}>{item}</span>)}
+    </div>
   );
 }
 

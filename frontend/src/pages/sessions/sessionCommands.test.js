@@ -38,6 +38,25 @@ test('run command requires confirmation and cancel keeps null command state', ()
   assert.equal(clearSessionCommandState(), null);
 });
 
+test('command payload preserves structured references for backend execution', () => {
+  const state = createSessionCommandState({ name: 'issue' });
+  const payload = buildRunnerCommandRequest(state, {
+    prompt: '请根据附件创建 issue',
+    projectId: 'runner',
+    references: [
+      { type: 'file', path: 'frontend/src/pages/Sessions.jsx', label: 'Sessions.jsx' },
+      { type: 'issue', id: '91', label: '@file support' },
+    ],
+  });
+
+  assert.deepEqual(payload.references, [
+    { type: 'file', path: 'frontend/src/pages/Sessions.jsx', label: 'Sessions.jsx' },
+    { type: 'issue', id: '91', label: '@file support' },
+  ]);
+  assert.equal(payload.command.args.project_id, 'runner');
+  assert.equal(payload.command.args.prompt, '请根据附件创建 issue');
+});
+
 test('issue command creates triage draft payload with project and source session', () => {
   const state = createSessionCommandState({ name: 'issue' });
   const payload = buildRunnerCommandRequest(state, {

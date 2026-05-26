@@ -139,3 +139,26 @@ Composer v2 错误应在发送前优先拦截；发送后错误由后端返回�
 - `/status` 状态命令：用真实 API 返回状态卡片。
 - `/issue` 表单命令：创建 issue，不再只插 prompt 模板。
 - `/run #id` 命令与确认：状态变更必须有 confirmation 与可验证 run 结果。
+
+## Composer v2 发布门禁
+
+#96 收敛后，Composer v2 不能只靠“菜单出现”或“文本插入”验收，发布前至少运行：
+
+```bash
+node --test frontend/src/pages/sessions/sessionCommands.test.js \
+  frontend/src/pages/sessions/sessionReferences.test.js \
+  frontend/src/pages/sessions/sessionComposerAssist.test.js \
+  frontend/src/pages/sessions/sessionComposerHelp.test.js \
+  frontend/src/components/editor/promptEditorSuggestions.test.js
+go test -count=1 ./backend/internal/api -run 'TestRunnerCommandStatusIssueAndRunFlow|TestRunnerCommandRunRequiresConfirmation|TestSessionAPIReferencesFlow'
+node scripts/smoke-composer-v2.mjs
+```
+
+`node scripts/smoke-composer-v2.mjs` 必须打到当前 live runner API，证明：
+
+- `@file` 可以从项目 workspace 搜索到真实文件 reference。
+- `@issue` / `@file` 作为 structured references 进入 `/issue` command，并落到创建出的 triage draft 证据里。
+- `/status` 返回结构化 issue / project / system 状态，不发送给 Codex 当普通 prompt。
+- `/run` 未确认时返回 400，不会静默 enqueue；确认路径仍由后端单测覆盖。
+
+Smoke 会创建一个临时 triage issue 用于验证 references，然后自动把它标记为 `cancelled`，避免污染待处理看板。

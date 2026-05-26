@@ -342,3 +342,29 @@
     text-overflow: ellipsis;
   }
 }
+
+.session-composer-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.session-composer-help span {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+[data-theme="dark"] .session-composer-help {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .session-composer-help span {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.78);
+}
