@@ -42,6 +42,9 @@ func Run(ctx context.Context, args []string, out, errOut io.Writer, opts Options
 	if args[0] == "system" {
 		return env.runSystem(ctx, args[1:])
 	}
+	if args[0] == "daemon" {
+		return env.runDaemon(ctx, args[1:])
+	}
 	if args[0] == "doctor" {
 		return env.getSystemStatus(ctx, args[1:])
 	}
@@ -82,14 +85,19 @@ func (e commandEnv) addCommonFlags(fs *flag.FlagSet) (*string, *bool) {
 }
 
 func withFlagToken(ctx context.Context, fs *flag.FlagSet) context.Context {
-	token := commonFlagValue(fs, "token")
-	if token == "" {
-		token = tokenFromFlagFile(commonFlagValue(fs, "token-file"))
-	}
+	token := parsedAuthToken(fs)
 	if token == "" {
 		return ctx
 	}
 	return context.WithValue(ctx, authTokenKey{}, token)
+}
+
+func parsedAuthToken(fs *flag.FlagSet) string {
+	token := commonFlagValue(fs, "token")
+	if token == "" {
+		token = tokenFromFlagFile(commonFlagValue(fs, "token-file"))
+	}
+	return token
 }
 
 func commonFlagValue(fs *flag.FlagSet, name string) string {

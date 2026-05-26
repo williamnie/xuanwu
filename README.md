@@ -219,9 +219,15 @@ codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --
 
 # 查看 runner / DB / Codex command 只读健康摘要
 codex-issue-runner system status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --json
+
+# macOS launchd 本机服务生命周期 v1
+codex-issue-runner daemon status --json
+codex-issue-runner daemon logs --lines 80
+codex-issue-runner daemon restart --json
 ```
 
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
+`daemon status/restart/logs` 第一版只支持当前 `scripts/install-launchd.sh` 安装出的 macOS launchd 服务；`status/restart --json` 会输出 `loaded/running/pid/label/listen_addr/version/build_stamp/http_ok/db_ok/log_paths`，`restart` 在 `launchctl kickstart -k` 后会重新验证 `/api/system/status`。`logs` 只 tail launchd stdout/stderr 路径，并会隐藏包含 token/Authorization 的敏感行。
 当前 CLI 子命令不实现 `--help`，`--json` 输出是完整 JSON 文档且可能跨多行。
 
 ## Codex Skill（可选）

@@ -35,6 +35,13 @@ func TestCommandModeRoutesSystemStatusToCLI(t *testing.T) {
 	}
 }
 
+func TestCommandModeRoutesDaemonToCLI(t *testing.T) {
+	serve, args := commandMode([]string{"daemon", "status"})
+	if serve || len(args) != 2 || args[0] != "daemon" {
+		t.Fatalf("expected cli mode, serve=%v args=%v", serve, args)
+	}
+}
+
 func TestRunnerCallbackEnvUsesLoopbackAddrAndTokenFile(t *testing.T) {
 	env := runnerCallbackEnv(config.Config{
 		Addr:          "0.0.0.0:3008",
