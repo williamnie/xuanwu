@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
 import IssueEditModal from '../components/IssueEditModal';
+import IssueWorkflowEvidencePanel from '../components/IssueWorkflowEvidencePanel';
 import { message } from '../store/toastStore';
 import {
   selectRefreshAllData,
@@ -40,6 +41,8 @@ import {
   refinementDraftToIssueRefinement,
   triageReadinessMoveToTodoMessage,
 } from '../utils/issueRefinement';
+import { deriveIssueWorkflowEvidence } from '../utils/issueWorkflowEvidence';
+import { issueRunSessionRef } from '../utils/issueRuns';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -444,6 +447,15 @@ ${error}` : error;
     refreshAllData();
   }, [refreshAllData, updateDetailState]);
 
+  const handleCopyText = useCallback(async (text) => {
+    try {
+      await copyTextToClipboard(text);
+      message.success('已复制到剪贴板');
+    } catch (err) {
+      message.error(err.message || '复制失败');
+    }
+  }, []);
+
   if (loading && !issue) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '16px' }}>
@@ -481,6 +493,7 @@ ${error}` : error;
   const isWaitingAutoRetry = issue.status === 'todo' && Boolean(autoRetryNextAt);
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
+  const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
@@ -774,6 +787,12 @@ ${error}` : error;
         {/* 右侧：元数据信息与运行设置 */}
         <div className="issue-detail-side" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
+          <IssueWorkflowEvidencePanel
+            workflow={workflowEvidence}
+            navigateTo={navigateTo}
+            onCopy={handleCopyText}
+          />
+
           {isWaitingAutoRetry && (
             <div className="glass-card" style={{ background: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.3)', borderLeft: '4px solid var(--warning)' }}>
               <h4 style={{ color: 'var(--warning)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -881,7 +900,13 @@ ${error}` : error;
             </div>
           </div>
 
-          <IssueRunsPanel runs={runs} currentStatus={issue.status} />
+          <IssueRunsPanel
+            issue={issue}
+            runs={runs}
+            currentStatus={issue.status}
+            navigateTo={navigateTo}
+            onCopy={handleCopyText}
+          />
 
           {/* 人工干预区 */}
           <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -995,7 +1020,8 @@ function RefinementItem({ label, value }) {
   );
 }
 
-function IssueRunsPanel({ runs, currentStatus }) {
+function IssueRunsPanel({ issue, runs, currentStatus, navigateTo, onCopy }) {
+  const latestRunId = latestRunFromRuns(runs)?.id || '';
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
       <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1012,7 +1038,14 @@ function IssueRunsPanel({ runs, currentStatus }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
           {runs.map(run => (
-            <IssueRunCard key={run.id} run={run} />
+            <IssueRunCard
+              key={run.id}
+              issue={issue}
+              run={run}
+              isLatest={run.id === latestRunId}
+              navigateTo={navigateTo}
+              onCopy={onCopy}
+            />
           ))}
         </div>
       )}
@@ -1020,13 +1053,18 @@ function IssueRunsPanel({ runs, currentStatus }) {
   );
 }
 
-function IssueRunCard({ run }) {
+function IssueRunCard({ issue, run, isLatest, navigateTo, onCopy }) {
   const running = !run.ended_at;
   const error = run.error ? summarize(run.error, 160) : '';
+  const sessionRef = issueRunSessionRef(issue, run);
+  const sessionId = run.provider_session_id || run.codex_thread_id || issue?.codex_thread_id || '';
+  const turnId = run.provider_turn_id || run.codex_turn_id || issue?.codex_turn_id || '';
   return (
     <article style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Attempt #{run.attempt}</span>
+        <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+          Attempt #{run.attempt}{isLatest ? ' · latest' : ''}
+        </span>
         <span className={`status-badge ${run.status}`} style={{ fontSize: '0.72rem', padding: '3px 8px' }}>
           {running && <span className="status-dot running"></span>}
           {run.status}
@@ -1035,8 +1073,8 @@ function IssueRunCard({ run }) {
 
       <RunField label="Run ID" value={run.id} mono />
       <RunField label="Provider" value={providerLabel(run.provider)} />
-      <RunField label="Session" value={run.provider_session_id || run.codex_thread_id || '暂无'} mono />
-      <RunField label="Turn" value={run.provider_turn_id || run.codex_turn_id || '暂无'} mono />
+      <RunField label="Session" value={sessionId || '暂无'} mono />
+      <RunField label="Turn" value={turnId || '暂无'} mono />
       <RunField label="开始" value={formatDateTime(run.started_at)} />
       <RunField label="结束" value={running ? '运行中' : formatDateTime(run.ended_at)} />
       {run.exit_reason && <RunField label="退出原因" value={run.exit_reason} />}
@@ -1045,8 +1083,35 @@ function IssueRunCard({ run }) {
           {error}
         </div>
       )}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {sessionRef && (
+          <button type="button" className="kanban-card-action-btn" onClick={() => navigateTo?.('sessions', null, sessionRef)}>
+            <ExternalLink size={12} /> 打开 Session
+          </button>
+        )}
+        <button type="button" className="kanban-card-action-btn" onClick={() => onCopy?.(runCopyText(run, sessionRef, sessionId, turnId))}>
+          复制 Run
+        </button>
+      </div>
     </article>
   );
+}
+
+function latestRunFromRuns(runs) {
+  if (!Array.isArray(runs) || runs.length === 0) return null;
+  return runs.reduce((latest, run) => Number(run.attempt || 0) >= Number(latest.attempt || 0) ? run : latest, runs[0]);
+}
+
+function runCopyText(run, sessionRef, sessionId, turnId) {
+  return [
+    `Run ID: ${run.id || ''}`,
+    `Attempt: ${run.attempt || '?'}`,
+    `Status: ${run.status || 'unknown'}`,
+    `Provider: ${providerLabel(run.provider)}`,
+    `Session: ${sessionRef || sessionId || 'none'}`,
+    `Turn: ${turnId || 'none'}`,
+    `Exit: ${run.error || run.exit_reason || 'none'}`,
+  ].join('\n');
 }
 
 function RunField({ label, value, mono = false }) {
@@ -1065,6 +1130,23 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(textarea);
+  if (!ok) throw new Error('当前浏览器不支持复制到剪贴板');
+  return Promise.resolve();
 }
 
 function issueSourceSessionRef(issue) {

@@ -1051,3 +1051,168 @@ input:checked + .slider:before {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Issue workflow/evidence panel */
+.issue-workflow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.issue-workflow-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.issue-workflow-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.issue-workflow-header p,
+.issue-workflow-empty {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.issue-workflow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.issue-workflow-step {
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--text-muted);
+  border-radius: 10px;
+  padding: 9px 10px;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.issue-workflow-step.done { border-left-color: #10b981; }
+.issue-workflow-step.active { border-left-color: #3b82f6; }
+.issue-workflow-step.warning { border-left-color: var(--warning); }
+.issue-workflow-step.blocked { border-left-color: var(--error); }
+.issue-workflow-step.missing { border-left-color: #94a3b8; }
+
+.issue-workflow-step-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.issue-workflow-step-top strong {
+  font-size: 0.83rem;
+}
+
+.issue-workflow-state {
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(100, 116, 139, 0.1);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.issue-workflow-state.done { color: #10b981; background: rgba(16, 185, 129, 0.1); }
+.issue-workflow-state.active { color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+.issue-workflow-state.warning { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+.issue-workflow-state.blocked { color: var(--error); background: var(--error-bg); }
+
+.issue-workflow-step-evidence {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.issue-workflow-evidence-summary {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.02);
+  min-width: 0;
+}
+
+.issue-workflow-latest-run {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.02);
+  min-width: 0;
+}
+
+.issue-workflow-summary-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.issue-workflow-summary-field:last-child {
+  margin-bottom: 0;
+}
+
+.issue-workflow-summary-field span,
+.issue-workflow-latest-run span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.issue-workflow-summary-field strong,
+.issue-workflow-latest-run strong,
+.issue-workflow-latest-run code,
+.issue-workflow-latest-run p {
+  overflow-wrap: anywhere;
+}
+
+.issue-workflow-latest-run {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.issue-workflow-latest-run > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.issue-workflow-latest-run code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.issue-workflow-latest-run p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.issue-workflow-run-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
