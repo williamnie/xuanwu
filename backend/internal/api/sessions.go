@@ -35,10 +35,11 @@ type sessionMessageRequest struct {
 
 type sessionDetailResponse struct {
 	agent.Session
-	Model        string                    `json:"model,omitempty"`
-	LinkedIssue  *linkedSessionIssue       `json:"linked_issue,omitempty"`
-	SourceIssues []linkedSessionIssue      `json:"source_issues,omitempty"`
-	TokenUsage   *codexusage.UsageSnapshot `json:"token_usage,omitempty"`
+	Model          string                            `json:"model,omitempty"`
+	LinkedIssue    *linkedSessionIssue               `json:"linked_issue,omitempty"`
+	SourceIssues   []linkedSessionIssue              `json:"source_issues,omitempty"`
+	CommandHistory []store.SessionCommandEventRecord `json:"command_history,omitempty"`
+	TokenUsage     *codexusage.UsageSnapshot         `json:"token_usage,omitempty"`
 }
 
 type linkedSessionIssue struct {
@@ -238,11 +239,12 @@ func parseSessionRefValue(raw string) sessionRef {
 func (s *Server) enrichSessionDetail(r *http.Request, session agent.Session) sessionDetailResponse {
 	meta, _ := codexusage.ReadSessionMetadata(r.Context(), s.sessionMetadataPath(session.Path))
 	return sessionDetailResponse{
-		Session:      session,
-		Model:        meta.Model,
-		LinkedIssue:  s.linkedIssue(r, session.ProviderSessionID),
-		SourceIssues: s.sourceIssues(r, session.ProviderSessionID),
-		TokenUsage:   meta.TokenUsage,
+		Session:        session,
+		Model:          meta.Model,
+		LinkedIssue:    s.linkedIssue(r, session.ProviderSessionID),
+		SourceIssues:   s.sourceIssues(r, session.ProviderSessionID),
+		CommandHistory: s.sessionCommandHistory(r, session.ProviderSessionID),
+		TokenUsage:     meta.TokenUsage,
 	}
 }
 

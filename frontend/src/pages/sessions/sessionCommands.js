@@ -66,6 +66,7 @@ export function validateSessionCommand(commandState, context = {}) {
 export function buildRunnerCommandRequest(commandState, context = {}, { confirmed = false } = {}) {
   const command = buildRunnerCommand(commandState, context, confirmed);
   const payload = { command };
+  if (context.sessionId) payload.session_id = String(context.sessionId).trim();
   if (String(context.prompt || '').trim()) payload.prompt = String(context.prompt || '').trim();
   if (Array.isArray(context.references) && context.references.length) payload.references = context.references;
   return payload;

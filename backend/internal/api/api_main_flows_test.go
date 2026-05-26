@@ -536,3 +536,81 @@ func assertAPIEventReason(t *testing.T, srv *Server, issueID int64, typ, reason 
 	}
 	t.Fatalf("missing event %s: %+v", typ, events)
 }
+
+func TestRunnerCommandPersistsSessionHistoryAndSourceMetadata(t *testing.T) {
+	srv := newTestServerWithCodex(t, sessionDetailCodex{
+		noopCodex: noopCodex{ch: make(chan agent.Event)},
+	})
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	seed := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": project.ID, "title": "Existing target", "description": "Check status", "status": store.StatusTriage,
+	})
+
+	_ = postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"session_id": "codex:thread-1",
+		"prompt":     "请查询 token=secret-value 是否会泄露",
+		"references": []map[string]any{{"type": "issue", "id": strconv.FormatInt(seed.ID, 10), "label": "Existing target"}},
+		"command":    map[string]any{"name": "status", "args": map[string]any{"issue_id": seed.ID, "api_token": "secret-value"}},
+	})
+	created := postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"session_id": "codex:thread-1",
+		"prompt":     "从 composer 创建可追溯 issue",
+		"command":    map[string]any{"name": "issue", "args": map[string]any{"project_id": project.ID}},
+	})
+	if created.Issue == nil || created.Issue.SourceSessionID != "thread-1" ||
+		!strings.Contains(created.Issue.SourceExcerpt, "Composer /issue") {
+		t.Fatalf("created issue should keep command source metadata: %+v", created.Issue)
+	}
+	_ = postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"session_id": "codex:thread-1",
+		"command":    map[string]any{"name": "run", "args": map[string]any{"issue_id": created.Issue.ID, "confirmed": true}},
+	})
+	_ = postRunnerCommandFailure(t, srv, map[string]any{
+		"session_id": "codex:thread-1",
+		"command":    map[string]any{"name": "run", "args": map[string]any{"issue_id": created.Issue.ID}},
+	})
+
+	detail := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-1")
+	if len(detail.CommandHistory) != 4 {
+		t.Fatalf("command history should persist across session detail reads: %+v", detail.CommandHistory)
+	}
+	if detail.CommandHistory[0].CommandName != "status" || detail.CommandHistory[0].TargetIssueID != seed.ID ||
+		!strings.Contains(detail.CommandHistory[0].ResultSummary, "issue #1 is triage") ||
+		strings.Contains(detail.CommandHistory[0].PromptSummary, "secret-value") ||
+		strings.Contains(detail.CommandHistory[0].CommandArgsJSON, "secret-value") ||
+		!strings.Contains(detail.CommandHistory[0].CommandArgsJSON, "[redacted]") {
+		t.Fatalf("unexpected status history: %+v", detail.CommandHistory[0])
+	}
+	if detail.CommandHistory[1].CommandName != "issue" || detail.CommandHistory[1].CreatedIssueID != created.Issue.ID {
+		t.Fatalf("unexpected issue history: %+v", detail.CommandHistory[1])
+	}
+	if detail.CommandHistory[2].CommandName != "run" || detail.CommandHistory[2].EnqueuedIssueID != created.Issue.ID ||
+		!strings.Contains(detail.CommandHistory[2].ResultSummary, "enqueued issue") {
+		t.Fatalf("unexpected run history: %+v", detail.CommandHistory[2])
+	}
+	if detail.CommandHistory[3].Error == "" || strings.Contains(strings.ToLower(detail.CommandHistory[3].Error), "secret-value") {
+		t.Fatalf("failure history should keep a safe error summary: %+v", detail.CommandHistory[3])
+	}
+}
+
+func TestRunnerCommandWithoutSessionDoesNotCreateSessionHistory(t *testing.T) {
+	srv := newTestServerWithCodex(t, sessionDetailCodex{
+		noopCodex: noopCodex{ch: make(chan agent.Event)},
+	})
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Target", "status": store.StatusTriage,
+	})
+	_ = postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"command": map[string]any{"name": "status", "args": map[string]any{"issue_id": 1}},
+	})
+
+	detail := getJSON[sessionDetailResponse](t, srv, "/api/sessions/codex:thread-1")
+	if len(detail.CommandHistory) != 0 {
+		t.Fatalf("unscoped command should not fake session history: %+v", detail.CommandHistory)
+	}
+}

@@ -50,6 +50,7 @@ func (s *Store) init() error {
 		issueEventsSchema,
 		issueRunsSchema,
 		sessionTurnReferencesSchema,
+		sessionCommandEventsSchema,
 		cronTasksSchema,
 		uploadsSchema,
 		appPreferencesSchema,
@@ -57,6 +58,7 @@ func (s *Store) init() error {
 		`create index if not exists idx_issues_queue on issues(project_id, status, priority, created_at)`,
 		`create index if not exists idx_issue_runs_issue on issue_runs(issue_id, attempt)`,
 		`create index if not exists idx_session_turn_references_turn on session_turn_references(provider_session_id, provider_turn_id)`,
+		`create index if not exists idx_session_command_events_session on session_command_events(provider_session_id, id)`,
 		`create index if not exists idx_cron_tasks_due on cron_tasks(status, next_run_at)`,
 	}
 	for _, stmt := range stmts {

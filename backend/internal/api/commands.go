@@ -13,6 +13,7 @@ import (
 )
 
 type runnerCommandRequest struct {
+	SessionID  string                    `json:"session_id,omitempty"`
 	Command    runnerCommandPayload      `json:"command"`
 	Prompt     string                    `json:"prompt,omitempty"`
 	References []runner.SessionReference `json:"references,omitempty"`
@@ -60,6 +61,15 @@ func (s *Server) handleCommands(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) executeRunnerCommand(r *http.Request, req runnerCommandRequest) (RunnerCommandResponse, error) {
 	cmd := normalizeRunnerCommand(req.Command)
+	req.Command = cmd
+	res, err := s.executeRunnerCommandAction(r, req, cmd)
+	if saveErr := s.saveCommandEvent(r, req, cmd, res, err); saveErr != nil && err == nil {
+		return RunnerCommandResponse{}, saveErr
+	}
+	return res, err
+}
+
+func (s *Server) executeRunnerCommandAction(r *http.Request, req runnerCommandRequest, cmd runnerCommandPayload) (RunnerCommandResponse, error) {
 	switch cmd.Name {
 	case "status":
 		return s.statusCommand(r.Context(), cmd)
@@ -106,6 +116,7 @@ func (s *Server) statusCommand(ctx context.Context, cmd runnerCommandPayload) (R
 }
 
 func (s *Server) issueCommand(r *http.Request, req runnerCommandRequest, cmd runnerCommandPayload) (RunnerCommandResponse, error) {
+	sourceSessionID := commandSourceSessionID(req, cmd)
 	projectID := firstNonEmpty(commandStringArg(cmd, "project_id"), projectIDFromRefs(req.References))
 	if projectID == "" {
 		return RunnerCommandResponse{}, commandBadRequest("/issue 需要选择 project")
@@ -116,8 +127,9 @@ func (s *Server) issueCommand(r *http.Request, req runnerCommandRequest, cmd run
 	}
 	issue, err := s.store.CreateIssue(r.Context(), store.Issue{
 		ProjectID: projectID, Title: commandStringArg(cmd, "title"), Description: description,
-		Status: store.StatusTriage, SourceSessionID: commandStringArg(cmd, "source_session_id"),
-		SourceTurnID: commandStringArg(cmd, "source_turn_id"), SourceExcerpt: commandStringArg(cmd, "source_excerpt"),
+		Status: store.StatusTriage, SourceSessionID: sourceSessionID,
+		SourceTurnID:  commandStringArg(cmd, "source_turn_id"),
+		SourceExcerpt: firstNonEmpty(commandStringArg(cmd, "source_excerpt"), commandIssueSourceExcerpt(cmd, sourceSessionID)),
 	})
 	if err != nil {
 		return RunnerCommandResponse{}, err
@@ -148,7 +160,7 @@ func (s *Server) runCommand(r *http.Request, cmd runnerCommandPayload) (RunnerCo
 	}
 	s.recordIssueEvent(r, issue.ID, "issue.status_changed", map[string]string{"status": store.StatusTodo})
 	s.kickAutoProject(r, updated.ProjectID)
-	return RunnerCommandResponse{Command: cmd, Issue: &updated, Project: &project, Summary: fmt.Sprintf("enqueued issue #%d", updated.ID)}, nil
+	return RunnerCommandResponse{Command: cmd, Issue: &updated, Project: &project, Summary: fmt.Sprintf("enqueued issue #%d as %s", updated.ID, updated.Status)}, nil
 }
 
 func (s *Server) projectForCommand(ctx context.Context, projectID string) (store.Project, error) {

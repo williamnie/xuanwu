@@ -32,6 +32,8 @@ import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject }
 import SessionComposer from './sessions/SessionComposer';
 import SessionCommandPanel from './sessions/SessionCommandPanel';
 import { buildRunnerCommandRequest, clearSessionCommandState, createSessionCommandState, validateSessionCommand } from './sessions/sessionCommands';
+import SessionCommandReplay from './sessions/SessionCommandReplay.js';
+import './sessions/SessionCommandReplay.css';
 import {
   defaultMessageSettings,
   defaultSessionSettings,
@@ -804,6 +806,9 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     try {
       const result = await api.executeCommand(buildRunnerCommandRequest(commandState, context, { confirmed: true }));
       setResult(result);
+      if (context.sessionId) {
+        await loadSelected(false);
+      }
       await afterSuccess?.(result);
     } catch (err) {
       setError(err.message || 'Command 执行失败');
@@ -1749,6 +1754,7 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
           navigateTo={navigateTo}
         />
       </div>
+      <SessionCommandReplay history={session?.command_history || []} navigateTo={navigateTo} />
       <div className="session-transcript-search" role="search">
         <Search size={14} />
         <input
@@ -1806,6 +1812,7 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
     </div>
   );
 }
+
 
 function SessionInfoPopover({ session, provider, sessionId, model, navigateTo }) {
   const linkedIssue = session?.linked_issue || null;

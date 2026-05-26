@@ -69,6 +69,7 @@ test('issue command creates triage draft payload with project and source session
   assert.equal(validateSessionCommand(state, { prompt: 'draft', projectId: 'runner' }), '');
   assert.equal(payload.command.name, 'issue');
   assert.equal(payload.command.args.project_id, 'runner');
+  assert.equal(payload.session_id, 'codex:thread-1');
   assert.equal(payload.command.args.source_session_id, 'codex:thread-1');
   assert.equal(payload.command.args.prompt, '修复 slash command');
   assert.equal(payload.references[0].id, '86');
