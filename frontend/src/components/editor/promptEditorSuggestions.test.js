@@ -50,6 +50,15 @@ test('detects @project alias and replaces only the search tail', () => {
   assert.deepEqual(context, { trigger: '@', query: 'project run', from: 0, to: 12 });
 });
 
+test('detects skill and plugin aliases for context and request hints', () => {
+  assert.deepEqual(detectPromptSuggestionContext(fakeEditor('@skill brow')), {
+    trigger: '@', query: 'skill brow', from: 0, to: 11,
+  });
+  assert.deepEqual(detectPromptSuggestionContext(fakeEditor('/plugin git')), {
+    trigger: '/', query: 'plugin git', from: 0, to: 11,
+  });
+});
+
 function fakeEditor(text) {
   return {
     state: {

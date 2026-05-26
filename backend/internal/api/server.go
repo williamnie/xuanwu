@@ -127,6 +127,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.handleCommands(w, r)
 		return
 	}
+	if len(parts) > 0 && parts[0] == "capabilities" {
+		s.handleCapabilities(w, r)
+		return
+	}
 	if len(parts) > 0 && parts[0] == "uploads" {
 		s.routeUploads(w, r, parts)
 		return

@@ -18,7 +18,7 @@ export function detectPromptSuggestionContext(editor, triggerChars = ['/', '@'])
   const { from } = state.selection;
   const start = Math.max(0, from - DEFAULT_CONTEXT_LOOKBACK);
   const textBefore = state.doc.textBetween(start, from, '\n', '\0');
-  const context = contextFromMentionAlias(textBefore, from) || contextFromPlainTrigger(textBefore, from);
+  const context = contextFromAlias(textBefore, from) || contextFromPlainTrigger(textBefore, from);
   if (!context || !triggers.has(context.trigger)) return null;
   return context;
 }
@@ -70,15 +70,15 @@ function contextFromPlainTrigger(textBefore, from) {
   return { trigger: match[2], query, from: from - match[2].length - query.length, to: from };
 }
 
-function contextFromMentionAlias(textBefore, from) {
-  const match = /(^|[\s([{])@(project|issue)\s+([^\n]*)$/i.exec(textBefore);
+function contextFromAlias(textBefore, from) {
+  const match = /(^|[\s([{])([/@])(project|issue|skill|plugin)\s+([^\n]*)$/i.exec(textBefore);
   if (!match) return null;
-  const alias = match[2].toLowerCase();
-  const query = match[3] || '';
+  const alias = match[3].toLowerCase();
+  const query = match[4] || '';
   return {
-    trigger: '@',
+    trigger: match[2],
     query: `${alias} ${query}`.trim(),
-    from: from - `@${match[2]} ${query}`.length,
+    from: from - `${match[2]}${match[3]} ${query}`.length,
     to: from,
   };
 }

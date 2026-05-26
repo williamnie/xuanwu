@@ -248,6 +248,8 @@ export const api = {
 
   getCodexModels: () => request('/api/codex/models'),
 
+  getCapabilities: () => request('/api/capabilities'),
+
   getSessionPreferences: () => request('/api/sessions/preferences'),
 
   createSession: (session) => request('/api/sessions', {

@@ -215,6 +215,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
+  const [capabilities, setCapabilities] = useState({ skills: [], plugins: [] });
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
   const [messageCommand, setMessageCommand] = useState(null);
@@ -395,7 +396,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     issues,
     currentProject: selectedSessionProject,
     linkedIssues: selectedSession?.source_issues || [],
-  }), [issues, projects, selectedSession?.source_issues, selectedSessionProject]);
+    capabilities,
+  }), [capabilities, issues, projects, selectedSession?.source_issues, selectedSessionProject]);
   const newSessionReferenceDetails = useMemo(() => buildReferenceDetails(promptReferences, {
     issues, projects, currentProjectId: projectId,
   }), [issues, projectId, projects, promptReferences]);
@@ -494,6 +496,18 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
   }, []);
 
+  const loadCapabilities = useCallback(async () => {
+    try {
+      const result = await api.getCapabilities();
+      setCapabilities({
+        skills: Array.isArray(result?.skills) ? result.skills : [],
+        plugins: Array.isArray(result?.plugins) ? result.plugins : [],
+      });
+    } catch {
+      setCapabilities({ skills: [], plugins: [] });
+    }
+  }, []);
+
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
   useEffect(() => {
     let alive = true;
@@ -521,6 +535,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   }, [selectedId, loadSelected]);
 
   useEffect(() => { loadModels(); }, [loadModels]);
+  useEffect(() => { loadCapabilities(); }, [loadCapabilities]);
   useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
 
   const scheduleListRefresh = useCallback(() => {

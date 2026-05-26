@@ -1,13 +1,17 @@
 const MAX_PROJECT_REFERENCES = 8;
 const MAX_ISSUE_REFERENCES = 12;
 
-export function buildSessionComposerSuggestions({ projects = [], issues = [], currentProject = null, linkedIssues = [] } = {}) {
+export function buildSessionComposerSuggestions({ projects = [], issues = [], currentProject = null, linkedIssues = [], capabilities = {} } = {}) {
   return [
     buildStatusCommand(linkedIssues),
     buildIssueCommand(currentProject),
     buildRunCommand(linkedIssues),
+    ...capabilityRequestSuggestions(capabilities.skills, 'skill'),
+    ...capabilityRequestSuggestions(capabilities.plugins, 'plugin'),
     ...issueReferenceSuggestions(issues),
     ...projectReferenceSuggestions(projects),
+    ...capabilityReferenceSuggestions(capabilities.skills, 'skill'),
+    ...capabilityReferenceSuggestions(capabilities.plugins, 'plugin'),
   ];
 }
 
@@ -114,6 +118,56 @@ function issueReferenceSuggestions(issues) {
     },
     searchText: `issue ${issue.id || ''} #${issue.id || ''} ${issue.title || ''} ${issue.status || ''} ${issue.project_id || ''}`,
   }));
+}
+
+function capabilityReferenceSuggestions(items = [], type) {
+  return capabilityItems(items).map((item) => ({
+    id: `${type}-${item.name}`,
+    trigger: '@',
+    label: `@${type} ${item.name}`,
+    description: capabilityDescription(item, '附加能力说明上下文'),
+    insertText: '',
+    reference: capabilityReference(item, type, 'context'),
+    searchText: capabilitySearchText(item, type),
+  }));
+}
+
+function capabilityRequestSuggestions(items = [], type) {
+  return capabilityItems(items).map((item) => ({
+    id: `command-${type}-${item.name}`,
+    trigger: '/',
+    label: `/${type} ${item.name}`,
+    description: capabilityRequestDescription(item),
+    insertText: '',
+    reference: capabilityReference(item, type, 'request'),
+    searchText: `${type} /${type} request 请求 使用 ${item.name} ${item.summary || ''}`,
+  }));
+}
+
+function capabilityReference(item, type, intent) {
+  return {
+    type,
+    name: cleanInline(item.name),
+    label: cleanInline(item.name),
+    metadata: { summary: cleanInline(item.summary), intent },
+  };
+}
+
+function capabilityItems(items = []) {
+  return Array.isArray(items) ? items.filter((item) => cleanInline(item?.name)).slice(0, 12) : [];
+}
+
+function capabilityDescription(item, fallback) {
+  return cleanInline(item.summary) || fallback;
+}
+
+function capabilityRequestDescription(item) {
+  const summary = cleanInline(item.summary);
+  return summary ? `请求使用该能力 · ${summary}` : '请求使用该能力；不强制启用 tool';
+}
+
+function capabilitySearchText(item, type) {
+  return `${type} @${type} ${item.name || ''} ${item.summary || ''}`;
 }
 
 function cleanInline(value) {

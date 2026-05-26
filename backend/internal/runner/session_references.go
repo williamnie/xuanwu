@@ -65,9 +65,9 @@ func (r *Runner) resolveSessionReference(
 	case "folder":
 		return resolvePathReference(cwd, ref, true)
 	case "skill":
-		return resolveInstalledReference(ref, installedSkillPath, "skill")
+		return resolveInstalledReference(ref, findInstalledSkill, "skill")
 	case "plugin":
-		return resolveInstalledReference(ref, installedPluginPath, "plugin")
+		return resolveInstalledReference(ref, findInstalledPlugin, "plugin")
 	default:
 		return ResolvedSessionReference{}, fmt.Errorf("type %q 不支持", ref.Type)
 	}
@@ -171,54 +171,41 @@ func pathWithin(root, target string) bool {
 
 func resolveInstalledReference(
 	ref SessionReference,
-	lookup func(string) (string, bool),
+	lookup func(string) (InstalledCapability, bool),
 	typ string,
 ) (ResolvedSessionReference, error) {
 	name := firstNonEmpty(ref.Name, ref.ID, ref.Path)
 	if name == "" || strings.Contains(name, string(filepath.Separator)) || strings.Contains(name, "..") {
 		return ResolvedSessionReference{}, fmt.Errorf("%s name 不合法: %q", typ, name)
 	}
-	path, ok := lookup(name)
+	item, ok := lookup(name)
 	if !ok {
 		return ResolvedSessionReference{}, fmt.Errorf("%s %q 未安装", typ, name)
 	}
 	return ResolvedSessionReference{
 		Type: typ, Name: name, Label: firstNonEmpty(ref.Label, name),
-		Summary:  fmt.Sprintf("%s %s (%s)", typ, name, path),
-		Metadata: map[string]any{"path": path},
+		Summary:  installedReferenceSummary(typ, name, item.Summary, ref.Metadata),
+		Metadata: map[string]any{"path": item.Path, "summary": item.Summary, "intent": referenceIntent(ref.Metadata)},
 	}, nil
 }
 
-func installedSkillPath(name string) (string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
+func installedReferenceSummary(typ, name, summary string, metadata map[string]any) string {
+	intent := referenceIntent(metadata)
+	prefix := fmt.Sprintf("%s %s", typ, name)
+	if summary != "" {
+		prefix += ": " + summary
 	}
-	for _, dir := range []string{"skills", "skills/.system", "superpowers/skills"} {
-		path := filepath.Join(home, ".codex", dir, name, "SKILL.md")
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			return path, true
-		}
+	if intent == "request" {
+		return prefix + " · 请求使用；当前 runner 只传达能力意图，不强制启用系统级 tool。"
 	}
-	return "", false
+	return prefix + " · 作为上下文引用；不强制启用系统级 tool。"
 }
 
-func installedPluginPath(name string) (string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
+func referenceIntent(metadata map[string]any) string {
+	if value, ok := metadata["intent"].(string); ok && strings.TrimSpace(value) == "request" {
+		return "request"
 	}
-	root := filepath.Join(home, ".codex", "plugins", "cache")
-	want := strings.ToLower(strings.TrimSpace(name))
-	found := ""
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || !d.IsDir() || strings.ToLower(d.Name()) != want {
-			return nil
-		}
-		found = path
-		return filepath.SkipAll
-	})
-	return found, found != ""
+	return "context"
 }
 
 func assembleSessionPrompt(prompt string, refs []ResolvedSessionReference) string {

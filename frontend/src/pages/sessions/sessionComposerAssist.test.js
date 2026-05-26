@@ -37,6 +37,31 @@ test('prioritizes issues before projects for empty @ suggestions', () => {
   assert.match(mentionLabels[1], /@project Project 1/);
 });
 
+test('builds skill and plugin context references and request hints', () => {
+  const suggestions = buildSessionComposerSuggestions({
+    capabilities: {
+      skills: [{ name: 'browser', summary: 'Browser automation' }],
+      plugins: [{ name: 'github', summary: 'GitHub connector' }],
+    },
+  });
+
+  const skillReference = suggestions.find((item) => item.label === '@skill browser');
+  const pluginReference = suggestions.find((item) => item.label === '@plugin github');
+  const skillHint = suggestions.find((item) => item.label === '/skill browser');
+  const pluginHint = suggestions.find((item) => item.label === '/plugin github');
+
+  assert.deepEqual(skillReference.reference, {
+    type: 'skill',
+    name: 'browser',
+    label: 'browser',
+    metadata: { summary: 'Browser automation', intent: 'context' },
+  });
+  assert.deepEqual(pluginReference.reference.type, 'plugin');
+  assert.deepEqual(skillHint.reference.metadata.intent, 'request');
+  assert.match(skillHint.description, /请求使用/);
+  assert.deepEqual(pluginHint.reference.metadata.intent, 'request');
+});
+
 test('slash suggestions expose structured command payloads', () => {
   const suggestions = buildSessionComposerSuggestions({
     currentProject: { id: 'runner', name: 'Codex Runner' },
