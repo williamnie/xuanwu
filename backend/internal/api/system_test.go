@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
 func TestSystemRestartAPI(t *testing.T) {
@@ -46,8 +49,10 @@ func TestSystemStatusIncludesProviderAvailabilityWithoutSecrets(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret-value")
 
 	srv := newTestServer(t)
+	srv.SetAuthToken("secret-token")
 	srv.SetSystemConfig(SystemConfig{CodexCmd: "codex"})
 	req := httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
 	rr := httptest.NewRecorder()
 	srv.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -58,6 +63,7 @@ func TestSystemStatusIncludesProviderAvailabilityWithoutSecrets(t *testing.T) {
 	if strings.Contains(body, "codex-secret-value") || strings.Contains(body, "anthropic-secret-value") {
 		t.Fatalf("system status leaked secret: %s", body)
 	}
+	assertNoTokenLeak(t, body)
 	var status systemStatus
 	if err := json.Unmarshal([]byte(body), &status); err != nil {
 		t.Fatalf("decode system status: %v", err)
@@ -89,4 +95,121 @@ func providerStatusByID(statuses []providerStatus) map[string]providerStatus {
 		out[status.ID] = status
 	}
 	return out
+}
+
+func TestSystemDoctorIncludesRuntimeSummaryWithoutTokens(t *testing.T) {
+	srv := newTestServer(t)
+	seedDoctorData(t, srv)
+	srv.SetAuthToken("secret-token")
+	srv.SetSystemConfig(SystemConfig{
+		Addr: "127.0.0.1:3008", DBPath: filepath.Join(t.TempDir(), "app.db"),
+		CodexCmd: "missing-codex-for-test", AuthEnabled: true, WebMode: "embedded",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/doctor", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	doctor := decodeResponse[runtimeDoctor](t, srv, req, http.StatusOK)
+
+	assertDoctorServiceSummary(t, doctor)
+	assertDoctorProjectSummary(t, doctor)
+	assertNoTokenLeak(t, mustMarshalDoctor(t, doctor))
+}
+
+func seedDoctorData(t *testing.T, srv *Server) {
+	t.Helper()
+	running := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 1,
+	})
+	held, err := srv.store.CreateProject(context.Background(), store.Project{
+		ID: "held", Name: "Held", CWD: t.TempDir(), AutoRun: 0,
+	})
+	if err != nil {
+		t.Fatalf("create held project: %v", err)
+	}
+	_, err = srv.store.SetProjectHold(context.Background(), held.ID, store.ProjectHold{
+		Reason: "usage_limit", Message: "paused", LastCheckAt: "2026-05-24T10:00:00Z",
+		LastCheckError: "rate limited",
+	})
+	if err != nil {
+		t.Fatalf("set hold: %v", err)
+	}
+	issue, err := srv.store.CreateIssue(context.Background(), store.Issue{
+		ProjectID: running.ID, Title: "failed", Status: store.StatusFailed,
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	if _, err := srv.store.SetIssueStatus(context.Background(), issue.ID, store.StatusFailed, "runner boom"); err != nil {
+		t.Fatalf("set issue error: %v", err)
+	}
+	_, err = srv.store.CreateCronTask(context.Background(), store.CronTask{
+		Name: "cron", Status: store.CronStatusPaused, Error: "cron boom",
+	})
+	if err != nil {
+		t.Fatalf("create cron task: %v", err)
+	}
+}
+
+func assertDoctorServiceSummary(t *testing.T, doctor runtimeDoctor) {
+	t.Helper()
+	if doctor.Service.Version == "" || doctor.Service.Build.Version == "" {
+		t.Fatalf("doctor missing version/build: %+v", doctor.Service)
+	}
+	if doctor.Listen.Addr != "127.0.0.1:3008" || !doctor.Auth.Enabled || !doctor.Auth.CurrentRequestAuthorized {
+		t.Fatalf("doctor missing listen/auth summary: %+v", doctor)
+	}
+	if doctor.RecentErrors.Count != 3 || doctor.RecentErrors.LatestAt == "" {
+		t.Fatalf("doctor recent error summary mismatch: %+v", doctor.RecentErrors)
+	}
+}
+
+func assertDoctorProjectSummary(t *testing.T, doctor runtimeDoctor) {
+	t.Helper()
+	if doctor.Runner.RunningLoops != 1 || len(doctor.Projects) != 2 {
+		t.Fatalf("doctor missing runner/project summary: %+v", doctor)
+	}
+	project := doctorProjectByID(doctor.Projects, "demo")
+	if project.LoopStatus != "running" || !hasString(project.ProviderCapabilities, "issue_execution") {
+		t.Fatalf("doctor project summary mismatch: %+v", project)
+	}
+	if len(doctor.Providers) == 0 || !hasString(doctor.Providers[0].Capabilities, "issue_execution") {
+		t.Fatalf("doctor provider capabilities missing: %+v", doctor.Providers)
+	}
+}
+
+func mustMarshalDoctor(t *testing.T, doctor runtimeDoctor) string {
+	t.Helper()
+	body, err := json.Marshal(doctor)
+	if err != nil {
+		t.Fatalf("marshal doctor: %v", err)
+	}
+	return string(body)
+}
+
+func doctorProjectByID(projects []doctorProject, id string) doctorProject {
+	for _, project := range projects {
+		if project.ID == id {
+			return project
+		}
+	}
+	return doctorProject{}
+}
+
+func hasString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func assertNoTokenLeak(t *testing.T, body string) {
+	t.Helper()
+	if strings.Contains(body, "secret-token") || strings.Contains(body, "CODEX_RUNNER_AUTH_TOKEN") {
+		t.Fatalf("doctor leaked token material: %s", body)
+	}
+	if strings.Contains(strings.ToLower(body), "auth_token") {
+		t.Fatalf("doctor leaked auth token field: %s", body)
+	}
 }

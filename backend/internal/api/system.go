@@ -79,7 +79,7 @@ func (s *Server) routeSystem(w http.ResponseWriter, r *http.Request, parts []str
 		return
 	}
 	if len(parts) == 2 && parts[1] == "doctor" {
-		s.handleSystemStatus(w, r)
+		s.handleSystemDoctor(w, r)
 		return
 	}
 	if len(parts) == 2 && parts[1] == "restart" {

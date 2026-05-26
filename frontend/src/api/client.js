@@ -157,6 +157,8 @@ export const api = {
 
   getSystemStatus: () => request('/api/system/status'),
 
+  getRuntimeDoctor: () => request('/api/system/doctor'),
+
   restartSystem: () => request('/api/system/restart', {
     method: 'POST',
     body: JSON.stringify({}),

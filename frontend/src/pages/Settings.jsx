@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw, ServerCog } from 'lucide-react';
+import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-react';
 import CronTasksPanel from '../components/CronTasksPanel';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
@@ -32,8 +32,12 @@ function RuntimeStatusPanel() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [doctorLoading, setDoctorLoading] = useState(false);
 
   useEffect(() => { loadStatus(setStatus, setError, setLoading); }, []);
+
+  const handleCopyDoctor = () => copyDoctor(setDoctorLoading);
+  const handleDownloadDoctor = () => downloadDoctor(setDoctorLoading);
 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -46,10 +50,20 @@ function RuntimeStatusPanel() {
             只读状态检查，不启动新的 Codex 深度探针。
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={() => loadStatus(setStatus, setError, setLoading)} disabled={loading}>
-          <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
-          刷新
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary" onClick={handleCopyDoctor} disabled={doctorLoading}>
+            <Copy size={15} />
+            复制诊断摘要
+          </button>
+          <button className="btn btn-secondary" onClick={handleDownloadDoctor} disabled={doctorLoading}>
+            <Download size={15} />
+            下载 JSON
+          </button>
+          <button className="btn btn-secondary" onClick={() => loadStatus(setStatus, setError, setLoading)} disabled={loading}>
+            <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
+            刷新
+          </button>
+        </div>
       </div>
       {error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{error}</div>}
       {!error && <RuntimeStatusBody status={status} loading={loading} />}
@@ -63,6 +77,63 @@ function loadStatus(setStatus, setError, setLoading) {
     .then(data => { setStatus(data); setError(''); })
     .catch(err => setError(err.message || '读取 runtime status 失败'))
     .finally(() => setLoading(false));
+}
+
+async function copyDoctor(setDoctorLoading) {
+  await withDoctor(setDoctorLoading, async (summary) => {
+    await copyText(formatDoctor(summary));
+    message.success('诊断摘要已复制');
+  });
+}
+
+async function downloadDoctor(setDoctorLoading) {
+  await withDoctor(setDoctorLoading, async (summary) => {
+    downloadText(`codex-runtime-doctor-${safeTimestamp(summary.generated_at)}.json`, formatDoctor(summary));
+    message.success('诊断 JSON 已下载');
+  });
+}
+
+async function withDoctor(setDoctorLoading, action) {
+  setDoctorLoading(true);
+  try {
+    await action(await api.getRuntimeDoctor());
+  } catch (err) {
+    message.error(err.message || '生成诊断摘要失败');
+  } finally {
+    setDoctorLoading(false);
+  }
+}
+
+function formatDoctor(summary) {
+  return JSON.stringify(summary, null, 2);
+}
+
+function safeTimestamp(value) {
+  return (value || new Date().toISOString()).replace(/[:.]/g, '-');
+}
+
+function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return Promise.resolve();
+}
+
+function downloadText(filename, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function RuntimeStatusBody({ status, loading }) {
