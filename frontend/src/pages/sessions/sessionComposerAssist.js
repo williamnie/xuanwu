@@ -3,8 +3,9 @@ const MAX_ISSUE_REFERENCES = 12;
 
 export function buildSessionComposerSuggestions({ projects = [], issues = [], currentProject = null, linkedIssues = [] } = {}) {
   return [
-    buildIssueCommand(currentProject),
     buildStatusCommand(linkedIssues),
+    buildIssueCommand(currentProject),
+    buildRunCommand(linkedIssues),
     ...projectReferenceSuggestions(projects),
     ...issueReferenceSuggestions(issues),
   ];
@@ -39,8 +40,9 @@ function buildIssueCommand(currentProject) {
     id: 'command-issue',
     trigger: '/',
     label: '/issue',
-    description: '插入创建 issue 的结构化提示',
-    insertText: issueCommandPrompt(currentProject),
+    description: '创建 triage issue draft，不会直接运行',
+    insertText: '',
+    command: { name: 'issue', args: issueCommandArgs(currentProject) },
     searchText: 'issue create 创建 任务 结构化',
   };
 }
@@ -50,10 +52,34 @@ function buildStatusCommand(linkedIssues) {
     id: 'command-status',
     trigger: '/',
     label: '/status',
-    description: '插入查询 linked issue / runner 状态的提示',
-    insertText: statusCommandPrompt(linkedIssues),
+    description: '直接查询 linked issue / runner 状态',
+    insertText: '',
+    command: { name: 'status', args: issueArgFromLinked(linkedIssues) },
     searchText: 'status 状态 runner linked issue 查询',
   };
+}
+
+
+function buildRunCommand(linkedIssues) {
+  return {
+    id: 'command-run',
+    trigger: '/',
+    label: '/run',
+    description: '确认后 enqueue 指定 issue',
+    insertText: '',
+    command: { name: 'run', args: issueArgFromLinked(linkedIssues), requires_confirmation: true },
+    searchText: 'run enqueue 运行 issue 确认',
+  };
+}
+
+function issueCommandArgs(currentProject) {
+  const id = cleanInline(currentProject?.id);
+  return id ? { project_id: id } : {};
+}
+
+function issueArgFromLinked(linkedIssues = []) {
+  const id = cleanInline(linkedIssues.find((issue) => issue?.id)?.id);
+  return id ? { issue_id: Number(id) } : {};
 }
 
 function projectReferenceSuggestions(projects) {

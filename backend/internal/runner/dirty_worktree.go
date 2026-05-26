@@ -9,7 +9,7 @@ import (
 
 const maxDirtyWorktreeEntries = 12
 
-func (r *Runner) ensureCleanWorktree(ctx context.Context, cwd string) error {
+func (r *Runner) EnsureCleanWorktree(ctx context.Context, cwd string) error {
 	if !r.dirtyWorktreeCheck {
 		return nil
 	}

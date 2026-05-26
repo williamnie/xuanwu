@@ -30,6 +30,8 @@ import {
 } from './sessions/sessionMessageQueue';
 import { PROJECT_REQUIRED_MESSAGE, canCreateSession, resolveLastSessionProject } from './sessions/newSessionGuards';
 import SessionComposer from './sessions/SessionComposer';
+import SessionCommandPanel from './sessions/SessionCommandPanel';
+import { buildRunnerCommandRequest, clearSessionCommandState, createSessionCommandState, validateSessionCommand } from './sessions/sessionCommands';
 import {
   defaultMessageSettings,
   defaultSessionSettings,
@@ -215,6 +217,13 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [modelsError, setModelsError] = useState('');
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
+  const [messageCommand, setMessageCommand] = useState(null);
+  const [messageCommandResult, setMessageCommandResult] = useState(null);
+  const [messageCommandError, setMessageCommandError] = useState('');
+  const [commandExecuting, setCommandExecuting] = useState(false);
+  const [promptCommand, setPromptCommand] = useState(null);
+  const [promptCommandResult, setPromptCommandResult] = useState(null);
+  const [promptCommandError, setPromptCommandError] = useState('');
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
@@ -401,6 +410,13 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     () => referenceValidation(messageReferenceDetails),
     [messageReferenceDetails],
   );
+  const newCommandContext = useMemo(() => ({
+    prompt, references: promptReferences, projectId, sessionId: '', linkedIssues: [],
+  }), [projectId, prompt, promptReferences]);
+  const messageCommandContext = useMemo(() => ({
+    prompt: message, references: messageReferences, projectId: selectedSessionProject?.id || '',
+    sessionId: selectedId, linkedIssues: selectedSession?.source_issues || [],
+  }), [message, messageReferences, selectedId, selectedSession?.source_issues, selectedSessionProject?.id]);
 
   useEffect(() => {
     refreshData(['projects', 'issues']);
@@ -674,6 +690,10 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       toast.error(messageReferenceValidation.message);
       return;
     }
+    if (messageCommand) {
+      toast.error('Command 请使用 command 面板执行，不会作为普通 prompt 发送。');
+      return;
+    }
     if (sessionRunning || currentQueuedMessages.length > 0) {
       const queued = createQueuedSessionMessage({
         id: queuedMessageId(),
@@ -693,10 +713,60 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       await startSessionMessage(selectedId, promptText, messageSettings, messageReferences);
       setMessage('');
       setMessageReferences([]);
+      setMessageCommand(clearSessionCommandState());
     } catch (err) {
       toast.error(err.message || '发送消息失败');
     } finally {
       setSending(false);
+    }
+  };
+
+
+  const executeNewSessionCommand = async () => {
+    await executeSessionCommand({
+      commandState: promptCommand,
+      context: newCommandContext,
+      setResult: setPromptCommandResult,
+      setError: setPromptCommandError,
+      afterSuccess: async () => {
+        await refreshData(['issues', 'projects']);
+        setPrompt('');
+        setPromptReferences([]);
+      },
+    });
+  };
+
+  const executeMessageCommand = async () => {
+    await executeSessionCommand({
+      commandState: messageCommand,
+      context: messageCommandContext,
+      setResult: setMessageCommandResult,
+      setError: setMessageCommandError,
+      afterSuccess: async () => {
+        await refreshData(['issues', 'projects']);
+        setMessage('');
+        setMessageReferences([]);
+      },
+    });
+  };
+
+  const executeSessionCommand = async ({ commandState, context, setResult, setError, afterSuccess }) => {
+    if (!commandState || commandExecuting) return;
+    const validation = validateSessionCommand(commandState, context);
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    setCommandExecuting(true);
+    setError('');
+    try {
+      const result = await api.executeCommand(buildRunnerCommandRequest(commandState, context, { confirmed: true }));
+      setResult(result);
+      await afterSuccess?.(result);
+    } catch (err) {
+      setError(err.message || 'Command 执行失败');
+    } finally {
+      setCommandExecuting(false);
     }
   };
 
@@ -769,6 +839,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setLiveEvents([]);
       setPrompt('');
       setPromptReferences([]);
+      setPromptCommand(clearSessionCommandState());
       await loadFirstPage();
     } catch (err) {
       toast.error(err.message || '创建 session 失败');
@@ -816,6 +887,9 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
               setSelectedId('');
               setActiveView('new');
               setPrompt('');
+              setPromptCommand(clearSessionCommandState());
+              setPromptCommandResult(null);
+              setPromptCommandError('');
               setSessionRunning(false);
             }}
           >
@@ -966,6 +1040,21 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   onAttachReference={(reference) => setMessageReferences((current) => addSessionReference(current, reference))}
                   onRemoveReference={(key) => setMessageReferences((current) => removeSessionReference(current, key))}
                   hasInvalidReferences={messageReferenceValidation.hasErrors}
+                  commandState={messageCommand}
+                  commandContext={messageCommandContext}
+                  commandExecuting={commandExecuting}
+                  commandResult={messageCommandResult}
+                  commandError={messageCommandError}
+                  onSelectCommand={(command) => {
+                    setMessageCommand(createSessionCommandState(command));
+                    setMessageCommandResult(null);
+                    setMessageCommandError('');
+                  }}
+                  onExecuteCommand={executeMessageCommand}
+                  onCancelCommand={() => {
+                    setMessageCommand(clearSessionCommandState());
+                    setMessageCommandError('');
+                  }}
                   onSubmit={sendMessage}
                   onStop={interrupt}
                   onCancelQueuedMessage={cancelQueuedMessage}
@@ -986,6 +1075,18 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
               </h1>
 
               <div className="new-session-composer-wrapper">
+                <SessionCommandPanel
+                  commandState={promptCommand}
+                  context={newCommandContext}
+                  executing={commandExecuting}
+                  result={promptCommandResult}
+                  error={promptCommandError}
+                  onExecute={executeNewSessionCommand}
+                  onCancel={() => {
+                    setPromptCommand(clearSessionCommandState());
+                    setPromptCommandError('');
+                  }}
+                />
                 <PromptEditor
                   value={prompt}
                   onChange={setPrompt}
@@ -996,7 +1097,12 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   referenceDetails={newSessionReferenceDetails}
                   onAttachReference={(reference) => setPromptReferences((current) => addSessionReference(current, reference))}
                   onRemoveReference={(key) => setPromptReferences((current) => removeSessionReference(current, key))}
-                  onSubmitKey={!sending && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors ? handleCreateNewSession : null}
+                  onSelectCommand={(command) => {
+                    setPromptCommand(createSessionCommandState(command));
+                    setPromptCommandResult(null);
+                    setPromptCommandError('');
+                  }}
+                  onSubmitKey={!promptCommand && !sending && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors ? handleCreateNewSession : null}
                   footerControls={(
                     <NewSessionPermissionControl
                       settings={sessionSettings}
@@ -1008,7 +1114,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                       settings={sessionSettings}
                       models={models}
                       sending={sending}
-                      canSubmit={hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
+                      canSubmit={!promptCommand && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
                       onModelChange={(value) => handleSettingChange('model', value)}
                       onSubmit={handleCreateNewSession}
                     />

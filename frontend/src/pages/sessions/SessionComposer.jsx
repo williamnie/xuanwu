@@ -5,6 +5,7 @@ import {
   modelLabel,
   supportedEffortValues,
 } from './sessionOptions';
+import SessionCommandPanel from './SessionCommandPanel';
 import './SessionComposer.css';
 
 const PERMISSION_PRESETS = [
@@ -37,6 +38,14 @@ export default function SessionComposer({
   onAttachReference = null,
   onRemoveReference = null,
   hasInvalidReferences = false,
+  commandState = null,
+  commandContext = {},
+  commandExecuting = false,
+  commandResult = null,
+  commandError = '',
+  onSelectCommand = null,
+  onExecuteCommand = null,
+  onCancelCommand = null,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
@@ -44,8 +53,9 @@ export default function SessionComposer({
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
   const hasQueuedMessages = queuedMessages.length > 0;
   const interrupting = isInterruptPending(interruptState, selectedId);
-  const hasContent = Boolean(value.trim() || referenceDetails.length);
-  const canSubmitMessage = Boolean(selectedId && hasContent && !hasInvalidReferences && !sending && !interrupting);
+  const hasCommand = Boolean(commandState);
+  const hasContent = Boolean(value.trim() || referenceDetails.length || hasCommand);
+  const canSubmitMessage = Boolean(selectedId && hasContent && !hasCommand && !hasInvalidReferences && !sending && !interrupting);
   const submitFromEditor = () => onSubmit({ preventDefault() {} });
   return (
     <form className="session-composer" onSubmit={onSubmit}>
@@ -56,6 +66,15 @@ export default function SessionComposer({
         onRetry={onRetryQueuedMessage}
       />
       <InterruptStatus interruptState={interruptState} selectedId={selectedId} />
+      <SessionCommandPanel
+        commandState={commandState}
+        context={commandContext}
+        executing={commandExecuting}
+        result={commandResult}
+        error={commandError}
+        onExecute={onExecuteCommand}
+        onCancel={onCancelCommand}
+      />
       <PromptEditor
         value={value}
         onChange={onChange}
@@ -78,13 +97,14 @@ export default function SessionComposer({
         referenceDetails={referenceDetails}
         onAttachReference={onAttachReference}
         onRemoveReference={onRemoveReference}
+        onSelectCommand={onSelectCommand}
         actions={(
           <ComposerActions
             sending={sending}
             running={running}
             interrupting={interrupting}
             selectedId={selectedId}
-            canSend={hasContent && !hasInvalidReferences}
+            canSend={!hasCommand && hasContent && !hasInvalidReferences}
             hasQueuedMessages={hasQueuedMessages}
             onStop={onStop}
           />

@@ -123,6 +123,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.routeCronTasks(w, r, parts)
 		return
 	}
+	if len(parts) > 0 && parts[0] == "commands" {
+		s.handleCommands(w, r)
+		return
+	}
 	if len(parts) > 0 && parts[0] == "uploads" {
 		s.routeUploads(w, r, parts)
 		return

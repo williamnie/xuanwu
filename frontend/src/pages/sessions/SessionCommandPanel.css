@@ -1,0 +1,135 @@
+.session-command-panel {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(15, 23, 42, 0.03));
+  color: var(--text-primary);
+}
+
+.session-command-panel.danger {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.03));
+}
+
+.session-command-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-command-title-row,
+.session-command-actions,
+.session-command-chips,
+.session-command-result {
+  display: flex;
+  align-items: center;
+}
+
+.session-command-title-row {
+  gap: 9px;
+}
+
+.session-command-title-row p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.session-command-icon,
+.session-command-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+}
+
+.session-command-icon {
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: rgba(59, 130, 246, 0.14);
+  color: #2563eb;
+}
+
+.session-command-chips {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.session-command-chip {
+  padding: 3px 8px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.session-command-chip.warning {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.session-command-actions {
+  gap: 8px;
+  align-self: start;
+  flex-shrink: 0;
+}
+
+.session-command-actions button {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.session-command-cancel {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-secondary);
+}
+
+.session-command-execute {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  background: var(--primary);
+  color: #fff;
+}
+
+.session-command-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.session-command-error {
+  color: #dc2626;
+  font-size: 0.78rem;
+}
+
+.session-command-result {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.11);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.session-command-result strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 760px) {
+  .session-command-panel,
+  .session-command-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

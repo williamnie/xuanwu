@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/textproto"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -786,6 +787,32 @@ func postProjectHoldResumeConflict(t *testing.T, h http.Handler, path string) pr
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	return decodeResponse[projectHoldResumeConflict](t, h, req, http.StatusConflict)
+}
+
+func initAPIGitRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for dirty worktree tests")
+	}
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init", "-q", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	return dir
+}
+
+func postRunnerCommandFailure(t *testing.T, h http.Handler, body any) string {
+	t.Helper()
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/commands", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	return rr.Body.String()
 }
 
 func decodeResponse[T any](t *testing.T, h http.Handler, req *http.Request, ok ...int) T {

@@ -304,6 +304,88 @@ func TestRecoveryIgnoresInterruptedStatusChangeRun(t *testing.T) {
 	}
 }
 
+func TestRunnerCommandStatusIssueAndRunFlow(t *testing.T) {
+	srv := newTestServer(t)
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": project.ID, "title": "Command target", "description": "Do it", "status": store.StatusTriage,
+	})
+
+	status := postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"command": map[string]any{"name": "status", "args": map[string]any{"issue_id": issue.ID}},
+	})
+	if status.Command.Name != "status" || status.Issue == nil || status.Issue.ID != issue.ID || status.Project == nil ||
+		status.Project.ID != project.ID || status.System.Runner.AutoRunProjects != 0 {
+		t.Fatalf("unexpected status command response: %+v", status)
+	}
+
+	created := postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"command": map[string]any{
+			"name": "issue",
+			"args": map[string]any{"project_id": project.ID, "prompt": "新的 triage 草稿\n\n验收", "references": []map[string]any{{"type": "issue", "id": strconv.FormatInt(issue.ID, 10)}}},
+		},
+	})
+	if created.Issue == nil || created.Issue.Status != store.StatusTriage || created.Issue.ProjectID != project.ID ||
+		!strings.Contains(created.Issue.Description, "新的 triage 草稿") || !strings.Contains(created.Summary, "created") {
+		t.Fatalf("unexpected issue command response: %+v", created)
+	}
+
+	run := postJSON[RunnerCommandResponse](t, srv, "/api/commands", map[string]any{
+		"command": map[string]any{"name": "run", "args": map[string]any{"issue_id": created.Issue.ID, "confirmed": true}},
+	})
+	if run.Issue == nil || run.Issue.Status != store.StatusTodo {
+		t.Fatalf("run command should enqueue issue: %+v", run)
+	}
+}
+
+func TestRunnerCommandRunRejectsDirtyWorktree(t *testing.T) {
+	repo := initAPIGitRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "scratch.txt"), []byte("dirty"), 0o600); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": repo, "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Dirty safe", "status": store.StatusTriage,
+	})
+
+	body := postRunnerCommandFailure(t, srv, map[string]any{
+		"command": map[string]any{"name": "run", "args": map[string]any{"issue_id": issue.ID, "confirmed": true}},
+	})
+	if !strings.Contains(body, "未提交修改") || !strings.Contains(body, "scratch.txt") {
+		t.Fatalf("dirty run command should expose preflight error: %s", body)
+	}
+	unchanged := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if unchanged.Status != store.StatusTriage {
+		t.Fatalf("dirty preflight must not enqueue issue: %+v", unchanged)
+	}
+}
+
+func TestRunnerCommandRunRequiresConfirmation(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Safe run", "status": store.StatusTriage,
+	})
+
+	body := postRunnerCommandFailure(t, srv, map[string]any{
+		"command": map[string]any{"name": "run", "args": map[string]any{"issue_id": issue.ID}},
+	})
+	if !strings.Contains(body, "需要确认") {
+		t.Fatalf("run without confirmation should explain confirmation requirement: %s", body)
+	}
+	unchanged := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if unchanged.Status != store.StatusTriage {
+		t.Fatalf("cancelled/unconfirmed run must not mutate issue: %+v", unchanged)
+	}
+}
+
 func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
 	session := getJSON[agent.Session](t, srv, "/api/sessions/codex:thread-1")

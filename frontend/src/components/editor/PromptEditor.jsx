@@ -34,11 +34,13 @@ export default function PromptEditor({
   referenceDetails = [],
   onAttachReference = null,
   onRemoveReference = null,
+  onSelectCommand = null,
 }) {
   const fileInputRef = useRef(null);
   const submitKeyRef = useRef(onSubmitKey);
   const suggestionsRef = useRef([]);
   const attachReferenceRef = useRef(onAttachReference);
+  const selectCommandRef = useRef(onSelectCommand);
   const suggestionMenuRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [suggestionMenu, setSuggestionMenuState] = useState(null);
@@ -54,6 +56,7 @@ export default function PromptEditor({
   const editor = usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, {
     suggestionsRef,
     attachReferenceRef,
+    selectCommandRef,
     suggestionMenuRef,
     setSuggestionMenu,
   });
@@ -70,6 +73,10 @@ export default function PromptEditor({
   useLayoutEffect(() => {
     attachReferenceRef.current = onAttachReference;
   }, [onAttachReference]);
+
+  useLayoutEffect(() => {
+    selectCommandRef.current = onSelectCommand;
+  }, [onSelectCommand]);
 
   const visibleSuggestions = useMemo(
     () => filterPromptSuggestionItems(suggestions, suggestionMenu?.context),
@@ -115,6 +122,7 @@ export default function PromptEditor({
           onPick={(item) => {
             applyPromptSuggestion(editor, suggestionMenu.context, item, {
               attachReference: attachReferenceRef.current,
+              selectCommand: selectCommandRef.current,
             });
             setSuggestionMenu(null);
           }}
@@ -203,6 +211,7 @@ function handlePromptEditorKeyDown(event, onSubmitKey, suggestionState) {
     if (action === 'pick') {
       applyPromptSuggestion(menu.editor, menu.context, items[Math.min(menu.activeIndex, items.length - 1)], {
         attachReference: suggestionState.attachReferenceRef.current,
+        selectCommand: suggestionState.selectCommandRef.current,
       });
       suggestionState.setSuggestionMenu(null);
     }
@@ -226,7 +235,12 @@ function updatePromptSuggestionMenu(editor, suggestionState) {
   suggestionState.setSuggestionMenu({ context, activeIndex: 0, editor });
 }
 
-function applyPromptSuggestion(editor, context, item, { attachReference } = {}) {
+function applyPromptSuggestion(editor, context, item, { attachReference, selectCommand } = {}) {
+  if (item?.command && selectCommand) {
+    removePromptSuggestionTrigger(editor, context);
+    selectCommand(item.command);
+    return true;
+  }
   if (item?.reference && attachReference) {
     removePromptSuggestionTrigger(editor, context);
     attachReference(item.reference);

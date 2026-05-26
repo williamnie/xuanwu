@@ -159,6 +159,11 @@ export const api = {
 
   getRuntimeDoctor: () => request('/api/system/doctor'),
 
+  executeCommand: (payload) => request('/api/commands', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   restartSystem: () => request('/api/system/restart', {
     method: 'POST',
     body: JSON.stringify({}),
