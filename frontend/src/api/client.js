@@ -250,6 +250,15 @@ export const api = {
 
   getCapabilities: () => request('/api/capabilities'),
 
+  searchProjectReferences: (id, { type = '', query = '', limit = 40 } = {}) => {
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    if (query) params.append('query', query);
+    if (limit) params.append('limit', String(limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/projects/${id}/references/search${qs}`);
+  },
+
   getSessionPreferences: () => request('/api/sessions/preferences'),
 
   createSession: (session) => request('/api/sessions', {

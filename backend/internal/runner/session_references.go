@@ -132,9 +132,19 @@ func resolvePathReference(cwd string, ref SessionReference, wantDir bool) (Resol
 	}
 	return ResolvedSessionReference{
 		Type: typ, Path: filepath.ToSlash(rel), Label: filepath.ToSlash(rel),
-		Summary:  fmt.Sprintf("%s %s (cwd: %s)", typ, filepath.ToSlash(rel), root),
-		Metadata: map[string]any{"cwd": root},
+		Summary:  pathReferenceSummary(root, target, rel, typ, info),
+		Metadata: pathReferenceMetadata(root, rel, typ, info),
 	}, nil
+}
+
+func pathReferenceMetadata(root, rel, typ string, info os.FileInfo) map[string]any {
+	metadata := map[string]any{"cwd": root}
+	if typ == "folder" {
+		metadata["file_count"] = countFolderFiles(filepath.Join(root, rel), nil)
+	} else {
+		metadata["size_bytes"] = info.Size()
+	}
+	return metadata
 }
 
 func safeProjectPath(cwd, rawPath string) (string, string, string, error) {

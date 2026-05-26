@@ -68,7 +68,16 @@ export default function PromptEditor({
 
   useLayoutEffect(() => {
     suggestionsRef.current = Array.isArray(suggestions) ? suggestions : [];
-  }, [suggestions]);
+    if (editor) {
+      updatePromptSuggestionMenu(editor, {
+        suggestionsRef,
+        attachReferenceRef,
+        selectCommandRef,
+        suggestionMenuRef,
+        setSuggestionMenu,
+      });
+    }
+  }, [editor, setSuggestionMenu, suggestions]);
 
   useLayoutEffect(() => {
     attachReferenceRef.current = onAttachReference;

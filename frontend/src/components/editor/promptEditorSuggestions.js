@@ -71,7 +71,7 @@ function contextFromPlainTrigger(textBefore, from) {
 }
 
 function contextFromAlias(textBefore, from) {
-  const match = /(^|[\s([{])([/@])(project|issue|skill|plugin)\s+([^\n]*)$/i.exec(textBefore);
+  const match = /(^|[\s([{])([/@])(project|issue|skill|plugin|file|folder)\s+([^\n]*)$/i.exec(textBefore);
   if (!match) return null;
   const alias = match[3].toLowerCase();
   const query = match[4] || '';

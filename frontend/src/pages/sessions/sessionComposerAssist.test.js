@@ -62,6 +62,27 @@ test('builds skill and plugin context references and request hints', () => {
   assert.deepEqual(pluginHint.reference.metadata.intent, 'request');
 });
 
+test('builds file and folder context reference suggestions', () => {
+  const suggestions = buildSessionComposerSuggestions({
+    pathReferences: {
+      files: [{ path: 'frontend/src/pages/Sessions.jsx', size_bytes: 1024 }],
+      folders: [{ path: 'frontend/src/pages', file_count: 3 }],
+    },
+  });
+
+  const file = suggestions.find((item) => item.label === '@file frontend/src/pages/Sessions.jsx');
+  const folder = suggestions.find((item) => item.label === '@folder frontend/src/pages');
+
+  assert.deepEqual(file.reference, {
+    type: 'file',
+    path: 'frontend/src/pages/Sessions.jsx',
+    label: 'frontend/src/pages/Sessions.jsx',
+    metadata: { size_bytes: 1024 },
+  });
+  assert.deepEqual(folder.reference.type, 'folder');
+  assert.equal(folder.reference.metadata.file_count, 3);
+});
+
 test('slash suggestions expose structured command payloads', () => {
   const suggestions = buildSessionComposerSuggestions({
     currentProject: { id: 'runner', name: 'Codex Runner' },

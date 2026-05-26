@@ -216,6 +216,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
   const [capabilities, setCapabilities] = useState({ skills: [], plugins: [] });
+  const [pathReferences, setPathReferences] = useState({ files: [], folders: [] });
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
   const [messageCommand, setMessageCommand] = useState(null);
@@ -397,7 +398,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     currentProject: selectedSessionProject,
     linkedIssues: selectedSession?.source_issues || [],
     capabilities,
-  }), [capabilities, issues, projects, selectedSession?.source_issues, selectedSessionProject]);
+    pathReferences,
+  }), [capabilities, issues, pathReferences, projects, selectedSession?.source_issues, selectedSessionProject]);
   const newSessionReferenceDetails = useMemo(() => buildReferenceDetails(promptReferences, {
     issues, projects, currentProjectId: projectId,
   }), [issues, projectId, projects, promptReferences]);
@@ -419,6 +421,10 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     prompt: message, references: messageReferences, projectId: selectedSessionProject?.id || '',
     sessionId: selectedId, linkedIssues: selectedSession?.source_issues || [],
   }), [message, messageReferences, selectedId, selectedSession?.source_issues, selectedSessionProject?.id]);
+  const pathSearchRequest = useMemo(() => (
+    pathReferenceSearchFromText(prompt, projectId) ||
+    pathReferenceSearchFromText(message, selectedSessionProject?.id || '')
+  ), [message, projectId, prompt, selectedSessionProject?.id]);
 
   useEffect(() => {
     refreshData(['projects', 'issues']);
@@ -507,6 +513,27 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setCapabilities({ skills: [], plugins: [] });
     }
   }, []);
+
+  useEffect(() => {
+    if (!pathSearchRequest) {
+      setPathReferences({ files: [], folders: [] });
+      return undefined;
+    }
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      api.searchProjectReferences(pathSearchRequest.projectId, {
+        type: pathSearchRequest.type, query: pathSearchRequest.query, limit: 40,
+      }).then((result) => {
+        if (alive) setPathReferences({ files: result?.files || [], folders: result?.folders || [] });
+      }).catch(() => {
+        if (alive) setPathReferences({ files: [], folders: [] });
+      });
+    }, 120);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [pathSearchRequest]);
 
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
   useEffect(() => {
@@ -1184,6 +1211,13 @@ function parseApprovalPayload(payload) {
   } catch {
     return { id: '', method: 'approval/requested', params: {} };
   }
+}
+
+function pathReferenceSearchFromText(text, projectId) {
+  if (!projectId) return null;
+  const match = String(text || '').match(/(?:^|\s)@(file|folder)\s+([^\n]*)$/i);
+  if (!match) return null;
+  return { projectId, type: match[1].toLowerCase(), query: match[2].trim() };
 }
 
 function normalizePendingApprovals(requests) {

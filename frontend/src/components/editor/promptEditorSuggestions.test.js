@@ -59,6 +59,15 @@ test('detects skill and plugin aliases for context and request hints', () => {
   });
 });
 
+test('detects file and folder aliases for workspace references', () => {
+  assert.deepEqual(detectPromptSuggestionContext(fakeEditor('@file Sessions')), {
+    trigger: '@', query: 'file Sessions', from: 0, to: 14,
+  });
+  assert.deepEqual(detectPromptSuggestionContext(fakeEditor('@folder src')), {
+    trigger: '@', query: 'folder src', from: 0, to: 11,
+  });
+});
+
 function fakeEditor(text) {
   return {
     state: {

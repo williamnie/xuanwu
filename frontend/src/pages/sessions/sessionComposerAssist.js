@@ -1,13 +1,15 @@
 const MAX_PROJECT_REFERENCES = 8;
 const MAX_ISSUE_REFERENCES = 12;
 
-export function buildSessionComposerSuggestions({ projects = [], issues = [], currentProject = null, linkedIssues = [], capabilities = {} } = {}) {
+export function buildSessionComposerSuggestions({ projects = [], issues = [], currentProject = null, linkedIssues = [], capabilities = {}, pathReferences = {} } = {}) {
   return [
     buildStatusCommand(linkedIssues),
     buildIssueCommand(currentProject),
     buildRunCommand(linkedIssues),
     ...capabilityRequestSuggestions(capabilities.skills, 'skill'),
     ...capabilityRequestSuggestions(capabilities.plugins, 'plugin'),
+    ...pathReferenceSuggestions(pathReferences.files, 'file'),
+    ...pathReferenceSuggestions(pathReferences.folders, 'folder'),
     ...issueReferenceSuggestions(issues),
     ...projectReferenceSuggestions(projects),
     ...capabilityReferenceSuggestions(capabilities.skills, 'skill'),
@@ -130,6 +132,34 @@ function capabilityReferenceSuggestions(items = [], type) {
     reference: capabilityReference(item, type, 'context'),
     searchText: capabilitySearchText(item, type),
   }));
+}
+
+function pathReferenceSuggestions(items = [], type) {
+  return pathReferenceItems(items).map((item) => ({
+    id: `${type}-${item.path}`,
+    trigger: '@',
+    label: `@${type} ${item.path}`,
+    description: pathReferenceDescription(item, type),
+    insertText: '',
+    reference: pathReference(item, type),
+    searchText: `${type} @${type} ${item.path}`,
+  }));
+}
+
+function pathReference(item, type) {
+  const metadata = type === 'folder'
+    ? { file_count: Number(item.file_count || 0) }
+    : { size_bytes: Number(item.size_bytes || 0) };
+  return { type, path: cleanInline(item.path), label: cleanInline(item.path), metadata };
+}
+
+function pathReferenceItems(items = []) {
+  return Array.isArray(items) ? items.filter((item) => cleanInline(item?.path)).slice(0, 40) : [];
+}
+
+function pathReferenceDescription(item, type) {
+  if (type === 'folder') return `${Number(item.file_count || 0)} 个文件`;
+  return `${Number(item.size_bytes || 0)} bytes`;
 }
 
 function capabilityRequestSuggestions(items = [], type) {

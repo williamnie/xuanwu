@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
@@ -26,6 +28,10 @@ func (s *Server) routeProjects(w http.ResponseWriter, r *http.Request, parts []s
 	}
 	if len(parts) == 4 && parts[2] == "loop" {
 		s.handleProjectLoop(w, r, parts[1], parts[3])
+		return
+	}
+	if len(parts) == 4 && parts[2] == "references" && parts[3] == "search" {
+		s.searchProjectReferences(w, r, parts[1])
 		return
 	}
 	writeError(w, http.StatusNotFound, "not found")
@@ -171,6 +177,37 @@ func normalizedProjectProvider(provider string) string {
 		return store.ProviderCodex
 	}
 	return provider
+}
+
+func (s *Server) searchProjectReferences(w http.ResponseWriter, r *http.Request, id string) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	project, err := s.store.GetProject(r.Context(), id)
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
+	result, err := runner.SearchProjectReferences(project.CWD, runner.ProjectReferenceSearchFilter{
+		Type: r.URL.Query().Get("type"), Query: r.URL.Query().Get("query"),
+		Limit: parseReferenceSearchLimit(r),
+	})
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func parseReferenceSearchLimit(r *http.Request) int {
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		return 40
+	}
+	if limit > 200 {
+		return 200
+	}
+	return limit
 }
 
 func (s *Server) handleProjectLoop(w http.ResponseWriter, r *http.Request, id, action string) {
