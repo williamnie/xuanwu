@@ -58,6 +58,39 @@ func TestRunnerUsesExecutionOnlyProviderCapability(t *testing.T) {
 	}
 }
 
+func TestRunnerInjectsAgentProfileForExecutionOnlyProvider(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateAgentProfile(ctx, store.AgentProfile{
+		ID: "nightly", Name: "Nightly", Provider: agent.ProviderFakeExecutionOnly,
+		DefaultInstructions: "profile instructions",
+		SkillIntents:        "[\"codex-issue-runner\"]",
+	})
+	_, _ = st.CreateProject(ctx, store.Project{
+		ID: "demo", Name: "Demo", CWD: t.TempDir(),
+		Provider: agent.ProviderFakeExecutionOnly, DefaultAgentProfileID: "nightly",
+	})
+	created, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
+	issue, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || issue.ID != created.ID {
+		t.Fatalf("claim issue ok=%v issue=%+v err=%v", ok, issue, err)
+	}
+	fake := &fakeExecutionOnlyProvider{}
+	r := New(st, events.NewBus(), fake)
+
+	r.runIssue(issue)
+
+	if !strings.Contains(fake.input.Prompt, "Agent Profile v0") ||
+		!strings.Contains(fake.input.Prompt, "profile instructions") ||
+		!strings.Contains(fake.input.Prompt, "codex-issue-runner") {
+		t.Fatalf("profile summary missing from provider prompt:\n%s", fake.input.Prompt)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 || runs[0].AgentProfileID != "nightly" {
+		t.Fatalf("run profile not recorded: runs=%+v err=%v", runs, err)
+	}
+}
+
 func TestRunnerRejectsSessionsForExecutionOnlyProvider(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()

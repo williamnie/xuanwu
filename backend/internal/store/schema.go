@@ -13,6 +13,23 @@ create table if not exists projects (
   sandbox text not null default 'workspace-write',
   sort_order integer not null default 0,
   created_at text not null,
+  updated_at text not null,
+  default_agent_profile_id text not null default ''
+);`
+
+const agentProfilesSchema = `
+create table if not exists agent_profiles (
+  id text primary key,
+  name text not null,
+  provider text not null default 'codex',
+  model text not null default '',
+  reasoning_effort text not null default '',
+  approval_policy text not null default '',
+  sandbox text not null default '',
+  default_instructions text not null default '',
+  skill_intents_json text not null default '[]',
+  plugin_intents_json text not null default '[]',
+  created_at text not null,
   updated_at text not null
 );`
 
@@ -75,6 +92,7 @@ create table if not exists issue_runs (
   ended_at text not null default '',
   exit_reason text not null default '',
   error text not null default '',
+  agent_profile_id text not null default '',
   foreign key(issue_id) references issues(id) on delete cascade
 );`
 

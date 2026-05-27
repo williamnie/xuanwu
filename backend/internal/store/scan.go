@@ -11,11 +11,24 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
+func scanAgentProfile(row scanner) (AgentProfile, error) {
+	var profile AgentProfile
+	err := row.Scan(&profile.ID, &profile.Name, &profile.Provider, &profile.Model,
+		&profile.ReasoningEffort, &profile.ApprovalPolicy, &profile.Sandbox,
+		&profile.DefaultInstructions, &profile.SkillIntents, &profile.PluginIntents,
+		&profile.CreatedAt, &profile.UpdatedAt)
+	if err == nil {
+		applyAgentProfileDefaults(&profile)
+	}
+	return profile, err
+}
+
 func scanProject(row scanner) (Project, error) {
 	var p Project
 	var holdReason, holdMessage, holdSince, nextCheckAt, lastCheckAt, lastCheckError sql.NullString
 	err := row.Scan(&p.ID, &p.Name, &p.CWD, &p.Provider, &p.ProviderConfig,
-		&p.AutoRun, &p.Model, &p.ApprovalPolicy, &p.Sandbox, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
+		&p.AutoRun, &p.Model, &p.ApprovalPolicy, &p.Sandbox,
+		&p.DefaultAgentProfileID, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
 		&holdReason, &holdMessage, &holdSince, &nextCheckAt, &lastCheckAt, &lastCheckError)
 	if err == nil {
 		applyProjectDefaults(&p)
@@ -62,7 +75,7 @@ func scanIssueRun(row scanner) (IssueRun, error) {
 	err := row.Scan(&run.ID, &run.IssueID, &run.Attempt, &run.Status,
 		&run.Provider, &run.ProviderSessionID, &run.ProviderTurnID,
 		&run.CodexThreadID, &run.CodexTurnID, &run.StartedAt,
-		&run.EndedAt, &run.ExitReason, &run.Error)
+		&run.EndedAt, &run.ExitReason, &run.Error, &run.AgentProfileID)
 	return run, err
 }
 

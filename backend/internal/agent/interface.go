@@ -27,12 +27,15 @@ type IssueRunner interface {
 }
 
 type IssueRunInput struct {
-	IssueID   int64
-	ProjectID string
-	CWD       string
-	Prompt    string
-	Model     string
-	Log       func(Event)
+	IssueID         int64
+	ProjectID       string
+	CWD             string
+	Prompt          string
+	Model           string
+	ReasoningEffort string
+	ApprovalPolicy  string
+	Sandbox         string
+	Log             func(Event)
 }
 
 type IssueRunResult struct {

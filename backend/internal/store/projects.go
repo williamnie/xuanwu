@@ -25,7 +25,10 @@ func (s *Store) ListProjects(ctx context.Context) ([]Project, error) {
 		}
 		projects = append(projects, p)
 	}
-	return projects, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return s.attachProjectAgentProfiles(ctx, projects)
 }
 
 func (s *Store) CreateProject(ctx context.Context, p Project) (Project, error) {
@@ -43,10 +46,11 @@ func (s *Store) CreateProject(ctx context.Context, p Project) (Project, error) {
 	}
 	p.SortOrder = nextOrder
 	_, err = s.db.ExecContext(ctx, `insert into projects
-		(id, name, cwd, provider, provider_config_json, auto_run, model, approval_policy, sandbox, sort_order, created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(id, name, cwd, provider, provider_config_json, auto_run, model,
+		approval_policy, sandbox, default_agent_profile_id, sort_order, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.Name, p.CWD, p.Provider, p.ProviderConfig, p.AutoRun, p.Model,
-		p.ApprovalPolicy, p.Sandbox, p.SortOrder, t, t)
+		p.ApprovalPolicy, p.Sandbox, p.DefaultAgentProfileID, p.SortOrder, t, t)
 	if err != nil {
 		return Project{}, err
 	}
@@ -59,7 +63,10 @@ func (s *Store) GetProject(ctx context.Context, id string) (Project, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return Project{}, err
+	}
+	return s.attachProjectAgentProfile(ctx, p)
 }
 
 func (s *Store) UpdateProject(ctx context.Context, id string, patch ProjectPatch) (Project, error) {
@@ -70,10 +77,10 @@ func (s *Store) UpdateProject(ctx context.Context, id string, patch ProjectPatch
 	patch = applyProjectPatchDefaults(&p, patch)
 	applyProjectPatch(&p, patch)
 	_, err = s.db.ExecContext(ctx, `update projects set name=?, cwd=?, provider=?,
-		provider_config_json=?, auto_run=?,
-		model=?, approval_policy=?, sandbox=?, updated_at=? where id=?`,
+		provider_config_json=?, auto_run=?, model=?, approval_policy=?, sandbox=?,
+		default_agent_profile_id=?, updated_at=? where id=?`,
 		p.Name, p.CWD, p.Provider, p.ProviderConfig, p.AutoRun,
-		p.Model, p.ApprovalPolicy, p.Sandbox, now(), id)
+		p.Model, p.ApprovalPolicy, p.Sandbox, p.DefaultAgentProfileID, now(), id)
 	if err != nil {
 		return Project{}, err
 	}
@@ -104,6 +111,32 @@ func (s *Store) ReorderProjects(ctx context.Context, ids []string) ([]Project, e
 		return nil, err
 	}
 	return s.ListProjects(ctx)
+}
+
+func (s *Store) attachProjectAgentProfile(ctx context.Context, project Project) (Project, error) {
+	projects, err := s.attachProjectAgentProfiles(ctx, []Project{project})
+	if err != nil || len(projects) == 0 {
+		return project, err
+	}
+	return projects[0], nil
+}
+
+func (s *Store) attachProjectAgentProfiles(ctx context.Context, projects []Project) ([]Project, error) {
+	for idx := range projects {
+		profileID := strings.TrimSpace(projects[idx].DefaultAgentProfileID)
+		if profileID == "" {
+			continue
+		}
+		profile, err := s.GetAgentProfile(ctx, profileID)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		projects[idx].DefaultAgentProfile = &profile
+	}
+	return projects, nil
 }
 
 func validateProjectIDs(ctx context.Context, tx *sql.Tx, ids []string) error {
@@ -159,6 +192,7 @@ func applyProjectDefaults(p *Project) {
 		p.Name = projectNameFromCWD(p.CWD)
 	}
 	p.Model = normalizeProjectModel(p.Model)
+	p.DefaultAgentProfileID = normalizeIdentifier(p.DefaultAgentProfileID)
 }
 
 func applyProjectPatchDefaults(p *Project, patch ProjectPatch) ProjectPatch {
@@ -185,6 +219,10 @@ func applyProjectPatchDefaults(p *Project, patch ProjectPatch) ProjectPatch {
 	if patch.ProviderConfig != nil {
 		config := normalizeProjectProviderConfig(*patch.ProviderConfig)
 		patch.ProviderConfig = &config
+	}
+	if patch.DefaultAgentProfileID != nil {
+		profileID := normalizeIdentifier(*patch.DefaultAgentProfileID)
+		patch.DefaultAgentProfileID = &profileID
 	}
 	return patch
 }
@@ -214,6 +252,9 @@ func applyProjectPatch(p *Project, patch ProjectPatch) {
 	if patch.Sandbox != nil {
 		p.Sandbox = *patch.Sandbox
 	}
+	if patch.DefaultAgentProfileID != nil {
+		p.DefaultAgentProfileID = normalizeIdentifier(*patch.DefaultAgentProfileID)
+	}
 }
 
 func (s *Store) nextProjectSortOrder(ctx context.Context) (int, error) {
@@ -227,7 +268,7 @@ func (s *Store) nextProjectSortOrder(ctx context.Context) (int, error) {
 
 const projectSelect = `select p.id, p.name, p.cwd, p.provider, p.provider_config_json,
 	p.auto_run, p.model, p.approval_policy,
-	p.sandbox, p.sort_order, p.created_at, p.updated_at,
+	p.sandbox, p.default_agent_profile_id, p.sort_order, p.created_at, p.updated_at,
 	h.reason, h.message, h.hold_since, h.next_check_at, h.last_check_at, h.last_check_error
 	from projects p left join project_holds h on h.project_id=p.id`
 

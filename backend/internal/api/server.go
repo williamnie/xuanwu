@@ -114,6 +114,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.routeProjects(w, r, parts)
 		return
 	}
+	if len(parts) > 0 && parts[0] == "agent-profiles" {
+		s.routeAgentProfiles(w, r, parts)
+		return
+	}
 	if len(parts) > 0 && parts[0] == "issues" {
 		s.routeIssues(w, r, parts)
 		return

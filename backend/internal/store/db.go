@@ -45,6 +45,7 @@ func (s *Store) init() error {
 	stmts := []string{
 		`pragma foreign_keys = on`,
 		projectsSchema,
+		agentProfilesSchema,
 		issueTemplatesSchema,
 		issuesSchema,
 		issueEventsSchema,
@@ -57,6 +58,7 @@ func (s *Store) init() error {
 		projectHoldsSchema,
 		`create index if not exists idx_issues_queue on issues(project_id, status, priority, created_at)`,
 		`create index if not exists idx_issue_runs_issue on issue_runs(issue_id, attempt)`,
+		`create index if not exists idx_agent_profiles_provider on agent_profiles(provider)`,
 		`create index if not exists idx_session_turn_references_turn on session_turn_references(provider_session_id, provider_turn_id)`,
 		`create index if not exists idx_session_command_events_session on session_command_events(provider_session_id, id)`,
 		`create index if not exists idx_cron_tasks_due on cron_tasks(status, next_run_at)`,
@@ -118,6 +120,12 @@ func (s *Store) migrateProjectColumns() error {
 		_, err := s.db.Exec(`alter table projects add column sort_order integer not null default 0`)
 		if err != nil {
 			return fmt.Errorf("migrate projects.sort_order: %w", err)
+		}
+	}
+	if !columns["default_agent_profile_id"] {
+		_, err := s.db.Exec(`alter table projects add column default_agent_profile_id text not null default ''`)
+		if err != nil {
+			return fmt.Errorf("migrate projects.default_agent_profile_id: %w", err)
 		}
 	}
 	if err := s.backfillProjectProvider(); err != nil {
@@ -203,6 +211,7 @@ func (s *Store) migrateIssueRunColumns() error {
 		"provider":            `alter table issue_runs add column provider text not null default 'codex'`,
 		"provider_session_id": `alter table issue_runs add column provider_session_id text not null default ''`,
 		"provider_turn_id":    `alter table issue_runs add column provider_turn_id text not null default ''`,
+		"agent_profile_id":    `alter table issue_runs add column agent_profile_id text not null default ''`,
 	}
 	for name, stmt := range additions {
 		if columns[name] {

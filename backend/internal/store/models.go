@@ -25,22 +25,51 @@ const (
 	CronLastStatusFailed   = "failed"
 )
 
+type AgentProfile struct {
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	Provider            string `json:"provider"`
+	Model               string `json:"model"`
+	ReasoningEffort     string `json:"reasoning_effort"`
+	ApprovalPolicy      string `json:"approval_policy"`
+	Sandbox             string `json:"sandbox"`
+	DefaultInstructions string `json:"default_instructions"`
+	SkillIntents        string `json:"skill_intents"`
+	PluginIntents       string `json:"plugin_intents"`
+	CreatedAt           string `json:"created_at"`
+	UpdatedAt           string `json:"updated_at"`
+}
+
+type AgentProfilePatch struct {
+	Name                *string `json:"name"`
+	Provider            *string `json:"provider"`
+	Model               *string `json:"model"`
+	ReasoningEffort     *string `json:"reasoning_effort"`
+	ApprovalPolicy      *string `json:"approval_policy"`
+	Sandbox             *string `json:"sandbox"`
+	DefaultInstructions *string `json:"default_instructions"`
+	SkillIntents        *string `json:"skill_intents"`
+	PluginIntents       *string `json:"plugin_intents"`
+}
+
 type Project struct {
-	ID                   string       `json:"id"`
-	Name                 string       `json:"name"`
-	CWD                  string       `json:"cwd"`
-	Provider             string       `json:"provider"`
-	ProviderCapabilities []string     `json:"provider_capabilities,omitempty"`
-	ProviderConfig       string       `json:"provider_config_json"`
-	AutoRun              int          `json:"auto_run"`
-	Model                string       `json:"model"`
-	ApprovalPolicy       string       `json:"approval_policy"`
-	Sandbox              string       `json:"sandbox"`
-	SortOrder            int          `json:"sort_order"`
-	CreatedAt            string       `json:"created_at"`
-	UpdatedAt            string       `json:"updated_at"`
-	LoopStatus           string       `json:"loop_status,omitempty"`
-	Hold                 *ProjectHold `json:"hold,omitempty"`
+	ID                    string        `json:"id"`
+	Name                  string        `json:"name"`
+	CWD                   string        `json:"cwd"`
+	Provider              string        `json:"provider"`
+	ProviderCapabilities  []string      `json:"provider_capabilities,omitempty"`
+	ProviderConfig        string        `json:"provider_config_json"`
+	AutoRun               int           `json:"auto_run"`
+	Model                 string        `json:"model"`
+	ApprovalPolicy        string        `json:"approval_policy"`
+	Sandbox               string        `json:"sandbox"`
+	DefaultAgentProfileID string        `json:"default_agent_profile_id"`
+	DefaultAgentProfile   *AgentProfile `json:"default_agent_profile,omitempty"`
+	SortOrder             int           `json:"sort_order"`
+	CreatedAt             string        `json:"created_at"`
+	UpdatedAt             string        `json:"updated_at"`
+	LoopStatus            string        `json:"loop_status,omitempty"`
+	Hold                  *ProjectHold  `json:"hold,omitempty"`
 }
 
 type ProjectHold struct {
@@ -53,14 +82,15 @@ type ProjectHold struct {
 }
 
 type ProjectPatch struct {
-	Name           *string `json:"name"`
-	CWD            *string `json:"cwd"`
-	Provider       *string `json:"provider"`
-	ProviderConfig *string `json:"provider_config_json"`
-	AutoRun        *int    `json:"auto_run"`
-	Model          *string `json:"model"`
-	ApprovalPolicy *string `json:"approval_policy"`
-	Sandbox        *string `json:"sandbox"`
+	Name                  *string `json:"name"`
+	CWD                   *string `json:"cwd"`
+	Provider              *string `json:"provider"`
+	ProviderConfig        *string `json:"provider_config_json"`
+	AutoRun               *int    `json:"auto_run"`
+	Model                 *string `json:"model"`
+	ApprovalPolicy        *string `json:"approval_policy"`
+	Sandbox               *string `json:"sandbox"`
+	DefaultAgentProfileID *string `json:"default_agent_profile_id"`
 }
 
 type SessionPreferences struct {
@@ -127,6 +157,7 @@ type IssueRun struct {
 	EndedAt           string `json:"ended_at"`
 	ExitReason        string `json:"exit_reason"`
 	Error             string `json:"error"`
+	AgentProfileID    string `json:"agent_profile_id"`
 }
 
 type IssuePatch struct {

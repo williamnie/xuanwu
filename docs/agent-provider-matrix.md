@@ -180,6 +180,14 @@ node scripts/experiments/claude-provider-poc.mjs --timeout-ms 60000
 3. provider 权限策略必须允许执行最终 CLI，或在 approval UI 中能批准该命令。
 4. runner 端保持现有兜底：agent run completed 但 issue 未 terminal => failed。
 
+## Agent Profile v0 骨架（issue 102）
+
+- 当前第一版只落项目级默认 profile，不做 issue override / marketplace。
+- profile 字段用于描述 provider、model、reasoning effort、approval、sandbox、默认 instructions 与 skill/plugin intent。
+- runner 会把 profile summary 注入 issue prompt，并在 `issue_runs.agent_profile_id` 记录本次使用的 profile id。
+- skill/plugin intent 只作为“请求使用/上下文”注入 prompt，不安装插件、不授权工具、不绕过当前 provider 权限策略。
+- 未配置 profile 时继续沿用项目现有 provider/model/approval/sandbox 行为。
+
 ## 不建议现在做
 
 - 不做 provider marketplace / 插件市场。

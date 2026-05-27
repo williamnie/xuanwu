@@ -85,6 +85,82 @@ func TestRenderPromptUsesIssueTemplate(t *testing.T) {
 	}
 }
 
+func TestCodexIssueRunUsesAgentProfileModelEffortAndPrompt(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateAgentProfile(ctx, store.AgentProfile{
+		ID: "nightly", Name: "Nightly", Provider: "codex",
+		Model: "gpt-5.5", ReasoningEffort: "high",
+		ApprovalPolicy: "never", Sandbox: "workspace-write",
+		DefaultInstructions: "profile instructions",
+		SkillIntents:        "[\"codex-issue-runner\"]",
+	})
+	_, _ = st.CreateProject(ctx, store.Project{
+		ID: "demo", Name: "Demo", CWD: t.TempDir(), DefaultAgentProfileID: "nightly",
+	})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
+	issue, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue ok=%v err=%v", ok, err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	r.runIssue(issue)
+
+	if len(fake.threadInputs) != 1 || fake.threadInputs[0].Model != "gpt-5.5" ||
+		fake.threadInputs[0].ReasoningEffort != "high" {
+		t.Fatalf("thread input did not use profile model/effort: %+v", fake.threadInputs)
+	}
+	if len(fake.turnInputs) == 0 || !strings.Contains(fake.turnInputs[0].Text, "profile instructions") {
+		t.Fatalf("turn prompt missing profile instructions: %+v", fake.turnInputs)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 || runs[0].AgentProfileID != "nightly" {
+		t.Fatalf("run profile not recorded: runs=%+v err=%v", runs, err)
+	}
+}
+
+func TestRenderPromptIncludesAgentProfileSummary(t *testing.T) {
+	project := store.Project{
+		ID: "demo", Name: "Demo", CWD: "/tmp/demo", Provider: "codex",
+		Model: "gpt-5.5", ApprovalPolicy: "never", Sandbox: "workspace-write",
+		DefaultAgentProfileID: "nightly",
+		DefaultAgentProfile: &store.AgentProfile{
+			ID: "nightly", Name: "Nightly Codex", Provider: "codex",
+			Model: "gpt-5.5", ReasoningEffort: "high",
+			ApprovalPolicy: "never", Sandbox: "workspace-write",
+			DefaultInstructions: "夜间执行：先验证再收尾。",
+			SkillIntents:        "[\"codex-issue-runner\"]",
+			PluginIntents:       "[\"browser\"]",
+		},
+	}
+	issue := store.Issue{ID: 7, Title: "任务", Description: "实现 profile 注入"}
+	got := renderPrompt(project, issue)
+	for _, want := range []string{
+		"Agent Profile v0（项目默认执行画像）",
+		"Profile: nightly · Nightly Codex",
+		"Model: gpt-5.5 · Effort: high · Approval: never · Sandbox: workspace-write",
+		"夜间执行：先验证再收尾。",
+		"Skills requested as context/intents only: codex-issue-runner",
+		"Plugins requested as context/intents only: browser",
+		"这些 skill/plugin intents 只是请求使用/上下文，不会安装插件、授权工具或绕过当前 provider 权限策略。",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderPromptSkipsAgentProfileWhenUnset(t *testing.T) {
+	project := store.Project{ID: "demo", Name: "Demo", CWD: "/tmp/demo"}
+	issue := store.Issue{ID: 7, Title: "任务", Description: "无 profile"}
+	got := renderPrompt(project, issue)
+	if strings.Contains(got, "Agent Profile v0") {
+		t.Fatalf("unset profile should not inject summary:\n%s", got)
+	}
+}
+
 func TestRenderPromptDefaultStartsWithIssueContent(t *testing.T) {
 	project := store.Project{ID: "demo", Name: "Demo", CWD: "/tmp/demo"}
 	issue := store.Issue{ID: 7, Title: "自动派生标题", Description: "修复 session 列表标题重复"}

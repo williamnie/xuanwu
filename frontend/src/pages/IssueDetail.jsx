@@ -43,6 +43,7 @@ import {
 } from '../utils/issueRefinement';
 import { deriveIssueWorkflowEvidence } from '../utils/issueWorkflowEvidence';
 import { issueRunSessionRef } from '../utils/issueRuns';
+import { issueRunProfileLabel, summarizeAgentProfile } from '../utils/agentProfiles';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -149,6 +150,7 @@ function issueRunSignature(run) {
     run?.ended_at,
     run?.exit_reason,
     run?.error,
+    run?.agent_profile_id,
   ].join('\u001f');
 }
 
@@ -494,6 +496,7 @@ ${error}` : error;
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
   const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
+  const profileSummary = summarizeAgentProfile(project?.default_agent_profile);
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
@@ -776,6 +779,8 @@ ${error}` : error;
                 Session ID: {runtimeIdentity.sessionId || '暂无'}
                 <br />
                 Turn ID: {runtimeIdentity.turnId || '暂无'}
+                <br />
+                Agent Profile: {profileSummary}
               </div>
 
               {renderTerminalLines()}
@@ -850,6 +855,12 @@ ${error}` : error;
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Agent Profile:</span>
+                <span style={{ fontWeight: 600 }}>{profileSummary}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>仅描述默认 instructions 与 skill/plugin intent，不授予额外工具权限。</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ color: 'var(--text-muted)' }}>执行 Session ID:</span>
                 <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {runtimeIdentity.sessionId || '未开始分配'}
@@ -902,6 +913,7 @@ ${error}` : error;
 
           <IssueRunsPanel
             issue={issue}
+            project={project}
             runs={runs}
             currentStatus={issue.status}
             navigateTo={navigateTo}
@@ -1020,7 +1032,7 @@ function RefinementItem({ label, value }) {
   );
 }
 
-function IssueRunsPanel({ issue, runs, currentStatus, navigateTo, onCopy }) {
+function IssueRunsPanel({ issue, project, runs, currentStatus, navigateTo, onCopy }) {
   const latestRunId = latestRunFromRuns(runs)?.id || '';
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
@@ -1041,6 +1053,7 @@ function IssueRunsPanel({ issue, runs, currentStatus, navigateTo, onCopy }) {
             <IssueRunCard
               key={run.id}
               issue={issue}
+              project={project}
               run={run}
               isLatest={run.id === latestRunId}
               navigateTo={navigateTo}
@@ -1053,7 +1066,7 @@ function IssueRunsPanel({ issue, runs, currentStatus, navigateTo, onCopy }) {
   );
 }
 
-function IssueRunCard({ issue, run, isLatest, navigateTo, onCopy }) {
+function IssueRunCard({ issue, project, run, isLatest, navigateTo, onCopy }) {
   const running = !run.ended_at;
   const error = run.error ? summarize(run.error, 160) : '';
   const sessionRef = issueRunSessionRef(issue, run);
@@ -1073,6 +1086,7 @@ function IssueRunCard({ issue, run, isLatest, navigateTo, onCopy }) {
 
       <RunField label="Run ID" value={run.id} mono />
       <RunField label="Provider" value={providerLabel(run.provider)} />
+      <RunField label="Agent Profile" value={issueRunProfileLabel(run, project)} />
       <RunField label="Session" value={sessionId || '暂无'} mono />
       <RunField label="Turn" value={turnId || '暂无'} mono />
       <RunField label="开始" value={formatDateTime(run.started_at)} />
@@ -1108,6 +1122,7 @@ function runCopyText(run, sessionRef, sessionId, turnId) {
     `Attempt: ${run.attempt || '?'}`,
     `Status: ${run.status || 'unknown'}`,
     `Provider: ${providerLabel(run.provider)}`,
+    `Agent Profile: ${run.agent_profile_id || 'none'}`,
     `Session: ${sessionRef || sessionId || 'none'}`,
     `Turn: ${turnId || 'none'}`,
     `Exit: ${run.error || run.exit_reason || 'none'}`,

@@ -50,10 +50,60 @@ func (r *Runner) runIssue(issue store.Issue) {
 }
 
 func (r *Runner) startIssueRun(ctx context.Context, issue store.Issue, project store.Project) error {
+	project = r.projectWithAgentProfile(ctx, project, issue)
 	if issueRunner, ok := r.agent.(agent.IssueRunner); ok {
 		return r.runProviderIssue(ctx, issueRunner, issue, project)
 	}
 	return r.startCodexTurn(ctx, issue, project)
+}
+
+func (r *Runner) projectWithAgentProfile(
+	ctx context.Context,
+	project store.Project,
+	issue store.Issue,
+) store.Project {
+	profileID := latestIssueRunProfileID(ctx, r.store, issue.ID)
+	if profileID == "" {
+		profileID = project.DefaultAgentProfileID
+	}
+	if profileID == "" {
+		return project
+	}
+	profile, err := r.store.GetAgentProfile(ctx, profileID)
+	if err != nil {
+		return project
+	}
+	project.DefaultAgentProfileID = profileID
+	project.DefaultAgentProfile = &profile
+	applyAgentProfileExecutionPreset(&project, profile)
+	return project
+}
+
+func applyAgentProfileExecutionPreset(project *store.Project, profile store.AgentProfile) {
+	if strings.TrimSpace(profile.Model) != "" {
+		project.Model = profile.Model
+	}
+	if strings.TrimSpace(profile.ApprovalPolicy) != "" {
+		project.ApprovalPolicy = profile.ApprovalPolicy
+	}
+	if strings.TrimSpace(profile.Sandbox) != "" {
+		project.Sandbox = profile.Sandbox
+	}
+}
+
+func profileReasoningEffort(profile *store.AgentProfile) string {
+	if profile == nil {
+		return ""
+	}
+	return strings.TrimSpace(profile.ReasoningEffort)
+}
+
+func latestIssueRunProfileID(ctx context.Context, st *store.Store, issueID int64) string {
+	runs, err := st.ListIssueRuns(ctx, issueID)
+	if err != nil || len(runs) == 0 {
+		return ""
+	}
+	return runs[len(runs)-1].AgentProfileID
 }
 
 func (r *Runner) runProviderIssue(
@@ -63,11 +113,14 @@ func (r *Runner) runProviderIssue(
 	project store.Project,
 ) error {
 	result, err := provider.RunIssue(ctx, agent.IssueRunInput{
-		IssueID:   issue.ID,
-		ProjectID: project.ID,
-		CWD:       project.CWD,
-		Prompt:    renderPrompt(project, issue),
-		Model:     project.Model,
+		IssueID:         issue.ID,
+		ProjectID:       project.ID,
+		CWD:             project.CWD,
+		Prompt:          renderPrompt(project, issue),
+		Model:           project.Model,
+		ReasoningEffort: profileReasoningEffort(project.DefaultAgentProfile),
+		ApprovalPolicy:  project.ApprovalPolicy,
+		Sandbox:         project.Sandbox,
 		Log: func(event agent.Event) {
 			r.publishLog(ctx, issue.ID, event)
 		},
@@ -97,9 +150,11 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 	}
 	r.ensureCodexEventPump()
 	threadID, err := r.startThread(ctx, agent.ThreadInput{
-		CWD: project.CWD, Model: project.Model, ApprovalPolicy: project.ApprovalPolicy,
-		Sandbox: project.Sandbox, DeveloperInstructions: developerInstructions(),
-		ThreadSource: agent.ThreadSourceSubagent,
+		CWD: project.CWD, Model: project.Model,
+		ReasoningEffort: profileReasoningEffort(project.DefaultAgentProfile),
+		ApprovalPolicy:  project.ApprovalPolicy, Sandbox: project.Sandbox,
+		DeveloperInstructions: developerInstructions(),
+		ThreadSource:          agent.ThreadSourceSubagent,
 	})
 	if err != nil {
 		return err
@@ -287,10 +342,77 @@ func renderPrompt(project store.Project, issue store.Issue) string {
 		template = store.DefaultIssuePromptTemplate
 	}
 	prompt := renderIssuePromptTemplate(template, project, issue)
+	profile := project.DefaultAgentProfile
+	if profile == nil && strings.TrimSpace(project.DefaultAgentProfileID) != "" {
+		profile = projectProfileFromFields(project)
+	}
+	prompt = appendAgentProfileSummary(prompt, profile)
 	if strings.HasSuffix(prompt, "\n") {
 		return prompt
 	}
 	return prompt + "\n"
+}
+
+func projectProfileFromFields(project store.Project) *store.AgentProfile {
+	return &store.AgentProfile{
+		ID: project.DefaultAgentProfileID, Name: project.DefaultAgentProfileID,
+		Provider: project.Provider, Model: project.Model,
+		ApprovalPolicy: project.ApprovalPolicy, Sandbox: project.Sandbox,
+	}
+}
+
+func appendAgentProfileSummary(prompt string, profile *store.AgentProfile) string {
+	if profile == nil || strings.TrimSpace(profile.ID) == "" {
+		return prompt
+	}
+	lines := []string{
+		"", "Agent Profile v0（项目默认执行画像）:",
+		"- Profile: " + profile.ID + " · " + profile.Name,
+		"- Provider: " + firstNonEmpty(profile.Provider, store.ProviderCodex),
+		"- Model: " + firstNonEmpty(profile.Model, "project default") +
+			" · Effort: " + firstNonEmpty(profile.ReasoningEffort, "provider default") +
+			" · Approval: " + firstNonEmpty(profile.ApprovalPolicy, "current project policy") +
+			" · Sandbox: " + firstNonEmpty(profile.Sandbox, "current project sandbox"),
+	}
+	if instructions := strings.TrimSpace(profile.DefaultInstructions); instructions != "" {
+		lines = append(lines, "- Default instructions: "+instructions)
+	}
+	lines = appendIntentLine(lines, "Skills", profile.SkillIntents)
+	lines = appendIntentLine(lines, "Plugins", profile.PluginIntents)
+	lines = append(lines,
+		"- 这些 skill/plugin intents 只是请求使用/上下文，不会安装插件、授权工具或绕过当前 provider 权限策略。")
+	return strings.TrimRight(prompt, "\n") + "\n" + strings.Join(lines, "\n") + "\n"
+}
+
+func appendIntentLine(lines []string, label string, raw string) []string {
+	items := parseIntentList(raw)
+	if len(items) == 0 {
+		return lines
+	}
+	return append(lines, "- "+label+" requested as context/intents only: "+strings.Join(items, ", "))
+}
+
+func parseIntentList(raw string) []string {
+	var values []string
+	if json.Unmarshal([]byte(strings.TrimSpace(raw)), &values) == nil {
+		return cleanIntentList(values)
+	}
+	parts := strings.Split(raw, ",")
+	return cleanIntentList(parts)
+}
+
+func cleanIntentList(values []string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 func renderIssuePromptTemplate(template string, project store.Project, issue store.Issue) string {

@@ -93,6 +93,22 @@ function subscribeToEvents(onEvent, onError, onOpen) {
 export const api = {
   getProjects: () => request('/api/projects'),
 
+  getAgentProfiles: () => request('/api/agent-profiles'),
+
+  createAgentProfile: (profile) => request('/api/agent-profiles', {
+    method: 'POST',
+    body: JSON.stringify(profile),
+  }),
+
+  updateAgentProfile: (id, updates) => request(`/api/agent-profiles/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  deleteAgentProfile: (id) => request(`/api/agent-profiles/${id}`, {
+    method: 'DELETE',
+  }),
+
   syncCodexProjects: () => request('/api/projects/sync/codex', {
     method: 'POST',
     body: JSON.stringify({}),

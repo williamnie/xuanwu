@@ -22,6 +22,12 @@ import {
 } from 'lucide-react';
 import ProjectHoldNotice from './ProjectHoldNotice';
 import { PROVIDER_OPTIONS, capabilitySummary, providerLabel } from './sessions/sessionOptions';
+import {
+  agentProfilePayload,
+  emptyAgentProfileForm,
+  normalizeAgentProfileForm,
+  summarizeAgentProfile,
+} from '../utils/agentProfiles';
 
 const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
@@ -72,8 +78,13 @@ export default function Projects() {
     formModel: DEFAULT_CODEX_MODEL,
     formApproval: 'never',
     formSandbox: 'workspace-write',
+    formAgentProfileId: '',
     formError: '',
     resumingHoldProjectId: '',
+    profiles: [],
+    profilesLoading: false,
+    profileForm: emptyAgentProfileForm(),
+    profileError: '',
   });
 
   const {
@@ -89,8 +100,13 @@ export default function Projects() {
     formModel,
     formApproval,
     formSandbox,
+    formAgentProfileId,
     formError,
     resumingHoldProjectId,
+    profiles,
+    profilesLoading,
+    profileForm,
+    profileError,
   } = ui;
 
   const closeModal = () => {
@@ -103,6 +119,33 @@ export default function Projects() {
     updateUi(draft => {
       draft[field] = value;
     });
+  };
+
+  const setProfileFormField = (field, value) => {
+    updateUi(draft => {
+      draft.profileForm[field] = value;
+    });
+  };
+
+  const loadAgentProfiles = async () => {
+    updateUi(draft => {
+      draft.profilesLoading = true;
+      draft.profileError = '';
+    });
+    try {
+      const list = await api.getAgentProfiles();
+      updateUi(draft => {
+        draft.profiles = list || [];
+      });
+    } catch (err) {
+      updateUi(draft => {
+        draft.profileError = err.message || '加载 Agent Profile 失败';
+      });
+    } finally {
+      updateUi(draft => {
+        draft.profilesLoading = false;
+      });
+    }
   };
 
   const handleSyncCodexProjects = async () => {
@@ -138,9 +181,11 @@ export default function Projects() {
       draft.formModel = DEFAULT_CODEX_MODEL;
       draft.formApproval = 'never';
       draft.formSandbox = 'workspace-write';
+      draft.formAgentProfileId = '';
       draft.formError = '';
       draft.isModalOpen = true;
     });
+    loadAgentProfiles();
   };
 
   const handleOpenEditModal = (proj) => {
@@ -154,9 +199,11 @@ export default function Projects() {
       draft.formModel = normalizeCodexModel(proj.model || DEFAULT_CODEX_MODEL);
       draft.formApproval = proj.approval_policy || 'never';
       draft.formSandbox = proj.sandbox || 'workspace-write';
+      draft.formAgentProfileId = proj.default_agent_profile_id || '';
       draft.formError = '';
       draft.isModalOpen = true;
     });
+    loadAgentProfiles();
   };
 
   const handleSubmit = async (e) => {
@@ -178,6 +225,7 @@ export default function Projects() {
       model: normalizeCodexModel(formModel),
       approval_policy: formApproval,
       sandbox: formSandbox,
+      default_agent_profile_id: formAgentProfileId,
     };
 
     try {
@@ -196,6 +244,46 @@ export default function Projects() {
         draft.formError = err.message || '操作失败';
       });
     }
+  };
+
+  const handleProfileSubmit = async (e) => {
+    e?.preventDefault?.();
+    const payload = agentProfilePayload(profileForm);
+    if (!payload.name) {
+      updateUi(draft => {
+        draft.profileError = 'Profile 名称不能为空';
+      });
+      return;
+    }
+    try {
+      const exists = profiles.some(profile => profile.id === payload.id);
+      const saved = exists
+        ? await api.updateAgentProfile(payload.id, payload)
+        : await api.createAgentProfile(payload);
+      updateUi(draft => {
+        draft.profileForm = emptyAgentProfileForm();
+        draft.formAgentProfileId = saved.id;
+      });
+      await loadAgentProfiles();
+    } catch (err) {
+      updateUi(draft => {
+        draft.profileError = err.message || '保存 Agent Profile 失败';
+      });
+    }
+  };
+
+  const handleEditProfile = (profile) => {
+    updateUi(draft => {
+      draft.profileForm = normalizeAgentProfileForm(profile);
+      draft.profileError = '';
+    });
+  };
+
+  const handleResetProfileForm = () => {
+    updateUi(draft => {
+      draft.profileForm = emptyAgentProfileForm();
+      draft.profileError = '';
+    });
   };
 
   const handleDelete = async (id) => {
@@ -406,6 +494,10 @@ export default function Projects() {
                     <span>Capabilities</span>
                     <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{capabilitySummary(proj)}</span>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    <span>Agent Profile</span>
+                    <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{summarizeAgentProfile(proj.default_agent_profile)}</span>
+                  </div>
 
                   <ProjectHoldNotice
                     hold={proj.hold}
@@ -565,6 +657,34 @@ export default function Projects() {
                 </select>
               </div>
 
+              <div className="form-group">
+                <label>默认 Agent Profile v0</label>
+                <select
+                  className="form-control"
+                  value={formAgentProfileId}
+                  onChange={(e) => setFormField('formAgentProfileId', e.target.value)}
+                >
+                  <option value="">不使用 Profile（沿用上方项目参数）</option>
+                  {profiles.map(profile => (
+                    <option key={profile.id} value={profile.id}>{profile.name} · {profile.id}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Profile 会在 issue prompt 中注入默认 instructions 与 skill/plugin intent；不会安装插件或放大权限。
+                </span>
+              </div>
+
+              <AgentProfileManager
+                profiles={profiles}
+                loading={profilesLoading}
+                form={profileForm}
+                error={profileError}
+                onFieldChange={setProfileFormField}
+                onSubmit={handleProfileSubmit}
+                onEdit={handleEditProfile}
+                onReset={handleResetProfileForm}
+              />
+
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
                 <label className="switch">
                   <input 
@@ -595,6 +715,71 @@ export default function Projects() {
         </div>
       )}
 
+    </div>
+  );
+}
+
+function AgentProfileManager({ profiles, loading, form, error, onFieldChange, onSubmit, onEdit, onReset }) {
+  return (
+    <div className="glass-card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.025)' }}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Agent Profile v0</div>
+        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+          仅保存 provider/model/权限 preset、默认 instructions 与 skill/plugin intent；不安装插件、不提升权限。
+        </p>
+      </div>
+      {error && <div style={{ color: 'var(--error)', fontSize: '0.8rem' }}>{error}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+          <input className="form-control" placeholder="Profile ID（可留空自动生成）" value={form.id} onChange={(e) => onFieldChange('id', e.target.value)} />
+          <input className="form-control" placeholder="Profile 名称" value={form.name} onChange={(e) => onFieldChange('name', e.target.value)} />
+          <select className="form-control" value={form.model} onChange={(e) => onFieldChange('model', e.target.value)}>
+            {CODEX_MODEL_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <select className="form-control" value={form.reasoning_effort} onChange={(e) => onFieldChange('reasoning_effort', e.target.value)}>
+            <option value="">默认 effort</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+          </select>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+          <select className="form-control" value={form.approval_policy} onChange={(e) => onFieldChange('approval_policy', e.target.value)}>
+            <option value="">沿用项目 approval</option>
+            <option value="never">never</option>
+            <option value="always">always</option>
+            <option value="danger-only">danger-only</option>
+          </select>
+          <select className="form-control" value={form.sandbox} onChange={(e) => onFieldChange('sandbox', e.target.value)}>
+            <option value="">沿用项目 sandbox</option>
+            <option value="workspace-write">workspace-write</option>
+            <option value="read-only">read-only</option>
+            <option value="danger-full-access">danger-full-access</option>
+          </select>
+        </div>
+        <textarea className="form-control" rows={3} placeholder="默认 instructions" value={form.default_instructions} onChange={(e) => onFieldChange('default_instructions', e.target.value)} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+          <input className="form-control" placeholder="skill intents，逗号分隔" value={form.skill_intents} onChange={(e) => onFieldChange('skill_intents', e.target.value)} />
+          <input className="form-control" placeholder="plugin intents，逗号分隔" value={form.plugin_intents} onChange={(e) => onFieldChange('plugin_intents', e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{loading ? '加载 profiles...' : `已有 ${profiles.length} 个 profile`}</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={onReset}>清空</button>
+            <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={onSubmit}>保存 Profile</button>
+          </div>
+        </div>
+      </div>
+      {profiles.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {profiles.map(profile => (
+            <button key={profile.id} type="button" className="kanban-card-action-btn" onClick={() => onEdit(profile)}>
+              {profile.name} · {profile.id}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

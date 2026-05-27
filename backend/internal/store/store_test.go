@@ -552,6 +552,74 @@ func TestCreateAndReadUpload(t *testing.T) {
 	}
 }
 
+func TestAgentProfileRoundTripAndProjectDefault(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	profile, err := st.CreateAgentProfile(ctx, AgentProfile{
+		ID: "nightly", Name: "Nightly Codex", Provider: "codex",
+		Model: "gpt-5.5", ReasoningEffort: "high",
+		ApprovalPolicy: "never", Sandbox: "workspace-write",
+		DefaultInstructions: "夜间执行：最小改动，先验证。",
+		SkillIntents:        "[\"codex-issue-runner\"]",
+		PluginIntents:       "[\"browser\"]",
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	if profile.Provider != ProviderCodex || profile.Model != "gpt-5.5" || profile.ReasoningEffort != "high" {
+		t.Fatalf("unexpected normalized profile: %+v", profile)
+	}
+
+	project, err := st.CreateProject(ctx, Project{ID: "demo", CWD: t.TempDir(), DefaultAgentProfileID: "nightly"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if project.DefaultAgentProfileID != "nightly" || project.DefaultAgentProfile == nil {
+		t.Fatalf("project profile not attached: %+v", project)
+	}
+	profiles, err := st.ListAgentProfiles(ctx)
+	if err != nil || len(profiles) != 1 || profiles[0].ID != "nightly" {
+		t.Fatalf("list profiles = %+v err=%v", profiles, err)
+	}
+
+	updated, err := st.UpdateAgentProfile(ctx, "nightly", AgentProfilePatch{Name: ptrString("Nightly Updated")})
+	if err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+	if updated.Name != "Nightly Updated" {
+		t.Fatalf("updated profile = %+v", updated)
+	}
+}
+
+func TestIssueRunRecordsAgentProfileID(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	if _, err := st.CreateAgentProfile(ctx, AgentProfile{ID: "nightly", Name: "Nightly"}); err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+	if _, err := st.CreateProject(ctx, Project{ID: "demo", CWD: t.TempDir(), DefaultAgentProfileID: "nightly"}); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	issue, err := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "task", Status: StatusTodo})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue ok=%v err=%v", ok, err)
+	}
+	if claimed.ID != issue.ID {
+		t.Fatalf("claimed issue = %+v", claimed)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs = %+v err=%v", runs, err)
+	}
+	if runs[0].AgentProfileID != "nightly" {
+		t.Fatalf("run profile id = %q", runs[0].AgentProfileID)
+	}
+}
+
 func TestLastSessionProjectPreferenceRoundTrip(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()
@@ -768,3 +836,5 @@ func openTestStore(t *testing.T) *Store {
 	t.Cleanup(func() { _ = st.Close() })
 	return st
 }
+
+func ptrString(value string) *string { return &value }

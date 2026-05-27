@@ -110,6 +110,39 @@ func (h *holdResumeCodex) Events() <-chan agent.Event {
 	return h.events
 }
 
+func TestAgentProfileAPIAndProjectBinding(t *testing.T) {
+	srv := newTestServer(t)
+	created := postJSON[store.AgentProfile](t, srv, "/api/agent-profiles", map[string]any{
+		"id": "nightly", "name": "Nightly Codex", "provider": "codex",
+		"model": "gpt-5.5", "reasoning_effort": "high",
+		"approval_policy": "never", "sandbox": "workspace-write",
+		"default_instructions": "先验证再收尾",
+		"skill_intents":        "[\"codex-issue-runner\"]",
+		"plugin_intents":       "[\"browser\"]",
+	})
+	if created.ID != "nightly" || created.Name != "Nightly Codex" {
+		t.Fatalf("created profile = %+v", created)
+	}
+
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "default_agent_profile_id": "nightly",
+	})
+	if project.DefaultAgentProfileID != "nightly" || project.DefaultAgentProfile == nil || project.DefaultAgentProfile.ID != "nightly" {
+		t.Fatalf("project profile not attached: %+v", project)
+	}
+
+	patched := patchJSON[store.AgentProfile](t, srv, "/api/agent-profiles/nightly", map[string]any{
+		"name": "Nightly Updated",
+	})
+	if patched.Name != "Nightly Updated" {
+		t.Fatalf("patched profile = %+v", patched)
+	}
+	profiles := getJSON[[]store.AgentProfile](t, srv, "/api/agent-profiles")
+	if len(profiles) != 1 || profiles[0].Name != "Nightly Updated" {
+		t.Fatalf("profiles = %+v", profiles)
+	}
+}
+
 func TestProjectAndIssueAPI(t *testing.T) {
 	srv := newTestServer(t)
 	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{

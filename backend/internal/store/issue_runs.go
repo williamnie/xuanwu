@@ -10,7 +10,7 @@ import (
 func (s *Store) ListIssueRuns(ctx context.Context, issueID int64) ([]IssueRun, error) {
 	rows, err := s.db.QueryContext(ctx, `select id, issue_id, attempt, status,
 		provider, provider_session_id, provider_turn_id, codex_thread_id,
-		codex_turn_id, started_at, ended_at, exit_reason, error
+		codex_turn_id, started_at, ended_at, exit_reason, error, agent_profile_id
 		from issue_runs where issue_id=? order by attempt asc`, issueID)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func latestIssueRunsQuery(count int) string {
 	return `select ir.id, ir.issue_id, ir.attempt, ir.status,
 		ir.provider, ir.provider_session_id, ir.provider_turn_id,
 		ir.codex_thread_id, ir.codex_turn_id, ir.started_at, ir.ended_at,
-		ir.exit_reason, ir.error from issue_runs ir
+		ir.exit_reason, ir.error, ir.agent_profile_id from issue_runs ir
 		join (select issue_id, max(attempt) as attempt from issue_runs
 		where issue_id in (` + placeholders + `) group by issue_id) latest
 		on latest.issue_id=ir.issue_id and latest.attempt=ir.attempt`
@@ -88,11 +88,23 @@ func currentIssueAttempt(ctx context.Context, tx *sql.Tx, issueID int64) (int, e
 }
 
 func createIssueRun(ctx context.Context, tx *sql.Tx, issueID int64, attempt int, startedAt string) error {
-	_, err := tx.ExecContext(ctx, `insert into issue_runs
-		(id, issue_id, attempt, status, provider, started_at)
-		values (?, ?, ?, ?, ?, ?)`,
-		issueRunID(issueID, attempt), issueID, attempt, StatusInProgress, ProviderCodex, startedAt)
+	profileID, err := defaultProfileIDForIssueRun(ctx, tx, issueID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `insert into issue_runs
+		(id, issue_id, attempt, status, provider, started_at, agent_profile_id)
+		values (?, ?, ?, ?, ?, ?, ?)`,
+		issueRunID(issueID, attempt), issueID, attempt, StatusInProgress,
+		ProviderCodex, startedAt, profileID)
 	return err
+}
+
+func defaultProfileIDForIssueRun(ctx context.Context, tx *sql.Tx, issueID int64) (string, error) {
+	var profileID string
+	err := tx.QueryRowContext(ctx, `select p.default_agent_profile_id
+		from issues i join projects p on p.id=i.project_id where i.id=?`, issueID).Scan(&profileID)
+	return profileID, err
 }
 
 func (s *Store) closeOpenIssueRun(
@@ -125,7 +137,7 @@ func (s *Store) closeOpenIssueRun(
 func (s *Store) latestOpenIssueRun(ctx context.Context, issueID int64) (IssueRun, bool, error) {
 	row := s.db.QueryRowContext(ctx, `select id, issue_id, attempt, status,
 		provider, provider_session_id, provider_turn_id, codex_thread_id,
-		codex_turn_id, started_at, ended_at, exit_reason, error
+		codex_turn_id, started_at, ended_at, exit_reason, error, agent_profile_id
 		from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1`, issueID)
 	run, err := scanIssueRun(row)
 	if err == sql.ErrNoRows {
