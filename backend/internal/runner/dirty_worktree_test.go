@@ -37,7 +37,7 @@ func TestRunnerStartsIssueForCleanWorktree(t *testing.T) {
 	waitIssueNotRunning(t, r, issue.ID)
 }
 
-func TestRunnerBlocksDirtyWorktreeBeforeStartingIssue(t *testing.T) {
+func TestRunnerHoldsProjectOnDirtyWorktreeBeforeStartingIssue(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()
 	repo := initGitRepo(t)
@@ -46,7 +46,8 @@ func TestRunnerBlocksDirtyWorktreeBeforeStartingIssue(t *testing.T) {
 		t.Fatalf("write dirty file: %v", err)
 	}
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: repo, AutoRun: 1})
-	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "dirty", Status: store.StatusTodo})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "dirty", Status: store.StatusTodo, Priority: 2})
+	next, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "must wait", Status: store.StatusTodo})
 	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
 
@@ -55,9 +56,13 @@ func TestRunnerBlocksDirtyWorktreeBeforeStartingIssue(t *testing.T) {
 	}
 	defer r.StopProject("demo")
 
-	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
+	got := waitIssueError(t, st, issue.ID)
 	if got.AttemptCount != 1 {
 		t.Fatalf("dirty preflight should run after claim, issue = %+v", got)
+	}
+	project := waitProjectHold(t, st, "demo")
+	if project.Hold.Reason != HoldReasonDirtyWorktree {
+		t.Fatalf("project hold = %+v", project.Hold)
 	}
 	if !strings.Contains(got.Error, "未提交修改") || !strings.Contains(got.Error, "scratch.txt") {
 		t.Fatalf("dirty error should mention uncommitted file, got %q", got.Error)
@@ -68,7 +73,11 @@ func TestRunnerBlocksDirtyWorktreeBeforeStartingIssue(t *testing.T) {
 	if len(fake.threadInputs) != 0 || len(fake.turnInputs) != 0 {
 		t.Fatalf("dirty worktree must block before codex turn: threads=%+v turns=%+v", fake.threadInputs, fake.turnInputs)
 	}
-	waitIssueErrorEventMentionsDirtyWorktree(t, st, issue.ID, secret)
+	unchanged, _ := st.GetIssue(ctx, next.ID)
+	if unchanged.Status != store.StatusTodo || unchanged.AttemptCount != 0 {
+		t.Fatalf("next issue should wait while project is held: %+v", unchanged)
+	}
+	waitRunnerHoldEventMentionsDirtyWorktree(t, st, issue.ID, secret)
 }
 
 func TestRunnerCanSkipDirtyWorktreeCheck(t *testing.T) {
@@ -95,6 +104,46 @@ func TestRunnerCanSkipDirtyWorktreeCheck(t *testing.T) {
 	}
 }
 
+func TestDirtyWorktreeHoldCheckWaitsForCleanWorktree(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	repo := initGitRepo(t)
+	scratch := filepath.Join(repo, "scratch.txt")
+	if err := os.WriteFile(scratch, []byte("dirty"), 0o600); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: repo, AutoRun: 1})
+	_, _ = st.SetProjectHold(ctx, "demo", store.ProjectHold{
+		Reason: HoldReasonDirtyWorktree, Message: "dirty",
+	})
+	fake := &fakeCodex{events: make(chan agent.Event, 8)}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.CheckHeldProjects(ctx); err != nil {
+		t.Fatalf("dirty hold check should continue scanning projects: %v", err)
+	}
+	stillHeld, _ := st.GetProject(ctx, "demo")
+	if stillHeld.Hold == nil || !strings.Contains(stillHeld.Hold.LastCheckError, "scratch.txt") {
+		t.Fatalf("dirty project should stay held with check error: %+v", stillHeld)
+	}
+	if len(fake.threadInputs) != 0 {
+		t.Fatalf("dirty hold check should not start health thread: %+v", fake.threadInputs)
+	}
+
+	if err := os.Remove(scratch); err != nil {
+		t.Fatalf("remove dirty file: %v", err)
+	}
+	fake.autoTurns = 1
+	r.healthCheckWait = 20 * time.Millisecond
+	if err := r.CheckHeldProjects(ctx); err != nil {
+		t.Fatalf("clean hold check should clear dirty hold: %v", err)
+	}
+	cleared, _ := st.GetProject(ctx, "demo")
+	if cleared.Hold != nil {
+		t.Fatalf("hold should clear after clean worktree: %+v", cleared)
+	}
+}
+
 func initGitRepo(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -108,7 +157,7 @@ func initGitRepo(t *testing.T) string {
 	return dir
 }
 
-func waitIssueErrorEventMentionsDirtyWorktree(
+func waitRunnerHoldEventMentionsDirtyWorktree(
 	t *testing.T,
 	st *store.Store,
 	issueID int64,
@@ -122,20 +171,20 @@ func waitIssueErrorEventMentionsDirtyWorktree(
 			t.Fatalf("list issue events: %v", err)
 		}
 		for _, event := range issueEvents {
-			if event.Type != "issue.error" {
+			if event.Type != "runner.hold" {
 				continue
 			}
 			if !strings.Contains(event.Payload, "未提交修改") || !strings.Contains(event.Payload, "scratch.txt") {
-				t.Fatalf("issue.error should mention dirty worktree, got %q", event.Payload)
+				t.Fatalf("runner.hold should mention dirty worktree, got %q", event.Payload)
 			}
 			if strings.Contains(event.Payload, secret) {
-				t.Fatalf("issue.error leaked file content: %q", event.Payload)
+				t.Fatalf("runner.hold leaked file content: %q", event.Payload)
 			}
 			return
 		}
 		select {
 		case <-deadline:
-			t.Fatalf("missing issue.error event: %+v", issueEvents)
+			t.Fatalf("missing runner.hold event: %+v", issueEvents)
 		case <-time.After(20 * time.Millisecond):
 		}
 	}

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -44,6 +45,14 @@ func statusLines(output string) []string {
 		}
 	}
 	return lines
+}
+
+func dirtyWorktreeHoldReason(err error) (holdReason, bool) {
+	var dirty dirtyWorktreeError
+	if !errors.As(err, &dirty) {
+		return holdReason{}, false
+	}
+	return holdReason{Kind: HoldReasonDirtyWorktree, Message: dirty.Error()}, true
 }
 
 type dirtyWorktreeError struct {

@@ -30,6 +30,10 @@ func (r *Runner) runIssue(issue store.Issue) {
 		return
 	}
 	if err := r.EnsureCleanWorktree(ctx, project.CWD); err != nil {
+		if reason, ok := dirtyWorktreeHoldReason(err); ok {
+			r.holdIssue(ctx, issue, reason)
+			return
+		}
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}

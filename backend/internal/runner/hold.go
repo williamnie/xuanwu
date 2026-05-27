@@ -109,7 +109,7 @@ func (r *Runner) ResumeHeldProject(ctx context.Context, projectID string) (store
 
 func (r *Runner) resumeHeldProject(ctx context.Context, project store.Project) (store.Project, error) {
 	checkedAt := time.Now().UTC()
-	if err := r.healthCheckProject(ctx, project); err != nil {
+	if err := r.checkProjectHoldReady(ctx, project); err != nil {
 		next := checkedAt.Add(r.healthCheckInterval).Format(time.RFC3339)
 		updated, updateErr := r.store.UpdateProjectHoldCheck(ctx, project.ID, checkedAt.Format(time.RFC3339), next, err.Error())
 		r.bus.Publish(events.AppEvent{
@@ -135,6 +135,15 @@ func (r *Runner) resumeHeldProject(ctx context.Context, project store.Project) (
 		}
 	}
 	return cleared, nil
+}
+
+func (r *Runner) checkProjectHoldReady(ctx context.Context, project store.Project) error {
+	if project.Hold != nil && project.Hold.Reason == HoldReasonDirtyWorktree {
+		if err := r.EnsureCleanWorktree(ctx, project.CWD); err != nil {
+			return err
+		}
+	}
+	return r.healthCheckProject(ctx, project)
 }
 
 func (r *Runner) healthCheckProject(ctx context.Context, project store.Project) error {

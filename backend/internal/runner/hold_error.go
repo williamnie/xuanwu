@@ -11,6 +11,7 @@ import (
 const (
 	HoldReasonUsageLimit     = "usage_limit"
 	HoldReasonAuthentication = "authentication"
+	HoldReasonDirtyWorktree  = "dirty_worktree"
 )
 
 type holdReason struct {
