@@ -20,6 +20,7 @@ type SystemConfig struct {
 	AuthEnabled      bool
 	AllowedOrigins   []string
 	WebMode          string
+	LogPaths         []string
 }
 
 type systemStatus struct {
@@ -85,6 +86,10 @@ func (s *Server) routeSystem(w http.ResponseWriter, r *http.Request, parts []str
 		s.handleSystemDoctor(w, r)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "logs" {
+		s.handleSystemLogs(w, r)
+		return
+	}
 	if len(parts) == 2 && parts[1] == "restart" {
 		s.handleRestart(w, r)
 		return
@@ -119,6 +124,7 @@ func (s *Server) SetSystemConfig(cfg SystemConfig) {
 	cfg.CodexSessionsDir = strings.TrimSpace(cfg.CodexSessionsDir)
 	cfg.AllowedOrigins = cleanAllowedOrigins(cfg.AllowedOrigins)
 	cfg.WebMode = strings.TrimSpace(cfg.WebMode)
+	cfg.LogPaths = cleanLogPaths(cfg.LogPaths)
 	s.systemConfig = cfg
 }
 
@@ -163,6 +169,20 @@ func configStatus(cfg SystemConfig) systemConfigStatus {
 		CodexSessionsDir: cfg.CodexSessionsDir, AuthEnabled: cfg.AuthEnabled,
 		OriginPolicy: originPolicyName(cfg.AllowedOrigins), WebMode: cfg.WebMode,
 	}
+}
+
+func cleanLogPaths(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	seen := map[string]bool{}
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, path)
+	}
+	return out
 }
 
 func (s *Server) dbStatus(ctx context.Context) checkStatus {

@@ -175,6 +175,8 @@ export const api = {
 
   getRuntimeDoctor: () => request('/api/system/doctor'),
 
+  getRuntimeLogs: (lines = 120) => request(`/api/system/logs?lines=${encodeURIComponent(lines)}`),
+
   executeCommand: (payload) => request('/api/commands', {
     method: 'POST',
     body: JSON.stringify(payload),

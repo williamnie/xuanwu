@@ -6,6 +6,8 @@ import { message } from '../store/toastStore';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
+import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
+import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
 import { APP_VERSION, buildVersionSummary } from '../version';
 
 export default function Settings() {
@@ -30,14 +32,25 @@ export default function Settings() {
 
 function RuntimeStatusPanel() {
   const [status, setStatus] = useState(null);
+  const [logs, setLogs] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [logsError, setLogsError] = useState('');
   const [doctorLoading, setDoctorLoading] = useState(false);
 
-  useEffect(() => { loadStatus(setStatus, setError, setLoading); }, []);
+  useEffect(() => {
+    loadStatus(setStatus, setError, setLoading);
+    loadLogs(setLogs, setLogsError, setLogsLoading);
+  }, []);
 
   const handleCopyDoctor = () => copyDoctor(setDoctorLoading);
   const handleDownloadDoctor = () => downloadDoctor(setDoctorLoading);
+  const handleCopyLogs = () => copyLogs(logs);
+  const handleRefresh = () => {
+    loadStatus(setStatus, setError, setLoading);
+    loadLogs(setLogs, setLogsError, setLogsLoading);
+  };
 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -59,14 +72,15 @@ function RuntimeStatusPanel() {
             <Download size={15} />
             下载 JSON
           </button>
-          <button className="btn btn-secondary" onClick={() => loadStatus(setStatus, setError, setLoading)} disabled={loading}>
-            <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
+          <button className="btn btn-secondary" onClick={handleRefresh} disabled={loading || logsLoading}>
+            <RefreshCw size={15} className={(loading || logsLoading) ? 'spin-animation' : ''} />
             刷新
           </button>
         </div>
       </div>
       {error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{error}</div>}
       {!error && <RuntimeStatusBody status={status} loading={loading} />}
+      <RuntimeLogsPanel logs={logs} loading={logsLoading} error={logsError} onCopy={handleCopyLogs} />
     </section>
   );
 }
@@ -76,6 +90,14 @@ function loadStatus(setStatus, setError, setLoading) {
   api.getSystemStatus()
     .then(data => { setStatus(data); setError(''); })
     .catch(err => setError(err.message || '读取 runtime status 失败'))
+    .finally(() => setLoading(false));
+}
+
+function loadLogs(setLogs, setError, setLoading) {
+  setLoading(true);
+  api.getRuntimeLogs(120)
+    .then(data => { setLogs(data); setError(''); })
+    .catch(err => setError(err.message || '读取 runtime logs 失败'))
     .finally(() => setLoading(false));
 }
 
@@ -91,6 +113,19 @@ async function downloadDoctor(setDoctorLoading) {
     downloadText(`codex-runtime-doctor-${safeTimestamp(summary.generated_at)}.json`, formatDoctor(summary));
     message.success('诊断 JSON 已下载');
   });
+}
+
+async function copyLogs(logs) {
+  if (!logs) {
+    message.error('暂无日志摘要可复制');
+    return;
+  }
+  try {
+    await copyText(formatRuntimeLogsSummary(logs));
+    message.success('Runtime 日志摘要已复制');
+  } catch (err) {
+    message.error(err.message || '复制日志摘要失败');
+  }
 }
 
 async function withDoctor(setDoctorLoading, action) {

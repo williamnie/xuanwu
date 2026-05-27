@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -79,6 +80,7 @@ func runServer(args []string) {
 		CodexSessionsDir: cfg.CodexSessionsDir, AuthEnabled: authToken != "",
 		AllowedOrigins: cfg.AllowedOrigins,
 		WebMode:        webMode(cfg.WebDir),
+		LogPaths:       runtimeLogPaths(cfg.DBPath),
 	})
 	srv.SetRestartFunc(func() {
 		log.Print("restart requested; exiting for supervisor restart")
@@ -139,6 +141,14 @@ func webMode(webDir string) string {
 		return "external"
 	}
 	return "embedded"
+}
+
+func runtimeLogPaths(dbPath string) []string {
+	dir := filepath.Join(filepath.Dir(strings.TrimSpace(dbPath)), "logs")
+	return []string{
+		filepath.Join(dir, "launchd.out.log"),
+		filepath.Join(dir, "launchd.err.log"),
+	}
 }
 
 func startSessionWatcher(ctx context.Context, root string, bus *events.Bus) {

@@ -127,6 +127,67 @@ func TestSystemDoctorWarnsOnUnsafeTransportPreflight(t *testing.T) {
 	assertWarningCode(t, doctor.Security.Warnings, "origin_wildcard")
 }
 
+func TestSystemLogsReturnsRedactedRecentEntries(t *testing.T) {
+	dbDir := t.TempDir()
+	logDir := filepath.Join(dbDir, "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	writeLogFile(t, filepath.Join(logDir, "launchd.out.log"), strings.Join([]string{
+		"2026/05/28 01:02:03 API listening",
+		"2026-05-28T01:03:04Z warn provider probe slow",
+		"Authorization: Bearer secret-token",
+		"Codex Issue Runner generated auth token file: /tmp/auth_token",
+		"2026-05-28T01:04:05Z error runner failed token=super-secret SECRET_KEY=env-secret",
+	}, "\n"))
+	writeLogFile(t, filepath.Join(logDir, "launchd.err.log"), "panic: runner password=hidden-pass\n")
+
+	srv := newTestServer(t)
+	srv.SetAuthToken("secret-token")
+	srv.SetSystemConfig(SystemConfig{DBPath: filepath.Join(dbDir, "app.db"), AuthEnabled: true})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/logs?lines=20", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	logs := decodeResponse[runtimeLogsSummary](t, srv, req, http.StatusOK)
+
+	if len(logs.Logs) != 2 || len(logs.RecentErrors) == 0 || len(logs.RecentWarnings) == 0 {
+		t.Fatalf("runtime logs summary missing files/errors/warnings: %+v", logs)
+	}
+	body := mustMarshalRuntimeLogs(t, logs)
+	for _, forbidden := range []string{"secret-token", "super-secret", "env-secret", "hidden-pass", "Authorization:", "auth_token"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("runtime logs leaked %q: %s", forbidden, body)
+		}
+	}
+	if !strings.Contains(body, "token=[redacted]") || !strings.Contains(body, "SECRET_KEY=[redacted]") {
+		t.Fatalf("runtime logs did not redact secret-looking env values: %s", body)
+	}
+	if logs.RecentErrors[0].Level != "error" || logs.RecentWarnings[0].Level != "warning" {
+		t.Fatalf("runtime logs did not classify levels: %+v", logs)
+	}
+}
+
+func TestSystemLogsReportsMissingFiles(t *testing.T) {
+	dbDir := t.TempDir()
+	srv := newTestServer(t)
+	srv.SetSystemConfig(SystemConfig{DBPath: filepath.Join(dbDir, "app.db")})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/logs", nil)
+	logs := decodeResponse[runtimeLogsSummary](t, srv, req, http.StatusOK)
+
+	if len(logs.Logs) != 2 {
+		t.Fatalf("runtime logs file count = %d, want 2: %+v", len(logs.Logs), logs)
+	}
+	for _, logFile := range logs.Logs {
+		if logFile.Available || !strings.Contains(logFile.Error, "does not exist") {
+			t.Fatalf("missing log file should report clear reason: %+v", logFile)
+		}
+		if !strings.Contains(logFile.Path, filepath.Join(dbDir, "logs")) {
+			t.Fatalf("log path should stay under runtime data dir: %+v", logFile)
+		}
+	}
+}
+
 func TestSystemStatusIncludesSecurityWarnings(t *testing.T) {
 	srv := newTestServer(t)
 	srv.SetSystemConfig(SystemConfig{Addr: "0.0.0.0:3008", AllowedOrigins: []string{"*"}})
@@ -218,6 +279,22 @@ func mustMarshalDoctor(t *testing.T, doctor runtimeDoctor) string {
 		t.Fatalf("marshal doctor: %v", err)
 	}
 	return string(body)
+}
+
+func mustMarshalRuntimeLogs(t *testing.T, logs runtimeLogsSummary) string {
+	t.Helper()
+	body, err := json.Marshal(logs)
+	if err != nil {
+		t.Fatalf("marshal runtime logs: %v", err)
+	}
+	return string(body)
+}
+
+func writeLogFile(t *testing.T, path string, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write log file: %v", err)
+	}
 }
 
 func doctorProjectByID(projects []doctorProject, id string) doctorProject {
