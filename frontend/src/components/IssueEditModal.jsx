@@ -64,7 +64,7 @@ export default function IssueEditModal({ issue, initialRefinement, onClose, onSa
 
   return (
     <div className="modal-overlay">
-      <div className="glass-card modal-content" style={{ maxWidth: '780px', padding: '24px' }}>
+      <div className="glass-card modal-content" style={{ maxWidth: '780px', padding: '24px', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' }}>
         <ModalHeader issue={issue} onClose={onClose} />
         <form onSubmit={submitEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {error && <EditError message={error} />}
