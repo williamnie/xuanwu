@@ -43,17 +43,20 @@ func TestCommandModeRoutesDaemonToCLI(t *testing.T) {
 }
 
 func TestRunnerCallbackEnvUsesLoopbackAddrAndTokenFile(t *testing.T) {
+	t.Setenv("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "")
 	env := runnerCallbackEnv(config.Config{
 		Addr:          "0.0.0.0:3008",
 		AuthTokenFile: "/tmp/runner-token",
 	}, "secret-token")
 
 	assertEnvContains(t, env, "CODEX_RUNNER_ADDR=127.0.0.1:3008")
+	assertEnvContains(t, env, "CODEX_INTERNAL_ORIGINATOR_OVERRIDE=Codex")
 	assertEnvContains(t, env, "CODEX_RUNNER_AUTH_TOKEN_FILE=/tmp/runner-token")
 	assertEnvMissing(t, env, "CODEX_RUNNER_AUTH_TOKEN=")
 }
 
 func TestRunnerCallbackEnvUsesDirectTokenWhenConfigured(t *testing.T) {
+	t.Setenv("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "")
 	env := runnerCallbackEnv(config.Config{
 		Addr:          ":3008",
 		AuthToken:     "direct-token",
@@ -62,6 +65,13 @@ func TestRunnerCallbackEnvUsesDirectTokenWhenConfigured(t *testing.T) {
 
 	assertEnvContains(t, env, "CODEX_RUNNER_ADDR=127.0.0.1:3008")
 	assertEnvContains(t, env, "CODEX_RUNNER_AUTH_TOKEN=direct-token")
+}
+
+func TestRunnerCallbackEnvPreservesCodexOriginatorOverride(t *testing.T) {
+	t.Setenv("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", "Codex Desktop")
+	env := runnerCallbackEnv(config.Config{Addr: "127.0.0.1:3008"}, "")
+
+	assertEnvContains(t, env, "CODEX_INTERNAL_ORIGINATOR_OVERRIDE=Codex Desktop")
 }
 
 func assertEnvContains(t *testing.T, env []string, want string) {

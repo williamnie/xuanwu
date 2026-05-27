@@ -91,7 +91,10 @@ func runServer(args []string) {
 }
 
 func runnerCallbackEnv(cfg config.Config, authToken string) []string {
-	env := []string{"CODEX_RUNNER_ADDR=" + runnerCallbackAddr(cfg.Addr)}
+	env := []string{
+		"CODEX_RUNNER_ADDR=" + runnerCallbackAddr(cfg.Addr),
+		"CODEX_INTERNAL_ORIGINATOR_OVERRIDE=" + codexOriginatorOverride(),
+	}
 	if strings.TrimSpace(cfg.AuthToken) != "" {
 		return append(env, "CODEX_RUNNER_AUTH_TOKEN="+strings.TrimSpace(authToken))
 	}
@@ -102,6 +105,13 @@ func runnerCallbackEnv(cfg config.Config, authToken string) []string {
 		env = append(env, "CODEX_RUNNER_AUTH_TOKEN="+token)
 	}
 	return env
+}
+
+func codexOriginatorOverride() string {
+	if value := strings.TrimSpace(os.Getenv("CODEX_INTERNAL_ORIGINATOR_OVERRIDE")); value != "" {
+		return value
+	}
+	return "Codex"
 }
 
 func runnerCallbackAddr(addr string) string {
