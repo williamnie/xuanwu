@@ -8,6 +8,7 @@ import {
   parseIssueRefinement,
   refinementDraftToIssueRefinement,
   serializeIssueRefinement,
+  triageReadinessMoveToTodoNotice,
 } from './issueRefinement.js';
 
 test('refinement draft maps API fields into editable refinement fields', () => {
@@ -138,4 +139,13 @@ test('triage readiness is not shown for non-triage issues', () => {
   });
 
   assert.equal(readiness, null);
+});
+
+test('triage move-to-todo notice explains gaps without asking for confirmation', () => {
+  const readiness = deriveTriageReadiness({ issue: { status: 'triage', description: '随手记录' } });
+  const notice = triageReadinessMoveToTodoNotice(readiness);
+
+  assert.match(notice, /已移动到 Todo/);
+  assert.match(notice, /readiness 为 raw/);
+  assert.doesNotMatch(notice, /仍要|确认|\?/);
 });

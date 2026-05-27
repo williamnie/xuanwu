@@ -76,19 +76,17 @@ export function deriveTriageReadiness({ issue, refinement, commentEvents } = {})
   };
 }
 
-export function triageReadinessMoveToTodoMessage(readiness) {
+export function triageReadinessMoveToTodoNotice(readiness) {
   if (!readiness) {
-    return '仍要移动到 Todo 吗？';
+    return '已移动到 Todo。';
   }
-  const lines = [
-    `当前 Triage readiness: ${readiness.state}`,
-    readiness.source,
-  ];
-  if (readiness.missing.length > 0) {
-    lines.push(`缺少：${readiness.missing.join('、')}`);
+  if (readiness.ready) {
+    return 'Triage readiness 已满足，已移动到 Todo。';
   }
-  lines.push('仍要移动到 Todo 吗？');
-  return lines.join('\n');
+  const missing = readiness.missing.length > 0
+    ? `缺少：${readiness.missing.join('、')}。`
+    : '';
+  return `已移动到 Todo；当前 readiness 为 ${readiness.state}。${readiness.source}${missing}`;
 }
 
 export function refinementDraftToIssueRefinement(draft) {

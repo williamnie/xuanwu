@@ -41,7 +41,7 @@ import {
   deriveTriageReadiness,
   parseIssueRefinement,
   refinementDraftToIssueRefinement,
-  triageReadinessMoveToTodoMessage,
+  triageReadinessMoveToTodoNotice,
 } from '../utils/issueRefinement';
 import { deriveIssueWorkflowEvidence } from '../utils/issueWorkflowEvidence';
 import { issueRunSessionRef } from '../utils/issueRuns';
@@ -360,21 +360,13 @@ ${error}` : error;
     }
   }, [events]);
 
-  const confirmTriageReady = () => {
-    const readiness = deriveTriageReadiness({
-      issue,
-      commentEvents: events.filter(event => event.type === 'issue.comment'),
-    });
-    return !readiness || readiness.ready ||
-      window.confirm(triageReadinessMoveToTodoMessage(readiness));
-  };
-
   const handleMoveToTodo = async () => {
-    if (issue?.status === 'triage' && !confirmTriageReady()) {
-      return;
-    }
+    const readinessNotice = moveToTodoReadinessNotice(issue, events);
     try {
       await api.updateIssue(issueId, { status: 'todo' });
+      if (readinessNotice) {
+        message.warning(readinessNotice, 7000);
+      }
       loadIssueData();
     } catch (err) {
       message.error('移动到 Todo 失败: ' + err.message);
@@ -983,6 +975,16 @@ ${error}` : error;
   );
 }
 
+function moveToTodoReadinessNotice(issue, events) {
+  if (issue?.status !== 'triage') return '';
+  const readiness = deriveTriageReadiness({
+    issue,
+    commentEvents: events.filter(event => event.type === 'issue.comment'),
+  });
+  if (!readiness || readiness.ready) return '';
+  return triageReadinessMoveToTodoNotice(readiness);
+}
+
 function IssueRefinement({ issue, refinement, recommendation, readiness, onEdit, onMoveToTodo, onGenerateDraft, draftError, draftGenerating }) {
   const canEdit = canEditIssue(issue);
   return (
@@ -1003,7 +1005,7 @@ function IssueRefinement({ issue, refinement, recommendation, readiness, onEdit,
 
       {readiness && !readiness.ready && (
         <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
-          {readiness.source} Move to Todo 前会先确认，但不会阻断手动流转。
+          {readiness.source} 仍可手动移入 Todo；系统会用轻量提示提醒缺口，不再打断操作。
         </div>
       )}
 

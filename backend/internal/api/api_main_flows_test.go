@@ -594,6 +594,27 @@ func TestRunnerCommandRunRejectsDirtyWorktree(t *testing.T) {
 	}
 }
 
+func TestIssueMoveToTodoAllowsDirtyWorktreePreflight(t *testing.T) {
+	repo := initAPIGitRepo(t)
+	if err := os.WriteFile(filepath.Join(repo, "scratch.txt"), []byte("dirty"), 0o600); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": repo, "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Dirty queue", "status": store.StatusTriage,
+	})
+
+	updated := patchJSON[store.Issue](t, srv, "/api/issues/1", map[string]any{
+		"status": store.StatusTodo,
+	})
+	if updated.ID != issue.ID || updated.Status != store.StatusTodo || updated.Error != "" {
+		t.Fatalf("manual todo move should queue issue despite dirty worktree: %+v", updated)
+	}
+}
+
 func TestRunnerCommandRunRequiresConfirmation(t *testing.T) {
 	srv := newTestServer(t)
 	postJSON[store.Project](t, srv, "/api/projects", map[string]any{

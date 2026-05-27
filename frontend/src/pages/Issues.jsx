@@ -24,7 +24,7 @@ import CronTasksPanel from '../components/CronTasksPanel';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
 import {
   deriveTriageReadiness,
-  triageReadinessMoveToTodoMessage,
+  triageReadinessMoveToTodoNotice,
 } from '../utils/issueRefinement';
 import {
   extractIssueTemplateVariables,
@@ -161,12 +161,13 @@ export default function Issues({
       }
 
       const draggedIssue = issues.find(issue => issue.id === issueId);
-      if (currentStatus === 'triage' && targetStatus === 'todo' && !confirmTriageMoveToTodo(draggedIssue)) {
-        return;
-      }
+      const readinessNotice = moveToTodoReadinessNotice(currentStatus, targetStatus, draggedIssue);
 
       // 调用接口更新状态
       await api.updateIssue(issueId, { status: targetStatus });
+      if (readinessNotice) {
+        message.warning(readinessNotice, 7000);
+      }
 
       // 成功后重新加载数据，保证即时同步
       refreshAllData();
@@ -651,10 +652,11 @@ function IssueTemplatePreview({ preview, unknownVariables }) {
   );
 }
 
-function confirmTriageMoveToTodo(issue) {
+function moveToTodoReadinessNotice(currentStatus, targetStatus, issue) {
+  if (currentStatus !== 'triage' || targetStatus !== 'todo') return '';
   const readiness = deriveTriageReadiness({ issue });
-  if (!readiness || readiness.ready) return true;
-  return window.confirm(triageReadinessMoveToTodoMessage(readiness));
+  if (!readiness || readiness.ready) return '';
+  return triageReadinessMoveToTodoNotice(readiness);
 }
 
 function TriageReadinessBadge({ readiness }) {

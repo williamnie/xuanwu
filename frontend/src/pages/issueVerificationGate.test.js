@@ -21,3 +21,11 @@ test('issue detail provides pending verification review actions', () => {
   assert.match(detailPage, /handleVerificationReview\('reject'\)/);
   assert.match(detailPage, /handleVerificationReview\('request_changes'\)/);
 });
+
+test('triage to todo uses non-blocking readiness notice instead of native confirm', () => {
+  assert.match(issuesPage, /moveToTodoReadinessNotice/);
+  assert.match(detailPage, /moveToTodoReadinessNotice/);
+  assert.doesNotMatch(issuesPage, /window\.confirm/);
+  assert.doesNotMatch(detailPage, /triageReadinessMoveToTodoMessage/);
+  assert.doesNotMatch(detailPage, /confirmTriageReady/);
+});

@@ -258,7 +258,7 @@ func (s *Server) ensureIssueRunnable(w http.ResponseWriter, r *http.Request, iss
 	if issue.ID == 0 {
 		issue.ProjectID = project.ID
 	}
-	if _, err := s.runner.ResolveIssueRunSelection(r.Context(), issue); err != nil {
+	if _, err := s.runner.ResolveIssueQueueSelection(r.Context(), issue); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return false
 	}

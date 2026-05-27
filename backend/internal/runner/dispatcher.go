@@ -44,6 +44,14 @@ func (r *Runner) ResolveIssueRunSelection(ctx context.Context, issue store.Issue
 	return selection, nil
 }
 
+func (r *Runner) ResolveIssueQueueSelection(ctx context.Context, issue store.Issue) (RunSelection, error) {
+	project, err := r.store.GetProject(ctx, issue.ProjectID)
+	if err != nil {
+		return RunSelection{}, err
+	}
+	return r.resolveProjectRunSelection(ctx, issue, project)
+}
+
 func (r *Runner) resolveProjectRunSelection(
 	ctx context.Context,
 	issue store.Issue,
