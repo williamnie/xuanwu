@@ -29,6 +29,7 @@ import {
   Pencil,
   MessageCircle,
   Send,
+  ClipboardCheck,
   History,
   ExternalLink,
 } from 'lucide-react';
@@ -200,6 +201,8 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const [refinementDraft, setRefinementDraft] = useState(null);
   const [refinementDraftError, setRefinementDraftError] = useState('');
   const [refinementDraftGenerating, setRefinementDraftGenerating] = useState(false);
+  const [verifierGenerating, setVerifierGenerating] = useState(false);
+  const [verifierError, setVerifierError] = useState('');
   const [detailState, updateDetailState] = useImmer({
     issue: null,
     project: null,
@@ -336,6 +339,8 @@ ${error}` : error;
     setRefinementDraft(null);
     setRefinementDraftError('');
     setRefinementDraftGenerating(false);
+    setVerifierGenerating(false);
+    setVerifierError('');
   }, [issueId]);
 
   const updateTerminalFollowState = useCallback(() => {
@@ -461,6 +466,27 @@ ${error}` : error;
     }
   };
 
+  const handleGenerateVerifierReport = async () => {
+    setVerifierGenerating(true);
+    setVerifierError('');
+    try {
+      const result = await api.generateIssueVerifierReport(issueId);
+      updateDetailState(draft => {
+        if (result?.event && !hasIssueEvent(draft.events, result.event)) {
+          draft.events.push(result.event);
+        }
+      });
+      message.success('Verifier report 已生成');
+      loadIssueData();
+    } catch (err) {
+      const errorMessage = err.message || '生成 verifier report 失败';
+      setVerifierError(errorMessage);
+      message.error('生成 verifier report 失败: ' + errorMessage);
+    } finally {
+      setVerifierGenerating(false);
+    }
+  };
+
   const closeEditModal = useCallback(() => {
     setRefinementDraft(null);
     setIsEditModalOpen(false);
@@ -520,6 +546,7 @@ ${error}` : error;
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
   const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
+  const verifierReports = issueVerifierReports(events);
   const profileSummary = summarizeAgentProfile(project?.default_agent_profile);
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
@@ -813,6 +840,15 @@ ${error}` : error;
             navigateTo={navigateTo}
             onCopy={handleCopyText}
           />
+
+          {canGenerateVerifierReport(issue) && (
+            <VerifierReportPanel
+              reports={verifierReports}
+              generating={verifierGenerating}
+              error={verifierError}
+              onGenerate={handleGenerateVerifierReport}
+            />
+          )}
 
           {issue.status === 'pending_verification' && (
             <VerificationReviewPanel
@@ -1254,6 +1290,105 @@ function verificationReviewComment(action) {
   const value = window.prompt(`${label}（会写入 issue comment）`, '');
   if (value === null) return null;
   return value.trim() || (action === 'reject' ? '验证拒绝' : '请求修改');
+}
+
+function canGenerateVerifierReport(issue) {
+  if (issue?.status === 'pending_verification') return true;
+  return issue?.status === 'done' && String(issue?.error || '').trim() !== '';
+}
+
+function issueVerifierReports(events = []) {
+  return events
+    .filter(event => event.type === 'issue.verification_report')
+    .map(event => ({ event, report: parseVerifierReportPayload(parseEventPayload(event)) }))
+    .filter(item => item.report.summary || item.report.recommendation)
+    .reverse();
+}
+
+function parseVerifierReportPayload(payload = {}) {
+  return {
+    summary: payload.summary || '',
+    acceptanceChecklist: payload.acceptanceChecklist || payload.acceptance_checklist || '',
+    evidenceFound: payload.evidenceFound || payload.evidence_found || '',
+    evidenceMissing: payload.evidenceMissing || payload.evidence_missing || '',
+    risk: payload.risk || '',
+    recommendation: payload.recommendation || '',
+    threadId: payload.thread_id || payload.threadId || '',
+    turnId: payload.turn_id || payload.turnId || '',
+  };
+}
+
+function VerifierReportPanel({ reports, generating, error, onGenerate }) {
+  const latest = reports[0];
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '4px solid #06b6d4' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ClipboardCheck size={18} color="#06b6d4" /> Verifier report
+          </h3>
+          <p style={{ margin: '6px 0 0', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+            只读审查最新 run、事件、证据和 diff 摘要；只给建议，不会自动改最终状态。
+          </p>
+        </div>
+        <button className="btn btn-primary" style={{ padding: '7px 10px', fontSize: '0.78rem' }} onClick={onGenerate} disabled={generating}>
+          <RotateCw size={14} /> {generating ? '生成中...' : '生成 report'}
+        </button>
+      </div>
+      {error && (
+        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.78rem' }}>
+          {error}
+        </div>
+      )}
+      {latest ? (
+        <VerifierReportCard item={latest} />
+      ) : (
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
+          暂无 verifier report，可先生成一份再人工 Accept / Reject / Request changes。
+        </p>
+      )}
+    </section>
+  );
+}
+
+function VerifierReportCard({ item }) {
+  const report = item.report;
+  return (
+    <article style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className={`triage-readiness-badge ${verifierRecommendationClass(report.recommendation)}`}>
+          Recommendation: {report.recommendation || 'unknown'}
+        </span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{formatDateTime(item.event.created_at)}</span>
+      </div>
+      <VerifierReportSection title="Summary" value={report.summary} />
+      <VerifierReportSection title="Acceptance checklist" value={report.acceptanceChecklist} />
+      <VerifierReportSection title="Evidence found" value={report.evidenceFound} />
+      <VerifierReportSection title="Evidence missing" value={report.evidenceMissing} />
+      <VerifierReportSection title="Risk" value={report.risk} />
+      {(report.threadId || report.turnId) && (
+        <code style={{ color: 'var(--text-muted)', fontSize: '0.7rem', overflowWrap: 'anywhere' }}>
+          Verifier: {report.threadId || 'thread?'} / {report.turnId || 'turn?'}
+        </code>
+      )}
+    </article>
+  );
+}
+
+function VerifierReportSection({ title, value }) {
+  if (!value) return null;
+  return (
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '9px', background: 'rgba(6,182,212,0.06)', minWidth: 0 }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>{title}</div>
+      <MarkdownPreview text={value} />
+    </div>
+  );
+}
+
+function verifierRecommendationClass(recommendation) {
+  if (recommendation === 'accept') return 'ready';
+  if (recommendation === 'reject') return 'raw';
+  return 'refined';
 }
 
 function VerificationReviewPanel({ evidence, onAccept, onReject, onRequestChanges }) {

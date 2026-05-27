@@ -259,6 +259,11 @@ export const api = {
     body: JSON.stringify({}),
   }),
 
+  generateIssueVerifierReport: (id) => request(`/api/issues/${id}/verifier-report`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getSessions: ({ limit = 50, cursor = '' } = {}) => {
     const params = new URLSearchParams();
     if (limit) params.append('limit', String(limit));

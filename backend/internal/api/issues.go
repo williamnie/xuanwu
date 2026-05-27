@@ -207,6 +207,10 @@ func (s *Server) handleIssueAction(w http.ResponseWriter, r *http.Request, id in
 		s.createIssueRefinementDraft(w, r, id)
 		return
 	}
+	if action == "verifier-report" && requireMethod(w, r, http.MethodPost) {
+		s.createIssueVerifierReport(w, r, id)
+		return
+	}
 	if action == "verification" && requireMethod(w, r, http.MethodPost) {
 		s.reviewIssueVerification(w, r, id)
 		return
