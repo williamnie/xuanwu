@@ -59,6 +59,9 @@ func (n noopCodex) SetThreadName(context.Context, string, string) error { return
 func (n noopCodex) StartTurn(context.Context, string, []agent.UserInput, agent.TurnOptions) (string, error) {
 	return "turn-new", nil
 }
+func (n noopCodex) SteerTurn(context.Context, string, string, []agent.UserInput) (string, error) {
+	return "turn-new", nil
+}
 func (n noopCodex) InterruptTurn(context.Context, string, string) error { return nil }
 func (n noopCodex) ResolveApproval(context.Context, string, agent.ApprovalDecision) error {
 	return nil

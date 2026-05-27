@@ -125,6 +125,15 @@ func (a *Adapter) TurnStart(ctx context.Context, threadID string, input []UserIn
 	return nestedString(result, "turn", "id")
 }
 
+func (a *Adapter) TurnSteer(ctx context.Context, threadID, turnID string, input []UserInput) (string, error) {
+	params := turnSteerParams(threadID, turnID, input)
+	result, err := a.request(ctx, "turn/steer", params)
+	if err != nil {
+		return "", err
+	}
+	return nestedString(result, "turnId")
+}
+
 func (a *Adapter) InterruptTurn(ctx context.Context, threadID, turnID string) error {
 	_, err := a.request(ctx, "turn/interrupt", map[string]any{"threadId": threadID, "turnId": turnID})
 	return err

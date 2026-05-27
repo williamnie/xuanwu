@@ -8,6 +8,6 @@ export function shouldSubmitPromptEditorKey(event) {
 export function handlePromptEditorSubmitKey(event, onSubmitKey) {
   if (!onSubmitKey || !shouldSubmitPromptEditorKey(event)) return false;
   event.preventDefault();
-  onSubmitKey();
+  onSubmitKey(event);
   return true;
 }

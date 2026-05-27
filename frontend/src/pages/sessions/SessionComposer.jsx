@@ -6,7 +6,6 @@ import {
   supportedEffortValues,
 } from './sessionOptions';
 import SessionCommandPanel from './SessionCommandPanel';
-import { COMPOSER_HELP_ITEMS } from './sessionComposerHelp';
 import './SessionComposer.css';
 
 const PERMISSION_PRESETS = [
@@ -30,6 +29,8 @@ export default function SessionComposer({
   interruptState,
   selectedId,
   queuedMessages = [],
+  followMode = false,
+  onFollowModeChange = null,
   onSubmit,
   onStop,
   onCancelQueuedMessage,
@@ -57,7 +58,11 @@ export default function SessionComposer({
   const hasCommand = Boolean(commandState);
   const hasContent = Boolean(value.trim() || referenceDetails.length || hasCommand);
   const canSubmitMessage = Boolean(selectedId && hasContent && !hasCommand && !hasInvalidReferences && !sending && !interrupting);
-  const submitFromEditor = () => onSubmit({ preventDefault() {} });
+  const submitFromEditor = (event) => onSubmit({
+    preventDefault() {},
+    metaKey: Boolean(event?.metaKey),
+    ctrlKey: Boolean(event?.ctrlKey),
+  });
   return (
     <form className="session-composer" onSubmit={onSubmit}>
       <QueueStatus
@@ -76,7 +81,6 @@ export default function SessionComposer({
         onExecute={onExecuteCommand}
         onCancel={onCancelCommand}
       />
-      <ComposerHelp />
       <PromptEditor
         value={value}
         onChange={onChange}
@@ -108,6 +112,8 @@ export default function SessionComposer({
             selectedId={selectedId}
             canSend={!hasCommand && hasContent && !hasInvalidReferences}
             hasQueuedMessages={hasQueuedMessages}
+            followMode={followMode}
+            onFollowModeChange={onFollowModeChange}
             onStop={onStop}
           />
         )}
@@ -116,14 +122,6 @@ export default function SessionComposer({
   );
 }
 
-
-function ComposerHelp() {
-  return (
-    <div className="session-composer-help" aria-label="Composer v2 help">
-      {COMPOSER_HELP_ITEMS.map((item) => <span key={item}>{item}</span>)}
-    </div>
-  );
-}
 
 function InterruptStatus({ interruptState, selectedId }) {
   if (!interruptState || interruptState.sessionId !== selectedId) return null;
@@ -243,14 +241,28 @@ function CompactSelect({ className, icon, value, displayLabel, onChange, title, 
   );
 }
 
-function ComposerActions({ sending, running, interrupting, selectedId, canSend, hasQueuedMessages, onStop }) {
+function ComposerActions({
+  sending,
+  running,
+  interrupting,
+  selectedId,
+  canSend,
+  hasQueuedMessages,
+  followMode,
+  onFollowModeChange,
+  onStop,
+}) {
+  const modeSwitch = running ? (
+    <ComposerModeSwitch value={followMode} onChange={onFollowModeChange} disabled={sending || interrupting} />
+  ) : null;
   if (running) {
     return (
       <>
+        {modeSwitch}
         <button type="button" className="session-composer-circle secondary" onClick={onStop} disabled={!selectedId || interrupting} title={interrupting ? '正在中断...' : '停止'}>
           {interrupting ? <Loader2 className="animate-spin" size={14} /> : <Square size={14} fill="currentColor" />}
         </button>
-        <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title="排队为下一条消息">
+        <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title={followMode ? '引导当前响应；⌘↵ 排队' : '排队为下一条消息；⌘↵ 引导'}>
           {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
         </button>
       </>
@@ -260,6 +272,29 @@ function ComposerActions({ sending, running, interrupting, selectedId, canSend, 
     <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title={hasQueuedMessages ? '追加到队列' : '发送'}>
       {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
     </button>
+  );
+}
+
+function ComposerModeSwitch({ value, onChange, disabled }) {
+  return (
+    <div className="session-composer-mode-switch" role="group" aria-label="运行中发送行为">
+      <button
+        type="button"
+        className={!value ? 'active' : ''}
+        disabled={disabled}
+        onClick={() => onChange?.(false)}
+      >
+        排队
+      </button>
+      <button
+        type="button"
+        className={value ? 'active' : ''}
+        disabled={disabled}
+        onClick={() => onChange?.(true)}
+      >
+        引导
+      </button>
+    </div>
   );
 }
 

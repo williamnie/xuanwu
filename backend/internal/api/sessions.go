@@ -26,6 +26,7 @@ type createSessionRequest struct {
 
 type sessionMessageRequest struct {
 	Prompt          string                    `json:"prompt"`
+	Mode            string                    `json:"mode"`
 	Model           string                    `json:"model"`
 	ReasoningEffort string                    `json:"reasoning_effort"`
 	ApprovalPolicy  string                    `json:"approval_policy"`
@@ -203,6 +204,7 @@ func toSessionTurnInput(req sessionMessageRequest) runner.SessionTurnInput {
 	return runner.SessionTurnInput{
 		Prompt: req.Prompt, Model: req.Model, ReasoningEffort: req.ReasoningEffort,
 		ApprovalPolicy: req.ApprovalPolicy, Sandbox: req.Sandbox, References: req.References,
+		Mode: req.Mode,
 	}
 }
 

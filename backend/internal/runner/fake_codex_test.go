@@ -11,6 +11,7 @@ type fakeCodex struct {
 	setName          string
 	threadInputs     []agent.ThreadInput
 	turnInputs       []agent.UserInput
+	steerInputs      []agent.UserInput
 	turnOptions      []agent.TurnOptions
 	resumeSession    agent.Session
 	pendingApprovals []agent.PendingApproval
@@ -20,6 +21,7 @@ type fakeCodex struct {
 	threadErr        error
 	resumeErr        error
 	turnErr          error
+	steerErr         error
 	interrupts       chan [2]string
 	resumeCalls      int
 }
@@ -80,6 +82,13 @@ func (f *fakeCodex) StartTurn(_ context.Context, _ string, input []agent.UserInp
 		}()
 	}
 	return "turn-1", nil
+}
+func (f *fakeCodex) SteerTurn(_ context.Context, _ string, turnID string, input []agent.UserInput) (string, error) {
+	f.steerInputs = input
+	if f.steerErr != nil {
+		return "", f.steerErr
+	}
+	return turnID, nil
 }
 func (f *fakeCodex) InterruptTurn(_ context.Context, threadID, turnID string) error {
 	if f.interrupts != nil {

@@ -33,6 +33,7 @@ type SessionCreateResult struct {
 
 type SessionTurnInput struct {
 	Prompt          string
+	Mode            string
 	Model           string
 	ReasoningEffort string
 	ApprovalPolicy  string
@@ -145,6 +146,9 @@ func (r *Runner) StartSessionTurn(ctx context.Context, threadID string, input Se
 	if err != nil {
 		return "", err
 	}
+	if strings.TrimSpace(input.Mode) == "steer" {
+		return r.steerSessionTurn(ctx, threadID, r.activeSessionTurnID(threadID, session), input.Prompt, refs)
+	}
 	return r.startSessionTurnWithOptions(ctx, threadID, input.Prompt, refs, sessionTurnOptions(input))
 }
 
@@ -254,6 +258,39 @@ func (r *Runner) startSessionTurnWithOptions(
 	r.setSessionRunning(threadID, turnID)
 	go r.waitSessionTurn(threadID, turnID, eventsCh, unsubscribe)
 	return turnID, nil
+}
+
+func (r *Runner) steerSessionTurn(
+	ctx context.Context,
+	threadID string,
+	activeTurnID string,
+	prompt string,
+	refs []ResolvedSessionReference,
+) (string, error) {
+	if activeTurnID == "" {
+		return "", errors.New("当前 session 没有可引导的运行中 turn")
+	}
+	input, err := buildTurnInput(ctx, r.store, assembleSessionPrompt(prompt, refs))
+	if err != nil {
+		return "", err
+	}
+	turnID, err := r.steerTurn(ctx, threadID, activeTurnID, input)
+	if err != nil {
+		return "", err
+	}
+	r.saveSessionTurnReferences(ctx, threadID, firstNonEmpty(turnID, activeTurnID), refs)
+	return firstNonEmpty(turnID, activeTurnID), nil
+}
+
+func (r *Runner) activeSessionTurnID(threadID string, session agent.Session) string {
+	if state := r.sessionRunState(threadID); state != nil && state.turnID != "" {
+		return state.turnID
+	}
+	turnID, active := recoveredTurn(session, "")
+	if active {
+		return turnID
+	}
+	return ""
 }
 
 func sessionCreateTurnOptions(input SessionCreateInput) agent.TurnOptions {

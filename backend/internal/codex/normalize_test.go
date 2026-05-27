@@ -100,6 +100,17 @@ func TestTurnStartParamsIncludesSessionOverrides(t *testing.T) {
 	}
 }
 
+func TestTurnSteerParamsUsesActiveTurnPrecondition(t *testing.T) {
+	params := turnSteerParams("thread-1", "turn-1", []UserInput{TextInput("follow")})
+	if params["threadId"] != "thread-1" || params["expectedTurnId"] != "turn-1" {
+		t.Fatalf("steer ids = %#v", params)
+	}
+	inputs, ok := params["input"].([]UserInput)
+	if !ok || len(inputs) != 1 || inputs[0].Text != "follow" {
+		t.Fatalf("steer input = %#v", params["input"])
+	}
+}
+
 func TestApprovalResponseMapsCommandDecisions(t *testing.T) {
 	result := approvalResponse("item/commandExecution/requestApproval", ApprovalDecision{Decision: "approve_session"}, nil)
 	if result["decision"] != "acceptForSession" {

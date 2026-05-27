@@ -88,6 +88,10 @@ func turnStartParams(threadID string, input []UserInput, options TurnOptions) ma
 	return params
 }
 
+func turnSteerParams(threadID, turnID string, input []UserInput) map[string]any {
+	return map[string]any{"threadId": threadID, "expectedTurnId": turnID, "input": input}
+}
+
 func TextInput(text string) UserInput {
 	return UserInput{Type: "text", Text: text, TextElements: []any{}}
 }

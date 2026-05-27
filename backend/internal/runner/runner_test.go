@@ -557,6 +557,29 @@ func TestStartSessionTurnPassesMessageRuntimeOptions(t *testing.T) {
 	}
 }
 
+func TestStartSessionTurnSteersRunningTurn(t *testing.T) {
+	st := openRunnerStore(t)
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+	r.setSessionRunning("thread-1", "turn-1")
+
+	turnID, err := r.StartSessionTurn(context.Background(), "thread-1", SessionTurnInput{
+		Mode: "steer", Prompt: "跟进",
+	})
+	if err != nil {
+		t.Fatalf("steer session turn: %v", err)
+	}
+	if turnID != "turn-1" {
+		t.Fatalf("turnID = %q, want active turn", turnID)
+	}
+	if got := stringFromUserInputs(fake.steerInputs); !strings.Contains(got, "跟进") {
+		t.Fatalf("steer input missing prompt: %q", got)
+	}
+	if len(fake.turnOptions) != 0 {
+		t.Fatalf("steer should not start a queued turn: %+v", fake.turnOptions)
+	}
+}
+
 func TestSessionTurnPublishesTerminalEventAfterWatcherStarts(t *testing.T) {
 	st := openRunnerStore(t)
 	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}

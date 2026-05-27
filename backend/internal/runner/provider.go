@@ -73,6 +73,14 @@ func (r *Runner) startTurn(
 	return capability.StartTurn(ctx, threadID, input, options)
 }
 
+func (r *Runner) steerTurn(ctx context.Context, threadID, turnID string, input []agent.UserInput) (string, error) {
+	capability, ok := r.agent.(agent.TurnSteerer)
+	if !ok {
+		return "", agent.ErrCapabilityUnsupported
+	}
+	return capability.SteerTurn(ctx, threadID, turnID, input)
+}
+
 func (r *Runner) listModels(ctx context.Context) (agent.ModelListResult, error) {
 	capability, ok := r.agent.(agent.ModelLister)
 	if !ok {

@@ -316,6 +316,11 @@ export const api = {
     body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
   }),
 
+  steerSessionMessage: (id, message) => request(`/api/sessions/${id}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(typeof message === 'string' ? { prompt: message } : message), mode: 'steer' }),
+  }),
+
   interruptSession: (id) => request(`/api/sessions/${id}/interrupt`, {
     method: 'POST',
   }),

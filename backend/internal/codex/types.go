@@ -99,6 +99,7 @@ type Client interface {
 	ThreadResume(ctx context.Context, threadID string) (Session, error)
 	ThreadSetName(ctx context.Context, threadID, name string) error
 	TurnStart(ctx context.Context, threadID string, input []UserInput, options TurnOptions) (string, error)
+	TurnSteer(ctx context.Context, threadID string, turnID string, input []UserInput) (string, error)
 	InterruptTurn(ctx context.Context, threadID, turnID string) error
 	PendingApprovals(ctx context.Context) ([]PendingApproval, error)
 	ResolveApproval(ctx context.Context, requestID string, decision ApprovalDecision) error

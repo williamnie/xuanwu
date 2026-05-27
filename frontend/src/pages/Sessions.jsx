@@ -232,6 +232,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState([]);
   const [sessionRunning, setSessionRunning] = useState(false);
+  const [followRunningTurn, setFollowRunningTurn] = useState(false);
   const [interruptState, setInterruptState] = useState(null);
   const [messageQueue, setMessageQueue] = useState(readQueuedSessionMessages);
   const [approvalQueue, setApprovalQueue] = useState([]);
@@ -702,6 +703,15 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     setLiveEvents([]);
   }, []);
 
+  const steerSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
+    await api.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
+      model: settings.model,
+      reasoning_effort: settings.reasoningEffort,
+      approval_policy: settings.approvalPolicy,
+      sandbox: settings.sandbox,
+    }, references));
+  }, []);
+
   const sendQueuedMessage = useCallback(async (sessionId) => {
     const queued = nextPendingQueuedSessionMessage(messageQueueRef.current, sessionId);
     if (!queued || activeQueuedSendsRef.current.has(queued.id)) return;
@@ -729,6 +739,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const sendMessage = async (event) => {
     event.preventDefault();
     const promptText = message.trim();
+    const wantsOppositeMode = Boolean(event.metaKey || event.ctrlKey);
+    const shouldGuide = sessionRunning && (wantsOppositeMode ? !followRunningTurn : followRunningTurn);
     if (!selectedId || sending || isInterruptPendingForSession(interruptStateRef.current, selectedId)) return;
     if (!hasComposerContent(promptText, messageReferences)) return;
     if (messageReferenceValidation.hasErrors) {
@@ -737,6 +749,20 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
     if (messageCommand) {
       toast.error('Command 请使用 command 面板执行，不会作为普通 prompt 发送。');
+      return;
+    }
+    if (shouldGuide) {
+      setSending(true);
+      try {
+        await steerSessionMessage(selectedId, promptText, messageSettings, messageReferences);
+        setMessage('');
+        setMessageReferences([]);
+        toast.info('已引导当前响应。');
+      } catch (err) {
+        toast.error(err.message || '引导当前响应失败');
+      } finally {
+        setSending(false);
+      }
       return;
     }
     if (sessionRunning || currentQueuedMessages.length > 0) {
@@ -750,7 +776,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setMessageQueue((current) => enqueueQueuedSessionMessage(current, queued));
       setMessage('');
       setMessageReferences([]);
-      toast.info(sessionRunning ? '已排队为下一条消息，当前响应不会被引导。' : '已追加到消息队列。');
+      toast.info(sessionRunning ? '已排队为下一条消息。' : '已追加到消息队列。');
       return;
     }
     setSending(true);
@@ -1083,6 +1109,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   interruptState={interruptState}
                   selectedId={selectedId}
                   queuedMessages={currentQueuedMessages}
+                  followMode={followRunningTurn}
+                  onFollowModeChange={setFollowRunningTurn}
                   suggestions={sessionComposerSuggestions}
                   referenceDetails={messageReferenceDetails}
                   onAttachReference={(reference) => setMessageReferences((current) => addSessionReference(current, reference))}

@@ -70,6 +70,10 @@ func (p *Provider) StartTurn(
 	return p.client.TurnStart(ctx, threadID, toCodexUserInputs(input), toCodexTurnOptions(options))
 }
 
+func (p *Provider) SteerTurn(ctx context.Context, threadID, turnID string, input []agent.UserInput) (string, error) {
+	return p.client.TurnSteer(ctx, threadID, turnID, toCodexUserInputs(input))
+}
+
 func (p *Provider) InterruptTurn(ctx context.Context, threadID, turnID string) error {
 	return p.client.InterruptTurn(ctx, threadID, turnID)
 }

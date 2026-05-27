@@ -22,6 +22,10 @@ type TurnStarter interface {
 	StartTurn(ctx context.Context, threadID string, input []UserInput, options TurnOptions) (string, error)
 }
 
+type TurnSteerer interface {
+	SteerTurn(ctx context.Context, threadID string, turnID string, input []UserInput) (string, error)
+}
+
 type IssueRunner interface {
 	RunIssue(ctx context.Context, input IssueRunInput) (IssueRunResult, error)
 }

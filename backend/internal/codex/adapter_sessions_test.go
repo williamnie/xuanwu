@@ -50,6 +50,48 @@ func TestThreadSetNameUsesCurrentRPCMethod(t *testing.T) {
 	}
 }
 
+func TestTurnSteerUsesCurrentRPCMethod(t *testing.T) {
+	adapter := NewAdapter("", nil)
+	reader, writer := io.Pipe()
+	adapter.stdin = writer
+	t.Cleanup(func() {
+		_ = reader.Close()
+		_ = writer.Close()
+	})
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := adapter.TurnSteer(context.Background(), "thread-1", "turn-1", []UserInput{TextInput("follow")})
+		errCh <- err
+	}()
+
+	line := readAdapterRequestLine(t, reader)
+	var got struct {
+		ID     int64          `json:"id"`
+		Method string         `json:"method"`
+		Params map[string]any `json:"params"`
+	}
+	if err := json.Unmarshal([]byte(line), &got); err != nil {
+		t.Fatalf("decode request: %v", err)
+	}
+	if got.Method != "turn/steer" {
+		t.Fatalf("method = %q, want turn/steer", got.Method)
+	}
+	if got.Params["threadId"] != "thread-1" || got.Params["expectedTurnId"] != "turn-1" {
+		t.Fatalf("params = %+v, want thread id and active turn id", got.Params)
+	}
+
+	adapter.handleLine([]byte(`{"id":1,"result":{"turnId":"turn-1"}}`))
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("TurnSteer returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("TurnSteer did not receive response")
+	}
+}
+
 func readAdapterRequestLine(t *testing.T, reader io.Reader) string {
 	t.Helper()
 	lines := make(chan string, 1)

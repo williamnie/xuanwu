@@ -673,7 +673,8 @@ func TestRunnerCommandRunRequiresConfirmation(t *testing.T) {
 }
 
 func TestSessionAPIReadAndMessageFlow(t *testing.T) {
-	srv := newTestServerWithCodex(t, noopCodex{ch: make(chan agent.Event)})
+	provider := &sessionMessageFlowCodex{noopCodex: noopCodex{ch: make(chan agent.Event)}}
+	srv := newTestServerWithCodex(t, provider)
 	session := getJSON[agent.Session](t, srv, "/api/sessions/codex:thread-1")
 	if session.ID != "codex:thread-1" || session.Provider != store.ProviderCodex ||
 		session.ProviderSessionID != "thread-1" || session.CWD != "/tmp/demo" {
@@ -693,6 +694,37 @@ func TestSessionAPIReadAndMessageFlow(t *testing.T) {
 	if message["thread_id"] != "thread-1" || message["turn_id"] != "turn-new" {
 		t.Fatalf("unexpected session message: %+v", message)
 	}
+	guidance := postJSON[map[string]string](t, srv, "/api/sessions/codex:thread-1/messages", map[string]any{
+		"prompt": "guide current",
+		"mode":   "steer",
+	})
+	if guidance["turn_id"] != "turn-new" || !strings.Contains(apiUserInputText(provider.steerInput), "guide current") {
+		t.Fatalf("unexpected guidance message: result=%+v input=%s", guidance, apiUserInputText(provider.steerInput))
+	}
+}
+
+type sessionMessageFlowCodex struct {
+	noopCodex
+	steerInput []agent.UserInput
+}
+
+func (c *sessionMessageFlowCodex) ResumeThread(context.Context, string) (agent.Session, error) {
+	return agent.Session{
+		ID:     "thread-1",
+		CWD:    "/tmp/demo",
+		Status: json.RawMessage(`{"type":"active"}`),
+		Turns:  json.RawMessage(`[{"id":"turn-new","status":"inProgress"}]`),
+	}, nil
+}
+
+func (c *sessionMessageFlowCodex) SteerTurn(
+	_ context.Context,
+	_ string,
+	turnID string,
+	input []agent.UserInput,
+) (string, error) {
+	c.steerInput = input
+	return turnID, nil
 }
 
 func TestSessionAPIReferencesFlow(t *testing.T) {
