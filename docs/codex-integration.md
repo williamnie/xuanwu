@@ -103,7 +103,7 @@ Go 侧按 message 形态分流：
 | `ThreadList` | `thread/list` | Sessions 列表页分页读取 Codex threads |
 | `ThreadRead` | `thread/read` | adapter 支持读取 thread；当前 API 详情主要用 resume |
 | `ThreadResume` | `thread/resume` | Sessions 详情页读取并恢复 thread |
-| `ThreadSetName` | `thread/setName` | issue 执行时把 thread 名设置为 issue 标题 |
+| `ThreadSetName` | `thread/name/set` | issue 执行时把 thread 名设置为 issue 标题 |
 | `TurnStart` | `turn/start` | 向指定 thread 发送用户输入并开始 turn |
 | `InterruptTurn` | `turn/interrupt` | 取消 issue 或中断 session turn |
 | `ResolveApproval` | server request response | 用户批准/拒绝 Codex 请求的操作 |
@@ -149,7 +149,7 @@ sequenceDiagram
   Codex-->>Adapter: thread id
   Runner->>DB: 保存 codex_thread_id
   Runner->>Adapter: ThreadSetName + TurnStart
-  Adapter->>Codex: thread/setName + turn/start
+  Adapter->>Codex: thread/name/set + turn/start
   Codex-->>Adapter: turn id + notifications
   Runner->>DB: 保存 codex_turn_id，写 issue_events
   Runner->>SSE: issue.log / codex.event

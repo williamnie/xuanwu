@@ -34,7 +34,7 @@ func (a *Adapter) ThreadResume(ctx context.Context, threadID string) (Session, e
 }
 
 func (a *Adapter) ThreadSetName(ctx context.Context, threadID, name string) error {
-	_, err := a.request(ctx, "thread/setName", map[string]any{"threadId": threadID, "name": name})
+	_, err := a.request(ctx, "thread/name/set", map[string]any{"threadId": threadID, "name": name})
 	return err
 }
 
