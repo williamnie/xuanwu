@@ -39,14 +39,17 @@ func (s *Store) CreateIssue(ctx context.Context, i Issue) (Issue, error) {
 	if err := s.applyIssueTemplateSnapshot(ctx, &i); err != nil {
 		return Issue{}, err
 	}
+	if strings.TrimSpace(i.WorkflowSnapshotJSON) == "" {
+		i.WorkflowSnapshotJSON = initialWorkflowSnapshot(i.Status, t)
+	}
 	_, err := s.db.ExecContext(ctx, `insert into issues
 		(project_id, title, description, status, priority, template_id,
 		prompt_template, agent_profile_id, source_session_id, source_turn_id, source_excerpt,
-		created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		workflow_snapshot_json, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		i.ProjectID, i.Title, i.Description, i.Status, i.Priority,
 		i.TemplateID, i.PromptTemplate, i.AgentProfileID, i.SourceSessionID, i.SourceTurnID,
-		i.SourceExcerpt, t, t)
+		i.SourceExcerpt, i.WorkflowSnapshotJSON, t, t)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -76,11 +79,15 @@ func (s *Store) UpdateIssue(ctx context.Context, id int64, patch IssuePatch) (Is
 		i.AutoRetryNextAt = ""
 		i.AutoRetryReason = ""
 	}
+	t := now()
+	if patch.Status != nil || patch.Error != nil {
+		i.WorkflowSnapshotJSON = nextWorkflowSnapshot(i.WorkflowSnapshotJSON, i.Status, i.Error, "user", "", t)
+	}
 	_, err = s.db.ExecContext(ctx, `update issues set title=?, description=?, status=?,
 		priority=?, agent_profile_id=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
-		auto_retry_reason=?, error=?, updated_at=? where id=?`,
+		auto_retry_reason=?, error=?, workflow_snapshot_json=?, updated_at=? where id=?`,
 		i.Title, i.Description, i.Status, i.Priority, i.AgentProfileID, i.CodexThreadID,
-		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, now(), id)
+		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, i.WorkflowSnapshotJSON, t, id)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -116,11 +123,15 @@ func (s *Store) UpdateIssueAndCloseRun(ctx context.Context, req IssueRunClosePat
 		i.AutoRetryNextAt = ""
 		i.AutoRetryReason = ""
 	}
+	t := now()
+	if req.Patch.Status != nil || req.Patch.Error != nil {
+		i.WorkflowSnapshotJSON = nextWorkflowSnapshot(i.WorkflowSnapshotJSON, i.Status, i.Error, "agent", "", t)
+	}
 	_, err = s.db.ExecContext(ctx, `update issues set title=?, description=?, status=?,
 		priority=?, agent_profile_id=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
-		auto_retry_reason=?, error=?, updated_at=? where id=?`,
+		auto_retry_reason=?, error=?, workflow_snapshot_json=?, updated_at=? where id=?`,
 		i.Title, i.Description, i.Status, i.Priority, i.AgentProfileID, i.CodexThreadID,
-		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, now(), id)
+		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, i.WorkflowSnapshotJSON, t, id)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -143,9 +154,14 @@ func (s *Store) ClaimNextIssue(ctx context.Context, projectID string) (Issue, bo
 	if err != nil || !ok {
 		return Issue{}, ok, err
 	}
+	var snapshot string
+	if err := tx.QueryRowContext(ctx, `select workflow_snapshot_json from issues where id=?`, id).Scan(&snapshot); err != nil {
+		return Issue{}, false, err
+	}
+	snapshot = nextWorkflowSnapshot(snapshot, StatusInProgress, "", "runner", "Runner claimed issue", t)
 	_, err = tx.ExecContext(ctx, `update issues set status=?, attempt_count=attempt_count+1,
-		auto_retry_next_at='', auto_retry_reason='', error='', updated_at=?
-		where id=? and status=?`, StatusInProgress, t, id, StatusTodo)
+		auto_retry_next_at='', auto_retry_reason='', error='', workflow_snapshot_json=?, updated_at=?
+		where id=? and status=?`, StatusInProgress, snapshot, t, id, StatusTodo)
 	if err != nil {
 		return Issue{}, false, err
 	}
@@ -164,8 +180,18 @@ func (s *Store) ClaimNextIssue(ctx context.Context, projectID string) (Issue, bo
 }
 
 func (s *Store) UpdateIssueRuntime(ctx context.Context, id int64, threadID, turnID string) error {
-	_, err := s.db.ExecContext(ctx, `update issues set codex_thread_id=?,
-		codex_turn_id=?, updated_at=? where id=?`, threadID, turnID, now(), id)
+	current, err := s.GetIssue(ctx, id)
+	if err != nil {
+		return err
+	}
+	t := now()
+	snapshot := nextWorkflowSnapshotWithRuntime(
+		current.WorkflowSnapshotJSON, StatusInProgress, "runner",
+		threadID, turnID, current.AttemptCount, t,
+	)
+	_, err = s.db.ExecContext(ctx, `update issues set codex_thread_id=?,
+		codex_turn_id=?, workflow_snapshot_json=?, updated_at=? where id=?`,
+		threadID, turnID, snapshot, t, id)
 	if err != nil {
 		return err
 	}
@@ -194,9 +220,15 @@ func (s *Store) ListIssueThreadIDs(ctx context.Context) (map[string]bool, error)
 }
 
 func (s *Store) SetIssueStatus(ctx context.Context, id int64, status, errText string) (Issue, error) {
-	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?,
-		auto_retry_next_at='', auto_retry_reason='', updated_at=? where id=?`,
-		status, errText, now(), id)
+	current, err := s.GetIssue(ctx, id)
+	if err != nil {
+		return Issue{}, err
+	}
+	t := now()
+	snapshot := nextWorkflowSnapshot(current.WorkflowSnapshotJSON, status, errText, "agent", "", t)
+	_, err = s.db.ExecContext(ctx, `update issues set status=?, error=?,
+		auto_retry_next_at='', auto_retry_reason='', workflow_snapshot_json=?, updated_at=? where id=?`,
+		status, errText, snapshot, t, id)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -207,9 +239,15 @@ func (s *Store) SetIssueStatus(ctx context.Context, id int64, status, errText st
 }
 
 func (s *Store) ScheduleIssueAutoRetry(ctx context.Context, id int64, reason, nextAt string) (Issue, error) {
+	current, err := s.GetIssue(ctx, id)
+	if err != nil {
+		return Issue{}, err
+	}
+	t := now()
+	snapshot := nextWorkflowSnapshot(current.WorkflowSnapshotJSON, StatusTodo, reason, "runner", "", t)
 	res, err := s.db.ExecContext(ctx, `update issues set status=?, error='',
-		auto_retry_next_at=?, auto_retry_reason=?, updated_at=?
-		where id=? and status=?`, StatusTodo, nextAt, reason, now(), id, StatusInProgress)
+		auto_retry_next_at=?, auto_retry_reason=?, workflow_snapshot_json=?, updated_at=?
+		where id=? and status=?`, StatusTodo, nextAt, reason, snapshot, t, id, StatusInProgress)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -223,9 +261,15 @@ func (s *Store) ScheduleIssueAutoRetry(ctx context.Context, id int64, reason, ne
 }
 
 func (s *Store) ResetIssueForRunnerHold(ctx context.Context, id int64, message string) (Issue, error) {
-	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?,
-		auto_retry_next_at='', auto_retry_reason='', updated_at=?
-		where id=? and status=?`, StatusTodo, message, now(), id, StatusInProgress)
+	current, err := s.GetIssue(ctx, id)
+	if err != nil {
+		return Issue{}, err
+	}
+	t := now()
+	snapshot := nextWorkflowSnapshot(current.WorkflowSnapshotJSON, StatusTodo, message, "runner", "", t)
+	_, err = s.db.ExecContext(ctx, `update issues set status=?, error=?,
+		auto_retry_next_at='', auto_retry_reason='', workflow_snapshot_json=?, updated_at=?
+		where id=? and status=?`, StatusTodo, message, snapshot, t, id, StatusInProgress)
 	if err != nil {
 		return Issue{}, err
 	}
@@ -237,6 +281,9 @@ func (s *Store) ResetIssueForRunnerHold(ctx context.Context, id int64, message s
 
 func (s *Store) FailStaleIssues(ctx context.Context) error {
 	message := "Service restarted while issue was in progress"
+	if err := s.updateWorkflowSnapshotsForStatus(ctx, StatusInProgress, StatusFailed, message, "runner"); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx, `update issues set status=?, error=?,
 		auto_retry_next_at='', auto_retry_reason='', updated_at=? where status=?`,
 		StatusFailed, message, now(), StatusInProgress)
@@ -269,7 +316,7 @@ const issueSelect = `select id, project_id, title, description, status, priority
 	template_id, prompt_template, agent_profile_id, source_session_id, source_turn_id, source_excerpt,
 	codex_thread_id, codex_turn_id, attempt_count,
 	(select count(*) from issue_events where issue_id=issues.id and type='issue.comment') as comment_count,
-	auto_retry_next_at, auto_retry_reason, error, created_at, updated_at from issues`
+	workflow_snapshot_json, auto_retry_next_at, auto_retry_reason, error, created_at, updated_at from issues`
 
 func issueSelectWithAlias(alias string) string {
 	prefix := alias + "."
@@ -280,7 +327,7 @@ func issueSelectWithAlias(alias string) string {
 		` + prefix + `source_excerpt, ` + prefix + `codex_thread_id, ` + prefix + `codex_turn_id,
 		` + prefix + `attempt_count, (select count(*) from issue_events
 		where issue_id=` + prefix + `id and type='issue.comment') as comment_count,
-		` + prefix + `auto_retry_next_at,
+		` + prefix + `workflow_snapshot_json, ` + prefix + `auto_retry_next_at,
 		` + prefix + `auto_retry_reason, ` + prefix + `error, ` + prefix + `created_at,
 		` + prefix + `updated_at from issues ` + alias
 }

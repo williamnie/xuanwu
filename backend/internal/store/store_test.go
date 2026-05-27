@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,6 +31,80 @@ func TestProjectIssueQueueLifecycle(t *testing.T) {
 	updated, err := st.SetIssueStatus(ctx, claimed.ID, StatusDone, "")
 	if err != nil || updated.Status != StatusDone {
 		t.Fatalf("set done: issue=%+v err=%v", updated, err)
+	}
+}
+
+func TestIssueWorkflowSnapshotLifecycle(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+
+	triage, err := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "workflow", Status: StatusTriage})
+	if err != nil {
+		t.Fatalf("create triage issue: %v", err)
+	}
+	snapshot := mustWorkflowSnapshot(t, triage.WorkflowSnapshotJSON)
+	if snapshot["version"] != "v0" || snapshot["current_step_id"] != "refine" {
+		t.Fatalf("unexpected triage workflow snapshot: %+v", snapshot)
+	}
+	steps := workflowSteps(t, snapshot)
+	if len(steps) != 6 || steps[0]["id"] != "intake" || steps[5]["id"] != "close" {
+		t.Fatalf("unexpected default workflow steps: %+v", steps)
+	}
+	if steps[0]["status"] != "done" || steps[1]["status"] != "active" {
+		t.Fatalf("triage workflow should complete intake and activate refine: %+v", steps[:2])
+	}
+
+	ready := StatusTodo
+	todo, err := st.UpdateIssue(ctx, triage.ID, IssuePatch{Status: &ready})
+	if err != nil {
+		t.Fatalf("move to todo: %v", err)
+	}
+	snapshot = mustWorkflowSnapshot(t, todo.WorkflowSnapshotJSON)
+	if snapshot["current_step_id"] != "implement" {
+		t.Fatalf("todo workflow current step = %v, want implement", snapshot["current_step_id"])
+	}
+	steps = workflowSteps(t, snapshot)
+	if steps[2]["id"] != "review" || steps[2]["status"] != "done" ||
+		steps[3]["id"] != "implement" || steps[3]["status"] != "active" {
+		t.Fatalf("todo workflow should finish review and activate implement: %+v", steps[2:4])
+	}
+
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || claimed.ID != triage.ID {
+		t.Fatalf("claim workflow issue: ok=%v issue=%+v err=%v", ok, claimed, err)
+	}
+	snapshot = mustWorkflowSnapshot(t, claimed.WorkflowSnapshotJSON)
+	if snapshot["current_step_id"] != "implement" {
+		t.Fatalf("claimed workflow current step = %v, want implement", snapshot["current_step_id"])
+	}
+
+	if err := st.UpdateIssueRuntime(ctx, claimed.ID, "thread-1", "turn-1"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	running, err := st.GetIssue(ctx, claimed.ID)
+	if err != nil {
+		t.Fatalf("get running issue: %v", err)
+	}
+	steps = workflowSteps(t, mustWorkflowSnapshot(t, running.WorkflowSnapshotJSON))
+	if !strings.Contains(steps[3]["evidence_summary"].(string), "thread-1") {
+		t.Fatalf("runtime evidence not recorded on implement step: %+v", steps[3])
+	}
+
+	pending := StatusPendingVerification
+	evidence := "go test ./backend/internal/store passed"
+	review, err := st.UpdateIssue(ctx, triage.ID, IssuePatch{Status: &pending, Error: &evidence})
+	if err != nil {
+		t.Fatalf("mark pending verification: %v", err)
+	}
+	snapshot = mustWorkflowSnapshot(t, review.WorkflowSnapshotJSON)
+	if snapshot["current_step_id"] != "verify" {
+		t.Fatalf("pending verification current step = %v, want verify", snapshot["current_step_id"])
+	}
+	steps = workflowSteps(t, snapshot)
+	if steps[3]["status"] != "done" || steps[4]["status"] != "active" ||
+		!strings.Contains(steps[4]["evidence_summary"].(string), "go test") {
+		t.Fatalf("verification workflow not updated from evidence: %+v", steps[3:5])
 	}
 }
 
@@ -722,6 +797,9 @@ func TestOpenMigratesExistingIssuesWithTemplates(t *testing.T) {
 	if issue.TemplateID != "" || issue.PromptTemplate != "" {
 		t.Fatalf("legacy issue should keep empty snapshot: %+v", issue)
 	}
+	if issue.WorkflowSnapshotJSON != "" {
+		t.Fatalf("legacy issue should not be force-backfilled with workflow snapshot: %+v", issue)
+	}
 	templates, err := st.ListIssueTemplates(context.Background())
 	if err != nil || len(templates) != 1 || templates[0].IsDefault != 1 {
 		t.Fatalf("default template not seeded after migration: %+v err=%v", templates, err)
@@ -874,6 +952,35 @@ func openTestStore(t *testing.T) *Store {
 }
 
 func ptrString(value string) *string { return &value }
+
+func mustWorkflowSnapshot(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	if raw == "" {
+		t.Fatalf("workflow snapshot is empty")
+	}
+	var snapshot map[string]any
+	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
+		t.Fatalf("decode workflow snapshot %q: %v", raw, err)
+	}
+	return snapshot
+}
+
+func workflowSteps(t *testing.T, snapshot map[string]any) []map[string]any {
+	t.Helper()
+	rawSteps, ok := snapshot["steps"].([]any)
+	if !ok {
+		t.Fatalf("workflow snapshot steps missing or invalid: %+v", snapshot)
+	}
+	steps := make([]map[string]any, 0, len(rawSteps))
+	for _, raw := range rawSteps {
+		step, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("workflow step invalid: %+v", raw)
+		}
+		steps = append(steps, step)
+	}
+	return steps
+}
 
 func TestPendingVerificationClosesRunAndIsNotClaimed(t *testing.T) {
 	st := openTestStore(t)

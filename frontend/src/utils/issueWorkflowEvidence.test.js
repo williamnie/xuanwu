@@ -43,6 +43,73 @@ test('links ready issue to acceptance and verification plan evidence', () => {
   assert.match(workflow.nextAction, /等待 runner claim/);
 });
 
+test('uses persisted workflow snapshot when present', () => {
+  const workflow = deriveIssueWorkflowEvidence({
+    issue: {
+      id: 6,
+      status: 'pending_verification',
+      description: 'legacy body',
+      workflow_snapshot_json: JSON.stringify({
+        version: 'v0',
+        current_step_id: 'verify',
+        steps: [
+          {
+            id: 'intake',
+            label: 'Intake',
+            status: 'done',
+            updated_at: '2026-05-27T01:00:00Z',
+            evidence_summary: 'created from API',
+            actor: 'system',
+          },
+          {
+            id: 'verify',
+            label: 'Verify',
+            status: 'active',
+            updated_at: '2026-05-27T01:02:00Z',
+            evidence_summary: 'go test ./backend/internal/store passed',
+            actor: 'agent',
+          },
+        ],
+      }),
+    },
+    runs: [{
+      id: 'issue-6-attempt-1',
+      attempt: 1,
+      status: 'pending_verification',
+      provider: 'codex',
+      provider_session_id: 'thread-snapshot',
+      provider_turn_id: 'turn-snapshot',
+    }],
+    events: [{ type: 'issue.log', payload: '{"text":"ignored derived verification"}' }],
+  });
+
+  assert.equal(workflow.source, 'snapshot');
+  assert.equal(workflow.currentStepId, 'verify');
+  assert.equal(workflow.latestRun.sessionRef, 'codex:thread-snapshot');
+  assert.deepEqual(workflow.steps.map(step => [step.id, step.state]), [
+    ['intake', 'done'],
+    ['verify', 'active'],
+  ]);
+  assert.match(workflow.steps[1].evidence, /go test/);
+  assert.equal(workflow.verificationEvidence.found, true);
+});
+
+test('falls back to derived workflow when persisted snapshot is invalid', () => {
+  const workflow = deriveIssueWorkflowEvidence({
+    issue: {
+      id: 7,
+      status: 'todo',
+      description: readyDescription,
+      workflow_snapshot_json: '{"steps":"bad"}',
+    },
+    events: [],
+    runs: [],
+  });
+
+  assert.equal(workflow.source, 'derived');
+  assert.equal(workflow.steps.find(step => step.id === 'ready').state, 'done');
+});
+
 test('surfaces latest in-progress run identity as implementation evidence', () => {
   const workflow = deriveIssueWorkflowEvidence({
     issue: { id: 3, status: 'in_progress', description: readyDescription },

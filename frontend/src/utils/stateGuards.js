@@ -33,6 +33,7 @@ const ISSUE_FIELDS = [
   'attempt_count',
   'comment_count',
   'latest_run',
+  'workflow_snapshot_json',
   'error',
   'created_at',
   'updated_at',

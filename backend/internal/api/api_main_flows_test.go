@@ -112,6 +112,42 @@ func TestIssueAPIListReadUpdateFlow(t *testing.T) {
 	}
 }
 
+func TestIssueAPIExposesWorkflowSnapshotUpdates(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "workflow snapshot", "status": "triage",
+	})
+	if !strings.Contains(issue.WorkflowSnapshotJSON, `"id":"intake"`) {
+		t.Fatalf("created issue should expose workflow snapshot: %+v", issue)
+	}
+
+	ready := patchJSON[store.Issue](t, srv, "/api/issues/1", map[string]any{
+		"status": store.StatusTodo,
+	})
+	if !strings.Contains(ready.WorkflowSnapshotJSON, `"current_step_id":"implement"`) {
+		t.Fatalf("ready issue should update current workflow step: %+v", ready)
+	}
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-api", "turn-api"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	pending := patchJSON[store.Issue](t, srv, "/api/issues/1", map[string]any{
+		"status": store.StatusPendingVerification,
+		"error":  "go test ./backend/internal/api passed",
+	})
+	if !strings.Contains(pending.WorkflowSnapshotJSON, `"current_step_id":"verify"`) ||
+		!strings.Contains(pending.WorkflowSnapshotJSON, `go test ./backend/internal/api passed`) {
+		t.Fatalf("verification issue should expose workflow evidence: %+v", pending)
+	}
+}
+
 func TestIssueRunsAPI(t *testing.T) {
 	srv := newTestServer(t)
 	ctx := t.Context()

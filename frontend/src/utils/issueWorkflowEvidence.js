@@ -13,11 +13,16 @@ import {
   shortId,
   summarize,
 } from './issueRuns.js';
+import { workflowFromSnapshot } from './issueWorkflowSnapshot.js';
 
 const TERMINAL_STATUSES = new Set(['done', 'failed', 'cancelled']);
 const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|test|tests|vitest|jest|node --test|go test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint/i;
 
 export function deriveIssueWorkflowEvidence({ issue = {}, events = [], runs = [] } = {}) {
+  const snapshotWorkflow = workflowFromSnapshot(issue.workflow_snapshot_json, issue, runs, workflowStep);
+  if (snapshotWorkflow) {
+    return snapshotWorkflow;
+  }
   const parsed = parseIssueRefinement(issue.description);
   const refinement = parsed.refinement;
   const readiness = issueRefinementReadiness(refinement);
@@ -31,6 +36,7 @@ export function deriveIssueWorkflowEvidence({ issue = {}, events = [], runs = []
   const verificationEvidence = findVerificationEvidence({ issue, events, latestRun: latestRunInfo });
 
   return {
+    source: 'derived',
     latestRun: latestRunInfo,
     explicitFinalStatus,
     verificationEvidence,

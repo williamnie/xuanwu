@@ -52,7 +52,7 @@ func scanIssue(row scanner) (Issue, error) {
 	err := row.Scan(&i.ID, &i.ProjectID, &i.Title, &i.Description, &i.Status,
 		&i.Priority, &i.TemplateID, &i.PromptTemplate, &i.AgentProfileID,
 		&i.SourceSessionID, &i.SourceTurnID, &i.SourceExcerpt, &i.CodexThreadID, &i.CodexTurnID,
-		&i.AttemptCount, &i.CommentCount, &i.AutoRetryNextAt,
+		&i.AttemptCount, &i.CommentCount, &i.WorkflowSnapshotJSON, &i.AutoRetryNextAt,
 		&i.AutoRetryReason, &i.Error, &i.CreatedAt, &i.UpdatedAt)
 	return i, err
 }
@@ -78,6 +78,19 @@ func scanIssueRun(row scanner) (IssueRun, error) {
 		&run.EndedAt, &run.ExitReason, &run.Error, &run.AgentProfileID,
 		&run.CapabilitySummary, &run.SelectionReason)
 	return run, err
+}
+
+func scanWorkflowSnapshotRows(rows *sql.Rows) ([]workflowSnapshotRow, error) {
+	items := []workflowSnapshotRow{}
+	defer rows.Close()
+	for rows.Next() {
+		var item workflowSnapshotRow
+		if err := rows.Scan(&item.id, &item.snapshot); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func scanCronTask(row scanner) (CronTask, error) {

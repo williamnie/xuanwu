@@ -141,6 +141,8 @@ func (s *Store) closeOpenIssueRun(
 	if err != nil {
 		return err
 	}
+	t := now()
+	snapshot := closeWorkflowSnapshotRun(issue.WorkflowSnapshotJSON, issue.Status, status, exitReason, errText, t)
 	_, err = s.db.ExecContext(ctx, `update issue_runs set status=?,
 		provider=?, provider_session_id=?, provider_turn_id=?,
 		codex_thread_id=?, codex_turn_id=?, ended_at=?, exit_reason=?, error=?
@@ -148,8 +150,12 @@ func (s *Store) closeOpenIssueRun(
 		status, firstNonEmptyString(run.Provider, ProviderCodex),
 		firstNonEmptyString(run.ProviderSessionID, issue.CodexThreadID),
 		firstNonEmptyString(run.ProviderTurnID, issue.CodexTurnID),
-		issue.CodexThreadID, issue.CodexTurnID, now(),
+		issue.CodexThreadID, issue.CodexTurnID, t,
 		exitReason, strings.TrimSpace(errText), run.ID)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `update issues set workflow_snapshot_json=? where id=?`, snapshot, issueID)
 	return err
 }
 

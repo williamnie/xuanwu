@@ -60,6 +60,7 @@ create table if not exists issues (
   codex_thread_id text not null default '',
   codex_turn_id text not null default '',
   attempt_count integer not null default 0,
+  workflow_snapshot_json text not null default '',
   auto_retry_next_at text not null default '',
   auto_retry_reason text not null default '',
   error text not null default '',

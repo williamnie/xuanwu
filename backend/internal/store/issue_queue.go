@@ -62,7 +62,13 @@ func triageIssueQuery(projectID string) (string, []any) {
 }
 
 func setIssueTodo(ctx context.Context, tx *sql.Tx, issueID int64, updatedAt string) error {
-	_, err := tx.ExecContext(ctx, `update issues set status=?, error='', updated_at=?
-		where id=? and status=?`, StatusTodo, updatedAt, issueID, StatusTriage)
+	var snapshot string
+	if err := tx.QueryRowContext(ctx, `select workflow_snapshot_json from issues where id=?`, issueID).Scan(&snapshot); err != nil {
+		return err
+	}
+	snapshot = nextWorkflowSnapshot(snapshot, StatusTodo, "", "system", "", updatedAt)
+	_, err := tx.ExecContext(ctx, `update issues set status=?, error='',
+		workflow_snapshot_json=?, updated_at=? where id=? and status=?`,
+		StatusTodo, snapshot, updatedAt, issueID, StatusTriage)
 	return err
 }
