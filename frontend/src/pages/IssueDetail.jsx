@@ -68,16 +68,6 @@ function parseEventPayload(event) {
   }
 }
 
-function latestAutoRetryEvent(events) {
-  for (let idx = events.length - 1; idx >= 0; idx -= 1) {
-    const event = events[idx];
-    if (event.type === 'issue.auto_retry_scheduled') {
-      return parseEventPayload(event);
-    }
-  }
-  return null;
-}
-
 function legacyAgentEventType(method) {
   if (method === 'item/agentMessage/delta') return 'agent.message.delta';
   if (method === 'item/commandExecution/outputDelta') return 'agent.command.output_delta';
@@ -113,13 +103,6 @@ function commandLineText(agent) {
   const text = agent.command || agent.text || '';
   if (agent.text?.startsWith('! ')) return agent.text;
   return text.startsWith('$ ') ? text.slice(2) : text;
-}
-
-function formatRetryTime(value) {
-  if (!value) return '未知时间';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
 }
 
 function interruptEventLabel(type) {
@@ -529,10 +512,6 @@ ${error}` : error;
   const commentEvents = events.filter(event => event.type === 'issue.comment');
   const triageReadiness = deriveTriageReadiness({ issue, refinement, commentEvents });
   const executionRecommendation = deriveExecutionRecommendation({ refinement, project, profiles });
-  const autoRetryPayload = latestAutoRetryEvent(events);
-  const autoRetryNextAt = issue.auto_retry_next_at || autoRetryPayload?.next_retry_at || '';
-  const autoRetryReason = issue.auto_retry_reason || autoRetryPayload?.reason || '';
-  const isWaitingAutoRetry = issue.status === 'todo' && Boolean(autoRetryNextAt);
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
   const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
@@ -617,15 +596,6 @@ ${error}` : error;
           </div>
         );
       }
-
-      if (event.type === 'issue.auto_retry_scheduled') {
-        return (
-          <div key={event.id || idx} className="terminal-line header">
-            &gt;&gt; [{timestamp}] 已安排自动重试 #{payload.attempt || '?'}，下次时间: {formatRetryTime(payload.next_retry_at)}，原因: {payload.reason || 'transient transport error'}
-          </div>
-        );
-      }
-
       if (event.type === 'issue.interrupt_requested' || event.type === 'issue.interrupted' || event.type === 'issue.interrupt_failed') {
         const error = event.error || payload.error || '';
         return (
@@ -838,23 +808,6 @@ ${error}` : error;
             navigateTo={navigateTo}
             onCopy={handleCopyText}
           />
-
-          {isWaitingAutoRetry && (
-            <div className="glass-card" style={{ background: 'rgba(245,158,11,0.1)', borderColor: 'rgba(245,158,11,0.3)', borderLeft: '4px solid var(--warning)' }}>
-              <h4 style={{ color: 'var(--warning)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <RotateCw size={18} /> 等待自动重试
-              </h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '6px' }}>
-                下次重试时间：{formatRetryTime(autoRetryNextAt)}
-              </p>
-              {autoRetryReason && (
-                <p className="issue-error-text" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  原因：{autoRetryReason}
-                </p>
-              )}
-            </div>
-          )}
-
           {/* 故障错误警报栏 */}
           {issue.error && (
             <div className="issue-error-card glass-card" style={{ background: 'var(--error-bg)', borderColor: 'rgba(244,63,94,0.3)', borderLeft: '4px solid var(--error)' }}>

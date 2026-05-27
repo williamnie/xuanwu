@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -302,6 +303,107 @@ func TestIssueCancelInProgressInterruptsLinkedTurn(t *testing.T) {
 	assertAPIEventReason(t, srv, 1, "issue.interrupted", "issue_cancel")
 }
 
+func TestIssueCancelClosesRunWhenProviderInterruptFails(t *testing.T) {
+	interrupts := make(chan [2]string, 1)
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:    noopCodex{ch: make(chan agent.Event)},
+		interrupts:   interrupts,
+		interruptErr: errors.New("codex rpc -32600: no corresponding turn"),
+	})
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-missing", "turn-missing"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	issue := postJSON[store.Issue](t, srv, "/api/issues/1/cancel", map[string]any{})
+	if issue.Status != store.StatusCancelled {
+		t.Fatalf("cancelled issue status = %q, want cancelled", issue.Status)
+	}
+	if got := readAPIInterrupt(t, interrupts); got != [2]string{"thread-missing", "turn-missing"} {
+		t.Fatalf("interrupt = %v, want linked issue turn", got)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].Status != store.StatusCancelled ||
+		runs[0].ExitReason != "issue_cancel" || runs[0].EndedAt == "" {
+		t.Fatalf("cancel should close run even when provider interrupt fails: %+v", runs)
+	}
+	assertAPIEvent(t, srv, 1, "issue.interrupt_failed")
+}
+
+func TestIssueCancelDoesNotWaitForHangingProviderInterrupt(t *testing.T) {
+	srv := newTestServerWithCodex(t, interruptCaptureCodex{
+		noopCodex:     noopCodex{ch: make(chan agent.Event)},
+		interrupts:    make(chan [2]string, 1),
+		interruptWait: time.Hour,
+	})
+	srv.runner.SetInterruptTimeout(10 * time.Millisecond)
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "running", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-slow", "turn-slow"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	start := time.Now()
+	issue := postJSON[store.Issue](t, srv, "/api/issues/1/cancel", map[string]any{})
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("cancel waited too long for provider interrupt: %s", elapsed)
+	}
+	if issue.Status != store.StatusCancelled {
+		t.Fatalf("cancelled issue status = %q, want cancelled", issue.Status)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].Status != store.StatusCancelled ||
+		runs[0].ExitReason != "issue_cancel" || runs[0].EndedAt == "" {
+		t.Fatalf("cancel should close run when provider interrupt hangs: %+v", runs)
+	}
+	assertAPIEvent(t, srv, 1, "issue.interrupt_failed")
+}
+
+func TestIssueRetryKeepsExistingThreadForContinuation(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := t.Context()
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "failed", "status": "todo",
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-retry", "turn-old"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+	if _, err := srv.store.SetIssueStatus(ctx, claimed.ID, store.StatusFailed, "failed once"); err != nil {
+		t.Fatalf("fail issue: %v", err)
+	}
+
+	issue := postJSON[store.Issue](t, srv, "/api/issues/1/retry", map[string]any{})
+	if issue.Status != store.StatusTodo || issue.CodexThreadID != "thread-retry" || issue.CodexTurnID != "" {
+		t.Fatalf("retry should preserve thread and clear turn only: %+v", issue)
+	}
+}
+
 func TestRecoveryIgnoresInterruptedStatusChangeRun(t *testing.T) {
 	srv := newTestServerWithCodex(t, interruptCaptureCodex{
 		noopCodex:  noopCodex{ch: make(chan agent.Event)},
@@ -554,14 +656,19 @@ func (c *sessionReferenceAPICodex) StartTurn(_ context.Context, _ string, input 
 
 type interruptCaptureCodex struct {
 	noopCodex
-	interrupts chan [2]string
+	interrupts    chan [2]string
+	interruptErr  error
+	interruptWait time.Duration
 }
 
 func (c interruptCaptureCodex) InterruptTurn(_ context.Context, threadID, turnID string) error {
 	if c.interrupts != nil {
 		c.interrupts <- [2]string{threadID, turnID}
 	}
-	return nil
+	if c.interruptWait > 0 {
+		time.Sleep(c.interruptWait)
+	}
+	return c.interruptErr
 }
 
 func readAPIInterrupt(t *testing.T, interrupts <-chan [2]string) [2]string {

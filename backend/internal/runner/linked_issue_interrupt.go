@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
@@ -51,9 +52,9 @@ func (r *Runner) InterruptIssue(ctx context.Context, req IssueInterruptRequest) 
 		Reason: req.ExitReason,
 	})
 	r.cancelRunningIssue(issue.ID)
-	if err := r.interruptTurn(ctx, issue.CodexThreadID, issue.CodexTurnID); err != nil {
-		r.recordInterruptFailed(ctx, issue.ID, issue.CodexThreadID, issue.CodexTurnID, req.ExitReason, err.Error())
-		return IssueInterruptResult{}, err
+	interruptErr := r.interruptTurnWithTimeout(ctx, issue.CodexThreadID, issue.CodexTurnID)
+	if interruptErr != nil {
+		r.recordInterruptFailed(ctx, issue.ID, issue.CodexThreadID, issue.CodexTurnID, req.ExitReason, interruptErr.Error())
 	}
 	updated, err := r.updateInterruptedIssue(ctx, req, issue)
 	if err != nil {
@@ -67,6 +68,23 @@ func (r *Runner) InterruptIssue(ctx context.Context, req IssueInterruptRequest) 
 		Reason: req.ExitReason,
 	})
 	return IssueInterruptResult{Issue: updated, Interrupted: true}, nil
+}
+
+func (r *Runner) interruptTurnWithTimeout(ctx context.Context, threadID, turnID string) error {
+	timeout := r.interruptTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	interruptCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- r.interruptTurn(interruptCtx, threadID, turnID) }()
+	select {
+	case err := <-done:
+		return err
+	case <-interruptCtx.Done():
+		return interruptCtx.Err()
+	}
 }
 
 func (r *Runner) InterruptSession(ctx context.Context, threadID string) (SessionInterruptResult, error) {

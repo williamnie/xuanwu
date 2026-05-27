@@ -21,6 +21,7 @@ type Runner struct {
 	healthCheckInterval time.Duration
 	healthCheckWait     time.Duration
 	autoRetryDelay      time.Duration
+	interruptTimeout    time.Duration
 	dirtyWorktreeCheck  bool
 
 	eventOnce    sync.Once
@@ -53,8 +54,9 @@ func New(st *store.Store, bus *events.Bus, provider agent.AgentProvider) *Runner
 		store: st, bus: bus, agent: provider, providers: map[string]agent.AgentProvider{},
 		eventSubs:           map[int]chan agent.Event{},
 		healthCheckInterval: defaultHoldCheckInterval, healthCheckWait: 20 * time.Second,
-		autoRetryDelay: defaultAutoRetryDelay, dirtyWorktreeCheck: true,
-		loops: map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
+		autoRetryDelay: defaultAutoRetryDelay, interruptTimeout: 2 * time.Second,
+		dirtyWorktreeCheck: true,
+		loops:              map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
 	}
 	r.RegisterProvider(provider)
 	return r
@@ -62,6 +64,10 @@ func New(st *store.Store, bus *events.Bus, provider agent.AgentProvider) *Runner
 
 func (r *Runner) SetDirtyWorktreeCheckEnabled(enabled bool) {
 	r.dirtyWorktreeCheck = enabled
+}
+
+func (r *Runner) SetInterruptTimeout(timeout time.Duration) {
+	r.interruptTimeout = timeout
 }
 
 func (r *Runner) ValidateIssueExecutionProvider(project store.Project) error {

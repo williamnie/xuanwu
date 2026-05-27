@@ -64,7 +64,7 @@ func (e commandEnv) runIssue(ctx context.Context, args []string) int {
 		return e.updateIssue(ctx, args[1:])
 	case "logs":
 		return e.getIssueLogs(ctx, args[1:])
-	case "enqueue", "retry", "cancel":
+	case "enqueue", "retry", "cancel", "accept", "reject", "request-changes":
 		return e.issueAction(ctx, args[0], args[1:])
 	default:
 		return e.fail("unknown issue command: " + args[0])

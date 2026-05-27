@@ -3,12 +3,13 @@ package store
 import "time"
 
 const (
-	StatusTriage     = "triage"
-	StatusTodo       = "todo"
-	StatusInProgress = "in_progress"
-	StatusDone       = "done"
-	StatusFailed     = "failed"
-	StatusCancelled  = "cancelled"
+	StatusTriage              = "triage"
+	StatusTodo                = "todo"
+	StatusInProgress          = "in_progress"
+	StatusPendingVerification = "pending_verification"
+	StatusDone                = "done"
+	StatusFailed              = "failed"
+	StatusCancelled           = "cancelled"
 )
 
 const ProviderCodex = "codex"

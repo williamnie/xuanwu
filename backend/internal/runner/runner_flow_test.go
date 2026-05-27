@@ -100,49 +100,26 @@ func TestRunnerHoldsProjectWhenTurnStartReturnsAuthError(t *testing.T) {
 	}
 }
 
-func TestRunnerSchedulesAutoRetryForTransientCodexError(t *testing.T) {
+func TestRunnerRetriesExistingIssueInSameThread(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()
 	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
-	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network", Status: store.StatusTodo})
-	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
-	r := New(st, events.NewBus(), fake)
-	r.autoRetryDelay = 5 * time.Second
-
-	if err := r.StartProject("demo"); err != nil {
-		t.Fatalf("start project: %v", err)
-	}
-	defer r.StopProject("demo")
-
-	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
-	reason := "Reconnecting... 1/5 stream disconnected before completion: Transport error: network error: error decoding response body"
-	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
-
-	waiting := waitIssueAutoRetry(t, st, issue.ID)
-	if waiting.Status != store.StatusTodo || waiting.AttemptCount != 1 {
-		t.Fatalf("transient error should return issue to todo after first attempt: %+v", waiting)
-	}
-	if waiting.AutoRetryReason != reason || waiting.AutoRetryNextAt == "" {
-		t.Fatalf("auto retry state missing: %+v", waiting)
-	}
-	assertAutoRetryEvent(t, st, issue.ID, reason, 2)
-}
-
-func TestRunnerReusesExistingThreadForAutoRetry(t *testing.T) {
-	st := openRunnerStore(t)
-	ctx := context.Background()
-	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
-	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network retry", Status: store.StatusTodo})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "manual retry", Status: store.StatusTodo})
 	if _, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || !ok {
 		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
 	}
 	if err := st.UpdateIssueRuntime(ctx, issue.ID, "thread-retry", "turn-old"); err != nil {
 		t.Fatalf("seed runtime: %v", err)
 	}
-	past := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
-	reason := "stream disconnected before completion"
-	if _, err := st.ScheduleIssueAutoRetry(ctx, issue.ID, reason, past); err != nil {
-		t.Fatalf("seed auto retry: %v", err)
+	if _, err := st.SetIssueStatus(ctx, issue.ID, store.StatusFailed, "failed once"); err != nil {
+		t.Fatalf("fail seed issue: %v", err)
+	}
+	empty := ""
+	todo := store.StatusTodo
+	if _, err := st.UpdateIssue(ctx, issue.ID, store.IssuePatch{
+		Status: &todo, Error: &empty, CodexTurnID: &empty,
+	}); err != nil {
+		t.Fatalf("queue retry: %v", err)
 	}
 	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
 	r := New(st, events.NewBus(), fake)
@@ -154,10 +131,58 @@ func TestRunnerReusesExistingThreadForAutoRetry(t *testing.T) {
 
 	waitIssueRuntime(t, st, issue.ID, "thread-retry", "turn-1")
 	if len(fake.threadInputs) != 0 {
-		t.Fatalf("auto retry should reuse existing thread, started threads: %+v", fake.threadInputs)
+		t.Fatalf("manual retry should continue existing thread, started threads: %+v", fake.threadInputs)
 	}
 	r.CancelIssue(issue.ID)
 	waitIssueNotRunning(t, r, issue.ID)
+}
+
+func TestRunnerDoesNotFailOnCodexReconnectProgressError(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network", Status: store.StatusTodo})
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
+	reason := "Reconnecting... 1/5 stream disconnected before completion: Upstream request failed"
+	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
+
+	after := assertIssueRemainsInProgress(t, st, issue.ID)
+	if after.AutoRetryNextAt != "" || after.AutoRetryReason != "" || after.Error != "" {
+		t.Fatalf("reconnect progress must not fail or auto-retry issue: %+v", after)
+	}
+	r.CancelIssue(issue.ID)
+	waitIssueNotRunning(t, r, issue.ID)
+}
+
+func TestRunnerFailsTransientErrorWithoutAutoRetry(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network", Status: store.StatusTodo})
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, issue.ID, "thread-1", "turn-1")
+	reason := "Transport error: connection reset by peer"
+	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: reason}
+
+	got := waitIssueStatus(t, st, issue.ID, store.StatusFailed)
+	if got.Error != reason || got.AutoRetryNextAt != "" || got.AutoRetryReason != "" {
+		t.Fatalf("transient error should fail once without auto retry: %+v", got)
+	}
 }
 
 func TestRunnerDoesNotAutoRetryPermissionDeniedError(t *testing.T) {
@@ -279,6 +304,19 @@ func waitIssueAutoRetry(t *testing.T, st *store.Store, id int64) store.Issue {
 	}
 	issue, _ := st.GetIssue(context.Background(), id)
 	t.Fatalf("issue auto retry missing: %+v", issue)
+	return issue
+}
+
+func assertIssueRemainsInProgress(t *testing.T, st *store.Store, id int64) store.Issue {
+	t.Helper()
+	time.Sleep(120 * time.Millisecond)
+	issue, err := st.GetIssue(context.Background(), id)
+	if err != nil {
+		t.Fatalf("get issue: %v", err)
+	}
+	if issue.Status != store.StatusInProgress {
+		t.Fatalf("issue status = %q, want in_progress: %+v", issue.Status, issue)
+	}
 	return issue
 }
 

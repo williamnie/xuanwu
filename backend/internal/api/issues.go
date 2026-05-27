@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
@@ -93,6 +94,14 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
+	if patch.Status != nil && *patch.Status == store.StatusDone {
+		var err error
+		patch, err = s.applyVerificationGatePatch(r, id, before, patch)
+		if err != nil {
+			handleErr(w, err)
+			return
+		}
+	}
 	if patch.Status != nil && *patch.Status == store.StatusTodo {
 		current := before
 		if current.ID == 0 {
@@ -126,8 +135,9 @@ func (s *Server) updateIssueWithLifecycle(
 	patch store.IssuePatch,
 ) (store.Issue, error) {
 	if patch.Status == nil || before.Status != store.StatusInProgress ||
-		*patch.Status == store.StatusInProgress || *patch.Status == store.StatusDone ||
-		*patch.Status == store.StatusFailed || *patch.Status == store.StatusCancelled ||
+		*patch.Status == store.StatusInProgress || *patch.Status == store.StatusPendingVerification ||
+		*patch.Status == store.StatusDone || *patch.Status == store.StatusFailed ||
+		*patch.Status == store.StatusCancelled ||
 		before.CodexThreadID == "" || before.CodexTurnID == "" {
 		return s.store.UpdateIssue(r.Context(), id, patch)
 	}
@@ -197,6 +207,10 @@ func (s *Server) handleIssueAction(w http.ResponseWriter, r *http.Request, id in
 		s.createIssueRefinementDraft(w, r, id)
 		return
 	}
+	if action == "verification" && requireMethod(w, r, http.MethodPost) {
+		s.reviewIssueVerification(w, r, id)
+		return
+	}
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
@@ -224,7 +238,7 @@ func (s *Server) setIssueQueued(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	issue, err := s.store.UpdateIssue(r.Context(), id, store.IssuePatch{
-		Status: ptr(store.StatusTodo), Error: ptr(""), CodexThreadID: ptr(""), CodexTurnID: ptr(""),
+		Status: ptr(store.StatusTodo), Error: ptr(""), CodexTurnID: ptr(""),
 	})
 	if err != nil {
 		handleErr(w, err)
@@ -290,6 +304,35 @@ func (s *Server) writeIssue(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)
+}
+
+func (s *Server) applyVerificationGatePatch(
+	r *http.Request,
+	id int64,
+	before store.Issue,
+	patch store.IssuePatch,
+) (store.IssuePatch, error) {
+	if before.ID == 0 {
+		var err error
+		before, err = s.store.GetIssue(r.Context(), id)
+		if err != nil {
+			return patch, err
+		}
+	}
+	if before.Status != store.StatusInProgress {
+		return patch, nil
+	}
+	project, err := s.store.GetProject(r.Context(), before.ProjectID)
+	if err != nil || !runner.VerificationGateEnabled(project) {
+		return patch, err
+	}
+	status := store.StatusPendingVerification
+	patch.Status = &status
+	if patch.Error == nil || strings.TrimSpace(*patch.Error) == "" {
+		evidence := "Verification gate: agent marked done; awaiting human/verifier acceptance"
+		patch.Error = &evidence
+	}
+	return patch, nil
 }
 
 func (s *Server) notifyTerminalIssue(r *http.Request, previousStatus string, issue store.Issue) {

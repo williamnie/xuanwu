@@ -234,7 +234,8 @@ func issueStatusExitReason(status string, errText string) string {
 }
 
 func isTerminalIssueStatus(status string) bool {
-	return status == StatusDone || status == StatusFailed || status == StatusCancelled
+	return status == StatusDone || status == StatusFailed ||
+		status == StatusCancelled || status == StatusPendingVerification
 }
 
 func issueRunID(issueID int64, attempt int) string {

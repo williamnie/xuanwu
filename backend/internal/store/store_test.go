@@ -874,3 +874,44 @@ func openTestStore(t *testing.T) *Store {
 }
 
 func ptrString(value string) *string { return &value }
+
+func TestPendingVerificationClosesRunAndIsNotClaimed(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	issue, _ := st.CreateIssue(ctx, Issue{ProjectID: "demo", Title: "needs review", Status: StatusTodo})
+
+	claimed, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || claimed.ID != issue.ID {
+		t.Fatalf("claim pending issue: ok=%v issue=%+v err=%v", ok, claimed, err)
+	}
+	status := StatusPendingVerification
+	evidence := "go test ./backend/internal/store passed"
+	updated, err := st.UpdateIssue(ctx, issue.ID, IssuePatch{Status: &status, Error: &evidence})
+	if err != nil {
+		t.Fatalf("mark pending verification: %v", err)
+	}
+	if updated.Status != StatusPendingVerification || updated.Error != evidence {
+		t.Fatalf("pending issue not persisted: %+v", updated)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs=%+v err=%v", runs, err)
+	}
+	if runs[0].Status != StatusPendingVerification || runs[0].EndedAt == "" || runs[0].ExitReason != "explicit_status_update" {
+		t.Fatalf("pending verification should close latest run: %+v", runs[0])
+	}
+	if next, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || ok {
+		t.Fatalf("pending verification must not be claimed: ok=%v issue=%+v err=%v", ok, next, err)
+	}
+
+	todo := StatusTodo
+	retried, err := st.UpdateIssue(ctx, issue.ID, IssuePatch{Status: &todo, Error: ptrString("")})
+	if err != nil || retried.Status != StatusTodo {
+		t.Fatalf("retry pending verification: issue=%+v err=%v", retried, err)
+	}
+	next, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || next.AttemptCount != 2 {
+		t.Fatalf("retried pending issue should be claimable: ok=%v issue=%+v err=%v", ok, next, err)
+	}
+}

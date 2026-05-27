@@ -129,6 +129,7 @@ func (e commandEnv) issueAction(ctx context.Context, action string, args []strin
 	fs := newFlagSet("issue " + action)
 	addr, asJSON := e.addCommonFlags(fs)
 	idRaw := fs.String("id", "", "issue id")
+	comment := fs.String("comment", "", "verification review comment")
 	if err := fs.Parse(args); err != nil {
 		return e.fail(err.Error())
 	}
@@ -137,15 +138,31 @@ func (e commandEnv) issueAction(ctx context.Context, action string, args []strin
 	if err != nil {
 		return e.fail(err.Error())
 	}
+	payload := issueActionPayload(action, *comment)
 	var issue issueDTO
-	path := fmt.Sprintf("/api/issues/%d/%s", id, action)
-	if err := postJSON(ctx, e.client, *addr, path, map[string]any{}, &issue); err != nil {
+	path := issueActionPath(id, action)
+	if err := postJSON(ctx, e.client, *addr, path, payload, &issue); err != nil {
 		return e.fail(err.Error())
 	}
 	if err := writeIssue(e.out, issue, *asJSON); err != nil {
 		return e.fail(err.Error())
 	}
 	return 0
+}
+
+func issueActionPath(id int64, action string) string {
+	if action == "accept" || action == "reject" || action == "request-changes" {
+		return fmt.Sprintf("/api/issues/%d/verification", id)
+	}
+	return fmt.Sprintf("/api/issues/%d/%s", id, action)
+}
+
+func issueActionPayload(action string, comment string) map[string]any {
+	if action == "accept" || action == "reject" || action == "request-changes" {
+		reviewAction := strings.ReplaceAll(action, "-", "_")
+		return map[string]any{"action": reviewAction, "comment": strings.TrimSpace(comment)}
+	}
+	return map[string]any{}
 }
 
 func readIssueBody(body, bodyFile string) (string, error) {

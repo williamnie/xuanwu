@@ -56,9 +56,6 @@ func (r *Runner) runIssue(issue store.Issue) {
 			r.holdIssue(ctx, issue, reason)
 			return
 		}
-		if r.scheduleAutoRetryIfNeeded(ctx, issue.ID, err) {
-			return
-		}
 		r.failIssue(ctx, issue.ID, err.Error())
 	}
 }
@@ -168,7 +165,7 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 }
 
 func (r *Runner) prepareIssueThread(ctx context.Context, issue store.Issue, project store.Project) (string, error) {
-	if threadID := r.autoRetryThreadID(ctx, issue); threadID != "" {
+	if threadID := retryThreadID(issue); threadID != "" {
 		r.updateRuntime(ctx, issue.ID, threadID, "")
 		return threadID, nil
 	}
@@ -187,30 +184,11 @@ func (r *Runner) prepareIssueThread(ctx context.Context, issue store.Issue, proj
 	return threadID, nil
 }
 
-func (r *Runner) autoRetryThreadID(ctx context.Context, issue store.Issue) string {
-	threadID := strings.TrimSpace(issue.CodexThreadID)
-	if threadID == "" {
+func retryThreadID(issue store.Issue) string {
+	if issue.AttemptCount <= 1 {
 		return ""
 	}
-	runs, err := r.store.ListIssueRuns(ctx, issue.ID)
-	if err != nil {
-		return ""
-	}
-	for i := len(runs) - 1; i >= 0; i-- {
-		run := runs[i]
-		if run.EndedAt == "" {
-			continue
-		}
-		if run.Status != "auto_retry" || run.ExitReason != "auto_retry_scheduled" {
-			return ""
-		}
-		runThreadID := strings.TrimSpace(firstNonEmpty(run.ProviderSessionID, run.CodexThreadID))
-		if runThreadID == "" || runThreadID == threadID {
-			return threadID
-		}
-		return ""
-	}
-	return ""
+	return strings.TrimSpace(issue.CodexThreadID)
 }
 
 func (r *Runner) setCodexThreadName(ctx context.Context, threadID string, issue store.Issue) {
@@ -236,10 +214,13 @@ func (r *Runner) consumeEvents(ctx context.Context, issueID int64, threadID, tur
 }
 
 func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event agent.Event) (bool, error) {
-	if event.Text != "" {
+	if event.Text != "" || event.Error != "" {
 		r.publishLog(ctx, issueID, event)
 	}
 	if isAgentError(event) && event.Error != "" {
+		if isCodexReconnectProgressError(event.Error) {
+			return false, nil
+		}
 		if r.issueAlreadyTerminal(ctx, issueID) {
 			return true, nil
 		}
@@ -253,6 +234,16 @@ func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event agen
 
 func isAgentError(event agent.Event) bool {
 	return event.NormalizedType() == events.AgentError || event.Method == "error"
+}
+
+func isCodexReconnectProgressError(message string) bool {
+	lower := strings.ToLower(strings.TrimSpace(message))
+	if !strings.HasPrefix(lower, "reconnecting...") || !strings.Contains(lower, "/5") {
+		return false
+	}
+	return strings.Contains(lower, "stream disconnected before completion") ||
+		strings.Contains(lower, "upstream request failed") ||
+		strings.Contains(lower, "transport error")
 }
 
 func isAgentTurnCompleted(event agent.Event) bool {
@@ -290,7 +281,8 @@ func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event 
 }
 
 func isTerminalStatus(status string) bool {
-	return status == store.StatusDone || status == store.StatusFailed || status == store.StatusCancelled
+	return status == store.StatusDone || status == store.StatusFailed ||
+		status == store.StatusCancelled || status == store.StatusPendingVerification
 }
 
 func missingExplicitStatusMessage() string {
@@ -393,6 +385,7 @@ func renderPrompt(project store.Project, issue store.Issue) string {
 		profile = projectProfileFromFields(project)
 	}
 	prompt = appendAgentProfileSummary(prompt, profile)
+	prompt = appendVerificationGatePrompt(prompt, issue, VerificationGateEnabled(project))
 	if strings.HasSuffix(prompt, "\n") {
 		return prompt
 	}
