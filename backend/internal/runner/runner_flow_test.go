@@ -128,6 +128,38 @@ func TestRunnerSchedulesAutoRetryForTransientCodexError(t *testing.T) {
 	assertAutoRetryEvent(t, st, issue.ID, reason, 2)
 }
 
+func TestRunnerReusesExistingThreadForAutoRetry(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	issue, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "network retry", Status: store.StatusTodo})
+	if _, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := st.UpdateIssueRuntime(ctx, issue.ID, "thread-retry", "turn-old"); err != nil {
+		t.Fatalf("seed runtime: %v", err)
+	}
+	past := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
+	reason := "stream disconnected before completion"
+	if _, err := st.ScheduleIssueAutoRetry(ctx, issue.ID, reason, past); err != nil {
+		t.Fatalf("seed auto retry: %v", err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, issue.ID, "thread-retry", "turn-1")
+	if len(fake.threadInputs) != 0 {
+		t.Fatalf("auto retry should reuse existing thread, started threads: %+v", fake.threadInputs)
+	}
+	r.CancelIssue(issue.ID)
+	waitIssueNotRunning(t, r, issue.ID)
+}
+
 func TestRunnerDoesNotAutoRetryPermissionDeniedError(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()

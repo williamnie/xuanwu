@@ -136,18 +136,10 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 		return err
 	}
 	r.ensureCodexEventPump()
-	threadID, err := r.startThread(ctx, agent.ThreadInput{
-		CWD: project.CWD, Model: project.Model,
-		ReasoningEffort: profileReasoningEffort(project.DefaultAgentProfile),
-		ApprovalPolicy:  project.ApprovalPolicy, Sandbox: project.Sandbox,
-		DeveloperInstructions: developerInstructions(),
-		ThreadSource:          agent.ThreadSourceSubagent,
-	})
+	threadID, err := r.prepareIssueThread(ctx, issue, project)
 	if err != nil {
 		return err
 	}
-	r.updateRuntime(ctx, issue.ID, threadID, "")
-	r.setCodexThreadName(ctx, threadID, issue)
 	eventsCh, unsubscribe := r.subscribeCodexEvents()
 	defer unsubscribe()
 	input, err := buildTurnInput(ctx, r.store, renderPrompt(project, issue))
@@ -160,6 +152,52 @@ func (r *Runner) startCodexTurn(ctx context.Context, issue store.Issue, project 
 	}
 	r.updateRuntime(ctx, issue.ID, threadID, turnID)
 	return r.consumeEvents(ctx, issue.ID, threadID, turnID, eventsCh)
+}
+
+func (r *Runner) prepareIssueThread(ctx context.Context, issue store.Issue, project store.Project) (string, error) {
+	if threadID := r.autoRetryThreadID(ctx, issue); threadID != "" {
+		r.updateRuntime(ctx, issue.ID, threadID, "")
+		return threadID, nil
+	}
+	threadID, err := r.startThread(ctx, agent.ThreadInput{
+		CWD: project.CWD, Model: project.Model,
+		ReasoningEffort: profileReasoningEffort(project.DefaultAgentProfile),
+		ApprovalPolicy:  project.ApprovalPolicy, Sandbox: project.Sandbox,
+		DeveloperInstructions: developerInstructions(),
+		ThreadSource:          agent.ThreadSourceSubagent,
+	})
+	if err != nil {
+		return "", err
+	}
+	r.updateRuntime(ctx, issue.ID, threadID, "")
+	r.setCodexThreadName(ctx, threadID, issue)
+	return threadID, nil
+}
+
+func (r *Runner) autoRetryThreadID(ctx context.Context, issue store.Issue) string {
+	threadID := strings.TrimSpace(issue.CodexThreadID)
+	if threadID == "" {
+		return ""
+	}
+	runs, err := r.store.ListIssueRuns(ctx, issue.ID)
+	if err != nil {
+		return ""
+	}
+	for i := len(runs) - 1; i >= 0; i-- {
+		run := runs[i]
+		if run.EndedAt == "" {
+			continue
+		}
+		if run.Status != "auto_retry" || run.ExitReason != "auto_retry_scheduled" {
+			return ""
+		}
+		runThreadID := strings.TrimSpace(firstNonEmpty(run.ProviderSessionID, run.CodexThreadID))
+		if runThreadID == "" || runThreadID == threadID {
+			return threadID
+		}
+		return ""
+	}
+	return ""
 }
 
 func (r *Runner) setCodexThreadName(ctx context.Context, threadID string, issue store.Issue) {
