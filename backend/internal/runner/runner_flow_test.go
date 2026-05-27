@@ -401,3 +401,89 @@ func waitIssueNotRunning(t *testing.T, r *Runner, issueID int64) {
 	}
 	t.Fatalf("issue %d still running", issueID)
 }
+
+func TestRunnerAdvancesNightlyBatchAfterDoneIssue(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	first, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "first", Status: store.StatusTriage})
+	second, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "second", Status: store.StatusTriage})
+	batch, err := st.CreateNightlyBatch(ctx, store.NightlyBatchInput{
+		ProjectID: "demo", IssueIDs: []int64{first.ID, second.ID}, Policy: store.NightlyPolicyFailStop,
+	})
+	if err != nil {
+		t.Fatalf("create batch: %v", err)
+	}
+	if _, err := st.PromoteNextNightlyBatchIssue(ctx, batch.ID); err != nil {
+		t.Fatalf("promote first: %v", err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, first.ID, "thread-1", "turn-1")
+	explicitlyCompleteIssue(t, st, first.ID)
+	fake.events <- agent.Event{Method: "turn/completed", ThreadID: "thread-1", TurnID: "turn-1", Status: "completed"}
+
+	gotSecond := waitIssueStatus(t, st, second.ID, store.StatusInProgress)
+	if gotSecond.AttemptCount != 1 {
+		t.Fatalf("second issue should be claimed once: %+v", gotSecond)
+	}
+	gotBatch, _ := st.GetNightlyBatch(ctx, batch.ID)
+	if gotBatch.Items[0].Status != store.NightlyItemDone || gotBatch.Items[1].Status != store.NightlyItemCurrent {
+		t.Fatalf("batch did not advance after done: %+v", gotBatch.Items)
+	}
+}
+
+func TestRunnerPausesNightlyBatchAfterFailedIssue(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+	first, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "first", Status: store.StatusTriage})
+	second, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "second", Status: store.StatusTriage})
+	batch, err := st.CreateNightlyBatch(ctx, store.NightlyBatchInput{
+		ProjectID: "demo", IssueIDs: []int64{first.ID, second.ID}, Policy: store.NightlyPolicyFailStop,
+	})
+	if err != nil {
+		t.Fatalf("create batch: %v", err)
+	}
+	if _, err := st.PromoteNextNightlyBatchIssue(ctx, batch.ID); err != nil {
+		t.Fatalf("promote first: %v", err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+	r := New(st, events.NewBus(), fake)
+
+	if err := r.StartProject("demo"); err != nil {
+		t.Fatalf("start project: %v", err)
+	}
+	defer r.StopProject("demo")
+
+	waitIssueRuntime(t, st, first.ID, "thread-1", "turn-1")
+	fake.events <- agent.Event{Method: "error", ThreadID: "thread-1", TurnID: "turn-1", Error: "boom"}
+
+	waitIssueStatus(t, st, first.ID, store.StatusFailed)
+	assertIssueStatusForDuration(t, st, second.ID, store.StatusTriage, 120*time.Millisecond)
+	gotBatch, _ := st.GetNightlyBatch(ctx, batch.ID)
+	if gotBatch.Status != store.NightlyBatchPaused || gotBatch.Items[1].Status != store.NightlyItemPending {
+		t.Fatalf("batch should pause after failure: %+v", gotBatch)
+	}
+}
+
+func assertIssueStatusForDuration(t *testing.T, st *store.Store, id int64, status string, duration time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(duration)
+	for time.Now().Before(deadline) {
+		issue, err := st.GetIssue(context.Background(), id)
+		if err != nil {
+			t.Fatalf("get issue: %v", err)
+		}
+		if issue.Status != status {
+			t.Fatalf("issue #%d status = %s, want %s", id, issue.Status, status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

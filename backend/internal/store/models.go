@@ -26,6 +26,24 @@ const (
 	CronLastStatusFailed   = "failed"
 )
 
+const (
+	NightlyPolicyFailStop = "fail_stop"
+	NightlyPolicyContinue = "continue"
+
+	NightlyPromotionAuto   = "auto"
+	NightlyPromotionManual = "manual"
+
+	NightlyBatchActive = "active"
+	NightlyBatchPaused = "paused"
+	NightlyBatchDone   = "done"
+
+	NightlyItemPending = "pending"
+	NightlyItemCurrent = "current"
+	NightlyItemDone    = "done"
+	NightlyItemFailed  = "failed"
+	NightlyItemSkipped = "skipped"
+)
+
 type AgentProfile struct {
 	ID                  string `json:"id"`
 	Name                string `json:"name"`
@@ -228,6 +246,40 @@ type CronTaskPatch struct {
 	NextRunAt *string `json:"next_run_at"`
 	Status    *string `json:"status"`
 	Error     *string `json:"error"`
+}
+
+type NightlyBatch struct {
+	ID             int64              `json:"id"`
+	ProjectID      string             `json:"project_id"`
+	Policy         string             `json:"policy"`
+	PromotionMode  string             `json:"promotion_mode"`
+	Status         string             `json:"status"`
+	CurrentIssueID int64              `json:"current_issue_id"`
+	PauseReason    string             `json:"pause_reason"`
+	Items          []NightlyBatchItem `json:"items"`
+	CreatedAt      string             `json:"created_at"`
+	UpdatedAt      string             `json:"updated_at"`
+}
+
+type NightlyBatchItem struct {
+	BatchID   int64  `json:"batch_id"`
+	IssueID   int64  `json:"issue_id"`
+	Position  int    `json:"position"`
+	Status    string `json:"status"`
+	UpdatedAt string `json:"updated_at"`
+	Issue     *Issue `json:"issue,omitempty"`
+}
+
+type NightlyBatchInput struct {
+	ProjectID     string  `json:"project_id"`
+	IssueIDs      []int64 `json:"issue_ids"`
+	Policy        string  `json:"policy"`
+	PromotionMode string  `json:"promotion_mode"`
+}
+
+type NightlyBatchAdvanceResult struct {
+	Batch         NightlyBatch `json:"batch"`
+	PromotedIssue *Issue       `json:"promoted_issue,omitempty"`
 }
 
 type Upload struct {

@@ -34,6 +34,8 @@ const ISSUE_FIELDS = [
   'comment_count',
   'latest_run',
   'workflow_snapshot_json',
+  'auto_retry_next_at',
+  'auto_retry_reason',
   'error',
   'created_at',
   'updated_at',
@@ -44,6 +46,19 @@ const ISSUE_TEMPLATE_FIELDS = [
   'name',
   'content',
   'is_default',
+  'created_at',
+  'updated_at',
+];
+
+const NIGHTLY_BATCH_FIELDS = [
+  'id',
+  'project_id',
+  'policy',
+  'promotion_mode',
+  'status',
+  'current_issue_id',
+  'pause_reason',
+  'items',
   'created_at',
   'updated_at',
 ];
@@ -62,6 +77,8 @@ const CRON_TASK_FIELDS = [
   'last_error',
   'status',
   'run_count',
+  'auto_retry_next_at',
+  'auto_retry_reason',
   'error',
   'created_at',
   'updated_at',
@@ -116,6 +133,10 @@ export function sameIssueTemplates(current, next) {
 
 export function sameCronTasks(current, next) {
   return sameListByFields(current, next, CRON_TASK_FIELDS);
+}
+
+export function sameNightlyBatches(current, next) {
+  return sameListByFields(current, next, NIGHTLY_BATCH_FIELDS);
 }
 
 function eventIdentity(event, index) {

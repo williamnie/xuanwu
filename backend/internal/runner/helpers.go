@@ -62,6 +62,7 @@ func (r *Runner) failIssue(ctx context.Context, issueID int64, message string) {
 		r.notifyIssueStatus(ctx, issue)
 	}
 	r.recordErrorEvent(ctx, issueID, message)
+	r.advanceNightlyBatches(ctx, issueID)
 }
 
 func (r *Runner) recordStatusEvent(ctx context.Context, issueID int64, status string) (store.Issue, error) {

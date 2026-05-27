@@ -34,13 +34,15 @@ const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'runner.hold_cleared',
   'cron_task.ran',
   'cron_task.error',
+  'nightly_batch.updated',
+  'nightly_batch.error',
 ]);
 
 function getReconcileSlices(currentPage, selectedIssueId) {
   if (currentPage === 'issues') {
     return selectedIssueId
-      ? ['projects', 'issues']
-      : ['projects', 'issues', 'issueTemplates', 'cronTasks'];
+      ? ['projects', 'issues', 'nightlyBatches']
+      : ['projects', 'issues', 'issueTemplates', 'cronTasks', 'nightlyBatches'];
   }
   if (currentPage === 'projects') {
     return ['projects', 'issues'];
@@ -49,7 +51,7 @@ function getReconcileSlices(currentPage, selectedIssueId) {
     return ['projects', 'cronTasks'];
   }
   if (currentPage === 'dashboard') {
-    return ['projects', 'issues'];
+    return ['projects', 'issues', 'nightlyBatches'];
   }
   return [];
 }

@@ -176,3 +176,29 @@ create table if not exists project_holds (
   updated_at text not null,
   foreign key(project_id) references projects(id) on delete cascade
 );`
+
+const nightlyBatchesSchema = `
+create table if not exists nightly_batches (
+  id integer primary key autoincrement,
+  project_id text not null,
+  policy text not null,
+  promotion_mode text not null,
+  status text not null,
+  current_issue_id integer not null default 0,
+  pause_reason text not null default '',
+  created_at text not null,
+  updated_at text not null,
+  foreign key(project_id) references projects(id) on delete cascade
+);`
+
+const nightlyBatchItemsSchema = `
+create table if not exists nightly_batch_items (
+  batch_id integer not null,
+  issue_id integer not null,
+  position integer not null,
+  status text not null,
+  updated_at text not null,
+  primary key(batch_id, issue_id),
+  foreign key(batch_id) references nightly_batches(id) on delete cascade,
+  foreign key(issue_id) references issues(id) on delete cascade
+);`

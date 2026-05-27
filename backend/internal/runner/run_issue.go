@@ -135,6 +135,7 @@ func (r *Runner) finishIssueAfterProviderRun(ctx context.Context, issueID int64,
 		return err
 	}
 	if isTerminalStatus(current.Status) {
+		r.advanceNightlyBatches(ctx, issueID)
 		return nil
 	}
 	r.failIssue(ctx, issueID, missingProviderExplicitStatusMessage(providerID))
@@ -261,6 +262,7 @@ func (r *Runner) finishIssueAfterTurn(ctx context.Context, issueID int64, event 
 		return err
 	}
 	if isTerminalStatus(current.Status) {
+		r.advanceNightlyBatches(ctx, issueID)
 		return nil
 	}
 	if event.Status == "completed" {

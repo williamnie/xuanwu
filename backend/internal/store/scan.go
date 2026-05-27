@@ -105,6 +105,21 @@ func scanCronTask(row scanner) (CronTask, error) {
 	return task, err
 }
 
+func scanNightlyBatch(row scanner) (NightlyBatch, error) {
+	var batch NightlyBatch
+	err := row.Scan(&batch.ID, &batch.ProjectID, &batch.Policy,
+		&batch.PromotionMode, &batch.Status, &batch.CurrentIssueID,
+		&batch.PauseReason, &batch.CreatedAt, &batch.UpdatedAt)
+	return batch, err
+}
+
+func scanNightlyBatchItem(row scanner) (NightlyBatchItem, error) {
+	var item NightlyBatchItem
+	err := row.Scan(&item.BatchID, &item.IssueID, &item.Position,
+		&item.Status, &item.UpdatedAt)
+	return item, err
+}
+
 func scanUpload(row scanner) (Upload, error) {
 	var upload Upload
 	err := row.Scan(&upload.ID, &upload.OriginalName, &upload.MimeType,

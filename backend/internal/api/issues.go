@@ -124,6 +124,7 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 	if patch.Status != nil {
 		s.recordIssueEvent(r, id, "issue.status_changed", map[string]string{"status": updated.Status})
 		s.notifyTerminalIssue(r, before.Status, updated)
+		s.advanceNightlyBatchAfterIssuePatch(r, updated)
 	}
 	writeJSON(w, http.StatusOK, updated)
 }

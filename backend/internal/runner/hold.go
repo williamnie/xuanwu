@@ -26,6 +26,7 @@ func (r *Runner) holdIssue(ctx context.Context, issue store.Issue, reason holdRe
 	_, _ = r.store.ResetIssueForRunnerHold(ctx, issue.ID, reason.Message)
 	r.recordStatusEvent(ctx, issue.ID, store.StatusTodo)
 	r.recordRunnerHoldEvent(ctx, issue.ID, issue.ProjectID, reason)
+	r.pauseNightlyBatches(ctx, issue.ID, reason.Message)
 	r.StopProject(issue.ProjectID)
 }
 

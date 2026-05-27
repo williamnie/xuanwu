@@ -130,6 +130,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.routeCronTasks(w, r, parts)
 		return
 	}
+	if len(parts) > 0 && parts[0] == "nightly-batches" {
+		s.routeNightlyBatches(w, r, parts)
+		return
+	}
 	if len(parts) > 0 && parts[0] == "commands" {
 		s.handleCommands(w, r)
 		return

@@ -210,6 +210,21 @@ export const api = {
     method: 'DELETE',
   }),
 
+  getNightlyBatches: (projectId = '') => {
+    const query = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+    return request(`/api/nightly-batches${query}`);
+  },
+
+  createNightlyBatch: (batch) => request('/api/nightly-batches', {
+    method: 'POST',
+    body: JSON.stringify(batch),
+  }),
+
+  promoteNightlyBatch: (id) => request(`/api/nightly-batches/${id}/promote`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getIssues: (projectId = '', status = '') => {
     const params = new URLSearchParams();
     if (projectId) params.append('projectId', projectId);

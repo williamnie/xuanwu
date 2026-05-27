@@ -4,6 +4,7 @@ import { message } from '../store/toastStore';
 import {
   selectIssueTemplates,
   selectIssues,
+  selectNightlyBatches,
   selectProjects,
   selectRefreshAllData,
   useDataStore,
@@ -11,35 +12,19 @@ import {
 import {
   Plus,
   X,
-  Clock,
   Sparkles,
-  Link2,
-  AlertTriangle,
-  ExternalLink,
-  RotateCw,
-  Terminal,
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
 import CronTasksPanel from '../components/CronTasksPanel';
+import { NightlyBatchPanel } from '../components/NightlyBatchPanel';
+import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
-import {
-  deriveTriageReadiness,
-  triageReadinessMoveToTodoNotice,
-} from '../utils/issueRefinement';
+import { activeNightlyBatchForProject, canCreateNightlyBatch, selectedNightlyIssues as getSelectedNightlyIssues } from '../utils/nightlyBatch';
+import { deriveTriageReadiness, triageReadinessMoveToTodoNotice } from '../utils/issueRefinement';
 import {
   extractIssueTemplateVariables,
   renderIssuePromptTemplate,
 } from '../utils/issuePromptTemplate';
-import {
-  issueFailureReason,
-  issueRunExitText,
-  issueRunSessionId,
-  issueRunSessionRef,
-  issueRunTurnId,
-  latestIssueRun,
-  providerLabel,
-  shortId,
-} from '../utils/issueRuns';
 
 export default function Issues({
   filterProject,
@@ -54,6 +39,7 @@ export default function Issues({
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const issueTemplates = useDataStore(selectIssueTemplates);
+  const nightlyBatches = useDataStore(selectNightlyBatches);
   const refreshAllData = useDataStore(selectRefreshAllData);
 
   // 新建 Issue 的局部表单状态
@@ -69,6 +55,9 @@ export default function Issues({
   const [draggingIssueId, setDraggingIssueId] = useState(null);
   const [draggedOverColumnId, setDraggedOverColumnId] = useState(null);
   const [retryingIssueId, setRetryingIssueId] = useState(null);
+  const [nightlySelection, setNightlySelection] = useState([]);
+  const [nightlyPolicy, setNightlyPolicy] = useState('fail_stop');
+  const [creatingNightlyBatch, setCreatingNightlyBatch] = useState(false);
 
   const stopCardAction = (event) => {
     event.stopPropagation();
@@ -99,6 +88,38 @@ export default function Issues({
       navigateTo('sessions', null, sessionRef);
     }
   };
+  const toggleNightlySelection = (issueId) => {
+    setNightlySelection(prev => (
+      prev.includes(issueId) ? prev.filter(id => id !== issueId) : [...prev, issueId]
+    ));
+  };
+
+  const clearNightlySelection = () => setNightlySelection([]);
+
+  const handleCreateNightlyBatch = async () => {
+    if (nightlySelection.length === 0) {
+      message.warning('请先选择至少一个 Triage issue');
+      return;
+    }
+    const selectedIssues = getSelectedNightlyIssues(triageIssues, nightlySelection);
+    setCreatingNightlyBatch(true);
+    try {
+      await api.createNightlyBatch({
+        project_id: selectedIssues[0]?.project_id || filterProject || '',
+        issue_ids: selectedIssues.map(issue => issue.id),
+        policy: nightlyPolicy,
+        promotion_mode: 'auto',
+      });
+      message.success(`Nightly batch 已创建，首个 issue 已进入 Todo`);
+      setNightlySelection([]);
+      refreshAllData();
+    } catch (err) {
+      message.error(`创建 Nightly batch 失败: ${err.message || '网络异常'}`);
+    } finally {
+      setCreatingNightlyBatch(false);
+    }
+  };
+
 
   const selectedTemplate = issueTemplates.find(template => template.id === formTemplateId) || null;
   const selectedProject = projects.find(project => project.id === formProjectId) || projects[0] || null;
@@ -356,6 +377,9 @@ export default function Issues({
   };
 
   const visibleColumns = getVisibleColumns();
+  const activeNightlyBatch = activeNightlyBatchForProject(nightlyBatches, filterProject);
+  const selectedNightlyIssues = getSelectedNightlyIssues(triageIssues, nightlySelection);
+  const canCreateSelectedNightlyBatch = canCreateNightlyBatch(selectedNightlyIssues);
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
@@ -367,6 +391,15 @@ export default function Issues({
         </h1>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {selectedNightlyIssues.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+              onClick={clearNightlySelection}
+            >
+              Clear nightly ({selectedNightlyIssues.length})
+            </button>
+          )}
           <CronTasksPanel compact defaultProjectId={filterProject} />
           <button
             className="btn btn-primary"
@@ -377,6 +410,16 @@ export default function Issues({
           </button>
         </div>
       </div>
+
+      <NightlyBatchPanel
+        batch={activeNightlyBatch}
+        selectedIssues={selectedNightlyIssues}
+        policy={nightlyPolicy}
+        onPolicyChange={setNightlyPolicy}
+        onCreate={handleCreateNightlyBatch}
+        creating={creatingNightlyBatch}
+        canCreate={canCreateSelectedNightlyBatch}
+      />
 
       {/* 核心看板网格组件 */}
       <div className="kanban-board">
@@ -414,74 +457,23 @@ export default function Issues({
               ) : (
                 col.issues.map(issue => {
                   const proj = projects.find(p => p.id === issue.project_id);
-                  const run = latestIssueRun(issue);
-                  const sessionRef = issueRunSessionRef(issue, run);
-                  const hasRuntime = Boolean(sessionRef || issueRunTurnId(issue, run));
-                  const failureReason = issueFailureReason(issue, run);
-                  const triageReadiness = deriveTriageReadiness({ issue });
                   return (
-                    <div
+                    <IssueCard
                       key={issue.id}
-                      className={`kanban-card ${draggingIssueId === issue.id ? 'dragging' : ''}`}
-                      draggable="true"
-                      onDragStart={(e) => handleDragStart(e, issue.id, issue.status)}
+                      issue={issue}
+                      project={proj}
+                      dragging={draggingIssueId === issue.id}
+                      retrying={retryingIssueId === issue.id}
+                      nightlySelected={nightlySelection.includes(issue.id)}
+                      onNightlyToggle={toggleNightlySelection}
+                      onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
-                      onClick={() => navigateTo('issues', issue.id)}
-                    >
-                      {/* ID 和 标题 */}
-                      <div className="kanban-card-title">
-                        #{issue.id} {issue.title}
-                      </div>
-
-                      <TriageReadinessBadge readiness={triageReadiness} />
-
-                      {issue.status === 'failed' && failureReason && (
-                        <IssueFailureSummary reason={failureReason} />
-                      )}
-
-                      <IssueRunSummary issue={issue} run={run} />
-
-                      <IssueQuickActions
-                        issue={issue}
-                        hasRuntime={hasRuntime}
-                        sessionRef={sessionRef}
-                        retrying={retryingIssueId === issue.id}
-                        onOpenLog={handleOpenIssueLog}
-                        onOpenSession={handleOpenSession}
-                        onRetry={handleRetryIssue}
-                      />
-
-                      {/* 底部属性与微标 */}
-                      <div className="kanban-card-footer">
-
-                        {/* 关联项目微标 (带圆点指示) */}
-                        <span className="kanban-card-project">
-                          <span
-                            style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              background: '#f97316', // 截图中的橙色圆点
-                              display: 'inline-block'
-                            }}
-                          ></span>
-                          {proj ? proj.name : issue.project_id}
-                        </span>
-
-                        {/* 更新时间时效 与 循环回合数 */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                            <Clock size={11} style={{ opacity: 0.6 }} />
-                            {getRelativeTime(issue.updated_at)}
-                          </span>
-                          <span className="kanban-card-loops" title="Codex 执行回合数">
-                            <Link2 size={11} style={{ transform: 'rotate(-45deg)', opacity: 0.6 }} />
-                            {issue.attempt_count || 1}
-                          </span>
-                        </div>
-
-                      </div>
-                    </div>
+                      onOpenIssue={(issueId) => navigateTo('issues', issueId)}
+                      onOpenLog={handleOpenIssueLog}
+                      onOpenSession={handleOpenSession}
+                      onRetry={handleRetryIssue}
+                      getRelativeTime={getRelativeTime}
+                    />
                   );
                 })
               )}
@@ -626,6 +618,17 @@ export default function Issues({
   );
 }
 
+function addIssueSource(payload, sourceMetadata) {
+  if (!sourceMetadata?.source_session_id) return;
+  payload.source_session_id = sourceMetadata.source_session_id;
+  if (sourceMetadata.source_turn_id) {
+    payload.source_turn_id = sourceMetadata.source_turn_id;
+  }
+  if (sourceMetadata.source_excerpt) {
+    payload.source_excerpt = sourceMetadata.source_excerpt;
+  }
+}
+
 function IssueTemplatePreview({ preview, unknownVariables }) {
   return (
     <div className="form-group" style={{ gap: '8px' }}>
@@ -657,95 +660,4 @@ function moveToTodoReadinessNotice(currentStatus, targetStatus, issue) {
   const readiness = deriveTriageReadiness({ issue });
   if (!readiness || readiness.ready) return '';
   return triageReadinessMoveToTodoNotice(readiness);
-}
-
-function TriageReadinessBadge({ readiness }) {
-  if (!readiness) return null;
-  return (
-    <span className={`triage-readiness-badge ${readiness.state}`} title={readiness.source}>
-      {readiness.state}
-    </span>
-  );
-}
-
-function IssueFailureSummary({ reason }) {
-  return (
-    <div className="kanban-card-failure" title={reason}>
-      <AlertTriangle size={13} />
-      <span>{reason}</span>
-    </div>
-  );
-}
-
-function addIssueSource(payload, sourceMetadata) {
-  if (!sourceMetadata?.source_session_id) return;
-  payload.source_session_id = sourceMetadata.source_session_id;
-  if (sourceMetadata.source_turn_id) {
-    payload.source_turn_id = sourceMetadata.source_turn_id;
-  }
-  if (sourceMetadata.source_excerpt) {
-    payload.source_excerpt = sourceMetadata.source_excerpt;
-  }
-}
-
-function IssueRunSummary({ issue, run }) {
-  if (!run) {
-    return null;
-  }
-  const sessionId = issueRunSessionId(issue, run);
-  const turnId = issueRunTurnId(issue, run);
-  const exitText = issueRunExitText(run);
-  return (
-    <div className="kanban-card-run">
-      <div className="kanban-card-run-header">
-        <span>Run #{run.attempt || issue.attempt_count || 1}</span>
-        <span className={`status-badge ${run.status}`}>{run.status || 'unknown'}</span>
-      </div>
-      <div className="kanban-card-run-grid">
-        <RunMiniField label="Provider" value={providerLabel(run.provider)} />
-        <RunMiniField label="Session" value={shortId(sessionId) || '暂无'} mono />
-        <RunMiniField label="Turn" value={shortId(turnId) || '暂无'} mono />
-      </div>
-      {exitText && <div className="kanban-card-run-exit" title={exitText}>{exitText}</div>}
-    </div>
-  );
-}
-
-function RunMiniField({ label, value, mono = false }) {
-  return (
-    <div className="kanban-card-run-field">
-      <span>{label}</span>
-      <code className={mono ? 'mono' : ''}>{value}</code>
-    </div>
-  );
-}
-
-function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRetry }) {
-  const showRetry = issue.status === 'failed';
-  const showLog = issue.status === 'in_progress' || hasRuntime;
-  if (!showRetry && !showLog && !sessionRef) return null;
-  return (
-    <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
-      {sessionRef && (
-        <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenSession(event, sessionRef)}>
-          <ExternalLink size={12} /> Session
-        </button>
-      )}
-      {showLog && (
-        <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenLog(event, issue.id)}>
-          <Terminal size={12} /> Logs
-        </button>
-      )}
-      {showRetry && (
-        <button
-          type="button"
-          className="kanban-card-action-btn retry"
-          disabled={retrying}
-          onClick={(event) => onRetry(event, issue.id)}
-        >
-          <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
-        </button>
-      )}
-    </div>
-  );
 }

@@ -56,12 +56,16 @@ func (s *Store) init() error {
 		uploadsSchema,
 		appPreferencesSchema,
 		projectHoldsSchema,
+		nightlyBatchesSchema,
+		nightlyBatchItemsSchema,
 		`create index if not exists idx_issues_queue on issues(project_id, status, priority, created_at)`,
 		`create index if not exists idx_issue_runs_issue on issue_runs(issue_id, attempt)`,
 		`create index if not exists idx_agent_profiles_provider on agent_profiles(provider)`,
 		`create index if not exists idx_session_turn_references_turn on session_turn_references(provider_session_id, provider_turn_id)`,
 		`create index if not exists idx_session_command_events_session on session_command_events(provider_session_id, id)`,
 		`create index if not exists idx_cron_tasks_due on cron_tasks(status, next_run_at)`,
+		`create index if not exists idx_nightly_batches_project on nightly_batches(project_id, status, id)`,
+		`create index if not exists idx_nightly_items_issue on nightly_batch_items(issue_id)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {
