@@ -22,7 +22,7 @@ export const SANDBOX_OPTIONS = [
 export const PROVIDER_OPTIONS = [
   { value: 'codex', label: 'Codex', enabled: true },
   { value: 'fake-execution-only', label: 'Fake execution-only', enabled: true },
-  { value: 'claude', label: 'Claude Code（未启用）', enabled: false },
+  { value: 'claude', label: 'Claude Code（仅 Issue 执行）', enabled: true },
   { value: 'opencode', label: 'opencode（未启用）', enabled: false },
   { value: 'kimicode', label: 'Kimi Code（未启用）', enabled: false },
 ];

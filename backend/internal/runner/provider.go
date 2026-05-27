@@ -9,15 +9,32 @@ import (
 )
 
 func (r *Runner) providerID() string {
-	return strings.ToLower(strings.TrimSpace(r.agent.Name()))
+	return providerKey(r.agent.Name())
+}
+
+func providerKey(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func (r *Runner) providerByID(providerID string) (agent.AgentProvider, bool) {
+	providerID = providerKey(providerID)
+	if providerID == "" || providerID == r.providerID() {
+		return r.agent, true
+	}
+	provider, ok := r.providers[providerID]
+	return provider, ok
 }
 
 func (r *Runner) providerCapabilities() agent.Capabilities {
-	reporter, ok := r.agent.(agent.CapabilityReporter)
+	return capabilitiesForProvider(r.agent, r.providerID())
+}
+
+func capabilitiesForProvider(provider agent.AgentProvider, providerID string) agent.Capabilities {
+	reporter, ok := provider.(agent.CapabilityReporter)
 	if ok {
 		return reporter.Capabilities()
 	}
-	return agent.CapabilitiesForProviderID(r.providerID())
+	return agent.CapabilitiesForProviderID(providerID)
 }
 
 func (r *Runner) hasCapability(capability agent.Capability) bool {

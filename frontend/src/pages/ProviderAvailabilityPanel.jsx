@@ -76,12 +76,19 @@ function ProviderCard({ provider }) {
         </span>
       </div>
       <ProviderMeta label="CLI" value={providerCLIText(provider)} ok={provider.cli?.available} />
+      {provider.cli?.version && <ProviderMeta label="Version" value={provider.cli.version} ok={provider.cli?.available} />}
       <ProviderMeta label="API key/token" value={secretStatusLabel(provider.secrets?.api_key)} ok={provider.secrets?.api_key?.configured} />
       <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', lineHeight: 1.5 }}>
-        {provider.enabled ? '已启用执行' : '仅展示配置状态，暂不启用执行'}
+        {provider.enabled ? `已启用：${providerCapabilityText(provider)}` : '仅展示配置状态，暂不启用执行'}
       </div>
     </div>
   );
+}
+
+function providerCapabilityText(provider) {
+  const capabilities = provider.capabilities || [];
+  if (capabilities.includes('issue_execution')) return 'Issue execution only';
+  return '未声明 capability';
 }
 
 function ProviderMeta({ label, value, ok }) {

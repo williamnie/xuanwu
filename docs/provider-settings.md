@@ -4,7 +4,7 @@
 
 ## v1 边界
 
-- 生产执行仍只启用 Codex provider；Claude Code / opencode 只展示本机配置状态。
+- 生产执行默认仍以 Codex 为主；Claude Code v1 可作为 `issue_execution` only provider，opencode 只展示本机配置状态。
 - 不实现完整 secret manager，不写入 Keychain，不接云端账户。
 - 不读取或枚举用户 credential store；只做本进程环境变量 presence 检查与 CLI `LookPath`。
 - provider-specific project 配置（model / approval / sandbox / provider_config_json）仍属于项目 DB；secret 不进入 SQLite。
@@ -61,7 +61,7 @@
 ## 当前 provider 判定
 
 - Codex：`codex-cmd` 可 `LookPath` 即 `available`；secret presence 检查 `CODEX_API_KEY` / `OPENAI_API_KEY`，但不要求其存在，因为 Codex 也可走本机登录态。
-- Claude Code：`claude-cmd` 可 `LookPath` 即 `available`；secret presence 检查 `ANTHROPIC_API_KEY`，但 v1 仍 `enabled=false`。
+- Claude Code：`claude-cmd` 可 `LookPath` 即 `available`，并读取 `claude --version`；secret presence 检查 `ANTHROPIC_API_KEY`，v1 `enabled=true` 但 capability 仅 `issue_execution`，不进入 Sessions list/read/resume。
 - opencode：v1 不读取 opencode config、不启动 server；无论 CLI 是否存在，provider `status` 都保持 `unknown`，避免把 CLI presence 误判为账号/模型可用；CLI 路径仍在 `cli` 字段中单独展示。
 
 ## 复用原则

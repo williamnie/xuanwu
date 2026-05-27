@@ -70,7 +70,7 @@ func (r *Runner) buildRunSelection(
 		providerID = profile.Provider
 	}
 	providerID = strings.ToLower(strings.TrimSpace(firstNonEmpty(providerID, store.ProviderCodex)))
-	capabilities := capabilityStrings(r.providerCapabilities())
+	capabilities := capabilityStrings(r.capabilitiesForID(providerID))
 	return RunSelection{
 		ProfileID: profileID, ProfileName: profileName(profile), ProviderID: providerID,
 		Capabilities: capabilities, CapabilitySummary: strings.Join(capabilities, ","),
@@ -118,17 +118,26 @@ func (r *Runner) applyRunSelection(ctx context.Context, issueID int64, project *
 }
 
 func (r *Runner) validateRunSelection(projectID string, selection RunSelection) error {
-	if selection.ProviderID != r.providerID() {
+	provider, ok := r.providerByID(selection.ProviderID)
+	if !ok {
 		return providerMismatchError(
 			store.Project{ID: projectID, Provider: selection.ProviderID}, r.providerID(),
 		)
 	}
-	if !r.providerCapabilities().Supports(agent.CapabilityIssueExecution) {
+	if !capabilitiesForProvider(provider, selection.ProviderID).Supports(agent.CapabilityIssueExecution) {
 		return fmt.Errorf(
 			"provider %q 不支持 capability %q", selection.ProviderID, agent.CapabilityIssueExecution,
 		)
 	}
 	return nil
+}
+
+func (r *Runner) capabilitiesForID(providerID string) agent.Capabilities {
+	provider, ok := r.providerByID(providerID)
+	if ok {
+		return capabilitiesForProvider(provider, providerID)
+	}
+	return agent.CapabilitiesForProviderID(providerID)
 }
 
 func (r *Runner) persistRunSelection(ctx context.Context, issueID int64, selection RunSelection) error {

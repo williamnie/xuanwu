@@ -182,6 +182,21 @@ func (s *Store) UpdateOpenIssueRunSelection(
 	return err
 }
 
+func (s *Store) UpdateOpenIssueRunRuntime(
+	ctx context.Context,
+	issueID int64,
+	providerID string,
+	providerSessionID string,
+	providerTurnID string,
+) error {
+	_, err := s.db.ExecContext(ctx, `update issue_runs set
+		provider=?, provider_session_id=?, provider_turn_id=?
+		where issue_id=? and ended_at=''`,
+		firstNonEmptyString(providerID, ProviderCodex), strings.TrimSpace(providerSessionID),
+		strings.TrimSpace(providerTurnID), issueID)
+	return err
+}
+
 func (s *Store) closeStaleIssueRuns(ctx context.Context, message string) error {
 	_, err := s.db.ExecContext(ctx, `update issue_runs set status=?,
 		provider=case when provider='' then ? else provider end,

@@ -15,6 +15,7 @@ type Runner struct {
 	store               *store.Store
 	bus                 *events.Bus
 	agent               agent.AgentProvider
+	providers           map[string]agent.AgentProvider
 	notifier            IssueNotifier
 	execMu              sync.Mutex
 	healthCheckInterval time.Duration
@@ -48,16 +49,34 @@ func (r *Runner) SetIssueNotifier(notifier IssueNotifier) {
 }
 
 func New(st *store.Store, bus *events.Bus, provider agent.AgentProvider) *Runner {
-	return &Runner{
-		store: st, bus: bus, agent: provider, eventSubs: map[int]chan agent.Event{},
+	r := &Runner{
+		store: st, bus: bus, agent: provider, providers: map[string]agent.AgentProvider{},
+		eventSubs:           map[int]chan agent.Event{},
 		healthCheckInterval: defaultHoldCheckInterval, healthCheckWait: 20 * time.Second,
 		autoRetryDelay: defaultAutoRetryDelay, dirtyWorktreeCheck: true,
 		loops: map[string]chan struct{}{}, running: map[int64]*runState{}, sessions: map[string]*runState{},
 	}
+	r.RegisterProvider(provider)
+	return r
 }
 
 func (r *Runner) SetDirtyWorktreeCheckEnabled(enabled bool) {
 	r.dirtyWorktreeCheck = enabled
+}
+
+func (r *Runner) ValidateIssueExecutionProvider(project store.Project) error {
+	return r.ensureRunnableProjectProvider(project)
+}
+
+func (r *Runner) RegisterProvider(provider agent.AgentProvider) {
+	if provider == nil {
+		return
+	}
+	id := providerKey(provider.Name())
+	if id == "" {
+		return
+	}
+	r.providers[id] = provider
 }
 
 func (r *Runner) StartProject(projectID string) error {
@@ -89,14 +108,32 @@ func (r *Runner) StartProject(projectID string) error {
 }
 
 func (r *Runner) ensureRunnableProjectProvider(project store.Project) error {
-	if project.Provider == "" || project.Provider == r.providerID() {
-		return r.requireCapability(agent.CapabilityIssueExecution)
+	providerID := providerKey(firstNonEmpty(project.Provider, r.providerID()))
+	provider, ok := r.providerByID(providerID)
+	if !ok {
+		return providerMismatchError(project, r.providerID())
 	}
-	return providerMismatchError(project, r.providerID())
+	if !capabilitiesForProvider(provider, providerID).Supports(agent.CapabilityIssueExecution) {
+		return fmt.Errorf("provider %q 不支持 capability %q", providerID, agent.CapabilityIssueExecution)
+	}
+	if providerID != r.providerID() {
+		if _, ok := provider.(agent.IssueRunner); !ok {
+			return fmt.Errorf("provider %q 不支持 capability %q", providerID, agent.CapabilityIssueExecution)
+		}
+	}
+	return nil
 }
 
 func (r *Runner) ensureSessionProjectProvider(project store.Project) error {
-	if project.Provider == "" || project.Provider == r.providerID() {
+	providerID := providerKey(firstNonEmpty(project.Provider, r.providerID()))
+	provider, ok := r.providerByID(providerID)
+	if !ok {
+		return providerMismatchError(project, r.providerID())
+	}
+	if !capabilitiesForProvider(provider, providerID).Supports(agent.CapabilitySessions) {
+		return fmt.Errorf("provider %q 不支持 capability %q", providerID, agent.CapabilitySessions)
+	}
+	if providerID == r.providerID() {
 		return r.requireCapability(agent.CapabilitySessions)
 	}
 	return providerMismatchError(project, r.providerID())

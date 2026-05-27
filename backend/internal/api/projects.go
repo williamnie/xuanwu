@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/runner"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
@@ -99,8 +98,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
-	if p.AutoRun == 1 && normalizedProjectProvider(p.Provider) != store.ProviderCodex {
-		writeError(w, http.StatusBadRequest, "project "+p.ID+" provider \""+p.Provider+"\" 暂不支持，当前只支持 codex")
+	if p.AutoRun == 1 && !s.projectCanAutoRun(w, p) {
 		return
 	}
 	created, err := s.store.CreateProject(r.Context(), p)
@@ -164,19 +162,19 @@ func (s *Server) projectPatchCanAutoRun(
 	if patch.AutoRun != nil {
 		autoRun = *patch.AutoRun
 	}
-	if autoRun == 1 && normalizedProjectProvider(provider) != store.ProviderCodex {
-		writeError(w, http.StatusBadRequest, "project "+id+" provider \""+provider+"\" 暂不支持，当前只支持 codex")
+	if autoRun != 1 {
+		return true
+	}
+	current.Provider = provider
+	return s.projectCanAutoRun(w, current)
+}
+
+func (s *Server) projectCanAutoRun(w http.ResponseWriter, project store.Project) bool {
+	if err := s.runner.ValidateIssueExecutionProvider(project); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return false
 	}
 	return true
-}
-
-func normalizedProjectProvider(provider string) string {
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	if provider == "" {
-		return store.ProviderCodex
-	}
-	return provider
 }
 
 func (s *Server) searchProjectReferences(w http.ResponseWriter, r *http.Request, id string) {

@@ -44,6 +44,40 @@ func TestProjectAPIReadUpdateFlow(t *testing.T) {
 	}
 }
 
+func TestProjectAPIAcceptsClaudeIssueExecutionAutoRun(t *testing.T) {
+	srv := newTestServer(t)
+	srv.runner.RegisterProvider(executionOnlyAPIProvider{name: agent.ProviderClaudeCode})
+	created := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "claude-demo", "cwd": t.TempDir(), "provider": agent.ProviderClaudeCode,
+		"auto_run": 1,
+	})
+	defer srv.runner.StopProject(created.ID)
+
+	if created.Provider != agent.ProviderClaudeCode || created.AutoRun != 1 ||
+		created.LoopStatus != "running" {
+		t.Fatalf("claude auto-run project should start: %+v", created)
+	}
+	if !hasCapability(created.ProviderCapabilities, string(agent.CapabilityIssueExecution)) ||
+		hasCapability(created.ProviderCapabilities, string(agent.CapabilitySessions)) {
+		t.Fatalf("claude capabilities should be issue_execution only: %+v", created.ProviderCapabilities)
+	}
+}
+
+type executionOnlyAPIProvider struct {
+	name string
+}
+
+func (p executionOnlyAPIProvider) Name() string { return p.name }
+
+func (p executionOnlyAPIProvider) Start(context.Context) error { return nil }
+
+func (p executionOnlyAPIProvider) RunIssue(
+	context.Context,
+	agent.IssueRunInput,
+) (agent.IssueRunResult, error) {
+	return agent.IssueRunResult{}, nil
+}
+
 func hasCapability(capabilities []string, want string) bool {
 	for _, capability := range capabilities {
 		if capability == want {

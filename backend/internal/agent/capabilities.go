@@ -10,6 +10,7 @@ var ErrCapabilityUnsupported = errors.New("agent capability unsupported")
 
 const (
 	ProviderCodex             = "codex"
+	ProviderClaudeCode        = "claude"
 	ProviderFakeExecutionOnly = "fake-execution-only"
 )
 
@@ -40,6 +41,8 @@ func CapabilitiesForProviderID(provider string) Capabilities {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case "", ProviderCodex:
 		return CodexCapabilities()
+	case ProviderClaudeCode:
+		return Capabilities{CapabilityIssueExecution}
 	case ProviderFakeExecutionOnly:
 		return Capabilities{CapabilityIssueExecution}
 	}

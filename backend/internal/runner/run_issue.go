@@ -72,8 +72,12 @@ func (r *Runner) startIssueRun(
 	if err := r.applyRunSelection(ctx, issue.ID, &project, selection); err != nil {
 		return err
 	}
-	if issueRunner, ok := r.agent.(agent.IssueRunner); ok {
-		return r.runProviderIssue(ctx, issueRunner, issue, project)
+	provider, ok := r.providerByID(selection.ProviderID)
+	if !ok {
+		return providerMismatchError(project, r.providerID())
+	}
+	if issueRunner, ok := provider.(agent.IssueRunner); ok {
+		return r.runProviderIssue(ctx, provider, issueRunner, issue, project)
 	}
 	return r.startCodexTurn(ctx, issue, project)
 }
@@ -99,10 +103,12 @@ func profileReasoningEffort(profile *store.AgentProfile) string {
 
 func (r *Runner) runProviderIssue(
 	ctx context.Context,
+	providerAgent agent.AgentProvider,
 	provider agent.IssueRunner,
 	issue store.Issue,
 	project store.Project,
 ) error {
+	providerID := providerKey(providerAgent.Name())
 	result, err := provider.RunIssue(ctx, agent.IssueRunInput{
 		IssueID:         issue.ID,
 		ProjectID:       project.ID,
@@ -114,16 +120,19 @@ func (r *Runner) runProviderIssue(
 		Sandbox:         project.Sandbox,
 		Log: func(event agent.Event) {
 			r.publishLog(ctx, issue.ID, event)
+			if event.ThreadID != "" || event.TurnID != "" {
+				r.updateProviderRuntime(ctx, issue.ID, providerID, event.ThreadID, event.TurnID)
+			}
 		},
 	})
 	if err != nil {
 		return err
 	}
-	r.updateRuntime(ctx, issue.ID, result.ProviderSessionID, result.ProviderTurnID)
-	return r.finishIssueAfterProviderRun(ctx, issue.ID)
+	r.updateProviderRuntime(ctx, issue.ID, providerID, result.ProviderSessionID, result.ProviderTurnID)
+	return r.finishIssueAfterProviderRun(ctx, issue.ID, providerID)
 }
 
-func (r *Runner) finishIssueAfterProviderRun(ctx context.Context, issueID int64) error {
+func (r *Runner) finishIssueAfterProviderRun(ctx context.Context, issueID int64, providerID string) error {
 	current, err := r.store.GetIssue(ctx, issueID)
 	if err != nil {
 		return err
@@ -131,7 +140,7 @@ func (r *Runner) finishIssueAfterProviderRun(ctx context.Context, issueID int64)
 	if isTerminalStatus(current.Status) {
 		return nil
 	}
-	r.failIssue(ctx, issueID, missingExplicitStatusMessage())
+	r.failIssue(ctx, issueID, missingProviderExplicitStatusMessage(providerID))
 	return nil
 }
 
@@ -286,6 +295,14 @@ func isTerminalStatus(status string) bool {
 
 func missingExplicitStatusMessage() string {
 	return "Codex turn completed without explicit issue status update; expected Codex to run codex-issue-runner issue update after verification"
+}
+
+func missingProviderExplicitStatusMessage(provider string) string {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = "provider"
+	}
+	return provider + " run completed without explicit issue status update; expected provider to run codex-issue-runner issue update or the documented HTTP equivalent after verification"
 }
 
 func matches(event agent.Event, threadID, turnID string) bool {

@@ -31,6 +31,20 @@ func (r *Runner) updateRuntime(ctx context.Context, issueID int64, threadID, tur
 	r.bus.Publish(events.AppEvent{Type: "issue.runtime_updated", IssueID: issueID, ThreadID: threadID, TurnID: turnID})
 }
 
+func (r *Runner) updateProviderRuntime(ctx context.Context, issueID int64, providerID, sessionID, turnID string) {
+	_ = r.store.UpdateOpenIssueRunRuntime(ctx, issueID, providerID, sessionID, turnID)
+	r.mu.Lock()
+	if state := r.running[issueID]; state != nil {
+		state.threadID = sessionID
+		state.turnID = turnID
+	}
+	r.mu.Unlock()
+	r.bus.Publish(events.AppEvent{
+		Type: "issue.runtime_updated", IssueID: issueID,
+		ThreadID: sessionID, TurnID: turnID, Provider: providerID,
+	})
+}
+
 func (r *Runner) publishStatus(issueID int64, status string) {
 	r.bus.Publish(events.AppEvent{Type: "issue.status_changed", IssueID: issueID, Status: status})
 }

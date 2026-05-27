@@ -1,9 +1,13 @@
 package config
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
+	agentclaude "github.com/xiaobei/codex-issue-runner/backend/internal/agent/providers/claude"
 )
 
 const (
@@ -26,6 +30,7 @@ type ProviderStatus struct {
 	Enabled      bool                    `json:"enabled"`
 	CLI          ProviderCLIStatus       `json:"cli"`
 	Secrets      map[string]SecretStatus `json:"secrets,omitempty"`
+	Capabilities []string                `json:"capabilities,omitempty"`
 	DefaultModel string                  `json:"default_model,omitempty"`
 	Notes        []string                `json:"notes,omitempty"`
 	SettingsMode string                  `json:"settings_mode"`
@@ -35,6 +40,7 @@ type ProviderCLIStatus struct {
 	Command   string `json:"command"`
 	Available bool   `json:"available"`
 	Path      string `json:"path,omitempty"`
+	Version   string `json:"version,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
@@ -61,18 +67,20 @@ func codexProviderStatus(command string) ProviderStatus {
 	return ProviderStatus{
 		ID: "codex", Label: "Codex", Status: availability(cli.Available), Available: cli.Available,
 		Enabled: true, CLI: cli, Secrets: apiKeyPresence("CODEX_API_KEY", "OPENAI_API_KEY"),
+		Capabilities: capabilityStrings(agent.CapabilitiesForProviderID(agent.ProviderCodex)),
 		SettingsMode: "env_or_codex_config",
-		Notes:        []string{"生产执行当前仅启用 Codex provider。"},
+		Notes:        []string{"Codex 仍是默认主 provider，Claude Code 可作为 issue_execution only 后端。"},
 	}
 }
 
 func claudeProviderStatus(command string) ProviderStatus {
-	cli := commandStatus(command)
+	probe, cli := claudeProbe(command)
 	return ProviderStatus{
 		ID: "claude", Label: "Claude Code", Status: availability(cli.Available), Available: cli.Available,
-		Enabled: false, CLI: cli, Secrets: apiKeyPresence("ANTHROPIC_API_KEY"),
+		Enabled: true, CLI: cli, Secrets: map[string]SecretStatus{"api_key": {Configured: probe.Auth.Configured}},
+		Capabilities: capabilityStrings(agent.CapabilitiesForProviderID(agent.ProviderClaudeCode)),
 		SettingsMode: "env_or_provider_login",
-		Notes:        []string{"v1 只展示本机配置状态，暂不启用执行。"},
+		Notes:        []string{"v1 仅支持 issue_execution，不进入 Sessions list/read/resume。"},
 	}
 }
 
@@ -84,6 +92,27 @@ func opencodeProviderStatus(command string) ProviderStatus {
 		Notes: []string{"opencode v1 不读取 provider 配置文件或启动 server，" +
 			"只展示 CLI 路径；真实可用性保持 unknown。"},
 	}
+}
+
+func claudeProbe(command string) (agentclaude.ProbeResult, ProviderCLIStatus) {
+	provider := agentclaude.New(agentclaude.Config{Command: command})
+	probe, _ := provider.Probe(context.Background())
+	cli := ProviderCLIStatus{
+		Command: strings.TrimSpace(command), Available: probe.Available,
+		Path: probe.Path, Version: probe.Version, Error: probe.Error,
+	}
+	if cli.Command == "" {
+		cli.Command = "claude"
+	}
+	return probe, cli
+}
+
+func capabilityStrings(capabilities agent.Capabilities) []string {
+	out := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		out = append(out, string(capability))
+	}
+	return out
 }
 
 func commandStatus(command string) ProviderCLIStatus {

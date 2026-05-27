@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	agentclaude "github.com/xiaobei/codex-issue-runner/backend/internal/agent/providers/claude"
 	agentcodex "github.com/xiaobei/codex-issue-runner/backend/internal/agent/providers/codex"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/api"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/cli"
@@ -58,6 +59,7 @@ func runServer(args []string) {
 	client.SetEnv(runnerCallbackEnv(cfg, authToken))
 	provider := agentcodex.New(client)
 	r := runner.New(st, bus, provider)
+	r.RegisterProvider(agentclaude.New(agentclaude.Config{Command: cfg.ClaudeCmd, Env: runnerCallbackEnv(cfg, authToken)}))
 	r.SetDirtyWorktreeCheckEnabled(!cfg.SkipDirtyCheck)
 	if err := r.RecoverInProgressIssues(context.Background()); err != nil {
 		log.Fatal(err)

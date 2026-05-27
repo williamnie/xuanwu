@@ -46,7 +46,7 @@ func TestProjectAPIFailurePaths(t *testing.T) {
 			method: http.MethodPatch, path: "/api/projects/unsupported",
 			body: `{"auto_run":1}`, contentType: "application/json",
 			newServer:  newUnsupportedProviderProjectServer,
-			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"unsupported-provider\" 暂不支持`,
 		},
 	})
 }
@@ -73,14 +73,14 @@ func TestIssueAPIFailurePaths(t *testing.T) {
 			method: http.MethodPost, path: "/api/issues",
 			body:        `{"project_id":"unsupported","title":"blocked","status":"todo"}`,
 			contentType: "application/json", newServer: newUnsupportedProviderProjectServer,
-			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"unsupported-provider\" 暂不支持`,
 		},
 		{
 			name:   "rejects enqueue for unsupported project provider",
 			method: http.MethodPost, path: "/api/issues/1/enqueue",
 			body: `{}`, contentType: "application/json",
 			newServer:  newUnsupportedProviderIssueServer,
-			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"unsupported-provider\" 暂不支持`,
 		},
 	})
 }
@@ -107,7 +107,7 @@ func TestSessionAPIFailurePaths(t *testing.T) {
 			method: http.MethodPost, path: "/api/sessions",
 			body:        `{"project_id":"unsupported","prompt":"hello"}`,
 			contentType: "application/json", newServer: newUnsupportedProviderProjectServer,
-			wantStatus: http.StatusBadRequest, wantBody: `provider \"claude\" 暂不支持`,
+			wantStatus: http.StatusBadRequest, wantBody: `provider \"unsupported-provider\" 暂不支持`,
 		},
 		{
 			name:   "rejects unknown session reference type",
@@ -228,7 +228,7 @@ func newUnsupportedProviderProjectServer(t *testing.T) *Server {
 	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
 		"id": "unsupported", "cwd": t.TempDir(),
 	})
-	provider := "claude"
+	provider := "unsupported-provider"
 	if _, err := srv.store.UpdateProject(
 		context.Background(), project.ID, store.ProjectPatch{Provider: &provider},
 	); err != nil {

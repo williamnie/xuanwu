@@ -731,6 +731,13 @@ function AgentProfileManager({ profiles, loading, form, error, onFieldChange, on
       {error && <div style={{ color: 'var(--error)', fontSize: '0.8rem' }}>{error}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+          <select className="form-control" value={form.provider} onChange={(e) => onFieldChange('provider', e.target.value)}>
+            {PROVIDER_OPTIONS.map(option => (
+              <option key={option.value} value={option.value} disabled={!option.enabled}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <input className="form-control" placeholder="Profile ID（可留空自动生成）" value={form.id} onChange={(e) => onFieldChange('id', e.target.value)} />
           <input className="form-control" placeholder="Profile 名称" value={form.name} onChange={(e) => onFieldChange('name', e.target.value)} />
           <select className="form-control" value={form.model} onChange={(e) => onFieldChange('model', e.target.value)}>
