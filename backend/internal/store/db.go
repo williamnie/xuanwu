@@ -77,6 +77,9 @@ func (s *Store) init() error {
 	if err := s.migrateIssueRunColumns(); err != nil {
 		return err
 	}
+	if err := s.backfillIssueRunProviderIDs(); err != nil {
+		return err
+	}
 	if err := s.migrateCronTaskColumns(); err != nil {
 		return err
 	}
@@ -185,6 +188,7 @@ func (s *Store) migrateIssueColumns() error {
 	additions := map[string]string{
 		"template_id":        `alter table issues add column template_id text not null default ''`,
 		"prompt_template":    `alter table issues add column prompt_template text not null default ''`,
+		"agent_profile_id":   `alter table issues add column agent_profile_id text not null default ''`,
 		"source_session_id":  `alter table issues add column source_session_id text not null default ''`,
 		"source_turn_id":     `alter table issues add column source_turn_id text not null default ''`,
 		"source_excerpt":     `alter table issues add column source_excerpt text not null default ''`,
@@ -212,6 +216,8 @@ func (s *Store) migrateIssueRunColumns() error {
 		"provider_session_id": `alter table issue_runs add column provider_session_id text not null default ''`,
 		"provider_turn_id":    `alter table issue_runs add column provider_turn_id text not null default ''`,
 		"agent_profile_id":    `alter table issue_runs add column agent_profile_id text not null default ''`,
+		"capability_summary":  `alter table issue_runs add column capability_summary text not null default ''`,
+		"selection_reason":    `alter table issue_runs add column selection_reason text not null default ''`,
 	}
 	for name, stmt := range additions {
 		if columns[name] {
@@ -221,7 +227,7 @@ func (s *Store) migrateIssueRunColumns() error {
 			return fmt.Errorf("migrate issue_runs.%s: %w", name, err)
 		}
 	}
-	return s.backfillIssueRunProviderIDs()
+	return nil
 }
 
 func (s *Store) backfillIssueRunProviderIDs() error {

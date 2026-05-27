@@ -24,7 +24,8 @@ func (r *Runner) runIssue(issue store.Issue) {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
-	if err := r.ensureRunnableProjectProvider(project); err != nil {
+	selection, err := r.buildRunSelection(ctx, issue, project)
+	if err != nil {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
@@ -32,7 +33,16 @@ func (r *Runner) runIssue(issue store.Issue) {
 		r.failIssue(ctx, issue.ID, err.Error())
 		return
 	}
-	if err := r.startIssueRun(ctx, issue, project); err != nil {
+	if err := r.persistRunSelection(ctx, issue.ID, selection); err != nil {
+		r.failIssue(ctx, issue.ID, err.Error())
+		return
+	}
+	r.recordRunSelectionEvent(ctx, issue.ID, selection)
+	if err := r.validateRunSelection(project.ID, selection); err != nil {
+		r.failIssue(ctx, issue.ID, err.Error())
+		return
+	}
+	if err := r.startIssueRun(ctx, issue, project, selection); err != nil {
 		var holdErr runnerHoldError
 		if errors.As(err, &holdErr) {
 			r.holdIssue(ctx, issue, holdErr.reason)
@@ -49,34 +59,19 @@ func (r *Runner) runIssue(issue store.Issue) {
 	}
 }
 
-func (r *Runner) startIssueRun(ctx context.Context, issue store.Issue, project store.Project) error {
-	project = r.projectWithAgentProfile(ctx, project, issue)
+func (r *Runner) startIssueRun(
+	ctx context.Context,
+	issue store.Issue,
+	project store.Project,
+	selection RunSelection,
+) error {
+	if err := r.applyRunSelection(ctx, issue.ID, &project, selection); err != nil {
+		return err
+	}
 	if issueRunner, ok := r.agent.(agent.IssueRunner); ok {
 		return r.runProviderIssue(ctx, issueRunner, issue, project)
 	}
 	return r.startCodexTurn(ctx, issue, project)
-}
-
-func (r *Runner) projectWithAgentProfile(
-	ctx context.Context,
-	project store.Project,
-	issue store.Issue,
-) store.Project {
-	profileID := latestIssueRunProfileID(ctx, r.store, issue.ID)
-	if profileID == "" {
-		profileID = project.DefaultAgentProfileID
-	}
-	if profileID == "" {
-		return project
-	}
-	profile, err := r.store.GetAgentProfile(ctx, profileID)
-	if err != nil {
-		return project
-	}
-	project.DefaultAgentProfileID = profileID
-	project.DefaultAgentProfile = &profile
-	applyAgentProfileExecutionPreset(&project, profile)
-	return project
 }
 
 func applyAgentProfileExecutionPreset(project *store.Project, profile store.AgentProfile) {
@@ -96,14 +91,6 @@ func profileReasoningEffort(profile *store.AgentProfile) string {
 		return ""
 	}
 	return strings.TrimSpace(profile.ReasoningEffort)
-}
-
-func latestIssueRunProfileID(ctx context.Context, st *store.Store, issueID int64) string {
-	runs, err := st.ListIssueRuns(ctx, issueID)
-	if err != nil || len(runs) == 0 {
-		return ""
-	}
-	return runs[len(runs)-1].AgentProfileID
 }
 
 func (r *Runner) runProviderIssue(

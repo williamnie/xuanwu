@@ -53,9 +53,18 @@ func TestRunnerUsesExecutionOnlyProviderCapability(t *testing.T) {
 		t.Fatalf("issue should still require explicit terminal update: %+v", got)
 	}
 	events, _ := st.ListIssueEvents(ctx, issue.ID)
-	if len(events) == 0 || !strings.Contains(events[0].Payload, "fake provider log") {
+	if !hasEventPayload(events, "fake provider log") {
 		t.Fatalf("expected fake provider log event, got %+v", events)
 	}
+}
+
+func hasEventPayload(events []store.IssueEvent, want string) bool {
+	for _, event := range events {
+		if strings.Contains(event.Payload, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRunnerInjectsAgentProfileForExecutionOnlyProvider(t *testing.T) {

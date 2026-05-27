@@ -45,7 +45,12 @@ import {
 } from '../utils/issueRefinement';
 import { deriveIssueWorkflowEvidence } from '../utils/issueWorkflowEvidence';
 import { issueRunSessionRef } from '../utils/issueRuns';
-import { issueRunProfileLabel, summarizeAgentProfile } from '../utils/agentProfiles';
+import {
+  issueRunProfileLabel,
+  runCapabilitySummary,
+  runSelectionReasonLabel,
+  summarizeAgentProfile,
+} from '../utils/agentProfiles';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -172,6 +177,8 @@ function issueRunSignature(run) {
     run?.exit_reason,
     run?.error,
     run?.agent_profile_id,
+    run?.capability_summary,
+    run?.selection_reason,
   ].join('\u001f');
 }
 
@@ -948,6 +955,7 @@ ${error}` : error;
           <IssueRunsPanel
             issue={issue}
             project={project}
+            profiles={profiles}
             runs={runs}
             currentStatus={issue.status}
             navigateTo={navigateTo}
@@ -1112,7 +1120,7 @@ function RefinementItem({ label, value }) {
   );
 }
 
-function IssueRunsPanel({ issue, project, runs, currentStatus, navigateTo, onCopy }) {
+function IssueRunsPanel({ issue, project, profiles, runs, currentStatus, navigateTo, onCopy }) {
   const latestRunId = latestRunFromRuns(runs)?.id || '';
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
@@ -1134,6 +1142,7 @@ function IssueRunsPanel({ issue, project, runs, currentStatus, navigateTo, onCop
               key={run.id}
               issue={issue}
               project={project}
+              profiles={profiles}
               run={run}
               isLatest={run.id === latestRunId}
               navigateTo={navigateTo}
@@ -1146,7 +1155,7 @@ function IssueRunsPanel({ issue, project, runs, currentStatus, navigateTo, onCop
   );
 }
 
-function IssueRunCard({ issue, project, run, isLatest, navigateTo, onCopy }) {
+function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onCopy }) {
   const running = !run.ended_at;
   const error = run.error ? summarize(run.error, 160) : '';
   const sessionRef = issueRunSessionRef(issue, run);
@@ -1166,7 +1175,9 @@ function IssueRunCard({ issue, project, run, isLatest, navigateTo, onCopy }) {
 
       <RunField label="Run ID" value={run.id} mono />
       <RunField label="Provider" value={providerLabel(run.provider)} />
-      <RunField label="Agent Profile" value={issueRunProfileLabel(run, project)} />
+      <RunField label="Agent Profile" value={issueRunProfileLabel(run, project, profiles)} />
+      <RunField label="选择原因" value={runSelectionReasonLabel(run.selection_reason)} />
+      <RunField label="Capabilities" value={runCapabilitySummary(run)} />
       <RunField label="Session" value={sessionId || '暂无'} mono />
       <RunField label="Turn" value={turnId || '暂无'} mono />
       <RunField label="开始" value={formatDateTime(run.started_at)} />
@@ -1203,6 +1214,8 @@ function runCopyText(run, sessionRef, sessionId, turnId) {
     `Status: ${run.status || 'unknown'}`,
     `Provider: ${providerLabel(run.provider)}`,
     `Agent Profile: ${run.agent_profile_id || 'none'}`,
+    `Selection: ${run.selection_reason || 'none'}`,
+    `Capabilities: ${runCapabilitySummary(run)}`,
     `Session: ${sessionRef || sessionId || 'none'}`,
     `Turn: ${turnId || 'none'}`,
     `Exit: ${run.error || run.exit_reason || 'none'}`,

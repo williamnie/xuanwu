@@ -73,7 +73,7 @@ func (s *Server) createIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法 JSON")
 		return
 	}
-	if issue.Status == store.StatusTodo && !s.ensureIssueProjectRunnable(w, r, issue.ProjectID) {
+	if issue.Status == store.StatusTodo && !s.ensureIssueRunnable(w, r, issue) {
 		return
 	}
 	created, err := s.store.CreateIssue(r.Context(), issue)
@@ -103,7 +103,7 @@ func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, id int64) {
 				return
 			}
 		}
-		if !s.ensureIssueProjectRunnable(w, r, current.ProjectID) {
+		if !s.ensureIssueRunnable(w, r, current) {
 			return
 		}
 	}
@@ -220,7 +220,7 @@ func (s *Server) setIssueQueued(w http.ResponseWriter, r *http.Request, id int64
 		handleErr(w, err)
 		return
 	}
-	if !s.ensureIssueProjectRunnable(w, r, current.ProjectID) {
+	if !s.ensureIssueRunnable(w, r, current) {
 		return
 	}
 	issue, err := s.store.UpdateIssue(r.Context(), id, store.IssuePatch{
@@ -235,14 +235,17 @@ func (s *Server) setIssueQueued(w http.ResponseWriter, r *http.Request, id int64
 	writeJSON(w, http.StatusOK, issue)
 }
 
-func (s *Server) ensureIssueProjectRunnable(w http.ResponseWriter, r *http.Request, projectID string) bool {
-	project, err := s.store.GetProject(r.Context(), projectID)
+func (s *Server) ensureIssueRunnable(w http.ResponseWriter, r *http.Request, issue store.Issue) bool {
+	project, err := s.store.GetProject(r.Context(), issue.ProjectID)
 	if err != nil {
 		handleErr(w, err)
 		return false
 	}
-	if project.Provider != store.ProviderCodex {
-		writeError(w, http.StatusBadRequest, "project "+project.ID+" provider \""+project.Provider+"\" 暂不支持，当前只支持 codex")
+	if issue.ID == 0 {
+		issue.ProjectID = project.ID
+	}
+	if _, err := s.runner.ResolveIssueRunSelection(r.Context(), issue); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return false
 	}
 	return true

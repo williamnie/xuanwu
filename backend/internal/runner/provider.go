@@ -3,23 +3,32 @@ package runner
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 )
 
-func (r *Runner) hasCapability(capability agent.Capability) bool {
+func (r *Runner) providerID() string {
+	return strings.ToLower(strings.TrimSpace(r.agent.Name()))
+}
+
+func (r *Runner) providerCapabilities() agent.Capabilities {
 	reporter, ok := r.agent.(agent.CapabilityReporter)
-	if !ok {
-		return defaultCapability(r.agent.Name(), capability)
+	if ok {
+		return reporter.Capabilities()
 	}
-	return reporter.Capabilities().Supports(capability)
+	return agent.CapabilitiesForProviderID(r.providerID())
+}
+
+func (r *Runner) hasCapability(capability agent.Capability) bool {
+	return r.providerCapabilities().Supports(capability)
 }
 
 func (r *Runner) requireCapability(capability agent.Capability) error {
 	if r.hasCapability(capability) {
 		return nil
 	}
-	return fmt.Errorf("provider %q 不支持 capability %q", r.agent.Name(), capability)
+	return fmt.Errorf("provider %q 不支持 capability %q", r.providerID(), capability)
 }
 
 func defaultCapability(provider string, capability agent.Capability) bool {

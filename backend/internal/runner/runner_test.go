@@ -14,6 +14,22 @@ import (
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
 
+type fakeNoIssueExecutionProvider struct {
+	name   string
+	starts int
+}
+
+func (f *fakeNoIssueExecutionProvider) Name() string { return f.name }
+
+func (f *fakeNoIssueExecutionProvider) Start(context.Context) error {
+	f.starts++
+	return nil
+}
+
+func (f *fakeNoIssueExecutionProvider) Capabilities() agent.Capabilities {
+	return agent.Capabilities{agent.CapabilitySessions}
+}
+
 func TestRunnerFailsIssueWhenCodexDoesNotSetFinalStatus(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()
@@ -119,6 +135,115 @@ func TestCodexIssueRunUsesAgentProfileModelEffortAndPrompt(t *testing.T) {
 	if err != nil || len(runs) != 1 || runs[0].AgentProfileID != "nightly" {
 		t.Fatalf("run profile not recorded: runs=%+v err=%v", runs, err)
 	}
+	if runs[0].Provider != store.ProviderCodex ||
+		!strings.Contains(runs[0].CapabilitySummary, string(agent.CapabilityIssueExecution)) ||
+		runs[0].SelectionReason != "project_default" {
+		t.Fatalf("run dispatcher metadata missing: %+v", runs[0])
+	}
+}
+
+func TestIssueOverrideProfileWinsOverProjectDefault(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateAgentProfile(ctx, store.AgentProfile{
+		ID: "project-default", Name: "Project Default", Provider: "codex", Model: "gpt-5.2",
+		ReasoningEffort: "medium",
+	})
+	_, _ = st.CreateAgentProfile(ctx, store.AgentProfile{
+		ID: "issue-override", Name: "Issue Override", Provider: "codex", Model: "gpt-5.5",
+		ReasoningEffort: "xhigh",
+	})
+	_, _ = st.CreateProject(ctx, store.Project{
+		ID: "demo", Name: "Demo", CWD: t.TempDir(), DefaultAgentProfileID: "project-default",
+	})
+	created, _ := st.CreateIssue(ctx, store.Issue{
+		ProjectID: "demo", Title: "task", Status: store.StatusTodo,
+		AgentProfileID: "issue-override",
+	})
+	issue, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || issue.ID != created.ID {
+		t.Fatalf("claim issue ok=%v issue=%+v err=%v", ok, issue, err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	r.runIssue(issue)
+
+	if len(fake.threadInputs) != 1 || fake.threadInputs[0].Model != "gpt-5.5" ||
+		fake.threadInputs[0].ReasoningEffort != "xhigh" {
+		t.Fatalf("issue override profile not used: %+v", fake.threadInputs)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs=%+v err=%v", runs, err)
+	}
+	if runs[0].AgentProfileID != "issue-override" || runs[0].SelectionReason != "issue_override" ||
+		!strings.Contains(runs[0].CapabilitySummary, string(agent.CapabilityIssueExecution)) {
+		t.Fatalf("override dispatcher metadata missing: %+v", runs[0])
+	}
+	issueEvents, _ := st.ListIssueEvents(ctx, issue.ID)
+	if !hasIssueEventType(issueEvents, "issue.run_selected") {
+		t.Fatalf("missing run selection event: %+v", issueEvents)
+	}
+}
+
+func TestDispatcherFallsBackToProviderDefaultWhenNoProfileConfigured(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{
+		ID: "demo", Name: "Demo", CWD: t.TempDir(), Model: "codex-default",
+	})
+	created, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
+	issue, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || issue.ID != created.ID {
+		t.Fatalf("claim issue ok=%v issue=%+v err=%v", ok, issue, err)
+	}
+	fake := &fakeCodex{events: make(chan agent.Event, 4)}
+	r := New(st, events.NewBus(), fake)
+
+	r.runIssue(issue)
+
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs=%+v err=%v", runs, err)
+	}
+	if runs[0].AgentProfileID != "" || runs[0].Provider != store.ProviderCodex ||
+		runs[0].SelectionReason != "provider_default" {
+		t.Fatalf("provider default dispatcher metadata missing: %+v", runs[0])
+	}
+}
+
+func TestDispatcherBlocksProviderWithoutIssueExecutionCapability(t *testing.T) {
+	st := openRunnerStore(t)
+	ctx := context.Background()
+	_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir()})
+	created, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "task", Status: store.StatusTodo})
+	issue, ok, err := st.ClaimNextIssue(ctx, "demo")
+	if err != nil || !ok || issue.ID != created.ID {
+		t.Fatalf("claim issue ok=%v issue=%+v err=%v", ok, issue, err)
+	}
+	provider := &fakeNoIssueExecutionProvider{name: store.ProviderCodex}
+	r := New(st, events.NewBus(), provider)
+
+	r.runIssue(issue)
+
+	got, _ := st.GetIssue(ctx, issue.ID)
+	if got.Status != store.StatusFailed ||
+		!strings.Contains(got.Error, string(agent.CapabilityIssueExecution)) {
+		t.Fatalf("capability mismatch should fail clearly: %+v", got)
+	}
+	if provider.starts != 0 {
+		t.Fatalf("provider must not start when capability is missing: %d", provider.starts)
+	}
+}
+
+func hasIssueEventType(events []store.IssueEvent, typ string) bool {
+	for _, event := range events {
+		if event.Type == typ {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRenderPromptIncludesAgentProfileSummary(t *testing.T) {

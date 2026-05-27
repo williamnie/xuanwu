@@ -620,6 +620,42 @@ func TestIssueRunRecordsAgentProfileID(t *testing.T) {
 	}
 }
 
+func TestIssueRunRecordsIssueOverrideProfileID(t *testing.T) {
+	st := openTestStore(t)
+	ctx := context.Background()
+	if _, err := st.CreateAgentProfile(ctx, AgentProfile{ID: "project-default", Name: "Project Default"}); err != nil {
+		t.Fatalf("create project profile: %v", err)
+	}
+	if _, err := st.CreateAgentProfile(ctx, AgentProfile{ID: "issue-override", Name: "Issue Override"}); err != nil {
+		t.Fatalf("create issue profile: %v", err)
+	}
+	if _, err := st.CreateProject(ctx, Project{
+		ID: "demo", CWD: t.TempDir(), DefaultAgentProfileID: "project-default",
+	}); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	issue, err := st.CreateIssue(ctx, Issue{
+		ProjectID: "demo", Title: "task", Status: StatusTodo,
+		AgentProfileID: "issue-override",
+	})
+	if err != nil {
+		t.Fatalf("create issue: %v", err)
+	}
+	if issue.AgentProfileID != "issue-override" {
+		t.Fatalf("issue override profile id = %q", issue.AgentProfileID)
+	}
+	if _, ok, err := st.ClaimNextIssue(ctx, "demo"); err != nil || !ok {
+		t.Fatalf("claim issue ok=%v err=%v", ok, err)
+	}
+	runs, err := st.ListIssueRuns(ctx, issue.ID)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("runs = %+v err=%v", runs, err)
+	}
+	if runs[0].AgentProfileID != "issue-override" || runs[0].SelectionReason != "issue_override" {
+		t.Fatalf("run selection = %+v", runs[0])
+	}
+}
+
 func TestLastSessionProjectPreferenceRoundTrip(t *testing.T) {
 	st := openTestStore(t)
 	ctx := context.Background()

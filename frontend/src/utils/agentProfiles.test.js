@@ -4,6 +4,8 @@ import test from 'node:test';
 import {
   agentProfilePayload,
   issueRunProfileLabel,
+  runCapabilitySummary,
+  runSelectionReasonLabel,
   normalizeAgentProfileForm,
   parseIntentText,
   profileIDFromName,
@@ -36,7 +38,27 @@ test('summarizes configured and missing agent profiles honestly', () => {
     issueRunProfileLabel({ agent_profile_id: 'nightly' }, { default_agent_profile: { id: 'nightly', name: 'Nightly' } }),
     'Nightly (nightly)',
   );
+  assert.equal(
+    issueRunProfileLabel({ agent_profile_id: 'override' }, {}, [{ id: 'override', name: 'Override' }]),
+    'Override (override)',
+  );
+  assert.equal(
+    issueRunProfileLabel(
+      { id: 'run-1', agent_profile_id: '' },
+      { default_agent_profile_id: 'current-default' },
+    ),
+    '未配置',
+  );
   assert.equal(issueRunProfileLabel({}, {}), '未配置');
+});
+
+test('labels run dispatcher metadata compactly', () => {
+  assert.equal(runSelectionReasonLabel('issue_override'), 'Issue override');
+  assert.equal(runSelectionReasonLabel('project_default'), 'Project default');
+  assert.equal(runSelectionReasonLabel('provider_default'), 'Provider default');
+  assert.equal(runCapabilitySummary({ capability_summary: 'issue_execution,sessions' }), 'issue_execution, sessions');
+  assert.equal(runCapabilitySummary({ capabilities: ['issue_execution'] }), 'issue_execution');
+  assert.equal(runCapabilitySummary({}), '未记录');
 });
 
 test('normalizes editable profile form defaults', () => {

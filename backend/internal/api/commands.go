@@ -39,6 +39,7 @@ type RunnerCommandResponse struct {
 	Issue                *store.Issue         `json:"issue,omitempty"`
 	Project              *store.Project       `json:"project,omitempty"`
 	Runs                 []store.IssueRun     `json:"runs,omitempty"`
+	RunSelection         *runner.RunSelection `json:"run_selection,omitempty"`
 	System               systemStatus         `json:"system,omitempty"`
 }
 
@@ -150,7 +151,7 @@ func (s *Server) runCommand(r *http.Request, cmd runnerCommandPayload) (RunnerCo
 	if err != nil {
 		return RunnerCommandResponse{}, err
 	}
-	project, err := s.runnableProjectForCommand(r.Context(), issue.ProjectID)
+	project, selection, err := s.runnableProjectForCommand(r.Context(), issue)
 	if err != nil {
 		return RunnerCommandResponse{}, err
 	}
@@ -160,7 +161,10 @@ func (s *Server) runCommand(r *http.Request, cmd runnerCommandPayload) (RunnerCo
 	}
 	s.recordIssueEvent(r, issue.ID, "issue.status_changed", map[string]string{"status": store.StatusTodo})
 	s.kickAutoProject(r, updated.ProjectID)
-	return RunnerCommandResponse{Command: cmd, Issue: &updated, Project: &project, Summary: fmt.Sprintf("enqueued issue #%d as %s", updated.ID, updated.Status)}, nil
+	return RunnerCommandResponse{
+		Command: cmd, Issue: &updated, Project: &project, RunSelection: &selection,
+		Summary: fmt.Sprintf("enqueued issue #%d as %s", updated.ID, updated.Status),
+	}, nil
 }
 
 func (s *Server) projectForCommand(ctx context.Context, projectID string) (store.Project, error) {
@@ -173,21 +177,16 @@ func (s *Server) projectForCommand(ctx context.Context, projectID string) (store
 	return project, nil
 }
 
-func (s *Server) runnableProjectForCommand(ctx context.Context, projectID string) (store.Project, error) {
-	project, err := s.projectForCommand(ctx, projectID)
+func (s *Server) runnableProjectForCommand(ctx context.Context, issue store.Issue) (store.Project, runner.RunSelection, error) {
+	project, err := s.projectForCommand(ctx, issue.ProjectID)
 	if err != nil {
-		return store.Project{}, err
+		return store.Project{}, runner.RunSelection{}, err
 	}
-	if project.Provider != store.ProviderCodex {
-		return store.Project{}, commandBadRequest("project " + project.ID + " provider \"" + project.Provider + "\" 暂不支持，当前只支持 codex")
+	selection, err := s.runner.ResolveIssueRunSelection(ctx, issue)
+	if err != nil {
+		return store.Project{}, runner.RunSelection{}, commandBadRequest(err.Error())
 	}
-	if project.Hold != nil {
-		return store.Project{}, commandBadRequest("project " + project.ID + " 处于 hold 状态: " + project.Hold.Message)
-	}
-	if err := s.runner.EnsureCleanWorktree(ctx, project.CWD); err != nil {
-		return store.Project{}, commandBadRequest(err.Error())
-	}
-	return project, nil
+	return project, selection, nil
 }
 
 func issueCommandDescription(req runnerCommandRequest, cmd runnerCommandPayload) string {

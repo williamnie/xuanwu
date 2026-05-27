@@ -306,8 +306,12 @@ func TestRecoveryIgnoresInterruptedStatusChangeRun(t *testing.T) {
 
 func TestRunnerCommandStatusIssueAndRunFlow(t *testing.T) {
 	srv := newTestServer(t)
+	postJSON[store.AgentProfile](t, srv, "/api/agent-profiles", map[string]any{
+		"id": "nightly", "name": "Nightly Codex", "provider": "codex",
+	})
 	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
 		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+		"default_agent_profile_id": "nightly",
 	})
 	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
 		"project_id": project.ID, "title": "Command target", "description": "Do it", "status": store.StatusTriage,
@@ -337,6 +341,36 @@ func TestRunnerCommandStatusIssueAndRunFlow(t *testing.T) {
 	})
 	if run.Issue == nil || run.Issue.Status != store.StatusTodo {
 		t.Fatalf("run command should enqueue issue: %+v", run)
+	}
+	if run.RunSelection == nil || run.RunSelection.ProfileID != "nightly" ||
+		run.RunSelection.ProviderID != store.ProviderCodex ||
+		run.RunSelection.SelectionReason != "project_default" {
+		t.Fatalf("run command should return dispatcher metadata: %+v", run.RunSelection)
+	}
+}
+
+func TestRunnerCommandRunRejectsUnavailableProfileProvider(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.AgentProfile](t, srv, "/api/agent-profiles", map[string]any{
+		"id": "fake", "name": "Fake", "provider": agent.ProviderFakeExecutionOnly,
+	})
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+		"default_agent_profile_id": "fake",
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "Needs fake provider", "status": store.StatusTriage,
+	})
+
+	body := postRunnerCommandFailure(t, srv, map[string]any{
+		"command": map[string]any{"name": "run", "args": map[string]any{"issue_id": issue.ID, "confirmed": true}},
+	})
+	if !strings.Contains(body, agent.ProviderFakeExecutionOnly) || !strings.Contains(body, "当前 runner 未注册") {
+		t.Fatalf("run command should expose dispatcher provider error: %s", body)
+	}
+	unchanged := getJSON[store.Issue](t, srv, "/api/issues/1")
+	if unchanged.Status != store.StatusTriage {
+		t.Fatalf("dispatcher preflight must not enqueue issue: %+v", unchanged)
 	}
 }
 

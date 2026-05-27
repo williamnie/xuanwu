@@ -89,17 +89,17 @@ func (r *Runner) StartProject(projectID string) error {
 }
 
 func (r *Runner) ensureRunnableProjectProvider(project store.Project) error {
-	if project.Provider == "" || project.Provider == r.agent.Name() {
+	if project.Provider == "" || project.Provider == r.providerID() {
 		return r.requireCapability(agent.CapabilityIssueExecution)
 	}
-	return providerMismatchError(project, r.agent.Name())
+	return providerMismatchError(project, r.providerID())
 }
 
 func (r *Runner) ensureSessionProjectProvider(project store.Project) error {
-	if project.Provider == "" || project.Provider == r.agent.Name() {
+	if project.Provider == "" || project.Provider == r.providerID() {
 		return r.requireCapability(agent.CapabilitySessions)
 	}
-	return providerMismatchError(project, r.agent.Name())
+	return providerMismatchError(project, r.providerID())
 }
 
 func providerMismatchError(project store.Project, activeProvider string) error {

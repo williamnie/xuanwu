@@ -128,6 +128,7 @@ type Issue struct {
 	Priority        int       `json:"priority"`
 	TemplateID      string    `json:"template_id"`
 	PromptTemplate  string    `json:"prompt_template"`
+	AgentProfileID  string    `json:"agent_profile_id"`
 	SourceSessionID string    `json:"source_session_id"`
 	SourceTurnID    string    `json:"source_turn_id"`
 	SourceExcerpt   string    `json:"source_excerpt"`
@@ -158,6 +159,8 @@ type IssueRun struct {
 	ExitReason        string `json:"exit_reason"`
 	Error             string `json:"error"`
 	AgentProfileID    string `json:"agent_profile_id"`
+	CapabilitySummary string `json:"capability_summary"`
+	SelectionReason   string `json:"selection_reason"`
 }
 
 type IssuePatch struct {
@@ -165,6 +168,7 @@ type IssuePatch struct {
 	Description     *string `json:"description"`
 	Status          *string `json:"status"`
 	Priority        *int    `json:"priority"`
+	AgentProfileID  *string `json:"agent_profile_id"`
 	CodexThreadID   *string `json:"codex_thread_id"`
 	CodexTurnID     *string `json:"codex_turn_id"`
 	AutoRetryNextAt *string `json:"auto_retry_next_at"`

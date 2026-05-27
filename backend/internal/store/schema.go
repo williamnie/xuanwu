@@ -53,6 +53,7 @@ create table if not exists issues (
   priority integer not null default 0,
   template_id text not null default '',
   prompt_template text not null default '',
+  agent_profile_id text not null default '',
   source_session_id text not null default '',
   source_turn_id text not null default '',
   source_excerpt text not null default '',
@@ -93,6 +94,8 @@ create table if not exists issue_runs (
   exit_reason text not null default '',
   error text not null default '',
   agent_profile_id text not null default '',
+  capability_summary text not null default '',
+  selection_reason text not null default '',
   foreign key(issue_id) references issues(id) on delete cascade
 );`
 

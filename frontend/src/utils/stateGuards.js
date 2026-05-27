@@ -24,6 +24,7 @@ const ISSUE_FIELDS = [
   'priority',
   'template_id',
   'prompt_template',
+  'agent_profile_id',
   'source_session_id',
   'source_turn_id',
   'source_excerpt',

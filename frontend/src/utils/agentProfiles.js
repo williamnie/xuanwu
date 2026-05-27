@@ -72,12 +72,37 @@ export function summarizeAgentProfile(profile) {
   return parts.join(' · ');
 }
 
-export function issueRunProfileLabel(run, project) {
-  const id = run?.agent_profile_id || project?.default_agent_profile_id || DEFAULT_PROFILE_ID;
+export function issueRunProfileLabel(run, project, profiles = []) {
+  const hasRun = Boolean(run && (run.id || run.selection_reason || run.agent_profile_id !== undefined));
+  const id = run?.agent_profile_id || (!hasRun ? project?.default_agent_profile_id : DEFAULT_PROFILE_ID);
   if (!id) return '未配置';
   const profile = project?.default_agent_profile;
   if (profile?.id === id && profile?.name) return `${profile.name} (${id})`;
+  const listedProfile = Array.isArray(profiles) ? profiles.find(item => item?.id === id) : null;
+  if (listedProfile?.name) return `${listedProfile.name} (${id})`;
   return id;
+}
+
+export function runSelectionReasonLabel(reason) {
+  switch (String(reason || '').trim()) {
+    case 'issue_override':
+      return 'Issue override';
+    case 'project_default':
+      return 'Project default';
+    case 'provider_default':
+      return 'Provider default';
+    default:
+      return reason || '未记录';
+  }
+}
+
+export function runCapabilitySummary(run) {
+  if (Array.isArray(run?.capabilities) && run.capabilities.length > 0) {
+    return run.capabilities.join(', ');
+  }
+  const summary = String(run?.capability_summary || '').trim();
+  if (!summary) return '未记录';
+  return summary.split(',').map(item => item.trim()).filter(Boolean).join(', ');
 }
 
 function cleanIntents(values) {

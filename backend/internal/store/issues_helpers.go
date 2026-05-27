@@ -24,6 +24,9 @@ func applyIssuePatch(i *Issue, patch IssuePatch) {
 	if patch.Priority != nil {
 		i.Priority = *patch.Priority
 	}
+	if patch.AgentProfileID != nil {
+		i.AgentProfileID = normalizeIdentifier(*patch.AgentProfileID)
+	}
 	if patch.CodexThreadID != nil {
 		i.CodexThreadID = *patch.CodexThreadID
 	}
@@ -64,6 +67,7 @@ func selectNextIssueID(ctx context.Context, tx *sql.Tx, projectID, dueAt string)
 func normalizeIssueForCreate(issue *Issue) error {
 	issue.Title = strings.TrimSpace(issue.Title)
 	issue.Description = strings.TrimSpace(issue.Description)
+	issue.AgentProfileID = normalizeIdentifier(issue.AgentProfileID)
 	issue.SourceSessionID = normalizeIssueSourceSessionID(issue.SourceSessionID)
 	issue.SourceTurnID = strings.TrimSpace(issue.SourceTurnID)
 	issue.SourceExcerpt = strings.TrimSpace(issue.SourceExcerpt)

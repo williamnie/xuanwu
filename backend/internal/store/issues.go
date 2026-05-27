@@ -41,11 +41,11 @@ func (s *Store) CreateIssue(ctx context.Context, i Issue) (Issue, error) {
 	}
 	_, err := s.db.ExecContext(ctx, `insert into issues
 		(project_id, title, description, status, priority, template_id,
-		prompt_template, source_session_id, source_turn_id, source_excerpt,
+		prompt_template, agent_profile_id, source_session_id, source_turn_id, source_excerpt,
 		created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		i.ProjectID, i.Title, i.Description, i.Status, i.Priority,
-		i.TemplateID, i.PromptTemplate, i.SourceSessionID, i.SourceTurnID,
+		i.TemplateID, i.PromptTemplate, i.AgentProfileID, i.SourceSessionID, i.SourceTurnID,
 		i.SourceExcerpt, t, t)
 	if err != nil {
 		return Issue{}, err
@@ -77,9 +77,9 @@ func (s *Store) UpdateIssue(ctx context.Context, id int64, patch IssuePatch) (Is
 		i.AutoRetryReason = ""
 	}
 	_, err = s.db.ExecContext(ctx, `update issues set title=?, description=?, status=?,
-		priority=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
+		priority=?, agent_profile_id=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
 		auto_retry_reason=?, error=?, updated_at=? where id=?`,
-		i.Title, i.Description, i.Status, i.Priority, i.CodexThreadID,
+		i.Title, i.Description, i.Status, i.Priority, i.AgentProfileID, i.CodexThreadID,
 		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, now(), id)
 	if err != nil {
 		return Issue{}, err
@@ -117,9 +117,9 @@ func (s *Store) UpdateIssueAndCloseRun(ctx context.Context, req IssueRunClosePat
 		i.AutoRetryReason = ""
 	}
 	_, err = s.db.ExecContext(ctx, `update issues set title=?, description=?, status=?,
-		priority=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
+		priority=?, agent_profile_id=?, codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?,
 		auto_retry_reason=?, error=?, updated_at=? where id=?`,
-		i.Title, i.Description, i.Status, i.Priority, i.CodexThreadID,
+		i.Title, i.Description, i.Status, i.Priority, i.AgentProfileID, i.CodexThreadID,
 		i.CodexTurnID, i.AutoRetryNextAt, i.AutoRetryReason, i.Error, now(), id)
 	if err != nil {
 		return Issue{}, err
@@ -266,7 +266,7 @@ func issueListQuery(f IssueFilter) (string, []any) {
 }
 
 const issueSelect = `select id, project_id, title, description, status, priority,
-	template_id, prompt_template, source_session_id, source_turn_id, source_excerpt,
+	template_id, prompt_template, agent_profile_id, source_session_id, source_turn_id, source_excerpt,
 	codex_thread_id, codex_turn_id, attempt_count,
 	(select count(*) from issue_events where issue_id=issues.id and type='issue.comment') as comment_count,
 	auto_retry_next_at, auto_retry_reason, error, created_at, updated_at from issues`
@@ -276,7 +276,7 @@ func issueSelectWithAlias(alias string) string {
 	return `select ` + prefix + `id, ` + prefix + `project_id, ` + prefix + `title,
 		` + prefix + `description, ` + prefix + `status, ` + prefix + `priority,
 		` + prefix + `template_id, ` + prefix + `prompt_template,
-		` + prefix + `source_session_id, ` + prefix + `source_turn_id,
+		` + prefix + `agent_profile_id, ` + prefix + `source_session_id, ` + prefix + `source_turn_id,
 		` + prefix + `source_excerpt, ` + prefix + `codex_thread_id, ` + prefix + `codex_turn_id,
 		` + prefix + `attempt_count, (select count(*) from issue_events
 		where issue_id=` + prefix + `id and type='issue.comment') as comment_count,
