@@ -259,11 +259,8 @@ function ComposerActions({
     return (
       <>
         {modeSwitch}
-        <button type="button" className="session-composer-circle secondary" onClick={onStop} disabled={!selectedId || interrupting} title={interrupting ? '正在中断...' : '停止'}>
+        <button type="button" className="session-composer-circle" onClick={onStop} disabled={!selectedId || interrupting} title={interrupting ? '正在中断...' : '停止'}>
           {interrupting ? <Loader2 className="animate-spin" size={14} /> : <Square size={14} fill="currentColor" />}
-        </button>
-        <button className="session-composer-circle" disabled={!selectedId || !canSend || sending || interrupting} title={followMode ? '引导当前响应；⌘↵ 排队' : '排队为下一条消息；⌘↵ 引导'}>
-          {sending ? <Loader2 className="animate-spin" size={17} /> : <ArrowUp size={18} strokeWidth={2.4} />}
         </button>
       </>
     );
