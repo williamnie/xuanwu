@@ -794,6 +794,10 @@
   align-self: flex-start;
 }
 
+.chat-bubble-container.agent.streaming {
+  width: 85%;
+}
+
 .chat-bubble-avatar {
   width: 28px;
   height: 28px;
