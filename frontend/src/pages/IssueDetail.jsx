@@ -35,7 +35,9 @@ import {
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
 import {
-  REFINEMENT_FIELDS,
+  REFINEMENT_RECOMMENDATION_FIELDS,
+  REFINEMENT_SPEC_FIELDS,
+  deriveExecutionRecommendation,
   deriveTriageReadiness,
   parseIssueRefinement,
   refinementDraftToIssueRefinement,
@@ -136,6 +138,25 @@ function sameIssueRuns(current = [], next = []) {
   return current.every((run, index) => issueRunSignature(run) === issueRunSignature(next[index]));
 }
 
+function sameAgentProfiles(current = [], next = []) {
+  if (current === next) return true;
+  if (!Array.isArray(current) || !Array.isArray(next)) return false;
+  if (current.length !== next.length) return false;
+  return current.every((profile, index) => agentProfileSignature(profile) === agentProfileSignature(next[index]));
+}
+
+function agentProfileSignature(profile) {
+  return [
+    profile?.id,
+    profile?.name,
+    profile?.provider,
+    profile?.model,
+    profile?.reasoning_effort,
+    profile?.approval_policy,
+    profile?.sandbox,
+  ].join('\u001f');
+}
+
 function issueRunSignature(run) {
   return [
     run?.id,
@@ -194,10 +215,11 @@ export default function IssueDetail({ issueId, navigateTo }) {
     project: null,
     events: [],
     runs: [],
+    profiles: [],
     loading: true,
     error: null,
   });
-  const { issue, project, events, runs, loading, error } = detailState;
+  const { issue, project, events, runs, profiles, loading, error } = detailState;
 
   // 只滚动终端自己的滚动容器，避免把整个详情页抢到最底部。
   const terminalRef = useRef(null);
@@ -210,6 +232,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
       let projData = null;
       let eventList = [];
       let runList = [];
+      let profileList = [];
 
       if (issueData) {
         // 加载关联项目
@@ -231,6 +254,12 @@ export default function IssueDetail({ issueId, navigateTo }) {
         } catch (e) {
           console.error('获取运行历史失败:', e);
         }
+
+        try {
+          profileList = await api.getAgentProfiles();
+        } catch (e) {
+          console.error('获取 Agent Profiles 失败:', e);
+        }
       }
 
       updateDetailState(draft => {
@@ -245,6 +274,9 @@ export default function IssueDetail({ issueId, navigateTo }) {
         }
         if (!sameIssueRuns(draft.runs, runList || [])) {
           draft.runs = runList || [];
+        }
+        if (!sameAgentProfiles(draft.profiles, profileList || [])) {
+          draft.profiles = profileList || [];
         }
         if (draft.error !== null) {
           draft.error = null;
@@ -489,6 +521,7 @@ ${error}` : error;
   const refinement = parsedDescription.refinement;
   const commentEvents = events.filter(event => event.type === 'issue.comment');
   const triageReadiness = deriveTriageReadiness({ issue, refinement, commentEvents });
+  const executionRecommendation = deriveExecutionRecommendation({ refinement, project, profiles });
   const autoRetryPayload = latestAutoRetryEvent(events);
   const autoRetryNextAt = issue.auto_retry_next_at || autoRetryPayload?.next_retry_at || '';
   const autoRetryReason = issue.auto_retry_reason || autoRetryPayload?.reason || '';
@@ -739,6 +772,7 @@ ${error}` : error;
           <IssueRefinement
             issue={issue}
             refinement={refinement}
+            recommendation={executionRecommendation}
             readiness={triageReadiness}
             onEdit={() => setIsEditModalOpen(true)}
             onMoveToTodo={handleMoveToTodo}
@@ -965,7 +999,7 @@ ${error}` : error;
   );
 }
 
-function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo, onGenerateDraft, draftError, draftGenerating }) {
+function IssueRefinement({ issue, refinement, recommendation, readiness, onEdit, onMoveToTodo, onGenerateDraft, draftError, draftGenerating }) {
   const canEdit = canEditIssue(issue);
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -990,10 +1024,16 @@ function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo, o
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-        {REFINEMENT_FIELDS.map(field => (
+        {REFINEMENT_SPEC_FIELDS.map(field => (
           <RefinementItem key={field.id} label={field.label} value={refinement[field.id]} />
         ))}
       </div>
+
+      <ExecutionRecommendation
+        recommendation={recommendation}
+        canEdit={canEdit}
+        onEdit={onEdit}
+      />
 
       {canEdit && (
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -1012,6 +1052,46 @@ function IssueRefinement({ issue, refinement, readiness, onEdit, onMoveToTodo, o
         <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.8rem' }}>
           {draftError}
         </div>
+      )}
+    </section>
+  );
+}
+
+function ExecutionRecommendation({ recommendation, canEdit, onEdit }) {
+  if (!recommendation) {
+    return (
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+        暂无 profile/provider 推荐；可生成 PI Agent draft 或手工编辑补充。
+      </div>
+    );
+  }
+  return (
+    <section style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(59,130,246,0.06)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <h4 style={{ fontSize: '0.98rem', fontWeight: 700 }}>Execution recommendation</h4>
+        {recommendation.riskLevel && (
+          <span className="triage-readiness-badge refined">Risk: {recommendation.riskLevel}</span>
+        )}
+      </div>
+      {recommendation.warnings?.length > 0 && (
+        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {recommendation.warnings.map(warning => (
+            <span key={warning}><AlertTriangle size={13} /> {warning}</span>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+        {REFINEMENT_RECOMMENDATION_FIELDS.map(field => (
+          <RefinementItem key={field.id} label={field.label} value={recommendation[field.id]} />
+        ))}
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
+        这里只保存建议，不会自动执行 provider、不改 issue 状态；用户可确认、覆盖或忽略。
+      </p>
+      {canEdit && (
+        <button className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={onEdit}>
+          <Pencil size={14} /> 确认 / 覆盖推荐
+        </button>
       )}
     </section>
   );

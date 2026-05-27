@@ -2,13 +2,21 @@ export const REFINEMENT_START = '<!-- codex-refinement:start -->';
 export const REFINEMENT_END = '<!-- codex-refinement:end -->';
 
 export const REFINEMENT_FIELDS = [
-  { id: 'problem', label: 'Problem' },
-  { id: 'context', label: 'Context / impacted files' },
-  { id: 'acceptanceCriteria', label: 'Acceptance criteria' },
-  { id: 'verificationPlan', label: 'Verification plan' },
-  { id: 'nonGoals', label: 'Non-goals' },
-  { id: 'risks', label: 'Risks / questions' },
+  { id: 'problem', label: 'Problem', group: 'spec' },
+  { id: 'context', label: 'Context / impacted files', group: 'spec' },
+  { id: 'acceptanceCriteria', label: 'Acceptance criteria', group: 'spec' },
+  { id: 'verificationPlan', label: 'Verification plan', group: 'spec' },
+  { id: 'nonGoals', label: 'Non-goals', group: 'spec' },
+  { id: 'risks', label: 'Risks / questions', group: 'spec' },
+  { id: 'recommendedProfile', label: 'Recommended profile', group: 'recommendation' },
+  { id: 'recommendedProvider', label: 'Recommended provider', group: 'recommendation' },
+  { id: 'riskLevel', label: 'Risk level', group: 'recommendation' },
+  { id: 'recommendationReasoning', label: 'Reasoning / why this profile fits', group: 'recommendation' },
+  { id: 'needsHumanConfirmation', label: 'Needs human confirmation', group: 'recommendation' },
 ];
+
+export const REFINEMENT_SPEC_FIELDS = REFINEMENT_FIELDS.filter(field => field.group === 'spec');
+export const REFINEMENT_RECOMMENDATION_FIELDS = REFINEMENT_FIELDS.filter(field => field.group === 'recommendation');
 
 export function emptyIssueRefinement() {
   return Object.fromEntries(REFINEMENT_FIELDS.map(field => [field.id, '']));
@@ -91,7 +99,23 @@ export function refinementDraftToIssueRefinement(draft) {
     verificationPlan: draft?.verificationPlan ?? draft?.verification_plan,
     nonGoals: draft?.nonGoals ?? draft?.non_goals,
     risks: draft?.risks ?? draft?.risksQuestions ?? draft?.risks_questions,
+    recommendedProfile: draft?.recommendedProfile ?? draft?.recommended_profile,
+    recommendedProvider: draft?.recommendedProvider ?? draft?.recommended_provider,
+    riskLevel: draft?.riskLevel ?? draft?.risk_level,
+    recommendationReasoning: draft?.recommendationReasoning ??
+      draft?.recommendation_reasoning ?? draft?.whyThisProfileFits ?? draft?.why_this_profile_fits,
+    needsHumanConfirmation: normalizeHumanConfirmation(
+      draft?.needsHumanConfirmation ?? draft?.needs_human_confirmation
+    ),
   });
+}
+
+export function deriveExecutionRecommendation({ refinement, project, profiles } = {}) {
+  const cleanRefinement = normalizeRefinement(refinement);
+  const hasRecommendation = REFINEMENT_RECOMMENDATION_FIELDS.some(field => cleanRefinement[field.id]);
+  if (!hasRecommendation) return null;
+  const warnings = recommendationWarnings(cleanRefinement, project, profiles);
+  return { ...cleanRefinement, warnings, ok: warnings.length === 0 };
 }
 
 function parseRefinementBlock(block) {
@@ -123,7 +147,9 @@ function buildRefinementBlock(refinement) {
 function normalizeRefinement(refinement) {
   const clean = emptyIssueRefinement();
   for (const field of REFINEMENT_FIELDS) {
-    clean[field.id] = cleanText(refinement?.[field.id]);
+    clean[field.id] = field.id === 'needsHumanConfirmation'
+      ? normalizeHumanConfirmation(refinement?.[field.id])
+      : cleanText(refinement?.[field.id]);
   }
   return clean;
 }
@@ -166,4 +192,34 @@ function cleanText(value) {
 
 function normalizeLabel(value) {
   return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+}
+
+function recommendationWarnings(refinement, project, profiles) {
+  const warnings = [];
+  const provider = cleanText(refinement.recommendedProvider);
+  const projectProvider = cleanText(project?.provider || 'codex').toLowerCase();
+  if (provider && provider.toLowerCase() !== projectProvider) {
+    warnings.push(`推荐 provider "${provider}" 当前未绑定到本项目，只能作为建议保存。`);
+  }
+  const profile = cleanText(refinement.recommendedProfile);
+  if (profile && !matchesExistingProfile(profile, profiles)) {
+    warnings.push(`推荐 profile "${profile}" 未在 Agent Profiles 中找到，只能作为建议保存。`);
+  }
+  return warnings;
+}
+
+function matchesExistingProfile(value, profiles) {
+  const lookup = normalizeLookup(value);
+  return Array.isArray(profiles) && profiles.some(profile =>
+    normalizeLookup(profile?.id) === lookup || normalizeLookup(profile?.name) === lookup
+  );
+}
+
+function normalizeLookup(value) {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9_-]+/g, '');
+}
+
+function normalizeHumanConfirmation(value) {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  return cleanText(value);
 }

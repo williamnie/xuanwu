@@ -14,8 +14,12 @@ import (
 func TestIssueRefinementDraftAPIKeepsIssueInTriageAndDoesNotOverwriteDescription(t *testing.T) {
 	provider := &refinementDraftAPICodex{events: make(chan agent.Event, 4)}
 	srv := newTestServerWithCodex(t, provider)
+	postJSON[store.AgentProfile](t, srv, "/api/agent-profiles", map[string]any{
+		"id": "codex-dev", "name": "Codex Dev", "provider": "codex",
+	})
 	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
 		"id": "demo", "name": "Demo", "cwd": t.TempDir(), "auto_run": 0,
+		"default_agent_profile_id": "codex-dev",
 	})
 	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
 		"project_id": "demo", "title": "Draft me", "description": "原始描述", "status": "triage",
@@ -28,6 +32,9 @@ func TestIssueRefinementDraftAPIKeepsIssueInTriageAndDoesNotOverwriteDescription
 	if result.Draft.AcceptanceCriteria == "" || result.Draft.VerificationPlan == "" {
 		t.Fatalf("draft missing ready fields: %+v", result.Draft)
 	}
+	if result.Draft.RecommendedProfile != "codex-dev" || result.Draft.RecommendedProvider != "codex" {
+		t.Fatalf("draft missing recommendation fields: %+v", result.Draft)
+	}
 	issue := getJSON[store.Issue](t, srv, "/api/issues/1")
 	if issue.Status != store.StatusTriage || issue.Description != "原始描述" {
 		t.Fatalf("draft API must not mutate issue: %+v", issue)
@@ -36,7 +43,13 @@ func TestIssueRefinementDraftAPIKeepsIssueInTriageAndDoesNotOverwriteDescription
 		t.Fatalf("PI Agent must be read-only/always: %+v", provider.threadInput)
 	}
 	prompt := apiUserInputText(provider.turnInput)
-	for _, want := range []string{"Do not update issue status", "Do not execute shell commands", "需要验收标准和验证计划"} {
+	for _, want := range []string{
+		"Do not update issue status",
+		"Do not execute shell commands",
+		"Recommended provider/profile are advisory only",
+		"codex-dev · Codex Dev",
+		"需要验收标准和验证计划",
+	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, prompt)
 		}
@@ -59,7 +72,8 @@ func (f *refinementDraftAPICodex) StartTurn(_ context.Context, threadID string, 
 	f.turnInput = input
 	go func() {
 		f.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: "turn-draft", Text: `{"problem":"整理需求","context":"frontend/src/pages/IssueDetail.jsx",`}
-		f.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: "turn-draft", Text: `"acceptanceCriteria":"- 入口可见","verificationPlan":"- npm --prefix frontend run build","nonGoals":"不自动 todo","risks":"无"}`}
+		f.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: "turn-draft", Text: `"acceptanceCriteria":"- 入口可见","verificationPlan":"- npm --prefix frontend run build","nonGoals":"不自动 todo","risks":"无",`}
+		f.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: "turn-draft", Text: `"recommendedProfile":"codex-dev","recommendedProvider":"codex","riskLevel":"Low","recommendationReasoning":"默认 Codex profile 可执行","needsHumanConfirmation":"Yes"}`}
 		f.events <- agent.Event{Type: events.AgentTurnCompleted, Method: "turn/completed", ThreadID: threadID, TurnID: "turn-draft", Status: "completed"}
 	}()
 	return "turn-draft", nil

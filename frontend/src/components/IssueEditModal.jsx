@@ -9,7 +9,8 @@ import {
   validateIssueDraft,
 } from '../utils/issueEdit';
 import {
-  REFINEMENT_FIELDS,
+  REFINEMENT_RECOMMENDATION_FIELDS,
+  REFINEMENT_SPEC_FIELDS,
   issueRefinementReadiness,
 } from '../utils/issueRefinement';
 
@@ -152,21 +153,32 @@ function RefinementFields({ draft, onChange }) {
           Ready 条件：至少补齐 {readiness.missing.join('、')}。
         </div>
       )}
-      {REFINEMENT_FIELDS.map(field => (
-        <div className="form-group" key={field.id}>
-          <label>{field.label}</label>
-          <textarea
-            className="form-control"
-            value={draft?.[field.id] || ''}
-            rows={field.id === 'context' ? 3 : 2}
-            onChange={(event) => onChange(field.id, event.target.value)}
-            placeholder={refinementPlaceholder(field.id)}
-            style={{ resize: 'vertical' }}
-          />
-        </div>
-      ))}
+      <RefinementFieldGroup fields={REFINEMENT_SPEC_FIELDS} draft={draft} onChange={onChange} />
+      <div>
+        <label style={{ display: 'block', marginBottom: '4px' }}>Execution recommendation</label>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
+          只保存 PI Agent 推荐，不会自动选择 provider/profile 或改变 issue 状态。
+        </p>
+      </div>
+      <RefinementFieldGroup fields={REFINEMENT_RECOMMENDATION_FIELDS} draft={draft} onChange={onChange} />
     </section>
   );
+}
+
+function RefinementFieldGroup({ fields, draft, onChange }) {
+  return fields.map(field => (
+    <div className="form-group" key={field.id}>
+      <label>{field.label}</label>
+      <textarea
+        className="form-control"
+        value={draft?.[field.id] || ''}
+        rows={field.id === 'context' || field.id === 'recommendationReasoning' ? 3 : 2}
+        onChange={(event) => onChange(field.id, event.target.value)}
+        placeholder={refinementPlaceholder(field.id)}
+        style={{ resize: 'vertical' }}
+      />
+    </div>
+  ));
 }
 
 function refinementPlaceholder(field) {
@@ -177,6 +189,11 @@ function refinementPlaceholder(field) {
     verificationPlan: '最小验证命令或手工验证步骤，一行一条。',
     nonGoals: '明确不做的范围，避免执行时扩大。',
     risks: '风险、待澄清问题或阻塞条件。',
+    recommendedProfile: '例如 codex-dev / readonly-verifier；不存在则标注为建议。',
+    recommendedProvider: '例如 codex；未接入 provider 只能作为建议，不可假装可用。',
+    riskLevel: 'Low / Medium / High。',
+    recommendationReasoning: '为什么这个 profile/provider 适合该任务。',
+    needsHumanConfirmation: 'Yes / No；默认推荐 Yes。',
   };
   return placeholders[field] || '';
 }

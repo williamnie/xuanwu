@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  deriveExecutionRecommendation,
   deriveTriageReadiness,
   issueRefinementReadiness,
   parseIssueRefinement,
@@ -17,6 +18,11 @@ test('refinement draft maps API fields into editable refinement fields', () => {
     verificationPlan: '- npm --prefix frontend run build',
     nonGoals: '不自动 todo',
     risks: '需要用户确认',
+    recommendedProfile: 'codex-dev',
+    recommendedProvider: 'codex',
+    riskLevel: 'Medium',
+    recommendationReasoning: 'Codex 已是生产执行 provider',
+    needsHumanConfirmation: true,
   }), {
     problem: '当前问题',
     context: 'frontend/src/pages/IssueDetail.jsx',
@@ -24,6 +30,11 @@ test('refinement draft maps API fields into editable refinement fields', () => {
     verificationPlan: '- npm --prefix frontend run build',
     nonGoals: '不自动 todo',
     risks: '需要用户确认',
+    recommendedProfile: 'codex-dev',
+    recommendedProvider: 'codex',
+    riskLevel: 'Medium',
+    recommendationReasoning: 'Codex 已是生产执行 provider',
+    needsHumanConfirmation: 'Yes',
   });
 });
 
@@ -36,6 +47,54 @@ test('saved generated refinement block remains ready for move-to-todo check', ()
 
   assert.equal(parsed.body, '原始描述');
   assert.equal(issueRefinementReadiness(parsed.refinement).ready, true);
+});
+
+test('refinement block preserves execution recommendation fields', () => {
+  const description = serializeIssueRefinement('原始描述', {
+    recommendedProfile: 'readonly-verifier',
+    recommendedProvider: 'codex',
+    riskLevel: 'Low',
+    recommendationReasoning: '- 只读验证更合适',
+    needsHumanConfirmation: 'Yes',
+  });
+  const parsed = parseIssueRefinement(description);
+
+  assert.equal(parsed.refinement.recommendedProfile, 'readonly-verifier');
+  assert.equal(parsed.refinement.recommendationReasoning, '- 只读验证更合适');
+});
+
+test('execution recommendation warns for unavailable profile or provider', () => {
+  const recommendation = deriveExecutionRecommendation({
+    refinement: {
+      recommendedProfile: 'claude-review',
+      recommendedProvider: 'Claude Code',
+      riskLevel: 'High',
+      recommendationReasoning: '适合 code review',
+      needsHumanConfirmation: 'Yes',
+    },
+    project: { provider: 'codex' },
+    profiles: [{ id: 'codex-dev', name: 'Codex Dev' }],
+  });
+
+  assert.equal(recommendation.ok, false);
+  assert.equal(recommendation.warnings.length, 2);
+});
+
+test('execution recommendation accepts configured project provider and profile', () => {
+  const recommendation = deriveExecutionRecommendation({
+    refinement: {
+      recommendedProfile: 'Codex Dev',
+      recommendedProvider: 'codex',
+      riskLevel: 'Medium',
+      recommendationReasoning: '默认执行画像匹配',
+      needsHumanConfirmation: 'Yes',
+    },
+    project: { provider: 'codex' },
+    profiles: [{ id: 'codex-dev', name: 'Codex Dev' }],
+  });
+
+  assert.equal(recommendation.ok, true);
+  assert.deepEqual(recommendation.warnings, []);
 });
 
 test('triage readiness derives raw from issue without discussion or refinement', () => {

@@ -13,9 +13,12 @@ import (
 
 func TestBuildIssueRefinementDraftPromptIncludesSafetyConstraintsAndDiscussion(t *testing.T) {
 	payload, _ := json.Marshal(map[string]string{"author": "user", "body": "需要保留 triage 状态"})
-	prompt := BuildIssueRefinementDraftPrompt(store.Issue{
-		ID: 86, Status: store.StatusTriage, Title: "PI Agent refinement draft", Description: "原始描述",
-	}, []store.IssueEvent{{Type: "issue.comment", Payload: string(payload)}})
+	prompt := BuildIssueRefinementDraftPrompt(
+		store.Issue{ID: 86, Status: store.StatusTriage, Title: "PI Agent refinement draft", Description: "原始描述"},
+		store.Project{ID: "demo", Provider: store.ProviderCodex, DefaultAgentProfileID: "codex-dev"},
+		[]store.AgentProfile{{ID: "codex-dev", Name: "Codex Dev", Provider: store.ProviderCodex}},
+		[]store.IssueEvent{{Type: "issue.comment", Payload: string(payload)}},
+	)
 
 	for _, want := range []string{
 		"Do not modify code.",
@@ -24,6 +27,9 @@ func TestBuildIssueRefinementDraftPromptIncludesSafetyConstraintsAndDiscussion(t
 		"Return only one JSON object",
 		"acceptanceCriteria",
 		"verificationPlan",
+		"recommendedProfile",
+		"Recommended provider/profile are advisory only",
+		"codex-dev · Codex Dev",
 		"需要保留 triage 状态",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -36,7 +42,9 @@ func TestGenerateIssueRefinementDraftParsesAgentJSON(t *testing.T) {
 	fake := &refinementDraftCodex{fakeCodex: fakeCodex{events: make(chan agent.Event, 4)}}
 	fake.onStartTurn = func(threadID, turnID string) {
 		fake.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: turnID, Text: `{"problem":"p","context":"c",`}
-		fake.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: turnID, Text: `"acceptanceCriteria":"- a","verificationPlan":"- v","nonGoals":"n","risks":"r"}`}
+		fake.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: turnID, Text: `"acceptanceCriteria":"- a","verificationPlan":"- v","nonGoals":"n","risks":"r",`}
+		fake.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: turnID, Text: `"recommendedProfile":"codex-dev","recommendedProvider":"codex","riskLevel":"Medium",`}
+		fake.events <- agent.Event{Type: events.AgentMessageDelta, Method: "item/agentMessage/delta", ThreadID: threadID, TurnID: turnID, Text: `"recommendationReasoning":"fits","needsHumanConfirmation":true}`}
 		fake.events <- agent.Event{Type: events.AgentTurnCompleted, Method: "turn/completed", ThreadID: threadID, TurnID: turnID, Status: "completed"}
 	}
 	r := New(nil, events.NewBus(), fake)
@@ -53,6 +61,10 @@ func TestGenerateIssueRefinementDraftParsesAgentJSON(t *testing.T) {
 	}
 	if result.Draft.AcceptanceCriteria != "- a" || result.Draft.VerificationPlan != "- v" {
 		t.Fatalf("unexpected draft: %+v", result.Draft)
+	}
+	if result.Draft.RecommendedProfile != "codex-dev" ||
+		result.Draft.NeedsHumanConfirmation != "Yes" {
+		t.Fatalf("unexpected recommendation fields: %+v", result.Draft)
 	}
 	if len(fake.threadInputs) != 1 || fake.threadInputs[0].Sandbox != "read-only" || fake.threadInputs[0].ApprovalPolicy != "always" {
 		t.Fatalf("PI Agent must run read-only/always: %+v", fake.threadInputs)

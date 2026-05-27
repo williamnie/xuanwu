@@ -35,8 +35,13 @@ func (s *Server) createIssueRefinementDraft(w http.ResponseWriter, r *http.Reque
 		handleErr(w, err)
 		return
 	}
+	profiles, err := s.store.ListAgentProfiles(r.Context())
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
 	result, err := s.runner.GenerateIssueRefinementDraft(r.Context(), runner.IssueRefinementDraftInput{
-		Issue: issue, Project: project, Events: events,
+		Issue: issue, Project: project, AgentProfiles: profiles, Events: events,
 	})
 	if err != nil {
 		handleErr(w, err)
