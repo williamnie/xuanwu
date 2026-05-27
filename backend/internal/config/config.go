@@ -17,6 +17,7 @@ type Config struct {
 	CodexSessionsDir string
 	AuthToken        string
 	AuthTokenFile    string
+	AllowedOrigins   []string
 	SkipDirtyCheck   bool
 }
 
@@ -40,6 +41,7 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.CodexSessionsDir, "codex-sessions-dir", cfg.CodexSessionsDir, "Codex persisted sessions directory")
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "Bearer token for protected API requests; prefer env or token file to avoid shell history")
 	fs.StringVar(&cfg.AuthTokenFile, "auth-token-file", cfg.AuthTokenFile, "File path for generated or persisted API bearer token")
+	origins := fs.String("allowed-origins", strings.Join(cfg.AllowedOrigins, ","), "Comma-separated allowed browser origins for API/SSE; empty allows local origins only")
 	fs.BoolVar(&cfg.SkipDirtyCheck, "skip-dirty-worktree-check", cfg.SkipDirtyCheck, "Allow issue execution to start when the target git worktree is dirty")
 	codexArgs := fs.String("codex-args", strings.Join(cfg.CodexArgs, " "), "Codex app-server args")
 	if err := fs.Parse(args); err != nil {
@@ -50,6 +52,7 @@ func Parse(args []string) (Config, error) {
 	cfg.OpencodeCmd = strings.TrimSpace(cfg.OpencodeCmd)
 	cfg.AuthToken = strings.TrimSpace(cfg.AuthToken)
 	cfg.AuthTokenFile = strings.TrimSpace(cfg.AuthTokenFile)
+	cfg.AllowedOrigins = splitList(*origins)
 	applyAuthTokenEnv(&cfg)
 	return cfg, nil
 }
@@ -76,6 +79,7 @@ func defaultConfig() Config {
 		OpencodeCmd:      env("CODEX_RUNNER_OPENCODE_CMD", "opencode"),
 		WebDir:           env("CODEX_RUNNER_WEB_DIR", ""),
 		CodexSessionsDir: env("CODEX_RUNNER_CODEX_SESSIONS_DIR", defaultCodexSessionsDir()),
+		AllowedOrigins:   splitList(env("CODEX_RUNNER_ALLOWED_ORIGINS", "")),
 		SkipDirtyCheck:   boolEnv("CODEX_RUNNER_SKIP_DIRTY_WORKTREE_CHECK"),
 	}
 }
@@ -98,4 +102,16 @@ func env(key, fallback string) string {
 func boolEnv(key string) bool {
 	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
 	return value == "1" || value == "true" || value == "yes"
+}
+
+func splitList(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

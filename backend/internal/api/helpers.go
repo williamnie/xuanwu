@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
@@ -36,10 +37,19 @@ func parseIssueID(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
 
-func withCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+func withCORS(w http.ResponseWriter, r *http.Request, allowed []string) bool {
+	origin := r.Header.Get("Origin")
+	if !originAllowed(origin, r.Host, allowed) {
+		writeError(w, http.StatusForbidden, "origin not allowed")
+		return false
+	}
+	if strings.TrimSpace(origin) != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+	}
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
+	return true
 }
 
 func requireMethod(w http.ResponseWriter, r *http.Request, method string) bool {

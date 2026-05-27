@@ -41,6 +41,11 @@ func writeSystemStatus(out io.Writer, status systemStatusDTO, asJSON bool) error
 			return err
 		}
 	}
+	for _, warning := range status.Security.Warnings {
+		if _, err := fmt.Fprintf(out, "warning %s: %s\n", warning.Code, warning.Message); err != nil {
+			return err
+		}
+	}
 	return err
 }
 

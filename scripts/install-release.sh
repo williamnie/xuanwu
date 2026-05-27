@@ -12,6 +12,7 @@ LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
 DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/app.db}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
+ALLOWED_ORIGINS="${CODEX_RUNNER_ALLOWED_ORIGINS:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
@@ -31,6 +32,7 @@ Useful environment variables:
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
   CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
   CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
+  CODEX_RUNNER_ALLOWED_ORIGINS=...     Comma-separated browser origin allowlist
 HELP
 }
 
@@ -146,6 +148,7 @@ write_macos_plist() {
     <string>--codex-cmd</string>
     <string>$(xml_escape "$codex_cmd")</string>
 $(auth_token_file_macos_args)
+$(allowed_origins_macos_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -176,9 +179,24 @@ ARGS
   fi
 }
 
+allowed_origins_macos_args() {
+  if [ -n "$ALLOWED_ORIGINS" ]; then
+    cat <<ARGS
+    <string>--allowed-origins</string>
+    <string>$(xml_escape "$ALLOWED_ORIGINS")</string>
+ARGS
+  fi
+}
+
 auth_token_file_systemd_args() {
   if [ -n "$AUTH_TOKEN_FILE" ]; then
     printf ' --auth-token-file %q' "$AUTH_TOKEN_FILE"
+  fi
+}
+
+allowed_origins_systemd_args() {
+  if [ -n "$ALLOWED_ORIGINS" ]; then
+    printf ' --allowed-origins %q' "$ALLOWED_ORIGINS"
   fi
 }
 
@@ -224,7 +242,7 @@ Type=simple
 WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
-ExecStart=$BIN_PATH serve --addr $ADDR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
+ExecStart=$BIN_PATH serve --addr $ADDR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)$(allowed_origins_systemd_args)
 Restart=always
 RestartSec=2
 

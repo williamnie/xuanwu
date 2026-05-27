@@ -87,6 +87,7 @@ export CODEX_RUNNER_ADDR=0.0.0.0:3018
 export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
 export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
 export CODEX_RUNNER_AUTH_TOKEN=your_custom_token  # 自定义 API 访问令牌 (可选)
+export CODEX_RUNNER_ALLOWED_ORIGINS=https://runner.example.com  # 远程 Web UI / 反代 origin allowlist（可选）
 curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
 ```
 
@@ -144,8 +145,17 @@ CODEX_RUNNER_ADDR=0.0.0.0:3018 \
 CODEX_RUNNER_DEPLOY_DB=/absolute/path/app.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
 CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
+CODEX_RUNNER_ALLOWED_ORIGINS=https://runner.example.com \
 ./deploy.sh
 ```
+
+### 本地 / 远程安全建议
+
+- 本机使用优先监听 `127.0.0.1`；需要局域网或反代时才监听 `0.0.0.0`。
+- 远程访问必须启用 bearer token。默认 token 文件会自动生成在 `data/auth_token` 或 release state dir `auth_token`，权限为 `0600`；不要提交 token 文件，也不要把 token 写入日志、issue 或截图。
+- 浏览器 Origin 默认只允许本机 origin（`localhost` / `127.0.0.1` / `::1`）。远程 Web UI 或反代域名需设置 `CODEX_RUNNER_ALLOWED_ORIGINS` / `--allowed-origins`，不要使用 `*` 作为长期配置。
+- `/health` 免鉴权用于健康检查；`/api/*`、`/api/system/status`、`/api/system/doctor`、SSE `/api/events` 都会走 token / origin 检查。
+- 对公网访问推荐 `127.0.0.1` 绑定 + SSH tunnel / Caddy / nginx 反代并在反代层启用 HTTPS；当前 v1 不自动安装自签 CA / Keychain 信任。
 
 
 ## GitHub Release 发布

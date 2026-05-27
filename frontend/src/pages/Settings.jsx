@@ -153,6 +153,7 @@ function RuntimeStatusBody({ status, loading }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <VersionSummaryCard summary={buildVersionSummary(APP_VERSION, status)} />
+      <SecurityWarnings warnings={status.security?.warnings || []} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
         {rows.map(([label, value, ok]) => (
           <div key={label} style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
@@ -164,6 +165,25 @@ function RuntimeStatusBody({ status, loading }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SecurityWarnings({ warnings }) {
+  if (warnings.length === 0) {
+    return null;
+  }
+  return (
+    <div style={{ border: '1px solid var(--warning)', borderRadius: '14px', padding: '12px', background: 'var(--warning-bg)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+        <AlertTriangle size={16} color="var(--warning)" />
+        安全诊断告警
+      </div>
+      <ul style={{ margin: '8px 0 0 18px', color: 'var(--warning)', fontSize: '0.82rem' }}>
+        {warnings.map(warning => (
+          <li key={warning.code}>{warning.message || warning.code}</li>
+        ))}
+      </ul>
     </div>
   );
 }

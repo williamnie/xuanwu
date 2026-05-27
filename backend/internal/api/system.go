@@ -18,12 +18,14 @@ type SystemConfig struct {
 	OpencodeCmd      string
 	CodexSessionsDir string
 	AuthEnabled      bool
+	AllowedOrigins   []string
 	WebMode          string
 }
 
 type systemStatus struct {
 	Service   systemServiceStatus `json:"service"`
 	Config    systemConfigStatus  `json:"config"`
+	Security  securityStatus      `json:"security"`
 	DB        checkStatus         `json:"db"`
 	Codex     systemCodexStatus   `json:"codex"`
 	Providers []providerStatus    `json:"providers"`
@@ -43,6 +45,7 @@ type systemConfigStatus struct {
 	CodexCmd         string `json:"codex_cmd"`
 	CodexSessionsDir string `json:"codex_sessions_dir"`
 	AuthEnabled      bool   `json:"auth_enabled"`
+	OriginPolicy     string `json:"origin_policy"`
 	WebMode          string `json:"web_mode"`
 }
 
@@ -114,6 +117,7 @@ func (s *Server) SetSystemConfig(cfg SystemConfig) {
 	cfg.ClaudeCmd = strings.TrimSpace(cfg.ClaudeCmd)
 	cfg.OpencodeCmd = strings.TrimSpace(cfg.OpencodeCmd)
 	cfg.CodexSessionsDir = strings.TrimSpace(cfg.CodexSessionsDir)
+	cfg.AllowedOrigins = cleanAllowedOrigins(cfg.AllowedOrigins)
 	cfg.WebMode = strings.TrimSpace(cfg.WebMode)
 	s.systemConfig = cfg
 }
@@ -135,6 +139,7 @@ func (s *Server) buildSystemStatus(ctx context.Context) systemStatus {
 	return systemStatus{
 		Service:   s.serviceStatus(),
 		Config:    configStatus(cfg),
+		Security:  buildSecurityStatus(cfg),
 		DB:        s.dbStatus(ctx),
 		Codex:     codexStatusFromProviders(cfg.CodexCmd, providers),
 		Providers: providers,
@@ -156,7 +161,7 @@ func configStatus(cfg SystemConfig) systemConfigStatus {
 	return systemConfigStatus{
 		Addr: cfg.Addr, DBPath: cfg.DBPath, CodexCmd: cfg.CodexCmd,
 		CodexSessionsDir: cfg.CodexSessionsDir, AuthEnabled: cfg.AuthEnabled,
-		WebMode: cfg.WebMode,
+		OriginPolicy: originPolicyName(cfg.AllowedOrigins), WebMode: cfg.WebMode,
 	}
 }
 

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,6 +65,25 @@ func TestParseDefaultAddrAllowsLANAccess(t *testing.T) {
 	}
 	if cfg.Addr != "0.0.0.0:3008" {
 		t.Fatalf("default addr = %q, want LAN listener", cfg.Addr)
+	}
+}
+
+func TestParseAllowedOriginsFromFlagOrEnv(t *testing.T) {
+	t.Setenv("CODEX_RUNNER_ALLOWED_ORIGINS", "http://localhost:5173, https://trusted.example")
+	cfg, err := Parse(nil)
+	if err != nil {
+		t.Fatalf("parse env: %v", err)
+	}
+	if strings.Join(cfg.AllowedOrigins, "|") != "http://localhost:5173|https://trusted.example" {
+		t.Fatalf("allowed origins from env mismatch: %#v", cfg.AllowedOrigins)
+	}
+
+	flagCfg, err := Parse([]string{"--allowed-origins", "https://ui.example"})
+	if err != nil {
+		t.Fatalf("parse flag: %v", err)
+	}
+	if len(flagCfg.AllowedOrigins) != 1 || flagCfg.AllowedOrigins[0] != "https://ui.example" {
+		t.Fatalf("allowed origins from flag mismatch: %#v", flagCfg.AllowedOrigins)
 	}
 }
 

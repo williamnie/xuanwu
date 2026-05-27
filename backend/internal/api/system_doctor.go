@@ -15,6 +15,7 @@ type runtimeDoctor struct {
 	Service      systemServiceStatus `json:"service"`
 	Listen       doctorListenStatus  `json:"listen"`
 	Auth         doctorAuthStatus    `json:"auth"`
+	Security     securityStatus      `json:"security"`
 	DB           doctorDBStatus      `json:"db"`
 	Runner       systemRunnerStatus  `json:"runner"`
 	Projects     []doctorProject     `json:"projects"`
@@ -86,6 +87,7 @@ func (s *Server) buildRuntimeDoctor(ctx context.Context) runtimeDoctor {
 		Service:      status.Service,
 		Listen:       doctorListenStatus{Addr: status.Config.Addr},
 		Auth:         doctorAuthStatus{Enabled: status.Config.AuthEnabled, CurrentRequestAuthorized: true},
+		Security:     status.Security,
 		DB:           doctorDB(status),
 		Runner:       status.Runner,
 		Projects:     doctorProjects(projects),

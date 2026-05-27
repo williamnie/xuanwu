@@ -15,6 +15,7 @@
 | --- | --- | --- | --- |
 | CLI 路径 | env / serve flag：`CODEX_RUNNER_CODEX_CMD`、`CODEX_RUNNER_CLAUDE_CMD`、`CODEX_RUNNER_OPENCODE_CMD` | 可展示 command 与 resolved path | 非 secret，可用于 doctor/status 复用。 |
 | Runner API token | `CODEX_RUNNER_AUTH_TOKEN` 或 `CODEX_RUNNER_AUTH_TOKEN_FILE`，默认 `data/auth_token` 且 `0600` | 只展示 `auth_enabled` | 不返回 token 内容。 |
+| Browser Origin allowlist | `CODEX_RUNNER_ALLOWED_ORIGINS` 或 `--allowed-origins`，逗号分隔 | 只展示策略名与安全 warning | 默认为本机 origin（`localhost` / `127.0.0.1` / `::1`）可访问；远程 Web UI 需显式加入 origin。 |
 | Provider API key/token | provider 官方 env / 本机登录态 / 后续 Keychain 或本机权限文件 | 只展示 `configured: true/false` | v1 不返回 env var 名称和 secret 值，避免泄露部署细节。 |
 | 默认模型/权限策略 | project DB 或 provider 自身 config | model/approval/sandbox 可展示 | 这些不是 secret，但语义 provider-specific。 |
 | provider raw config | provider 自己的本机配置文件 | v1 不读取 | 后续如读取，只能输出 redacted summary。 |
@@ -46,6 +47,16 @@
 - `secrets.*.configured` 只能是布尔值；不得返回 token/API key 值。
 - v1 不返回 secret source（例如具体 env var 名称），减少 HTTP JSON / DOM 泄露面。
 - `status` 取值：`available` / `missing` / `unknown`。
+- `security.warnings` 可返回 `bind_all_interfaces`、`auth_disabled`、`origin_wildcard` 等非 secret 诊断，不包含 token 文件路径或 token 原文。
+
+## 本地 / 远程安全配置建议
+
+- 本机单人使用优先绑定 `127.0.0.1:3008`；需要局域网或反代时才绑定 `0.0.0.0`。
+- 远程访问必须启用 bearer token。推荐使用默认 token 文件或 `CODEX_RUNNER_AUTH_TOKEN_FILE`，不要把 `data/auth_token` 提交到 Git，也不要把 token 写进 issue、日志或截图。
+- 浏览器 Origin 默认只接受本机 origin；远程 Web UI / 反代域名需设置 `CODEX_RUNNER_ALLOWED_ORIGINS=https://runner.example.com`。不要使用 `*`，除非只做临时隔离测试。
+- `/health` 保持免鉴权用于 supervisor / load balancer；`/api/*`（包括 `/api/system/status`、`/api/system/doctor`、SSE `/api/events`）都应走 token + origin 检查。
+- 对公网或跨机器使用，推荐 `127.0.0.1` 绑定 + SSH tunnel / Caddy / nginx 反代，并在反代层终止 HTTPS；v1 不自动安装自签 CA 或 Keychain 信任。
+- Settings / `system status` / `doctor` 出现 `bind_all_interfaces`、`auth_disabled` 或 `origin_wildcard` 时，先收紧监听地址、启用 token、设置精确 Origin allowlist。
 
 ## 当前 provider 判定
 

@@ -7,6 +7,7 @@ ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$ROOT_DIR/data/app.db}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$(dirname "$DB_PATH")/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
+ALLOWED_ORIGINS="${CODEX_RUNNER_ALLOWED_ORIGINS:-}"
 WEB_DIR="${CODEX_RUNNER_WEB_DIR:-}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$ROOT_DIR/data/bin/codex-issue-runner}"
@@ -51,6 +52,15 @@ auth_token_file_args() {
     cat <<ARGS
     <string>--auth-token-file</string>
     <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+ARGS
+  fi
+}
+
+allowed_origins_args() {
+  if [ -n "$ALLOWED_ORIGINS" ]; then
+    cat <<ARGS
+    <string>--allowed-origins</string>
+    <string>$(xml_escape "$ALLOWED_ORIGINS")</string>
 ARGS
   fi
 }
@@ -102,6 +112,7 @@ cat > "$PLIST" <<PLIST
     <string>$(xml_escape "$CODEX_CMD")</string>
 $(web_dir_args)
 $(auth_token_file_args)
+$(allowed_origins_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>

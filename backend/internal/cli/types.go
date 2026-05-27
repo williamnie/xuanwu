@@ -61,8 +61,12 @@ type systemStatusDTO struct {
 		CodexCmd         string `json:"codex_cmd"`
 		CodexSessionsDir string `json:"codex_sessions_dir"`
 		AuthEnabled      bool   `json:"auth_enabled"`
+		OriginPolicy     string `json:"origin_policy"`
 		WebMode          string `json:"web_mode"`
 	} `json:"config"`
+	Security struct {
+		Warnings []securityWarningDTO `json:"warnings,omitempty"`
+	} `json:"security"`
 	DB struct {
 		OK    bool   `json:"ok"`
 		Error string `json:"error,omitempty"`
@@ -84,6 +88,11 @@ type systemStatusDTO struct {
 		RunningIssues    int `json:"running_issues"`
 		RunningSessions  int `json:"running_sessions"`
 	} `json:"runner"`
+}
+
+type securityWarningDTO struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type providerStatusDTO struct {

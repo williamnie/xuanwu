@@ -115,6 +115,30 @@ func TestSystemDoctorIncludesRuntimeSummaryWithoutTokens(t *testing.T) {
 	assertNoTokenLeak(t, mustMarshalDoctor(t, doctor))
 }
 
+func TestSystemDoctorWarnsOnUnsafeTransportPreflight(t *testing.T) {
+	srv := newTestServer(t)
+	srv.SetSystemConfig(SystemConfig{Addr: "0.0.0.0:3008", AllowedOrigins: []string{"*"}})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/doctor", nil)
+	doctor := decodeResponse[runtimeDoctor](t, srv, req, http.StatusOK)
+
+	assertWarningCode(t, doctor.Security.Warnings, "bind_all_interfaces")
+	assertWarningCode(t, doctor.Security.Warnings, "auth_disabled")
+	assertWarningCode(t, doctor.Security.Warnings, "origin_wildcard")
+}
+
+func TestSystemStatusIncludesSecurityWarnings(t *testing.T) {
+	srv := newTestServer(t)
+	srv.SetSystemConfig(SystemConfig{Addr: "0.0.0.0:3008", AllowedOrigins: []string{"*"}})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	status := decodeResponse[systemStatus](t, srv, req, http.StatusOK)
+
+	assertWarningCode(t, status.Security.Warnings, "bind_all_interfaces")
+	assertWarningCode(t, status.Security.Warnings, "auth_disabled")
+	assertWarningCode(t, status.Security.Warnings, "origin_wildcard")
+}
+
 func seedDoctorData(t *testing.T, srv *Server) {
 	t.Helper()
 	running := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
@@ -175,6 +199,16 @@ func assertDoctorProjectSummary(t *testing.T, doctor runtimeDoctor) {
 	if len(doctor.Providers) == 0 || !hasString(doctor.Providers[0].Capabilities, "issue_execution") {
 		t.Fatalf("doctor provider capabilities missing: %+v", doctor.Providers)
 	}
+}
+
+func assertWarningCode(t *testing.T, warnings []securityWarning, code string) {
+	t.Helper()
+	for _, warning := range warnings {
+		if warning.Code == code {
+			return
+		}
+	}
+	t.Fatalf("missing warning %q in %+v", code, warnings)
 }
 
 func mustMarshalDoctor(t *testing.T, doctor runtimeDoctor) string {

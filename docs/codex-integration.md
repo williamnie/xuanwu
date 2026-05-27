@@ -35,6 +35,7 @@ CODEX_RUNNER_ADDR       默认 0.0.0.0:3008
 CODEX_RUNNER_DB         默认 data/app.db
 CODEX_RUNNER_CODEX_CMD  默认 codex
 CODEX_RUNNER_WEB_DIR    默认空，使用二进制内嵌前端；设置后改为托管外部目录
+CODEX_RUNNER_ALLOWED_ORIGINS 默认空，仅允许本机浏览器 origin；远程 UI 可设逗号分隔 allowlist
 --codex-args            默认 app-server --listen stdio://
 ```
 
@@ -45,6 +46,7 @@ codex-issue-runner serve \
   --addr 0.0.0.0:3008 \
   --db data/app.db \
   --codex-cmd codex \
+  --allowed-origins 'http://127.0.0.1:3008,http://localhost:3008' \
   --codex-args 'app-server --listen stdio://'
 ```
 
@@ -314,6 +316,14 @@ curl -H "Authorization: Bearer $(cat data/auth_token)" http://127.0.0.1:3008/api
 ```
 
 `/api/system/status` 只返回只读健康摘要：API/DB、脱敏后的配置、Codex command 是否存在、runner loop/hold/in_progress 计数；不会返回 token 值，也不会为 status 主动拉起新的 Codex 深度探针。
+
+## 本地 / 远程 transport 安全
+
+- `/health` 免鉴权，供 launchd / systemd / 反代健康检查使用。
+- `/api/*`（包括 `/api/system/status`、`/api/system/doctor`、SSE `/api/events`）属于敏感 API；启用 token 时必须携带 `Authorization: Bearer ...` 或 UI cookie。
+- 默认浏览器 Origin 策略只允许本机 origin（`localhost` / `127.0.0.1` / `::1`）。远程 Web UI 或反代域名需显式配置 `CODEX_RUNNER_ALLOWED_ORIGINS=https://runner.example.com` 或 `--allowed-origins`。
+- 远程访问必须启用 token。推荐保留默认生成的 `data/auth_token` / state dir `auth_token`（权限 `0600`），或用 `CODEX_RUNNER_AUTH_TOKEN_FILE` 指向权限受限文件；不要提交 token 文件。
+- 对公网暴露时优先绑定 `127.0.0.1` 并通过 SSH tunnel、Caddy 或 nginx 反代终止 HTTPS；如必须绑定 `0.0.0.0`，Settings / doctor 会在 `bind_all_interfaces`、`auth_disabled`、`origin_wildcard` 等风险下给出 warning。
 
 ## 排查建议
 

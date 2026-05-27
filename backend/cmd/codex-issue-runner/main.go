@@ -75,7 +75,8 @@ func runServer(args []string) {
 		Addr: cfg.Addr, DBPath: cfg.DBPath, CodexCmd: cfg.CodexCmd,
 		ClaudeCmd: cfg.ClaudeCmd, OpencodeCmd: cfg.OpencodeCmd,
 		CodexSessionsDir: cfg.CodexSessionsDir, AuthEnabled: authToken != "",
-		WebMode: webMode(cfg.WebDir),
+		AllowedOrigins: cfg.AllowedOrigins,
+		WebMode:        webMode(cfg.WebDir),
 	})
 	srv.SetRestartFunc(func() {
 		log.Print("restart requested; exiting for supervisor restart")

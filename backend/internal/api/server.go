@@ -78,13 +78,16 @@ func newWebHandler(webDir string) http.Handler {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	withCORS(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
 	if r.URL.Path == "/health" {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+	allowedOrigins := s.systemConfig.AllowedOrigins
+	if !withCORS(w, r, allowedOrigins) {
+		return
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/") {
