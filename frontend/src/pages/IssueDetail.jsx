@@ -413,6 +413,19 @@ ${error}` : error;
     }
   };
 
+  const handleVerificationReview = async (action) => {
+    const comment = verificationReviewComment(action);
+    if (comment === null) return;
+    try {
+      await api.reviewIssueVerification(issueId, { action, comment });
+      message.success('验证处理已提交');
+      loadIssueData();
+      refreshAllData();
+    } catch (err) {
+      message.error('验证处理失败: ' + err.message);
+    }
+  };
+
   const handleSubmitComment = async (event) => {
     event.preventDefault();
     const body = commentDraft.trim();
@@ -808,8 +821,18 @@ ${error}` : error;
             navigateTo={navigateTo}
             onCopy={handleCopyText}
           />
+
+          {issue.status === 'pending_verification' && (
+            <VerificationReviewPanel
+              evidence={issue.error}
+              onAccept={() => handleVerificationReview('accept')}
+              onReject={() => handleVerificationReview('reject')}
+              onRequestChanges={() => handleVerificationReview('request_changes')}
+            />
+          )}
+
           {/* 故障错误警报栏 */}
-          {issue.error && (
+          {issue.error && issue.status !== 'pending_verification' && (
             <div className="issue-error-card glass-card" style={{ background: 'var(--error-bg)', borderColor: 'rgba(244,63,94,0.3)', borderLeft: '4px solid var(--error)' }}>
               <h4 style={{ color: 'var(--error)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <AlertTriangle size={18} /> 执行失败阻断
@@ -1219,6 +1242,45 @@ function issueSourceSessionRef(issue) {
 function summarize(value, maxLength) {
   if (!value || value.length <= maxLength) return value || '';
   return `${value.slice(0, maxLength - 1)}…`;
+}
+
+function verificationReviewComment(action) {
+  if (action === 'accept') {
+    return '';
+  }
+  const label = action === 'reject' ? '拒绝原因' : '需要修改的内容';
+  const value = window.prompt(`${label}（会写入 issue comment）`, '');
+  if (value === null) return null;
+  return value.trim() || (action === 'reject' ? '验证拒绝' : '请求修改');
+}
+
+function VerificationReviewPanel({ evidence, onAccept, onReject, onRequestChanges }) {
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderLeft: '4px solid #8b5cf6' }}>
+      <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <UserCheck size={18} color="#8b5cf6" /> 待验证门禁
+      </h3>
+      <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+        Agent 已提交完成证据，等待人工或 verifier 确认；接受后进入 Done，拒绝后进入 Failed，要求修改会退回 Triage。
+      </p>
+      {evidence && (
+        <div className="issue-error-text" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '8px', padding: '10px', fontSize: '0.78rem' }}>
+          {evidence}
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <button className="btn btn-secondary btn-success" onClick={onAccept}>
+          <CheckCircle size={14} /> Accept → Done
+        </button>
+        <button className="btn btn-secondary btn-danger" onClick={onReject}>
+          <XCircle size={14} /> Reject → Failed
+        </button>
+        <button className="btn btn-secondary" onClick={onRequestChanges}>
+          <MessageCircle size={14} /> Request changes → Triage
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function IssueDiscussion({ events, draft, error, submitting, onDraftChange, onSubmit }) {

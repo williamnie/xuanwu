@@ -11,6 +11,30 @@ agent/provider 处理 runner issue 时，不能只依赖模型回复、turn comp
 
 Runner 不会根据 agent/provider 的自然语言回复自动判断完成态。
 
+## 可选 verification gate
+
+项目或执行 profile 可开启 verification gate。开启后，agent/provider 完成实现与直接相关验证时，不应把 issue 直接最终 `done`，而应提交验证证据并进入待验证：
+
+```bash
+codex-issue-runner issue update --id <issue-id> --status pending_verification --error "<verification evidence summary>" --json
+```
+
+兼容迁移规则：
+
+- 未开启 gate 的 issue 保持原契约：成功 `done`，失败 `failed`。
+- 开启 gate 且 issue 仍在 `in_progress` 时，如果旧 agent 仍回写 `done`，Runner API 会把它改写为 `pending_verification`，并保留 `error` 中的验证证据或默认待验证说明。
+- `pending_verification` 会关闭当前 run，但不是最终验收态；queue claim 不会再次领取它。
+- 人工或 verifier 可在 UI 中执行 Accept / Reject / Request changes，或调用 API：
+  - Accept → `done`
+  - Reject → `failed`
+  - Request changes → `triage`
+- 待验证 issue 需要重新执行时，可 retry/enqueue 回 `todo`，这会开启下一轮 run。
+
+开启方式 v1：
+
+- project `provider_config_json` 中设置 `{"verification_gate": true}` 或 `{"verification_required": true}`。
+- 或在默认 Agent Profile instructions 中包含 `verification_gate` 标记。
+
 ## 首选 CLI 回写
 
 成功时：
@@ -19,10 +43,24 @@ Runner 不会根据 agent/provider 的自然语言回复自动判断完成态。
 codex-issue-runner issue update --id <issue-id> --status done --json
 ```
 
+开启 verification gate 时，成功路径改为：
+
+```bash
+codex-issue-runner issue update --id <issue-id> --status pending_verification --error "<verification evidence summary>" --json
+```
+
 失败或阻塞时：
 
 ```bash
 codex-issue-runner issue update --id <issue-id> --status failed --error "<failure reason>" --json
+```
+
+待验证处理也可通过 CLI 操作：
+
+```bash
+codex-issue-runner issue accept --id <issue-id> --json
+codex-issue-runner issue reject --id <issue-id> --comment "<reject reason>" --json
+codex-issue-runner issue request-changes --id <issue-id> --comment "<changes requested>" --json
 ```
 
 ## Auth/token 规则
@@ -63,6 +101,15 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issu
   -d '{"status":"done"}'
 ```
 
+开启 verification gate 时：
+
+```bash
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"pending_verification","error":"<verification evidence summary>"}'
+```
+
 失败或阻塞时：
 
 ```bash
@@ -73,3 +120,4 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issu
 ```
 
 无论使用 CLI 还是 API，agent/provider 都必须先完成直接相关验证，再回写 `done`。
+开启 verification gate 时，上述要求对应为先完成直接相关验证，再回写 `pending_verification`。

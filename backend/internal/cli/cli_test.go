@@ -278,6 +278,41 @@ func TestIssueUpdatePatchesStatusAndError(t *testing.T) {
 	}
 }
 
+func TestIssueVerificationActionPostsReviewPayload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/issues/8/verification" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var payload map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode verification payload: %v", err)
+		}
+		if payload["action"] != "request_changes" || payload["comment"] != "补 smoke" {
+			t.Fatalf("unexpected verification payload: %+v", payload)
+		}
+		writeTestJSON(w, http.StatusOK, map[string]any{
+			"id": float64(8), "project_id": "demo", "title": "待验证任务", "status": "triage",
+			"error": "补 smoke",
+		})
+	}))
+	defer server.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"issue", "request-changes", "--addr", server.URL, "--id", "8", "--comment", "补 smoke", "--json",
+	}, &stdout, &stderr, Options{})
+	if code != 0 {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	var output map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("stdout is not JSON: %q err=%v", stdout.String(), err)
+	}
+	if output["status"] != "triage" || output["error"] != "补 smoke" {
+		t.Fatalf("unexpected output: %+v", output)
+	}
+}
+
 func TestIssueRetryPostsAction(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/issues/9/retry" {

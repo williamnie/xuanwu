@@ -240,6 +240,11 @@ export const api = {
     method: 'POST',
   }),
 
+  reviewIssueVerification: (id, review) => request(`/api/issues/${id}/verification`, {
+    method: 'POST',
+    body: JSON.stringify(review),
+  }),
+
   getIssueEvents: (id) => request(`/api/issues/${id}/events`),
 
   getIssueRuns: (id) => request(`/api/issues/${id}/runs`),

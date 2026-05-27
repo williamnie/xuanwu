@@ -279,6 +279,7 @@ export default function Issues({
   const triageIssues = projectIssues.filter(i => i.status === 'triage');
   const todoIssues = projectIssues.filter(i => i.status === 'todo');
   const inProgressIssues = projectIssues.filter(i => i.status === 'in_progress');
+  const pendingVerificationIssues = projectIssues.filter(i => i.status === 'pending_verification');
   const failedIssues = projectIssues.filter(i => i.status === 'failed');
   const doneIssues = projectIssues.filter(i => i.status === 'done');
   const cancelledIssues = projectIssues.filter(i => i.status === 'cancelled');
@@ -305,6 +306,13 @@ export default function Issues({
       dotColor: '#3b82f6', // 蓝色
       emptyText: 'nothing in flight',
       issues: inProgressIssues
+    },
+    {
+      id: 'pending_verification',
+      title: 'Pending Verification',
+      dotColor: '#8b5cf6', // 紫色
+      emptyText: 'nothing awaiting review',
+      issues: pendingVerificationIssues
     },
     {
       id: 'failed',

@@ -404,6 +404,65 @@ func TestIssueRetryKeepsExistingThreadForContinuation(t *testing.T) {
 	}
 }
 
+func TestVerificationGateRewritesDoneAndReviewActions(t *testing.T) {
+	srv := newTestServer(t)
+	ctx := t.Context()
+	project := postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+		"provider_config_json": `{"verification_gate":true}`,
+	})
+	postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": project.ID, "title": "needs review", "status": store.StatusTodo,
+	})
+	claimed, ok, err := srv.store.ClaimNextIssue(ctx, project.ID)
+	if err != nil || !ok {
+		t.Fatalf("claim issue: ok=%v err=%v", ok, err)
+	}
+	if err := srv.store.UpdateIssueRuntime(ctx, claimed.ID, "thread-gate", "turn-gate"); err != nil {
+		t.Fatalf("update runtime: %v", err)
+	}
+
+	pending := patchJSON[store.Issue](t, srv, "/api/issues/1", map[string]any{
+		"status": store.StatusDone, "error": "go test ./backend/internal/api passed",
+	})
+	if pending.Status != store.StatusPendingVerification || pending.Error == "" {
+		t.Fatalf("done update should enter pending verification with evidence: %+v", pending)
+	}
+	runs := getJSON[[]store.IssueRun](t, srv, "/api/issues/1/runs")
+	if len(runs) != 1 || runs[0].Status != store.StatusPendingVerification || runs[0].EndedAt == "" {
+		t.Fatalf("pending verification should close current run: %+v", runs)
+	}
+
+	accepted := postJSON[store.Issue](t, srv, "/api/issues/1/verification", map[string]any{
+		"action": "accept", "comment": "人工验收通过",
+	})
+	if accepted.Status != store.StatusDone || accepted.Error != "" {
+		t.Fatalf("accept should finalize done and clear evidence/error: %+v", accepted)
+	}
+	assertAPIEvent(t, srv, 1, "issue.verification_reviewed")
+	assertAPIEvent(t, srv, 1, "issue.comment")
+}
+
+func TestVerificationRequestChangesReturnsToTriageWithComment(t *testing.T) {
+	srv := newTestServer(t)
+	postJSON[store.Project](t, srv, "/api/projects", map[string]any{
+		"id": "demo", "cwd": t.TempDir(), "auto_run": 0,
+	})
+	issue := postJSON[store.Issue](t, srv, "/api/issues", map[string]any{
+		"project_id": "demo", "title": "needs changes", "status": store.StatusPendingVerification,
+		"error": "agent evidence",
+	})
+
+	updated := postJSON[store.Issue](t, srv, "/api/issues/1/verification", map[string]any{
+		"action": "request_changes", "comment": "缺少 smoke 证据",
+	})
+	if updated.ID != issue.ID || updated.Status != store.StatusTriage || updated.Error != "缺少 smoke 证据" {
+		t.Fatalf("request_changes should return to triage with comment as error: %+v", updated)
+	}
+	assertAPIEvent(t, srv, 1, "issue.verification_reviewed")
+	assertAPIEvent(t, srv, 1, "issue.comment")
+}
+
 func TestRecoveryIgnoresInterruptedStatusChangeRun(t *testing.T) {
 	srv := newTestServerWithCodex(t, interruptCaptureCodex{
 		noopCodex:  noopCodex{ch: make(chan agent.Event)},
