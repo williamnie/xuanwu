@@ -1,5 +1,15 @@
 import { redactSensitiveText } from "../util/redact.ts";
-import type { ProjectDTO, SystemLogLineDTO, SystemLogsDTO, SystemStatusDTO } from "./types.ts";
+import type { IssueDTO, IssueEventDTO, ProjectDTO, SystemLogLineDTO, SystemLogsDTO, SystemStatusDTO } from "./types.ts";
+
+export function formatIssue(issue: IssueDTO, asJSON: boolean): string {
+  if (asJSON) return formatJSON(issue);
+  return `#${issue.id} [${issue.status}] ${issue.project_id} - ${issue.title}\n`;
+}
+
+export function formatIssueEvents(events: IssueEventDTO[], asJSON: boolean): string {
+  if (asJSON) return formatJSON(events);
+  return events.map(formatIssueEvent).join("");
+}
 
 export function formatProject(project: ProjectDTO, asJSON: boolean): string {
   if (asJSON) return formatJSON(project);
@@ -33,4 +43,24 @@ export function formatJSON(value: unknown): string {
 function formatLogLine(line: SystemLogLineDTO): string {
   const prefix = [line.time, line.level, line.source].filter(Boolean).join(" ");
   return `${prefix}: ${redactSensitiveText(line.text ?? "")}\n`;
+}
+
+function formatIssueEvent(event: IssueEventDTO): string {
+  const parts = [event.created_at, event.type].filter(Boolean).join(" ");
+  return `${parts} ${eventText(event)}\n`;
+}
+
+function eventText(event: IssueEventDTO): string {
+  const payload = (event.payload ?? "").trim();
+  if (payload === "") return "";
+  try {
+    const body = JSON.parse(payload) as { body?: unknown; text?: unknown };
+    const text = typeof body.text === "string" ? body.text : body.body;
+    if (typeof text === "string" && text.trim() !== "") {
+      return redactSensitiveText(text.trim());
+    }
+  } catch {
+    // fall through to raw payload
+  }
+  return redactSensitiveText(payload);
 }

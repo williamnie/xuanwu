@@ -40,6 +40,31 @@ describe("Bun issue patch API", () => {
     }
   });
 
+  test("final status update closes the latest open issue run", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo", "in_progress");
+      insertOpenRun(database, issueId);
+
+      const response = await patchIssue(database, issueId, { status: "done", error: "" });
+      const run = latestRun(database, issueId);
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: issueId, status: "done", error: "" });
+      expect(run).toMatchObject({
+        status: "done",
+        provider_session_id: "thread-runtime",
+        provider_turn_id: "turn-runtime",
+        exit_reason: "explicit_status_update",
+        error: ""
+      });
+      expect(run?.ended_at).not.toBe("");
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns stable errors for invalid and missing issue patches", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -113,13 +138,28 @@ function insertProject(db: RunnerDatabase, id: string): void {
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectId: string): number {
+function insertIssue(db: RunnerDatabase, projectId: string, status = "triage"): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, source_session_id, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [projectId, "Patch API", "triage", "thread-a", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, status, source_session_id, codex_thread_id, codex_turn_id, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [projectId, "Patch API", status, "thread-a", "thread-runtime", "turn-runtime", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function insertOpenRun(db: RunnerDatabase, issueId: number): void {
+  db.sqlite.run(
+    `insert into issue_runs (id, issue_id, attempt, status, started_at)
+     values (?, ?, ?, ?, ?)`,
+    [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function latestRun(db: RunnerDatabase, issueId: number): Record<string, unknown> | null {
+  return db.sqlite.query<Record<string, unknown>, [number]>(
+    `select status, provider_session_id, provider_turn_id, ended_at, exit_reason, error
+     from issue_runs where issue_id = ? order by attempt desc limit 1`
+  ).get(issueId) ?? null;
 }

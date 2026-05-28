@@ -7,6 +7,22 @@ export type EnvReader = (key: string) => string | undefined;
 export type Fetcher = typeof globalThis.fetch;
 export type Writer = { write(chunk: string | Uint8Array): unknown };
 
+export type IssueDTO = {
+  error?: string;
+  id: number;
+  project_id: string;
+  status: string;
+  title: string;
+};
+
+export type IssueEventDTO = {
+  created_at?: string;
+  id?: number;
+  issue_id?: number;
+  payload?: string;
+  type?: string;
+};
+
 export type ProjectDTO = {
   cwd: string;
   id: string;

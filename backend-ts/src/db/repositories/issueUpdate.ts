@@ -14,6 +14,7 @@ import { ProjectNotFoundError } from "./projects.ts";
 export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>>;
 
 type NormalizedIssuePatch = {
+  id: number;
   agent_profile_id: string;
   auto_retry_next_at: string;
   auto_retry_reason: string;
@@ -65,11 +66,14 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
         record.source_excerpt, record.codex_thread_id, record.codex_turn_id,
         record.auto_retry_next_at, record.auto_retry_reason, record.error,
         timestamp, current.id]);
-    if (Object.hasOwn(patch, "status") && current.status !== record.status) {
-      db.sqlite.run(
-        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-        [current.id, "issue.status_changed", JSON.stringify({ status: record.status }), timestamp]
-      );
+    if (Object.hasOwn(patch, "status")) {
+      closeOpenIssueRun(db, record, timestamp);
+      if (current.status !== record.status) {
+        db.sqlite.run(
+          `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+          [current.id, "issue.status_changed", JSON.stringify({ status: record.status }), timestamp]
+        );
+      }
     }
   });
   write(next);
@@ -105,6 +109,7 @@ function validateIssuePatch(issue: NormalizedIssuePatch): void {
 
 function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
   return {
+    id: issue.id,
     title: issue.title,
     description: issue.description,
     status: issue.status,
@@ -129,4 +134,24 @@ function mustGetIssue(db: RunnerDatabase, id: number): Issue {
 
 function hasPatchValue(input: UpdateIssueInput, key: keyof NormalizedIssuePatch): boolean {
   return Object.hasOwn(input, key) && input[key] !== null && input[key] !== undefined;
+}
+
+function closeOpenIssueRun(db: RunnerDatabase, issue: NormalizedIssuePatch & { id?: number }, timestamp: string): void {
+  const issueID = typeof issue.id === "number" ? issue.id : undefined;
+  if (!issueID) return;
+  db.sqlite.run(`update issue_runs set status=?,
+    provider_session_id=case when provider_session_id='' then ? else provider_session_id end,
+    provider_turn_id=case when provider_turn_id='' then ? else provider_turn_id end,
+    codex_thread_id=?, codex_turn_id=?, ended_at=?, exit_reason=?, error=?
+    where id=(select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1)`,
+    [issue.status, issue.codex_thread_id, issue.codex_turn_id, issue.codex_thread_id,
+      issue.codex_turn_id, timestamp, patchStatusExitReason(issue.status), issue.error, issueID]);
+}
+
+function patchStatusExitReason(status: string): string {
+  return isTerminalStatus(status) ? "explicit_status_update" : "status_changed";
+}
+
+function isTerminalStatus(status: string): boolean {
+  return status === "done" || status === "failed" || status === "cancelled" || status === "pending_verification";
 }

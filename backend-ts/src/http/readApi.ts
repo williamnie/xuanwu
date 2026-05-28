@@ -5,14 +5,29 @@ import { createIssueComment, listIssueEvents } from "../db/repositories/issueEve
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues } from "../db/repositories/issues.ts";
-import { createProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
+import { createProject, getProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
 type ReadApiContext = { database: RunnerDatabase };
 
+const DEFAULT_ISSUE_TEMPLATE = {
+  id: "default",
+  name: "Default",
+  content: "{{issue.description}}",
+  is_default: 1
+};
+
 export function registerReadApiRoutes(router: Router, context: ReadApiContext): void {
+  registerIssuesPageAuxRoutes(router);
+  registerProjectRoutes(router, context);
+  registerIssueCollectionRoutes(router, context);
+  registerIssueItemRoutes(router, context);
+}
+
+function registerProjectRoutes(router: Router, context: ReadApiContext): void {
   router.get("/api/projects", () => json(listProjects(context.database)));
+  router.get("/api/projects/:id", (request) => projectResponse(context, request));
   router.post("/api/projects", async (request) => {
     const body = await parseProjectBody(request);
     return projectWriteResponse(() => createProject(context.database, body), 201);
@@ -21,29 +36,25 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
     const body = await parseProjectBody(request);
     return projectWriteResponse(() => updateProject(context.database, projectID(request), body));
   });
+}
+
+function registerIssueCollectionRoutes(router: Router, context: ReadApiContext): void {
   router.get("/api/issues", (request) => json(listIssues(context.database, issueFilter(request))));
   router.post("/api/issues", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssue(context.database, body), 201);
   });
-  router.post("/api/issues/:id/enqueue", (request) => {
-    return writeResponse(() => enqueueIssue(context.database, issueID(request)));
-  });
-  router.post("/api/issues/:id/retry", (request) => {
-    return writeResponse(() => retryIssue(context.database, issueID(request)));
-  });
-  router.post("/api/issues/:id/cancel", (request) => {
-    return writeResponse(() => cancelIssue(context.database, issueID(request)));
-  });
+}
+
+function registerIssueItemRoutes(router: Router, context: ReadApiContext): void {
+  router.post("/api/issues/:id/enqueue", (request) => actionResponse(context, request, enqueueIssue));
+  router.post("/api/issues/:id/retry", (request) => actionResponse(context, request, retryIssue));
+  router.post("/api/issues/:id/cancel", (request) => actionResponse(context, request, cancelIssue));
   router.post("/api/issues/:id/verification", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => reviewIssueVerification(context.database, issueID(request), body));
   });
-  router.get("/api/issues/:id", (request) => {
-    const issue = getIssue(context.database, issueID(request));
-    if (!issue) throw new HttpError(404, "资源不存在");
-    return json(issue);
-  });
+  router.get("/api/issues/:id", (request) => issueResponse(context, request));
   router.patch("/api/issues/:id", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => updateIssue(context.database, issueID(request), body));
@@ -52,12 +63,35 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssueComment(context.database, issueID(request), body), 201);
   });
-  router.get("/api/issues/:id/events", (request) => {
-    return writeResponse(() => listIssueEvents(context.database, issueID(request)));
-  });
-  router.get("/api/issues/:id/runs", (request) => {
-    return writeResponse(() => listIssueRuns(context.database, issueID(request)));
-  });
+  router.get("/api/issues/:id/events", (request) => writeResponse(() => listIssueEvents(context.database, issueID(request))));
+  router.get("/api/issues/:id/runs", (request) => writeResponse(() => listIssueRuns(context.database, issueID(request))));
+}
+
+function projectResponse(context: ReadApiContext, request: Request): Response {
+  const project = getProject(context.database, projectID(request));
+  if (!project) throw new HttpError(404, "资源不存在");
+  return json(project);
+}
+
+function actionResponse(
+  context: ReadApiContext,
+  request: Request,
+  action: (db: RunnerDatabase, id: number) => unknown
+): Response {
+  return writeResponse(() => action(context.database, issueID(request)));
+}
+
+function issueResponse(context: ReadApiContext, request: Request): Response {
+  const issue = getIssue(context.database, issueID(request));
+  if (!issue) throw new HttpError(404, "资源不存在");
+  return json(issue);
+}
+
+function registerIssuesPageAuxRoutes(router: Router): void {
+  router.get("/api/agent-profiles", () => json([]));
+  router.get("/api/cron-tasks", () => json([]));
+  router.get("/api/issue-templates", () => json([DEFAULT_ISSUE_TEMPLATE]));
+  router.get("/api/nightly-batches", () => json([]));
 }
 
 function projectID(request: Request): string {

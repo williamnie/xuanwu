@@ -42,10 +42,13 @@ describe("Bun projects/issues read API", () => {
 
       const router = createDefaultRouter({ database });
       const projects = await router.handle(new Request(`${BASE_URL}/api/projects`));
+      const project = await router.handle(new Request(`${BASE_URL}/api/projects/demo`));
       const issues = await router.handle(new Request(`${BASE_URL}/api/issues?projectId=demo&sourceSessionId=codex:thread-a`));
       const issue = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
 
       expect(projects.status).toBe(200);
+      expect(project.status).toBe(200);
+      expect(await project.json()).toMatchObject({ id: "demo", cwd: "/tmp/demo" });
       const projectBody = await projects.json() as Array<Record<string, unknown>>;
       expect(projectBody.map((project) => project.id)).toEqual(["demo", "other"]);
       expect(projectBody[0]).toMatchObject({
@@ -67,7 +70,6 @@ describe("Bun projects/issues read API", () => {
       database.close();
     }
   });
-
 
   test("creates and updates projects with Go-compatible responses", async () => {
     const database = await openFixtureDatabase();
@@ -143,6 +145,30 @@ describe("Bun projects/issues read API", () => {
       expect((await duplicateID.json() as { message: string }).message).toContain("UNIQUE constraint failed: projects.id");
       expect(missing.status).toBe(404);
       expect(await missing.json()).toEqual({ message: "资源不存在" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("provides minimal auxiliary read endpoints needed by the Issues page", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const templates = await router.handle(new Request(`${BASE_URL}/api/issue-templates`));
+      const cron = await router.handle(new Request(`${BASE_URL}/api/cron-tasks`));
+      const nightly = await router.handle(new Request(`${BASE_URL}/api/nightly-batches`));
+      const profiles = await router.handle(new Request(`${BASE_URL}/api/agent-profiles`));
+
+      expect(templates.status).toBe(200);
+      expect(await templates.json()).toEqual([
+        { id: "default", name: "Default", content: "{{issue.description}}", is_default: 1 }
+      ]);
+      expect(cron.status).toBe(200);
+      expect(await cron.json()).toEqual([]);
+      expect(nightly.status).toBe(200);
+      expect(await nightly.json()).toEqual([]);
+      expect(profiles.status).toBe(200);
+      expect(await profiles.json()).toEqual([]);
     } finally {
       database.close();
     }

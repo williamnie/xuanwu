@@ -152,12 +152,6 @@ describe("Bun CLI dispatcher", () => {
     expect(stderr).not.toContain(secret);
   });
 
-  test("rejects unknown subcommands without falling into serve mode", async () => {
-    const { code, stderr } = await run(["issue", "status"], { fetcher: fetchStub() });
-
-    expect(code).toBe(1);
-    expect(stderr).toContain("unknown command: issue");
-  });
 });
 
 async function run(args: string[], options: {
