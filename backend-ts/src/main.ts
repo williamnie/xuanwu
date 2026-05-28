@@ -4,7 +4,7 @@ import { startServer } from "./http/server.ts";
 
 const config = loadConfig();
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
-const server = await startServer(config);
+const server = await startServer(config, { database });
 
 console.log(JSON.stringify({
   ok: true,
