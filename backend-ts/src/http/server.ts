@@ -1,4 +1,5 @@
 import type { RunnerConfig } from "../config/env.ts";
+import { loadAuthToken, requireBearerAuth } from "./auth.ts";
 import { json } from "./errors.ts";
 import { createRouter, type Router } from "./router.ts";
 
@@ -10,13 +11,18 @@ export function createDefaultRouter(): Router {
   return router;
 }
 
-export function startServer(config: RunnerConfig, router = createDefaultRouter()): ReturnType<typeof Bun.serve> {
+export async function startServer(config: RunnerConfig, router = createDefaultRouter()): Promise<ReturnType<typeof Bun.serve>> {
   const address = parseListenAddress(config.addr);
+  const authToken = await loadAuthToken(config);
   return Bun.serve({
     hostname: address.hostname,
     port: address.port,
-    fetch: (request) => router.handle(request)
+    fetch: createRequestHandler(router, authToken)
   });
+}
+
+export function createRequestHandler(router: Router, authToken: string): (request: Request) => Promise<Response> {
+  return async (request) => requireBearerAuth(request, authToken) ?? await router.handle(request);
 }
 
 export function parseListenAddress(addr: string): ListenAddress {

@@ -2,7 +2,7 @@ import { loadConfig } from "./config/env.ts";
 import { startServer } from "./http/server.ts";
 
 const config = loadConfig();
-const server = startServer(config);
+const server = await startServer(config);
 
 console.log(JSON.stringify({
   ok: true,
@@ -11,7 +11,6 @@ console.log(JSON.stringify({
   config: {
     addr: config.addr,
     stateDir: config.stateDir,
-    dbPath: config.dbPath,
-    authTokenFile: "<redacted>"
+    dbPath: config.dbPath
   }
 }, null, 2));

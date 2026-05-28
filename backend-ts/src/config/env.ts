@@ -4,6 +4,7 @@ export const ENV_KEYS = {
   addr: "CODEX_RUNNER_BUN_ADDR",
   stateDir: "CODEX_RUNNER_BUN_STATE_DIR",
   dbPath: "CODEX_RUNNER_BUN_DB",
+  authToken: "CODEX_RUNNER_BUN_AUTH_TOKEN",
   authTokenFile: "CODEX_RUNNER_BUN_AUTH_TOKEN_FILE"
 } as const;
 
@@ -16,6 +17,7 @@ export type RunnerConfig = {
   addr: string;
   stateDir: string;
   dbPath: string;
+  authToken: string;
   authTokenFile: string;
 };
 
@@ -23,6 +25,7 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--addr": "addr",
   "--state-dir": "stateDir",
   "--db": "dbPath",
+  "--auth-token": "authToken",
   "--auth-token-file": "authTokenFile"
 };
 
@@ -36,6 +39,7 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
   const paths = buildRunnerPaths(overrides);
   return {
     addr: cleanValue(overrides.addr) ?? DEFAULT_ADDR,
+    authToken: cleanValue(overrides.authToken) ?? "",
     ...paths
   };
 }
@@ -45,6 +49,7 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     addr: cleanValue(env[ENV_KEYS.addr]),
     stateDir: cleanValue(env[ENV_KEYS.stateDir]),
     dbPath: cleanValue(env[ENV_KEYS.dbPath]),
+    authToken: cleanValue(env[ENV_KEYS.authToken]),
     authTokenFile: cleanValue(env[ENV_KEYS.authTokenFile])
   };
 }
