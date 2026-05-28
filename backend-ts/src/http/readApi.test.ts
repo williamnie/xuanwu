@@ -166,6 +166,82 @@ describe("Bun projects/issues read API", () => {
       database.close();
     }
   });
+
+  test("creates issues with default triage status and persists creation history", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      const router = createDefaultRouter({ database });
+
+      const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: "demo",
+          title: "Create API",
+          description: "Issue body",
+          priority: 4,
+          template_id: "custom-template",
+          prompt_template: "snapshot body",
+          agent_profile_id: "Codex Pro!",
+          source_session_id: "codex:thread-source",
+          source_turn_id: "turn-source",
+          source_excerpt: "讨论摘录",
+          workflow_snapshot_json: '{"steps":[]}'
+        }),
+        headers: { "content-type": "application/json" }
+      }));
+      const createdIssue = await created.json() as Record<string, unknown>;
+      const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${createdIssue.id}`));
+      const list = await router.handle(new Request(`${BASE_URL}/api/issues?projectId=demo&status=triage`));
+      const event = database.sqlite.query<{ type: string; payload: string }, []>(
+        "select type, payload from issue_events order by id asc"
+      ).get();
+
+      expect(created.status).toBe(201);
+      expect(createdIssue).toMatchObject({
+        project_id: "demo",
+        title: "Create API",
+        description: "Issue body",
+        status: "triage",
+        priority: 4,
+        template_id: "custom-template",
+        prompt_template: "snapshot body",
+        agent_profile_id: "codex-pro",
+        source_session_id: "thread-source",
+        source_turn_id: "turn-source",
+        source_excerpt: "讨论摘录",
+        workflow_snapshot_json: '{"steps":[]}'
+      });
+      expect(await readBack.json()).toMatchObject(createdIssue);
+      expect((await list.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([createdIssue.id]);
+      expect(event).toEqual({ type: "issue.created", payload: "" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("returns stable errors for invalid issue create payloads", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      const router = createDefaultRouter({ database });
+      const missingProject = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "missing", title: "bad" })
+      }));
+      const invalidStatus = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "demo", title: "bad", status: "bogus" })
+      }));
+
+      expect(missingProject.status).toBe(404);
+      expect(await missingProject.json()).toEqual({ message: "资源不存在" });
+      expect(invalidStatus.status).toBe(400);
+      expect(await invalidStatus.json()).toEqual({ message: "status 不合法" });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 type ProjectFixture = { id: string; name: string; sortOrder: number };

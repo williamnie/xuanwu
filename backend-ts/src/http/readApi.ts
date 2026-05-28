@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { createProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -17,6 +18,10 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
     return projectWriteResponse(() => updateProject(context.database, projectID(request), body));
   });
   router.get("/api/issues", (request) => json(listIssues(context.database, issueFilter(request))));
+  router.post("/api/issues", async (request) => {
+    const body = await parseObjectBody(request);
+    return writeResponse(() => createIssue(context.database, body), 201);
+  });
   router.get("/api/issues/:id", (request) => {
     const issue = getIssue(context.database, issueID(request));
     if (!issue) throw new HttpError(404, "资源不存在");
@@ -31,6 +36,10 @@ function projectID(request: Request): string {
 }
 
 async function parseProjectBody(request: Request): Promise<Record<string, unknown>> {
+  return parseObjectBody(request);
+}
+
+async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {
   try {
     const body = await parseJsonBody(request);
     return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
@@ -41,6 +50,10 @@ async function parseProjectBody(request: Request): Promise<Record<string, unknow
 }
 
 function projectWriteResponse(write: () => unknown, status = 200): Response {
+  return writeResponse(write, status);
+}
+
+function writeResponse(write: () => unknown, status = 200): Response {
   try {
     return json(write(), { status });
   } catch (error) {
