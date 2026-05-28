@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -63,6 +63,86 @@ describe("Bun projects/issues read API", () => {
         source_session_id: "thread-a",
         comment_count: 0
       });
+    } finally {
+      database.close();
+    }
+  });
+
+
+  test("creates and updates projects with Go-compatible responses", async () => {
+    const database = await openFixtureDatabase();
+    const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
+    tempRoots.push(cwd);
+    try {
+      const router = createDefaultRouter({ database });
+
+      const created = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST",
+        body: JSON.stringify({ id: "demo", cwd }),
+        headers: { "content-type": "application/json" }
+      }));
+      expect(created.status).toBe(201);
+      expect(await created.json()).toMatchObject({
+        id: "demo",
+        name: basename(cwd),
+        cwd,
+        provider: "codex",
+        auto_run: 0,
+        model: "codex-default",
+        approval_policy: "never",
+        sandbox: "workspace-write",
+        sort_order: 1,
+        loop_status: "stopped",
+        provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"]
+      });
+
+      const patched = await router.handle(new Request(`${BASE_URL}/api/projects/demo`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: "Renamed", provider: "CODEX" }),
+        headers: { "content-type": "application/json" }
+      }));
+      expect(patched.status).toBe(200);
+      expect(await patched.json()).toMatchObject({ id: "demo", name: "Renamed", provider: "codex" });
+
+      const projects = await router.handle(new Request(`${BASE_URL}/api/projects`));
+      expect((await projects.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["demo"]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("matches Go API failure paths for project writes", async () => {
+    const database = await openFixtureDatabase();
+    const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
+    tempRoots.push(cwd);
+    try {
+      const router = createDefaultRouter({ database });
+      const withoutID = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST", body: JSON.stringify({ cwd })
+      }));
+      const invalidCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST", body: JSON.stringify({ id: "bad", cwd: join(cwd, "missing") })
+      }));
+      await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST", body: JSON.stringify({ id: "demo", cwd })
+      }));
+      const duplicateCWD = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
+      tempRoots.push(duplicateCWD);
+      const duplicateID = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST", body: JSON.stringify({ id: "demo", cwd: duplicateCWD })
+      }));
+      const missing = await router.handle(new Request(`${BASE_URL}/api/projects/missing`, {
+        method: "PATCH", body: JSON.stringify({ name: "Missing" })
+      }));
+
+      expect(withoutID.status).toBe(400);
+      expect(await withoutID.json()).toEqual({ message: "project id 不能为空" });
+      expect(invalidCWD.status).toBe(400);
+      expect(await invalidCWD.json()).toEqual({ message: "cwd 不存在" });
+      expect(duplicateID.status).toBe(400);
+      expect((await duplicateID.json() as { message: string }).message).toContain("UNIQUE constraint failed: projects.id");
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toEqual({ message: "资源不存在" });
     } finally {
       database.close();
     }

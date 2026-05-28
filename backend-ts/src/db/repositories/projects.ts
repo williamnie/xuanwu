@@ -1,4 +1,6 @@
+import { statSync } from "node:fs";
 import type { RunnerDatabase } from "../database.ts";
+import { normalizeProjectForWrite, normalizeProjectModel, normalizeProjectPatch, normalizeProjectProvider, normalizeProjectProviderConfig, type NormalizedProjectWrite, type ProjectPatchInput, type ProjectWriteInput } from "./projectUtils.ts";
 
 type ProjectRow = {
   approval_policy: unknown;
@@ -15,6 +17,10 @@ type ProjectRow = {
   sort_order: unknown;
   updated_at: unknown;
 };
+
+export type CreateProjectInput = ProjectWriteInput;
+
+export type UpdateProjectInput = ProjectPatchInput;
 
 export type Project = {
   approval_policy: string;
@@ -38,6 +44,38 @@ const PROJECT_COLUMNS = `id, name, cwd, provider, provider_config_json, auto_run
   model, approval_policy, sandbox, default_agent_profile_id, sort_order,
   created_at, updated_at`;
 
+
+export function createProject(db: RunnerDatabase, input: CreateProjectInput): Project {
+  const project = normalizeProjectForWrite(input);
+  validateProjectForWrite(project.id, project.cwd);
+  const timestamp = now();
+  const sortOrder = nextProjectSortOrder(db);
+  db.sqlite.run(`insert into projects
+    (id, name, cwd, provider, provider_config_json, auto_run, model,
+     approval_policy, sandbox, default_agent_profile_id, sort_order, created_at, updated_at)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [project.id, project.name, project.cwd, project.provider, project.provider_config_json,
+      project.auto_run, project.model, project.approval_policy, project.sandbox,
+      project.default_agent_profile_id, sortOrder, timestamp, timestamp]);
+  return mustGetProject(db, project.id);
+}
+
+export function updateProject(db: RunnerDatabase, id: string, input: UpdateProjectInput): Project {
+  const projectID = cleanRequiredString(id, "project id");
+  const current = getProject(db, projectID);
+  if (!current) throw new ProjectNotFoundError();
+  const patch = normalizeProjectPatch(projectToWriteShape(current), input);
+  const next = { ...projectToWriteShape(current), ...patch };
+  validateProjectForWrite(projectID, next.cwd);
+  db.sqlite.run(`update projects set name=?, cwd=?, provider=?, provider_config_json=?,
+    auto_run=?, model=?, approval_policy=?, sandbox=?, default_agent_profile_id=?,
+    updated_at=? where id=?`,
+    [next.name, next.cwd, next.provider, next.provider_config_json, next.auto_run,
+      next.model, next.approval_policy, next.sandbox, next.default_agent_profile_id,
+      now(), projectID]);
+  return mustGetProject(db, projectID);
+}
+
 export function listProjects(db: RunnerDatabase): Project[] {
   return db.sqlite.query<ProjectRow, []>(`
     select ${PROJECT_COLUMNS} from projects
@@ -58,10 +96,10 @@ function mapProjectRow(row: ProjectRow): Project {
     id: requiredString(row.id, "projects.id"),
     name: requiredString(row.name, "projects.name"),
     cwd: requiredString(row.cwd, "projects.cwd"),
-    provider: normalizedProvider(row.provider),
-    provider_config_json: optionalString(row.provider_config_json, "{}"),
+    provider: normalizeProjectProvider(row.provider),
+    provider_config_json: normalizeProjectProviderConfig(row.provider_config_json),
     auto_run: integerValue(row.auto_run, "projects.auto_run"),
-    model: normalizedModel(row.model),
+    model: normalizeProjectModel(row.model),
     approval_policy: optionalString(row.approval_policy, "never"),
     sandbox: optionalString(row.sandbox, "workspace-write"),
     default_agent_profile_id: optionalString(row.default_agent_profile_id),
@@ -71,6 +109,60 @@ function mapProjectRow(row: ProjectRow): Project {
     loop_status: "stopped",
     provider_capabilities: providerCapabilities(row.provider)
   };
+}
+
+export class ProjectNotFoundError extends Error {
+  constructor() {
+    super("资源不存在");
+    this.name = "ProjectNotFoundError";
+  }
+}
+
+function validateProjectForWrite(id: string, cwd: string): void {
+  if (id === "") throw new Error("project id 不能为空");
+  if (cwd === "") throw new Error("cwd 不能为空");
+  validateProjectCWD(cwd);
+}
+
+function validateProjectCWD(cwd: string): void {
+  try {
+    if (!statSync(cwd).isDirectory()) throw new Error("cwd 不是目录");
+  } catch (error) {
+    if (error instanceof Error && error.message === "cwd 不是目录") throw error;
+    throw new Error("cwd 不存在");
+  }
+}
+
+function mustGetProject(db: RunnerDatabase, id: string): Project {
+  const project = getProject(db, id);
+  if (!project) throw new ProjectNotFoundError();
+  return project;
+}
+
+function nextProjectSortOrder(db: RunnerDatabase): number {
+  const row = db.sqlite.query<{ value: number }, []>(
+    "select coalesce(max(sort_order), 0) + 1 as value from projects"
+  ).get();
+  return row?.value ?? 1;
+}
+
+function projectToWriteShape(project: Project): NormalizedProjectWrite {
+  return {
+    id: project.id,
+    name: project.name,
+    cwd: project.cwd,
+    provider: project.provider,
+    provider_config_json: project.provider_config_json,
+    auto_run: project.auto_run,
+    model: project.model,
+    approval_policy: project.approval_policy,
+    sandbox: project.sandbox,
+    default_agent_profile_id: project.default_agent_profile_id
+  };
+}
+
+function now(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function cleanRequiredString(value: string, label: string): string {
@@ -97,18 +189,8 @@ function integerValue(value: unknown, label: string): number {
   return value;
 }
 
-function normalizedProvider(value: unknown): string {
-  return optionalString(value, "codex").toLowerCase();
-}
-
-function normalizedModel(value: unknown): string {
-  const model = optionalString(value);
-  if (model === "" || model.toLowerCase().startsWith("gemini-")) return "codex-default";
-  return model;
-}
-
 function providerCapabilities(value: unknown): string[] {
-  switch (normalizedProvider(value)) {
+  switch (normalizeProjectProvider(value)) {
     case "codex":
       return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
     case "claude":
