@@ -1,9 +1,15 @@
 import {
   AuthStorage,
+  createAgentSession,
+  createExtensionRuntime,
+  type AgentSession,
+  ModelRegistry,
   SessionManager,
   SettingsManager,
+  type ResourceLoader,
   VERSION as piSdkVersion
 } from "@earendil-works/pi-coding-agent";
+import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
 import { Type } from "@sinclair/typebox";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -15,9 +21,30 @@ type SmokeOptions = {
   createDirs: boolean;
 };
 
+type SmokeConfig = ReturnType<typeof buildConfig>;
+type SmokeSdk = ReturnType<typeof createSmokeSdk>;
+
+type PromptResult = {
+  responseText: string;
+};
+
+type BuildSummaryArgs = {
+  config: SmokeConfig;
+  sdk: SmokeSdk;
+  session: AgentSession;
+  prompt: PromptResult;
+};
+
 const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 const DEFAULT_STATE_DIR = join(REPO_ROOT, "data-bun");
 const HELP_FLAGS = new Set(["--help", "-h"]);
+const RESPONSE_PREVIEW_MAX = 120;
+const RESPONSE_PREVIEW_SUFFIX = "...";
+const SMOKE_API = "pi-smoke-faux-api";
+const SMOKE_PROVIDER = "pi-smoke-faux";
+const SMOKE_RESPONSE = "pi-smoke-response-ok";
+const SMOKE_RUNTIME_KEY_LABEL = "<redacted-local-smoke-key>";
+const SMOKE_TOKENS_PER_SECOND = 0;
 
 const ConfigSchema = Type.Object({
   cwd: Type.String(),
@@ -105,6 +132,125 @@ function summarizePath(path: string, stateDir: string): string {
   return "<outside-stateDir>";
 }
 
+function createSmokeResourceLoader(): ResourceLoader {
+  return {
+    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getPrompts: () => ({ prompts: [], diagnostics: [] }),
+    getThemes: () => ({ themes: [], diagnostics: [] }),
+    getAgentsFiles: () => ({ agentsFiles: [] }),
+    getSystemPrompt: () => "You are a minimal PI smoke test assistant. Reply concisely.",
+    getAppendSystemPrompt: () => [],
+    extendResources: () => {},
+    reload: async () => {}
+  };
+}
+
+function collectAssistantText(messages: ReadonlyArray<{ role: string; content?: unknown }>): string {
+  const lastAssistant = findLastAssistant(messages);
+  if (!Array.isArray(lastAssistant?.content)) return "";
+
+  return lastAssistant.content
+    .filter((block): block is { type: "text"; text: string } => {
+      return typeof block === "object" && block !== null &&
+        "type" in block && block.type === "text" &&
+        "text" in block && typeof block.text === "string";
+    })
+    .map((block) => block.text)
+    .join("");
+}
+
+function findLastAssistant(
+  messages: ReadonlyArray<{ role: string; content?: unknown }>
+): { role: string; content?: unknown } | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === "assistant") return messages[index];
+  }
+  return undefined;
+}
+
+function summarizeText(text: string): string {
+  const contentLength = RESPONSE_PREVIEW_MAX - RESPONSE_PREVIEW_SUFFIX.length;
+  return text.length > RESPONSE_PREVIEW_MAX
+    ? `${text.slice(0, contentLength)}${RESPONSE_PREVIEW_SUFFIX}`
+    : text;
+}
+
+function createSmokeSdk(config: SmokeConfig) {
+  const authStorage = AuthStorage.create(config.authPath);
+  const settingsManager = SettingsManager.inMemory({ sessionDir: config.sessionDir });
+  const sessionManager = SessionManager.create(config.cwd, config.sessionDir);
+  authStorage.setFallbackResolver((provider) => {
+    return provider === SMOKE_PROVIDER ? SMOKE_RUNTIME_KEY_LABEL : undefined;
+  });
+
+  const modelRegistry = ModelRegistry.inMemory(authStorage);
+  const fauxProvider = registerFauxProvider({
+    api: SMOKE_API,
+    provider: SMOKE_PROVIDER,
+    tokensPerSecond: SMOKE_TOKENS_PER_SECOND
+  });
+  fauxProvider.setResponses([fauxAssistantMessage(SMOKE_RESPONSE)]);
+
+  return { authStorage, settingsManager, sessionManager, modelRegistry, fauxProvider };
+}
+
+async function createSmokeSession(config: SmokeConfig, sdk: SmokeSdk): Promise<AgentSession> {
+  const { session } = await createAgentSession({
+    cwd: config.cwd,
+    agentDir: config.piAgentDir,
+    authStorage: sdk.authStorage,
+    modelRegistry: sdk.modelRegistry,
+    model: sdk.fauxProvider.getModel(),
+    thinkingLevel: "off",
+    resourceLoader: createSmokeResourceLoader(),
+    tools: [],
+    sessionManager: sdk.sessionManager,
+    settingsManager: sdk.settingsManager
+  });
+  return session;
+}
+
+async function runPrompt(session: AgentSession): Promise<PromptResult> {
+  await session.prompt(`Reply with ${SMOKE_RESPONSE}.`, {
+    expandPromptTemplates: false,
+    source: "rpc"
+  });
+  return { responseText: collectAssistantText(session.state.messages) };
+}
+
+function buildSummary({ config, sdk, session, prompt }: BuildSummaryArgs) {
+  return {
+    ok: prompt.responseText.length > 0,
+    piSdkVersion,
+    cwd: summarizePath(config.cwd, config.stateDir),
+    stateDir: summarizePath(config.stateDir, config.stateDir),
+    piAgentDir: summarizePath(config.piAgentDir, config.stateDir),
+    authPath: summarizePath(config.authPath, config.stateDir),
+    settingsPath: summarizePath(config.settingsPath, config.stateDir),
+    sessionDir: summarizePath(config.sessionDir, config.stateDir),
+    createDirs: config.createDirs,
+    typebox: ConfigSchema.type,
+    sdkObjects: {
+      authStorage: sdk.authStorage.constructor.name,
+      settingsManager: sdk.settingsManager.constructor.name,
+      sessionManager: sdk.sessionManager.constructor.name
+    },
+    session: {
+      id: session.sessionManager.getSessionId(),
+      persisted: session.sessionManager.isPersisted(),
+      messageCount: session.state.messages.length,
+      model: `${session.model?.provider}/${session.model?.id}`
+    },
+    prompt: {
+      completed: prompt.responseText.length > 0,
+      responsePreview: summarizeText(prompt.responseText),
+      providerCalls: sdk.fauxProvider.state.callCount
+    },
+    note: "paths are redacted relative to <stateDir>; faux provider uses no token/secrets"
+  };
+}
+
 function printHelp(): void {
   console.log(`Usage: bun run src/spikes/piSmoke.ts [options]
 
@@ -115,8 +261,8 @@ Options:
   --no-create         Do not create smoke directories
   --help, -h          Show this help
 
-The smoke harness only imports PI SDK pieces and prints a redacted config summary.
-It does not start an HTTP server or create an agent session turn.`);
+The smoke harness creates a PI AgentSession with a local faux provider, runs one
+short prompt, and prints only a redacted response summary.`);
 }
 
 async function main(): Promise<void> {
@@ -134,33 +280,22 @@ async function main(): Promise<void> {
 
   if (config.createDirs) ensureRuntimeDirs(config);
 
-  const authStorage = AuthStorage.create(config.authPath);
-  const settingsManager = SettingsManager.inMemory({ sessionDir: config.sessionDir });
-  const sessionManager = SessionManager.create(config.cwd, config.sessionDir);
+  const sdk = createSmokeSdk(config);
+  const session = await createSmokeSession(config, sdk);
 
-  const summary = {
-    ok: true,
-    piSdkVersion,
-    cwd: summarizePath(config.cwd, config.stateDir),
-    stateDir: summarizePath(config.stateDir, config.stateDir),
-    piAgentDir: summarizePath(config.piAgentDir, config.stateDir),
-    authPath: summarizePath(config.authPath, config.stateDir),
-    settingsPath: summarizePath(config.settingsPath, config.stateDir),
-    sessionDir: summarizePath(config.sessionDir, config.stateDir),
-    createDirs: config.createDirs,
-    typebox: ConfigSchema.type,
-    sdkImports: {
-      authStorage: authStorage.constructor.name,
-      settingsManager: settingsManager.constructor.name,
-      sessionManager: sessionManager.constructor.name
-    },
-    note: "paths are redacted relative to <stateDir>; no HTTP server started"
-  };
-
-  console.log(JSON.stringify(summary, null, 2));
+  try {
+    const prompt = await runPrompt(session);
+    const summary = buildSummary({ config, sdk, session, prompt });
+    console.log(JSON.stringify(summary, null, 2));
+    if (!summary.ok) process.exitCode = 1;
+  } finally {
+    session.dispose();
+    sdk.fauxProvider.unregister();
+  }
 }
 
 main().catch((error) => {
-  console.error(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(JSON.stringify({ ok: false, error: message }));
   process.exitCode = 1;
 });
