@@ -46,6 +46,7 @@ describe("Bun SQLite database connection", () => {
 
     try {
       expect(tableNames(connection)).toEqual([
+        "agent_sessions",
         "issue_events",
         "issue_runs",
         "issues",
@@ -56,8 +57,10 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
       expect(columnNames(connection, "issues")).toContain("workflow_snapshot_json");
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
+      expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
       expect(connection.sqlite.query("select id from schema_migrations").all()).toEqual([
-        { id: "001_base_schema" }
+        { id: "001_base_schema" },
+        { id: "002_agent_sessions_runtime" }
       ]);
     } finally {
       connection.close();
@@ -73,7 +76,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 1 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 2 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

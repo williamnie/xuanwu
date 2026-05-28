@@ -45,6 +45,7 @@ type IssueRunRow = {
   provider: unknown;
   provider_session_id: unknown;
   provider_turn_id: unknown;
+  runtime_metadata_json: unknown;
   selection_reason: unknown;
   started_at: unknown;
   status: unknown;
@@ -64,6 +65,7 @@ export type IssueRun = {
   provider: string;
   provider_session_id: string;
   provider_turn_id: string;
+  runtime_metadata_json: string;
   selection_reason: string;
   started_at: string;
   status: string;
@@ -107,7 +109,7 @@ const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
 const LATEST_ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
   ir.provider_session_id, ir.provider_turn_id, ir.codex_thread_id, ir.codex_turn_id,
   ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.agent_profile_id,
-  ir.capability_summary, ir.selection_reason`;
+  ir.capability_summary, ir.selection_reason, ir.runtime_metadata_json`;
 
 export function listIssues(db: RunnerDatabase, filter: IssueFilter = {}): Issue[] {
   const query = buildIssueListQuery(filter);
@@ -214,6 +216,7 @@ function mapIssueRunRow(row: IssueRunRow): IssueRun {
     provider: optionalString(row.provider, "codex"),
     provider_session_id: optionalString(row.provider_session_id),
     provider_turn_id: optionalString(row.provider_turn_id),
+    runtime_metadata_json: optionalString(row.runtime_metadata_json, "{}"),
     codex_thread_id: optionalString(row.codex_thread_id),
     codex_turn_id: optionalString(row.codex_turn_id),
     started_at: requiredString(row.started_at, "issue_runs.started_at"),

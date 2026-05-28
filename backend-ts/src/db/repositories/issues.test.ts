@@ -71,6 +71,7 @@ describe("issue read repository", () => {
           provider: "codex",
           provider_session_id: "",
           provider_turn_id: "",
+          runtime_metadata_json: "{}",
           codex_thread_id: "",
           codex_turn_id: "",
           started_at: "2026-01-02T00:00:00Z",
