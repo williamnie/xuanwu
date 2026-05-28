@@ -8,12 +8,15 @@ describe("Bun backend config", () => {
       stateDir: "data-bun",
       dbPath: "data-bun/runner.db",
       authToken: "",
-      authTokenFile: "data-bun/auth_token"
+      authTokenFile: "data-bun/auth_token",
+      providers: {
+        codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 }
+      }
     });
   });
 
   test("derives db and auth token paths from overridden state dir", () => {
-    expect(buildConfig({ stateDir: "/tmp/codex-bun" })).toEqual({
+    expect(buildConfig({ stateDir: "/tmp/codex-bun" })).toMatchObject({
       addr: "127.0.0.1:3018",
       stateDir: "/tmp/codex-bun",
       dbPath: "/tmp/codex-bun/runner.db",
@@ -28,7 +31,11 @@ describe("Bun backend config", () => {
       [ENV_KEYS.stateDir]: "/tmp/state-bun",
       [ENV_KEYS.dbPath]: "/tmp/runner-bun.db",
       [ENV_KEYS.authToken]: "env-token",
-      [ENV_KEYS.authTokenFile]: "/tmp/token-bun"
+      [ENV_KEYS.authTokenFile]: "/tmp/token-bun",
+      [ENV_KEYS.codexCommand]: "/opt/bin/codex app-server --listen stdio://",
+      [ENV_KEYS.codexCwd]: "/tmp/project",
+      [ENV_KEYS.codexEnv]: "CODEX_HOME=/tmp/codex, SAFE_VALUE=ok, CODEX_API_KEY=secret",
+      [ENV_KEYS.codexTimeoutMs]: "1234"
     });
 
     expect(config).toEqual({
@@ -36,7 +43,15 @@ describe("Bun backend config", () => {
       stateDir: "/tmp/state-bun",
       dbPath: "/tmp/runner-bun.db",
       authToken: "env-token",
-      authTokenFile: "/tmp/token-bun"
+      authTokenFile: "/tmp/token-bun",
+      providers: {
+        codex: {
+          command: "/opt/bin/codex app-server --listen stdio://",
+          cwd: "/tmp/project",
+          env: { CODEX_HOME: "/tmp/codex", SAFE_VALUE: "ok", CODEX_API_KEY: "secret" },
+          timeoutMs: 1234
+        }
+      }
     });
   });
 
@@ -48,7 +63,11 @@ describe("Bun backend config", () => {
       "--state-dir=/tmp/cli-state",
       "--db", "/tmp/cli.db",
       "--auth-token", "cli-token",
-      "--auth-token-file", "/tmp/cli-token"
+      "--auth-token-file", "/tmp/cli-token",
+      "--codex-cmd", "cli-codex app-server --listen stdio://",
+      "--codex-cwd=/tmp/cli-project",
+      "--codex-env", "CODEX_HOME=/tmp/cli-codex",
+      "--codex-timeout-ms", "5678"
     ], env);
 
     expect(config).toEqual({
@@ -56,7 +75,15 @@ describe("Bun backend config", () => {
       stateDir: "/tmp/cli-state",
       dbPath: "/tmp/cli.db",
       authToken: "cli-token",
-      authTokenFile: "/tmp/cli-token"
+      authTokenFile: "/tmp/cli-token",
+      providers: {
+        codex: {
+          command: "cli-codex app-server --listen stdio://",
+          cwd: "/tmp/cli-project",
+          env: { CODEX_HOME: "/tmp/cli-codex" },
+          timeoutMs: 5678
+        }
+      }
     });
   });
 });

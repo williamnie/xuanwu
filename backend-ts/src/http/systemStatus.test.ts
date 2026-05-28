@@ -57,6 +57,22 @@ describe("Bun system status endpoints", () => {
       expect(body.config.addr).toBe("127.0.0.1:3018");
       expect(body.config.auth_enabled).toBe(true);
       expect(body.config.db_path).toBe("<stateDir>/runner.db");
+      expect(body.codex).toMatchObject({
+        command: "codex app-server --listen stdio://",
+        command_ok: true,
+        app_server: "not_checked",
+        model_list: "not_checked"
+      });
+      expect(body.providers).toEqual([{
+        id: "codex",
+        role: "executor",
+        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+        command: "codex app-server --listen stdio://",
+        cwd_configured: false,
+        env_keys: [],
+        timeout_ms: 1_800_000
+      }]);
+      expect(body.providers.some((provider) => provider.id === "pi")).toBe(false);
       expect(body.runner.running_loops).toBe(0);
     } finally {
       database.close();
@@ -65,7 +81,11 @@ describe("Bun system status endpoints", () => {
 
   test("does not leak token or raw paths in status JSON", async () => {
     const secret = "fixture-status-secret";
-    const { config, database } = await openFixtureRuntime({ secret });
+    const { config, database } = await openFixtureRuntime({
+      secret,
+      codexCommand: "codex --token=runtime-secret app-server --listen stdio://",
+      codexEnv: "CODEX_API_KEY=runtime-secret,SAFE_VALUE=ok"
+    });
     try {
       const router = createDefaultRouter();
       registerSystemStatusRoute(router, { authToken: secret, config, database });
@@ -82,19 +102,31 @@ describe("Bun system status endpoints", () => {
       expect(text).not.toContain(config.dbPath);
       expect(text).not.toContain(config.authTokenFile);
       expect(text).not.toContain("auth_token");
+      expect(text).not.toContain("runtime-secret");
+      expect(text).not.toContain("CODEX_API_KEY");
+      expect(text).toContain("SAFE_VALUE");
     } finally {
       database.close();
     }
   });
 });
 
-async function openFixtureRuntime(options: { secret?: string } = {}): Promise<{
+async function openFixtureRuntime(options: {
+  codexCommand?: string;
+  codexEnv?: string;
+  secret?: string;
+} = {}): Promise<{
   config: ReturnType<typeof buildConfig>;
   database: RunnerDatabase;
 }> {
   const root = await tempPath("codex-runner-bun-status-");
   const stateDir = join(root, "state");
-  const config = buildConfig({ authToken: options.secret, stateDir });
+  const config = buildConfig({
+    authToken: options.secret,
+    codexCommand: options.codexCommand,
+    codexEnv: options.codexEnv,
+    stateDir
+  });
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
   return { config, database };
 }
@@ -103,6 +135,8 @@ type SystemStatusBody = {
   auth: { enabled: boolean };
   config: { addr: string; auth_enabled: boolean; db_path: string };
   db: { ok: boolean };
+  codex: Record<string, unknown>;
+  providers: Array<{ id: string } & Record<string, unknown>>;
   runner: { running_loops: number };
   service: { alive: boolean; runtime: string };
 };

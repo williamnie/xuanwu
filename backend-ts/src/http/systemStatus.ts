@@ -1,6 +1,7 @@
 import { basename, isAbsolute, relative } from "node:path";
 import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 
 type SystemStatusContext = {
   authEnabled: boolean;
@@ -18,8 +19,8 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     auth: { enabled: context.authEnabled },
     config: configStatus(context),
     security: { warnings: securityWarnings(context.config.addr, context.authEnabled) },
-    codex: { command: "", command_ok: false, app_server: "not_checked", model_list: "not_checked" },
-    providers: [],
+    codex: codexStatus(context.config),
+    providers: providerStatus(context.config),
     runner: runnerStatus()
   };
 }
@@ -71,6 +72,33 @@ function securityWarnings(addr: string, authEnabled: boolean): Array<Record<stri
     warnings.push({ code: "auth_disabled", message: "API bearer token auth is disabled" });
   }
   return warnings;
+}
+
+function codexStatus(config: RunnerConfig): Record<string, unknown> {
+  const command = redactSensitiveText(config.providers.codex?.command ?? "");
+  return { command, command_ok: command.trim() !== "", app_server: "not_checked", model_list: "not_checked" };
+}
+
+function providerStatus(config: RunnerConfig): Array<Record<string, unknown>> {
+  const codex = config.providers.codex;
+  if (!codex) return [];
+  return [{
+    id: "codex",
+    role: "executor",
+    capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+    command: redactSensitiveText(codex.command),
+    cwd_configured: codex.cwd.trim() !== "",
+    env_keys: diagnosticEnvKeys(codex.env),
+    timeout_ms: codex.timeoutMs
+  }];
+}
+
+function diagnosticEnvKeys(env: Record<string, string>): string[] {
+  return Object.keys(env).filter((key) => !isSensitiveEnvKey(key)).sort();
+}
+
+function isSensitiveEnvKey(key: string): boolean {
+  return /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)/i.test(key);
 }
 
 function runnerStatus(): Record<string, number> {
