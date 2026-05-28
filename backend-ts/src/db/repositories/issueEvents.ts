@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import type { ProviderEvent } from "../../providers/types.ts";
 import { cleanString, issueTimestamp } from "./issueCreate.ts";
 import { getIssue } from "./issues.ts";
 import { ProjectNotFoundError } from "./projects.ts";
@@ -44,6 +45,35 @@ export function createIssueComment(db: RunnerDatabase, issueID: number, input: C
     [issueID, "issue.comment", payload, timestamp]
   );
   return mustGetIssueEvent(db, lastInsertID(db));
+}
+
+export function recordIssueLogEvent(db: RunnerDatabase, issueID: number, event: ProviderEvent): IssueEvent {
+  ensureIssueExists(db, issueID);
+  const timestamp = issueTimestamp();
+  db.sqlite.run(
+    `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+    [issueID, "issue.log", JSON.stringify(issueLogPayload(event)), timestamp]
+  );
+  return mustGetIssueEvent(db, lastInsertID(db));
+}
+
+function issueLogPayload(event: ProviderEvent): Record<string, unknown> {
+  return compactObject({
+    type: event.type,
+    provider: event.provider,
+    raw_method: event.raw?.method,
+    raw_payload: event.raw?.payload,
+    payload: event.payload,
+    text: event.text,
+    command: event.command,
+    path: event.path,
+    status: event.status,
+    error: event.error
+  });
+}
+
+function compactObject(input: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== ""));
 }
 
 function normalizeCommentAuthor(value: unknown): string {

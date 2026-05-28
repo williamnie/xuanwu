@@ -16,6 +16,29 @@ export type ThreadStartResult = ThreadSummary & {
   thread_id: string;
 };
 
+export type CodexUserInput = {
+  name?: string;
+  path?: string;
+  text?: string;
+  text_elements?: unknown[];
+  type: string;
+  url?: string;
+};
+
+export type TurnStartOptions = {
+  approvalPolicy?: string;
+  model?: string;
+  reasoningEffort?: string;
+  sandbox?: string;
+};
+
+export type TurnStartResult = {
+  provider: typeof PROVIDER_CODEX;
+  provider_session_id: string;
+  sessionId: string;
+  turn_id: string;
+};
+
 export type ThreadListInput = { cursor?: string; limit?: number };
 export type ThreadListResult = {
   backwardsCursor?: string;
@@ -67,6 +90,13 @@ export function normalizeThreadResult(value: unknown): ThreadSummary {
   return normalizeThread(raw.thread ?? raw.data ?? value);
 }
 
+export function normalizeTurnStartResult(threadID: string, value: unknown): TurnStartResult {
+  const raw = recordValue(value);
+  const turn = recordValue(raw.turn ?? raw.data ?? value);
+  const turnID = stringField(turn, "id") || stringField(raw, "turnId") || stringField(raw, "turn_id");
+  return { provider: PROVIDER_CODEX, sessionId: threadID.trim(), provider_session_id: threadID.trim(), turn_id: turnID };
+}
+
 export function threadStartParams(input: ThreadStartInput): Record<string, unknown> {
   const params: Record<string, unknown> = {
     cwd: input.cwd,
@@ -91,6 +121,19 @@ export function threadListParams(input: ThreadListInput): Record<string, unknown
 
 export function threadIDParams(threadID: string): Record<string, unknown> {
   return { threadId: threadID.trim() };
+}
+
+export function turnStartParams(threadID: string, input: CodexUserInput[], options: TurnStartOptions = {}): Record<string, unknown> {
+  const params: Record<string, unknown> = { threadId: threadID.trim(), input };
+  if (options.model?.trim() && options.model.trim() !== "codex-default") params.model = options.model.trim();
+  if (options.reasoningEffort?.trim()) params.effort = options.reasoningEffort.trim();
+  if (options.approvalPolicy?.trim()) params.approvalPolicy = approvalPolicy(options.approvalPolicy);
+  if (options.sandbox?.trim()) params.sandboxPolicy = turnSandboxPolicy(options.sandbox);
+  return params;
+}
+
+export function textInput(text: string): CodexUserInput {
+  return { type: "text", text, text_elements: [] };
 }
 
 function normalizeThread(value: unknown): ThreadSummary {
@@ -136,6 +179,20 @@ function approvalPolicy(value: string | undefined): string {
     case "always": return "untrusted";
     case "danger-only": return "on-request";
     default: return policy;
+  }
+}
+
+function turnSandboxPolicy(value: string | undefined): Record<string, string> {
+  switch (value?.trim()) {
+    case "read-only":
+    case "readOnly": return { type: "readOnly" };
+    case "danger-full-access":
+    case "dangerFullAccess": return { type: "dangerFullAccess" };
+    case "":
+    case undefined:
+    case "workspace-write":
+    case "workspaceWrite": return { type: "workspaceWrite" };
+    default: return { type: value.trim() };
   }
 }
 

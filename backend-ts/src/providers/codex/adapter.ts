@@ -4,11 +4,22 @@ import {
   normalizeThreadListResult,
   normalizeThreadResult,
   normalizeThreadStartResult,
+  normalizeTurnStartResult,
   threadIDParams,
   threadListParams,
-  threadStartParams
+  threadStartParams,
+  turnStartParams
 } from "./threadLifecycle.ts";
-import type { ThreadListInput, ThreadListResult, ThreadStartInput, ThreadStartResult, ThreadSummary } from "./threadLifecycle.ts";
+import type {
+  CodexUserInput,
+  ThreadListInput,
+  ThreadListResult,
+  ThreadStartInput,
+  ThreadStartResult,
+  ThreadSummary,
+  TurnStartOptions,
+  TurnStartResult
+} from "./threadLifecycle.ts";
 
 export { CodexThreadLifecycleError } from "./threadLifecycle.ts";
 export type {
@@ -17,7 +28,9 @@ export type {
   ThreadListResult,
   ThreadStartInput,
   ThreadStartResult,
-  ThreadSummary
+  ThreadSummary,
+  TurnStartOptions,
+  TurnStartResult
 } from "./threadLifecycle.ts";
 
 const CLIENT_INFO = { name: "codex-issue-runner-bun", version: "0.1.0" } as const;
@@ -86,6 +99,12 @@ export class CodexAdapter {
   async setThreadName(threadID: string, name: string): Promise<{ ok: true; provider_session_id: string }> {
     await this.lifecycleRequest("thread/name/set", { ...threadIDParams(threadID), name });
     return { ok: true, provider_session_id: threadID.trim() };
+  }
+
+  async startTurn(threadID: string, input: CodexUserInput[], options: TurnStartOptions = {}): Promise<TurnStartResult> {
+    const cleanThreadID = threadID.trim();
+    const result = await this.lifecycleRequest("turn/start", turnStartParams(cleanThreadID, input, options));
+    return normalizeTurnStartResult(cleanThreadID, result);
   }
 
   private async lifecycleRequest(method: string, params: JsonRpcParams): Promise<unknown> {

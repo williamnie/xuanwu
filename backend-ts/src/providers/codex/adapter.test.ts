@@ -159,6 +159,39 @@ describe("Codex adapter RPC methods", () => {
     ]);
   });
 
+  test("starts turns with issue prompt input and normalized runtime options", async () => {
+    const rpc = new FakeRpc({
+      "turn/start": { turn: { id: "turn-1" } }
+    });
+    const result = await new CodexAdapter(rpc).startTurn("thread-1", [{
+      type: "text",
+      text: "issue prompt",
+      text_elements: []
+    }], {
+      model: "codex-default",
+      reasoningEffort: "xhigh",
+      approvalPolicy: "danger-only",
+      sandbox: "read-only"
+    });
+
+    expect(rpc.calls[0]).toEqual({
+      method: "turn/start",
+      params: {
+        threadId: "thread-1",
+        input: [{ type: "text", text: "issue prompt", text_elements: [] }],
+        effort: "xhigh",
+        approvalPolicy: "on-request",
+        sandboxPolicy: { type: "readOnly" }
+      }
+    });
+    expect(result).toEqual({
+      provider: "codex",
+      provider_session_id: "thread-1",
+      sessionId: "thread-1",
+      turn_id: "turn-1"
+    });
+  });
+
   test("wraps thread lifecycle failures in diagnostic typed errors with redaction", async () => {
     const secret = "fixture-secret-token";
     const rpc = new FakeRpc({ "thread/resume": new Error(`codex rpc -32603: TOKEN=${secret}`) });

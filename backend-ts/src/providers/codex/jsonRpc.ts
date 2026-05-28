@@ -1,11 +1,14 @@
 import { redactSensitiveText } from "../../util/redact.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { ProviderEvent } from "../types.ts";
+import { normalizeCodexEvent } from "./events.ts";
 
 export type JsonRpcParams = Record<string, unknown> | unknown[] | null;
 
 type JsonRpcResponse = {
   id?: unknown;
+  method?: unknown;
+  params?: unknown;
   result?: unknown;
   error?: { code?: unknown; message?: unknown } | null;
 };
@@ -30,6 +33,7 @@ export type CodexJsonRpcProcessFactory = (options: {
 }) => CodexJsonRpcProcess;
 
 export type CodexTransportOptions = {
+  onEvent?: (event: ProviderEvent) => void;
   processFactory?: CodexJsonRpcProcessFactory;
   onDiagnostic?: (event: ProviderEvent) => void;
 };
@@ -122,6 +126,11 @@ export class CodexStdioJsonRpcTransport {
       return;
     }
     if (typeof message.id === "number") this.deliverResponse(message.id, message);
+    if (typeof message.method === "string" && message.id === undefined) this.deliverEvent(message.method, message.params);
+  }
+
+  private deliverEvent(method: string, params: unknown): void {
+    this.options.onEvent?.(normalizeCodexEvent({ method, params }));
   }
 
   private deliverResponse(id: number, message: JsonRpcResponse): void {
