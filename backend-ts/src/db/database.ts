@@ -2,6 +2,7 @@ import { Database as SQLiteDatabase } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname, join, normalize, resolve } from "node:path";
 import { buildRunnerPaths } from "../config/paths.ts";
+import { runMigrations } from "./migrations.ts";
 
 const GO_STABLE_DB_PATH = join("data", "runner.db");
 
@@ -38,6 +39,7 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     strict: true
   });
   sqlite.run("pragma foreign_keys = on");
+  if (!target.readonly) runMigrations(sqlite);
 
   return {
     path: target.path,

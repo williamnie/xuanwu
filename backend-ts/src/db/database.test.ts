@@ -40,6 +40,46 @@ describe("Bun SQLite database connection", () => {
     }
   });
 
+  test("runs the base schema migration on an empty runtime database", async () => {
+    const root = await tempPath("codex-runner-bun-schema-");
+    const connection = await openDatabase({ stateDir: join(root, "state") });
+
+    try {
+      expect(tableNames(connection)).toEqual([
+        "issue_events",
+        "issue_runs",
+        "issues",
+        "projects",
+        "schema_migrations",
+        "sqlite_sequence"
+      ]);
+      expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
+      expect(columnNames(connection, "issues")).toContain("workflow_snapshot_json");
+      expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
+      expect(connection.sqlite.query("select id from schema_migrations").all()).toEqual([
+        { id: "001_base_schema" }
+      ]);
+    } finally {
+      connection.close();
+    }
+  });
+
+  test("keeps migrations idempotent across repeated runtime opens", async () => {
+    const root = await tempPath("codex-runner-bun-idempotent-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.close();
+
+    const second = await openDatabase({ stateDir });
+
+    try {
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 1 });
+      expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
+    } finally {
+      second.close();
+    }
+  });
+
   test("rejects runtime access to the Go stable database path", async () => {
     await expect(openDatabase({ dbPath: "data/runner.db" })).rejects.toThrow(
       "refusing to open Go stable database for Bun runtime"
@@ -95,4 +135,17 @@ function failingInsertTransaction(connection: RunnerDatabase): (name: string) =>
     connection.sqlite.run("insert into items (name) values (?)", [name]);
     throw new Error("rollback fixture");
   });
+}
+
+function tableNames(connection: RunnerDatabase): string[] {
+  return connection.sqlite.query(`
+    select name from sqlite_master
+    where type='table'
+    order by name asc
+  `).all().map((row) => (row as { name: string }).name);
+}
+
+function columnNames(connection: RunnerDatabase, table: string): string[] {
+  return connection.sqlite.query(`pragma table_info(${table})`).all()
+    .map((row) => (row as { name: string }).name);
 }

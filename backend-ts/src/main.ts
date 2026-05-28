@@ -1,7 +1,9 @@
 import { loadConfig } from "./config/env.ts";
+import { openDatabase } from "./db/database.ts";
 import { startServer } from "./http/server.ts";
 
 const config = loadConfig();
+const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 const server = await startServer(config);
 
 console.log(JSON.stringify({
@@ -11,6 +13,6 @@ console.log(JSON.stringify({
   config: {
     addr: config.addr,
     stateDir: config.stateDir,
-    dbPath: config.dbPath
+    dbPath: database.path
   }
 }, null, 2));
