@@ -1,18 +1,22 @@
 import type { RunnerConfig } from "../config/env.ts";
+import { EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { loadAuthToken, requireBearerAuth } from "./auth.ts";
+import { applyLocalCors, withCors } from "./cors.ts";
+import { registerEventRoutes } from "./events.ts";
 import { json } from "./errors.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildSystemStatus } from "./systemStatus.ts";
 
 type ListenAddress = { hostname: string; port: number };
-type ServerRuntime = { database: RunnerDatabase; startedAt?: Date };
-type DefaultRouterOptions = { database?: RunnerDatabase };
+type ServerRuntime = { bus?: EventBus; database: RunnerDatabase; startedAt?: Date };
+type DefaultRouterOptions = { bus?: EventBus; database?: RunnerDatabase };
 
 export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
   const router = createRouter();
   router.get("/health", () => json({ status: "ok" }));
+  registerEventRoutes(router, { bus: runtime.bus ?? new EventBus() });
   if (runtime.database) registerReadApiRoutes(router, { database: runtime.database });
   return router;
 }
@@ -46,7 +50,12 @@ export function registerSystemStatusRoute(
 }
 
 export function createRequestHandler(router: Router, authToken: string): (request: Request) => Promise<Response> {
-  return async (request) => requireBearerAuth(request, authToken) ?? await router.handle(request);
+  return async (request) => {
+    const corsResponse = applyLocalCors(request);
+    if (corsResponse) return corsResponse;
+    const response = requireBearerAuth(request, authToken) ?? await router.handle(request);
+    return withCors(request, response);
+  };
 }
 
 export function parseListenAddress(addr: string): ListenAddress {

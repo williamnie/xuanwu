@@ -53,6 +53,30 @@ describe("Bun HTTP bearer auth", () => {
     expect(deniedBody).not.toContain("auth_token");
   });
 
+
+  test("allows local browser origins to read API routes", async () => {
+    const secret = "fixture-bearer-secret";
+    const handle = createRequestHandler(protectedRouter(), secret);
+    const origin = "http://127.0.0.1:3568";
+
+    const preflight = await handle(new Request(`${BASE_URL}/api/protected`, {
+      method: "OPTIONS",
+      headers: { origin }
+    }));
+    const allowed = await handle(new Request(`${BASE_URL}/api/protected`, {
+      headers: { authorization: `Bearer ${secret}`, origin }
+    }));
+    const denied = await handle(new Request(`${BASE_URL}/api/protected`, {
+      headers: { authorization: `Bearer ${secret}`, origin: "https://evil.example" }
+    }));
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(denied.status).toBe(403);
+  });
+
   test("leaves API routes open when auth token is not configured", async () => {
     const handle = createRequestHandler(protectedRouter(), "");
 
