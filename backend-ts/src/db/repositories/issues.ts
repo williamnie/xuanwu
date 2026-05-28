@@ -1,0 +1,257 @@
+import type { RunnerDatabase } from "../database.ts";
+
+export type IssueFilter = {
+  projectId?: string;
+  sourceSessionId?: string;
+  status?: string;
+};
+
+type IssueRow = {
+  agent_profile_id: unknown;
+  attempt_count: unknown;
+  auto_retry_next_at: unknown;
+  auto_retry_reason: unknown;
+  codex_thread_id: unknown;
+  codex_turn_id: unknown;
+  comment_count: unknown;
+  created_at: unknown;
+  description: unknown;
+  error: unknown;
+  id: unknown;
+  priority: unknown;
+  project_id: unknown;
+  prompt_template: unknown;
+  source_excerpt: unknown;
+  source_session_id: unknown;
+  source_turn_id: unknown;
+  status: unknown;
+  template_id: unknown;
+  title: unknown;
+  updated_at: unknown;
+  workflow_snapshot_json: unknown;
+};
+
+type IssueRunRow = {
+  agent_profile_id: unknown;
+  attempt: unknown;
+  capability_summary: unknown;
+  codex_thread_id: unknown;
+  codex_turn_id: unknown;
+  ended_at: unknown;
+  error: unknown;
+  exit_reason: unknown;
+  id: unknown;
+  issue_id: unknown;
+  provider: unknown;
+  provider_session_id: unknown;
+  provider_turn_id: unknown;
+  selection_reason: unknown;
+  started_at: unknown;
+  status: unknown;
+};
+
+export type IssueRun = {
+  agent_profile_id: string;
+  attempt: number;
+  capability_summary: string;
+  codex_thread_id: string;
+  codex_turn_id: string;
+  ended_at: string;
+  error: string;
+  exit_reason: string;
+  id: string;
+  issue_id: number;
+  provider: string;
+  provider_session_id: string;
+  provider_turn_id: string;
+  selection_reason: string;
+  started_at: string;
+  status: string;
+};
+
+export type Issue = {
+  agent_profile_id: string;
+  attempt_count: number;
+  auto_retry_next_at: string;
+  auto_retry_reason: string;
+  codex_thread_id: string;
+  codex_turn_id: string;
+  comment_count: number;
+  created_at: string;
+  description: string;
+  error: string;
+  id: number;
+  latest_run?: IssueRun;
+  priority: number;
+  project_id: string;
+  prompt_template: string;
+  source_excerpt: string;
+  source_session_id: string;
+  source_turn_id: string;
+  status: string;
+  template_id: string;
+  title: string;
+  updated_at: string;
+  workflow_snapshot_json: string;
+};
+
+const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
+  template_id, prompt_template, agent_profile_id, source_session_id,
+  source_turn_id, source_excerpt, codex_thread_id, codex_turn_id,
+  attempt_count,
+  (select count(*) from issue_events where issue_id=issues.id and type='issue.comment') as comment_count,
+  workflow_snapshot_json, auto_retry_next_at, auto_retry_reason, error,
+  created_at, updated_at`;
+
+
+const LATEST_ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
+  ir.provider_session_id, ir.provider_turn_id, ir.codex_thread_id, ir.codex_turn_id,
+  ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.agent_profile_id,
+  ir.capability_summary, ir.selection_reason`;
+
+export function listIssues(db: RunnerDatabase, filter: IssueFilter = {}): Issue[] {
+  const query = buildIssueListQuery(filter);
+  const rows = db.sqlite.query<IssueRow, Array<number | string>>(query.sql).all(...query.args);
+  return attachLatestRuns(db, rows.map(mapIssueRow));
+}
+
+export function getIssue(db: RunnerDatabase, id: number): Issue | null {
+  const issueID = positiveInteger(id, "issue id");
+  const row = db.sqlite.query<IssueRow, [number]>(`
+    select ${ISSUE_COLUMNS} from issues where id = ?
+  `).get(issueID);
+  if (!row) return null;
+  return attachLatestRuns(db, [mapIssueRow(row)])[0] ?? null;
+}
+
+function buildIssueListQuery(filter: IssueFilter): { args: string[]; sql: string } {
+  const conditions: string[] = [];
+  const args: string[] = [];
+  const projectId = cleanOptionalString(filter.projectId);
+  const status = cleanOptionalString(filter.status);
+  const sourceSessionId = normalizeSourceSessionID(filter.sourceSessionId);
+  addFilter(conditions, args, "project_id = ?", projectId);
+  addFilter(conditions, args, "status = ?", status);
+  addFilter(conditions, args, "source_session_id = ?", sourceSessionId);
+  const where = conditions.length > 0 ? ` where ${conditions.join(" and ")}` : "";
+  return {
+    args,
+    sql: `select ${ISSUE_COLUMNS} from issues${where} order by priority desc, created_at asc`
+  };
+}
+
+function addFilter(conditions: string[], args: string[], condition: string, value: string): void {
+  if (!value) return;
+  conditions.push(condition);
+  args.push(value);
+}
+
+function attachLatestRuns(db: RunnerDatabase, issues: Issue[]): Issue[] {
+  if (issues.length === 0) return issues;
+  const latestRuns = loadLatestRuns(db, issues.map((issue) => issue.id));
+  return issues.map((issue) => {
+    const latest_run = latestRuns.get(issue.id);
+    return latest_run ? { ...issue, latest_run } : issue;
+  });
+}
+
+function loadLatestRuns(db: RunnerDatabase, issueIDs: number[]): Map<number, IssueRun> {
+  const placeholders = issueIDs.map(() => "?").join(", ");
+  const rows = db.sqlite.query<IssueRunRow, number[]>(`
+    select ${LATEST_ISSUE_RUN_COLUMNS} from issue_runs ir
+    join (
+      select issue_id, max(attempt) as attempt from issue_runs
+      where issue_id in (${placeholders}) group by issue_id
+    ) latest on latest.issue_id=ir.issue_id and latest.attempt=ir.attempt
+  `).all(...issueIDs);
+  return new Map(rows.map((row) => {
+    const run = mapIssueRunRow(row);
+    return [run.issue_id, run];
+  }));
+}
+
+function mapIssueRow(row: IssueRow): Issue {
+  return {
+    id: positiveInteger(row.id, "issues.id"),
+    project_id: requiredString(row.project_id, "issues.project_id"),
+    title: requiredString(row.title, "issues.title"),
+    description: optionalString(row.description),
+    status: requiredString(row.status, "issues.status"),
+    priority: integerValue(row.priority, "issues.priority"),
+    template_id: optionalString(row.template_id),
+    prompt_template: optionalString(row.prompt_template),
+    agent_profile_id: optionalString(row.agent_profile_id),
+    source_session_id: optionalString(row.source_session_id),
+    source_turn_id: optionalString(row.source_turn_id),
+    source_excerpt: optionalString(row.source_excerpt),
+    codex_thread_id: optionalString(row.codex_thread_id),
+    codex_turn_id: optionalString(row.codex_turn_id),
+    attempt_count: integerValue(row.attempt_count, "issues.attempt_count"),
+    comment_count: integerValue(row.comment_count, "issues.comment_count"),
+    workflow_snapshot_json: optionalString(row.workflow_snapshot_json),
+    auto_retry_next_at: optionalString(row.auto_retry_next_at),
+    auto_retry_reason: optionalString(row.auto_retry_reason),
+    error: optionalString(row.error),
+    created_at: requiredString(row.created_at, "issues.created_at"),
+    updated_at: requiredString(row.updated_at, "issues.updated_at")
+  };
+}
+
+function mapIssueRunRow(row: IssueRunRow): IssueRun {
+  return {
+    id: requiredString(row.id, "issue_runs.id"),
+    issue_id: positiveInteger(row.issue_id, "issue_runs.issue_id"),
+    attempt: positiveInteger(row.attempt, "issue_runs.attempt"),
+    status: requiredString(row.status, "issue_runs.status"),
+    provider: optionalString(row.provider, "codex"),
+    provider_session_id: optionalString(row.provider_session_id),
+    provider_turn_id: optionalString(row.provider_turn_id),
+    codex_thread_id: optionalString(row.codex_thread_id),
+    codex_turn_id: optionalString(row.codex_turn_id),
+    started_at: requiredString(row.started_at, "issue_runs.started_at"),
+    ended_at: optionalString(row.ended_at),
+    exit_reason: optionalString(row.exit_reason),
+    error: optionalString(row.error),
+    agent_profile_id: optionalString(row.agent_profile_id),
+    capability_summary: optionalString(row.capability_summary),
+    selection_reason: optionalString(row.selection_reason)
+  };
+}
+
+function normalizeSourceSessionID(value: string | undefined): string {
+  const text = cleanOptionalString(value);
+  if (!text) return "";
+  const separator = text.indexOf(":");
+  if (separator < 0) return text;
+  const provider = text.slice(0, separator).trim().toLowerCase();
+  const sessionID = text.slice(separator + 1).trim();
+  return provider === "codex" ? sessionID : text;
+}
+
+function cleanOptionalString(value: string | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function requiredString(value: unknown, label: string): string {
+  const text = optionalString(value);
+  if (text === "") throw new Error(`${label} is required`);
+  return text;
+}
+
+function optionalString(value: unknown, fallback = ""): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== "string") throw new Error(`expected string row value`);
+  const trimmed = value.trim();
+  return trimmed === "" ? fallback : trimmed;
+}
+
+function positiveInteger(value: unknown, label: string): number {
+  const number = integerValue(value, label);
+  if (number <= 0) throw new Error(`${label} must be positive`);
+  return number;
+}
+
+function integerValue(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
+  return value;
+}
