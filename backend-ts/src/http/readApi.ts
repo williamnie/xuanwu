@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { createProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -26,6 +27,10 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
     const issue = getIssue(context.database, issueID(request));
     if (!issue) throw new HttpError(404, "资源不存在");
     return json(issue);
+  });
+  router.patch("/api/issues/:id", async (request) => {
+    const body = await parseObjectBody(request);
+    return writeResponse(() => updateIssue(context.database, issueID(request), body));
   });
 }
 

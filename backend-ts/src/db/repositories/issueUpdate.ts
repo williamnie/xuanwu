@@ -1,0 +1,132 @@
+import type { RunnerDatabase } from "../database.ts";
+import { getIssue, type Issue } from "./issues.ts";
+import {
+  cleanString,
+  deriveIssueTitle,
+  integerInput,
+  issueTimestamp,
+  normalizeIdentifier,
+  normalizeSourceSessionID,
+  VALID_ISSUE_STATUSES
+} from "./issueCreate.ts";
+import { ProjectNotFoundError } from "./projects.ts";
+
+export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>>;
+
+type NormalizedIssuePatch = {
+  agent_profile_id: string;
+  auto_retry_next_at: string;
+  auto_retry_reason: string;
+  codex_thread_id: string;
+  codex_turn_id: string;
+  description: string;
+  error: string;
+  priority: number;
+  source_excerpt: string;
+  source_session_id: string;
+  source_turn_id: string;
+  status: string;
+  title: string;
+};
+
+const PATCH_FIELDS = [
+  "title",
+  "description",
+  "status",
+  "priority",
+  "error",
+  "source_session_id",
+  "source_turn_id",
+  "source_excerpt",
+  "agent_profile_id",
+  "codex_thread_id",
+  "codex_turn_id",
+  "auto_retry_next_at",
+  "auto_retry_reason"
+] as const satisfies ReadonlyArray<keyof NormalizedIssuePatch>;
+
+export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueInput): Issue {
+  const current = getIssue(db, id);
+  if (!current) throw new ProjectNotFoundError();
+  const patch = normalizeIssuePatch(input);
+  const next = { ...issueToPatchShape(current), ...patch };
+  if (Object.hasOwn(patch, "description") && !Object.hasOwn(patch, "title")) {
+    next.title = deriveIssueTitle(next.description);
+  }
+  validateIssuePatch(next);
+  const timestamp = issueTimestamp();
+  const write = db.transaction((record: NormalizedIssuePatch) => {
+    db.sqlite.run(`update issues set title=?, description=?, status=?, priority=?,
+      agent_profile_id=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
+      codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?, auto_retry_reason=?,
+      error=?, updated_at=? where id=?`,
+      [record.title, record.description, record.status, record.priority,
+        record.agent_profile_id, record.source_session_id, record.source_turn_id,
+        record.source_excerpt, record.codex_thread_id, record.codex_turn_id,
+        record.auto_retry_next_at, record.auto_retry_reason, record.error,
+        timestamp, current.id]);
+    if (Object.hasOwn(patch, "status") && current.status !== record.status) {
+      db.sqlite.run(
+        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+        [current.id, "issue.status_changed", JSON.stringify({ status: record.status }), timestamp]
+      );
+    }
+  });
+  write(next);
+  return mustGetIssue(db, current.id);
+}
+
+function normalizeIssuePatch(input: UpdateIssueInput): Partial<NormalizedIssuePatch> {
+  const patch: Partial<NormalizedIssuePatch> = {};
+  for (const field of PATCH_FIELDS) {
+    if (!hasPatchValue(input, field)) continue;
+    patch[field] = normalizePatchField(field, input[field]) as never;
+  }
+  return patch;
+}
+
+function normalizePatchField(field: keyof NormalizedIssuePatch, value: unknown): string | number {
+  switch (field) {
+    case "agent_profile_id":
+      return normalizeIdentifier(value);
+    case "priority":
+      return integerInput(value);
+    case "source_session_id":
+      return normalizeSourceSessionID(value);
+    default:
+      return cleanString(value);
+  }
+}
+
+function validateIssuePatch(issue: NormalizedIssuePatch): void {
+  if (!VALID_ISSUE_STATUSES.has(issue.status)) throw new Error("status 不合法");
+  if (issue.title === "") throw new Error("issue 内容不能为空");
+}
+
+function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
+  return {
+    title: issue.title,
+    description: issue.description,
+    status: issue.status,
+    priority: issue.priority,
+    error: issue.error,
+    source_session_id: issue.source_session_id,
+    source_turn_id: issue.source_turn_id,
+    source_excerpt: issue.source_excerpt,
+    agent_profile_id: issue.agent_profile_id,
+    codex_thread_id: issue.codex_thread_id,
+    codex_turn_id: issue.codex_turn_id,
+    auto_retry_next_at: issue.auto_retry_next_at,
+    auto_retry_reason: issue.auto_retry_reason
+  };
+}
+
+function mustGetIssue(db: RunnerDatabase, id: number): Issue {
+  const issue = getIssue(db, id);
+  if (!issue) throw new Error("updated issue missing");
+  return issue;
+}
+
+function hasPatchValue(input: UpdateIssueInput, key: keyof NormalizedIssuePatch): boolean {
+  return Object.hasOwn(input, key) && input[key] !== null && input[key] !== undefined;
+}

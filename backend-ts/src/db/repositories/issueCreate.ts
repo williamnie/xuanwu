@@ -19,8 +19,8 @@ type NormalizedIssueWrite = {
   workflow_snapshot_json: string;
 };
 
-const ISSUE_TITLE_MAX_RUNES = 50;
-const VALID_ISSUE_STATUSES = new Set([
+export const ISSUE_TITLE_MAX_RUNES = 50;
+export const VALID_ISSUE_STATUSES = new Set([
   "triage",
   "todo",
   "in_progress",
@@ -33,7 +33,7 @@ const VALID_ISSUE_STATUSES = new Set([
 export function createIssue(db: RunnerDatabase, input: CreateIssueInput): Issue {
   const issue = normalizeIssueForWrite(input);
   validateIssueForCreate(db, issue);
-  const timestamp = now();
+  const timestamp = issueTimestamp();
   const insertIssue = db.transaction((record: NormalizedIssueWrite) => {
     db.sqlite.run(`insert into issues
       (project_id, title, description, status, priority, template_id,
@@ -100,7 +100,7 @@ function lastInsertID(db: RunnerDatabase): number {
   return row.id;
 }
 
-function normalizeSourceSessionID(value: unknown): string {
+export function normalizeSourceSessionID(value: unknown): string {
   const text = cleanString(value);
   if (!text) return "";
   const separator = text.indexOf(":");
@@ -110,7 +110,7 @@ function normalizeSourceSessionID(value: unknown): string {
   return provider === "codex" ? sessionID : text;
 }
 
-function normalizeIdentifier(value: unknown): string {
+export function normalizeIdentifier(value: unknown): string {
   let out = "";
   let lastDash = false;
   for (const char of cleanString(value).toLowerCase()) {
@@ -125,7 +125,7 @@ function normalizeIdentifier(value: unknown): string {
   return out.replace(/^-+|-+$/g, "");
 }
 
-function deriveIssueTitle(content: string): string {
+export function deriveIssueTitle(content: string): string {
   const line = content.split("\n").map((item) => item.trim()).find(Boolean) ?? "";
   return truncateRunes(line, ISSUE_TITLE_MAX_RUNES);
 }
@@ -135,14 +135,14 @@ function truncateRunes(value: string, maxRunes: number): string {
   return runes.length <= maxRunes ? value : `${runes.slice(0, maxRunes - 1).join("")}…`;
 }
 
-function integerInput(value: unknown): number {
+export function integerInput(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) ? value : 0;
 }
 
-function cleanString(value: unknown): string {
+export function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function now(): string {
+export function issueTimestamp(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
