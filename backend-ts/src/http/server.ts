@@ -7,6 +7,7 @@ import { registerEventRoutes } from "./events.ts";
 import { json } from "./errors.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
+import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { buildSystemStatus } from "./systemStatus.ts";
 
 type ListenAddress = { hostname: string; port: number };
@@ -29,11 +30,18 @@ export async function startServer(
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);
   registerSystemStatusRoute(router, { authToken, config, ...runtime });
+  registerSystemLogsRoute(router, { config });
   return Bun.serve({
     hostname: address.hostname,
     port: address.port,
     fetch: createRequestHandler(router, authToken)
   });
+}
+
+export function registerSystemLogsRoute(router: Router, context: { config: RunnerConfig }): void {
+  router.get("/api/system/logs", async (request) => json(
+    await buildRuntimeLogs(context.config, runtimeLogLineLimit(request))
+  ));
 }
 
 export function registerSystemStatusRoute(

@@ -124,6 +124,14 @@ export function getIssue(db: RunnerDatabase, id: number): Issue | null {
   return attachLatestRuns(db, [mapIssueRow(row)])[0] ?? null;
 }
 
+export function listIssueRuns(db: RunnerDatabase, id: number): IssueRun[] {
+  const issueID = positiveInteger(id, "issue id");
+  return db.sqlite.query<IssueRunRow, [number]>(`
+    select ${LATEST_ISSUE_RUN_COLUMNS} from issue_runs ir
+    where ir.issue_id = ? order by ir.attempt asc
+  `).all(issueID).map(mapIssueRunRow);
+}
+
 function buildIssueListQuery(filter: IssueFilter): { args: string[]; sql: string } {
   const conditions: string[] = [];
   const args: string[] = [];

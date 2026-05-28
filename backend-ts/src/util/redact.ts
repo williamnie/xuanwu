@@ -7,7 +7,8 @@ const SENSITIVE_LINE_MARKERS = [
   "bearer "
 ];
 
-const SECRET_ASSIGNMENT_PATTERN = /((?:api[_-]?key|auth[_-]?token|password|secret|token)\s*[:=]\s*)[^\s,;]+/gi;
+const SECRET_ASSIGNMENT_PATTERN =
+  /([A-Z0-9_-]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)[A-Z0-9_-]*\s*[:=]\s*)[^\s,;]+/gi;
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 
 export function redactSensitiveText(text: string): string {
