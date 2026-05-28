@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { cancelIssue, enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues } from "../db/repositories/issues.ts";
 import { createProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
@@ -33,6 +34,10 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   });
   router.post("/api/issues/:id/cancel", (request) => {
     return writeResponse(() => cancelIssue(context.database, issueID(request)));
+  });
+  router.post("/api/issues/:id/verification", async (request) => {
+    const body = await parseObjectBody(request);
+    return writeResponse(() => reviewIssueVerification(context.database, issueID(request), body));
   });
   router.get("/api/issues/:id", (request) => {
     const issue = getIssue(context.database, issueID(request));
