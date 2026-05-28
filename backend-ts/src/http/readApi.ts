@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { createProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
@@ -31,6 +32,13 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   router.patch("/api/issues/:id", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => updateIssue(context.database, issueID(request), body));
+  });
+  router.post("/api/issues/:id/comments", async (request) => {
+    const body = await parseObjectBody(request);
+    return writeResponse(() => createIssueComment(context.database, issueID(request), body), 201);
+  });
+  router.get("/api/issues/:id/events", (request) => {
+    return writeResponse(() => listIssueEvents(context.database, issueID(request)));
   });
 }
 
@@ -78,7 +86,8 @@ function issueFilter(request: Request): { projectId: string; sourceSessionId: st
 }
 
 function issueID(request: Request): number {
-  const raw = new URL(request.url).pathname.split("/").pop() ?? "";
+  const parts = new URL(request.url).pathname.split("/").filter(Boolean);
+  const raw = parts[parts.indexOf("issues") + 1] ?? "";
   if (!/^[0-9]+$/.test(raw)) throw new HttpError(400, "issue id 不合法");
   const id = Number(raw);
   if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, "issue id 不合法");
