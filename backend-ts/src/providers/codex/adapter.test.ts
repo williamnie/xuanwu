@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CodexAdapter } from "./adapter.ts";
+import { CodexAdapter, CodexThreadLifecycleError } from "./adapter.ts";
 import type { JsonRpcParams } from "./jsonRpc.ts";
 
 describe("Codex adapter RPC methods", () => {
@@ -57,6 +57,44 @@ describe("Codex adapter RPC methods", () => {
     });
   });
 
+  test("starts threads and returns provider session ids for Sessions API", async () => {
+    const rpc = new FakeRpc({
+      "thread/start": { thread: { id: "thread-new", cwd: "/tmp/demo", status: { state: "running" } } }
+    });
+    const result = await new CodexAdapter(rpc).startThread({
+      cwd: "/tmp/demo",
+      model: "codex-default",
+      reasoningEffort: "xhigh",
+      approvalPolicy: "danger-only",
+      sandbox: "workspace-write",
+      developerInstructions: "keep changes small",
+      threadSource: "subagent"
+    });
+
+    expect(rpc.calls[0]).toEqual({
+      method: "thread/start",
+      params: {
+        cwd: "/tmp/demo",
+        model: null,
+        approvalPolicy: "on-request",
+        sandbox: "workspace-write",
+        developerInstructions: "keep changes small",
+        ephemeral: false,
+        threadSource: "subagent",
+        config: { model_reasoning_effort: "xhigh" }
+      }
+    });
+    expect(result).toMatchObject({
+      id: "codex:thread-new",
+      thread_id: "thread-new",
+      sessionId: "thread-new",
+      provider: "codex",
+      provider_session_id: "thread-new",
+      cwd: "/tmp/demo",
+      isRunning: true
+    });
+  });
+
   test("normalizes thread list responses", async () => {
     const rpc = new FakeRpc({
       "thread/list": {
@@ -87,6 +125,60 @@ describe("Codex adapter RPC methods", () => {
       }],
       nextCursor: "next"
     });
+  });
+
+  test("reads, resumes, and names threads through lifecycle RPC calls", async () => {
+    const rpc = new FakeRpc({
+      "thread/read": { thread: { id: "thread-1", name: "Read title", turns: [{ id: "turn-1" }] } },
+      "thread/resume": { thread: { threadId: "thread-1", preview: "resumed", status: "busy" } },
+      "thread/name/set": {}
+    });
+    const adapter = new CodexAdapter(rpc);
+
+    await expect(adapter.readThread("thread-1")).resolves.toMatchObject({
+      id: "codex:thread-1",
+      provider_session_id: "thread-1",
+      name: "Read title",
+      turns: [{ id: "turn-1" }]
+    });
+    await expect(adapter.resumeThread("thread-1")).resolves.toMatchObject({
+      id: "codex:thread-1",
+      provider_session_id: "thread-1",
+      preview: "resumed",
+      isRunning: true
+    });
+    await expect(adapter.setThreadName("thread-1", "Issue title")).resolves.toEqual({
+      ok: true,
+      provider_session_id: "thread-1"
+    });
+
+    expect(rpc.calls.slice(0, 3)).toEqual([
+      { method: "thread/read", params: { threadId: "thread-1" } },
+      { method: "thread/resume", params: { threadId: "thread-1" } },
+      { method: "thread/name/set", params: { threadId: "thread-1", name: "Issue title" } }
+    ]);
+  });
+
+  test("wraps thread lifecycle failures in diagnostic typed errors with redaction", async () => {
+    const secret = "fixture-secret-token";
+    const rpc = new FakeRpc({ "thread/resume": new Error(`codex rpc -32603: TOKEN=${secret}`) });
+
+    await expect(new CodexAdapter(rpc).resumeThread("thread-1")).rejects.toThrow(CodexThreadLifecycleError);
+
+    try {
+      await new CodexAdapter(rpc).resumeThread("thread-1");
+      throw new Error("expected lifecycle error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(CodexThreadLifecycleError);
+      const detail = (error as CodexThreadLifecycleError).detail;
+      expect(detail).toEqual({
+        provider: "codex",
+        method: "thread/resume",
+        code: "-32603",
+        message: "codex rpc -32603: TOKEN=[redacted]"
+      });
+      expect(String(error)).not.toContain(secret);
+    }
   });
 
   test("surfaces RPC errors without leaking extra fields", async () => {
