@@ -1,8 +1,16 @@
+import { runCli } from "./cli/command.ts";
+import { commandMode } from "./mainMode.ts";
 import { loadConfig } from "./config/env.ts";
 import { openDatabase } from "./db/database.ts";
 import { startServer } from "./http/server.ts";
 
-const config = loadConfig();
+const { serve, args } = commandMode(Bun.argv.slice(2));
+
+if (!serve) {
+  process.exit(await runCli(args));
+}
+
+const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 const server = await startServer(config, { database });
 
