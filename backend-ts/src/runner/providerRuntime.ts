@@ -1,7 +1,8 @@
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { recordIssueLogEvent } from "../db/repositories/issueEvents.ts";
 import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import type { ExecutorProvider, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
+import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   database?: RunnerDatabase;
@@ -77,8 +78,10 @@ function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string
   });
 }
 
-function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: { session?: SessionRef; status?: string }): void {
-  if (!input.database || !event.session) return;
+function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEvent): void {
+  if (!input.database) return;
+  recordIssueLogEvent(input.database, input.issueId, event);
+  if (!event.session) return;
   persistRuntime({
     db: input.database, input, provider: event.session.provider, session: event.session,
     status: event.status || "running", metadata: { source: "provider_event" }

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
@@ -140,6 +141,11 @@ describe("executor provider runtime seam", () => {
         issue_id: issueId,
         raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\"}"
       });
+      expect(listIssueEvents(db, issueId)).toMatchObject([{
+        issue_id: issueId,
+        type: "issue.log",
+        payload: "{\"type\":\"provider.message\",\"provider\":\"fake-execution-only\",\"text\":\"fake provider log\"}"
+      }]);
     } finally {
       db.close();
     }
