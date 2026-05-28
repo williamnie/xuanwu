@@ -23,9 +23,11 @@ export type Project = {
   cwd: string;
   default_agent_profile_id: string;
   id: string;
+  loop_status: string;
   model: string;
   name: string;
   provider: string;
+  provider_capabilities: string[];
   provider_config_json: string;
   sandbox: string;
   sort_order: number;
@@ -65,7 +67,9 @@ function mapProjectRow(row: ProjectRow): Project {
     default_agent_profile_id: optionalString(row.default_agent_profile_id),
     sort_order: integerValue(row.sort_order, "projects.sort_order"),
     created_at: requiredString(row.created_at, "projects.created_at"),
-    updated_at: requiredString(row.updated_at, "projects.updated_at")
+    updated_at: requiredString(row.updated_at, "projects.updated_at"),
+    loop_status: "stopped",
+    provider_capabilities: providerCapabilities(row.provider)
   };
 }
 
@@ -101,4 +105,16 @@ function normalizedModel(value: unknown): string {
   const model = optionalString(value);
   if (model === "" || model.toLowerCase().startsWith("gemini-")) return "codex-default";
   return model;
+}
+
+function providerCapabilities(value: unknown): string[] {
+  switch (normalizedProvider(value)) {
+    case "codex":
+      return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
+    case "claude":
+    case "fake-execution-only":
+      return ["issue_execution"];
+    default:
+      return [];
+  }
 }

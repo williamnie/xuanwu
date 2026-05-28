@@ -35,7 +35,7 @@ async function dispatch(routes: Route[], request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
     const path = normalizePath(url.pathname);
-    const route = routes.find((item) => item.path === path && item.method === request.method);
+    const route = routes.find((item) => routeMatches(item.path, path) && item.method === request.method);
     if (route) return await route.handler(request);
     return missingRouteResponse(routes, path);
   } catch (error) {
@@ -52,11 +52,27 @@ function missingRouteResponse(routes: Route[], path: string): Response {
 }
 
 function allowedMethods(routes: Route[], path: string): HttpMethod[] {
-  return ROUTE_METHODS.filter((method) => routes.some((item) => item.path === path && item.method === method));
+  return ROUTE_METHODS.filter((method) => routes.some((item) => routeMatches(item.path, path) && item.method === method));
 }
 
 function normalizePath(path: string): string {
   if (path === "") return "/";
   if (path.length > 1 && path.endsWith("/")) return path.slice(0, -1);
   return path;
+}
+
+function routeMatches(pattern: string, path: string): boolean {
+  if (pattern === path) return true;
+  const patternParts = pathSegments(pattern);
+  const pathParts = pathSegments(path);
+  if (patternParts.length !== pathParts.length) return false;
+  return patternParts.every((part, index) => part === pathParts[index] || isParamSegment(part));
+}
+
+function pathSegments(path: string): string[] {
+  return normalizePath(path).split("/").filter(Boolean);
+}
+
+function isParamSegment(segment: string): boolean {
+  return segment.startsWith(":") && segment.length > 1;
 }

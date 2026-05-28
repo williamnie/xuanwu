@@ -2,22 +2,25 @@ import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { loadAuthToken, requireBearerAuth } from "./auth.ts";
 import { json } from "./errors.ts";
+import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildSystemStatus } from "./systemStatus.ts";
 
 type ListenAddress = { hostname: string; port: number };
 type ServerRuntime = { database: RunnerDatabase; startedAt?: Date };
+type DefaultRouterOptions = { database?: RunnerDatabase };
 
-export function createDefaultRouter(): Router {
+export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
   const router = createRouter();
   router.get("/health", () => json({ status: "ok" }));
+  if (runtime.database) registerReadApiRoutes(router, { database: runtime.database });
   return router;
 }
 
 export async function startServer(
   config: RunnerConfig,
   runtime: ServerRuntime,
-  router = createDefaultRouter()
+  router = createDefaultRouter(runtime)
 ): Promise<ReturnType<typeof Bun.serve>> {
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);

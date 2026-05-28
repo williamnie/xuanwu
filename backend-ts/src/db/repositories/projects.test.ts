@@ -60,7 +60,9 @@ describe("project read repository", () => {
         approval_policy: "never",
         sandbox: "workspace-write",
         default_agent_profile_id: "",
+        loop_status: "stopped",
         sort_order: 1,
+        provider_capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
         created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-01T00:00:00Z"
       });
