@@ -47,7 +47,7 @@ export type SystemLogsDTO = {
 
 export type SystemStatusDTO = {
   auth?: { enabled?: boolean };
-  codex?: { command_ok?: boolean };
+  codex?: { capability_summary?: string; command_ok?: boolean };
   config?: { auth_enabled?: boolean };
   db?: { ok?: boolean };
   runner?: { in_progress_issues?: number; running_loops?: number };

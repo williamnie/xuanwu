@@ -32,6 +32,18 @@ describe("Bun CLI dispatcher", () => {
     expect(stderr).toBe("");
   });
 
+  test("shows Codex capability summary when status provides it", async () => {
+    const fetcher = fetchStub(() => jsonResponse({
+      ...systemStatusBody(),
+      codex: { command_ok: true, capability_summary: "issue_execution,sessions,model_list" }
+    }));
+    const { stdout } = await run(["system", "status"], { fetcher });
+
+    expect(stdout).toBe(
+      "API alive=true db=true codex_cmd=true auth=true loops=2 in_progress=1 codex_caps=issue_execution,sessions,model_list\n"
+    );
+  });
+
   test("pretty prints JSON and sends token from Bun env", async () => {
     const fetcher = fetchStub((request) => {
       expect(request.headers.get("authorization")).toBe("Bearer env-token");

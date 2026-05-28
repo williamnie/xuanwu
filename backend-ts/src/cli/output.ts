@@ -24,7 +24,9 @@ export function formatSystemStatus(status: SystemStatusDTO, asJSON: boolean): st
   const auth = status.config?.auth_enabled ?? status.auth?.enabled ?? false;
   const loops = status.runner?.running_loops ?? 0;
   const inProgress = status.runner?.in_progress_issues ?? 0;
-  return `API alive=${alive} db=${dbOK} codex_cmd=${codexOK} auth=${auth} loops=${loops} in_progress=${inProgress}\n`;
+  const codexCaps = status.codex?.capability_summary?.trim();
+  const suffix = codexCaps ? ` codex_caps=${codexCaps}` : "";
+  return `API alive=${alive} db=${dbOK} codex_cmd=${codexOK} auth=${auth} loops=${loops} in_progress=${inProgress}${suffix}\n`;
 }
 
 export function formatSystemLogs(summary: SystemLogsDTO, asJSON: boolean): string {

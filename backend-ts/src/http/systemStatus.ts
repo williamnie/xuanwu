@@ -76,7 +76,15 @@ function securityWarnings(addr: string, authEnabled: boolean): Array<Record<stri
 
 function codexStatus(config: RunnerConfig): Record<string, unknown> {
   const command = redactSensitiveText(config.providers.codex?.command ?? "");
-  return { command, command_ok: command.trim() !== "", app_server: "not_checked", model_list: "not_checked" };
+  const capabilities = codexCapabilities();
+  return {
+    command,
+    command_ok: command.trim() !== "",
+    capability_summary: capabilities.join(","),
+    capabilities,
+    app_server: "not_checked",
+    model_list: "not_checked"
+  };
 }
 
 function providerStatus(config: RunnerConfig): Array<Record<string, unknown>> {
@@ -85,12 +93,16 @@ function providerStatus(config: RunnerConfig): Array<Record<string, unknown>> {
   return [{
     id: "codex",
     role: "executor",
-    capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
+    capabilities: codexCapabilities(),
     command: redactSensitiveText(codex.command),
     cwd_configured: codex.cwd.trim() !== "",
     env_keys: diagnosticEnvKeys(codex.env),
     timeout_ms: codex.timeoutMs
   }];
+}
+
+function codexCapabilities(): string[] {
+  return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
 }
 
 function diagnosticEnvKeys(env: Record<string, string>): string[] {

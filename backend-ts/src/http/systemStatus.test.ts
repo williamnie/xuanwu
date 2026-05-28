@@ -60,6 +60,8 @@ describe("Bun system status endpoints", () => {
       expect(body.codex).toMatchObject({
         command: "codex app-server --listen stdio://",
         command_ok: true,
+        capability_summary: "issue_execution,sessions,resume_session,interrupt,approvals,model_list",
+        capabilities: ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"],
         app_server: "not_checked",
         model_list: "not_checked"
       });
