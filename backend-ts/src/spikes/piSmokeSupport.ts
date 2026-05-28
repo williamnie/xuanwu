@@ -1,11 +1,15 @@
 import { type AgentSession, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { existsSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 
 export const READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
 const DISABLED_WRITE_TOOLS = ["edit", "write", "bash"] as const;
 const RESPONSE_PREVIEW_SUFFIX = "...";
 const TOOL_RESULT_PREVIEW_MAX = 100;
 const SMOKE_RESPONSE = "pi-smoke-response-ok";
+const PI_PACKAGE_DIR_ENV = "PI_PACKAGE_DIR";
+const PI_PACKAGE_RELATIVE_DIR = join("backend-ts", "node_modules", "@earendil-works", "pi-coding-agent");
 
 type SmokeRuntimeConfig = {
   events: boolean;
@@ -39,6 +43,27 @@ export type PromptResult = {
   events: EventSummary[];
   toolProbes: ToolProbe[];
 };
+
+export type SmokeRuntime = {
+  ai: typeof import("@earendil-works/pi-ai");
+  pi: typeof import("@earendil-works/pi-coding-agent");
+};
+
+export function resolveDefaultRepoRoot(): string {
+  if (!isCompiledBunExecutable()) return resolve(import.meta.dirname, "../../..");
+
+  const cwd = process.cwd();
+  return basename(cwd) === "backend-ts" ? resolve(cwd, "..") : cwd;
+}
+
+export async function loadSmokeRuntime(repoRoot: string): Promise<SmokeRuntime> {
+  ensurePiPackageDir(repoRoot);
+  const [pi, ai] = await Promise.all([
+    import("@earendil-works/pi-coding-agent"),
+    import("@earendil-works/pi-ai")
+  ]);
+  return { ai, pi };
+}
 
 export function buildReadOnlyToolCallResponse() {
   return fauxAssistantMessage([
@@ -229,4 +254,25 @@ function toolOrder(name: string): number {
   const order = [...READ_ONLY_TOOLS, ...DISABLED_WRITE_TOOLS];
   const index = order.indexOf(name as never);
   return index === -1 ? order.length : index;
+}
+
+function isCompiledBunExecutable(): boolean {
+  return import.meta.url.includes("$bunfs") ||
+    import.meta.url.includes("~BUN") ||
+    import.meta.url.includes("%7EBUN");
+}
+
+function ensurePiPackageDir(repoRoot: string): void {
+  if (process.env[PI_PACKAGE_DIR_ENV]) return;
+
+  const candidates = [
+    join(repoRoot, PI_PACKAGE_RELATIVE_DIR),
+    join(process.cwd(), "node_modules", "@earendil-works", "pi-coding-agent")
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, "package.json"))) {
+      process.env[PI_PACKAGE_DIR_ENV] = candidate;
+      return;
+    }
+  }
 }

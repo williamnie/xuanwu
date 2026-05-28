@@ -878,6 +878,12 @@ bun build --compile --target=bun-linux-x64 ./src/main.ts --outfile dist/codex-is
 - compiled executable 至少能启动 session 并完成 prompt。
 - 如果 compiled executable 失败，必须记录具体失败原因；迁移仍继续，但 release binary milestone 延后。
 
+P00.05 结论（2026-05-28）：`backend-ts/src/spikes/piSmoke.ts` 已通过 `bun build --compile`
+生成 `dist/pi-smoke`，并在 `backend-ts` cwd 下跑通 prompt、events 与 read-only tool boundary smoke。
+兼容性风险收敛为打包形态问题：PI SDK 在 Bun binary 模式会从 executable 旁解析包资源，smoke 通过启动时设置
+`PI_PACKAGE_DIR` 指向本地 `backend-ts/node_modules/@earendil-works/pi-coding-agent` 解决；后续 release binary
+需要复制这些 PI 包资源或提供等价 `PI_PACKAGE_DIR`。Phase 0 允许进入 P01。
+
 ### Phase 1：TS 后端骨架 + DB 兼容
 
 目标：Bun 后端能在 `127.0.0.1:3018` 启动，读独立 SQLite，提供基础 API；Go 服务继续在 `127.0.0.1:3008` 可用。

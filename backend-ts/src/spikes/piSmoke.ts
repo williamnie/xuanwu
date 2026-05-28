@@ -1,15 +1,7 @@
 import {
-  AuthStorage,
-  createAgentSession,
-  createExtensionRuntime,
   type AgentSession,
-  ModelRegistry,
-  SessionManager,
-  SettingsManager,
   type ResourceLoader,
-  VERSION as piSdkVersion
 } from "@earendil-works/pi-coding-agent";
-import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
 import { Type } from "@sinclair/typebox";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -18,8 +10,11 @@ import {
   buildEventsSummary,
   buildReadOnlyToolCallResponse,
   buildToolBoundarySummary,
+  loadSmokeRuntime,
+  resolveDefaultRepoRoot,
   runPrompt,
-  type PromptResult
+  type PromptResult,
+  type SmokeRuntime
 } from "./piSmokeSupport.ts";
 
 type SmokeOptions = {
@@ -39,9 +34,10 @@ type BuildSummaryArgs = {
   sdk: SmokeSdk;
   session: AgentSession;
   prompt: PromptResult;
+  runtime: SmokeRuntime;
 };
 
-const REPO_ROOT = resolve(import.meta.dirname, "../../..");
+const REPO_ROOT = resolveDefaultRepoRoot();
 const DEFAULT_STATE_DIR = join(REPO_ROOT, "data-bun");
 const HELP_FLAGS = new Set(["--help", "-h"]);
 const RESPONSE_PREVIEW_MAX = 120;
@@ -150,9 +146,9 @@ function summarizePath(path: string, stateDir: string): string {
   return "<outside-stateDir>";
 }
 
-function createSmokeResourceLoader(): ResourceLoader {
+function createSmokeResourceLoader(runtime: SmokeRuntime): ResourceLoader {
   return {
-    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+    getExtensions: () => ({ extensions: [], errors: [], runtime: runtime.pi.createExtensionRuntime() }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getThemes: () => ({ themes: [], diagnostics: [] }),
@@ -171,36 +167,40 @@ function summarizeText(text: string): string {
     : text;
 }
 
-function createSmokeSdk(config: SmokeConfig) {
-  const authStorage = AuthStorage.create(config.authPath);
-  const settingsManager = SettingsManager.inMemory({ sessionDir: config.sessionDir });
-  const sessionManager = SessionManager.create(config.cwd, config.sessionDir);
+function createSmokeSdk(config: SmokeConfig, runtime: SmokeRuntime) {
+  const authStorage = runtime.pi.AuthStorage.create(config.authPath);
+  const settingsManager = runtime.pi.SettingsManager.inMemory({ sessionDir: config.sessionDir });
+  const sessionManager = runtime.pi.SessionManager.create(config.cwd, config.sessionDir);
   authStorage.setFallbackResolver((provider) => {
     return provider === SMOKE_PROVIDER ? SMOKE_RUNTIME_KEY_LABEL : undefined;
   });
 
-  const modelRegistry = ModelRegistry.inMemory(authStorage);
-  const fauxProvider = registerFauxProvider({
+  const modelRegistry = runtime.pi.ModelRegistry.inMemory(authStorage);
+  const fauxProvider = runtime.ai.registerFauxProvider({
     api: SMOKE_API,
     provider: SMOKE_PROVIDER,
     tokensPerSecond: SMOKE_TOKENS_PER_SECOND
   });
   fauxProvider.setResponses(config.toolsReadonly
-    ? [buildReadOnlyToolCallResponse(), fauxAssistantMessage(SMOKE_RESPONSE)]
-    : [fauxAssistantMessage(SMOKE_RESPONSE)]);
+    ? [buildReadOnlyToolCallResponse(), runtime.ai.fauxAssistantMessage(SMOKE_RESPONSE)]
+    : [runtime.ai.fauxAssistantMessage(SMOKE_RESPONSE)]);
 
   return { authStorage, settingsManager, sessionManager, modelRegistry, fauxProvider };
 }
 
-async function createSmokeSession(config: SmokeConfig, sdk: SmokeSdk): Promise<AgentSession> {
-  const { session } = await createAgentSession({
+async function createSmokeSession(
+  config: SmokeConfig,
+  sdk: SmokeSdk,
+  runtime: SmokeRuntime
+): Promise<AgentSession> {
+  const { session } = await runtime.pi.createAgentSession({
     cwd: config.cwd,
     agentDir: config.piAgentDir,
     authStorage: sdk.authStorage,
     modelRegistry: sdk.modelRegistry,
     model: sdk.fauxProvider.getModel(),
     thinkingLevel: "off",
-    resourceLoader: createSmokeResourceLoader(),
+    resourceLoader: createSmokeResourceLoader(runtime),
     tools: config.toolsReadonly ? [...READ_ONLY_TOOLS] : [],
     sessionManager: sdk.sessionManager,
     settingsManager: sdk.settingsManager
@@ -208,14 +208,13 @@ async function createSmokeSession(config: SmokeConfig, sdk: SmokeSdk): Promise<A
   return session;
 }
 
-function buildSummary({ config, sdk, session, prompt }: BuildSummaryArgs) {
+function buildSummary({ config, sdk, session, prompt, runtime }: BuildSummaryArgs) {
   const toolBoundary = buildToolBoundarySummary(config, session, prompt.toolProbes);
   const events = buildEventsSummary(config, prompt.events);
   const ok = prompt.responseText.length > 0 && toolBoundary.ok && events.ok;
 
   return {
     ok,
-    piSdkVersion,
     cwd: summarizePath(config.cwd, config.stateDir),
     stateDir: summarizePath(config.stateDir, config.stateDir),
     piAgentDir: summarizePath(config.piAgentDir, config.stateDir),
@@ -224,6 +223,7 @@ function buildSummary({ config, sdk, session, prompt }: BuildSummaryArgs) {
     sessionDir: summarizePath(config.sessionDir, config.stateDir),
     createDirs: config.createDirs,
     typebox: ConfigSchema.type,
+    piSdkVersion: runtime.pi.VERSION,
     sdkObjects: {
       authStorage: sdk.authStorage.constructor.name,
       settingsManager: sdk.settingsManager.constructor.name,
@@ -278,12 +278,13 @@ async function main(): Promise<void> {
 
   if (config.createDirs) ensureRuntimeDirs(config);
 
-  const sdk = createSmokeSdk(config);
-  const session = await createSmokeSession(config, sdk);
+  const runtime = await loadSmokeRuntime(REPO_ROOT);
+  const sdk = createSmokeSdk(config, runtime);
+  const session = await createSmokeSession(config, sdk, runtime);
 
   try {
     const prompt = await runPrompt(session, config);
-    const summary = buildSummary({ config, sdk, session, prompt });
+    const summary = buildSummary({ config, sdk, session, prompt, runtime });
     console.log(JSON.stringify(summary, null, 2));
     if (!summary.ok) process.exitCode = 1;
   } finally {
