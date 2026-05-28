@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { cancelIssue, enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues } from "../db/repositories/issues.ts";
@@ -23,6 +24,15 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   router.post("/api/issues", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssue(context.database, body), 201);
+  });
+  router.post("/api/issues/:id/enqueue", (request) => {
+    return writeResponse(() => enqueueIssue(context.database, issueID(request)));
+  });
+  router.post("/api/issues/:id/retry", (request) => {
+    return writeResponse(() => retryIssue(context.database, issueID(request)));
+  });
+  router.post("/api/issues/:id/cancel", (request) => {
+    return writeResponse(() => cancelIssue(context.database, issueID(request)));
   });
   router.get("/api/issues/:id", (request) => {
     const issue = getIssue(context.database, issueID(request));
