@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 EMBED_WEB_DIR="$ROOT_DIR/backend/internal/web/dist"
 API_PKG="github.com/xiaobei/codex-issue-runner/backend/internal/api"
+DEFAULT_CODESIGN_IDENTITY="Apple Development"
+DEFAULT_BUNDLE_IDENTIFIER="com.xiaobei.codex-issue-runner"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -63,6 +65,43 @@ cleanup_embedded_web() {
   rm -rf "$EMBED_WEB_DIR"
 }
 
+resolve_codesign_identity() {
+  if [ "${CODEX_RUNNER_CODESIGN:-1}" = "0" ]; then
+    return
+  fi
+  if [ -n "${CODEX_RUNNER_CODESIGN_IDENTITY:-}" ]; then
+    printf '%s' "$CODEX_RUNNER_CODESIGN_IDENTITY"
+    return
+  fi
+  if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$DEFAULT_CODESIGN_IDENTITY"; then
+    printf '%s' "$DEFAULT_CODESIGN_IDENTITY"
+    return
+  fi
+  printf '-'
+}
+
+codesign_binary() {
+  if [[ "$OSTYPE" != "darwin"* ]]; then
+    return
+  fi
+  if ! command -v codesign >/dev/null 2>&1; then
+    return
+  fi
+  local identity bundle_id
+  identity="$(resolve_codesign_identity)"
+  if [ -z "$identity" ]; then
+    echo "[build] codesign disabled"
+    return
+  fi
+  bundle_id="${CODEX_RUNNER_BUNDLE_ID:-$DEFAULT_BUNDLE_IDENTIFIER}"
+  if [ "$identity" = "-" ]; then
+    echo "[build] codesigning binary for macOS with ad-hoc identity..."
+  else
+    echo "[build] codesigning binary for macOS with identity: $identity"
+  fi
+  codesign --force --sign "$identity" --identifier "$bundle_id" "$BINARY_PATH"
+}
+
 install_frontend_deps() {
   if [ -d "$ROOT_DIR/frontend/node_modules" ]; then
     return
@@ -95,14 +134,7 @@ trap cleanup_embedded_web EXIT
     -o "$BINARY_PATH" ./backend/cmd/codex-issue-runner
 )
 
-# 针对 macOS 系统进行本地 Ad-Hoc 签名；本地 LaunchAgent 使用普通 ad-hoc
-# 签名即可，避免 Hardened Runtime 下 launchd 启动卡在 dyld 早期。
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  if command -v codesign >/dev/null 2>&1; then
-    echo "[build] codesigning binary for macOS..."
-    codesign --force --sign - "$BINARY_PATH"
-  fi
-fi
+codesign_binary
 
 printf '%s\n' "$BUILD_STAMP" > "$BINARY_PATH.build.stamp"
 echo "[build] done"

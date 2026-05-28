@@ -3,13 +3,24 @@ import { setAuthToken } from '../api/authToken';
 
 export default function AuthGate({ onUnlock }) {
   const [token, setToken] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const submitToken = (event) => {
+  const submitToken = async (event) => {
     event.preventDefault();
     const value = token.trim();
     if (!value) return;
-    setAuthToken(value);
-    onUnlock();
+    setSubmitting(true);
+    setError('');
+    try {
+      setAuthToken(value);
+      await onUnlock();
+    } catch (err) {
+      setAuthToken('');
+      setError(err?.message || 'Token 校验失败');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -32,8 +43,9 @@ export default function AuthGate({ onUnlock }) {
             autoFocus
           />
         </div>
-        <button className="btn btn-primary" type="submit" disabled={!token.trim()}>
-          保存并进入
+        {error && <p className="form-error">{error}</p>}
+        <button className="btn btn-primary" type="submit" disabled={!token.trim() || submitting}>
+          {submitting ? '校验中...' : '保存并进入'}
         </button>
       </form>
     </div>

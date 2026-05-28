@@ -107,6 +107,12 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 ./deploy.sh
 ```
 
+如果只是想把当前源码重新构建并切到 live 服务，同时做部署后验活，可以执行：
+
+```bash
+./redeploy.sh
+```
+
 部署后访问：
 
 ```txt
@@ -136,6 +142,12 @@ Web:    内嵌在二进制中（可用 CODEX_RUNNER_WEB_DIR 覆盖）
 二进制: dist/codex-issue-runner
 日志:   data/logs/launchd.out.log / data/logs/launchd.err.log
 Token:  默认在服务首次启动时自动生成并写入 data/auth_token 文件中
+```
+
+macOS 会按二进制代码签名身份记录“文稿/Documents”等隐私授权。源码部署默认会优先使用本机 `Apple Development` 证书和固定 bundle id `com.xiaobei.codex-issue-runner` 签名，避免每次 build 后被当成新的 ad-hoc 程序；如需指定其他证书：
+
+```bash
+CODEX_RUNNER_CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./redeploy.sh
 ```
 
 可通过环境变量覆盖：

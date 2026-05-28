@@ -4,7 +4,7 @@
  * 这里不做本地假数据或 localStorage 降级：前端展示的数据必须来自 Go 后端。
  * 后端未连接时，请求会直接抛错，由页面显示 DISCONNECTED / 错误态。
  */
-import { authHeader } from './authToken';
+import { authHeader, clearAuthToken } from './authToken';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -91,6 +91,10 @@ function subscribeToEvents(onEvent, onError, onOpen) {
 }
 
 export const api = {
+  validateAuthToken: () => request('/api/system/status'),
+
+  clearAuthToken,
+
   getProjects: () => request('/api/projects'),
 
   getAgentProfiles: () => request('/api/agent-profiles'),

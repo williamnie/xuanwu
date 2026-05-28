@@ -99,9 +99,19 @@ export default function App() {
   } = appState;
 
   const setAuthReady = useCallback(() => {
-    updateAppState(draft => {
-      draft.authReady = true;
-    });
+    return api.validateAuthToken()
+      .then(() => {
+        updateAppState(draft => {
+          draft.authReady = true;
+        });
+      })
+      .catch((err) => {
+        api.clearAuthToken();
+        updateAppState(draft => {
+          draft.authReady = false;
+        });
+        throw err;
+      });
   }, [updateAppState]);
 
   const setIsNewIssueOpen = useCallback((open) => {
