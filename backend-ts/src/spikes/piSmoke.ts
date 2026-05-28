@@ -13,20 +13,26 @@ import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-a
 import { Type } from "@sinclair/typebox";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import {
+  READ_ONLY_TOOLS,
+  buildEventsSummary,
+  buildReadOnlyToolCallResponse,
+  buildToolBoundarySummary,
+  runPrompt,
+  type PromptResult
+} from "./piSmokeSupport.ts";
 
 type SmokeOptions = {
   cwd: string;
   stateDir: string;
   tempDir?: string;
   createDirs: boolean;
+  events: boolean;
+  toolsReadonly: boolean;
 };
 
 type SmokeConfig = ReturnType<typeof buildConfig>;
 type SmokeSdk = ReturnType<typeof createSmokeSdk>;
-
-type PromptResult = {
-  responseText: string;
-};
 
 type BuildSummaryArgs = {
   config: SmokeConfig;
@@ -60,7 +66,9 @@ function parseArgs(argv: string[]): SmokeOptions | "help" {
   const options: SmokeOptions = {
     cwd: REPO_ROOT,
     stateDir: DEFAULT_STATE_DIR,
-    createDirs: true
+    createDirs: true,
+    events: false,
+    toolsReadonly: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -68,6 +76,14 @@ function parseArgs(argv: string[]): SmokeOptions | "help" {
     if (HELP_FLAGS.has(arg)) return "help";
     if (arg === "--no-create") {
       options.createDirs = false;
+      continue;
+    }
+    if (arg === "--events") {
+      options.events = true;
+      continue;
+    }
+    if (arg === "--tools-readonly") {
+      options.toolsReadonly = true;
       continue;
     }
 
@@ -105,7 +121,9 @@ function buildConfig(options: SmokeOptions) {
     authPath: join(piAgentDir, "auth.json"),
     settingsPath: join(piAgentDir, "settings.json"),
     sessionDir,
-    createDirs: options.createDirs
+    createDirs: options.createDirs,
+    events: options.events,
+    toolsReadonly: options.toolsReadonly
   };
 }
 
@@ -146,29 +164,6 @@ function createSmokeResourceLoader(): ResourceLoader {
   };
 }
 
-function collectAssistantText(messages: ReadonlyArray<{ role: string; content?: unknown }>): string {
-  const lastAssistant = findLastAssistant(messages);
-  if (!Array.isArray(lastAssistant?.content)) return "";
-
-  return lastAssistant.content
-    .filter((block): block is { type: "text"; text: string } => {
-      return typeof block === "object" && block !== null &&
-        "type" in block && block.type === "text" &&
-        "text" in block && typeof block.text === "string";
-    })
-    .map((block) => block.text)
-    .join("");
-}
-
-function findLastAssistant(
-  messages: ReadonlyArray<{ role: string; content?: unknown }>
-): { role: string; content?: unknown } | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === "assistant") return messages[index];
-  }
-  return undefined;
-}
-
 function summarizeText(text: string): string {
   const contentLength = RESPONSE_PREVIEW_MAX - RESPONSE_PREVIEW_SUFFIX.length;
   return text.length > RESPONSE_PREVIEW_MAX
@@ -190,7 +185,9 @@ function createSmokeSdk(config: SmokeConfig) {
     provider: SMOKE_PROVIDER,
     tokensPerSecond: SMOKE_TOKENS_PER_SECOND
   });
-  fauxProvider.setResponses([fauxAssistantMessage(SMOKE_RESPONSE)]);
+  fauxProvider.setResponses(config.toolsReadonly
+    ? [buildReadOnlyToolCallResponse(), fauxAssistantMessage(SMOKE_RESPONSE)]
+    : [fauxAssistantMessage(SMOKE_RESPONSE)]);
 
   return { authStorage, settingsManager, sessionManager, modelRegistry, fauxProvider };
 }
@@ -204,24 +201,20 @@ async function createSmokeSession(config: SmokeConfig, sdk: SmokeSdk): Promise<A
     model: sdk.fauxProvider.getModel(),
     thinkingLevel: "off",
     resourceLoader: createSmokeResourceLoader(),
-    tools: [],
+    tools: config.toolsReadonly ? [...READ_ONLY_TOOLS] : [],
     sessionManager: sdk.sessionManager,
     settingsManager: sdk.settingsManager
   });
   return session;
 }
 
-async function runPrompt(session: AgentSession): Promise<PromptResult> {
-  await session.prompt(`Reply with ${SMOKE_RESPONSE}.`, {
-    expandPromptTemplates: false,
-    source: "rpc"
-  });
-  return { responseText: collectAssistantText(session.state.messages) };
-}
-
 function buildSummary({ config, sdk, session, prompt }: BuildSummaryArgs) {
+  const toolBoundary = buildToolBoundarySummary(config, session, prompt.toolProbes);
+  const events = buildEventsSummary(config, prompt.events);
+  const ok = prompt.responseText.length > 0 && toolBoundary.ok && events.ok;
+
   return {
-    ok: prompt.responseText.length > 0,
+    ok,
     piSdkVersion,
     cwd: summarizePath(config.cwd, config.stateDir),
     stateDir: summarizePath(config.stateDir, config.stateDir),
@@ -247,6 +240,8 @@ function buildSummary({ config, sdk, session, prompt }: BuildSummaryArgs) {
       responsePreview: summarizeText(prompt.responseText),
       providerCalls: sdk.fauxProvider.state.callCount
     },
+    events,
+    toolBoundary,
     note: "paths are redacted relative to <stateDir>; faux provider uses no token/secrets"
   };
 }
@@ -259,10 +254,13 @@ Options:
   --state-dir <path>  Bun backend state dir (default: ../data-bun)
   --temp-dir <path>   PI smoke runtime dir (default: <stateDir>/tmp/pi-smoke)
   --no-create         Do not create smoke directories
+  --events            Record key PI session event order
+  --tools-readonly    Enable read/grep/find/ls and probe disabled edit/write/bash
   --help, -h          Show this help
 
 The smoke harness creates a PI AgentSession with a local faux provider, runs one
-short prompt, and prints only a redacted response summary.`);
+short prompt, and prints only a redacted response summary. Use --events and
+--tools-readonly to verify PI event streaming and read-only tool boundaries.`);
 }
 
 async function main(): Promise<void> {
@@ -284,7 +282,7 @@ async function main(): Promise<void> {
   const session = await createSmokeSession(config, sdk);
 
   try {
-    const prompt = await runPrompt(session);
+    const prompt = await runPrompt(session, config);
     const summary = buildSummary({ config, sdk, session, prompt });
     console.log(JSON.stringify(summary, null, 2));
     if (!summary.ok) process.exitCode = 1;
