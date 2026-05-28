@@ -1,5 +1,7 @@
 # Runtime data
 /data/
+/data-bun/*
+!/data-bun/.gitignore
 *.db
 *.db-*
 logs/

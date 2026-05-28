@@ -1,0 +1,10 @@
+{
+  "name": "codex-issue-runner-backend-ts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "smoke": "bun run src/main.ts"
+  }
+}
