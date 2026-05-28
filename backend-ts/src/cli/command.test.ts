@@ -77,6 +77,65 @@ describe("Bun CLI dispatcher", () => {
     expect(code).toBe(0);
   });
 
+  test("creates project against Bun default addr", async () => {
+    const fetcher = fetchStub(async (request) => {
+      expect(request.method).toBe("POST");
+      expect(request.url).toBe("http://127.0.0.1:3018/api/projects");
+      expect(await request.json()).toMatchObject({
+        id: "demo",
+        cwd: "/tmp/demo",
+        auto_run: 1
+      });
+      return jsonResponse({ id: "demo", cwd: "/tmp/demo", loop_status: "stopped" }, 201);
+    });
+    const { code, stdout, stderr } = await run([
+      "project", "create", "--id", "demo", "--cwd", "/tmp/demo", "--auto-run"
+    ], { fetcher });
+
+    expect(code).toBe(0);
+    expect(stdout).toBe("demo [stopped] /tmp/demo\n");
+    expect(stderr).toBe("");
+  });
+
+  test("creates project as JSON and redacts token on API errors", async () => {
+    const secret = "project-secret";
+    const okFetcher = fetchStub(() => jsonResponse({ id: "demo", cwd: "/tmp/demo" }, 201));
+    const ok = await run([
+      "project", "create", "--id", "demo", "--cwd", "/tmp/demo", "--json"
+    ], { fetcher: okFetcher });
+
+    expect(ok.code).toBe(0);
+    expect(JSON.parse(ok.stdout)).toMatchObject({ id: "demo", cwd: "/tmp/demo" });
+
+    const failFetcher = fetchStub(() => jsonResponse({ message: `bad token ${secret}` }, 400));
+    const failed = await run([
+      "project", "create", "--id", "demo", "--cwd", "/tmp/demo", "--token", secret
+    ], { fetcher: failFetcher });
+
+    expect(failed.code).toBe(1);
+    expect(failed.stderr).toContain("[redacted]");
+    expect(failed.stderr).not.toContain(secret);
+  });
+
+  test("gets system logs with line limit", async () => {
+    const fetcher = fetchStub((request) => {
+      expect(request.method).toBe("GET");
+      expect(request.url).toBe("http://127.0.0.1:3018/api/system/logs?lines=2");
+      return jsonResponse({
+        logs: [{
+          available: true,
+          lines: [{ level: "info", source: "server", text: "started token=hidden", time: "2026-05-28T00:00:00Z" }],
+          source: "server"
+        }]
+      });
+    });
+    const { code, stdout } = await run(["system", "logs", "--lines", "2"], { fetcher });
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("server: started token=[redacted]");
+    expect(stdout).not.toContain("hidden");
+  });
+
   test("supports custom addr and does not leak token on 401", async () => {
     const secret = "flag-secret";
     const fetcher = fetchStub((request) => {

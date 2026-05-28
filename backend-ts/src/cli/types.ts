@@ -7,6 +7,28 @@ export type EnvReader = (key: string) => string | undefined;
 export type Fetcher = typeof globalThis.fetch;
 export type Writer = { write(chunk: string | Uint8Array): unknown };
 
+export type ProjectDTO = {
+  cwd: string;
+  id: string;
+  loop_status?: string;
+};
+
+export type SystemLogLineDTO = {
+  level?: string;
+  source?: string;
+  text?: string;
+  time?: string;
+};
+
+export type SystemLogsDTO = {
+  logs?: Array<{
+    available?: boolean;
+    error?: string;
+    lines?: SystemLogLineDTO[];
+    source?: string;
+  }>;
+};
+
 export type SystemStatusDTO = {
   auth?: { enabled?: boolean };
   codex?: { command_ok?: boolean };
