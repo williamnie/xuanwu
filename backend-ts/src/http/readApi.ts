@@ -11,6 +11,7 @@ import type { EventBus } from "../events/bus.ts";
 import { registerSessionRoutes } from "./sessionApi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import { registerPiRoutes } from "./piApi.ts";
 import type { Router } from "./router.ts";
 
 type ReadApiContext = {
@@ -32,6 +33,7 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   registerProjectRoutes(router, context);
   registerIssueCollectionRoutes(router, context);
   registerIssueItemRoutes(router, context);
+  registerPiRoutes(router, context);
   registerSessionRoutes(router, context);
 }
 
