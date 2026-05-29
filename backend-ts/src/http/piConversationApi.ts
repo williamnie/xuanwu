@@ -1,7 +1,3 @@
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
@@ -14,25 +10,29 @@ import {
   type PiConversation
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
-import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
+import type { EventBus } from "../events/bus.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import {
+  createOrRestorePiRuntime,
+  createPiRuntimeSession,
+  publishPiSessionEvent,
+  type PiRuntimeResult,
+  type PiRuntimeSession
+} from "./piRuntime.ts";
 import type { Router } from "./router.ts";
 
-type PiConversationContext = { database: RunnerDatabase };
-type PiRuntimeResult = { piSessionId: string; sessionFile: string };
-type RuntimeSessionInput = { agent: PiAgent; conversationID: string; project: Project; sessionFile?: string };
+type PiConversationContext = { bus?: EventBus; database: RunnerDatabase };
 
 const PI_SESSION_PROVIDER = "pi-sdk";
 const PI_SESSION_ROLE = "pi_manager";
-const PI_RUNTIME_ROOT = "pi-runtime";
-const PI_AGENT_DIR = "agent";
-const PI_SESSIONS_DIR = "sessions";
-const PI_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
+const activePiRuns = new Map<string, PiRuntimeSession["session"]>();
 
 export function registerPiConversationRoutes(router: Router, context: PiConversationContext): void {
   router.get("/api/pi/conversations", (request) => piConversationListResponse(context, request));
   router.post("/api/pi/conversations", async (request) => piConversationCreateResponse(context, request));
   router.get("/api/pi/conversations/:id", (request) => piConversationResponse(context, request));
+  router.post("/api/pi/conversations/:id/messages", async (request) => piConversationMessageResponse(context, request));
+  router.post("/api/pi/conversations/:id/interrupt", (request) => piConversationInterruptResponse(context, request));
 }
 
 function piConversationListResponse(context: PiConversationContext, request: Request): Response {
@@ -54,6 +54,17 @@ function piConversationResponse(context: PiConversationContext, request: Request
   return json(conversation);
 }
 
+async function piConversationMessageResponse(context: PiConversationContext, request: Request): Promise<Response> {
+  const body = await parseObjectBody(request);
+  const id = pathPart(request, "conversations");
+  return writeResponse(() => sendPiConversationMessage(context, id, body), 201);
+}
+
+async function piConversationInterruptResponse(context: PiConversationContext, request: Request): Promise<Response> {
+  const id = pathPart(request, "conversations");
+  return writeResponse(() => interruptPiConversation(context, id));
+}
+
 async function createConversationWithRuntime(
   context: PiConversationContext,
   body: Record<string, unknown>
@@ -71,87 +82,6 @@ async function createConversationWithRuntime(
   }));
   persistPiSessionIndex(context.database, conversation, project);
   return conversation;
-}
-
-async function createOrRestorePiRuntime(
-  db: RunnerDatabase,
-  input: RuntimeSessionInput
-): Promise<PiRuntimeResult> {
-  const runtime = await createPiRuntimeSession(db, input);
-  await ensurePiSessionFile(runtime.session);
-  runtime.session.dispose();
-  return {
-    piSessionId: runtime.session.sessionId,
-    sessionFile: runtime.session.sessionFile ?? ""
-  };
-}
-
-async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeSessionInput) {
-  const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot());
-  const paths = piRuntimePaths(db);
-  await mkdir(dirname(paths.authPath), { recursive: true });
-  await mkdir(paths.sessionDir, { recursive: true });
-
-  const authStorage = sdk.pi.AuthStorage.create(paths.authPath);
-  const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
-  const sessionManager = input.sessionFile
-    ? sdk.pi.SessionManager.open(input.sessionFile, paths.sessionDir, input.project.cwd)
-    : sdk.pi.SessionManager.create(input.project.cwd, paths.sessionDir, { id: input.conversationID });
-  const { session } = await sdk.pi.createAgentSession({
-    cwd: input.project.cwd,
-    agentDir: paths.agentDir,
-    authStorage,
-    model: resolvePiModel(modelRegistry, input.agent),
-    modelRegistry,
-    resourceLoader: emptyResourceLoader(sdk),
-    sessionManager,
-    settingsManager: sdk.pi.SettingsManager.create(input.project.cwd, paths.agentDir),
-    thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
-    tools: [...PI_READ_ONLY_TOOLS]
-  });
-  if (input.agent.name !== "") session.setSessionName(input.agent.name);
-  return { session };
-}
-
-function piRuntimePaths(db: RunnerDatabase) {
-  const stateDir = dirname(db.path);
-  const agentDir = join(stateDir, PI_RUNTIME_ROOT, PI_AGENT_DIR);
-  return {
-    agentDir,
-    authPath: join(agentDir, "auth.json"),
-    modelsPath: join(agentDir, "models.json"),
-    sessionDir: join(stateDir, PI_RUNTIME_ROOT, PI_SESSIONS_DIR)
-  };
-}
-
-async function ensurePiSessionFile(session: {
-  sessionFile?: string;
-  sessionManager: { getEntries(): unknown[]; getHeader(): unknown };
-}): Promise<void> {
-  const file = session.sessionFile?.trim();
-  const header = session.sessionManager.getHeader();
-  if (!file || !header) return;
-  const entries = [header, ...session.sessionManager.getEntries()];
-  await mkdir(dirname(file), { recursive: true });
-  try {
-    await writeFile(file, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`, { flag: "wx" });
-  } catch (error) {
-    if (!isFileExistsError(error)) throw error;
-  }
-}
-
-function emptyResourceLoader(sdk: SmokeRuntime) {
-  return {
-    getAgentsFiles: () => ({ agentsFiles: [] }),
-    getAppendSystemPrompt: () => [],
-    getExtensions: () => ({ extensions: [], errors: [], runtime: sdk.pi.createExtensionRuntime() }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getSystemPrompt: () => "You are PI, an independent project manager agent for codex-issue-runner.",
-    getThemes: () => ({ themes: [], diagnostics: [] }),
-    extendResources: () => {},
-    reload: async () => {}
-  };
 }
 
 function conversationInput(input: {
@@ -172,6 +102,43 @@ function conversationInput(input: {
   };
 }
 
+async function sendPiConversationMessage(
+  context: PiConversationContext,
+  id: string,
+  body: Record<string, unknown>
+) {
+  const prompt = cleanString(body.prompt || body.message || body.content);
+  if (prompt === "") throw new HttpError(400, "prompt is required");
+  const conversation = requireConversation(context.database, id);
+  if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
+  const runtime = await openConversationRuntime(context.database, conversation);
+  const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
+  activePiRuns.set(conversation.id, runtime.session);
+  try {
+    await runtime.session.prompt(prompt, { expandPromptTemplates: false, source: "rpc" });
+    persistPiSessionIndex(context.database, conversation, requireConversationProject(context.database, conversation));
+    return {
+      conversation_id: conversation.id,
+      pi_session_id: runtime.session.sessionId,
+      session_file: runtime.session.sessionFile ?? "",
+      status: runtime.session.state.errorMessage ? "failed" : "completed",
+      text: runtime.session.getLastAssistantText() ?? "",
+      message_count: runtime.session.state.messages.length
+    };
+  } finally {
+    if (activePiRuns.get(conversation.id) === runtime.session) activePiRuns.delete(conversation.id);
+    unsubscribe();
+    runtime.session.dispose();
+  }
+}
+
+async function interruptPiConversation(context: PiConversationContext, id: string) {
+  const active = activePiRuns.get(id);
+  if (!active) return { interrupted: false };
+  await active.abort();
+  return { interrupted: true, conversation_id: id, pi_session_id: active.sessionId };
+}
+
 function persistPiSessionIndex(
   db: RunnerDatabase,
   conversation: PiConversation,
@@ -186,6 +153,17 @@ function persistPiSessionIndex(
     preview: "",
     status: conversation.status,
     raw_ref: { conversation_id: conversation.id, session_file: conversation.session_file }
+  });
+}
+
+async function openConversationRuntime(db: RunnerDatabase, conversation: PiConversation) {
+  const project = requireConversationProject(db, conversation);
+  const agent = requireConversationAgent(db, conversation);
+  return createPiRuntimeSession(db, {
+    agent,
+    conversationID: conversation.id,
+    project,
+    sessionFile: conversation.session_file
   });
 }
 
@@ -205,17 +183,10 @@ function conversationAgent(db: RunnerDatabase, id: string): PiAgent {
   return agent;
 }
 
-function resolvePiModel(modelRegistry: { find(provider: string, modelID: string): Model<any> | undefined }, agent: PiAgent) {
-  if (agent.model_provider === "" || agent.model_id === "") return undefined;
-  return modelRegistry.find(agent.model_provider, agent.model_id);
-}
-
-function normalizeThinkingLevel(value: string): ThinkingLevel {
-  return isThinkingLevel(value) ? value : "medium";
-}
-
-function isThinkingLevel(value: string): value is ThinkingLevel {
-  return ["off", "minimal", "low", "medium", "high", "xhigh"].includes(value);
+function requireConversation(db: RunnerDatabase, id: string): PiConversation {
+  const conversation = getPiConversation(db, id);
+  if (!conversation) throw new HttpError(404, "资源不存在");
+  return conversation;
 }
 
 async function writeResponse(write: () => unknown | Promise<unknown>, status = 200): Promise<Response> {
@@ -245,8 +216,17 @@ function pathPart(request: Request, marker: string): string {
   return decodeURIComponent(value);
 }
 
-function isFileExistsError(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "EEXIST";
+function requireConversationProject(db: RunnerDatabase, conversation: PiConversation): Project {
+  const project = getProject(db, conversation.project_id);
+  if (!project) throw new HttpError(404, "资源不存在");
+  return project;
+}
+
+function requireConversationAgent(db: RunnerDatabase, conversation: PiConversation): PiAgent {
+  const agent = getPiAgent(db, conversation.pi_agent_id);
+  if (!agent) throw new HttpError(400, "PI agent 不存在");
+  if (agent.enabled !== 1) throw new HttpError(400, "disabled PI agent cannot start conversation");
+  return agent;
 }
 
 function cleanString(value: unknown): string {

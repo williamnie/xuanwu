@@ -4,6 +4,7 @@ export type AppEvent = {
   id?: number;
   type: string;
   issueId?: number;
+  conversationId?: string;
   projectId?: string;
   threadId?: string;
   turnId?: string;
