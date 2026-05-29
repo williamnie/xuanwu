@@ -15,6 +15,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiActionRoutes } from "./piActionsApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
+import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import type { Router } from "./router.ts";
 
 type PiApiContext = { database: RunnerDatabase };
@@ -32,6 +33,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.delete("/api/pi/agents/:id", (request) => deletePiAgentResponse(context, request));
   registerPiActionRoutes(router, context);
   registerPiConversationRoutes(router, context);
+  registerPiMemoryRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
 }

@@ -56,8 +56,9 @@ describe("PI project tools", () => {
 
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "find", "grep", "issue.comment", "issue.create_proposal", "issue.enqueue_proposal",
-        "issue.list", "issue.read", "issue.update_refinement", "ls", "project.list",
-        "project.status", "read", "session.list", "session.read_summary", "session.steer_proposal"
+        "issue.list", "issue.read", "issue.update_refinement", "ls", "memory.search",
+        "memory.write_candidate", "project.list", "project.status", "read", "session.list",
+        "session.read_summary", "session.steer_proposal"
       ]);
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project.status")?.isError).toBe(false);
