@@ -97,14 +97,15 @@ describe("Bun issue action API", () => {
       const response = await issueAction(database, issueId, "cancel");
       const body = await response.json() as Record<string, unknown>;
       const run = latestRun(database, issueId);
-      const event = listEvents(database).at(-1);
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ id: issueId, status: "cancelled" });
       expect(run).toMatchObject({ status: "cancelled", exit_reason: "issue_cancel" });
       expect(run?.ended_at).not.toBe("");
-      expect(event?.type).toBe("issue.status_changed");
-      expect(JSON.parse(event?.payload ?? "{}")).toEqual({ status: "cancelled", reason: "issue_cancel" });
+      expect(eventWithType(database, "issue.status_changed")?.payload).toBe(JSON.stringify({
+        status: "cancelled",
+        reason: "issue_cancel"
+      }));
     } finally {
       database.close();
     }
@@ -211,4 +212,8 @@ function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }
   return db.sqlite.query<{ payload: string; type: string }, []>(
     "select type, payload from issue_events order by id asc"
   ).all();
+}
+
+function eventWithType(db: RunnerDatabase, type: string): { payload: string; type: string } | undefined {
+  return listEvents(db).find((event) => event.type === type);
 }

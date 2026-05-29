@@ -30,6 +30,11 @@ class FakeCodexIssueAdapter {
     this.calls.push({ method: "turn/start", params: { threadID, input, options } });
     return { provider: "codex", provider_session_id: threadID, sessionId: threadID, turn_id: "turn-1" };
   }
+
+  async interruptTurn(threadID: string, turnID: string) {
+    this.calls.push({ method: "turn/interrupt", params: { threadID, turnID } });
+    return { ok: true as const, provider_session_id: threadID, turn_id: turnID };
+  }
 }
 
 describe("Codex executor provider", () => {
@@ -114,6 +119,20 @@ describe("Codex executor provider", () => {
           options: {}
         }
       }
+    ]);
+  });
+
+  test("interrupts a Codex turn through the adapter", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+
+    await new CodexExecutorProvider(adapter).interrupt({
+      session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" },
+      reason: "issue_cancel"
+    });
+
+    expect(adapter.calls).toEqual([
+      { method: "initialize" },
+      { method: "turn/interrupt", params: { threadID: "thread-1", turnID: "turn-1" } }
     ]);
   });
 });

@@ -1,6 +1,7 @@
 import type { RunnerConfig } from "../config/env.ts";
 import { EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { loadAuthToken, requireBearerAuth } from "./auth.ts";
 import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
@@ -11,14 +12,25 @@ import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { buildSystemStatus } from "./systemStatus.ts";
 
 type ListenAddress = { hostname: string; port: number };
-type ServerRuntime = { bus?: EventBus; database: RunnerDatabase; startedAt?: Date };
-type DefaultRouterOptions = { bus?: EventBus; database?: RunnerDatabase };
+type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
+type DefaultRouterOptions = {
+  bus?: EventBus;
+  database?: RunnerDatabase;
+  interruptTimeoutMs?: number;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+};
 
 export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
   const router = createRouter();
+  const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
-  registerEventRoutes(router, { bus: runtime.bus ?? new EventBus() });
-  if (runtime.database) registerReadApiRoutes(router, { database: runtime.database });
+  registerEventRoutes(router, { bus });
+  if (runtime.database) registerReadApiRoutes(router, {
+    bus,
+    database: runtime.database,
+    interruptTimeoutMs: runtime.interruptTimeoutMs,
+    providers: runtime.providers
+  });
   return router;
 }
 

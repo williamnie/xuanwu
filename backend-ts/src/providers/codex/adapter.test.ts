@@ -192,6 +192,21 @@ describe("Codex adapter RPC methods", () => {
     });
   });
 
+  test("interrupts an active turn through the Codex RPC contract", async () => {
+    const rpc = new FakeRpc({ "turn/interrupt": {} });
+
+    await expect(new CodexAdapter(rpc).interruptTurn("thread-1", "turn-1")).resolves.toEqual({
+      ok: true,
+      provider_session_id: "thread-1",
+      turn_id: "turn-1"
+    });
+
+    expect(rpc.calls[0]).toEqual({
+      method: "turn/interrupt",
+      params: { threadId: "thread-1", turnId: "turn-1" }
+    });
+  });
+
   test("wraps thread lifecycle failures in diagnostic typed errors with redaction", async () => {
     const secret = "fixture-secret-token";
     const rpc = new FakeRpc({ "thread/resume": new Error(`codex rpc -32603: TOKEN=${secret}`) });

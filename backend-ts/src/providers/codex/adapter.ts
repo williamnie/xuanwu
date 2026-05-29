@@ -8,6 +8,7 @@ import {
   threadIDParams,
   threadListParams,
   threadStartParams,
+  turnInterruptParams,
   turnStartParams
 } from "./threadLifecycle.ts";
 import type {
@@ -17,6 +18,7 @@ import type {
   ThreadStartInput,
   ThreadStartResult,
   ThreadSummary,
+  TurnInterruptResult,
   TurnStartOptions,
   TurnStartResult
 } from "./threadLifecycle.ts";
@@ -29,6 +31,7 @@ export type {
   ThreadStartInput,
   ThreadStartResult,
   ThreadSummary,
+  TurnInterruptResult,
   TurnStartOptions,
   TurnStartResult
 } from "./threadLifecycle.ts";
@@ -105,6 +108,13 @@ export class CodexAdapter {
     const cleanThreadID = threadID.trim();
     const result = await this.lifecycleRequest("turn/start", turnStartParams(cleanThreadID, input, options));
     return normalizeTurnStartResult(cleanThreadID, result);
+  }
+
+  async interruptTurn(threadID: string, turnID: string): Promise<TurnInterruptResult> {
+    const cleanThreadID = threadID.trim();
+    const cleanTurnID = turnID.trim();
+    await this.lifecycleRequest("turn/interrupt", turnInterruptParams(cleanThreadID, cleanTurnID));
+    return { ok: true, provider_session_id: cleanThreadID, turn_id: cleanTurnID };
   }
 
   private async lifecycleRequest(method: string, params: JsonRpcParams): Promise<unknown> {

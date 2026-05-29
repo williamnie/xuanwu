@@ -16,8 +16,9 @@ if (!serve) {
 
 const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
-const server = await startServer(config, { database });
-await startAutoRunLoops(database, config);
+const provider = codexProvider(config);
+const server = await startServer(config, { database, providers: provider ? { codex: provider } : undefined });
+if (provider) await startAutoRunLoops(database, provider);
 
 console.log(JSON.stringify({
   ok: true,
@@ -30,10 +31,15 @@ console.log(JSON.stringify({
   }
 }, null, 2));
 
-async function startAutoRunLoops(database: Awaited<ReturnType<typeof openDatabase>>, config: ReturnType<typeof loadConfig>): Promise<void> {
+function codexProvider(config: ReturnType<typeof loadConfig>): ReturnType<typeof createCodexExecutorProvider> | undefined {
   const codexConfig = config.providers.codex;
-  if (!codexConfig) return;
-  const provider = createCodexExecutorProvider(codexConfig);
+  return codexConfig ? createCodexExecutorProvider(codexConfig) : undefined;
+}
+
+async function startAutoRunLoops(
+  database: Awaited<ReturnType<typeof openDatabase>>,
+  provider: ReturnType<typeof createCodexExecutorProvider>
+): Promise<void> {
   await recoverInProgressIssues({ database, providers: { codex: provider } }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
   });

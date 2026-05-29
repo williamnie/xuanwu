@@ -1,7 +1,7 @@
 import { CodexAdapter } from "./adapter.ts";
 import { textInput } from "./threadLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../types.ts";
+import type { ExecutorProvider, InterruptInput, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../types.ts";
 import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import { CodexStdioJsonRpcTransport } from "./jsonRpc.ts";
 
@@ -14,6 +14,7 @@ type CodexIssueAdapter = {
   setThreadName(threadID: string, name: string): Promise<{ ok: true; provider_session_id: string }>;
   startThread(input: Parameters<CodexAdapter["startThread"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["startThread"]>>>;
   startTurn(threadID: string, input: Parameters<CodexAdapter["startTurn"]>[1], options?: Parameters<CodexAdapter["startTurn"]>[2]): Promise<TurnStartResult>;
+  interruptTurn(threadID: string, turnID: string): Promise<Awaited<ReturnType<CodexAdapter["interruptTurn"]>>>;
 };
 
 export class CodexExecutorProvider implements ExecutorProvider {
@@ -59,6 +60,14 @@ export class CodexExecutorProvider implements ExecutorProvider {
     });
     input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
     return { runId: runID(turn), session: sessionRef(turn) };
+  }
+
+  async interrupt(input: InterruptInput): Promise<void> {
+    await this.adapter.initialize();
+    const threadID = input.session.sessionId.trim();
+    const turnID = input.session.turnId?.trim() ?? "";
+    if (threadID === "" || turnID === "") throw new Error("codex interrupt requires thread and turn ids");
+    await this.adapter.interruptTurn(threadID, turnID);
   }
 
   private async nameThread(threadID: string, issueID: number): Promise<void> {

@@ -39,6 +39,12 @@ export type TurnStartResult = {
   turn_id: string;
 };
 
+export type TurnInterruptResult = {
+  ok: true;
+  provider_session_id: string;
+  turn_id: string;
+};
+
 export type ThreadListInput = { cursor?: string; limit?: number };
 export type ThreadListResult = {
   backwardsCursor?: string;
@@ -130,6 +136,10 @@ export function turnStartParams(threadID: string, input: CodexUserInput[], optio
   if (options.approvalPolicy?.trim()) params.approvalPolicy = approvalPolicy(options.approvalPolicy);
   if (options.sandbox?.trim()) params.sandboxPolicy = turnSandboxPolicy(options.sandbox);
   return params;
+}
+
+export function turnInterruptParams(threadID: string, turnID: string): Record<string, unknown> {
+  return { threadId: threadID.trim(), turnId: turnID.trim() };
 }
 
 export function textInput(text: string): CodexUserInput {

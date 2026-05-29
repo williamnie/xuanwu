@@ -16,14 +16,14 @@ export function retryIssue(db: RunnerDatabase, id: number): Issue {
   return queueIssue(db, issue);
 }
 
-export function cancelIssue(db: RunnerDatabase, id: number): Issue {
+export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_cancel"): Issue {
   const issue = mustGetIssue(db, id);
   const timestamp = issueTimestamp();
   const write = db.transaction((record: Issue) => {
     db.sqlite.run(`update issues set status=?, error='', auto_retry_next_at='',
       auto_retry_reason='', updated_at=? where id=?`, [STATUS_CANCELLED, timestamp, record.id]);
-    closeOpenIssueRun(db, { ...record, status: STATUS_CANCELLED }, STATUS_CANCELLED, "issue_cancel", timestamp);
-    recordStatusEvent(db, record.id, { status: STATUS_CANCELLED, reason: "issue_cancel" }, timestamp);
+    closeOpenIssueRun(db, { ...record, status: STATUS_CANCELLED }, STATUS_CANCELLED, reason, timestamp);
+    recordStatusEvent(db, record.id, { status: STATUS_CANCELLED, reason }, timestamp);
   });
   write(issue);
   return mustGetIssue(db, issue.id);
