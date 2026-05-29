@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3018";
@@ -109,6 +111,66 @@ describe("Bun PI settings API", () => {
       });
     } finally {
       database.close();
+    }
+  });
+
+
+  test("creates and reads PI conversations with SDK session metadata", async () => {
+    let database: RunnerDatabase | undefined = await openFixtureDatabase();
+    let restored: RunnerDatabase | undefined;
+    try {
+      insertProject(database, "demo");
+      insertAgent(database, "pi-default", 1);
+      const router = createDefaultRouter({ database });
+
+      const created = await request(router, "/api/pi/conversations", "POST", {
+        id: "conv-1",
+        project_id: "demo",
+        title: "Plan"
+      });
+      expect(created.status).toBe(201);
+      const createdBody = await created.json() as Record<string, unknown>;
+      expect(createdBody).toMatchObject({
+        id: "conv-1",
+        project_id: "demo",
+        pi_agent_id: "pi-default",
+        pi_session_id: "conv-1",
+        status: "active",
+        title: "Plan"
+      });
+      expect(String(createdBody.session_file)).toContain("pi-runtime/sessions/");
+      expect(String(createdBody.session_file)).toContain("_conv-1.jsonl");
+      expect(existsSync(String(createdBody.session_file))).toBe(true);
+      expect(getAgentSession(database, "pi-sdk:conv-1")).toMatchObject({
+        provider: "pi-sdk",
+        provider_session_id: "conv-1",
+        agent_role: "pi_manager",
+        project_id: "demo",
+        status: "active",
+        title: "Plan"
+      });
+
+      const dbPath = database.path;
+      database.close();
+      database = undefined;
+      restored = await openDatabase({ dbPath });
+      const restoredRouter = createDefaultRouter({ database: restored });
+      const detail = await restoredRouter.handle(new Request(`${BASE_URL}/api/pi/conversations/conv-1`));
+      const list = await restoredRouter.handle(new Request(`${BASE_URL}/api/pi/conversations?project_id=demo`));
+
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({
+        id: "conv-1",
+        project_id: "demo",
+        pi_session_id: "conv-1",
+        session_file: createdBody.session_file
+      });
+      expect(list.status).toBe(200);
+      expect((await list.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["conv-1"]);
+      expect(getAgentSession(restored, "pi-sdk:conv-1")?.provider).toBe("pi-sdk");
+    } finally {
+      database?.close();
+      restored?.close();
     }
   });
 
