@@ -31,6 +31,11 @@ class FakeCodexIssueAdapter {
     return { provider: "codex", provider_session_id: threadID, sessionId: threadID, turn_id: "turn-1" };
   }
 
+  async steerTurn(threadID: string, turnID: string, input: CodexUserInput[]): Promise<TurnStartResult> {
+    this.calls.push({ method: "turn/steer", params: { threadID, turnID, input } });
+    return { provider: "codex", provider_session_id: threadID, sessionId: threadID, turn_id: turnID };
+  }
+
   async interruptTurn(threadID: string, turnID: string) {
     this.calls.push({ method: "turn/interrupt", params: { threadID, turnID } });
     return { ok: true as const, provider_session_id: threadID, turn_id: turnID };
@@ -133,6 +138,73 @@ describe("Codex executor provider", () => {
     expect(adapter.calls).toEqual([
       { method: "initialize" },
       { method: "turn/interrupt", params: { threadID: "thread-1", turnID: "turn-1" } }
+    ]);
+  });
+
+  test("creates manual Sessions API turns and steers running turns", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    const provider = new CodexExecutorProvider(adapter, "manual instructions");
+
+    const created = await provider.createSession({
+      cwd: "/tmp/demo",
+      prompt: "hello",
+      reasoningEffort: "high"
+    });
+    const message = await provider.sendSessionMessage({ sessionId: "thread-1", prompt: "follow" });
+    const steer = await provider.sendSessionMessage({
+      sessionId: "thread-1",
+      prompt: "adjust",
+      mode: "steer",
+      turnId: "turn-1"
+    });
+
+    expect(created).toEqual({
+      id: "codex:thread-1",
+      provider: "codex",
+      provider_session_id: "thread-1",
+      provider_turn_id: "turn-1",
+      thread_id: "thread-1",
+      turn_id: "turn-1"
+    });
+    expect(message).toEqual({ provider: "codex", provider_session_id: "thread-1", sessionId: "thread-1", turn_id: "turn-1" });
+    expect(steer).toEqual({ provider: "codex", provider_session_id: "thread-1", sessionId: "thread-1", turn_id: "turn-1" });
+    expect(adapter.calls).toEqual([
+      { method: "initialize" },
+      {
+        method: "thread/start",
+        params: {
+          cwd: "/tmp/demo",
+          reasoningEffort: "high",
+          developerInstructions: "manual instructions",
+          threadSource: "user"
+        }
+      },
+      {
+        method: "turn/start",
+        params: {
+          threadID: "thread-1",
+          input: [{ type: "text", text: "hello", text_elements: [] }],
+          options: { reasoningEffort: "high" }
+        }
+      },
+      { method: "initialize" },
+      {
+        method: "turn/start",
+        params: {
+          threadID: "thread-1",
+          input: [{ type: "text", text: "follow", text_elements: [] }],
+          options: {}
+        }
+      },
+      { method: "initialize" },
+      {
+        method: "turn/steer",
+        params: {
+          threadID: "thread-1",
+          turnID: "turn-1",
+          input: [{ type: "text", text: "adjust", text_elements: [] }]
+        }
+      }
     ]);
   });
 });

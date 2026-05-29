@@ -18,7 +18,7 @@ const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 const provider = codexProvider(config);
 const server = await startServer(config, { database, providers: provider ? { codex: provider } : undefined });
-if (provider) await startAutoRunLoops(database, provider);
+if (provider) void startAutoRunLoops(database, provider);
 
 console.log(JSON.stringify({
   ok: true,

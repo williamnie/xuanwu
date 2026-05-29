@@ -1,7 +1,19 @@
 import { CodexAdapter } from "./adapter.ts";
 import { textInput } from "./threadLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ExecutorProvider, InterruptInput, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../types.ts";
+import type {
+  ExecutorProvider,
+  InterruptInput,
+  ProviderRecoveryInput,
+  ProviderRunInput,
+  ProviderRunResult,
+  SessionCreateInput,
+  SessionCreateResult,
+  SessionListInput,
+  SessionListResult,
+  SessionMessageInput,
+  SessionMessageResult
+} from "../types.ts";
 import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import { CodexStdioJsonRpcTransport } from "./jsonRpc.ts";
 
@@ -10,17 +22,19 @@ const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue 
 
 type CodexIssueAdapter = {
   initialize(): Promise<CodexInitializeResult>;
+  listThreads(input?: Parameters<CodexAdapter["listThreads"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["listThreads"]>>>;
+  readThread(threadID: string): Promise<ThreadSummary>;
   resumeThread(threadID: string): Promise<ThreadSummary>;
   setThreadName(threadID: string, name: string): Promise<{ ok: true; provider_session_id: string }>;
   startThread(input: Parameters<CodexAdapter["startThread"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["startThread"]>>>;
   startTurn(threadID: string, input: Parameters<CodexAdapter["startTurn"]>[1], options?: Parameters<CodexAdapter["startTurn"]>[2]): Promise<TurnStartResult>;
+  steerTurn(threadID: string, turnID: string, input: Parameters<CodexAdapter["steerTurn"]>[2]): Promise<TurnStartResult>;
   interruptTurn(threadID: string, turnID: string): Promise<Awaited<ReturnType<CodexAdapter["interruptTurn"]>>>;
 };
 
 export class CodexExecutorProvider implements ExecutorProvider {
-  readonly id = PROVIDER_CODEX;
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"] as const;
-
+  readonly id = PROVIDER_CODEX;
   constructor(
     private readonly adapter: CodexIssueAdapter,
     private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS
@@ -46,6 +60,39 @@ export class CodexExecutorProvider implements ExecutorProvider {
     });
     input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
     return { runId: runID(turn), session: sessionRef(turn) };
+  }
+
+  async listSessions(input: SessionListInput = {}): Promise<SessionListResult> {
+    await this.adapter.initialize();
+    return await this.adapter.listThreads(input);
+  }
+
+  async readSession(sessionId: string): Promise<ThreadSummary> {
+    await this.adapter.initialize();
+    return await this.adapter.readThread(sessionId.trim());
+  }
+
+  async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
+    await this.adapter.initialize();
+    const thread = await this.adapter.startThread({ ...threadOptions(input, this.developerInstructions), threadSource: "user" });
+    const result = createResult(thread.provider_session_id);
+    if (input.prompt?.trim()) {
+      const turn = await this.adapter.startTurn(thread.provider_session_id, [textInput(input.prompt)], turnOptions(input));
+      result.turn_id = turn.turn_id;
+      result.provider_turn_id = turn.turn_id;
+    }
+    return result;
+  }
+
+  async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
+    await this.adapter.initialize();
+    const threadID = input.sessionId.trim();
+    if (input.mode?.trim() === "steer") {
+      const turnID = input.turnId?.trim() ?? "";
+      if (turnID === "") throw new Error("当前 session 没有可引导的运行中 turn");
+      return await this.adapter.steerTurn(threadID, turnID, [textInput(input.prompt ?? "")]);
+    }
+    return await this.adapter.startTurn(threadID, [textInput(input.prompt ?? "")], turnOptions(input));
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
@@ -88,4 +135,28 @@ function sessionRef(turn: TurnStartResult): ProviderRunResult["session"] {
 function runID(turn: TurnStartResult): string {
   const turnID = turn.turn_id || "pending-turn";
   return `${PROVIDER_CODEX}:${turn.provider_session_id}:${turnID}`;
+}
+
+function createResult(threadID: string): SessionCreateResult {
+  return { id: `${PROVIDER_CODEX}:${threadID}`, provider: PROVIDER_CODEX, provider_session_id: threadID, thread_id: threadID };
+}
+
+function threadOptions(input: SessionCreateInput, developerInstructions: string): Parameters<CodexAdapter["startThread"]>[0] {
+  return {
+    cwd: input.cwd,
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+    approvalPolicy: input.approvalPolicy,
+    sandbox: input.sandbox,
+    developerInstructions
+  };
+}
+
+function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "reasoningEffort" | "sandbox">) {
+  return {
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+    approvalPolicy: input.approvalPolicy,
+    sandbox: input.sandbox
+  };
 }

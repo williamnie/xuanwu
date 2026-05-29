@@ -6,8 +6,9 @@ import { reviewIssueVerification } from "../db/repositories/issueVerification.ts
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues } from "../db/repositories/issues.ts";
 import { createProject, getProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
-import { cancelIssueWithInterrupt, interruptSession } from "../runner/interrupt.ts";
+import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
 import type { EventBus } from "../events/bus.ts";
+import { registerSessionRoutes } from "./sessionApi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -31,6 +32,7 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   registerProjectRoutes(router, context);
   registerIssueCollectionRoutes(router, context);
   registerIssueItemRoutes(router, context);
+  registerSessionRoutes(router, context);
 }
 
 function registerProjectRoutes(router: Router, context: ReadApiContext): void {
@@ -73,7 +75,6 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
   });
   router.get("/api/issues/:id/events", (request) => writeResponse(() => listIssueEvents(context.database, issueID(request))));
   router.get("/api/issues/:id/runs", (request) => writeResponse(() => listIssueRuns(context.database, issueID(request))));
-  router.post("/api/sessions/:id/interrupt", (request) => sessionInterruptResponse(context, request));
 }
 
 function projectResponse(context: ReadApiContext, request: Request): Response {
@@ -91,19 +92,11 @@ function actionResponse(
 }
 
 async function cancelIssueResponse(context: ReadApiContext, request: Request): Promise<Response> {
-  return asyncWriteResponse(() => cancelIssueWithInterrupt(context.database, issueID(request), interruptRuntime(context)));
-}
-
-async function sessionInterruptResponse(context: ReadApiContext, request: Request): Promise<Response> {
-  return asyncWriteResponse(() => interruptSession(context.database, sessionID(request), interruptRuntime(context)));
-}
-
-function interruptRuntime(context: ReadApiContext) {
-  return {
+  return asyncWriteResponse(() => cancelIssueWithInterrupt(context.database, issueID(request), {
     bus: context.bus,
     interruptTimeoutMs: context.interruptTimeoutMs,
     providers: context.providers
-  };
+  }));
 }
 
 function issueResponse(context: ReadApiContext, request: Request): Response {
@@ -178,14 +171,6 @@ function issueID(request: Request): number {
   if (!/^[0-9]+$/.test(raw)) throw new HttpError(400, "issue id 不合法");
   const id = Number(raw);
   if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, "issue id 不合法");
-  return id;
-}
-
-function sessionID(request: Request): string {
-  const parts = new URL(request.url).pathname.split("/").filter(Boolean);
-  const raw = parts[parts.indexOf("sessions") + 1] ?? "";
-  const id = decodeURIComponent(raw).trim();
-  if (id === "") throw new HttpError(400, "session id 不能为空");
   return id;
 }
 

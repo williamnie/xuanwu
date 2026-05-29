@@ -11,15 +11,18 @@ describe("Codex adapter RPC methods", () => {
         capabilities: { experimentalApi: true, threads: true }
       }
     });
-    const result = await new CodexAdapter(rpc).initialize();
+    const adapter = new CodexAdapter(rpc);
+    const result = await adapter.initialize();
 
-    expect(rpc.calls[0]).toEqual({
+    await adapter.initialize();
+
+    expect(rpc.calls).toEqual([{
       method: "initialize",
       params: {
         clientInfo: { name: "codex-issue-runner-bun", version: "0.1.0" },
         capabilities: { experimentalApi: true }
       }
-    });
+    }]);
     expect(result).toEqual({
       protocolVersion: "2026-05-01",
       serverInfo: { name: "codex-app-server", version: "0.42.0" },
@@ -189,6 +192,31 @@ describe("Codex adapter RPC methods", () => {
       provider_session_id: "thread-1",
       sessionId: "thread-1",
       turn_id: "turn-1"
+    });
+  });
+
+  test("steers an active session turn through the current Codex RPC contract", async () => {
+    const rpc = new FakeRpc({ "turn/steer": { turnId: "turn-active" } });
+
+    const result = await new CodexAdapter(rpc).steerTurn("thread-1", "turn-active", [{
+      type: "text",
+      text: "adjust",
+      text_elements: []
+    }]);
+
+    expect(rpc.calls[0]).toEqual({
+      method: "turn/steer",
+      params: {
+        threadId: "thread-1",
+        expectedTurnId: "turn-active",
+        input: [{ type: "text", text: "adjust", text_elements: [] }]
+      }
+    });
+    expect(result).toEqual({
+      provider: "codex",
+      provider_session_id: "thread-1",
+      sessionId: "thread-1",
+      turn_id: "turn-active"
     });
   });
 

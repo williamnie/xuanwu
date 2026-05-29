@@ -65,9 +65,16 @@ export type Model = {
 export type ReasoningEffortOption = { description: string; reasoningEffort: string };
 
 export class CodexAdapter {
+  private initialized?: Promise<CodexInitializeResult>;
+
   constructor(private readonly rpc: CodexRpcClient) {}
 
   async initialize(): Promise<CodexInitializeResult> {
+    this.initialized ??= this.initializeOnce();
+    return await this.initialized;
+  }
+
+  private async initializeOnce(): Promise<CodexInitializeResult> {
     return normalizeInitializeResult(await this.rpc.request("initialize", {
       clientInfo: CLIENT_INFO,
       capabilities: { experimentalApi: true }
@@ -108,6 +115,13 @@ export class CodexAdapter {
     const cleanThreadID = threadID.trim();
     const result = await this.lifecycleRequest("turn/start", turnStartParams(cleanThreadID, input, options));
     return normalizeTurnStartResult(cleanThreadID, result);
+  }
+
+  async steerTurn(threadID: string, turnID: string, input: CodexUserInput[]): Promise<TurnStartResult> {
+    const cleanThreadID = threadID.trim();
+    const cleanTurnID = turnID.trim();
+    const result = await this.lifecycleRequest("turn/steer", { threadId: cleanThreadID, expectedTurnId: cleanTurnID, input });
+    return normalizeTurnStartResult(cleanThreadID, { turnId: cleanTurnID, ...recordValue(result) });
   }
 
   async interruptTurn(threadID: string, turnID: string): Promise<TurnInterruptResult> {
