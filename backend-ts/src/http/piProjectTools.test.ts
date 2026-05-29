@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listPiActions } from "../db/repositories/pi.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -27,8 +28,8 @@ afterEach(async () => {
   }
 });
 
-describe("PI read-only project tools", () => {
-  test("exposes project.status and read-only SDK tools only", async () => {
+describe("PI project tools", () => {
+  test("exposes read-only SDK tools and runner action tools", async () => {
     const { db, projectCwd } = await openFixture();
     const faux = registerFauxProvider({ api: "pi-tools-api", provider: "pi-tools" });
     try {
@@ -40,6 +41,7 @@ describe("PI read-only project tools", () => {
       faux.setResponses([
         fauxAssistantMessage([
           fauxToolCall("project.status", {}, { id: "status" }),
+          fauxToolCall("issue.enqueue_proposal", { issue_id: 1, rationale: "ready" }, { id: "enqueue" }),
           fauxToolCall("read", { path: "README.md", limit: 5 }, { id: "read" }),
           fauxToolCall("write", { path: "blocked.txt", content: "must-not-write" }, { id: "write" }),
           fauxToolCall("edit", {
@@ -53,14 +55,17 @@ describe("PI read-only project tools", () => {
       const { probes, runtime } = await runToolProbeSession(db, projectCwd);
 
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
-        "find", "grep", "ls", "project.status", "read"
+        "find", "grep", "issue.comment", "issue.create_proposal", "issue.enqueue_proposal",
+        "issue.list", "issue.read", "issue.update_refinement", "ls", "project.list",
+        "project.status", "read", "session.list", "session.read_summary", "session.steer_proposal"
       ]);
-      expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual([
-        "find", "grep", "ls", "project.status", "read"
-      ]);
+      expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project.status")?.isError).toBe(false);
       expect(probes.get("project.status")?.text).toContain('"total_issues": 2');
       expect(probes.get("project.status")?.text).toContain('"todo": 1');
+      expect(probes.get("issue.enqueue_proposal")?.isError).toBe(false);
+      expect(probes.get("issue.enqueue_proposal")?.text).toContain('"requires_confirmation": true');
+      expect(listPiActions(db).map((action) => action.action_type)).toEqual(["issue.enqueue"]);
       expect(probes.get("read")?.isError).toBe(false);
       expect(probes.get("write")?.isError).toBe(true);
       expect(probes.get("write")?.text).toContain("Tool write not found");

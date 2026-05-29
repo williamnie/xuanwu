@@ -1,0 +1,205 @@
+import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { validateToolArguments } from "@earendil-works/pi-ai";
+import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { AgentSession } from "../db/repositories/agentSessions.ts";
+import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { listPiActions } from "../db/repositories/pi.ts";
+import { getProject, type Project } from "../db/repositories/projects.ts";
+import { createPiRunnerActions, type PiRunnerActionLayer } from "./runnerActions.ts";
+import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "./runnerActionTools.ts";
+
+describe("PI runner action tools", () => {
+  test("defines schemas and delegates tool calls to the action layer", async () => {
+    const calls: Array<[string, unknown]> = [];
+    const tools = createPiRunnerActionTools(fakeActions(calls));
+    const issueRead = toolByName(tools, "issue.read");
+    const steer = toolByName(tools, "session.steer_proposal");
+
+    expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
+    expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(steer, { session_key: "codex:thread-1", prompt: "adjust" })).toEqual({
+      session_key: "codex:thread-1",
+      prompt: "adjust"
+    });
+    expect(() => validateArgs(issueRead, { id: "bad" })).toThrow(/Validation failed/);
+    expect(() => validateArgs(issueRead, { id: 1, unexpected: true })).toThrow(/Validation failed/);
+    expect(() => validateArgs(steer, { session_key: "codex:thread-1", prompt: " " })).toThrow(/Validation failed/);
+
+    await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
+    await steer.execute("tool-2", { session_key: "codex:thread-1", prompt: "adjust" }, undefined, undefined, {} as never);
+
+    expect(calls).toEqual([
+      ["readIssue", { id: 7 }],
+      ["createSessionSteerProposal", { session_key: "codex:thread-1", prompt: "adjust" }]
+    ]);
+  });
+
+  test("creates high-risk proposals without mutating issues or sessions", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+      const tools = createPiRunnerActionTools(actions);
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Queue me" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-1" });
+
+      const createIssue = await runTool(tools, "issue.create_proposal", {
+        description: "New scoped issue",
+        title: "New issue"
+      });
+      const updateRefinement = await runTool(tools, "issue.update_refinement", {
+        issue_id: issueID,
+        acceptance_criteria: "- passes",
+        verification_plan: "bun test"
+      });
+      const enqueue = await runTool(tools, "issue.enqueue_proposal", { issue_id: issueID, rationale: "ready" });
+      const steer = await runTool(tools, "session.steer_proposal", {
+        session_key: "codex:thread-1",
+        prompt: "Please adjust the plan"
+      });
+
+      expect(createIssue.details).toMatchObject({
+        action_type: "issue.create",
+        requires_confirmation: true,
+        status: "pending"
+      });
+      expect(updateRefinement.details).toMatchObject({
+        action_type: "issue.update_refinement",
+        issue_id: issueID,
+        requires_confirmation: true,
+        status: "pending"
+      });
+      expect(enqueue.details).toMatchObject({
+        action_type: "issue.enqueue",
+        issue_id: issueID,
+        requires_confirmation: true,
+        status: "pending"
+      });
+      expect(steer.details).toMatchObject({
+        action_type: "session.steer",
+        requires_confirmation: true,
+        status: "pending"
+      });
+      expect(getIssue(fixture.db, issueID)?.status).toBe("triage");
+      expect(getIssue(fixture.db, issueID)?.description).toBe("");
+      expect(listIssues(fixture.db, { projectId: fixture.project.id })).toHaveLength(1);
+      expect(listPiActions(fixture.db).map((action) => action.action_type).sort()).toEqual([
+        "issue.create",
+        "issue.enqueue",
+        "issue.update_refinement",
+        "session.steer"
+      ]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("executes safe reads and low-risk comments through the action layer", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "todo", title: "Read me" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-1" });
+
+      expect(actions.listIssues({ status: "todo" })).toMatchObject({ items: [{ id: issueID, title: "Read me" }] });
+      expect(actions.readIssue({ id: issueID })).toMatchObject({ id: issueID, title: "Read me" });
+      expect(projectIDs(actions.listProjects({}))).toContain(fixture.project.id);
+      expect(sessionKeys(actions.listSessions({}))).toEqual(["codex:thread-1"]);
+
+      const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });
+
+      expect(comment).toMatchObject({ type: "issue.comment", issue_id: issueID });
+      expect(listIssueEvents(fixture.db, issueID).map((event) => event.type)).toEqual([
+        "issue.comment"
+      ]);
+      expect(listIssues(fixture.db, { projectId: fixture.project.id })[0]?.comment_count).toBe(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+});
+
+function projectIDs(result: unknown): string[] {
+  return (result as { items: Project[] }).items.map((project) => project.id);
+}
+
+function sessionKeys(result: unknown): string[] {
+  return (result as { items: AgentSession[] }).items.map((session) => session.session_key);
+}
+
+function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
+  const record = (name: string) => (input: unknown) => {
+    calls.push([name, input]);
+    return { ok: true };
+  };
+  return {
+    commentIssue: record("commentIssue"),
+    createIssueProposal: record("createIssueProposal"),
+    createSessionSteerProposal: record("createSessionSteerProposal"),
+    createUpdateRefinementProposal: record("createUpdateRefinementProposal"),
+    enqueueIssueProposal: record("enqueueIssueProposal"),
+    listIssues: record("listIssues"),
+    listProjects: record("listProjects"),
+    listSessions: record("listSessions"),
+    projectStatus: record("projectStatus"),
+    readIssue: record("readIssue"),
+    readSessionSummary: record("readSessionSummary")
+  };
+}
+
+async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
+  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-action-tools-"));
+  const db = await openDatabase({ stateDir: join(root, "state") });
+  db.sqlite.run(
+    `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    ["demo", "Demo", join(root, "project"), 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+  const project = getProject(db, "demo");
+  if (!project) throw new Error("missing fixture project");
+  return { db, project, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
+}
+
+function insertIssue(db: RunnerDatabase, input: { projectID: string; status: string; title: string }): number {
+  db.sqlite.run(
+    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
+    [input.projectID, input.title, input.status, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+  const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
+  if (!row) throw new Error("missing issue id");
+  return row.id;
+}
+
+function insertAgentSession(db: RunnerDatabase, input: { projectID: string; sessionKey: string }): void {
+  const [, sessionID] = input.sessionKey.split(":");
+  db.sqlite.run(
+    `insert into agent_sessions
+      (session_key, provider, provider_session_id, project_id, title, status, raw_ref, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.sessionKey, "codex", sessionID, input.projectID, "Thread 1", "running",
+      '{"provider_turn_id":"turn-1"}', "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+    ]
+  );
+}
+
+function toolByName(tools: ReturnType<typeof createPiRunnerActionTools>, name: string) {
+  const tool = tools.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`missing tool ${name}`);
+  return tool;
+}
+
+function validateArgs(tool: ReturnType<typeof toolByName>, args: Record<string, unknown>) {
+  return validateToolArguments(tool as never, { name: tool.name, arguments: args } as never);
+}
+
+async function runTool(
+  tools: ReturnType<typeof createPiRunnerActionTools>,
+  name: string,
+  params: Record<string, unknown>
+) {
+  return toolByName(tools, name).execute("tool-call", params as never, undefined, undefined, {} as never);
+}
