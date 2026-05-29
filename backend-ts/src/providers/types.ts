@@ -41,6 +41,10 @@ export type ProviderRunInput = {
   onEvent?: (event: ProviderEvent) => void;
 };
 
+export type ProviderRecoveryInput = ProviderRunInput & {
+  session: SessionRef;
+};
+
 export type ProviderRunResult = {
   runId: string;
   session?: SessionRef;
@@ -55,6 +59,7 @@ export interface ExecutorProvider {
   id: ExecutorProviderId;
   capabilities: readonly ExecutorCapability[];
   run(input: ProviderRunInput): Promise<ProviderRunResult>;
+  recover?(input: ProviderRecoveryInput): Promise<ProviderRunResult>;
   events?(): AsyncIterable<ProviderEvent>;
   interrupt?(input: InterruptInput): Promise<void>;
 }

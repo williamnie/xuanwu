@@ -1,8 +1,8 @@
 import { CodexAdapter } from "./adapter.ts";
 import { textInput } from "./threadLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../types.ts";
-import type { CodexInitializeResult, TurnStartResult } from "./adapter.ts";
+import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../types.ts";
+import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import { CodexStdioJsonRpcTransport } from "./jsonRpc.ts";
 
 const PROVIDER_CODEX = "codex";
@@ -10,6 +10,7 @@ const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue 
 
 type CodexIssueAdapter = {
   initialize(): Promise<CodexInitializeResult>;
+  resumeThread(threadID: string): Promise<ThreadSummary>;
   setThreadName(threadID: string, name: string): Promise<{ ok: true; provider_session_id: string }>;
   startThread(input: Parameters<CodexAdapter["startThread"]>[0]): Promise<Awaited<ReturnType<CodexAdapter["startThread"]>>>;
   startTurn(threadID: string, input: Parameters<CodexAdapter["startTurn"]>[1], options?: Parameters<CodexAdapter["startTurn"]>[2]): Promise<TurnStartResult>;
@@ -37,6 +38,20 @@ export class CodexExecutorProvider implements ExecutorProvider {
     });
     await this.nameThread(thread.provider_session_id, input.issueId);
     const turn = await this.adapter.startTurn(thread.provider_session_id, [textInput(input.prompt)], {
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
+      approvalPolicy: input.approvalPolicy,
+      sandbox: input.sandbox
+    });
+    input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
+    return { runId: runID(turn), session: sessionRef(turn) };
+  }
+
+  async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
+    await this.adapter.initialize();
+    const session = await this.adapter.resumeThread(input.session.sessionId);
+    const threadID = session.provider_session_id || input.session.sessionId;
+    const turn = await this.adapter.startTurn(threadID, [textInput(input.prompt)], {
       model: input.model,
       reasoningEffort: input.reasoningEffort,
       approvalPolicy: input.approvalPolicy,

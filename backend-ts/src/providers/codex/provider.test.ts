@@ -11,6 +11,11 @@ class FakeCodexIssueAdapter {
     return { protocolVersion: "fixture", capabilities: {} };
   }
 
+  async resumeThread(threadID: string) {
+    this.calls.push({ method: "thread/resume", params: { threadID } });
+    return { id: `codex:${threadID}`, provider: "codex" as const, provider_session_id: threadID, sessionId: threadID, ephemeral: false };
+  }
+
   async startThread(input: ThreadStartInput): Promise<ThreadStartResult> {
     this.calls.push({ method: "thread/start", params: input });
     return { id: "codex:thread-1", provider: "codex", provider_session_id: "thread-1", sessionId: "thread-1", thread_id: "thread-1", ephemeral: false };
@@ -79,6 +84,34 @@ describe("Codex executor provider", () => {
             approvalPolicy: "never",
             sandbox: "workspace-write"
           }
+        }
+      }
+    ]);
+  });
+
+  test("recovers an existing Codex thread with a continuation turn", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    const result = await new CodexExecutorProvider(adapter).recover({
+      issueId: 161,
+      projectId: "demo",
+      cwd: "/tmp/demo",
+      prompt: "recover prompt",
+      session: { provider: "codex", sessionId: "thread-1", turnId: "turn-old" }
+    });
+
+    expect(result).toEqual({
+      runId: "codex:thread-1:turn-1",
+      session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" }
+    });
+    expect(adapter.calls).toEqual([
+      { method: "initialize" },
+      { method: "thread/resume", params: { threadID: "thread-1" } },
+      {
+        method: "turn/start",
+        params: {
+          threadID: "thread-1",
+          input: [{ type: "text", text: "recover prompt", text_elements: [] }],
+          options: {}
         }
       }
     ]);

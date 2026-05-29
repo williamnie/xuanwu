@@ -149,7 +149,9 @@ function closeOpenIssueRun(db: RunnerDatabase, issue: NormalizedIssuePatch & { i
 }
 
 function patchStatusExitReason(status: string): string {
-  return isTerminalStatus(status) ? "explicit_status_update" : "status_changed";
+  if (status === "done" || status === "pending_verification") return "explicit_status_update";
+  if (status === "failed" || status === "cancelled") return status;
+  return "status_changed";
 }
 
 function isTerminalStatus(status: string): boolean {

@@ -5,6 +5,7 @@ import type { Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
+import { failIssueExecution } from "./statusGate.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
@@ -22,17 +23,31 @@ export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<Proje
   const provider = projectProvider(project, input.providers);
   const issue = claimNextIssue(input.database, project.id);
   if (!issue) return { claimed: false };
-  const run = await runIssueWithProvider(provider, {
-    database: input.database,
-    issueId: issue.id,
-    projectId: project.id,
-    cwd: project.cwd,
-    prompt: issuePrompt(issue),
-    model: project.model,
-    approvalPolicy: project.approval_policy,
-    sandbox: project.sandbox
-  });
+  const run = await runClaimedIssue(input, project, provider, issue);
   return { claimed: true, issue, run };
+}
+
+async function runClaimedIssue(
+  input: ProjectLoopInput,
+  project: Project,
+  provider: ExecutorProvider,
+  issue: Issue
+): Promise<ProviderRunResult> {
+  try {
+    return await runIssueWithProvider(provider, {
+      database: input.database,
+      issueId: issue.id,
+      projectId: project.id,
+      cwd: project.cwd,
+      prompt: issuePrompt(issue),
+      model: project.model,
+      approvalPolicy: project.approval_policy,
+      sandbox: project.sandbox
+    });
+  } catch (error) {
+    failIssueExecution(input.database, issue.id, error, provider.id);
+    return { runId: "failed" };
+  }
 }
 
 function mustGetProject(db: RunnerDatabase, projectId: string): Project {

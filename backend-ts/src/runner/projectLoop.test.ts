@@ -30,6 +30,13 @@ class FakeExecutionProvider implements ExecutorProvider {
   }
 }
 
+class FailingExecutionProvider extends FakeExecutionProvider {
+  async run(input: ProviderRunInput) {
+    this.inputs.push(input);
+    throw new Error("provider failed CODEX_API_KEY=fixture-secret");
+  }
+}
+
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-loop-"));
   tempRoots.push(root);
@@ -110,6 +117,33 @@ describe("Bun project loop claim execution", () => {
 
       expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress" });
       expect(listIssueRuns(db, issueId)).toMatchObject([{ status: "in_progress", ended_at: "" }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("marks provider failures failed and closes the open run with redacted error", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FailingExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueId = insertIssue(db, { projectId: "demo", title: "provider fails" });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const issue = getIssue(db, issueId);
+      const run = listIssueRuns(db, issueId).at(-1);
+      expect(issue).toMatchObject({
+        status: "failed",
+        error: "provider failed CODEX_API_KEY=[redacted]"
+      });
+      expect(issue?.error).not.toContain("fixture-secret");
+      expect(run).toMatchObject({
+        status: "failed",
+        exit_reason: "failed",
+        error: "provider failed CODEX_API_KEY=[redacted]"
+      });
+      expect(run?.ended_at).not.toBe("");
     } finally {
       db.close();
     }
