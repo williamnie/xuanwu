@@ -23,7 +23,7 @@ export type PiAction = {
 };
 
 export type PiActionInput = PatchInput<PiAction>;
-export type PiActionFilter = { conversationId?: string; projectId?: string; status?: string };
+export type PiActionFilter = { conversationId?: string; issueId?: number; projectId?: string; status?: string };
 
 const TABLE = "pi_actions";
 const COLUMNS = `id, project_id, issue_id, conversation_id, action_type, status,
@@ -53,6 +53,7 @@ export function listPiActions(db: RunnerDatabase, filter: PiActionFilter = {}): 
   return listRows(db, TABLE, COLUMNS, mapPiAction, buildFilter([
     ["project_id=?", filter.projectId],
     ["conversation_id=?", filter.conversationId],
+    ["issue_id=?", filter.issueId],
     ["status=?", filter.status]
   ], "created_at asc, id asc"));
 }

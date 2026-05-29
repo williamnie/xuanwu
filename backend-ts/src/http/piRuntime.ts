@@ -14,6 +14,7 @@ export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
 export type RuntimeSessionInput = {
   agent: PiAgent;
+  bus?: EventBus;
   conversationID: string;
   project: Project;
   sessionFile?: string;
@@ -58,7 +59,10 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     settingsManager: sdk.pi.SettingsManager.create(input.project.cwd, paths.agentDir),
     thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
     tools: [...PI_ALLOWED_TOOLS],
-    customTools: createPiProjectTools(db, input.project)
+    customTools: createPiProjectTools(db, input.project, {
+      bus: input.bus,
+      conversationID: input.conversationID
+    })
   });
   if (input.agent.name !== "") session.setSessionName(input.agent.name);
   return { session };

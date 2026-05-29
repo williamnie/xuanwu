@@ -1,9 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
-import { createPiAction } from "../db/repositories/pi.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { getAgentSession, listAgentSessions } from "../db/repositories/agentSessions.ts";
+import type { EventBus } from "../events/bus.ts";
+import { createPendingPiAction, executeSafePiAction } from "./actionEngine.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import { serializeRefinement, type RefinementField } from "./runnerActionRefinement.ts";
 
@@ -22,6 +23,7 @@ export type PiRunnerActionLayer = {
 };
 
 export type PiRunnerActionContext = {
+  bus?: EventBus;
   conversationID?: string;
   project?: Project;
 };
@@ -52,6 +54,7 @@ type ProposalInput = {
   actionType: string;
   issueID?: number;
   payload: Record<string, unknown>;
+  projectID?: string;
   rationale?: string;
 };
 
@@ -60,23 +63,85 @@ export function createPiRunnerActions(
   context: PiRunnerActionContext = {}
 ): PiRunnerActionLayer {
   return {
-    commentIssue: (input) => createIssueComment(db, input.issue_id, { author: "agent", body: input.body }),
-    createIssueProposal: (input) => createProposal(db, context, issueCreateProposal(input, context)),
-    createSessionSteerProposal: (input) => createProposal(db, context, sessionSteerProposal(db, input)),
-    createUpdateRefinementProposal: (input) => createProposal(db, context, refinementProposal(db, input)),
-    enqueueIssueProposal: (input) => createProposal(db, context, {
+    commentIssue: (input) => executeSafePiAction(db, context, {
+      actionType: "issue.comment",
+      issueID: input.issue_id,
+      payload: { body: input.body, issue_id: input.issue_id },
+      projectID: issueProjectID(db, input.issue_id, context),
+      execute: () => createIssueComment(db, input.issue_id, { author: "agent", body: input.body })
+    }),
+    createIssueProposal: (input) => createPendingPiAction(db, context, issueCreateProposal(input, context)),
+    createSessionSteerProposal: (input) => createPendingPiAction(db, context, sessionSteerProposal(db, input)),
+    createUpdateRefinementProposal: (input) => createPendingPiAction(db, context, refinementProposal(db, input)),
+    enqueueIssueProposal: (input) => createPendingPiAction(db, context, {
       actionType: "issue.enqueue",
       issueID: input.issue_id,
       payload: { issue_id: input.issue_id },
+      projectID: issueProjectID(db, input.issue_id, context),
       rationale: input.rationale
     }),
-    listIssues: (input) => ({ items: listIssues(db, normalizeIssueFilter(input, context)) }),
-    listProjects: () => ({ items: listProjects(db) }),
-    listSessions: (input) => ({ items: listAgentSessions(db, normalizeSessionFilter(input, context)) }),
-    projectStatus: (input) => createProjectStatusSnapshot(db, scopedProjectID(input.project_id, context)),
-    readIssue: (input) => mustGetIssue(db, input.id),
-    readSessionSummary: (input) => readSessionSummary(db, input.session_key)
+    listIssues: (input) => safeListIssues(db, context, input),
+    listProjects: () => executeSafePiAction(db, context, {
+      actionType: "project.list",
+      payload: {},
+      execute: () => ({ items: listProjects(db) })
+    }),
+    listSessions: (input) => safeListSessions(db, context, input),
+    projectStatus: (input) => safeProjectStatus(db, context, input),
+    readIssue: (input) => safeReadIssue(db, context, input),
+    readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
+}
+
+function safeListIssues(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueListInput) {
+  const filter = normalizeIssueFilter(input, context);
+  return executeSafePiAction(db, context, {
+    actionType: "issue.list",
+    payload: cleanObject({ project_id: filter.projectId, status: filter.status }),
+    projectID: filter.projectId,
+    execute: () => ({ items: listIssues(db, filter) })
+  });
+}
+
+function safeListSessions(db: RunnerDatabase, context: PiRunnerActionContext, input: SessionListInput) {
+  const filter = normalizeSessionFilter(input, context);
+  return executeSafePiAction(db, context, {
+    actionType: "session.list",
+    payload: cleanObject({ project_id: filter.projectId, provider: filter.provider }),
+    projectID: filter.projectId,
+    execute: () => ({ items: listAgentSessions(db, filter) })
+  });
+}
+
+function safeProjectStatus(db: RunnerDatabase, context: PiRunnerActionContext, input: ProjectStatusInput) {
+  const projectID = scopedProjectID(input.project_id, context);
+  return executeSafePiAction(db, context, {
+    actionType: "project.status",
+    payload: { project_id: projectID },
+    projectID,
+    execute: () => createProjectStatusSnapshot(db, projectID)
+  });
+}
+
+function safeReadIssue(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueReadInput) {
+  const issue = mustGetIssue(db, input.id);
+  return executeSafePiAction(db, context, {
+    actionType: "issue.read",
+    issueID: issue.id,
+    payload: { id: issue.id },
+    projectID: issue.project_id,
+    execute: () => issue
+  });
+}
+
+function safeReadSessionSummary(db: RunnerDatabase, context: PiRunnerActionContext, input: SessionReadSummaryInput) {
+  const session = readSessionSummary(db, input.session_key);
+  return executeSafePiAction(db, context, {
+    actionType: "session.read_summary",
+    payload: { session_key: session.session_key },
+    projectID: session.project_id,
+    execute: () => session
+  });
 }
 
 function issueCreateProposal(
@@ -92,6 +157,7 @@ function issueCreateProposal(
       description: issueDescription(input),
       status: "triage"
     },
+    projectID,
     rationale: input.rationale
   };
 }
@@ -106,6 +172,7 @@ function sessionSteerProposal(db: RunnerDatabase, input: SessionSteerProposalInp
       provider_session_id: session.provider_session_id,
       session_key: session.session_key
     },
+    projectID: session.project_id,
     rationale: input.rationale
   };
 }
@@ -119,34 +186,8 @@ function refinementProposal(db: RunnerDatabase, input: IssueUpdateRefinementInpu
       issue_id: issue.id,
       patch: { description: serializeRefinement(issue.description, input) }
     },
+    projectID: issue.project_id,
     rationale: input.rationale
-  };
-}
-
-function createProposal(
-  db: RunnerDatabase,
-  context: PiRunnerActionContext,
-  input: ProposalInput
-) {
-  const action = createPiAction(db, {
-    id: crypto.randomUUID(),
-    action_type: input.actionType,
-    conversation_id: cleanString(context.conversationID),
-    issue_id: input.issueID ?? 0,
-    payload_json: JSON.stringify(input.payload),
-    project_id: proposalProjectID(input.payload, context),
-    rationale: input.rationale ?? "",
-    requires_confirmation: 1,
-    risk_level: "high",
-    status: "pending"
-  });
-  return {
-    action_id: action.id,
-    action_type: action.action_type,
-    issue_id: action.issue_id,
-    requires_confirmation: action.requires_confirmation === 1,
-    risk_level: action.risk_level,
-    status: action.status
   };
 }
 
@@ -165,15 +206,14 @@ function normalizeSessionFilter(input: SessionListInput, context: PiRunnerAction
   };
 }
 
-function proposalProjectID(payload: Record<string, unknown>, context: PiRunnerActionContext): string {
-  const projectID = cleanString(payload.project_id);
-  return projectID || (context.project?.id ?? "");
-}
-
 function scopedProjectID(id: unknown, context: PiRunnerActionContext): string {
   const projectID = cleanString(id) || (context.project?.id ?? "");
   if (projectID === "") throw new ProjectNotFoundError();
   return projectID;
+}
+
+function issueProjectID(db: RunnerDatabase, id: number, context: PiRunnerActionContext): string {
+  return mustGetIssue(db, id).project_id || (context.project?.id ?? "");
 }
 
 function mustGetIssue(db: RunnerDatabase, id: number) {
@@ -206,6 +246,10 @@ function issueDescription(input: IssueCreateProposalInput): string {
     verification_plan: input.verification_plan
   });
   return refinement || input.description;
+}
+
+function cleanObject(input: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== "")) as Record<string, string>;
 }
 
 function cleanString(value: unknown): string {

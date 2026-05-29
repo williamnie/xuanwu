@@ -7,7 +7,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import type { AgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { listPiActions } from "../db/repositories/pi.ts";
+import { getPiAction, listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions, type PiRunnerActionLayer } from "./runnerActions.ts";
 import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "./runnerActionTools.ts";
@@ -112,10 +112,64 @@ describe("PI runner action tools", () => {
       const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });
 
       expect(comment).toMatchObject({ type: "issue.comment", issue_id: issueID });
+      const completedActions = listPiActions(fixture.db, { status: "completed" });
+      expect(completedActions.map((action) => action.action_type).sort()).toEqual([
+        "issue.comment", "issue.list", "issue.read", "project.list", "session.list"
+      ]);
+      expect(completedActions).toContainEqual(expect.objectContaining({
+        action_type: "issue.comment",
+        issue_id: issueID,
+        result_json: expect.stringContaining("issue.comment"),
+        risk_level: "low"
+      }));
+      const commentAction = completedActions.find((action) => action.action_type === "issue.comment");
+      expect(getPiAction(fixture.db, commentAction?.id ?? "")).toMatchObject({
+        action_type: "issue.comment",
+        issue_id: issueID,
+        result_json: expect.stringContaining("issue.comment"),
+        status: "completed"
+      });
       expect(listIssueEvents(fixture.db, issueID).map((event) => event.type)).toEqual([
         "issue.comment"
       ]);
       expect(listIssues(fixture.db, { projectId: fixture.project.id })[0]?.comment_count).toBe(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("keeps confirm-required actions pending and records rationale/result", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, {
+        conversationID: "conv-1",
+        project: fixture.project
+      });
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Queue me" });
+
+      const action = actions.enqueueIssueProposal({ issue_id: issueID, rationale: "ready to run" }) as {
+        action_id: string;
+      };
+      const stored = getPiAction(fixture.db, action.action_id);
+
+      expect(stored).toMatchObject({
+        action_type: "issue.enqueue",
+        conversation_id: "conv-1",
+        issue_id: issueID,
+        payload_json: JSON.stringify({ issue_id: issueID }),
+        project_id: fixture.project.id,
+        rationale: "ready to run",
+        requires_confirmation: 1,
+        result_json: expect.stringContaining("pending"),
+        risk_level: "medium",
+        status: "pending"
+      });
+      expect(action).toMatchObject({
+        action_type: "issue.enqueue",
+        requires_confirmation: true,
+        risk_level: "medium",
+        status: "pending"
+      });
     } finally {
       await fixture.close();
     }

@@ -72,7 +72,12 @@ async function createConversationWithRuntime(
   const project = conversationProject(context.database, cleanString(body.project_id));
   const agent = conversationAgent(context.database, cleanString(body.pi_agent_id));
   const id = cleanString(body.id) || crypto.randomUUID();
-  const runtime = await createOrRestorePiRuntime(context.database, { agent, conversationID: id, project });
+  const runtime = await createOrRestorePiRuntime(context.database, {
+    agent,
+    bus: context.bus,
+    conversationID: id,
+    project
+  });
   const conversation = createPiConversation(context.database, conversationInput({
     body,
     id,
@@ -111,7 +116,7 @@ async function sendPiConversationMessage(
   if (prompt === "") throw new HttpError(400, "prompt is required");
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
-  const runtime = await openConversationRuntime(context.database, conversation);
+  const runtime = await openConversationRuntime(context, conversation);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
@@ -156,11 +161,12 @@ function persistPiSessionIndex(
   });
 }
 
-async function openConversationRuntime(db: RunnerDatabase, conversation: PiConversation) {
-  const project = requireConversationProject(db, conversation);
-  const agent = requireConversationAgent(db, conversation);
-  return createPiRuntimeSession(db, {
+async function openConversationRuntime(context: PiConversationContext, conversation: PiConversation) {
+  const project = requireConversationProject(context.database, conversation);
+  const agent = requireConversationAgent(context.database, conversation);
+  return createPiRuntimeSession(context.database, {
     agent,
+    bus: context.bus,
     conversationID: conversation.id,
     project,
     sessionFile: conversation.session_file

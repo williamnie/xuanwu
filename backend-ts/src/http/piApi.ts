@@ -13,6 +13,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import { registerPiActionRoutes } from "./piActionsApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
 import type { Router } from "./router.ts";
 
@@ -29,6 +30,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.get("/api/pi/agents/:id", (request) => piAgentResponse(context, request));
   router.patch("/api/pi/agents/:id", (request) => patchPiAgentResponse(context, request));
   router.delete("/api/pi/agents/:id", (request) => deletePiAgentResponse(context, request));
+  registerPiActionRoutes(router, context);
   registerPiConversationRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));

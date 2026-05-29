@@ -65,7 +65,7 @@ describe("PI project tools", () => {
       expect(probes.get("project.status")?.text).toContain('"todo": 1');
       expect(probes.get("issue.enqueue_proposal")?.isError).toBe(false);
       expect(probes.get("issue.enqueue_proposal")?.text).toContain('"requires_confirmation": true');
-      expect(listPiActions(db).map((action) => action.action_type)).toEqual(["issue.enqueue"]);
+      expect(listPiActions(db, { status: "pending" }).map((action) => action.action_type)).toEqual(["issue.enqueue"]);
       expect(probes.get("read")?.isError).toBe(false);
       expect(probes.get("write")?.isError).toBe(true);
       expect(probes.get("write")?.text).toContain("Tool write not found");
