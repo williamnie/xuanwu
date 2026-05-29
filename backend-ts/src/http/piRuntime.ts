@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent, PiConversation } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
+import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 
@@ -21,7 +22,6 @@ export type RuntimeSessionInput = {
 const PI_RUNTIME_ROOT = "pi-runtime";
 const PI_AGENT_DIR = "agent";
 const PI_SESSIONS_DIR = "sessions";
-const PI_READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
 
 export async function createOrRestorePiRuntime(
   db: RunnerDatabase,
@@ -57,7 +57,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     sessionManager,
     settingsManager: sdk.pi.SettingsManager.create(input.project.cwd, paths.agentDir),
     thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
-    tools: [...PI_READ_ONLY_TOOLS]
+    tools: [...PI_ALLOWED_TOOLS],
+    customTools: createPiProjectTools(db, input.project)
   });
   if (input.agent.name !== "") session.setSessionName(input.agent.name);
   return { session };
