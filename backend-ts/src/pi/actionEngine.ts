@@ -139,7 +139,7 @@ function risk(gate: PiRiskGate, riskLevel: PiRiskClassification["riskLevel"]): P
   return { gate, requiresConfirmation: gate !== "safe", riskLevel };
 }
 
-function publishPiActionEvent(bus: EventBus | undefined, type: string, action: PiAction): void {
+export function publishPiActionEvent(bus: EventBus | undefined, type: string, action: PiAction): void {
   bus?.publish(piActionEvent(type, action));
 }
 

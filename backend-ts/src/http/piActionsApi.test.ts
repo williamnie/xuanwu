@@ -3,9 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listPiActions } from "../db/repositories/pi.ts";
+import { getIssue } from "../db/repositories/issues.ts";
+import { createPiAction, getPiAction, listPiActions, updatePiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
+import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiRunnerActions } from "../pi/runnerActions.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -59,7 +61,129 @@ describe("Bun PI actions API", () => {
       database.close();
     }
   });
+
+  test("approve executes a pending action once and is idempotent", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "ready" }) as { action_id: string };
+      const bus = new EventBus();
+      const events = bus.subscribe();
+      const router = createDefaultRouter({ bus, database });
+
+      const first = await postAction(router, action.action_id, "approve");
+      const second = await postAction(router, action.action_id, "approve");
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(await first.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(await second.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });
+      expect(listEvents(database).map((event) => event.type)).toEqual(["issue.status_changed"]);
+      expect((await events.next())?.type).toBe("pi.action_approved");
+      expect((await events.next())?.type).toBe("pi.action_executing");
+      expect((await events.next())?.type).toBe("pi.action_completed");
+      events.close();
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reject does not execute the pending payload", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "not yet" }) as { action_id: string };
+
+      const response = await postAction(createDefaultRouter({ database }), action.action_id, "reject");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: action.action_id, status: "rejected" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
+      expect(listEvents(database)).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("execute runs approved actions and records failed results", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID }) as { action_id: string };
+      updatePiAction(database, action.action_id, { status: "approved" });
+      createPiAction(database, {
+        id: "bad-action",
+        action_type: "issue.enqueue",
+        status: "approved",
+        payload_json: JSON.stringify({ issue_id: 9999 })
+      });
+      const router = createDefaultRouter({ database });
+
+      const completed = await postAction(router, action.action_id, "execute");
+      const failed = await postAction(router, "bad-action", "execute");
+
+      expect(completed.status).toBe(200);
+      expect(await completed.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });
+      expect(failed.status).toBe(200);
+      expect(await failed.json()).toMatchObject({ id: "bad-action", status: "failed" });
+      expect(getPiAction(database, "bad-action")?.result_json).toContain("资源不存在");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("execute steers approved session actions through provider once", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionSteerProvider();
+    try {
+      insertProject(database, "demo");
+      insertAgentSession(database, "demo", "codex:thread-1", "turn-1");
+      createPiAction(database, {
+        id: "steer-action",
+        action_type: "session.steer",
+        project_id: "demo",
+        status: "approved",
+        payload_json: JSON.stringify({ prompt: "adjust plan", session_key: "codex:thread-1" })
+      });
+      const router = createDefaultRouter({ database, providers: { codex: provider } });
+
+      const first = await postAction(router, "steer-action", "execute");
+      const second = await postAction(router, "steer-action", "execute");
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(await first.json()).toMatchObject({ id: "steer-action", status: "completed" });
+      expect(await second.json()).toMatchObject({ id: "steer-action", status: "completed" });
+      expect(provider.calls).toEqual([{ mode: "steer", prompt: "adjust plan", sessionId: "thread-1", turnId: "turn-1" }]);
+      expect(getPiAction(database, "steer-action")?.result_json).toContain("turn-steered");
+    } finally {
+      database.close();
+    }
+  });
 });
+
+function postAction(
+  router: ReturnType<typeof createDefaultRouter>,
+  id: string,
+  action: "approve" | "execute" | "reject"
+): Promise<Response> {
+  return router.handle(new Request(`${BASE_URL}/api/pi/actions/${id}/${action}`, {
+    method: "POST",
+    body: "{}",
+    headers: { "content-type": "application/json" }
+  }));
+}
 
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(
@@ -80,8 +204,59 @@ function insertIssue(db: RunnerDatabase, projectID: string): number {
   return row.id;
 }
 
+function insertAgentSession(db: RunnerDatabase, projectID: string, sessionKey: string, turnID: string): void {
+  const [, sessionID] = sessionKey.split(":");
+  db.sqlite.run(
+    `insert into agent_sessions
+      (session_key, provider, provider_session_id, project_id, title, status, raw_ref, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      sessionKey,
+      "codex",
+      sessionID,
+      projectID,
+      "Thread 1",
+      "running",
+      JSON.stringify({ provider_turn_id: turnID }),
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:00Z"
+    ]
+  );
+}
+
+function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }> {
+  return db.sqlite.query<{ payload: string; type: string }, []>(
+    "select type, payload from issue_events order by id asc"
+  ).all();
+}
+
 function mustGetProject(db: RunnerDatabase, id: string): Project {
   const project = getProject(db, id);
   if (!project) throw new Error("missing project");
   return project;
+}
+
+class SessionSteerProvider implements ExecutorProvider {
+  readonly capabilities = ["resume_session"] as const;
+  readonly calls: Record<string, unknown>[] = [];
+  readonly id = "codex" as const;
+
+  async run(_input: ProviderRunInput): Promise<never> {
+    throw new Error("not implemented");
+  }
+
+  async sendSessionMessage(input: SessionMessageInput) {
+    this.calls.push({
+      mode: input.mode,
+      prompt: input.prompt,
+      sessionId: input.sessionId,
+      turnId: input.turnId
+    });
+    return {
+      provider: "codex" as const,
+      provider_session_id: input.sessionId,
+      sessionId: input.sessionId,
+      turn_id: "turn-steered"
+    };
+  }
 }
