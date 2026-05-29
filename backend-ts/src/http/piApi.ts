@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { EventBus } from "../events/bus.ts";
 import {
   createPiAgent,
   createProjectPiSettings,
@@ -16,9 +17,10 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiActionRoutes } from "./piActionsApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
+import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
 import type { Router } from "./router.ts";
 
-type PiApiContext = { database: RunnerDatabase };
+type PiApiContext = { bus?: EventBus; database: RunnerDatabase };
 
 type SettingsPatch = Partial<Pick<ProjectPiSettings,
   "auto_enqueue" | "auto_manage" | "auto_triage" | "max_actions_per_cycle" |
@@ -34,6 +36,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiActionRoutes(router, context);
   registerPiConversationRoutes(router, context);
   registerPiMemoryRoutes(router, context);
+  registerPiProjectControlRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
 }
