@@ -9,9 +9,30 @@ Use the local `codex-issue-runner` CLI to hand bounded work from an agent/provid
 
 ## Preconditions
 
-- The service should be running at `CODEX_RUNNER_ADDR` or `127.0.0.1:3008`.
+- The Go stable service should be running at `CODEX_RUNNER_ADDR` or `127.0.0.1:3008`.
+- On the Bun preview branch, use the Bun CLI/binary only with the preview addr `127.0.0.1:3018`; do not point it at the Go stable addr unless doing an explicit cutover.
 - The target repository should already be registered as a project. If not, register it first.
 - Prefer explicit project ids, short issue titles, and full markdown bodies in a temp file.
+
+## Runtime Targets
+
+Daily usage remains on Go stable:
+
+- Addr: `127.0.0.1:3008`
+- Data/DB: `data/` (`data/app.db` or `data/runner.db`, depending on the running Go service config)
+- Token file: `data/auth_token`
+- launchd label: `com.xiaobei.codex-issue-runner`
+- CLI: `codex-issue-runner` or repo-local `./dist/codex-issue-runner`
+
+Bun preview is isolated:
+
+- Addr: `127.0.0.1:3018`
+- Data/DB: `data-bun/` and `data-bun/runner.db`
+- Token file: `data-bun/auth_token`
+- launchd label: `com.xiaobei.codex-issue-runner-bun`
+- CLI/binary: `./dist/codex-issue-runner-bun`
+
+Never let Bun preview claim `127.0.0.1:3008`, write Go stable `data/runner.db`, or reuse the Go launchd label. Use the corresponding token file via env or `--token-file`; never paste or print actual token values.
 
 ## CLI and Authentication
 
@@ -32,11 +53,27 @@ Token lookup rules:
 - Prefer `CODEX_RUNNER_AUTH_TOKEN` when it is already set.
 - Prefer `CODEX_RUNNER_AUTH_TOKEN_FILE` when it is set.
 - For this repository's source deploy, the default token file is `data/auth_token`.
+- For Bun preview, prefer `CODEX_RUNNER_BUN_AUTH_TOKEN` or `CODEX_RUNNER_BUN_AUTH_TOKEN_FILE`; the default preview token file is `data-bun/auth_token`.
 - For release installs or other projects, the token file lives under that runner's configured state/data directory; do not assume every runner uses the current repo path.
 - If the CLI returns `401 Unauthorized: unauthorized`, retry only after setting `CODEX_RUNNER_AUTH_TOKEN` or passing `--token "$(cat <token-file>)"`.
 - When working inside this repo and `codex-issue-runner` on `PATH` is older, prefer `./dist/codex-issue-runner` or reinstall the release/skill before retrying.
+- When validating Bun preview from this repo, prefer `./dist/codex-issue-runner-bun --addr 127.0.0.1:3018 --token-file data-bun/auth_token`.
 - Current subcommands do not implement `--help`; `project --help` is parsed as an unknown project command. Use this skill, repo docs, or source/tests as the CLI reference instead of probing subcommand help.
 - `--json` prints a complete JSON document and may be pretty-printed across multiple lines. Parse the whole stdout; do not treat it as newline-delimited JSON.
+
+## Smoke Checks
+
+```bash
+# Go stable daily path
+curl -fsS http://127.0.0.1:3008/health
+codex-issue-runner system status --addr 127.0.0.1:3008 --token-file data/auth_token --json
+./scripts/status-launchd.sh
+
+# Bun preview path
+curl -fsS http://127.0.0.1:3018/health
+./dist/codex-issue-runner-bun system status --addr 127.0.0.1:3018 --token-file data-bun/auth_token --json
+./scripts/status-bun-preview.sh
+```
 
 ## Register a Project
 

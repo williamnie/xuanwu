@@ -245,13 +245,21 @@ Codex adapter 会把 Codex notification 转成统一 `codex.Event`，再由 runn
 
 ## Agent/provider 通过 CLI 或 API 反向更新 Runner
 
-agent/provider 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`。如果服务启用了 API bearer token，CLI 支持 `--token` 或 `CODEX_RUNNER_AUTH_TOKEN`；遇到 `401 Unauthorized: unauthorized` 时，优先读取运行中服务配置的 token 文件：先看 `CODEX_RUNNER_AUTH_TOKEN_FILE`，源码部署默认是当前服务数据目录里的 `data/auth_token`，release/其他项目则来自对应 state/data 目录，不要假设都在当前仓库。
+agent/provider 在执行 issue 时不直接访问 SQLite，而是通过短命令 CLI 调 Runner API。Go stable 的 CLI 默认读取 `CODEX_RUNNER_ADDR`，未设置时连接 `127.0.0.1:3008`；Bun preview 的 CLI 默认读取 `CODEX_RUNNER_BUN_ADDR`，未设置时连接 `127.0.0.1:3018`。如果服务启用了 API bearer token，CLI 支持 `--token`、`--token-file` 或对应环境变量；遇到 `401 Unauthorized: unauthorized` 时，优先读取运行中服务配置的 token 文件：Go stable 先看 `CODEX_RUNNER_AUTH_TOKEN_FILE`，源码部署默认是当前服务数据目录里的 `data/auth_token`；Bun preview 先看 `CODEX_RUNNER_BUN_AUTH_TOKEN_FILE`，默认是 `data-bun/auth_token`；release/其他项目则来自对应 state/data 目录，不要假设都在当前仓库。
 
-示例：
+并行期不要把 Bun preview 指到 Go stable 的 `127.0.0.1:3008`，也不要让 Bun 直接写 Go stable 正在使用的 `data/runner.db`。两者默认区分如下：
+
+```text
+Go stable:   addr 127.0.0.1:3008, data data/,     launchd com.xiaobei.codex-issue-runner
+Bun preview: addr 127.0.0.1:3018, data data-bun/, launchd com.xiaobei.codex-issue-runner-bun
+```
+
+示例（只传 token file 路径，不输出实际 token）：
 
 ```bash
-codex-issue-runner issue status --id <issue-id> --token "$(cat data/auth_token)" --json
-CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)" codex-issue-runner issue update --id <issue-id> --status done --json
+codex-issue-runner issue status --addr 127.0.0.1:3008 --id <issue-id> --token-file data/auth_token --json
+codex-issue-runner issue update --addr 127.0.0.1:3008 --id <issue-id> --status done --token-file data/auth_token --json
+./dist/codex-issue-runner-bun system status --addr 127.0.0.1:3018 --token-file data-bun/auth_token --json
 ```
 
 如果 CLI 不可用，provider 必须使用 API 等价更新：
@@ -308,11 +316,16 @@ codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --i
 codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 ```
 
-Runtime 状态：
+Runtime 状态 smoke：
 
 ```bash
-codex-issue-runner system status --token "$(cat data/auth_token)" --json
-curl -H "Authorization: Bearer $(cat data/auth_token)" http://127.0.0.1:3008/api/system/status
+# Go stable 日常路径
+curl -fsS http://127.0.0.1:3008/health
+codex-issue-runner system status --addr 127.0.0.1:3008 --token-file data/auth_token --json
+
+# Bun preview 并行路径
+curl -fsS http://127.0.0.1:3018/health
+./dist/codex-issue-runner-bun system status --addr 127.0.0.1:3018 --token-file data-bun/auth_token --json
 ```
 
 `/api/system/status` 只返回只读健康摘要：API/DB、脱敏后的配置、Codex command 是否存在、runner loop/hold/in_progress 计数；不会返回 token 值，也不会为 status 主动拉起新的 Codex 深度探针。

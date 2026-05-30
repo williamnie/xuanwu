@@ -74,8 +74,7 @@ git switch -c feat/bun-ts-pi-runtime
 
 ```text
 Go stable:  127.0.0.1:3008
-Bun dev:    127.0.0.1:3018
-Bun preview:127.0.0.1:3019
+Bun dev/preview: 127.0.0.1:3018
 ```
 
 ## 2. 依据
@@ -811,7 +810,7 @@ codex-issue-runner system ...
 
 ```text
 Go stable label:  com.xiaobei.codex-issue-runner
-Bun dev label:    com.xiaobei.codex-issue-runner-bun
+Bun preview label: com.xiaobei.codex-issue-runner-bun
 ```
 
 Bun launchd 默认参数：
@@ -829,6 +828,48 @@ ProgramArguments:
 ```
 
 只有正式切换时，才把原 Go label 指向 Bun binary 或停掉 Go label。
+
+Go stable 与 Bun preview 在并行期必须保持隔离：
+
+```text
+Go stable:
+  addr:       127.0.0.1:3008
+  data dir:   data/
+  db:         data/app.db 或 data/runner.db（以当前 Go 启动参数为准）
+  launchd:    com.xiaobei.codex-issue-runner
+  token file: data/auth_token
+
+Bun preview:
+  addr:       127.0.0.1:3018
+  data dir:   data-bun/
+  db:         data-bun/runner.db
+  launchd:    com.xiaobei.codex-issue-runner-bun
+  token file: data-bun/auth_token
+```
+
+并行 smoke 时不要把 Bun 指到 `127.0.0.1:3008`，也不要把 Bun DB 指到 Go stable 正在使用的 `data/runner.db`。token 只从对应 token file 读取到环境或 `--token-file`，不要把实际 token 粘贴到文档、issue、日志或截图。
+
+最小 smoke 命令：
+
+```bash
+# Go stable 日常路径
+curl -fsS http://127.0.0.1:3008/health
+codex-issue-runner system status \
+  --addr 127.0.0.1:3008 \
+  --token-file data/auth_token \
+  --json
+
+# Bun preview 路径
+curl -fsS http://127.0.0.1:3018/health
+./dist/codex-issue-runner-bun system status \
+  --addr 127.0.0.1:3018 \
+  --token-file data-bun/auth_token \
+  --json
+
+# launchd 隔离状态
+./scripts/status-launchd.sh
+./scripts/status-bun-preview.sh
+```
 
 ### 10.3 Build
 

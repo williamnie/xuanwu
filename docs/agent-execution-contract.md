@@ -70,9 +70,10 @@ codex-issue-runner issue request-changes --id <issue-id> --comment "<changes req
 1. 不要硬编码、打印、提交或粘贴 token 值。
 2. 优先使用已有的 `CODEX_RUNNER_AUTH_TOKEN`。
 3. 其次读取 `CODEX_RUNNER_AUTH_TOKEN_FILE` 指向的 token 文件。
-4. 源码部署常见 token 文件是 `data/auth_token`。
-5. release 或其他项目使用对应 runner 的 state/data 目录，不要假设都在当前仓库。
-6. CLI 可用 `--token "$(cat <token-file>)"` 显式传入 token。
+4. Go stable 源码部署常见 token 文件是 `data/auth_token`。
+5. Bun preview 使用独立 token 环境变量 `CODEX_RUNNER_BUN_AUTH_TOKEN` / `CODEX_RUNNER_BUN_AUTH_TOKEN_FILE`，默认 token 文件是 `data-bun/auth_token`。
+6. release 或其他项目使用对应 runner 的 state/data 目录，不要假设都在当前仓库。
+7. CLI 可用 `--token-file <token-file>` 传路径，或用 `--token "$(cat <token-file>)"` 显式传入 token；文档、issue、日志里不要输出实际 token。
 
 示例：
 
@@ -86,6 +87,17 @@ if [ -z "${CODEX_RUNNER_AUTH_TOKEN:-}" ]; then
 fi
 
 codex-issue-runner issue update --id <issue-id> --status done --json
+```
+
+并行预览期运行目标必须明确区分：Go stable 仍走 `127.0.0.1:3008`、`data/`、`com.xiaobei.codex-issue-runner`；Bun preview 走 `127.0.0.1:3018`、`data-bun/runner.db`、`com.xiaobei.codex-issue-runner-bun`。不要让 Bun preview 抢占 Go stable 端口或直接写 Go stable 正在使用的 `data/runner.db`。
+
+最小 smoke：
+
+```bash
+curl -fsS http://127.0.0.1:3008/health
+codex-issue-runner system status --addr 127.0.0.1:3008 --token-file data/auth_token --json
+curl -fsS http://127.0.0.1:3018/health
+./dist/codex-issue-runner-bun system status --addr 127.0.0.1:3018 --token-file data-bun/auth_token --json
 ```
 
 ## API 等价回写

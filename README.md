@@ -60,6 +60,8 @@ npm run build
 VITE_API_TARGET=http://127.0.0.1:3018 npm run preview
 ```
 
+并行预览期保持运行目标隔离：Go stable 日常服务仍使用 `127.0.0.1:3008`、`data/`、launchd label `com.xiaobei.codex-issue-runner`；Bun preview 使用 `127.0.0.1:3018`、`data-bun/runner.db`、launchd label `com.xiaobei.codex-issue-runner-bun`。不要让 Bun preview 抢占 Go stable 端口或直接写 Go stable DB。
+
 可选后端配置：
 
 ```bash
@@ -98,7 +100,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 常用覆盖项：
 
 ```bash
-export CODEX_RUNNER_ADDR=0.0.0.0:3018
+export CODEX_RUNNER_ADDR=0.0.0.0:3008
 export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
 export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
 export CODEX_RUNNER_AUTH_TOKEN=your_custom_token  # 自定义 API 访问令牌 (可选)
@@ -141,7 +143,7 @@ http://127.0.0.1:3008/（局域网使用 http://<本机LAN-IP>:3008/）
 ./scripts/status-launchd.sh
 
 # 查看产品内 runtime doctor/status（需要 API token）
-codex-issue-runner system status --token "$(cat data/auth_token)" --json
+codex-issue-runner system status --token-file data/auth_token --json
 
 # 停止并移除后台服务
 ./scripts/uninstall-launchd.sh
@@ -168,7 +170,7 @@ CODEX_RUNNER_CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./redeplo
 可通过环境变量覆盖：
 
 ```bash
-CODEX_RUNNER_ADDR=0.0.0.0:3018 \
+CODEX_RUNNER_ADDR=0.0.0.0:3008 \
 CODEX_RUNNER_DEPLOY_DB=/absolute/path/app.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
 CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
