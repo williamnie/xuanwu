@@ -49,11 +49,13 @@ export type SmokeRuntime = {
   pi: typeof import("@earendil-works/pi-coding-agent");
 };
 
-export function resolveDefaultRepoRoot(): string {
+export function resolveDefaultRepoRoot(fallbackCwd = ""): string {
   if (!isCompiledBunExecutable()) return resolve(import.meta.dirname, "../../..");
 
   const cwd = process.cwd();
-  return basename(cwd) === "backend-ts" ? resolve(cwd, "..") : cwd;
+  const current = basename(cwd) === "backend-ts" ? resolve(cwd, "..") : cwd;
+  if (hasPiPackage(current)) return current;
+  return hasPiPackage(fallbackCwd) ? resolve(fallbackCwd) : current;
 }
 
 export async function loadSmokeRuntime(repoRoot: string): Promise<SmokeRuntime> {
@@ -275,4 +277,8 @@ function ensurePiPackageDir(repoRoot: string): void {
       return;
     }
   }
+}
+
+function hasPiPackage(path: string): boolean {
+  return path.trim() !== "" && existsSync(join(path, PI_PACKAGE_RELATIVE_DIR, "package.json"));
 }

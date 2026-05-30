@@ -38,7 +38,7 @@ export async function createOrRestorePiRuntime(
 }
 
 export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeSessionInput) {
-  const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot());
+  const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot(input.project.cwd));
   const paths = piRuntimePaths(db);
   await mkdir(dirname(paths.authPath), { recursive: true });
   await mkdir(paths.sessionDir, { recursive: true });
