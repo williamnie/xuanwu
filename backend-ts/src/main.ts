@@ -4,6 +4,7 @@ import { loadConfig } from "./config/env.ts";
 import { openDatabase } from "./db/database.ts";
 import { runProjectPiCycle } from "./http/piProjectControlApi.ts";
 import { startServer } from "./http/server.ts";
+import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./runner/projectLoop.ts";
@@ -18,9 +19,9 @@ if (!serve) {
 
 const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
-const provider = codexProvider(config);
-const server = await startServer(config, { database, providers: provider ? { codex: provider } : undefined });
-if (provider) void startAutoRunLoops(database, provider);
+const providers = executorProviders(config);
+const server = await startServer(config, { database, providers });
+void startAutoRunLoops(database, providers);
 
 console.log(JSON.stringify({
   ok: true,
@@ -33,22 +34,26 @@ console.log(JSON.stringify({
   }
 }, null, 2));
 
-function codexProvider(config: ReturnType<typeof loadConfig>): ReturnType<typeof createCodexExecutorProvider> | undefined {
+function executorProviders(config: ReturnType<typeof loadConfig>) {
+  const providers: Partial<Record<"codex" | "claude", ReturnType<typeof createCodexExecutorProvider> | ReturnType<typeof createClaudeExecutorProvider>>> = {};
   const codexConfig = config.providers.codex;
-  return codexConfig ? createCodexExecutorProvider(codexConfig) : undefined;
+  const claudeConfig = config.providers.claude;
+  if (codexConfig) providers.codex = createCodexExecutorProvider(codexConfig);
+  if (claudeConfig) providers.claude = createClaudeExecutorProvider(claudeConfig);
+  return providers;
 }
 
 async function startAutoRunLoops(
   database: Awaited<ReturnType<typeof openDatabase>>,
-  provider: ReturnType<typeof createCodexExecutorProvider>
+  providers: ReturnType<typeof executorProviders>
 ): Promise<void> {
-  await recoverInProgressIssues({ database, providers: { codex: provider } }).catch((error) => {
+  await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
   });
   const projects = database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
-  for (const project of projects) runAutoProject(database, project.id, provider);
+  for (const project of projects) runAutoProject(database, project.id, providers);
   createPiAutoManageScheduler({
     database,
     onError: (error) => {
@@ -61,11 +66,11 @@ async function startAutoRunLoops(
 function runAutoProject(
   database: Awaited<ReturnType<typeof openDatabase>>,
   projectId: string,
-  provider: ReturnType<typeof createCodexExecutorProvider>
+  providers: ReturnType<typeof executorProviders>
 ): void {
   void (async () => {
     while (true) {
-      const result = await runProjectLoopOnce({ database, projectId, providers: { codex: provider } });
+      const result = await runProjectLoopOnce({ database, projectId, providers });
       if (!result.claimed) break;
     }
   })().catch((error) => {
