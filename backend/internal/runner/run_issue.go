@@ -6,11 +6,14 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xiaobei/codex-issue-runner/backend/internal/agent"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/events"
 	"github.com/xiaobei/codex-issue-runner/backend/internal/store"
 )
+
+const issueActiveCheckInterval = 200 * time.Millisecond
 
 func (r *Runner) runIssue(issue store.Issue) {
 	r.execMu.Lock()
@@ -199,19 +202,49 @@ func (r *Runner) setCodexThreadName(ctx context.Context, threadID string, issue 
 }
 
 func (r *Runner) consumeEvents(ctx context.Context, issueID int64, threadID, turnID string, eventsCh <-chan agent.Event) error {
+	checkActive := time.NewTicker(issueActiveCheckInterval)
+	defer checkActive.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-checkActive.C:
+			if active, err := r.issueRunStillActive(ctx, issueID, threadID, turnID); err != nil || !active {
+				return err
+			}
 		case event := <-eventsCh:
 			if !matches(event, threadID, turnID) {
 				continue
+			}
+			if active, err := r.issueRunStillActive(ctx, issueID, threadID, turnID); err != nil || !active {
+				return err
 			}
 			if done, err := r.handleCodexEvent(ctx, issueID, event); done || err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func (r *Runner) issueRunStillActive(ctx context.Context, issueID int64, threadID, turnID string) (bool, error) {
+	current, err := r.store.GetIssue(ctx, issueID)
+	if err != nil {
+		return false, err
+	}
+	if current.Status != store.StatusInProgress || current.CodexThreadID != threadID || current.CodexTurnID != turnID {
+		if isTerminalStatus(current.Status) {
+			r.advanceNightlyBatches(ctx, issueID)
+		}
+		return false, nil
+	}
+	runs, err := r.store.ListIssueRuns(ctx, issueID)
+	if err != nil {
+		return false, err
+	}
+	if len(runs) == 0 || runs[len(runs)-1].EndedAt != "" || runs[len(runs)-1].Status != store.StatusInProgress {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *Runner) handleCodexEvent(ctx context.Context, issueID int64, event agent.Event) (bool, error) {

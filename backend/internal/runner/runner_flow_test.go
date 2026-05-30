@@ -40,6 +40,38 @@ func TestRunnerWaitsForExplicitIssueUpdateAfterClaiming(t *testing.T) {
 	}
 }
 
+func TestRunnerReleasesRunWhenIssueLeavesActiveStateBeforeTurnCompletes(t *testing.T) {
+	for _, status := range []string{store.StatusDone, store.StatusFailed, store.StatusCancelled, store.StatusTriage} {
+		t.Run(status, func(t *testing.T) {
+			st := openRunnerStore(t)
+			ctx := context.Background()
+			_, _ = st.CreateProject(ctx, store.Project{ID: "demo", Name: "Demo", CWD: t.TempDir(), AutoRun: 1})
+			first, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "changed elsewhere", Status: store.StatusTodo, Priority: 2})
+			second, _ := st.CreateIssue(ctx, store.Issue{ProjectID: "demo", Title: "next", Status: store.StatusTodo})
+			fake := &fakeCodex{events: make(chan agent.Event, 8), manualEvents: true}
+			r := New(st, events.NewBus(), fake)
+
+			if err := r.StartProject("demo"); err != nil {
+				t.Fatalf("start project: %v", err)
+			}
+			defer r.StopProject("demo")
+
+			waitIssueRuntime(t, st, first.ID, "thread-1", "turn-1")
+			if _, err := st.UpdateIssue(ctx, first.ID, store.IssuePatch{Status: &status}); err != nil {
+				t.Fatalf("mark first %s: %v", status, err)
+			}
+
+			waitIssueNotRunning(t, r, first.ID)
+			claimed := waitIssueStatus(t, st, second.ID, store.StatusInProgress)
+			if claimed.AttemptCount != 1 {
+				t.Fatalf("second issue should be claimed once: %+v", claimed)
+			}
+			r.CancelIssue(second.ID)
+			waitIssueNotRunning(t, r, second.ID)
+		})
+	}
+}
+
 func TestRunnerHoldsProjectAndStopsClaimingOnUsageLimit(t *testing.T) {
 	st := openRunnerStore(t)
 	ctx := context.Background()
