@@ -1516,20 +1516,179 @@ while read -r project_id; do
 done < "$CUTOVER_DIR/go-auto-run-projects.txt"
 ```
 
+#### P08.04 rollback runbook 与 dry-run 验证（P08.05 前置）
+
+本 runbook 只用于切换失败后的人工 rollback，以及正式切换前的 dry-run 验证。dry-run 阶段不得修改 live
+主入口、不得停止 Go stable、不得把 Bun 指向 `127.0.0.1:3008`、不得直接写 Go stable 正在使用的 DB。
+
+rollback 触发条件：
+
+- 策略 A 切换后 `3008/health`、`system status`、issues/sessions/PI/issue execution 任一 must-pass smoke 失败。
+- 策略 B 切换后 Bun preview 或前端代理 smoke 失败，或需要立即恢复操作者默认入口到 Go stable。
+- 发现 Bun DB 路径等于 Go DB 路径、Go source DB mtime 被导入流程改变、诊断需要输出 token/secrets，或 rollback owner 要求中止。
+
+准备变量（执行真实 rollback 前设置；dry-run 也复用这些变量）：
+
+```bash
+set -euo pipefail
+set +x
+
+export GO_ADDR=127.0.0.1:3008
+export GO_LABEL=com.xiaobei.codex-issue-runner
+export GO_PLIST="$HOME/Library/LaunchAgents/$GO_LABEL.plist"
+export GO_BINARY=dist/codex-issue-runner
+export GO_STAGED_BINARY="$(pwd)/data/bin/codex-issue-runner"
+export GO_TOKEN_FILE=data/auth_token
+# 以 Go launchd plist 为准；不要假设固定是 data/runner.db。
+export GO_DB="$(python3 - "$GO_PLIST" <<'PY'
+import plistlib, sys
+args = plistlib.load(open(sys.argv[1], "rb")).get("ProgramArguments", [])
+print(args[args.index("--db") + 1] if "--db" in args else "")
+PY
+)"
+test -n "$GO_DB"
+export GO_DB_BACKUP="<CUTOVER_DIR 中保留的 go-runner.db 或等价备份路径>"
+
+export BUN_ADDR=127.0.0.1:3018
+export BUN_LABEL=com.xiaobei.codex-issue-runner-bun
+export BUN_PLIST="$HOME/Library/LaunchAgents/$BUN_LABEL.plist"
+export BUN_LIVE_LABEL=com.xiaobei.codex-issue-runner-bun-live
+export BUN_LIVE_PLIST="$HOME/Library/LaunchAgents/$BUN_LIVE_LABEL.plist"
+export BUN_DB=data-bun/runner.db
+export BUN_DB_BACKUP="<CUTOVER_DIR 中保留的 bun-runner.db 或等价备份路径>"
+export CUTOVER_DIR="<P08.03 生成的 cutover 目录>"
+```
+
+策略 B / Go stable 未停止时的轻量 rollback：停止 Bun preview 或前端 preview，取消 Bun 相关环境变量，验证
+`127.0.0.1:3008` 的 Go stable 仍可用；不得覆盖 Go DB。若 Bun smoke 污染了 `data-bun/runner.db`，只在停止 Bun
+preview 后恢复 `$BUN_DB_BACKUP` 到 `$BUN_DB`。
+
+策略 A / live `3008` 已切到 Bun 后的 rollback 步骤（只在维护窗口内由 rollback owner 明确确认后执行）：
+
+```bash
+# 0. 前置检查：Go binary、Go DB backup、Go plist 都必须存在；备份至少保留一个稳定周期。
+test -x "$GO_BINARY"
+test -f "$GO_DB_BACKUP"
+test -f "$GO_PLIST"
+test "$GO_DB" != "$BUN_DB"
+
+# 1. 停止 Bun service。策略 A 使用 bun-live label；preview label 也允许幂等停止，避免残留 Bun 写入者。
+launchctl bootout "gui/$(id -u)" "$BUN_LIVE_PLIST" >/dev/null 2>&1 || true
+rm -f "$BUN_LIVE_PLIST"
+launchctl bootout "gui/$(id -u)" "$BUN_PLIST" >/dev/null 2>&1 || true
+
+# 2. 恢复 Go DB backup。只有确认 live 3008 已释放且 GO_DB 指向真实 Go DB 后，才覆盖 Go DB。
+if lsof -nP -iTCP:3008 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "refusing to restore Go DB while port 3008 is still serving; stop Bun/Go first" >&2
+  exit 1
+fi
+install -m 0600 "$GO_DB_BACKUP" "$GO_DB"
+
+# 3. launchd 指回 Go dist/staged binary 并启动 Go service。
+# 源码部署的 Go plist 应指向 data/bin/codex-issue-runner；先把保留的 Go dist binary stage 回去。
+go_plist_program="$(python3 - "$GO_PLIST" <<'PY'
+import plistlib, sys
+print(plistlib.load(open(sys.argv[1], "rb")).get("Program", ""))
+PY
+)"
+test "$go_plist_program" = "$GO_STAGED_BINARY"
+install -m 0755 "$GO_BINARY" "$GO_STAGED_BINARY"
+launchctl bootstrap "gui/$(id -u)" "$GO_PLIST" >/dev/null 2>&1 || true
+launchctl enable "gui/$(id -u)/$GO_LABEL" >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/$(id -u)/$GO_LABEL"
+
+# 4. smoke：Go stable 必须重新服务 live 主入口；输出不得包含 token。
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+./dist/codex-issue-runner system status \
+  --addr "$GO_ADDR" \
+  --token-file "$GO_TOKEN_FILE" \
+  --json > "$CUTOVER_DIR/go-rollback-status.json"
+jq -e '.service.runtime != "bun" and .db.ok == true' "$CUTOVER_DIR/go-rollback-status.json"
+./scripts/status-launchd.sh > "$CUTOVER_DIR/go-launchd-after-rollback.txt"
+```
+
+rollback 后处理：
+
+- 不要删除 `dist/codex-issue-runner`、`data/bin/codex-issue-runner`、`$GO_DB_BACKUP`、`$BUN_DB_BACKUP` 或 `$CUTOVER_DIR`；至少保留一个稳定周期。
+- 在 Go smoke 通过前，不恢复任何 auto-run 项目，也不重新启动 Bun preview。
+- 策略 B 轻量 rollback 不覆盖 Go DB；只有策略 A 或 Go stable 已停止的正式切换失败，才执行 Go DB restore。
+- 如需恢复 auto-run，只对 `$CUTOVER_DIR/go-auto-run-projects.txt` 中原本开启的项目执行，并用 Go token file 访问 `$GO_ADDR`。
+- 如需保留 Bun preview，必须等 Go stable smoke 通过后重新执行 `./scripts/deploy-bun-preview.sh`；不得复用 rollback 中停止前的未知状态。
+
+dry-run 验证（可在当前并行预览期执行；不得改 live 主入口）：
+
+```bash
+set -euo pipefail
+set +x
+
+export GO_ADDR=127.0.0.1:3008
+export GO_LABEL=com.xiaobei.codex-issue-runner
+export GO_PLIST="$HOME/Library/LaunchAgents/$GO_LABEL.plist"
+export GO_BINARY=dist/codex-issue-runner
+export GO_DB="$(python3 - "$GO_PLIST" <<'PY'
+import plistlib, sys
+args = plistlib.load(open(sys.argv[1], "rb")).get("ProgramArguments", [])
+print(args[args.index("--db") + 1] if "--db" in args else "")
+PY
+)"
+export BUN_ADDR=127.0.0.1:3018
+export BUN_LABEL=com.xiaobei.codex-issue-runner-bun
+export BUN_DB=data-bun/runner.db
+
+# 1. 读取状态，不停止/启动任何 live 服务。
+./scripts/status-launchd.sh || true
+./scripts/status-bun-preview.sh --dry-run
+./scripts/uninstall-bun-launchd.sh --dry-run
+
+# 2. 校验路径隔离与 rollback 依赖。
+test -x "$GO_BINARY"
+test -f "$GO_PLIST"
+test -n "$GO_DB"
+test "${BUN_ADDR##*:}" != "3008"
+test "$BUN_LABEL" != "$GO_LABEL"
+test "$GO_DB" != "$BUN_DB"
+test "$BUN_DB" != "data/runner.db"
+test "$BUN_DB" != "data/app.db"
+case "$GO_DB" in *data-bun/*) echo "Go DB points into data-bun; abort" >&2; exit 1 ;; esac
+
+# 3. 如已有 cutover 目录，用备份文件做只读检查；不覆盖 live DB。
+if [ -n "${CUTOVER_DIR:-}" ]; then
+  test -f "$CUTOVER_DIR/go-runner.db"
+  test -f "$CUTOVER_DIR/bun-runner.db"
+fi
+
+# 4. 生成 Bun preview plist dry-run，验证不会抢占 Go stable。
+CODEX_RUNNER_BUN_ADDR="$BUN_ADDR" \
+CODEX_RUNNER_BUN_DB="$BUN_DB" \
+CODEX_RUNNER_BUN_LAUNCHD_LABEL="$BUN_LABEL" \
+  ./scripts/install-bun-launchd.sh --dry-run
+
+# 5. dry-run 后 Go live 入口仍应可用；若本机未运行 Go stable，可记录为环境未验证，不得标记切换成功。
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+```
+
+dry-run 通过标准：
+
+- 所有命令只读取状态或使用 `--dry-run`，不会 `bootout` Go stable、不会写 Go DB、不会安装 Bun live plist。
+- Go stable 的 `127.0.0.1:3008/health` 在 dry-run 前后均可用。
+- Bun dry-run 输出 label 仍为 `com.xiaobei.codex-issue-runner-bun`，addr 仍为 `127.0.0.1:3018`，DB 仍为 `data-bun/runner.db`。
+- Go binary 和 Go DB backup 路径明确；备份保留策略写入 release notes 或 cutover 记录。
+
 ## 12. 回滚策略
 
 直到 Phase 8 显式切换完成并稳定运行前，Go 服务不删除、不停用、不迁移端口。
 
-回滚方式：
+回滚方式见 P08.04 runbook；摘要如下：
 
 ```text
-Go stable 未切换前：直接停止 Bun preview，不影响 Go。
+Go stable 未切换前：直接停止 Bun preview，不影响 Go，不覆盖 Go DB。
 
 正式切换后：
-launchd 指回 Go dist binary
-恢复 Go DB backup
 停止 Bun service
+launchd 指回 Go dist/staged binary
+恢复 Go DB backup
 启动 Go service
+health/status smoke 通过后再恢复 auto-run
 ```
 
 DB migration 必须满足：
