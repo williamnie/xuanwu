@@ -12,7 +12,7 @@
 - issue enqueue / retry / cancel
 - Triage cron：到点批量将 Triage issue 切到 Todo 并启动运行
 - 通过 `codex app-server --listen stdio://` 执行 todo issue
-- 前端 Vite proxy 已指向后端 `/api -> http://127.0.0.1:3008`
+- 前端 Vite proxy 默认指向 Go stable `/api -> http://127.0.0.1:3008`；可通过 `VITE_API_TARGET` 显式切到 Bun preview
 - Dashboard Codex token 用量统计：今日/周/月 token、最近 7 天趋势、5 小时/周限额剩余量
 
 ## Dashboard 用量统计
@@ -43,6 +43,21 @@ go run ./backend/cmd/codex-issue-runner
 ```bash
 cd frontend
 npm run dev
+```
+
+默认前端开发代理会访问 Go stable `http://127.0.0.1:3008`。如需本地验证 Bun preview，不改默认配置，显式指定 API target：
+
+```bash
+cd frontend
+VITE_API_TARGET=http://127.0.0.1:3018 npm run dev
+```
+
+如果要用 `vite preview` 预览已构建产物，也使用同一个 target：
+
+```bash
+cd frontend
+npm run build
+VITE_API_TARGET=http://127.0.0.1:3018 npm run preview
 ```
 
 可选后端配置：
