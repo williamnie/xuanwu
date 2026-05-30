@@ -122,7 +122,7 @@ Bun 支持：
 ```bash
 bun run src/main.ts
 bun test
-bun build ./src/main.ts --compile --outfile dist/codex-issue-runner
+bun build ./src/main.ts --compile --outfile ../dist/codex-issue-runner-bun
 ```
 
 Bun `--compile` 可以把 TypeScript/JavaScript entrypoint 生成 standalone executable，并包含 Bun runtime 与导入包。它也支持 cross-compile target。
@@ -330,7 +330,7 @@ typebox > zod
 目标命令：
 
 ```bash
-bun build ./src/main.ts --compile --outfile dist/codex-issue-runner
+bun build ./src/main.ts --compile --outfile dist/codex-issue-runner-bun
 ```
 
 目标形态：
@@ -841,11 +841,14 @@ bun run dev
 bun test
 ```
 
-构建：
+构建（不会覆盖 Go stable 的 `dist/codex-issue-runner`）：
 
 ```bash
-bun build ./src/main.ts --compile --outfile ../dist/codex-issue-runner
+bun run build:binary
+# 等价核心命令：bun build ./src/main.ts --compile --outfile ../dist/codex-issue-runner-bun
 ```
+
+脚本会输出 version/build stamp 摘要，并写入 `dist/codex-issue-runner-bun.build.stamp`。
 
 跨平台后续：
 

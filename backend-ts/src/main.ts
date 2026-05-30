@@ -1,4 +1,5 @@
 import { runCli } from "./cli/command.ts";
+import { formatBunVersion } from "./buildInfo.ts";
 import { commandMode } from "./mainMode.ts";
 import { loadConfig } from "./config/env.ts";
 import { openDatabase } from "./db/database.ts";
@@ -11,7 +12,12 @@ import { runProjectLoopOnce } from "./runner/projectLoop.ts";
 import { recoverInProgressIssues } from "./runner/recovery.ts";
 import { redactSensitiveText } from "./util/redact.ts";
 
-const { serve, args } = commandMode(Bun.argv.slice(2));
+const { serve, args, version } = commandMode(Bun.argv.slice(2));
+
+if (version) {
+  process.stdout.write(formatBunVersion());
+  process.exit(0);
+}
 
 if (!serve) {
   process.exit(await runCli(args));

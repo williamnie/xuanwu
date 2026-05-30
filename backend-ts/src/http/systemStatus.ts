@@ -1,5 +1,6 @@
 import { statSync } from "node:fs";
 import { basename, delimiter, isAbsolute, join, relative } from "node:path";
+import { bunBuildInfo } from "../buildInfo.ts";
 import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
@@ -54,12 +55,14 @@ export function summarizeRuntimePath(path: string, stateDir: string): string {
 }
 
 function serviceStatus(startedAt: Date): Record<string, unknown> {
+  const build = bunBuildInfo();
   return {
     alive: true,
     name: "codex-issue-runner backend-ts",
     runtime: "bun",
-    bun_version: Bun.version,
-    version: "0.0.0-dev",
+    bun_version: build.bun_version,
+    version: build.version,
+    build,
     started_at: startedAt.toISOString()
   };
 }

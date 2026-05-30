@@ -52,6 +52,13 @@ describe("Bun system status endpoints", () => {
       expect(response.status).toBe(200);
       expect(body.service.alive).toBe(true);
       expect(body.service.runtime).toBe("bun");
+      expect(body.service.version).toBe("0.0.0-dev");
+      expect(body.service.build).toMatchObject({
+        artifact: "codex-issue-runner-bun",
+        bun_version: Bun.version,
+        stamp: "",
+        version: "0.0.0-dev"
+      });
       expect(body.db.ok).toBe(true);
       expect(body.auth.enabled).toBe(true);
       expect(body.config.addr).toBe("127.0.0.1:3018");
@@ -252,7 +259,12 @@ type SystemStatusBody = {
   codex: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
   runner: { running_loops: number };
-  service: { alive: boolean; runtime: string };
+  service: {
+    alive: boolean;
+    build: Record<string, unknown>;
+    runtime: string;
+    version: string;
+  };
 };
 
 type RuntimeDoctorBody = {
