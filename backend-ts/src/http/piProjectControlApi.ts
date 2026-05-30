@@ -13,6 +13,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
+import { publishNeedsUserFindingNotifications } from "../notifications/piNotifier.ts";
 import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
 import { HttpError, json } from "./errors.ts";
 import {
@@ -83,7 +84,13 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
     });
     await ensurePiSessionFile(runtime.session);
     persistPiSessionIndex(context.database, conversation, project);
-    return managerCycleResult(conversation, runtime.session, cycleSettings);
+    const notifications = publishNeedsUserFindingNotifications({
+      bus: context.bus,
+      findings: snapshot.findings,
+      notifyOnNeedsUser: cycleSettings.notify_on_needs_user !== 0,
+      project
+    });
+    return managerCycleResult(conversation, runtime.session, cycleSettings, snapshot, notifications);
   } finally {
     if (activeProjectPiRuns.get(project.id) === runtime.session) activeProjectPiRuns.delete(project.id);
     unsubscribe();
@@ -165,16 +172,21 @@ function managerCyclePrompt(
 function managerCycleResult(
   conversation: PiConversation,
   session: PiRuntimeSession["session"],
-  settings: ProjectPiSettings
+  settings: ProjectPiSettings,
+  snapshot: ReturnType<typeof createProjectStatusSnapshot>,
+  notifications: ReturnType<typeof publishNeedsUserFindingNotifications>
 ) {
   return {
+    action_candidates: snapshot.findings.flatMap((finding) => finding.action_candidate ? [finding.action_candidate] : []),
     auto_manage: settings.auto_manage,
     conversation_id: conversation.id,
     message_count: session.state.messages.length,
+    notifications,
     pi_session_id: session.sessionId,
     project_id: conversation.project_id,
     session_file: session.sessionFile ?? conversation.session_file,
     status: session.state.errorMessage ? "failed" : "completed",
+    status_summary: snapshot.compact_summary,
     text: session.getLastAssistantText() ?? ""
   };
 }

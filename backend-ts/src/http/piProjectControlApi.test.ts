@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getProjectPiSettings, listPiConversations } from "../db/repositories/pi.ts";
+import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3018";
@@ -55,6 +56,57 @@ describe("Bun project PI control API", () => {
       expect(promptContext).toContain("Failed issue");
       const promptText = JSON.parse(promptContext).messages[0].content[0].text;
       expect(promptText).toContain('"failed": 1');
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("run-once emits needs-user notifications and returns summary/action candidates", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-control-summary-api", provider: "pi-control-summary" });
+    const bus = new EventBus();
+    try {
+      faux.setResponses([fauxAssistantMessage("cycle done")]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-control-summary");
+      writeFauxModelsConfig(database, "pi-control-summary");
+      insertIssue(database, {
+        error: "approval denied CODEX_API_KEY=fixture-secret at /Users/secret/log.txt",
+        projectId: "demo",
+        status: "failed",
+        title: "Needs user at /Users/secret/project"
+      });
+      insertIssue(database, {
+        autoRetryNextAt: "2026-01-01T01:00:00Z",
+        autoRetryReason: "network error",
+        projectId: "demo",
+        status: "todo",
+        title: "Retry candidate"
+      });
+      const events = bus.subscribe();
+      const router = createDefaultRouter({ bus, database });
+
+      const response = await post(router, "/api/projects/demo/pi/run-once");
+      const event = await nextEvent(events, "pi.needs_user");
+      events.close();
+      const body = await response.json() as Record<string, unknown>;
+      const notifications = body.notifications as Array<Record<string, unknown>>;
+      const actionCandidates = body.action_candidates as Array<Record<string, unknown>>;
+      const json = JSON.stringify(body);
+
+      expect(response.status).toBe(201);
+      expect(String(body.status_summary)).toContain("findings=2");
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0]).toMatchObject({ event: "pi.needs_user", issue_id: 1 });
+      expect(event).toMatchObject({ type: "pi.needs_user", issueId: 1, projectId: "demo" });
+      expect(actionCandidates).toEqual([
+        expect.objectContaining({ action_type: "issue.retry_proposal", payload: { issue_id: 2 } })
+      ]);
+      expect(json).toContain("[redacted]");
+      expect(json).toContain("[redacted-path]");
+      expect(json).not.toContain("fixture-secret");
+      expect(json).not.toContain("/Users/secret");
     } finally {
       faux.unregister();
       database.close();
@@ -116,6 +168,14 @@ function post(router: ReturnType<typeof createDefaultRouter>, path: string): Pro
   }));
 }
 
+async function nextEvent(events: ReturnType<EventBus["subscribe"]>, type: string) {
+  for (let index = 0; index < 20; index += 1) {
+    const event = await events.next();
+    if (!event || event.type === type) return event;
+  }
+  return undefined;
+}
+
 function insertAgent(db: RunnerDatabase, id: string, enabled: number): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, enabled, created_at, updated_at) values (?, ?, ?, ?, ?)`,
@@ -123,11 +183,11 @@ function insertAgent(db: RunnerDatabase, id: string, enabled: number): void {
   );
 }
 
-function insertFauxAgent(db: RunnerDatabase): void {
+function insertFauxAgent(db: RunnerDatabase, provider = "pi-control-faux"): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", "pi-control-faux", "faux-1", "off", 1,
+    ["pi-faux", "PI Faux", provider, "faux-1", "off", 1,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
@@ -141,20 +201,26 @@ function insertProject(db: RunnerDatabase, id: string): void {
   );
 }
 
-function insertIssue(db: RunnerDatabase, issue: { projectId: string; status: string; title: string }): void {
+function insertIssue(db: RunnerDatabase, issue: {
+  autoRetryNextAt?: string; autoRetryReason?: string; error?: string; projectId: string; status: string; title: string;
+}): void {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [issue.projectId, issue.title, issue.status, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues
+      (project_id, title, status, error, auto_retry_next_at, auto_retry_reason, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [issue.projectId, issue.title, issue.status, issue.error ?? "",
+      issue.autoRetryNextAt ?? "", issue.autoRetryReason ?? "",
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
-function writeFauxModelsConfig(db: RunnerDatabase): void {
+function writeFauxModelsConfig(db: RunnerDatabase, provider = "pi-control-faux"): void {
   const agentDir = join(db.path, "..", "pi-runtime", "agent");
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(join(agentDir, "models.json"), JSON.stringify({
     providers: {
-      "pi-control-faux": {
-        api: "pi-control-faux-api",
+      [provider]: {
+        api: `${provider}-api`,
         apiKey: "test",
         baseUrl: "http://localhost:0",
         models: [{ id: "faux-1" }]
