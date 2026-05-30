@@ -3,7 +3,7 @@ import { splitCommand } from "../codex/jsonRpc.ts";
 import { parseClaudeStreamJSONL } from "./stream.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult } from "../types.ts";
+import type { ExecutorProvider, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../types.ts";
 
 const PROVIDER = "claude";
 const DEFAULT_MAX_TURNS = "50";
@@ -25,8 +25,9 @@ export type ClaudeProcessFactory = (options: {
 export type ClaudeProviderOptions = { processFactory?: ClaudeProcessFactory };
 
 export class ClaudeExecutorProvider implements ExecutorProvider {
-  readonly capabilities = ["issue_execution"] as const;
+  readonly capabilities = ["issue_execution", "interrupt"] as const;
   readonly id = PROVIDER;
+  private readonly active = new Map<string, ClaudeProcess>();
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: ClaudeProviderOptions = {}) {}
 
@@ -34,14 +35,31 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
     assertUsableCwd(input.cwd);
     const runId = `cli:claude:${input.issueId}`;
     const process = this.spawn(input);
-    const [stdout, stderr, exitCode] = await waitForProcess(process, this.config.timeoutMs);
-    const secrets = secretValues(this.config.env);
-    emitStderr(input, stderr, runId, secrets);
-    const parsed = parseClaudeStreamJSONL(stdout, { runId, secrets });
-    parsed.events.forEach((event) => input.onEvent?.(event));
-    if (exitCode !== 0) throw new Error(commandError(stderr, exitCode, secrets));
-    if (!parsed.completed) throw new Error(redactSensitiveText(parsed.error || parsed.diagnostic || "Claude Code run did not complete"));
-    return { runId, session: parsed.session };
+    const session = runSession(runId);
+    const aliases = new Set<string>();
+    this.track(session, process, aliases);
+    input.onEvent?.(startEvent(session));
+    try {
+      const [stdout, stderr, exitCode] = await waitForProcess(process, this.config.timeoutMs);
+      const secrets = secretValues(this.config.env);
+      emitStderr(input, stderr, runId, secrets);
+      const parsed = parseClaudeStreamJSONL(stdout, { runId, secrets });
+      parsed.events.forEach((event) => {
+        if (event.session) this.track(event.session, process, aliases);
+        input.onEvent?.(event);
+      });
+      if (exitCode !== 0) throw new Error(commandError(stderr, exitCode, secrets));
+      if (!parsed.completed) throw new Error(redactSensitiveText(parsed.error || parsed.diagnostic || "Claude Code run did not complete"));
+      return { runId, session: parsed.session };
+    } finally {
+      this.untrack(aliases);
+    }
+  }
+
+  async interrupt(input: InterruptInput): Promise<void> {
+    const process = this.lookup(input.session);
+    if (!process) return;
+    process.kill("SIGTERM");
   }
 
   private spawn(input: ProviderRunInput): ClaudeProcess {
@@ -54,6 +72,22 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
 
   private processFactory(): ClaudeProcessFactory {
     return this.options.processFactory ?? spawnClaudeProcess;
+  }
+
+  private track(session: SessionRef, process: ClaudeProcess, aliases: Set<string>): void {
+    for (const id of [session.sessionId, session.turnId]) {
+      if (!id) continue;
+      this.active.set(id, process);
+      aliases.add(id);
+    }
+  }
+
+  private untrack(aliases: Set<string>): void {
+    aliases.forEach((id) => this.active.delete(id));
+  }
+
+  private lookup(session: SessionRef): ClaudeProcess | undefined {
+    return this.active.get(session.sessionId) ?? (session.turnId ? this.active.get(session.turnId) : undefined);
   }
 }
 
@@ -89,6 +123,20 @@ function claudePermissionMode(policy?: string): string {
     default:
       return "default";
   }
+}
+
+function runSession(runId: string): SessionRef {
+  return { provider: PROVIDER, sessionId: runId, turnId: runId };
+}
+
+function startEvent(session: SessionRef): ProviderEvent {
+  return {
+    provider: PROVIDER,
+    type: "text",
+    status: "started",
+    session,
+    raw: { method: "start", payload: "Claude Code child process started" }
+  };
 }
 
 async function waitForProcess(process: ClaudeProcess, timeoutMs: number): Promise<[string, string, number]> {

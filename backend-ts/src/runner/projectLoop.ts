@@ -1,6 +1,6 @@
 import { claimNextIssue } from "../db/repositories/issueQueue.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import type { Issue } from "../db/repositories/issues.ts";
+import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
@@ -45,10 +45,18 @@ async function runClaimedIssue(
       sandbox: project.sandbox
     });
   } catch (error) {
+    if (issueAlreadyClosed(input.database, issue.id)) return { runId: "interrupted" };
     failIssueExecution(input.database, issue.id, error, provider.id);
     return { runId: "failed" };
   }
 }
+
+function issueAlreadyClosed(db: RunnerDatabase, issueID: number): boolean {
+  const issue = getIssue(db, issueID);
+  return issue ? CLOSED_ISSUE_STATUSES.has(issue.status) : false;
+}
+
+const CLOSED_ISSUE_STATUSES = new Set(["done", "failed", "cancelled", "pending_verification"]);
 
 function mustGetProject(db: RunnerDatabase, projectId: string): Project {
   const project = getProject(db, projectId);

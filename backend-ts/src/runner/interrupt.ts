@@ -51,7 +51,11 @@ export async function interruptSession(
 }
 
 function shouldInterruptIssue(issue: Issue): boolean {
-  return issue.status === "in_progress" && issue.codex_thread_id !== "" && issue.codex_turn_id !== "";
+  const run = issue.latest_run;
+  if (issue.status !== "in_progress") return false;
+  if (!run || run.ended_at !== "") return false;
+  return (run.provider_session_id !== "" && run.provider_turn_id !== "") ||
+    (issue.codex_thread_id !== "" && issue.codex_turn_id !== "");
 }
 
 async function interruptLinkedIssue(
@@ -60,10 +64,23 @@ async function interruptLinkedIssue(
   reason: string,
   runtime: InterruptRuntime
 ): Promise<void> {
-  const session = sessionRef(issue.codex_thread_id, issue.codex_turn_id);
+  const session = issueSessionRef(issue);
   recordInterruptEvent(db, issue.id, "issue.interrupt_requested", session, reason, runtime.bus);
   await interruptProviderTurn(db, issue.id, session, reason, runtime);
   recordInterruptEvent(db, issue.id, "issue.interrupted", session, reason, runtime.bus);
+}
+
+function issueSessionRef(issue: Issue): SessionRef {
+  const run = issue.latest_run;
+  if (run?.provider_session_id) {
+    const turnId = run.provider_turn_id || issue.codex_turn_id;
+    return {
+      provider: providerID(run.provider),
+      sessionId: run.provider_session_id,
+      ...(turnId === "" ? {} : { turnId })
+    };
+  }
+  return sessionRef(issue.codex_thread_id, issue.codex_turn_id);
 }
 
 async function interruptProviderTurn(
@@ -134,6 +151,10 @@ function sessionRef(rawSessionID: string, turnID: string): SessionRef {
   const separator = key.indexOf(":");
   const provider = key.slice(0, separator) as ExecutorProviderId;
   return { provider, sessionId: key.slice(separator + 1), ...(turnID === "" ? {} : { turnId: turnID }) };
+}
+
+function providerID(value: string): ExecutorProviderId {
+  return value === "claude" || value === "fake-execution-only" ? value : "codex";
 }
 
 function recordInterruptEvent(

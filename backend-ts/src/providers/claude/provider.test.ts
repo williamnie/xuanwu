@@ -6,6 +6,8 @@ import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { listIssueEvents } from "../../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../../db/repositories/issues.ts";
+import { cancelIssueWithInterrupt } from "../../runner/interrupt.ts";
+import { runProjectLoopOnce } from "../../runner/projectLoop.ts";
 import { runIssueWithProvider } from "../../runner/providerRuntime.ts";
 import { ClaudeExecutorProvider, type ClaudeProcessFactory } from "./provider.ts";
 
@@ -97,6 +99,79 @@ describe("Claude execution-only provider", () => {
 
     expect(factory.killed).toBe(true);
   });
+
+  test("cancel interrupts the active Claude child process and closes the run", async () => {
+    const db = await openFixtureDatabase();
+    const factory = hangingProcessFactory();
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), { processFactory: factory.factory });
+    try {
+      const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-claude-cancel-cwd-"));
+      tempRoots.push(cwd);
+      insertProject(db, "demo", cwd);
+      const issueId = insertIssue(db, "demo");
+      const running = runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd,
+        prompt: "issue prompt"
+      });
+
+      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === `cli:claude:${issueId}`);
+      const issue = await cancelIssueWithInterrupt(db, issueId, {
+        interruptTimeoutMs: 50,
+        providers: { claude: provider }
+      });
+      await expect(running).rejects.toThrow("Claude Code run failed: exit code 143");
+
+      expect(factory.killed).toBe(true);
+      expect(issue.status).toBe("cancelled");
+      expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", codex_thread_id: "", codex_turn_id: "" });
+      expect(listIssueRuns(db, issueId)).toMatchObject([{
+        provider: "claude",
+        provider_session_id: `cli:claude:${issueId}`,
+        provider_turn_id: `cli:claude:${issueId}`,
+        codex_thread_id: "",
+        codex_turn_id: "",
+        status: "cancelled",
+        exit_reason: "issue_cancel"
+      }]);
+      const eventTypes = listIssueEvents(db, issueId).map((event) => event.type);
+      expect(eventTypes).toContain("issue.interrupt_requested");
+      expect(eventTypes).toContain("issue.interrupted");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("cancelled Claude run failure does not pollute the next project loop claim", async () => {
+    const db = await openFixtureDatabase();
+    const factory = hangingProcessFactory();
+    const provider = new ClaudeExecutorProvider(runtimeConfig({ timeoutMs: 30_000 }), { processFactory: factory.factory });
+    try {
+      const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-claude-next-cwd-"));
+      tempRoots.push(cwd);
+      insertProject(db, "demo", cwd);
+      const issueId = insertIssue(db, "demo", "todo");
+      const running = runProjectLoopOnce({ database: db, projectId: "demo", providers: { claude: provider } });
+
+      await waitFor(() => listIssueRuns(db, issueId)[0]?.provider_session_id === `cli:claude:${issueId}`);
+      await cancelIssueWithInterrupt(db, issueId, {
+        interruptTimeoutMs: 50,
+        providers: { claude: provider }
+      });
+      await running;
+
+      expect(getIssue(db, issueId)).toMatchObject({ status: "cancelled", error: "" });
+      expect(listIssueRuns(db, issueId)[0]).toMatchObject({
+        status: "cancelled",
+        exit_reason: "issue_cancel",
+        error: ""
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 afterEach(async () => {
@@ -175,6 +250,15 @@ function closableStream(register: (close: () => void) => void): ReadableStream<U
   return new ReadableStream({ start(controller) { register(() => controller.close()); } });
 }
 
+async function waitFor(condition: () => boolean): Promise<void> {
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition timed out");
+}
+
 function jsonl(records: unknown[]): string {
   return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
 }
@@ -193,11 +277,11 @@ function insertProject(db: RunnerDatabase, id: string, cwd: string): void {
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectId: string): number {
+function insertIssue(db: RunnerDatabase, projectId: string, status = "in_progress"): number {
   db.sqlite.run(
     `insert into issues (project_id, title, status, created_at, updated_at)
      values (?, ?, ?, ?, ?)`,
-    [projectId, "Claude runtime", "in_progress", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    [projectId, "Claude runtime", status, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
