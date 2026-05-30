@@ -9,7 +9,7 @@ import { json } from "./errors.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
-import { buildSystemStatus } from "./systemStatus.ts";
+import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
 
 type ListenAddress = { hostname: string; port: number };
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
@@ -61,12 +61,14 @@ export function registerSystemStatusRoute(
   context: ServerRuntime & { authToken: string; config: RunnerConfig }
 ): void {
   const startedAt = context.startedAt ?? new Date();
-  router.get("/api/system/status", () => json(buildSystemStatus({
+  const statusContext = {
     authEnabled: context.authToken.trim() !== "",
     config: context.config,
     database: context.database,
     startedAt
-  })));
+  };
+  router.get("/api/system/status", () => json(buildSystemStatus(statusContext)));
+  router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }
 
 export function createRequestHandler(router: Router, authToken: string): (request: Request) => Promise<Response> {

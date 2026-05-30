@@ -78,6 +78,7 @@ describe("Bun CLI dispatcher", () => {
   test("reads token from token file env", async () => {
     const file = await tempTokenFile("file-token");
     const fetcher = fetchStub((request) => {
+      expect(request.url).toBe("http://127.0.0.1:3018/api/system/doctor");
       expect(request.headers.get("authorization")).toBe("Bearer file-token");
       return jsonResponse(systemStatusBody());
     });

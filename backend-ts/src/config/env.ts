@@ -10,17 +10,23 @@ export const ENV_KEYS = {
   codexCommand: "CODEX_RUNNER_BUN_CODEX_CMD",
   codexCwd: "CODEX_RUNNER_BUN_CODEX_CWD",
   codexEnv: "CODEX_RUNNER_BUN_CODEX_ENV",
-  codexTimeoutMs: "CODEX_RUNNER_BUN_CODEX_TIMEOUT_MS"
+  codexTimeoutMs: "CODEX_RUNNER_BUN_CODEX_TIMEOUT_MS",
+  claudeCommand: "CODEX_RUNNER_BUN_CLAUDE_CMD",
+  claudeCwd: "CODEX_RUNNER_BUN_CLAUDE_CWD",
+  claudeEnv: "CODEX_RUNNER_BUN_CLAUDE_ENV",
+  claudeModel: "CODEX_RUNNER_BUN_CLAUDE_MODEL",
+  claudeTimeoutMs: "CODEX_RUNNER_BUN_CLAUDE_TIMEOUT_MS"
 } as const;
 
 type Env = Record<string, string | undefined>;
-type ConfigOverrides = Partial<RunnerConfig> & CodexRuntimeOverrides;
+type ConfigOverrides = Partial<RunnerConfig> & ProviderRuntimeOverrides;
 type ConfigKey = keyof typeof ENV_KEYS;
 
 export type ProviderRuntimeConfig = {
   command: string;
   cwd: string;
   env: Record<string, string>;
+  model?: string;
   timeoutMs: number;
 };
 
@@ -42,7 +48,12 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--codex-cmd": "codexCommand",
   "--codex-cwd": "codexCwd",
   "--codex-env": "codexEnv",
-  "--codex-timeout-ms": "codexTimeoutMs"
+  "--codex-timeout-ms": "codexTimeoutMs",
+  "--claude-cmd": "claudeCommand",
+  "--claude-cwd": "claudeCwd",
+  "--claude-env": "claudeEnv",
+  "--claude-model": "claudeModel",
+  "--claude-timeout-ms": "claudeTimeoutMs"
 };
 
 export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): RunnerConfig {
@@ -58,7 +69,8 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
     authToken: cleanValue(overrides.authToken) ?? "",
     ...paths,
     providers: {
-      codex: buildCodexRuntimeConfig(overrides)
+      codex: buildCodexRuntimeConfig(overrides),
+      claude: buildClaudeRuntimeConfig(overrides)
     }
   };
 }
@@ -73,7 +85,12 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     codexCommand: cleanValue(env[ENV_KEYS.codexCommand]),
     codexCwd: cleanValue(env[ENV_KEYS.codexCwd]),
     codexEnv: cleanValue(env[ENV_KEYS.codexEnv]),
-    codexTimeoutMs: cleanValue(env[ENV_KEYS.codexTimeoutMs])
+    codexTimeoutMs: cleanValue(env[ENV_KEYS.codexTimeoutMs]),
+    claudeCommand: cleanValue(env[ENV_KEYS.claudeCommand]),
+    claudeCwd: cleanValue(env[ENV_KEYS.claudeCwd]),
+    claudeEnv: cleanValue(env[ENV_KEYS.claudeEnv]),
+    claudeModel: cleanValue(env[ENV_KEYS.claudeModel]),
+    claudeTimeoutMs: cleanValue(env[ENV_KEYS.claudeTimeoutMs])
   };
 }
 
@@ -106,7 +123,12 @@ function cleanValue(value: string | undefined): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
-type CodexRuntimeOverrides = {
+type ProviderRuntimeOverrides = {
+  claudeCommand?: string;
+  claudeCwd?: string;
+  claudeEnv?: string;
+  claudeModel?: string;
+  claudeTimeoutMs?: number | string;
   codexCommand?: string;
   codexCwd?: string;
   codexEnv?: string;
@@ -114,14 +136,44 @@ type CodexRuntimeOverrides = {
 };
 
 const DEFAULT_CODEX_COMMAND = "codex app-server --listen stdio://";
-const DEFAULT_CODEX_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_CLAUDE_COMMAND = "claude";
+const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
 
-function buildCodexRuntimeConfig(overrides: CodexRuntimeOverrides): ProviderRuntimeConfig {
+function buildCodexRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+  return buildProviderRuntimeConfig({
+    command: overrides.codexCommand,
+    cwd: overrides.codexCwd,
+    defaultCommand: DEFAULT_CODEX_COMMAND,
+    env: overrides.codexEnv,
+    timeoutMs: overrides.codexTimeoutMs
+  });
+}
+
+function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
   return {
-    command: cleanValue(overrides.codexCommand) ?? DEFAULT_CODEX_COMMAND,
-    cwd: cleanValue(overrides.codexCwd) ?? "",
-    env: parseEnvOverrides(cleanValue(overrides.codexEnv) ?? ""),
-    timeoutMs: parsePositiveInteger(overrides.codexTimeoutMs, DEFAULT_CODEX_TIMEOUT_MS)
+    ...buildProviderRuntimeConfig({
+      command: overrides.claudeCommand,
+      cwd: overrides.claudeCwd,
+      defaultCommand: DEFAULT_CLAUDE_COMMAND,
+      env: overrides.claudeEnv,
+      timeoutMs: overrides.claudeTimeoutMs
+    }),
+    model: cleanValue(overrides.claudeModel) ?? ""
+  };
+}
+
+function buildProviderRuntimeConfig(input: {
+  command?: string;
+  cwd?: string;
+  defaultCommand: string;
+  env?: string;
+  timeoutMs?: number | string;
+}): ProviderRuntimeConfig {
+  return {
+    command: cleanValue(input.command) ?? input.defaultCommand,
+    cwd: cleanValue(input.cwd) ?? "",
+    env: parseEnvOverrides(cleanValue(input.env) ?? ""),
+    timeoutMs: parsePositiveInteger(input.timeoutMs, DEFAULT_PROVIDER_TIMEOUT_MS)
   };
 }
 

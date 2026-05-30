@@ -1,6 +1,8 @@
-import { basename, isAbsolute, relative } from "node:path";
-import type { RunnerConfig } from "../config/env.ts";
+import { statSync } from "node:fs";
+import { basename, delimiter, isAbsolute, join, relative } from "node:path";
+import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { ExecutorCapability } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 type SystemStatusContext = {
@@ -11,8 +13,10 @@ type SystemStatusContext = {
 };
 
 type CheckStatus = { ok: boolean; error?: string };
+type ProviderStatus = ReturnType<typeof providerStatus>[number];
 
 export function buildSystemStatus(context: SystemStatusContext): Record<string, unknown> {
+  const providers = providerStatus(context.config);
   return {
     service: serviceStatus(context.startedAt),
     db: databaseStatus(context.database),
@@ -20,8 +24,24 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     config: configStatus(context),
     security: { warnings: securityWarnings(context.config.addr, context.authEnabled) },
     codex: codexStatus(context.config),
-    providers: providerStatus(context.config),
+    providers,
     runner: runnerStatus()
+  };
+}
+
+export function buildRuntimeDoctor(context: SystemStatusContext): Record<string, unknown> {
+  const status = buildSystemStatus(context) as RuntimeStatus;
+  return {
+    generated_at: new Date().toISOString(),
+    service: status.service,
+    listen: { addr: status.config.addr },
+    auth: { enabled: status.auth.enabled, current_request_authorized: true },
+    security: status.security,
+    db: { ...status.db, path: status.config.db_path, path_visible: status.db.ok },
+    runner: status.runner,
+    projects: [],
+    providers: status.providers.map(doctorProvider),
+    recent_errors: { count: 0, sources: [] }
   };
 }
 
@@ -75,7 +95,8 @@ function securityWarnings(addr: string, authEnabled: boolean): Array<Record<stri
 }
 
 function codexStatus(config: RunnerConfig): Record<string, unknown> {
-  const command = redactSensitiveText(config.providers.codex?.command ?? "");
+  const codex = config.providers.codex;
+  const command = redactSensitiveText(codex?.command ?? "");
   const capabilities = codexCapabilities();
   return {
     command,
@@ -87,22 +108,132 @@ function codexStatus(config: RunnerConfig): Record<string, unknown> {
   };
 }
 
-function providerStatus(config: RunnerConfig): Array<Record<string, unknown>> {
+function providerStatus(config: RunnerConfig): Array<{
+  available: boolean;
+  capabilities: string[];
+  cli: Record<string, unknown>;
+  command: string;
+  cwd_configured: boolean;
+  default_model?: string;
+  enabled: boolean;
+  env_keys: string[];
+  id: string;
+  label: string;
+  role: string;
+  secrets: Record<string, { configured: boolean }>;
+  settings_mode: string;
+  status: string;
+  timeout_ms: number;
+}> {
+  const out = [];
   const codex = config.providers.codex;
-  if (!codex) return [];
-  return [{
-    id: "codex",
-    role: "executor",
+  if (codex) out.push(providerEntry({
     capabilities: codexCapabilities(),
-    command: redactSensitiveText(codex.command),
-    cwd_configured: codex.cwd.trim() !== "",
-    env_keys: diagnosticEnvKeys(codex.env),
-    timeout_ms: codex.timeoutMs
-  }];
+    config: codex,
+    id: "codex",
+    label: "Codex",
+    settingsMode: "env_or_codex_config"
+  }));
+  const claude = config.providers.claude;
+  if (claude) out.push(providerEntry({
+    capabilities: claudeCapabilities(),
+    config: claude,
+    defaultModel: claude.model ?? "",
+    id: "claude",
+    label: "Claude Code",
+    settingsMode: "env_or_provider_login"
+  }));
+  return out;
 }
 
-function codexCapabilities(): string[] {
+function providerEntry(input: {
+  capabilities: ExecutorCapability[];
+  config: ProviderRuntimeConfig;
+  defaultModel?: string;
+  id: string;
+  label: string;
+  settingsMode: string;
+}) {
+  const cli = cliStatus(input.config);
+  return {
+    id: input.id,
+    label: input.label,
+    role: "executor",
+    status: cli.available ? "available" : "missing",
+    available: cli.available,
+    enabled: true,
+    capabilities: input.capabilities,
+    command: redactSensitiveText(input.config.command),
+    cli,
+    cwd_configured: input.config.cwd.trim() !== "",
+    ...(input.defaultModel === undefined ? {} : { default_model: redactSensitiveText(input.defaultModel) }),
+    env_keys: diagnosticEnvKeys(input.config.env),
+    secrets: { api_key: { configured: hasConfiguredApiKey(input.config.env, input.id) } },
+    settings_mode: input.settingsMode,
+    timeout_ms: input.config.timeoutMs
+  };
+}
+
+function cliStatus(config: ProviderRuntimeConfig): Record<string, unknown> & { available: boolean } {
+  const command = redactSensitiveText(config.command.trim());
+  if (command === "") return { command: "", available: false, error: "command is empty" };
+  const binary = firstCommandPart(command);
+  const path = findExecutable(binary, config.env);
+  const base = { command, available: path !== "" };
+  if (path === "") return { ...base, error: `exec: "${binary}" not found in PATH` };
+  const version = commandVersion(path, config.env);
+  return { ...base, path: redactSensitiveText(path), ...(version === "" ? {} : { version }) };
+}
+
+function firstCommandPart(command: string): string {
+  const match = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/)?.[0] ?? "";
+  return unquoteArg(match);
+}
+
+function unquoteArg(value: string): string {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) return value.slice(1, -1);
+  return value;
+}
+
+function findExecutable(command: string, env: Record<string, string>): string {
+  if (command === "") return "";
+  if (command.includes("/")) return isExecutable(command) ? command : "";
+  const overridePath = env.PATH;
+  if (overridePath !== undefined) return findInPath(command, overridePath);
+  return Bun.which(command) ?? findInPath(command, Bun.env.PATH ?? "");
+}
+
+function findInPath(command: string, pathEnv: string): string {
+  for (const dir of pathEnv.split(delimiter)) {
+    const candidate = join(dir, command);
+    if (isExecutable(candidate)) return candidate;
+  }
+  return "";
+}
+function isExecutable(path: string): boolean {
+  try {
+    const stat = statSync(path);
+    return stat.isFile() && (stat.mode & 0o111) !== 0;
+  } catch {
+    return false;
+  }
+}
+function commandVersion(path: string, env: Record<string, string>): string {
+  try {
+    const result = Bun.spawnSync([path, "--version"], { env: { ...Bun.env, ...env }, stderr: "pipe", stdout: "pipe" });
+    if (result.exitCode !== 0) return "";
+    return redactSensitiveText(new TextDecoder().decode(result.stdout).trim());
+  } catch {
+    return "";
+  }
+}
+
+function codexCapabilities(): ExecutorCapability[] {
   return ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"];
+}
+
+function claudeCapabilities(): ExecutorCapability[] {
+  return ["issue_execution"];
 }
 
 function diagnosticEnvKeys(env: Record<string, string>): string[] {
@@ -113,6 +244,13 @@ function isSensitiveEnvKey(key: string): boolean {
   return /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)/i.test(key);
 }
 
+function hasConfiguredApiKey(env: Record<string, string>, provider: string): boolean {
+  const keys = provider === "claude"
+    ? ["ANTHROPIC_API_KEY"]
+    : ["CODEX_API_KEY", "OPENAI_API_KEY"];
+  return keys.some((key) => (env[key] ?? Bun.env[key] ?? "").trim() !== "");
+}
+
 function runnerStatus(): Record<string, number> {
   return {
     auto_run_projects: 0,
@@ -121,6 +259,17 @@ function runnerStatus(): Record<string, number> {
     in_progress_issues: 0,
     running_issues: 0,
     running_sessions: 0
+  };
+}
+
+function doctorProvider(provider: ProviderStatus): Record<string, unknown> {
+  return {
+    id: provider.id,
+    label: provider.label,
+    status: provider.status,
+    available: provider.available,
+    enabled: provider.enabled,
+    capabilities: provider.capabilities
   };
 }
 
@@ -139,3 +288,13 @@ function bindsAllInterfaces(addr: string): boolean {
   const clean = addr.trim();
   return clean.startsWith(":") || clean.startsWith("0.0.0.0:") || clean.startsWith("[::]:");
 }
+
+type RuntimeStatus = {
+  auth: { enabled: boolean };
+  config: { addr: string; db_path: string };
+  db: CheckStatus;
+  providers: ProviderStatus[];
+  runner: Record<string, number>;
+  security: Record<string, unknown>;
+  service: Record<string, unknown>;
+};

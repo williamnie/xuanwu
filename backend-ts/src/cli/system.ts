@@ -6,14 +6,23 @@ import type { EnvReader, Fetcher, SystemLogsDTO, SystemStatusDTO } from "./types
 export async function runSystem(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const command = args[0]?.trim();
   if (!command) throw new Error("missing system command");
-  if (command === "status" || command === "doctor") return await getSystemStatus(args.slice(1), env, fetcher);
+  if (command === "status") return await getSystemStatus(args.slice(1), env, fetcher);
+  if (command === "doctor") return await getSystemDoctor(args.slice(1), env, fetcher);
   if (command === "logs") return await getSystemLogs(args.slice(1), env, fetcher);
   throw new Error(`unknown system command: ${command}`);
 }
 
 export async function getSystemStatus(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
+  return await getSystemPayload(args, env, fetcher, "/api/system/status");
+}
+
+export async function getSystemDoctor(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
+  return await getSystemPayload(args, env, fetcher, "/api/system/doctor");
+}
+
+async function getSystemPayload(args: string[], env: EnvReader, fetcher: Fetcher, path: string): Promise<string> {
   const { common } = parseCommandArgs(args, [], env);
-  const status = await getJSON<SystemStatusDTO>(fetcher, common, "/api/system/status");
+  const status = await getJSON<SystemStatusDTO>(fetcher, common, path);
   return formatSystemStatus(status, common.json);
 }
 

@@ -10,7 +10,8 @@ describe("Bun backend config", () => {
       authToken: "",
       authTokenFile: "data-bun/auth_token",
       providers: {
-        codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 }
+        codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
+        claude: { command: "claude", cwd: "", env: {}, model: "", timeoutMs: 1_800_000 }
       }
     });
   });
@@ -25,7 +26,7 @@ describe("Bun backend config", () => {
     });
   });
 
-  test("reads Bun-specific environment overrides including auth token", () => {
+  test("reads Bun-specific environment overrides including provider settings", () => {
     const config = loadConfig([], {
       [ENV_KEYS.addr]: "127.0.0.1:3999",
       [ENV_KEYS.stateDir]: "/tmp/state-bun",
@@ -35,7 +36,12 @@ describe("Bun backend config", () => {
       [ENV_KEYS.codexCommand]: "/opt/bin/codex app-server --listen stdio://",
       [ENV_KEYS.codexCwd]: "/tmp/project",
       [ENV_KEYS.codexEnv]: "CODEX_HOME=/tmp/codex, SAFE_VALUE=ok, CODEX_API_KEY=secret",
-      [ENV_KEYS.codexTimeoutMs]: "1234"
+      [ENV_KEYS.codexTimeoutMs]: "1234",
+      [ENV_KEYS.claudeCommand]: "/opt/bin/claude",
+      [ENV_KEYS.claudeCwd]: "/tmp/claude-project",
+      [ENV_KEYS.claudeEnv]: "ANTHROPIC_API_KEY=anthropic-secret,SAFE_CLAUDE=ok",
+      [ENV_KEYS.claudeModel]: "claude-sonnet-4-5",
+      [ENV_KEYS.claudeTimeoutMs]: "2345"
     });
 
     expect(config).toEqual({
@@ -50,6 +56,13 @@ describe("Bun backend config", () => {
           cwd: "/tmp/project",
           env: { CODEX_HOME: "/tmp/codex", SAFE_VALUE: "ok", CODEX_API_KEY: "secret" },
           timeoutMs: 1234
+        },
+        claude: {
+          command: "/opt/bin/claude",
+          cwd: "/tmp/claude-project",
+          env: { ANTHROPIC_API_KEY: "anthropic-secret", SAFE_CLAUDE: "ok" },
+          model: "claude-sonnet-4-5",
+          timeoutMs: 2345
         }
       }
     });
@@ -67,7 +80,12 @@ describe("Bun backend config", () => {
       "--codex-cmd", "cli-codex app-server --listen stdio://",
       "--codex-cwd=/tmp/cli-project",
       "--codex-env", "CODEX_HOME=/tmp/cli-codex",
-      "--codex-timeout-ms", "5678"
+      "--codex-timeout-ms", "5678",
+      "--claude-cmd", "cli-claude",
+      "--claude-cwd=/tmp/cli-claude-project",
+      "--claude-env", "ANTHROPIC_API_KEY=cli-secret",
+      "--claude-model", "claude-opus",
+      "--claude-timeout-ms", "6789"
     ], env);
 
     expect(config).toEqual({
@@ -82,6 +100,13 @@ describe("Bun backend config", () => {
           cwd: "/tmp/cli-project",
           env: { CODEX_HOME: "/tmp/cli-codex" },
           timeoutMs: 5678
+        },
+        claude: {
+          command: "cli-claude",
+          cwd: "/tmp/cli-claude-project",
+          env: { ANTHROPIC_API_KEY: "cli-secret" },
+          model: "claude-opus",
+          timeoutMs: 6789
         }
       }
     });

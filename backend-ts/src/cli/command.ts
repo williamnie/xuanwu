@@ -1,7 +1,7 @@
 import { sanitizeError } from "./common.ts";
 import { runIssue } from "./issue.ts";
 import { runProject } from "./project.ts";
-import { getSystemStatus, runSystem } from "./system.ts";
+import { getSystemDoctor, runSystem } from "./system.ts";
 import type { CliOptions, EnvReader, Fetcher, Writer } from "./types.ts";
 
 export async function runCli(
@@ -26,7 +26,7 @@ async function dispatch(args: string[], env: EnvReader, fetcher: Fetcher): Promi
   if (command === "issue") return await runIssue(args.slice(1), env, fetcher);
   if (command === "project") return await runProject(args.slice(1), env, fetcher);
   if (command === "system") return await runSystem(args.slice(1), env, fetcher);
-  if (command === "doctor") return await getSystemStatus(args.slice(1), env, fetcher);
+  if (command === "doctor") return await getSystemDoctor(args.slice(1), env, fetcher);
   throw new Error(`unknown command: ${command}`);
 }
 
