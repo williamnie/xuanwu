@@ -1141,6 +1141,381 @@ printf 'header = "Authorization: Bearer %s"\n' "$(cat "$BUN_TOKEN_FILE")" > "$cu
 | CLI long tail | can-defer | 与正式切换无关的长尾 CLI 子命令可延后；executor 回写、issue/status/system/project 核心 CLI 不能延后。 | 在 CLI parity follow-up 中列出缺口；P08.05 release notes 写明替代 API/UI 操作。 |
 | One-command rollback | can-defer | 可以先用人工 rollback runbook，不强制 P08.05 前完成一键 rollback 脚本。 | runbook 必须包含 Go launchd 恢复、Go DB backup 恢复、Bun service 停止、health/status smoke，并在维护窗口演练一次 dry-run。 |
 
+#### P08.03 正式切换 runbook（P08.05 前置）
+
+本 runbook 只定义正式切换步骤，不在文档编写阶段执行任何 live 切换。P08.05 执行前必须由用户在维护窗口内明确确认
+一种策略；没有确认时，Go stable 继续占用 `127.0.0.1:3008`，Bun preview 继续使用
+`127.0.0.1:3018`、`data-bun/`、`data-bun/runner.db`。
+
+可选策略：
+
+- 策略 A：停止 Go stable 后，让 Bun live 监听 `127.0.0.1:3008`。前端/CLI 仍访问原 live addr。
+- 策略 B：Go stable 保持在 `127.0.0.1:3008` 作为 fallback；Bun 继续监听 `127.0.0.1:3018`，
+  只把前端代理目标和默认 CLI 调用切到 Bun。
+
+共同硬门禁：
+
+- P08.01 的所有 `must-pass` gate 已通过并留存结果。
+- P08.02 最终迁移演练已通过，`reconciliation.all_match == true`。
+- 维护窗口、rollback owner、smoke 项目 id、选择的策略已经由用户确认。
+- 关闭 `set -x`，所有 token 只通过 `--token-file` 或临时 curl config 使用；日志、截图、issue 评论不得输出 token/secrets。
+- 切换前、切换中、失败回滚时都不得让 Bun 直接写 Go stable 正在使用的 `data/runner.db`。
+
+维护窗口准备命令（只在用户确认后执行）：
+
+```bash
+set -euo pipefail
+set +x
+
+export GO_ADDR=127.0.0.1:3008
+export GO_DB=data/runner.db
+export GO_TOKEN_FILE=data/auth_token
+export GO_LABEL=com.xiaobei.codex-issue-runner
+export GO_PLIST="$HOME/Library/LaunchAgents/$GO_LABEL.plist"
+
+export BUN_ADDR=127.0.0.1:3018
+export BUN_STATE_DIR=data-bun
+export BUN_DB=data-bun/runner.db
+export BUN_TOKEN_FILE=data-bun/auth_token
+export BUN_LABEL=com.xiaobei.codex-issue-runner-bun
+export BUN_PLIST="$HOME/Library/LaunchAgents/$BUN_LABEL.plist"
+
+export SMOKE_PROJECT=<已导入 Bun preview 的项目 id>
+export SWITCHOVER_STRATEGY=<A 或 B>
+export CUTOVER_DIR="data/backups/p08-cutover/$(date -u +%Y%m%dT%H%M%SZ)"
+
+mkdir -p "$CUTOVER_DIR"
+umask 077
+go_curl_auth_config="$(mktemp)"
+bun_curl_auth_config="$(mktemp)"
+trap 'rm -f "$go_curl_auth_config" "$bun_curl_auth_config"' EXIT
+printf 'header = "Authorization: Bearer %s"\n' "$(cat "$GO_TOKEN_FILE")" > "$go_curl_auth_config"
+printf 'header = "Authorization: Bearer %s"\n' "$(cat "$BUN_TOKEN_FILE")" > "$bun_curl_auth_config"
+
+printf 'Type CONFIRM_P08_SWITCHOVER_%s to continue: ' "$SWITCHOVER_STRATEGY"
+read -r confirmation
+test "$confirmation" = "CONFIRM_P08_SWITCHOVER_$SWITCHOVER_STRATEGY"
+```
+
+冻结写入与最终演练：
+
+```bash
+# 基线健康检查。
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+curl -fsS "http://$BUN_ADDR/health" >/dev/null
+./scripts/status-launchd.sh > "$CUTOVER_DIR/go-launchd-before.txt"
+./scripts/status-bun-preview.sh > "$CUTOVER_DIR/bun-launchd-before.txt"
+
+# 停止新 auto-run claim；人工维护窗口内也不得再创建/更新 Go issue。
+curl -fsS --config "$go_curl_auth_config" "http://$GO_ADDR/api/projects" \
+  -o "$CUTOVER_DIR/go-projects-before.json"
+jq -r '.[] | select(.auto_run == 1) | .id' \
+  "$CUTOVER_DIR/go-projects-before.json" > "$CUTOVER_DIR/go-auto-run-projects.txt"
+while read -r project_id; do
+  [ -n "$project_id" ] || continue
+  curl -fsS -X PATCH --config "$go_curl_auth_config" \
+    -H 'Content-Type: application/json' \
+    -d '{"auto_run":0}' \
+    "http://$GO_ADDR/api/projects/$project_id" >/dev/null
+done < "$CUTOVER_DIR/go-auto-run-projects.txt"
+
+# 不允许带着 Go in-progress issue 切换。
+curl -fsS --config "$go_curl_auth_config" "http://$GO_ADDR/api/issues?status=in_progress" \
+  -o "$CUTOVER_DIR/go-in-progress.json"
+jq -e 'length == 0' "$CUTOVER_DIR/go-in-progress.json"
+
+# Bun preview 也要冻结，避免最终导入时同一个 `data-bun/runner.db` 还有写入者。
+curl -fsS --config "$bun_curl_auth_config" "http://$BUN_ADDR/api/projects" \
+  -o "$CUTOVER_DIR/bun-projects-before.json"
+jq -r '.[] | select(.auto_run == 1) | .id' \
+  "$CUTOVER_DIR/bun-projects-before.json" > "$CUTOVER_DIR/bun-auto-run-projects.txt"
+while read -r project_id; do
+  [ -n "$project_id" ] || continue
+  curl -fsS -X PATCH --config "$bun_curl_auth_config" \
+    -H 'Content-Type: application/json' \
+    -d '{"auto_run":0}' \
+    "http://$BUN_ADDR/api/projects/$project_id" >/dev/null
+done < "$CUTOVER_DIR/bun-auto-run-projects.txt"
+curl -fsS --config "$bun_curl_auth_config" "http://$BUN_ADDR/api/issues?status=in_progress" \
+  -o "$CUTOVER_DIR/bun-in-progress.json"
+jq -e 'length == 0' "$CUTOVER_DIR/bun-in-progress.json"
+
+# 停止 Bun preview 后再写 `data-bun/runner.db`；策略 B 会在导入后重新拉起 preview。
+launchctl print "gui/$(id -u)/$BUN_LABEL" > "$CUTOVER_DIR/bun-launchd-print-before-stop.txt" 2>&1 || true
+launchctl bootout "gui/$(id -u)" "$BUN_PLIST" >/dev/null 2>&1 || true
+
+# 最终备份与迁移演练；该命令写 backup/rehearsal 目录，不写 Go live DB。
+./dist/codex-issue-runner-bun db rehearse-final-migration \
+  --go-db "$GO_DB" \
+  --bun-db "$BUN_DB" \
+  --backup-dir "$CUTOVER_DIR" \
+  --json > "$CUTOVER_DIR/final-rehearsal.json"
+jq -e '.ok == true and .reconciliation.all_match == true' "$CUTOVER_DIR/final-rehearsal.json"
+
+# 最终导入只允许 Go -> Bun，不允许 Bun 写 Go DB。
+test "$BUN_DB" != "$GO_DB"
+./dist/codex-issue-runner-bun db import-go \
+  --source "$GO_DB" \
+  --target "$BUN_DB" \
+  --json > "$CUTOVER_DIR/final-import.json"
+jq -e '.source_readonly == true and .source_mtime_unchanged == true' "$CUTOVER_DIR/final-import.json"
+```
+
+策略 A：Bun 接管 `127.0.0.1:3008`
+
+适用场景：希望所有现有前端/CLI 默认入口继续使用 `3008`。该策略必须先停止 Go stable；不得在 Go 仍监听
+`3008` 时启动 Bun live。现有 `scripts/install-bun-launchd.sh` 是 preview 脚本，带有拒绝 `3008` 的安全护栏；
+策略 A 使用单独可审查的 live plist，不复用 preview install 脚本抢占端口。
+
+```bash
+test "$SWITCHOVER_STRATEGY" = "A"
+
+# 构建并 stage Bun live binary，不覆盖 Go stable binary。
+(cd backend-ts && bun run build:binary)
+export BUN_LIVE_LABEL=com.xiaobei.codex-issue-runner-bun-live
+export BUN_LIVE_PLIST="$HOME/Library/LaunchAgents/$BUN_LIVE_LABEL.plist"
+export BUN_LIVE_BINARY="$(pwd)/data-bun/bin/codex-issue-runner-bun-live"
+mkdir -p "$(dirname "$BUN_LIVE_BINARY")" "$(pwd)/data-bun/logs"
+install -m 0755 dist/codex-issue-runner-bun "$BUN_LIVE_BINARY"
+
+# 停止 Go stable，确认 3008 已释放。
+launchctl print "gui/$(id -u)/$GO_LABEL" > "$CUTOVER_DIR/go-launchd-print-before-stop.txt" 2>&1 || true
+launchctl bootout "gui/$(id -u)" "$GO_PLIST" >/dev/null 2>&1 || true
+for _ in {1..40}; do
+  ! lsof -nP -iTCP:3008 -sTCP:LISTEN >/dev/null 2>&1 && break
+  sleep 0.5
+done
+! lsof -nP -iTCP:3008 -sTCP:LISTEN
+
+# 写入 Bun live launchd plist。注意：DB/token/state-dir 全部仍指向 data-bun。
+python3 - <<'PY'
+import os
+import plistlib
+from pathlib import Path
+
+root = Path.cwd()
+plist = {
+    "Label": os.environ["BUN_LIVE_LABEL"],
+    "Program": os.environ["BUN_LIVE_BINARY"],
+    "ProgramArguments": [
+        os.environ["BUN_LIVE_BINARY"],
+        "serve",
+        "--addr", os.environ["GO_ADDR"],
+        "--state-dir", str(root / os.environ["BUN_STATE_DIR"]),
+        "--db", str(root / os.environ["BUN_DB"]),
+        "--auth-token-file", str(root / os.environ["BUN_TOKEN_FILE"]),
+    ],
+    "EnvironmentVariables": {
+        "HOME": os.environ["HOME"],
+        "PATH": os.environ["PATH"],
+    },
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "StandardOutPath": str(root / "data-bun/logs/live.out.log"),
+    "StandardErrorPath": str(root / "data-bun/logs/live.err.log"),
+}
+with open(os.environ["BUN_LIVE_PLIST"], "wb") as f:
+    plistlib.dump(plist, f)
+PY
+plutil -lint "$BUN_LIVE_PLIST"
+launchctl bootstrap "gui/$(id -u)" "$BUN_LIVE_PLIST"
+launchctl enable "gui/$(id -u)/$BUN_LIVE_LABEL" >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/$(id -u)/$BUN_LIVE_LABEL"
+```
+
+策略 A 验证：
+
+```bash
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+./dist/codex-issue-runner-bun system status \
+  --addr "$GO_ADDR" \
+  --token-file "$BUN_TOKEN_FILE" \
+  --json > "$CUTOVER_DIR/bun-live-status.json"
+jq -e '.service.runtime == "bun" and .db.ok == true and (.auth.enabled == true)' \
+  "$CUTOVER_DIR/bun-live-status.json"
+
+curl -fsS --config "$bun_curl_auth_config" "http://$GO_ADDR/api/issues?projectId=$SMOKE_PROJECT" \
+  -o "$CUTOVER_DIR/bun-live-issues.json"
+jq -e 'type == "array"' "$CUTOVER_DIR/bun-live-issues.json"
+
+smoke_issue_json="$(./dist/codex-issue-runner-bun issue create \
+  --addr "$GO_ADDR" \
+  --token-file "$BUN_TOKEN_FILE" \
+  --project "$SMOKE_PROJECT" \
+  --title "P08 strategy A smoke" \
+  --body "Runbook smoke; mark done after review." \
+  --status triage \
+  --json)"
+smoke_issue_id="$(jq -r '.id' <<<"$smoke_issue_json")"
+./dist/codex-issue-runner-bun issue update \
+  --addr "$GO_ADDR" \
+  --token-file "$BUN_TOKEN_FILE" \
+  --id "$smoke_issue_id" \
+  --status done \
+  --json > "$CUTOVER_DIR/strategy-a-smoke-issue.json"
+
+# 浏览器验证：打开 live UI，Projects / Issues / Issue Detail / Sessions / PI 入口必须可用。
+# 如果 Bun live binary 尚未服务前端静态资源，必须有同源前端代理；否则策略 A 判失败并回滚。
+```
+
+策略 A 失败判定：
+
+- `3008` 在停止 Go 后仍被非预期进程占用。
+- `system status` 不显示 Bun runtime、DB 不可用、auth 不可用，或 API 返回 5xx。
+- `final-import.json` 显示 Go source mtime 改变，或 Bun DB 路径等于 Go DB 路径。
+- frontend 主入口不可用、SSE/issue execution/PI smoke 失败，或需要输出 token 才能诊断。
+
+策略 A rollback：
+
+```bash
+launchctl bootout "gui/$(id -u)" "$BUN_LIVE_PLIST" >/dev/null 2>&1 || true
+rm -f "$BUN_LIVE_PLIST"
+
+# 如 final import 或 Bun live 写入导致 Bun DB 污染，恢复 Bun backup；Go DB 正常情况下不需要恢复。
+cp "$CUTOVER_DIR/bun-runner.db" "$BUN_DB"
+
+launchctl bootstrap "gui/$(id -u)" "$GO_PLIST"
+launchctl enable "gui/$(id -u)/$GO_LABEL" >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/$(id -u)/$GO_LABEL"
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+./dist/codex-issue-runner system status \
+  --addr "$GO_ADDR" \
+  --token-file "$GO_TOKEN_FILE" \
+  --json > "$CUTOVER_DIR/go-rollback-status.json"
+
+while read -r project_id; do
+  [ -n "$project_id" ] || continue
+  curl -fsS -X PATCH --config "$go_curl_auth_config" \
+    -H 'Content-Type: application/json' \
+    -d '{"auto_run":1}' \
+    "http://$GO_ADDR/api/projects/$project_id" >/dev/null
+done < "$CUTOVER_DIR/go-auto-run-projects.txt"
+```
+
+策略 B：前端/CLI 默认指向 Bun preview
+
+适用场景：不动 Go stable live port，让 Go 继续作为 fallback；只把操作者入口和前端代理切到 Bun。该策略不停止
+Go stable，不让 Bun 监听 `3008`。
+
+```bash
+test "$SWITCHOVER_STRATEGY" = "B"
+
+# 重新拉起已冻结的 Bun preview；Go stable 仍保持在 3008。
+launchctl bootstrap "gui/$(id -u)" "$BUN_PLIST" >/dev/null 2>&1 || true
+launchctl enable "gui/$(id -u)/$BUN_LABEL" >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/$(id -u)/$BUN_LABEL"
+
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+curl -fsS "http://$BUN_ADDR/health" >/dev/null
+
+# 前端本地 live 入口使用同源 Vite proxy 指向 Bun，避免跨源 EventSource 无法带 Authorization header。
+VITE_API_TARGET="http://$BUN_ADDR" npm --prefix frontend run build
+VITE_API_TARGET="http://$BUN_ADDR" \
+  npm --prefix frontend run preview -- --host 127.0.0.1 --port 3568 \
+  > "$CUTOVER_DIR/frontend-preview.log" 2>&1 &
+echo $! > "$CUTOVER_DIR/frontend-preview.pid"
+
+# CLI 默认使用 Bun binary 和 Bun token file；不要依赖 PATH 上可能仍指向 Go 的旧 wrapper。
+export CODEX_RUNNER_BUN_ADDR="$BUN_ADDR"
+export CODEX_RUNNER_BUN_AUTH_TOKEN_FILE="$BUN_TOKEN_FILE"
+./dist/codex-issue-runner-bun system status --json > "$CUTOVER_DIR/bun-cli-status.json"
+jq -e '.service.runtime == "bun" and .db.ok == true and (.auth.enabled == true)' \
+  "$CUTOVER_DIR/bun-cli-status.json"
+```
+
+策略 B 验证：
+
+```bash
+# Go fallback 仍可用。
+./dist/codex-issue-runner system status \
+  --addr "$GO_ADDR" \
+  --token-file "$GO_TOKEN_FILE" \
+  --json > "$CUTOVER_DIR/go-fallback-status.json"
+
+# 前端代理入口命中 Bun。
+curl -fsS "http://127.0.0.1:3568/health" >/dev/null
+curl -fsS --config "$bun_curl_auth_config" "http://127.0.0.1:3568/api/system/status" \
+  -o "$CUTOVER_DIR/frontend-proxy-status.json"
+jq -e '.service.runtime == "bun" and .db.ok == true' "$CUTOVER_DIR/frontend-proxy-status.json"
+
+# Bun CLI issue smoke。
+smoke_issue_json="$(./dist/codex-issue-runner-bun issue create \
+  --project "$SMOKE_PROJECT" \
+  --title "P08 strategy B smoke" \
+  --body "Runbook smoke; mark done after review." \
+  --status triage \
+  --json)"
+smoke_issue_id="$(jq -r '.id' <<<"$smoke_issue_json")"
+./dist/codex-issue-runner-bun issue update \
+  --id "$smoke_issue_id" \
+  --status done \
+  --json > "$CUTOVER_DIR/strategy-b-smoke-issue.json"
+
+# 浏览器验证：打开 http://127.0.0.1:3568，Network 中 /api 与 /api/events 必须经同源 proxy 到 Bun。
+```
+
+策略 B 失败判定：
+
+- Go fallback 不可用，或 Bun preview 不可用。
+- 前端 Network 仍命中 Go `3008`，或 `/api/events` 因跨源/auth 失败。
+- Bun CLI 未默认连到 `3018`，或 status/issue smoke 失败。
+- 任何 smoke 需要输出 token 才能继续诊断。
+
+策略 B rollback：
+
+```bash
+if [ -f "$CUTOVER_DIR/frontend-preview.pid" ]; then
+  kill "$(cat "$CUTOVER_DIR/frontend-preview.pid")" >/dev/null 2>&1 || true
+fi
+unset CODEX_RUNNER_BUN_ADDR CODEX_RUNNER_BUN_AUTH_TOKEN_FILE
+
+# 如 Bun DB 被 smoke 污染且需要完全回退，先停止 Bun preview，再恢复 Bun backup；Go stable 未停止也未写入。
+launchctl bootout "gui/$(id -u)" "$BUN_PLIST" >/dev/null 2>&1 || true
+cp "$CUTOVER_DIR/bun-runner.db" "$BUN_DB"
+
+curl -fsS "http://$GO_ADDR/health" >/dev/null
+./dist/codex-issue-runner system status \
+  --addr "$GO_ADDR" \
+  --token-file "$GO_TOKEN_FILE" \
+  --json > "$CUTOVER_DIR/go-after-strategy-b-rollback.json"
+
+while read -r project_id; do
+  [ -n "$project_id" ] || continue
+  curl -fsS -X PATCH --config "$go_curl_auth_config" \
+    -H 'Content-Type: application/json' \
+    -d '{"auto_run":1}' \
+    "http://$GO_ADDR/api/projects/$project_id" >/dev/null
+done < "$CUTOVER_DIR/go-auto-run-projects.txt"
+
+# 如果仍需要保留 Bun preview，可在 rollback 完成并确认 Go 可用后重新执行：
+# ./scripts/deploy-bun-preview.sh
+```
+
+最终成功记录：
+
+- 保存 `final-rehearsal.json`、`final-import.json`、strategy smoke JSON、launchd/status 输出到 `$CUTOVER_DIR`。
+- smoke 全部通过且用户确认恢复自动执行后，把 `$CUTOVER_DIR/go-auto-run-projects.txt` 中原本开启的项目在
+  当前 Bun active addr 上逐个 `PATCH {"auto_run":1}`；恢复前不得让新 issue 自动 claim。
+- 在 release notes 中写明实际采用策略、维护窗口起止时间、rollback 文件位置、已知 can-defer 项。
+- 只有上述验证全部通过，才可把 P08.05 标记为切换成功；否则执行对应 rollback，不得宣称已切换完成。
+
+恢复自动执行命令（仅在 smoke 全部通过且用户确认后）：
+
+```bash
+if [ "$SWITCHOVER_STRATEGY" = "A" ]; then
+  ACTIVE_ADDR="$GO_ADDR"
+else
+  ACTIVE_ADDR="$BUN_ADDR"
+fi
+while read -r project_id; do
+  [ -n "$project_id" ] || continue
+  curl -fsS -X PATCH --config "$bun_curl_auth_config" \
+    -H 'Content-Type: application/json' \
+    -d '{"auto_run":1}' \
+    "http://$ACTIVE_ADDR/api/projects/$project_id" >/dev/null
+done < "$CUTOVER_DIR/go-auto-run-projects.txt"
+```
+
 ## 12. 回滚策略
 
 直到 Phase 8 显式切换完成并稳定运行前，Go 服务不删除、不停用、不迁移端口。
