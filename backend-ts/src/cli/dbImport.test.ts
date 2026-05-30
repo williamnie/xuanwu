@@ -3,6 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { openDatabase } from "../db/database.ts";
 import { runCli } from "./command.ts";
 
 const tempRoots: string[] = [];
@@ -34,14 +35,77 @@ describe("Bun Go DB import command", () => {
     expect(body.tables.projects).toEqual({ source: 1, target: 1 });
     expect(body.tables.issue_templates).toEqual({ source: 1, target: 1 });
     expect(body.tables.issues).toEqual({ source: 2, target: 2 });
+    expect(body.tables.issue_events).toEqual({ source: 1, target: 1 });
+    expect(body.tables.issue_runs).toEqual({ source: 1, target: 1 });
     expect(body.tables.agent_profiles).toEqual({ source: 1, target: 1 });
     expect((await stat(sourcePath)).mtimeMs).toBe(sourceMtimeBefore);
-    expect(targetCounts(targetPath, ["projects", "agent_profiles", "issue_templates", "issues"])).toEqual({
+    expect(targetCounts(targetPath, ["projects", "agent_profiles", "issue_templates", "issues", "issue_events", "issue_runs"])).toEqual({
       agent_profiles: 1,
+      issue_events: 1,
+      issue_runs: 1,
       issue_templates: 1,
       issues: 2,
       projects: 1
     });
+  });
+
+  test("rehearses final migration in a backup dir without changing live DBs", async () => {
+    const root = await tempRoot();
+    const goPath = join(root, "go", "runner.db");
+    const bunPath = join(root, "data-bun", "runner.db");
+    const backupDir = join(root, "backups", "p08-cutover");
+    await createGoFixtureDatabase(goPath);
+    await createBunPreviewDatabase(bunPath);
+    const goMtimeBefore = (await stat(goPath)).mtimeMs;
+    const bunMtimeBefore = (await stat(bunPath)).mtimeMs;
+
+    const { code, stdout, stderr } = await run([
+      "db", "rehearse-final-migration", "--go-db", goPath, "--bun-db", bunPath,
+      "--backup-dir", backupDir, "--json"
+    ]);
+
+    expect(code).toBe(0);
+    expect(stderr).toBe("");
+    const body = JSON.parse(stdout) as RehearsalResult;
+    expect(body.ok).toBe(true);
+    expect(body.backup_dir).toBe(backupDir);
+    expect(body.backups.go_db).toBe(join(backupDir, "go-runner.db"));
+    expect(body.backups.bun_db).toBe(join(backupDir, "bun-runner.db"));
+    expect(body.rehearsal.target_db).toBe(join(backupDir, "rehearsal", "runner.db"));
+    expect(body.restore_commands.go_db).toContain(body.backups.go_db);
+    expect(body.restore_commands.bun_db).toContain(body.backups.bun_db);
+    expect(body.reconciliation.all_match).toBe(true);
+    expect(body.reconciliation.tables.issues).toMatchObject({
+      match: true,
+      source_count: 2,
+      target_count: 2
+    });
+    expect(body.reconciliation.tables.issues.source_hash).toBe(body.reconciliation.tables.issues.target_hash);
+    expect((await stat(goPath)).mtimeMs).toBe(goMtimeBefore);
+    expect((await stat(bunPath)).mtimeMs).toBe(bunMtimeBefore);
+    expect(targetCounts(bunPath, ["issues"])).toEqual({ issues: 1 });
+    expect(targetCounts(body.rehearsal.target_db, ["issues"])).toEqual({ issues: 2 });
+    await stat(body.backups.go_db);
+    await stat(body.backups.bun_db);
+  });
+
+  test("keeps diagnostics directory and returns non-zero when rehearsal backup fails", async () => {
+    const root = await tempRoot();
+    const goPath = join(root, "go", "runner.db");
+    const missingBunPath = join(root, "data-bun", "missing.db");
+    const backupDir = join(root, "backups", "p08-cutover");
+    await createGoFixtureDatabase(goPath);
+
+    const { code, stdout, stderr } = await run([
+      "db", "rehearse-final-migration", "--go-db", goPath,
+      "--bun-db", missingBunPath, "--backup-dir", backupDir, "--json"
+    ]);
+
+    expect(code).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("diagnostics preserved at");
+    expect(stderr).toContain(backupDir);
+    await stat(backupDir);
   });
 });
 
@@ -49,6 +113,24 @@ type ImportResult = {
   source_mtime_unchanged: boolean;
   source_readonly: boolean;
   tables: Record<string, { source: number; target: number }>;
+};
+
+type RehearsalResult = {
+  backups: { bun_db: string; go_db: string };
+  backup_dir: string;
+  ok: boolean;
+  reconciliation: {
+    all_match: boolean;
+    tables: Record<string, {
+      match: boolean;
+      source_count: number;
+      source_hash: string;
+      target_count: number;
+      target_hash: string;
+    }>;
+  };
+  rehearsal: { target_db: string };
+  restore_commands: { bun_db: string; go_db: string };
 };
 
 async function tempRoot(): Promise<string> {
@@ -102,6 +184,15 @@ async function createGoFixtureDatabase(path: string): Promise<void> {
       id integer primary key autoincrement, issue_id integer not null, type text not null,
       payload text not null default '', created_at text not null
     )`);
+    db.run(`create table issue_runs (
+      id text primary key, issue_id integer not null, attempt integer not null, status text not null,
+      provider text not null default 'codex', provider_session_id text not null default '',
+      provider_turn_id text not null default '', codex_thread_id text not null default '',
+      codex_turn_id text not null default '', started_at text not null, ended_at text not null default '',
+      exit_reason text not null default '', error text not null default '',
+      agent_profile_id text not null default '', capability_summary text not null default '',
+      selection_reason text not null default ''
+    )`);
     db.run(`insert into projects (id, name, cwd, default_agent_profile_id, created_at, updated_at)
       values ('demo', 'Demo', '/tmp/demo', 'nightly', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
     db.run(`insert into agent_profiles (id, name, created_at, updated_at)
@@ -112,6 +203,22 @@ async function createGoFixtureDatabase(path: string): Promise<void> {
       values ('demo', 'One', 'first', 'triage', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
     db.run(`insert into issues (project_id, title, description, status, created_at, updated_at)
       values ('demo', 'Two', 'second', 'todo', '2026-01-01T00:00:01Z', '2026-01-01T00:00:01Z')`);
+    db.run(`insert into issue_events (issue_id, type, payload, created_at)
+      values (1, 'issue.comment', '{"body":"ok"}', '2026-01-01T00:00:02Z')`);
+    db.run(`insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
+      values ('run-1', 1, 1, 'done', '2026-01-01T00:00:03Z', '2026-01-01T00:00:04Z')`);
+  } finally {
+    db.close();
+  }
+}
+
+async function createBunPreviewDatabase(path: string): Promise<void> {
+  const db = await openDatabase({ dbPath: path });
+  try {
+    db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
+      values ('bun-demo', 'Bun Demo', '/tmp/bun-demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
+    db.sqlite.run(`insert into issues (project_id, title, description, status, created_at, updated_at)
+      values ('bun-demo', 'Bun Only', 'preview', 'triage', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
   } finally {
     db.close();
   }
