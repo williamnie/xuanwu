@@ -3,11 +3,13 @@ import { listAgentSessions, type AgentSession } from "../db/repositories/agentSe
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { scanProjectFindings, type ProjectFinding } from "./projectFindings.ts";
 
 export type ProjectStatusSnapshot = {
   active_holds: ProjectHoldSnapshot[];
   compact_summary: string;
   cwd: string;
+  findings: ProjectFinding[];
   id: string;
   issue_status_counts: Record<string, number>;
   latest_issues: Array<{ id: number; status: string; title: string; updated_at: string }>;
@@ -57,10 +59,12 @@ export function createProjectStatusSnapshot(db: RunnerDatabase, projectID: strin
   const runs = listProjectRuns(db, project.id);
   const sessions = listAgentSessions(db, { projectId: project.id });
   const holds = listProjectHolds(db, project.id);
+  const findings = scanProjectFindings(db, project.id);
   const recentErrors = recentProjectErrors(db, project.id, issues, runs);
   const snapshot = {
     active_holds: holds,
     cwd: summarizePath(project.cwd),
+    findings,
     id: project.id,
     issue_status_counts: countStatuses(issues),
     latest_issues: latestIssues(issues),
@@ -254,6 +258,7 @@ function compactSummary(snapshot: Omit<ProjectStatusSnapshot, "compact_summary">
     `runs${runCounts}`,
     `sessions${sessionCounts}`,
     `holds=${snapshot.active_holds.length}`,
+    `findings=${snapshot.findings.length}`,
     `recent_errors=${snapshot.recent_errors.length}`
   ].join("; ");
 }

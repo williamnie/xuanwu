@@ -75,6 +75,7 @@ describe("PI project status snapshot", () => {
       const json = JSON.stringify(snapshot);
 
       expect(snapshot.issue_status_counts).toEqual({ failed: 1 });
+      expect(snapshot.findings[0]).toMatchObject({ issue_id: failed, reason: "issue_failed" });
       expect(snapshot.recent_errors.map((error) => error.source)).toEqual([
         "event",
         "run",
@@ -117,7 +118,9 @@ describe("PI project status snapshot", () => {
 
       expect(snapshot.active_holds).toHaveLength(1);
       expect(snapshot.active_holds[0]).toMatchObject({ reason: "dirty_worktree" });
+      expect(snapshot.findings[0]).toMatchObject({ issue_id: 0, reason: "project_hold:dirty_worktree" });
       expect(snapshot.compact_summary).toContain("holds=1");
+      expect(snapshot.compact_summary).toContain("findings=1");
       expect(json).not.toContain("hold-secret");
       expect(json).not.toContain("/Users/secret");
     } finally {
