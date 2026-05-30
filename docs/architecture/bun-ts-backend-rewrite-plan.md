@@ -1099,6 +1099,48 @@ P00.05 结论（2026-05-28）：`backend-ts/src/spikes/piSmoke.ts` 已通过 `bu
 - PI Chat 可用。
 - rollback path 明确。
 
+#### P08.01 Preview parity readiness gate（P08.05 前置）
+
+P08.05 正式切换前必须在维护窗口按下面 checklist 留存结果。`must-pass` 任一未达标都阻止
+P08.05；`can-defer` 只允许在有 follow-up issue、owner 和 rollback 影响说明时延后。所有命令不得
+输出 token/secrets；API 调用优先用 `--token-file` 或临时 curl config，日志摘要必须 redacted。
+
+准备变量（不打印 token）：
+
+```bash
+export GO_ADDR=127.0.0.1:3008
+export GO_DB=data/runner.db
+export GO_TOKEN_FILE=data/auth_token
+export BUN_ADDR=127.0.0.1:3018
+export BUN_STATE_DIR=data-bun
+export BUN_DB=data-bun/runner.db
+export BUN_TOKEN_FILE=data-bun/auth_token
+export SMOKE_PROJECT=<已导入 Bun preview 的项目 id>
+
+umask 077
+curl_auth_config="$(mktemp)"
+trap 'rm -f "$curl_auth_config"' EXIT
+printf 'header = "Authorization: Bearer %s"\n' "$(cat "$BUN_TOKEN_FILE")" > "$curl_auth_config"
+```
+
+| Gate | Level | 验收项 | 命令或验证方法 |
+| --- | --- | --- | --- |
+| Isolation | must-pass | Go stable 继续在 `3008` 可用，Bun preview 只在 `3018` 可用；Bun 不抢占 Go port。 | `curl -fsS "http://$GO_ADDR/health" >/dev/null`；`curl -fsS "http://$BUN_ADDR/health" >/dev/null`；`./scripts/status-launchd.sh`；`./scripts/status-bun-preview.sh`。 |
+| Isolation | must-pass | Bun preview 只写 `data-bun/runner.db`，不直接写 Go stable 的 `data/runner.db`。 | `test "$BUN_DB" != "$GO_DB"`；`./dist/codex-issue-runner-bun db import-go --source "$GO_DB" --target "$BUN_DB" --json >/tmp/bun-import.json && jq -e '.source_readonly == true and .source_mtime_unchanged == true' /tmp/bun-import.json`。 |
+| Health / status | must-pass | `/health`、`/api/system/status`、runtime doctor 都成功，且 status 显示 DB、auth、Codex command/capabilities 可用。 | `./dist/codex-issue-runner-bun system status --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --json >/tmp/bun-status.json && jq -e '.service.alive == true and .db.ok == true and (.config.auth_enabled // .auth.enabled) == true and .codex.command_ok == true' /tmp/bun-status.json`；`./dist/codex-issue-runner-bun system doctor --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --json >/tmp/bun-doctor.json`。 |
+| Issues API | must-pass | imported projects/issues 可读；issue create/read/update/comment/events/runs/retry/cancel 行为与 Go stable 关键路径一致。 | `curl -fsS --config "$curl_auth_config" "http://$BUN_ADDR/api/issues?projectId=$SMOKE_PROJECT" -o /tmp/bun-issues.json && jq -e 'type == "array"' /tmp/bun-issues.json`；创建一次 disposable issue：`issue_json="$(./dist/codex-issue-runner-bun issue create --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --project "$SMOKE_PROJECT" --title "P08 parity smoke" --body "disposable" --status triage --json)"`，再用 `issue_id="$(jq -r '.id' <<<"$issue_json")"` 执行 `issue status/update/logs/retry/cancel` 并确认最终状态可读。 |
+| Sessions API | must-pass | Sessions 页面依赖的 list/create/read/resume/interrupt API 在 Bun preview 可用，provider session id 与 turn id 能持久化到 `agent_sessions`。 | `curl -fsS --config "$curl_auth_config" "http://$BUN_ADDR/api/sessions?limit=5" >/tmp/bun-sessions.json`；用前端或 API 创建一次短 session（prompt: `Reply ok only.`），随后 `GET /api/sessions/:id`、`POST /api/sessions/:id/messages`、必要时 `POST /api/sessions/:id/interrupt`，并用 `sqlite3 "$BUN_DB" 'select session_key,status from agent_sessions order by updated_at desc limit 5;'` 核对记录存在。 |
+| PI | must-pass | PI agents/settings/conversations/actions/memory API 可用；PI Chat 能完成一次最小对话；PI run-once 失败时必须是可解释的配置错误而非 5xx/崩溃。 | `curl -fsS --config "$curl_auth_config" "http://$BUN_ADDR/api/pi/agents" -o /tmp/bun-pi-agents.json && jq -e 'type == "array"' /tmp/bun-pi-agents.json`；`curl -fsS --config "$curl_auth_config" "http://$BUN_ADDR/api/projects/$SMOKE_PROJECT/pi-settings" -o /tmp/bun-pi-settings.json && jq -e 'has("project_id")' /tmp/bun-pi-settings.json`；创建/恢复一个 PI conversation 后 `POST /api/pi/conversations/:id/messages`，确认响应含 `conversation_id`、`pi_session_id` 或明确配置错误。 |
+| Issue execution | must-pass | Bun preview 能 claim 一个 `todo` issue、启动 Codex executor、写 `issue_runs`、消费事件，并通过显式 `issue update --status done/failed` gate 收口。 | 创建 disposable execution issue 并 enqueue：`./dist/codex-issue-runner-bun issue create --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --project "$SMOKE_PROJECT" --title "P08 execution smoke" --body "Run: test -f docs/architecture/bun-ts-backend-rewrite-plan.md. Then update this issue done if it passes." --status todo --run --json`；轮询 `issue status`，最终必须为 `done`，并用 `GET /api/issues/:id/runs` 确认 latest run 有 provider session/turn 和 `exit_reason=explicit_status_update`。 |
+| Frontend | must-pass | React frontend 指向 Bun preview 时，Projects、Issues、Issue Detail、Sessions、Settings runtime health、PI 入口均可加载；无 mock/fallback 数据冒充成功。 | `VITE_API_BASE_URL="http://$BUN_ADDR" npm --prefix frontend run build`；用浏览器或 Playwright 打开预览构建/开发页，逐页确认 Network 请求命中 `3018`，关键按钮（issue create/update/retry/cancel、session send、PI chat）返回 2xx 或受控错误。 |
+| CLI | must-pass | Bun binary 的核心 CLI 可替代 Go 日常闭环：`system status/doctor/logs`、`project create`、`issue create/status/update/logs/retry/cancel`，并支持 `--addr`、`--token-file`、`--json`。 | `./dist/codex-issue-runner-bun system logs --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --lines 80 >/tmp/bun-logs.txt`，确认 `/tmp/bun-logs.txt` 不含实际 token；复用 Issues API disposable issue 验证 `issue` 子命令。 |
+| Rollback | must-pass | 正式切换前已有 Go DB/Bun DB 备份、Go binary/plist 可恢复，且 preview 停止不会影响 Go stable。 | `mkdir -p data/backups/p08-cutover && cp "$GO_DB" data/backups/p08-cutover/go-runner.db && cp "$BUN_DB" data/backups/p08-cutover/bun-runner.db`；`test -x dist/codex-issue-runner`；`./scripts/uninstall-bun-launchd.sh --dry-run`；dry-run 后再次 `curl -fsS "http://$GO_ADDR/health" >/dev/null`。 |
+| Observability | must-pass | preview logs、system logs、doctor 输出可用于故障定位，且 redaction 生效。 | `./scripts/deploy-bun-preview.sh --dry-run`；`./dist/codex-issue-runner-bun system logs --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --lines 120 >/tmp/bun-logs.txt`；`rg -i 'token' /tmp/bun-logs.txt; rg -i 'secret' /tmp/bun-logs.txt; rg -i 'authorization' /tmp/bun-logs.txt` 只能出现 redacted 文本或无结果。 |
+| Extended frontend parity | can-defer | cron/nightly/notifications/usage/upload 等非切换核心页面若未完整迁移，不阻止 P08.05，但必须在 release notes 中隐藏入口或标注 preview limitation。 | 建 follow-up issue，列出受影响页面、API 路径、用户影响和回滚影响；P08.05 前确认主导航不会把用户引到假成功页面。 |
+| Advanced PI automation | can-defer | PI auto-manage loop、action 自动 approve/execute、memory ranking 的高级体验可延后；PI Chat 与受控 action API 不能延后。 | 建 follow-up issue；`GET /api/pi/actions`、`GET /api/pi/memory` 至少可读，run-once 不得导致服务崩溃或污染 Go DB。 |
+| CLI long tail | can-defer | 与正式切换无关的长尾 CLI 子命令可延后；executor 回写、issue/status/system/project 核心 CLI 不能延后。 | 在 CLI parity follow-up 中列出缺口；P08.05 release notes 写明替代 API/UI 操作。 |
+| One-command rollback | can-defer | 可以先用人工 rollback runbook，不强制 P08.05 前完成一键 rollback 脚本。 | runbook 必须包含 Go launchd 恢复、Go DB backup 恢复、Bun service 停止、health/status smoke，并在维护窗口演练一次 dry-run。 |
+
 ## 12. 回滚策略
 
 直到 Phase 8 显式切换完成并稳定运行前，Go 服务不删除、不停用、不迁移端口。
