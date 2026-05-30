@@ -23,6 +23,7 @@ import {
 import type { Router } from "./router.ts";
 
 type PiProjectControlContext = { bus?: EventBus; database: RunnerDatabase };
+type ProjectPiCycleInput = { maxActions?: number; projectId: string };
 type ProjectPiControlAction = "pause" | "resume";
 
 const PI_SESSION_PROVIDER = "pi-sdk";
@@ -36,7 +37,7 @@ export function registerPiProjectControlRoutes(router: Router, context: PiProjec
 }
 
 async function runOnceResponse(context: PiProjectControlContext, request: Request): Promise<Response> {
-  return writeResponse(async () => runProjectPiCycle(context, projectID(request)), 201);
+  return writeResponse(async () => runProjectPiCycle(context, { projectId: projectID(request) }), 201);
 }
 
 function projectPiSettingsActionResponse(
@@ -47,9 +48,10 @@ function projectPiSettingsActionResponse(
   return json(persistProjectPiAutoManage(context.database, projectID(request), action));
 }
 
-async function runProjectPiCycle(context: PiProjectControlContext, projectID: string) {
-  const project = requireProject(context.database, projectID);
+export async function runProjectPiCycle(context: PiProjectControlContext, input: ProjectPiCycleInput) {
+  const project = requireProject(context.database, input.projectId);
   const settings = readProjectPiSettings(context.database, project.id);
+  const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
   const agent = requireRunnableAgent(context.database, settings.pi_agent_id, "run manager cycle");
   if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "PI manager cycle is already running");
 
@@ -73,13 +75,13 @@ async function runProjectPiCycle(context: PiProjectControlContext, projectID: st
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activeProjectPiRuns.set(project.id, runtime.session);
   try {
-    await runtime.session.prompt(managerCyclePrompt(project, settings), {
+    await runtime.session.prompt(managerCyclePrompt(project, cycleSettings), {
       expandPromptTemplates: false,
       source: "rpc"
     });
     await ensurePiSessionFile(runtime.session);
     persistPiSessionIndex(context.database, conversation, project);
-    return managerCycleResult(conversation, runtime.session, settings);
+    return managerCycleResult(conversation, runtime.session, cycleSettings);
   } finally {
     if (activeProjectPiRuns.get(project.id) === runtime.session) activeProjectPiRuns.delete(project.id);
     unsubscribe();

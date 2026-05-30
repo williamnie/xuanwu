@@ -2,8 +2,10 @@ import { runCli } from "./cli/command.ts";
 import { commandMode } from "./mainMode.ts";
 import { loadConfig } from "./config/env.ts";
 import { openDatabase } from "./db/database.ts";
+import { runProjectPiCycle } from "./http/piProjectControlApi.ts";
 import { startServer } from "./http/server.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
+import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./runner/projectLoop.ts";
 import { recoverInProgressIssues } from "./runner/recovery.ts";
 import { redactSensitiveText } from "./util/redact.ts";
@@ -47,6 +49,13 @@ async function startAutoRunLoops(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
   for (const project of projects) runAutoProject(database, project.id, provider);
+  createPiAutoManageScheduler({
+    database,
+    onError: (error) => {
+      console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
+    },
+    runProjectCycle: ({ maxActions, projectId }) => runProjectPiCycle({ database }, { maxActions, projectId })
+  }).start();
 }
 
 function runAutoProject(
