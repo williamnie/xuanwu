@@ -6,6 +6,8 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
+import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput } from "../providers/types.ts";
@@ -28,6 +30,21 @@ class FakeExecutionProvider implements ExecutorProvider {
     return {
       runId: "fake-run",
       session: { provider: this.id, sessionId: "fake-session", turnId: "fake-turn" }
+    };
+  }
+}
+
+class ClosingClaudeProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution"] as const;
+
+  constructor(private readonly db: RunnerDatabase) {}
+
+  async run(input: ProviderRunInput) {
+    updateIssue(this.db, input.issueId, { status: "done", error: "" });
+    return {
+      runId: "claude-run",
+      session: { provider: this.id, sessionId: "claude-session", turnId: "claude-turn" }
     };
   }
 }
@@ -150,6 +167,61 @@ describe("executor provider runtime seam", () => {
       db.close();
     }
   });
+
+  test("keeps a Claude run separate from stale Codex thread fields when status is closed during execution", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const codexRun = createIssueRun(db, issueId);
+      updateIssueRuntime(db, issueId, {
+        provider: "codex",
+        provider_session_id: "codex-thread",
+        provider_turn_id: "codex-turn",
+        metadata: { run_id: "codex-run" }
+      });
+      closeRun(db, codexRun.id);
+
+      await runIssueWithProvider(new ClosingClaudeProvider(db), {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      });
+
+      expect(listIssueRuns(db, issueId)).toMatchObject([
+        {
+          attempt: 1,
+          provider: "codex",
+          provider_session_id: "codex-thread",
+          provider_turn_id: "codex-turn",
+          codex_thread_id: "codex-thread",
+          codex_turn_id: "codex-turn",
+          runtime_metadata_json: "{\"run_id\":\"codex-run\"}"
+        },
+        {
+          attempt: 2,
+          status: "done",
+          provider: "claude",
+          provider_session_id: "claude-session",
+          provider_turn_id: "claude-turn",
+          codex_thread_id: "",
+          codex_turn_id: "",
+          exit_reason: "explicit_status_update",
+          runtime_metadata_json: "{\"run_id\":\"claude-run\"}"
+        }
+      ]);
+      expect(getAgentSession(db, "claude:claude-session")).toMatchObject({
+        provider: "claude",
+        provider_session_id: "claude-session",
+        issue_id: issueId,
+        raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\"}"
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {
@@ -168,4 +240,8 @@ function insertIssue(db: RunnerDatabase, projectId: string): number {
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function closeRun(db: RunnerDatabase, id: string): void {
+  db.sqlite.run("update issue_runs set ended_at=?, status=? where id=?", ["2026-01-01T00:00:00Z", "done", id]);
 }

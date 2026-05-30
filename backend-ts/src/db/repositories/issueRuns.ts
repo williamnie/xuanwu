@@ -3,8 +3,10 @@ import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 
 export type IssueRunRuntimeInput = {
-  metadata?: unknown; provider?: string; provider_session_id?: string; provider_turn_id?: string;
+  issue_run_id?: string; metadata?: unknown; provider?: string; provider_session_id?: string; provider_turn_id?: string;
 };
+
+type RuntimeTarget = { args: Array<number | string>; sql: string };
 
 export function createIssueRun(db: RunnerDatabase, issueID: number): IssueRun {
   const attempt = nextAttempt(db, issueID);
@@ -32,19 +34,45 @@ export function updateIssueRuntime(db: RunnerDatabase, issueID: number, input: I
 }
 
 export function updateOpenIssueRunRuntime(db: RunnerDatabase, issueID: number, input: IssueRunRuntimeInput): void {
+  updateTargetIssueRunRuntime(db, issueID, input);
+}
+
+function updateTargetIssueRunRuntime(db: RunnerDatabase, issueID: number, input: IssueRunRuntimeInput): void {
   const provider = cleanString(input.provider) || "codex";
   const sessionID = cleanString(input.provider_session_id);
   const turnID = cleanString(input.provider_turn_id);
   const metadata = JSON.stringify(input.metadata ?? {});
+  const target = runtimeTarget(issueID, input);
   db.sqlite.run(`update issue_runs set provider=?,
     provider_session_id=case when ?<>'' then ? else provider_session_id end,
     provider_turn_id=case when ?<>'' then ? else provider_turn_id end,
-    codex_thread_id=case when ?='codex' and ?<>'' then ? else codex_thread_id end,
-    codex_turn_id=case when ?='codex' and ?<>'' then ? else codex_turn_id end,
+    codex_thread_id=case when ?='codex' and ?<>'' then ? when ?<>'codex' then '' else codex_thread_id end,
+    codex_turn_id=case when ?='codex' and ?<>'' then ? when ?<>'codex' then '' else codex_turn_id end,
     runtime_metadata_json=case when ?<>'{}' then ? else runtime_metadata_json end
-    where id=(select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1)`,
+    where ${target.sql}`,
     [provider, sessionID, sessionID, turnID, turnID, provider, sessionID, sessionID,
-      provider, turnID, turnID, metadata, metadata, issueID]);
+      provider, provider, turnID, turnID, provider, metadata, metadata, ...target.args]);
+}
+
+function runtimeTarget(issueID: number, input: IssueRunRuntimeInput): RuntimeTarget {
+  const id = cleanString(input.issue_run_id);
+  if (id !== "") return { args: [id, issueID], sql: "id=? and issue_id=?" };
+  const provider = cleanString(input.provider);
+  const sessionID = cleanString(input.provider_session_id);
+  if (provider !== "" && provider !== "codex" && sessionID !== "") {
+    return {
+      args: [issueID, issueID, provider, sessionID],
+      sql: `id=coalesce(
+        (select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1),
+        (select id from issue_runs where issue_id=? and provider=? and provider_session_id=?
+          order by attempt desc limit 1)
+      )`
+    };
+  }
+  return {
+    args: [issueID],
+    sql: "id=(select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1)"
+  };
 }
 
 function nextAttempt(db: RunnerDatabase, issueID: number): number {

@@ -35,6 +35,7 @@ export function workflowCopyText(workflow) {
   lines.push(`Verification: ${workflow.verificationEvidence?.summary || '未找到 verification evidence'}`);
   if (workflow.latestRun) {
     lines.push(`Latest run: attempt #${workflow.latestRun.attempt || '?'} ${workflow.latestRun.status || ''}`.trim());
+    lines.push(`Provider run: ${workflow.latestRun.metadata?.run_id || 'none'}`);
     lines.push(`Session: ${workflow.latestRun.sessionRef || workflow.latestRun.sessionId || 'none'}`);
     lines.push(`Turn: ${workflow.latestRun.turnId || 'none'}`);
   }
@@ -65,8 +66,10 @@ function LatestRunEvidence({ run, navigateTo, onCopy }) {
     React.createElement('div', null,
       React.createElement('span', null, 'Latest run'),
       React.createElement('strong', null, `Attempt #${run.attempt || '?'} · ${run.status || 'unknown'}`),
+      React.createElement('code', null, `Provider ${run.providerLabel || run.provider || 'unknown'}`),
       React.createElement('code', null, run.sessionRef || run.sessionId || 'no-session'),
       React.createElement('code', null, run.turnId ? `Turn ${run.turnId}` : 'no-turn'),
+      run.metadata?.run_id ? React.createElement('code', null, `Run ${run.metadata.run_id}`) : null,
       run.exitText ? React.createElement('p', null, run.exitText) : null,
     ),
     React.createElement('div', { className: 'issue-workflow-run-actions' },
@@ -85,6 +88,7 @@ function latestRunCopyText(run) {
     `Attempt: ${run.attempt || '?'}`,
     `Status: ${run.status || 'unknown'}`,
     `Provider: ${run.providerLabel || run.provider || 'unknown'}`,
+    `Provider run: ${run.metadata?.run_id || 'none'}`,
     `Session: ${run.sessionRef || run.sessionId || 'none'}`,
     `Turn: ${run.turnId || 'none'}`,
     `Exit: ${run.exitText || run.exit_reason || 'none'}`,

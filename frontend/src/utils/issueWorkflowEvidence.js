@@ -5,6 +5,7 @@ import {
 } from './issueRefinement.js';
 import {
   issueRunExitText,
+  issueRunMetadata,
   issueRunSessionId,
   issueRunSessionRef,
   issueRunTurnId,
@@ -141,6 +142,7 @@ function normalizeLatestRun(issue, runs) {
     turnId: issueRunTurnId(issue, run),
     sessionRef: issueRunSessionRef(issue, run),
     exitText: issueRunExitText(run),
+    metadata: issueRunMetadata(run),
   };
 }
 

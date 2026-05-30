@@ -18,6 +18,7 @@ test('renders compact workflow evidence and latest run actions', () => {
       sessionId: 'thread-abc',
       turnId: 'turn-xyz',
       exitText: 'explicit_status_update',
+      metadata: { run_id: 'codex:thread-abc:turn-xyz' },
     },
     steps: [
       { id: 'intake', label: 'Intake', state: 'done', evidence: 'raw description' },
@@ -31,9 +32,38 @@ test('renders compact workflow evidence and latest run actions', () => {
   assert.match(html, /needs evidence/);
   assert.match(html, /未找到 verification evidence/);
   assert.match(html, /Attempt #2 · done/);
+  assert.match(html, /Provider Codex/);
+  assert.match(html, /Run codex:thread-abc:turn-xyz/);
   assert.match(html, /codex:thread-abc/);
   assert.match(html, /打开 Session/);
   assert.match(html, /复制 Evidence/);
+});
+
+test('does not render Session open action for Claude execution-only latest run', () => {
+  const html = renderToStaticMarkup(React.createElement(IssueWorkflowEvidencePanel, {
+    workflow: {
+      nextAction: '证据已可用于人工验收。',
+      explicitFinalStatus: 'done',
+      verificationEvidence: { summary: 'bun test passed' },
+      latestRun: {
+        attempt: 1,
+        status: 'done',
+        providerLabel: 'Claude',
+        provider: 'claude',
+        sessionRef: '',
+        sessionId: 'claude-session',
+        turnId: 'claude-turn',
+        metadata: { run_id: 'cli:claude:184' },
+      },
+      steps: [{ id: 'close', label: 'Close', state: 'done', evidence: 'Explicit final status: done' }],
+    },
+    navigateTo: () => {},
+  }));
+
+  assert.match(html, /Provider Claude/);
+  assert.match(html, /Run cli:claude:184/);
+  assert.match(html, /claude-session/);
+  assert.doesNotMatch(html, /打开 Session/);
 });
 
 test('workflow copy text associates final status with verification and latest run', () => {
@@ -41,12 +71,13 @@ test('workflow copy text associates final status with verification and latest ru
     nextAction: '补充测试摘要',
     explicitFinalStatus: 'done',
     verificationEvidence: { summary: '未找到 verification evidence' },
-    latestRun: { attempt: 1, status: 'done', sessionRef: 'codex:s1', turnId: 't1' },
+    latestRun: { attempt: 1, status: 'done', sessionRef: 'codex:s1', turnId: 't1', metadata: { run_id: 'run-1' } },
     steps: [{ label: 'Close', state: 'warning', evidence: 'Explicit final status: done' }],
   });
 
   assert.match(text, /Final status: done/);
   assert.match(text, /Verification: 未找到 verification evidence/);
   assert.match(text, /Latest run: attempt #1 done/);
+  assert.match(text, /Provider run: run-1/);
   assert.match(text, /Next: 补充测试摘要/);
 });

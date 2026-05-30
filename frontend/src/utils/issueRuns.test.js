@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   issueFailureReason,
+  issueRunMetadata,
   issueRunExitText,
   issueRunSessionId,
   issueRunSessionRef,
@@ -27,6 +28,24 @@ test('latest issue run helpers prefer run runtime identity', () => {
   assert.equal(issueRunSessionId(issue, run), 'thread-run');
   assert.equal(issueRunTurnId(issue, run), 'turn-run');
   assert.equal(issueRunSessionRef(issue, run), 'codex:thread-run');
+});
+
+test('Claude execution-only runs expose provider metadata without opening a Codex Session ref', () => {
+  const issue = {
+    codex_thread_id: 'stale-codex-thread',
+    codex_turn_id: 'stale-codex-turn',
+  };
+  const run = {
+    provider: 'claude',
+    provider_session_id: 'claude-session',
+    provider_turn_id: 'claude-turn',
+    runtime_metadata_json: '{"run_id":"cli:claude:184"}',
+  };
+
+  assert.equal(issueRunSessionId(issue, run), 'claude-session');
+  assert.equal(issueRunTurnId(issue, run), 'claude-turn');
+  assert.equal(issueRunSessionRef(issue, run), '');
+  assert.deepEqual(issueRunMetadata(run), { run_id: 'cli:claude:184' });
 });
 
 test('issue failure summary falls back through issue and run fields', () => {

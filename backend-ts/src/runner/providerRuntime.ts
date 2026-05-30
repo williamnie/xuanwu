@@ -36,8 +36,9 @@ export async function runIssueWithProvider(
     projectId: input.projectId,
     metadata: { cwd: input.cwd }
   });
-  const result = await provider.run(providerInput(input, providerEventSink(input)));
-  persistRuntimeResult(input, providerID, result);
+  const activeRunID = openIssueRunID(input.database, input.issueId);
+  const result = await provider.run(providerInput(input, providerEventSink(input, activeRunID)));
+  persistRuntimeResult(input, providerID, result, activeRunID);
   input.onRunComplete?.({
     provider: providerID,
     issueId: input.issueId,
@@ -48,10 +49,10 @@ export async function runIssueWithProvider(
   return result;
 }
 
-function providerEventSink(input: RunnerIssueExecutionInput): ProviderRunInput["onEvent"] {
+function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string): ProviderRunInput["onEvent"] {
   return (event) => {
     input.onLog?.(event);
-    persistRuntimeEvent(input, event);
+    persistRuntimeEvent(input, event, activeRunID);
     input.onRuntimeEvent?.(event);
   };
 }
@@ -70,21 +71,23 @@ function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInp
   };
 }
 
-function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string, result: ProviderRunResult): void {
+function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string, result: ProviderRunResult, activeRunID: string): void {
   if (!input.database || !result.session) return;
   persistRuntime({
     db: input.database, input, provider, session: result.session,
-    status: "completed", metadata: { run_id: result.runId }
+    status: "completed", metadata: { run_id: result.runId },
+    issueRunId: activeRunID || openIssueRunID(input.database, input.issueId)
   });
 }
 
-function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEvent): void {
+function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEvent, activeRunID: string): void {
   if (!input.database) return;
   recordIssueLogEvent(input.database, input.issueId, event);
   if (!event.session) return;
   persistRuntime({
     db: input.database, input, provider: event.session.provider, session: event.session,
-    status: event.status || "running", metadata: { source: "provider_event" }
+    status: event.status || "running", metadata: { source: "provider_event" },
+    issueRunId: activeRunID
   });
 }
 
@@ -95,10 +98,12 @@ type PersistRuntimeInput = {
   provider: string;
   session: SessionRef;
   status: string;
+  issueRunId: string;
 };
 
 function persistRuntime(args: PersistRuntimeInput): void {
   updateIssueRuntime(args.db, args.input.issueId, {
+    issue_run_id: args.issueRunId,
     provider: args.provider,
     provider_session_id: args.session.sessionId,
     provider_turn_id: args.session.turnId,
@@ -113,4 +118,11 @@ function persistRuntime(args: PersistRuntimeInput): void {
     status: args.status,
     raw_ref: { provider_turn_id: args.session.turnId ?? "", ...args.metadata }
   });
+}
+
+function openIssueRunID(db: RunnerDatabase | undefined, issueID: number): string {
+  if (!db) return "";
+  return db.sqlite.query<{ id: string }, [number]>(
+    "select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1"
+  ).get(issueID)?.id ?? "";
 }

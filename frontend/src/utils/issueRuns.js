@@ -1,4 +1,5 @@
 const DEFAULT_PROVIDER = 'codex';
+const SESSION_CAPABLE_PROVIDERS = new Set(['codex']);
 
 export function latestIssueRun(issue) {
   return issue?.latest_run || null;
@@ -28,6 +29,7 @@ export function issueRunTurnId(issue, run) {
 }
 
 export function issueRunSessionRef(issue, run) {
+  if (!providerSupportsSessionOpen(run?.provider || DEFAULT_PROVIDER)) return '';
   const sessionId = issueRunSessionId(issue, run);
   if (!sessionId) return '';
   return providerSessionKey(run?.provider || DEFAULT_PROVIDER, sessionId);
@@ -39,6 +41,10 @@ export function issueFailureReason(issue, run, maxLength = 180) {
 
 export function issueRunExitText(run, maxLength = 120) {
   return summarize(firstNonEmpty(run?.error, run?.exit_reason), maxLength);
+}
+
+export function issueRunMetadata(run) {
+  return parseMetadata(run?.runtime_metadata_json);
 }
 
 export function shortId(value, prefixLength = 8, suffixLength = 4) {
@@ -59,6 +65,22 @@ function providerSessionKey(provider, sessionId) {
   if (!normalizedSessionId) return '';
   if (normalizedSessionId.startsWith(`${normalizedProvider}:`)) return normalizedSessionId;
   return `${normalizedProvider}:${normalizedSessionId}`;
+}
+
+function providerSupportsSessionOpen(provider) {
+  return SESSION_CAPABLE_PROVIDERS.has(String(provider || DEFAULT_PROVIDER).trim().toLowerCase());
+}
+
+function parseMetadata(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  const text = String(value || '').trim();
+  if (!text) return {};
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 function firstNonEmpty(...values) {
