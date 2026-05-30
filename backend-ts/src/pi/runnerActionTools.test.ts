@@ -92,6 +92,10 @@ describe("PI runner action tools", () => {
         "issue.update_refinement",
         "session.steer"
       ]);
+      const steerAction = listPiActions(fixture.db).find((action) => action.action_type === "session.steer");
+      expect(JSON.parse(steerAction?.payload_json ?? "{}")).toMatchObject({
+        progress_context: expect.stringContaining("state=active")
+      });
     } finally {
       await fixture.close();
     }
@@ -108,13 +112,16 @@ describe("PI runner action tools", () => {
       expect(actions.readIssue({ id: issueID })).toMatchObject({ id: issueID, title: "Read me" });
       expect(projectIDs(actions.listProjects({}))).toContain(fixture.project.id);
       expect(sessionKeys(actions.listSessions({}))).toEqual(["codex:thread-1"]);
+      expect(actions.readSessionSummary({ session_key: "codex:thread-1" })).toMatchObject({
+        progress: expect.objectContaining({ progress_state: "active" })
+      });
 
       const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });
 
       expect(comment).toMatchObject({ type: "issue.comment", issue_id: issueID });
       const completedActions = listPiActions(fixture.db, { status: "completed" });
       expect(completedActions.map((action) => action.action_type).sort()).toEqual([
-        "issue.comment", "issue.list", "issue.read", "project.list", "session.list"
+        "issue.comment", "issue.list", "issue.read", "project.list", "session.list", "session.read_summary"
       ]);
       expect(completedActions).toContainEqual(expect.objectContaining({
         action_type: "issue.comment",

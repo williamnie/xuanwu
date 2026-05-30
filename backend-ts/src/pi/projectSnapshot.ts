@@ -4,6 +4,7 @@ import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { scanProjectFindings, type ProjectFinding } from "./projectFindings.ts";
+import { listProjectSessionProgress, type SessionProgressSummary } from "./sessionObserver.ts";
 
 export type ProjectStatusSnapshot = {
   active_holds: ProjectHoldSnapshot[];
@@ -19,6 +20,7 @@ export type ProjectStatusSnapshot = {
   recent_runs: ProjectRunSnapshot[];
   recent_sessions: ProjectSessionSnapshot[];
   run_status_counts: Record<string, number>;
+  session_progress: SessionProgressSummary[];
   session_status_counts: Record<string, number>;
   total_issues: number;
 };
@@ -58,6 +60,7 @@ export function createProjectStatusSnapshot(db: RunnerDatabase, projectID: strin
   const issues = listIssues(db, { projectId: project.id });
   const runs = listProjectRuns(db, project.id);
   const sessions = listAgentSessions(db, { projectId: project.id });
+  const sessionProgress = listProjectSessionProgress(db, project.id);
   const holds = listProjectHolds(db, project.id);
   const findings = scanProjectFindings(db, project.id);
   const recentErrors = recentProjectErrors(db, project.id, issues, runs);
@@ -74,6 +77,7 @@ export function createProjectStatusSnapshot(db: RunnerDatabase, projectID: strin
     recent_runs: recentRuns(runs),
     recent_sessions: recentSessions(sessions),
     run_status_counts: countStatuses(runs),
+    session_progress: sessionProgress,
     session_status_counts: countStatuses(sessions),
     total_issues: issues.length
   };

@@ -7,6 +7,7 @@ import type { EventBus } from "../events/bus.ts";
 import { createPendingPiAction, executeSafePiAction } from "./actionEngine.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import { serializeRefinement, type RefinementField } from "./runnerActionRefinement.ts";
+import { observeSessionProgress } from "./sessionObserver.ts";
 
 export type PiRunnerActionLayer = {
   commentIssue(input: IssueCommentInput): unknown;
@@ -164,10 +165,12 @@ function issueCreateProposal(
 
 function sessionSteerProposal(db: RunnerDatabase, input: SessionSteerProposalInput): ProposalInput {
   const session = readSessionSummary(db, input.session_key);
+  const progress = observeSessionProgress(db, session.session_key);
   return {
     actionType: "session.steer",
     payload: {
       prompt: input.prompt,
+      progress_context: progress.summary,
       provider: session.provider,
       provider_session_id: session.provider_session_id,
       session_key: session.session_key
@@ -230,6 +233,7 @@ function readSessionSummary(db: RunnerDatabase, sessionKey: string) {
     agent_role: session.agent_role,
     issue_id: session.issue_id,
     preview: session.preview,
+    progress: observeSessionProgress(db, key),
     project_id: session.project_id,
     provider: session.provider,
     provider_session_id: session.provider_session_id,

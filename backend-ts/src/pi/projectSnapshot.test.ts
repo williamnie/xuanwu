@@ -39,6 +39,7 @@ describe("PI project status snapshot", () => {
       expect(snapshot.latest_issues.map((issue) => issue.id)).toEqual([done, todo]);
       expect(snapshot.recent_runs[0]).toMatchObject({ issue_id: done, run_id: "run-done", status: "done" });
       expect(snapshot.recent_sessions[0]).toMatchObject({ session_key: "codex:thread-1", status: "running" });
+      expect(snapshot.session_progress[0]).toMatchObject({ progress_state: "active", session_key: "codex:thread-1" });
       expect(snapshot.compact_summary).toContain("issues total=2");
       expect(JSON.stringify(snapshot)).not.toContain("/Users/secret");
     } finally {
