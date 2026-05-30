@@ -54,15 +54,20 @@ print_system_status() {
     curl -fsS --config "$curl_config" "$url/api/system/status" -o "$status_file" || {
       rm -f "$curl_config" "$status_file"
       echo "[bun-status] system status not reachable"
-      return
+      return 1
     }
     rm -f "$curl_config"
   elif ! curl -fsS "$url/api/system/status" -o "$status_file"; then
     rm -f "$status_file"
     echo "[bun-status] system status not reachable"
-    return
+    return 1
   fi
-  python3 - "$status_file" <<'PY' || echo "[bun-status] system status parse failed"
+  if ! command -v python3 >/dev/null 2>&1; then
+    rm -f "$status_file"
+    echo "[bun-status] system status parse skipped: python3 not found"
+    return 1
+  fi
+  if ! python3 - "$status_file" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
     status = json.load(f)
@@ -73,6 +78,11 @@ print(f"[bun-status] backend version: {service.get('version') or build.get('vers
 print(f"[bun-status] runtime stamp: {build.get('stamp') or 'missing'}")
 print(f"[bun-status] db ok: {(status.get('db') or {}).get('ok')}")
 PY
+  then
+    rm -f "$status_file"
+    echo "[bun-status] system status parse failed"
+    return 1
+  fi
   rm -f "$status_file"
 }
 

@@ -57,9 +57,11 @@ fail_unsafe() {
 }
 
 require_safe_config() {
-  local db_path staged_binary
+  local build_binary db_path staged_binary
   [ "$LABEL" != "com.xiaobei.codex-issue-runner" ] || fail_unsafe "label must not use Go stable label"
   [ "${ADDR##*:}" != "3008" ] || fail_unsafe "addr must not use Go stable port 3008"
+  build_binary="$(normalize_path "$BINARY_PATH")"
+  [ "$build_binary" != "$(normalize_path "$ROOT_DIR/dist/codex-issue-runner")" ] || fail_unsafe "build binary must not overwrite Go stable binary"
   db_path="$(normalize_path "$DB_PATH")"
   [ "$db_path" != "$(normalize_path "$ROOT_DIR/data/runner.db")" ] || fail_unsafe "db must not point at Go stable data/ database"
   [ "$db_path" != "$(normalize_path "$ROOT_DIR/data/app.db")" ] || fail_unsafe "db must not point at Go stable data/ database"
@@ -100,8 +102,6 @@ write_plist() {
     <string>--auth-token-file</string>
     <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
   </array>
-  <key>WorkingDirectory</key>
-  <string>$(xml_escape "$ROOT_DIR")</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>HOME</key>
