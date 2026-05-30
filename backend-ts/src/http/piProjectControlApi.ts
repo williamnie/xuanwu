@@ -13,6 +13,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
+import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
 import { HttpError, json } from "./errors.ts";
 import {
   createPiRuntimeSession,
@@ -54,6 +55,7 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
   const agent = requireRunnableAgent(context.database, settings.pi_agent_id, "run manager cycle");
   if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "PI manager cycle is already running");
+  const snapshot = createProjectStatusSnapshot(context.database, project.id);
 
   const conversationID = crypto.randomUUID();
   const runtime = await createPiRuntimeSession(context.database, {
@@ -75,7 +77,7 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activeProjectPiRuns.set(project.id, runtime.session);
   try {
-    await runtime.session.prompt(managerCyclePrompt(project, cycleSettings), {
+    await runtime.session.prompt(managerCyclePrompt(project, cycleSettings, snapshot), {
       expandPromptTemplates: false,
       source: "rpc"
     });
@@ -143,12 +145,17 @@ function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation,
   });
 }
 
-function managerCyclePrompt(project: Project, settings: ProjectPiSettings): string {
+function managerCyclePrompt(
+  project: Project,
+  settings: ProjectPiSettings,
+  snapshot: ReturnType<typeof createProjectStatusSnapshot>
+): string {
   return [
     "Run exactly one PI manager cycle for this codex-issue-runner project.",
     `Project id: ${project.id}`,
     `Project name: ${project.name}`,
-    "Inspect project.status and related issue/session state if needed.",
+    "Project status snapshot:",
+    JSON.stringify(snapshot, null, 2),
     "Create PI action proposals for concrete next steps; execute only safe read/comment tools.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."

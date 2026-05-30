@@ -28,9 +28,14 @@ describe("Bun project PI control API", () => {
   test("run-once starts one PI manager cycle for a project", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-faux-api", provider: "pi-control-faux" });
+    let promptContext = "";
     try {
-      faux.setResponses([fauxAssistantMessage("cycle done")]);
+      faux.setResponses([(context) => {
+        promptContext = JSON.stringify(context);
+        return fauxAssistantMessage("cycle done");
+      }]);
       insertProject(database, "demo");
+      insertIssue(database, { projectId: "demo", status: "failed", title: "Failed issue" });
       insertFauxAgent(database);
       writeFauxModelsConfig(database);
       const router = createDefaultRouter({ database });
@@ -46,6 +51,10 @@ describe("Bun project PI control API", () => {
       });
       expect(listPiConversations(database, { projectId: "demo" })).toHaveLength(1);
       expect(faux.state.callCount).toBe(1);
+      expect(promptContext).toContain("Project status snapshot");
+      expect(promptContext).toContain("Failed issue");
+      const promptText = JSON.parse(promptContext).messages[0].content[0].text;
+      expect(promptText).toContain('"failed": 1');
     } finally {
       faux.unregister();
       database.close();
@@ -129,6 +138,13 @@ function insertProject(db: RunnerDatabase, id: string): void {
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', 1,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertIssue(db: RunnerDatabase, issue: { projectId: string; status: string; title: string }): void {
+  db.sqlite.run(
+    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
+    [issue.projectId, issue.title, issue.status, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
