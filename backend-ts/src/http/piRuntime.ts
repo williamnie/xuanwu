@@ -23,18 +23,27 @@ export type RuntimeSessionInput = {
 const PI_RUNTIME_ROOT = "pi-runtime";
 const PI_AGENT_DIR = "agent";
 const PI_SESSIONS_DIR = "sessions";
+const PI_SMOKE_FAUX_PROVIDER = "pi-smoke-faux";
+const PI_SMOKE_FAUX_API = "pi-smoke-faux-api";
+const PI_SMOKE_FAUX_MODEL = "faux-1";
+const PI_SMOKE_FAUX_RESPONSE = "pi-smoke-response-ok";
+
+type RuntimeCleanup = () => void;
 
 export async function createOrRestorePiRuntime(
   db: RunnerDatabase,
   input: RuntimeSessionInput
 ): Promise<PiRuntimeResult> {
   const runtime = await createPiRuntimeSession(db, input);
-  await ensurePiSessionFile(runtime.session);
-  runtime.session.dispose();
-  return {
-    piSessionId: runtime.session.sessionId,
-    sessionFile: runtime.session.sessionFile ?? ""
-  };
+  try {
+    await ensurePiSessionFile(runtime.session);
+    return {
+      piSessionId: runtime.session.sessionId,
+      sessionFile: runtime.session.sessionFile ?? ""
+    };
+  } finally {
+    runtime.dispose();
+  }
 }
 
 export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeSessionInput) {
@@ -48,24 +57,30 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   const sessionManager = input.sessionFile
     ? sdk.pi.SessionManager.open(input.sessionFile, paths.sessionDir, input.project.cwd)
     : sdk.pi.SessionManager.create(input.project.cwd, paths.sessionDir, { id: input.conversationID });
-  const { session } = await sdk.pi.createAgentSession({
-    cwd: input.project.cwd,
-    agentDir: paths.agentDir,
-    authStorage,
-    model: resolvePiModel(modelRegistry, input.agent),
-    modelRegistry,
-    resourceLoader: emptyResourceLoader(sdk),
-    sessionManager,
-    settingsManager: sdk.pi.SettingsManager.create(input.project.cwd, paths.agentDir),
-    thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
-    tools: [...PI_ALLOWED_TOOLS],
-    customTools: createPiProjectTools(db, input.project, {
-      bus: input.bus,
-      conversationID: input.conversationID
-    })
-  });
-  if (input.agent.name !== "") session.setSessionName(input.agent.name);
-  return { session };
+  const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, input.agent);
+  try {
+    const { session } = await sdk.pi.createAgentSession({
+      cwd: input.project.cwd,
+      agentDir: paths.agentDir,
+      authStorage,
+      model: resolvePiModel(modelRegistry, input.agent),
+      modelRegistry,
+      resourceLoader: emptyResourceLoader(sdk),
+      sessionManager,
+      settingsManager: sdk.pi.SettingsManager.create(input.project.cwd, paths.agentDir),
+      thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
+      tools: [...PI_ALLOWED_TOOLS],
+      customTools: createPiProjectTools(db, input.project, {
+        bus: input.bus,
+        conversationID: input.conversationID
+      })
+    });
+    if (input.agent.name !== "") session.setSessionName(input.agent.name);
+    return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider) };
+  } catch (error) {
+    cleanupRuntimeProvider();
+    throw error;
+  }
 }
 
 export function publishPiSessionEvent(
@@ -116,6 +131,33 @@ function emptyResourceLoader(sdk: SmokeRuntime) {
     reload: async () => {}
   };
 }
+
+function ensureRuntimeProvider(sdk: SmokeRuntime, agent: PiAgent): RuntimeCleanup {
+  if (!isLocalSmokeFauxAgent(agent)) return noopRuntimeCleanup;
+  if (sdk.ai.getApiProvider(PI_SMOKE_FAUX_API)) return noopRuntimeCleanup;
+
+  const provider = sdk.ai.registerFauxProvider({
+    api: PI_SMOKE_FAUX_API,
+    provider: PI_SMOKE_FAUX_PROVIDER,
+    tokensPerSecond: 0
+  });
+  provider.setResponses([sdk.ai.fauxAssistantMessage(PI_SMOKE_FAUX_RESPONSE)]);
+  return () => provider.unregister();
+}
+
+function isLocalSmokeFauxAgent(agent: PiAgent): boolean {
+  return agent.model_provider === PI_SMOKE_FAUX_PROVIDER && agent.model_id === PI_SMOKE_FAUX_MODEL;
+}
+
+function disposePiRuntimeSession(session: AgentSession, cleanupRuntimeProvider: RuntimeCleanup): void {
+  try {
+    session.dispose();
+  } finally {
+    cleanupRuntimeProvider();
+  }
+}
+
+function noopRuntimeCleanup(): void {}
 
 function piAppEvent(conversation: PiConversation, event: AgentSessionEvent): AppEvent {
   return {

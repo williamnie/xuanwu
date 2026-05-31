@@ -113,7 +113,7 @@ async function runToolProbeSession(db: RunnerDatabase, projectCwd: string) {
   });
   await runtime.session.prompt("Check project tools", { expandPromptTemplates: false, source: "rpc" });
   unsubscribe();
-  runtime.session.dispose();
+  runtime.dispose();
   return { probes, runtime };
 }
 

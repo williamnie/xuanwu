@@ -133,7 +133,7 @@ async function sendPiConversationMessage(
   } finally {
     if (activePiRuns.get(conversation.id) === runtime.session) activePiRuns.delete(conversation.id);
     unsubscribe();
-    runtime.session.dispose();
+    runtime.dispose();
   }
 }
 

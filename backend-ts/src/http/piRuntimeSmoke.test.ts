@@ -26,6 +26,35 @@ afterEach(async () => {
 });
 
 describe("Bun PI runtime v1 smoke", () => {
+  test("auto-registers local faux provider for preview smoke agent", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+      const router = createDefaultRouter({ bus: new EventBus(), database });
+
+      const created = await post(router, "/api/pi/conversations", {
+        id: "conv-auto-faux",
+        project_id: "demo",
+        pi_agent_id: "pi-faux"
+      });
+      const message = await post(router, "/api/pi/conversations/conv-auto-faux/messages", {
+        prompt: "Reply ok only"
+      });
+
+      expect(created.status).toBe(201);
+      expect(message.status).toBe(201);
+      expect(await message.json()).toMatchObject({
+        conversation_id: "conv-auto-faux",
+        status: "completed",
+        text: "pi-smoke-response-ok"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("runs conversation to action/memory/SSE without promoting memory candidates", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-smoke-faux-api", provider: "pi-smoke-faux" });

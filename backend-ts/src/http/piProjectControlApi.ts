@@ -94,7 +94,7 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   } finally {
     if (activeProjectPiRuns.get(project.id) === runtime.session) activeProjectPiRuns.delete(project.id);
     unsubscribe();
-    runtime.session.dispose();
+    runtime.dispose();
   }
 }
 
