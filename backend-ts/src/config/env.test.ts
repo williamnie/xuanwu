@@ -17,6 +17,18 @@ describe("Bun backend config", () => {
     });
   });
 
+  test("expands bare Codex command path to app-server stdio command", () => {
+    expect(buildConfig({ codexCommand: "/opt/bin/codex" }).providers.codex).toMatchObject({
+      command: "/opt/bin/codex app-server --listen stdio://"
+    });
+  });
+
+  test("keeps explicit Codex app-server command unchanged", () => {
+    expect(buildConfig({ codexCommand: "/opt/bin/codex --profile runner app-server --listen stdio://" }).providers.codex).toMatchObject({
+      command: "/opt/bin/codex --profile runner app-server --listen stdio://"
+    });
+  });
+
   test("derives db and auth token paths from overridden state dir", () => {
     expect(buildConfig({ stateDir: "/tmp/codex-bun" })).toMatchObject({
       addr: "127.0.0.1:3018",

@@ -145,13 +145,14 @@ const DEFAULT_CLAUDE_COMMAND = "claude";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
 
 function buildCodexRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
-  return buildProviderRuntimeConfig({
+  const config = buildProviderRuntimeConfig({
     command: overrides.codexCommand,
     cwd: overrides.codexCwd,
     defaultCommand: DEFAULT_CODEX_COMMAND,
     env: overrides.codexEnv,
     timeoutMs: overrides.codexTimeoutMs
   });
+  return { ...config, command: normalizeCodexCommand(config.command) };
 }
 
 function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
@@ -180,6 +181,22 @@ function buildProviderRuntimeConfig(input: {
     env: parseEnvOverrides(cleanValue(input.env) ?? ""),
     timeoutMs: parsePositiveInteger(input.timeoutMs, DEFAULT_PROVIDER_TIMEOUT_MS)
   };
+}
+
+function normalizeCodexCommand(command: string): string {
+  const parts = splitCommand(command);
+  return parts.includes("app-server") ? command : `${command} app-server --listen stdio://`;
+}
+
+function splitCommand(command: string): string[] {
+  return command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map(unquoteArg) ?? [];
+}
+
+function unquoteArg(value: string): string {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function parseEnvOverrides(value: string): Record<string, string> {
