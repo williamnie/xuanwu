@@ -9,6 +9,7 @@ import { json } from "./errors.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
+import { staticWebResponse } from "./staticWeb.ts";
 import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
 
 type ListenAddress = { hostname: string; port: number };
@@ -46,7 +47,7 @@ export async function startServer(
   return Bun.serve({
     hostname: address.hostname,
     port: address.port,
-    fetch: createRequestHandler(router, authToken)
+    fetch: createRequestHandler(router, authToken, { webDir: config.webDir })
   });
 }
 
@@ -71,13 +72,37 @@ export function registerSystemStatusRoute(
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }
 
-export function createRequestHandler(router: Router, authToken: string): (request: Request) => Promise<Response> {
+type RequestHandlerOptions = { webDir?: string };
+
+export function createRequestHandler(
+  router: Router,
+  authToken: string,
+  options: RequestHandlerOptions = {}
+): (request: Request) => Promise<Response> {
   return async (request) => {
     const corsResponse = applyLocalCors(request);
     if (corsResponse) return corsResponse;
-    const response = requireBearerAuth(request, authToken) ?? await router.handle(request);
+    const response = requireBearerAuth(request, authToken) ?? await routeOrStatic(router, request, options);
     return withCors(request, response);
   };
+}
+
+async function routeOrStatic(router: Router, request: Request, options: RequestHandlerOptions): Promise<Response> {
+  const response = await router.handle(request);
+  if (!shouldTryStaticWeb(request, response, options.webDir)) return response;
+  return await staticWebResponse(request, options.webDir ?? "") ?? response;
+}
+
+function shouldTryStaticWeb(request: Request, response: Response, webDir: string | undefined): boolean {
+  return response.status === 404 && clean(webDir) !== "" && !isApiPath(request);
+}
+
+function isApiPath(request: Request): boolean {
+  return new URL(request.url).pathname.startsWith("/api/");
+}
+
+function clean(value: string | undefined): string {
+  return value?.trim() ?? "";
 }
 
 export function parseListenAddress(addr: string): ListenAddress {

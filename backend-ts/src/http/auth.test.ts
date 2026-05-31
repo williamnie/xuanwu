@@ -77,6 +77,18 @@ describe("Bun HTTP bearer auth", () => {
     expect(denied.status).toBe(403);
   });
 
+  test("accepts same-origin cookie auth for browser SSE compatibility", async () => {
+    const secret = "fixture-cookie-secret";
+    const handle = createRequestHandler(protectedRouter(), secret);
+
+    const response = await handle(new Request(`${BASE_URL}/api/protected`, {
+      headers: { cookie: `codex_runner_token=${encodeURIComponent(secret)}` }
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await readBody(response)).toBe(JSON.stringify({ ok: true }));
+  });
+
   test("leaves API routes open when auth token is not configured", async () => {
     const handle = createRequestHandler(protectedRouter(), "");
 

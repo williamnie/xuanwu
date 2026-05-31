@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { getProject, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
+import { lastSessionProject } from "../db/repositories/preferences.ts";
 import { interruptSession } from "../runner/interrupt.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId, SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
@@ -20,7 +21,7 @@ export function registerSessionRoutes(router: Router, context: SessionApiContext
     const body = await parseObjectBody(request);
     return asyncResponse(() => createSession(context, body), 201);
   });
-  router.get("/api/sessions/preferences", () => json({ last_project_id: "" }));
+  router.get("/api/sessions/preferences", () => json({ last_project_id: lastSessionProject(context.database) }));
   router.get("/api/sessions/:id", (request) => asyncResponse(() => readSession(context, sessionID(request))));
   router.post("/api/sessions/:id/messages", async (request) => {
     const body = await parseObjectBody(request);

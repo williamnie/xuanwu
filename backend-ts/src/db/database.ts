@@ -4,7 +4,8 @@ import { dirname, join, normalize, resolve } from "node:path";
 import { buildRunnerPaths } from "../config/paths.ts";
 import { runMigrations } from "./migrations.ts";
 
-const GO_STABLE_DB_PATH = join("data", "runner.db");
+const GO_STABLE_DB_PATHS = [join("data", "runner.db"), join("data", "app.db")];
+const ALLOW_GO_STABLE_DB_ENV = "CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB";
 
 type OpenDatabaseOptions = {
   dbPath?: string;
@@ -29,7 +30,7 @@ export type RunnerDatabase = {
 
 export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<RunnerDatabase> {
   const target = resolveDatabaseTarget(options);
-  if (!target.readonly && isGoStableDatabasePath(target.path)) throw goStableDatabaseError();
+  if (!target.readonly && isGoStableDatabasePath(target.path) && !allowsGoStableDatabase()) throw goStableDatabaseError();
   if (!target.readonly) await createRuntimeDirectories(target.stateDir, target.path);
 
   const sqlite = new SQLiteDatabase(target.path, {
@@ -65,14 +66,22 @@ async function createRuntimeDirectories(stateDir: string, dbPath: string): Promi
 }
 
 function isGoStableDatabasePath(path: string): boolean {
-  const suffix = normalizedSlashes(GO_STABLE_DB_PATH);
   const normalized = normalizedSlashes(normalize(path));
   const absolute = normalizedSlashes(normalize(resolve(path)));
-  return normalized === suffix || normalized.endsWith(`/${suffix}`) || absolute.endsWith(`/${suffix}`);
+  return GO_STABLE_DB_PATHS.some((item) => pathMatchesSuffix(normalized, item) || pathMatchesSuffix(absolute, item));
+}
+
+function pathMatchesSuffix(path: string, suffixPath: string): boolean {
+  const suffix = normalizedSlashes(suffixPath);
+  return path === suffix || path.endsWith(`/${suffix}`);
+}
+
+function allowsGoStableDatabase(): boolean {
+  return ["1", "true", "yes"].includes((Bun.env[ALLOW_GO_STABLE_DB_ENV] ?? "").trim().toLowerCase());
 }
 
 function goStableDatabaseError(): Error {
-  return new Error("refusing to open Go stable database for Bun runtime");
+  return new Error(`refusing to open Go stable database for Bun runtime without ${ALLOW_GO_STABLE_DB_ENV}=1`);
 }
 
 function cleanPath(value: string | undefined): string | undefined {

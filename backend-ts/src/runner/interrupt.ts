@@ -1,7 +1,7 @@
 import { cancelIssue } from "../db/repositories/issueActions.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
-import { getIssue, listIssues, type Issue } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositories/issues.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
@@ -27,7 +27,7 @@ export async function cancelIssueWithInterrupt(
   issueID: number,
   runtime: InterruptRuntime = {}
 ): Promise<Issue> {
-  const issue = mustGetIssue(db, issueID);
+  const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
   if (shouldInterruptIssue(issue)) {
     await interruptLinkedIssue(db, issue, ISSUE_CANCEL_REASON, runtime);
   }
@@ -120,9 +120,16 @@ async function interruptWithTimeout(
 }
 
 function linkedRunningIssue(db: RunnerDatabase, threadID: string): Issue | null {
-  return listIssues(db, { status: "in_progress" }).find((issue) => {
-    return issue.codex_thread_id === threadID && issue.codex_turn_id !== "";
+  const issue = listIssues(db, { status: "in_progress" }).find((item) => {
+    return item.codex_thread_id === threadID && item.codex_turn_id !== "";
   }) ?? null;
+  return issue ? issueWithLatestRun(db, issue) : null;
+}
+
+function issueWithLatestRun(db: RunnerDatabase, issue: Issue): Issue {
+  if (issue.latest_run) return issue;
+  const latest_run = listIssueRuns(db, issue.id).at(-1);
+  return latest_run ? { ...issue, latest_run } : issue;
 }
 
 function latestTurnID(db: RunnerDatabase, rawSessionID: string): string {

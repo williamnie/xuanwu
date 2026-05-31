@@ -106,7 +106,7 @@ const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
   created_at, updated_at`;
 
 
-const LATEST_ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
+const ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
   ir.provider_session_id, ir.provider_turn_id, ir.codex_thread_id, ir.codex_turn_id,
   ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.agent_profile_id,
   ir.capability_summary, ir.selection_reason, ir.runtime_metadata_json`;
@@ -123,13 +123,13 @@ export function getIssue(db: RunnerDatabase, id: number): Issue | null {
     select ${ISSUE_COLUMNS} from issues where id = ?
   `).get(issueID);
   if (!row) return null;
-  return attachLatestRuns(db, [mapIssueRow(row)])[0] ?? null;
+  return mapIssueRow(row);
 }
 
 export function listIssueRuns(db: RunnerDatabase, id: number): IssueRun[] {
   const issueID = positiveInteger(id, "issue id");
   return db.sqlite.query<IssueRunRow, [number]>(`
-    select ${LATEST_ISSUE_RUN_COLUMNS} from issue_runs ir
+    select ${ISSUE_RUN_COLUMNS} from issue_runs ir
     where ir.issue_id = ? order by ir.attempt asc
   `).all(issueID).map(mapIssueRunRow);
 }
@@ -168,7 +168,7 @@ function attachLatestRuns(db: RunnerDatabase, issues: Issue[]): Issue[] {
 function loadLatestRuns(db: RunnerDatabase, issueIDs: number[]): Map<number, IssueRun> {
   const placeholders = issueIDs.map(() => "?").join(", ");
   const rows = db.sqlite.query<IssueRunRow, number[]>(`
-    select ${LATEST_ISSUE_RUN_COLUMNS} from issue_runs ir
+    select ${ISSUE_RUN_COLUMNS} from issue_runs ir
     join (
       select issue_id, max(attempt) as attempt from issue_runs
       where issue_id in (${placeholders}) group by issue_id
@@ -185,7 +185,7 @@ function mapIssueRow(row: IssueRow): Issue {
     id: positiveInteger(row.id, "issues.id"),
     project_id: requiredString(row.project_id, "issues.project_id"),
     title: requiredString(row.title, "issues.title"),
-    description: optionalString(row.description),
+    description: rawString(row.description),
     status: requiredString(row.status, "issues.status"),
     priority: integerValue(row.priority, "issues.priority"),
     template_id: optionalString(row.template_id),
@@ -216,7 +216,6 @@ function mapIssueRunRow(row: IssueRunRow): IssueRun {
     provider: optionalString(row.provider, "codex"),
     provider_session_id: optionalString(row.provider_session_id),
     provider_turn_id: optionalString(row.provider_turn_id),
-    runtime_metadata_json: optionalString(row.runtime_metadata_json, "{}"),
     codex_thread_id: optionalString(row.codex_thread_id),
     codex_turn_id: optionalString(row.codex_turn_id),
     started_at: requiredString(row.started_at, "issue_runs.started_at"),
@@ -225,7 +224,8 @@ function mapIssueRunRow(row: IssueRunRow): IssueRun {
     error: optionalString(row.error),
     agent_profile_id: optionalString(row.agent_profile_id),
     capability_summary: optionalString(row.capability_summary),
-    selection_reason: optionalString(row.selection_reason)
+    selection_reason: optionalString(row.selection_reason),
+    runtime_metadata_json: optionalString(row.runtime_metadata_json, "{}")
   };
 }
 
@@ -264,5 +264,11 @@ function positiveInteger(value: unknown, label: string): number {
 
 function integerValue(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
+  return value;
+}
+
+function rawString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value !== "string") throw new Error(`expected string row value`);
   return value;
 }

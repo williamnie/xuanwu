@@ -18,7 +18,7 @@ export async function loadAuthToken(config: AuthConfig): Promise<string> {
 export function requireBearerAuth(request: Request, authToken: string): Response | undefined {
   const configured = clean(authToken);
   if (configured === "" || !isApiRequest(request)) return undefined;
-  if (constantTimeEqual(requestBearerToken(request), configured)) return undefined;
+  if (constantTimeEqual(requestToken(request), configured)) return undefined;
   return jsonError(401, "unauthorized");
 }
 
@@ -35,10 +35,32 @@ function isApiRequest(request: Request): boolean {
   return new URL(request.url).pathname.startsWith("/api/");
 }
 
+function requestToken(request: Request): string {
+  return requestBearerToken(request) || requestCookieToken(request);
+}
+
 function requestBearerToken(request: Request): string {
   const header = clean(request.headers.get("authorization") ?? "");
   if (!header.toLowerCase().startsWith("bearer ")) return "";
   return clean(header.slice("bearer ".length));
+}
+
+function requestCookieToken(request: Request): string {
+  const cookie = request.headers.get("cookie") ?? "";
+  for (const part of cookie.split(";")) {
+    const [rawName, ...rawValue] = part.split("=");
+    if (clean(rawName) !== "codex_runner_token") continue;
+    return decodeCookieToken(rawValue.join("="));
+  }
+  return "";
+}
+
+function decodeCookieToken(value: string): string {
+  try {
+    return clean(decodeURIComponent(value));
+  } catch {
+    return clean(value);
+  }
 }
 
 function clean(value: string | undefined): string {

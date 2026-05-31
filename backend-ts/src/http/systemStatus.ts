@@ -82,7 +82,8 @@ function configStatus(context: SystemStatusContext): Record<string, unknown> {
     db_path: summarizeRuntimePath(context.database.path, context.config.stateDir),
     auth_enabled: context.authEnabled,
     origin_policy: "local_only",
-    web_mode: "api_only"
+    web_mode: context.config.webDir.trim() === "" ? "api_only" : "external",
+    web_dir: summarizeRuntimePath(context.config.webDir, context.config.stateDir)
   };
 }
 

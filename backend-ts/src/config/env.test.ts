@@ -9,6 +9,7 @@ describe("Bun backend config", () => {
       dbPath: "data-bun/runner.db",
       authToken: "",
       authTokenFile: "data-bun/auth_token",
+      webDir: "",
       providers: {
         codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
         claude: { command: "claude", cwd: "", env: {}, model: "", timeoutMs: 1_800_000 }
@@ -22,7 +23,8 @@ describe("Bun backend config", () => {
       stateDir: "/tmp/codex-bun",
       dbPath: "/tmp/codex-bun/runner.db",
       authToken: "",
-      authTokenFile: "/tmp/codex-bun/auth_token"
+      authTokenFile: "/tmp/codex-bun/auth_token",
+      webDir: ""
     });
   });
 
@@ -33,6 +35,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.dbPath]: "/tmp/runner-bun.db",
       [ENV_KEYS.authToken]: "env-token",
       [ENV_KEYS.authTokenFile]: "/tmp/token-bun",
+      [ENV_KEYS.webDir]: "/tmp/frontend-dist",
       [ENV_KEYS.codexCommand]: "/opt/bin/codex app-server --listen stdio://",
       [ENV_KEYS.codexCwd]: "/tmp/project",
       [ENV_KEYS.codexEnv]: "CODEX_HOME=/tmp/codex, SAFE_VALUE=ok, CODEX_API_KEY=secret",
@@ -50,6 +53,7 @@ describe("Bun backend config", () => {
       dbPath: "/tmp/runner-bun.db",
       authToken: "env-token",
       authTokenFile: "/tmp/token-bun",
+      webDir: "/tmp/frontend-dist",
       providers: {
         codex: {
           command: "/opt/bin/codex app-server --listen stdio://",
@@ -77,6 +81,7 @@ describe("Bun backend config", () => {
       "--db", "/tmp/cli.db",
       "--auth-token", "cli-token",
       "--auth-token-file", "/tmp/cli-token",
+      "--web-dir", "/tmp/cli-web",
       "--codex-cmd", "cli-codex app-server --listen stdio://",
       "--codex-cwd=/tmp/cli-project",
       "--codex-env", "CODEX_HOME=/tmp/cli-codex",
@@ -94,6 +99,7 @@ describe("Bun backend config", () => {
       dbPath: "/tmp/cli.db",
       authToken: "cli-token",
       authTokenFile: "/tmp/cli-token",
+      webDir: "/tmp/cli-web",
       providers: {
         codex: {
           command: "cli-codex app-server --listen stdio://",

@@ -161,7 +161,7 @@ describe("Bun projects/issues read API", () => {
 
       expect(templates.status).toBe(200);
       expect(await templates.json()).toEqual([
-        { id: "default", name: "Default", content: "{{issue.description}}", is_default: 1 }
+        { id: "default", name: "Default", content: "{{issue.description}}", is_default: 1, created_at: "", updated_at: "" }
       ]);
       expect(cron.status).toBe(200);
       expect(await cron.json()).toEqual([]);

@@ -7,6 +7,7 @@ export const ENV_KEYS = {
   dbPath: "CODEX_RUNNER_BUN_DB",
   authToken: "CODEX_RUNNER_BUN_AUTH_TOKEN",
   authTokenFile: "CODEX_RUNNER_BUN_AUTH_TOKEN_FILE",
+  webDir: "CODEX_RUNNER_BUN_WEB_DIR",
   codexCommand: "CODEX_RUNNER_BUN_CODEX_CMD",
   codexCwd: "CODEX_RUNNER_BUN_CODEX_CWD",
   codexEnv: "CODEX_RUNNER_BUN_CODEX_ENV",
@@ -36,6 +37,7 @@ export type RunnerConfig = {
   dbPath: string;
   authToken: string;
   authTokenFile: string;
+  webDir: string;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
 };
 
@@ -45,6 +47,7 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--db": "dbPath",
   "--auth-token": "authToken",
   "--auth-token-file": "authTokenFile",
+  "--web-dir": "webDir",
   "--codex-cmd": "codexCommand",
   "--codex-cwd": "codexCwd",
   "--codex-env": "codexEnv",
@@ -67,6 +70,7 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
   return {
     addr: cleanValue(overrides.addr) ?? DEFAULT_ADDR,
     authToken: cleanValue(overrides.authToken) ?? "",
+    webDir: cleanValue(overrides.webDir) ?? "",
     ...paths,
     providers: {
       codex: buildCodexRuntimeConfig(overrides),
@@ -82,6 +86,7 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     dbPath: cleanValue(env[ENV_KEYS.dbPath]),
     authToken: cleanValue(env[ENV_KEYS.authToken]),
     authTokenFile: cleanValue(env[ENV_KEYS.authTokenFile]),
+    webDir: cleanValue(env[ENV_KEYS.webDir]),
     codexCommand: cleanValue(env[ENV_KEYS.codexCommand]),
     codexCwd: cleanValue(env[ENV_KEYS.codexCwd]),
     codexEnv: cleanValue(env[ENV_KEYS.codexEnv]),

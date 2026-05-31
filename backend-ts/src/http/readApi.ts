@@ -2,9 +2,13 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
+import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
+import { listCronTasks } from "../db/repositories/cronTasks.ts";
+import { listNightlyBatches } from "../db/repositories/nightlyBatches.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { getIssue, listIssueRuns, listIssues } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { createProject, getProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -21,15 +25,9 @@ type ReadApiContext = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
-const DEFAULT_ISSUE_TEMPLATE = {
-  id: "default",
-  name: "Default",
-  content: "{{issue.description}}",
-  is_default: 1
-};
 
 export function registerReadApiRoutes(router: Router, context: ReadApiContext): void {
-  registerIssuesPageAuxRoutes(router);
+  registerIssuesPageAuxRoutes(router, context);
   registerProjectRoutes(router, context);
   registerIssueCollectionRoutes(router, context);
   registerIssueItemRoutes(router, context);
@@ -51,7 +49,7 @@ function registerProjectRoutes(router: Router, context: ReadApiContext): void {
 }
 
 function registerIssueCollectionRoutes(router: Router, context: ReadApiContext): void {
-  router.get("/api/issues", (request) => json(listIssues(context.database, issueFilter(request))));
+  router.get("/api/issues", (request) => json(publicIssues(listIssues(context.database, issueFilter(request)))));
   router.post("/api/issues", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssue(context.database, body), 201);
@@ -76,7 +74,7 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
     return writeResponse(() => createIssueComment(context.database, issueID(request), body), 201);
   });
   router.get("/api/issues/:id/events", (request) => writeResponse(() => listIssueEvents(context.database, issueID(request))));
-  router.get("/api/issues/:id/runs", (request) => writeResponse(() => listIssueRuns(context.database, issueID(request))));
+  router.get("/api/issues/:id/runs", (request) => writeResponse(() => publicIssueRuns(listIssueRuns(context.database, issueID(request)))));
 }
 
 function projectResponse(context: ReadApiContext, request: Request): Response {
@@ -104,14 +102,35 @@ async function cancelIssueResponse(context: ReadApiContext, request: Request): P
 function issueResponse(context: ReadApiContext, request: Request): Response {
   const issue = getIssue(context.database, issueID(request));
   if (!issue) throw new HttpError(404, "资源不存在");
-  return json(issue);
+  return json(publicIssue(issue));
 }
 
-function registerIssuesPageAuxRoutes(router: Router): void {
-  router.get("/api/agent-profiles", () => json([]));
-  router.get("/api/cron-tasks", () => json([]));
-  router.get("/api/issue-templates", () => json([DEFAULT_ISSUE_TEMPLATE]));
-  router.get("/api/nightly-batches", () => json([]));
+function publicIssues(issues: Issue[]): PublicIssue[] {
+  return issues.map(publicIssue);
+}
+
+type PublicIssueRun = Omit<IssueRun, "runtime_metadata_json">;
+type PublicIssue = Omit<Issue, "latest_run"> & { latest_run?: PublicIssueRun };
+
+function publicIssue(issue: Issue): PublicIssue {
+  if (!issue.latest_run) return issue;
+  return { ...issue, latest_run: publicIssueRun(issue.latest_run) };
+}
+
+function publicIssueRuns(runs: IssueRun[]): PublicIssueRun[] {
+  return runs.map(publicIssueRun);
+}
+
+function publicIssueRun(run: IssueRun): PublicIssueRun {
+  const { runtime_metadata_json: _runtimeMetadata, ...publicRun } = run;
+  return publicRun;
+}
+
+function registerIssuesPageAuxRoutes(router: Router, context: ReadApiContext): void {
+  router.get("/api/agent-profiles", () => json(listAgentProfiles(context.database)));
+  router.get("/api/cron-tasks", () => json(listCronTasks(context.database)));
+  router.get("/api/issue-templates", () => json(listIssueTemplates(context.database)));
+  router.get("/api/nightly-batches", (request) => json(listNightlyBatches(context.database, cleanParam(new URL(request.url).searchParams.get("projectId")))));
 }
 
 function projectID(request: Request): string {

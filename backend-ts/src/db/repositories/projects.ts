@@ -1,8 +1,15 @@
 import { statSync } from "node:fs";
 import type { RunnerDatabase } from "../database.ts";
+import { getAgentProfile, type AgentProfile } from "./agentProfiles.ts";
 import { normalizeProjectForWrite, normalizeProjectModel, normalizeProjectPatch, normalizeProjectProvider, normalizeProjectProviderConfig, type NormalizedProjectWrite, type ProjectPatchInput, type ProjectWriteInput } from "./projectUtils.ts";
 
 type ProjectRow = {
+  hold_since: unknown;
+  last_check_at: unknown;
+  last_check_error: unknown;
+  message: unknown;
+  next_check_at: unknown;
+  reason: unknown;
   approval_policy: unknown;
   auto_run: unknown;
   created_at: unknown;
@@ -22,12 +29,16 @@ export type CreateProjectInput = ProjectWriteInput;
 
 export type UpdateProjectInput = ProjectPatchInput;
 
+export type ProjectHold = { reason: string; message: string; hold_since: string; next_check_at: string; last_check_at: string; last_check_error: string };
+
 export type Project = {
   approval_policy: string;
   auto_run: number;
   created_at: string;
   cwd: string;
+  default_agent_profile?: AgentProfile;
   default_agent_profile_id: string;
+  hold?: ProjectHold;
   id: string;
   loop_status: string;
   model: string;
@@ -40,9 +51,10 @@ export type Project = {
   updated_at: string;
 };
 
-const PROJECT_COLUMNS = `id, name, cwd, provider, provider_config_json, auto_run,
-  model, approval_policy, sandbox, default_agent_profile_id, sort_order,
-  created_at, updated_at`;
+const PROJECT_COLUMNS = `p.id, p.name, p.cwd, p.provider, p.provider_config_json, p.auto_run,
+  p.model, p.approval_policy, p.sandbox, p.default_agent_profile_id, p.sort_order,
+  p.created_at, p.updated_at, h.reason, h.message, h.hold_since, h.next_check_at,
+  h.last_check_at, h.last_check_error`;
 
 
 export function createProject(db: RunnerDatabase, input: CreateProjectInput): Project {
@@ -77,18 +89,20 @@ export function updateProject(db: RunnerDatabase, id: string, input: UpdateProje
 }
 
 export function listProjects(db: RunnerDatabase): Project[] {
-  return db.sqlite.query<ProjectRow, []>(`
-    select ${PROJECT_COLUMNS} from projects
-    order by sort_order asc, created_at asc, id asc
+  const projects = db.sqlite.query<ProjectRow, []>(`
+    select ${PROJECT_COLUMNS} from projects p left join project_holds h on h.project_id=p.id
+    order by p.sort_order asc, p.created_at asc, p.id asc
   `).all().map(mapProjectRow);
+  return attachAgentProfiles(db, projects);
 }
 
 export function getProject(db: RunnerDatabase, id: string): Project | null {
   const projectID = cleanRequiredString(id, "project id");
   const row = db.sqlite.query<ProjectRow, [string]>(`
-    select ${PROJECT_COLUMNS} from projects where id = ?
+    select ${PROJECT_COLUMNS} from projects p left join project_holds h on h.project_id=p.id where p.id = ?
   `).get(projectID);
-  return row ? mapProjectRow(row) : null;
+  if (!row) return null;
+  return attachAgentProfiles(db, [mapProjectRow(row)])[0] ?? null;
 }
 
 function mapProjectRow(row: ProjectRow): Project {
@@ -106,6 +120,7 @@ function mapProjectRow(row: ProjectRow): Project {
     sort_order: integerValue(row.sort_order, "projects.sort_order"),
     created_at: requiredString(row.created_at, "projects.created_at"),
     updated_at: requiredString(row.updated_at, "projects.updated_at"),
+    ...(projectHold(row) ? { hold: projectHold(row) } : {}),
     loop_status: "stopped",
     provider_capabilities: providerCapabilities(row.provider)
   };
@@ -187,6 +202,27 @@ function optionalString(value: unknown, fallback = ""): string {
 function integerValue(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
   return value;
+}
+
+function attachAgentProfiles(db: RunnerDatabase, projects: Project[]): Project[] {
+  return projects.map((project) => {
+    const profileID = project.default_agent_profile_id.trim();
+    if (profileID === "") return project;
+    const profile = getAgentProfile(db, profileID);
+    return profile ? { ...project, default_agent_profile: profile } : project;
+  });
+}
+
+function projectHold(row: ProjectRow): ProjectHold | undefined {
+  if (optionalString(row.reason) === "") return undefined;
+  return {
+    reason: optionalString(row.reason),
+    message: optionalString(row.message),
+    hold_since: optionalString(row.hold_since),
+    next_check_at: optionalString(row.next_check_at),
+    last_check_at: optionalString(row.last_check_at),
+    last_check_error: optionalString(row.last_check_error)
+  };
 }
 
 function providerCapabilities(value: unknown): string[] {

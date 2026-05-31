@@ -8,6 +8,8 @@ STATE_DIR="${CODEX_RUNNER_BUN_STATE_DIR:-$ROOT_DIR/data-bun}"
 DB_PATH="${CODEX_RUNNER_BUN_DB:-$STATE_DIR/runner.db}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_BUN_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_BUN_AUTH_TOKEN:-}"
+SOURCE_WEB_DIR="${CODEX_RUNNER_BUN_WEB_DIR:-$ROOT_DIR/frontend/dist}"
+WEB_DIR="${CODEX_RUNNER_BUN_LAUNCHD_WEB_DIR:-$STATE_DIR/web}"
 BINARY_PATH="${CODEX_RUNNER_BUN_BINARY:-$ROOT_DIR/dist/codex-issue-runner-bun}"
 LAUNCHD_BINARY_PATH="${CODEX_RUNNER_BUN_LAUNCHD_BINARY:-$STATE_DIR/bin/codex-issue-runner-bun}"
 LOG_DIR="${CODEX_RUNNER_BUN_LOG_DIR:-$STATE_DIR/logs}"
@@ -101,6 +103,8 @@ write_plist() {
     <string>$(xml_escape "$DB_PATH")</string>
     <string>--auth-token-file</string>
     <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+    <string>--web-dir</string>
+    <string>$(xml_escape "$WEB_DIR")</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -131,6 +135,12 @@ stage_bun_binary() {
   fi
 }
 
+stage_web_dir() {
+  mkdir -p "$WEB_DIR"
+  rm -rf "$WEB_DIR"
+  cp -R "$SOURCE_WEB_DIR" "$WEB_DIR"
+}
+
 write_custom_auth_token_file() {
   if [ -n "$AUTH_TOKEN" ]; then
     umask 077
@@ -156,6 +166,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
   "$ROOT_DIR/backend-ts/scripts/build-binary.sh"
   mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$(dirname "$PLIST")"
   stage_bun_binary
+  stage_web_dir
   write_custom_auth_token_file
 else
   mkdir -p "$(dirname "$PLIST")"
@@ -170,6 +181,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "[bun-launchd] addr: $ADDR"
   echo "[bun-launchd] state-dir: $STATE_DIR"
   echo "[bun-launchd] db: $DB_PATH"
+  echo "[bun-launchd] source-web-dir: $SOURCE_WEB_DIR"
+  echo "[bun-launchd] web-dir: $WEB_DIR"
   echo "[bun-launchd] binary: $LAUNCHD_BINARY_PATH"
   echo "[bun-launchd] launchctl skipped"
   exit 0

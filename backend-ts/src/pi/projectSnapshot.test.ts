@@ -131,7 +131,7 @@ describe("PI project status snapshot", () => {
 });
 
 function createProjectHoldsTable(db: RunnerDatabase): void {
-  db.sqlite.run(`create table project_holds (
+  db.sqlite.run(`create table if not exists project_holds (
     project_id text primary key,
     reason text not null,
     message text not null,

@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ENV_KEYS } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
 
 const tempRoots: string[] = [];
@@ -48,18 +49,24 @@ describe("Bun SQLite database connection", () => {
       expect(tableNames(connection)).toEqual([
         "agent_profiles",
         "agent_sessions",
+        "app_preferences",
+        "cron_tasks",
         "issue_events",
         "issue_runs",
         "issue_templates",
         "issues",
+        "nightly_batch_items",
+        "nightly_batches",
         "pi_actions",
         "pi_agents",
         "pi_conversations",
         "pi_memory_items",
+        "project_holds",
         "project_pi_settings",
         "projects",
         "schema_migrations",
-        "sqlite_sequence"
+        "sqlite_sequence",
+        "uploads"
       ]);
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
       expect(columnNames(connection, "issues")).toContain("workflow_snapshot_json");
@@ -94,8 +101,33 @@ describe("Bun SQLite database connection", () => {
 
   test("rejects runtime access to the Go stable database path", async () => {
     await expect(openDatabase({ dbPath: "data/runner.db" })).rejects.toThrow(
-      "refusing to open Go stable database for Bun runtime"
+      "refusing to open Go stable database for Bun runtime without CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB=1"
     );
+    await expect(openDatabase({ dbPath: "data/app.db" })).rejects.toThrow(
+      "refusing to open Go stable database for Bun runtime without CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB=1"
+    );
+  });
+
+  test("allows explicit parity test access to the Go stable database path", async () => {
+    const previous = Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB;
+    const root = await tempPath("codex-runner-bun-go-db-allow-");
+    const stateDir = join(root, "state");
+    const goDataDir = join(root, "data");
+    const goDb = join(goDataDir, "app.db");
+    await mkdir(goDataDir, { recursive: true });
+    Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB = "1";
+
+    const connection = await openDatabase({ dbPath: goDb, stateDir });
+
+    try {
+      expect(connection.path).toBe(goDb);
+      expect(connection.readonly).toBe(false);
+      expect(tableNames(connection)).toContain("projects");
+    } finally {
+      connection.close();
+      if (previous === undefined) delete Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB;
+      else Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB = previous;
+    }
   });
 
   test("opens explicit read-only import database without allowing writes", async () => {
