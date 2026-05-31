@@ -63,6 +63,7 @@ export type Model = {
   supportedReasoningEfforts: ReasoningEffortOption[];
 };
 export type ReasoningEffortOption = { description: string; reasoningEffort: string };
+export type ApprovalDecision = { decision: string; scope?: string };
 
 export class CodexAdapter {
   private initialized?: Promise<CodexInitializeResult>;
@@ -122,6 +123,11 @@ export class CodexAdapter {
     const cleanTurnID = turnID.trim();
     const result = await this.lifecycleRequest("turn/steer", { threadId: cleanThreadID, expectedTurnId: cleanTurnID, input });
     return normalizeTurnStartResult(cleanThreadID, { turnId: cleanTurnID, ...recordValue(result) });
+  }
+
+  async resolveApproval(requestID: string, decision: ApprovalDecision): Promise<{ ok: true }> {
+    await this.lifecycleRequest("approval/resolve", { requestId: requestID.trim(), decision: decision.decision, scope: decision.scope ?? "" });
+    return { ok: true };
   }
 
   async interruptTurn(threadID: string, turnID: string): Promise<TurnInterruptResult> {

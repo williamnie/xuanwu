@@ -87,7 +87,7 @@ export default function Dashboard({
           <AlertTriangle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
           <div>
             <h4 style={{ color: 'var(--error)', fontWeight: 600, marginBottom: '2px' }}>连接后端 API 失败</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>无法连接到后端服务。请确保 Go 后端 API Server 已在端口 3008 启动。</p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>无法连接到 Runner 后端服务。请确认当前 API 入口已启动且 /api/* 接口可用。</p>
           </div>
           <button className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={refreshAllData}>
             重试连接

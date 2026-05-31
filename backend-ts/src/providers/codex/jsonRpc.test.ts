@@ -146,6 +146,27 @@ describe("Codex stdio JSON-RPC transport", () => {
     expect(diagnostics.join("\n")).not.toContain("fixture-secret");
   });
 
+
+  test("answers app-server server requests on stdout frames with ids", async () => {
+    let fake!: FakeCodexProcess;
+    const transport = new CodexStdioJsonRpcTransport(config, {
+      processFactory: () => {
+        fake = new FakeCodexProcess((request, process) => {
+          if (request.method === "initialize") {
+            process.sendStdout({ id: 99, method: "item/tool/requestUserInput", params: { prompt: "continue?" } });
+            process.sendStdout({ id: request.id, result: { protocolVersion: "fixture" } });
+          }
+        });
+        return fake;
+      }
+    });
+
+    await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fake.requests).toContainEqual({ id: 99, result: { answers: {} } });
+  });
+
   test("normalizes app-server notification events from fake stdout stream", async () => {
     let fake!: FakeCodexProcess;
     const events: ProviderEvent[] = [];

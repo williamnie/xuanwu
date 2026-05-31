@@ -65,6 +65,8 @@ describe("Bun SQLite database connection", () => {
         "project_pi_settings",
         "projects",
         "schema_migrations",
+        "session_command_events",
+        "session_turn_references",
         "sqlite_sequence",
         "uploads"
       ]);
@@ -80,6 +82,36 @@ describe("Bun SQLite database connection", () => {
       ]);
     } finally {
       connection.close();
+    }
+  });
+
+
+
+  test("repairs schema drift when a migration row exists but tables are missing", async () => {
+    const root = await tempPath("codex-runner-bun-schema-drift-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.close();
+
+    const raw = new Database(join(stateDir, "runner.db"));
+    try {
+      raw.run("drop table project_holds");
+      raw.run("drop table cron_tasks");
+      raw.run("drop table nightly_batches");
+      raw.run("drop table nightly_batch_items");
+    } finally {
+      raw.close();
+    }
+
+    const repaired = await openDatabase({ stateDir });
+    try {
+      expect(tableNames(repaired)).toContain("project_holds");
+      expect(tableNames(repaired)).toContain("cron_tasks");
+      expect(tableNames(repaired)).toContain("nightly_batches");
+      expect(tableNames(repaired)).toContain("nightly_batch_items");
+      expect(repaired.sqlite.query("select count(*) as count from schema_migrations where id='004_safe_go_import_tables'").get()).toEqual({ count: 1 });
+    } finally {
+      repaired.close();
     }
   });
 

@@ -32,10 +32,12 @@ export type CodexJsonRpcProcessFactory = (options: {
   env: Record<string, string | undefined>;
 }) => CodexJsonRpcProcess;
 
+export type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown> | unknown;
 export type CodexTransportOptions = {
   onEvent?: (event: ProviderEvent) => void;
   processFactory?: CodexJsonRpcProcessFactory;
   onDiagnostic?: (event: ProviderEvent) => void;
+  onServerRequest?: ServerRequestHandler;
 };
 
 const MAX_STDERR_LINES = 50;
@@ -125,8 +127,29 @@ export class CodexStdioJsonRpcTransport {
       this.emitDiagnostic("protocol/error", redactSensitiveText(line), asError(error).message);
       return;
     }
+    if (typeof message.id === "number" && typeof message.method === "string") {
+      void this.deliverServerRequest(message.id, message.method, message.params);
+      return;
+    }
     if (typeof message.id === "number") this.deliverResponse(message.id, message);
     if (typeof message.method === "string" && message.id === undefined) this.deliverEvent(message.method, message.params);
+  }
+
+  private async deliverServerRequest(id: number, method: string, params: unknown): Promise<void> {
+    try {
+      const result = await this.serverRequestResult(method, params);
+      this.write({ id, result });
+    } catch (error) {
+      this.write({ id, error: { code: -32603, message: asError(error).message } });
+    }
+  }
+
+  private async serverRequestResult(method: string, params: unknown): Promise<unknown> {
+    if (this.options.onServerRequest) return await this.options.onServerRequest(method, params);
+    if (method === "item/tool/requestUserInput") return { answers: {} };
+    if (method === "mcpServer/elicitation/request") return { action: "cancel", content: null, _meta: null };
+    if (method === "item/tool/call") return { contentItems: [], success: false };
+    throw new Error(`unsupported server request: ${method}`);
   }
 
   private deliverEvent(method: string, params: unknown): void {

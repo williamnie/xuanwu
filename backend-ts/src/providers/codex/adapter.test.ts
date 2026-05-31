@@ -235,6 +235,19 @@ describe("Codex adapter RPC methods", () => {
     });
   });
 
+  test("resolves approval requests through the Codex RPC contract", async () => {
+    const rpc = new FakeRpc({ "approval/resolve": {} });
+
+    await expect(new CodexAdapter(rpc).resolveApproval("approval-1", {
+      decision: "approve_session", scope: "session"
+    })).resolves.toEqual({ ok: true });
+
+    expect(rpc.calls[0]).toEqual({
+      method: "approval/resolve",
+      params: { requestId: "approval-1", decision: "approve_session", scope: "session" }
+    });
+  });
+
   test("wraps thread lifecycle failures in diagnostic typed errors with redaction", async () => {
     const secret = "fixture-secret-token";
     const rpc = new FakeRpc({ "thread/resume": new Error(`codex rpc -32603: TOKEN=${secret}`) });

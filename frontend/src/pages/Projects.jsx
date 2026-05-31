@@ -369,7 +369,7 @@ export default function Projects() {
             <AlertCircle color="var(--error)" size={24} style={{ flexShrink: 0 }} />
             <div>
               <h4 style={{ color: 'var(--error)', fontWeight: 600 }}>API 连接错误</h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>加载数据失败，请检查 Go 后端服务连接。</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>加载数据失败，请检查当前 Runner 后端服务连接。</p>
             </div>
           </div>
         )}

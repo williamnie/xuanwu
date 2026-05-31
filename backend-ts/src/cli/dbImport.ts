@@ -27,6 +27,7 @@ export type GoDatabaseImportResult = {
   source_readonly: true;
   tables: TableCounts;
   target: string;
+  upload_paths_rebased: number;
 };
 
 export async function runDbImport(args: string[], env: EnvReader): Promise<string> {
@@ -56,6 +57,7 @@ export async function importGoDatabase(options: ImportOptions): Promise<GoDataba
     const target = await openDatabase(options.targetPath ? { dbPath: options.targetPath } : {});
     try {
       const tables = copySafeTables(source, target);
+      const uploadPathsRebased = rebaseImportedUploadPaths(target, options.sourcePath);
       const after = await stat(options.sourcePath);
       return {
         ok: true,
@@ -63,7 +65,8 @@ export async function importGoDatabase(options: ImportOptions): Promise<GoDataba
         source_mtime_unchanged: before.mtimeMs === after.mtimeMs,
         source_readonly: true,
         tables,
-        target: target.path
+        target: target.path,
+        upload_paths_rebased: uploadPathsRebased
       };
     } finally {
       target.close();
@@ -121,12 +124,45 @@ function ensureDistinctDatabasePaths(sourcePath: string, targetPath: string): vo
 }
 
 function clearSafeTargetTables(target: SQLiteDatabase): void {
+  target.run("delete from pi_memory_items");
+  target.run("delete from pi_actions");
+  target.run("delete from pi_conversations");
+  target.run("delete from project_pi_settings");
+  target.run("delete from pi_agents");
+  target.run("delete from uploads");
+  target.run("delete from app_preferences");
+  target.run("delete from nightly_batch_items");
+  target.run("delete from nightly_batches");
+  target.run("delete from cron_tasks");
+  target.run("delete from project_holds");
+  target.run("delete from session_command_events");
+  target.run("delete from session_turn_references");
+  target.run("delete from agent_sessions");
   target.run("delete from issue_runs");
   target.run("delete from issue_events");
   target.run("delete from issues");
   target.run("delete from issue_templates");
   target.run("delete from agent_profiles");
   target.run("delete from projects");
+}
+
+function rebaseImportedUploadPaths(target: RunnerDatabase, sourcePath: string): number {
+  if (!tableExists(target.sqlite, "uploads")) return 0;
+  const sourceDataDir = resolve(join(sourcePath, ".."));
+  const targetDataDir = resolve(join(target.path, ".."));
+  const sourceUploads = join(sourceDataDir, "uploads");
+  const targetUploads = join(targetDataDir, "uploads");
+  const rows = target.sqlite.query<{ id: string; storage_path: string }, []>(
+    "select id, storage_path from uploads"
+  ).all();
+  let changed = 0;
+  for (const row of rows) {
+    if (!row.storage_path.startsWith(sourceUploads)) continue;
+    const nextPath = row.storage_path.replace(sourceUploads, targetUploads);
+    target.sqlite.run("update uploads set storage_path=? where id=?", [nextPath, row.id]);
+    changed += 1;
+  }
+  return changed;
 }
 
 function formatImportResult(result: GoDatabaseImportResult): string {
@@ -136,6 +172,7 @@ function formatImportResult(result: GoDatabaseImportResult): string {
     lines.push(`${table}: source=${counts.source} target=${counts.target}`);
   }
   lines.push(`source_readonly=${result.source_readonly} source_mtime_unchanged=${result.source_mtime_unchanged}`);
+  lines.push(`upload_paths_rebased=${result.upload_paths_rebased}`);
   return `${lines.join("\n")}\n`;
 }
 

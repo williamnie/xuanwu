@@ -6,7 +6,21 @@ export const SAFE_IMPORT_TABLES = [
   "issue_templates",
   "issues",
   "issue_events",
-  "issue_runs"
+  "issue_runs",
+  "agent_sessions",
+  "session_turn_references",
+  "session_command_events",
+  "project_holds",
+  "cron_tasks",
+  "nightly_batches",
+  "nightly_batch_items",
+  "app_preferences",
+  "uploads",
+  "pi_agents",
+  "project_pi_settings",
+  "pi_conversations",
+  "pi_actions",
+  "pi_memory_items"
 ] as const;
 
 export type SafeImportTable = typeof SAFE_IMPORT_TABLES[number];
@@ -25,6 +39,7 @@ export function tableExists(db: SQLiteDatabase, table: SafeImportTable): boolean
 }
 
 export function countRows(db: SQLiteDatabase, table: SafeImportTable): number {
+  if (!tableExists(db, table)) return 0;
   const row = db.query<{ count: number }, []>(`select count(*) as count from ${quoteIdentifier(table)}`).get();
   return row?.count ?? 0;
 }

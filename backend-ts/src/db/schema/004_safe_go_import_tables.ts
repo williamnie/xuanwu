@@ -33,6 +33,31 @@ create table if not exists app_preferences (
   updated_at text not null
 );
 
+create table if not exists session_turn_references (
+  id integer primary key autoincrement,
+  provider text not null default 'codex',
+  provider_session_id text not null,
+  provider_turn_id text not null,
+  references_json text not null default '[]',
+  created_at text not null
+);
+
+create table if not exists session_command_events (
+  id integer primary key autoincrement,
+  provider text not null default 'codex',
+  provider_session_id text not null,
+  command_name text not null,
+  command_args_json text not null default '{}',
+  prompt_summary text not null default '',
+  references_summary text not null default '',
+  result_summary text not null default '',
+  target_issue_id integer not null default 0,
+  created_issue_id integer not null default 0,
+  enqueued_issue_id integer not null default 0,
+  error text not null default '',
+  created_at text not null
+);
+
 create table if not exists cron_tasks (
   id integer primary key autoincrement,
   name text not null,

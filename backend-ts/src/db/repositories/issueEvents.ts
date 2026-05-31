@@ -47,6 +47,17 @@ export function createIssueComment(db: RunnerDatabase, issueID: number, input: C
   return mustGetIssueEvent(db, lastInsertID(db));
 }
 
+
+export function recordIssueEvent(db: RunnerDatabase, issueID: number, type: string, payload: unknown): IssueEvent {
+  ensureIssueExists(db, issueID);
+  const body = typeof payload === "string" ? payload : JSON.stringify(payload ?? {});
+  db.sqlite.run(
+    `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+    [issueID, type, body, issueTimestamp()]
+  );
+  return mustGetIssueEvent(db, lastInsertID(db));
+}
+
 export function recordIssueLogEvent(db: RunnerDatabase, issueID: number, event: ProviderEvent): IssueEvent {
   ensureIssueExists(db, issueID);
   const timestamp = issueTimestamp();

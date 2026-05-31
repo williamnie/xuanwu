@@ -16,6 +16,7 @@ import { registerSessionRoutes } from "./sessionApi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiRoutes } from "./piApi.ts";
+import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import type { Router } from "./router.ts";
 
 type ReadApiContext = {
@@ -33,6 +34,7 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   registerIssueItemRoutes(router, context);
   registerPiRoutes(router, context);
   registerSessionRoutes(router, context);
+  registerFrontendCompatRoutes(router, context);
 }
 
 function registerProjectRoutes(router: Router, context: ReadApiContext): void {

@@ -1,7 +1,7 @@
 /**
  * Codex Issue Runner API 客户端。
  *
- * 这里不做本地假数据或 localStorage 降级：前端展示的数据必须来自 Go 后端。
+ * 这里不做本地假数据或 localStorage 降级：前端展示的数据必须来自当前 Runner 后端。
  * 后端未连接时，请求会直接抛错，由页面显示 DISCONNECTED / 错误态。
  */
 import { authHeader, clearAuthToken } from './authToken';

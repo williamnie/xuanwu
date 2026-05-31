@@ -21,6 +21,7 @@ describe("Bun Go DB import command", () => {
     const sourcePath = join(root, "go", "runner.db");
     const targetPath = join(root, "data-bun", "runner.db");
     await createGoFixtureDatabase(sourcePath);
+    setSourceUploadPath(sourcePath);
     const sourceMtimeBefore = (await stat(sourcePath)).mtimeMs;
 
     const { code, stdout, stderr } = await run([
@@ -32,20 +33,39 @@ describe("Bun Go DB import command", () => {
     const body = JSON.parse(stdout) as ImportResult;
     expect(body.source_readonly).toBe(true);
     expect(body.source_mtime_unchanged).toBe(true);
+    expect(body.upload_paths_rebased).toBe(1);
     expect(body.tables.projects).toEqual({ source: 1, target: 1 });
     expect(body.tables.issue_templates).toEqual({ source: 1, target: 1 });
     expect(body.tables.issues).toEqual({ source: 2, target: 2 });
     expect(body.tables.issue_events).toEqual({ source: 1, target: 1 });
     expect(body.tables.issue_runs).toEqual({ source: 1, target: 1 });
     expect(body.tables.agent_profiles).toEqual({ source: 1, target: 1 });
+    expect(body.tables.cron_tasks).toEqual({ source: 1, target: 1 });
+    expect(body.tables.nightly_batches).toEqual({ source: 1, target: 1 });
+    expect(body.tables.nightly_batch_items).toEqual({ source: 1, target: 1 });
+    expect(body.tables.app_preferences).toEqual({ source: 1, target: 1 });
+    expect(body.tables.uploads).toEqual({ source: 1, target: 1 });
+    expect(body.tables.session_turn_references).toEqual({ source: 1, target: 1 });
+    expect(body.tables.session_command_events).toEqual({ source: 1, target: 1 });
     expect((await stat(sourcePath)).mtimeMs).toBe(sourceMtimeBefore);
-    expect(targetCounts(targetPath, ["projects", "agent_profiles", "issue_templates", "issues", "issue_events", "issue_runs"])).toEqual({
+    expect(targetCounts(targetPath, [
+      "projects", "agent_profiles", "issue_templates", "issues", "issue_events", "issue_runs",
+      "cron_tasks", "nightly_batches", "nightly_batch_items", "app_preferences", "uploads",
+      "session_turn_references", "session_command_events"
+    ])).toEqual({
       agent_profiles: 1,
+      app_preferences: 1,
+      cron_tasks: 1,
       issue_events: 1,
       issue_runs: 1,
       issue_templates: 1,
       issues: 2,
-      projects: 1
+      nightly_batch_items: 1,
+      nightly_batches: 1,
+      projects: 1,
+      session_command_events: 1,
+      session_turn_references: 1,
+      uploads: 1
     });
   });
 
@@ -55,6 +75,7 @@ describe("Bun Go DB import command", () => {
     const bunPath = join(root, "data-bun", "runner.db");
     const backupDir = join(root, "backups", "p08-cutover");
     await createGoFixtureDatabase(goPath);
+    setSourceUploadPath(goPath);
     await createBunPreviewDatabase(bunPath);
     const goMtimeBefore = (await stat(goPath)).mtimeMs;
     const bunMtimeBefore = (await stat(bunPath)).mtimeMs;
@@ -191,7 +212,42 @@ async function createGoFixtureDatabase(path: string): Promise<void> {
       codex_turn_id text not null default '', started_at text not null, ended_at text not null default '',
       exit_reason text not null default '', error text not null default '',
       agent_profile_id text not null default '', capability_summary text not null default '',
-      selection_reason text not null default ''
+      selection_reason text not null default '', runtime_metadata_json text not null default '{}'
+    )`);
+    db.run(`create table cron_tasks (
+      id integer primary key autoincrement, name text not null, project_id text not null default '',
+      action text not null, mode text not null, time_of_day text not null default '',
+      next_run_at text not null default '', last_run_at text not null default '',
+      status text not null, run_count integer not null default 0, error text not null default '',
+      created_at text not null, updated_at text not null, last_status text not null default '',
+      last_result text not null default ''
+    )`);
+    db.run(`create table nightly_batches (
+      id integer primary key autoincrement, project_id text not null, policy text not null,
+      promotion_mode text not null, status text not null, current_issue_id integer not null default 0,
+      pause_reason text not null default '', created_at text not null, updated_at text not null
+    )`);
+    db.run(`create table nightly_batch_items (
+      batch_id integer not null, issue_id integer not null, position integer not null,
+      status text not null, updated_at text not null, primary key(batch_id, issue_id)
+    )`);
+    db.run(`create table app_preferences (key text primary key, value text not null, updated_at text not null)`);
+    db.run(`create table uploads (
+      id text primary key, original_name text not null, mime_type text not null, size_bytes integer not null,
+      sha256 text not null, storage_path text not null, created_at text not null
+    )`);
+    db.run(`create table session_turn_references (
+      id integer primary key autoincrement, provider text not null default 'codex',
+      provider_session_id text not null, provider_turn_id text not null,
+      references_json text not null default '[]', created_at text not null
+    )`);
+    db.run(`create table session_command_events (
+      id integer primary key autoincrement, provider text not null default 'codex',
+      provider_session_id text not null, command_name text not null,
+      command_args_json text not null default '{}', prompt_summary text not null default '',
+      references_summary text not null default '', result_summary text not null default '',
+      target_issue_id integer not null default 0, created_issue_id integer not null default 0,
+      enqueued_issue_id integer not null default 0, error text not null default '', created_at text not null
     )`);
     db.run(`insert into projects (id, name, cwd, default_agent_profile_id, created_at, updated_at)
       values ('demo', 'Demo', '/tmp/demo', 'nightly', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
@@ -205,8 +261,22 @@ async function createGoFixtureDatabase(path: string): Promise<void> {
       values ('demo', 'Two', 'second', 'todo', '2026-01-01T00:00:01Z', '2026-01-01T00:00:01Z')`);
     db.run(`insert into issue_events (issue_id, type, payload, created_at)
       values (1, 'issue.comment', '{"body":"ok"}', '2026-01-01T00:00:02Z')`);
-    db.run(`insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
-      values ('run-1', 1, 1, 'done', '2026-01-01T00:00:03Z', '2026-01-01T00:00:04Z')`);
+    db.run(`insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at, runtime_metadata_json)
+      values ('run-1', 1, 1, 'done', '2026-01-01T00:00:03Z', '2026-01-01T00:00:04Z', '{"runtime":"go"}')`);
+    db.run(`insert into cron_tasks (name, project_id, action, mode, time_of_day, status, created_at, updated_at)
+      values ('Daily', 'demo', 'triage_to_todo', 'daily', '09:00', 'active', '2026-01-01T00:00:05Z', '2026-01-01T00:00:05Z')`);
+    db.run(`insert into nightly_batches (project_id, policy, promotion_mode, status, current_issue_id, created_at, updated_at)
+      values ('demo', 'fail_stop', 'auto', 'active', 1, '2026-01-01T00:00:06Z', '2026-01-01T00:00:06Z')`);
+    db.run(`insert into nightly_batch_items (batch_id, issue_id, position, status, updated_at)
+      values (1, 1, 1, 'current', '2026-01-01T00:00:07Z')`);
+    db.run(`insert into app_preferences (key, value, updated_at)
+      values ('sessions.last_project_id', 'demo', '2026-01-01T00:00:08Z')`);
+    db.run(`insert into uploads (id, original_name, mime_type, size_bytes, sha256, storage_path, created_at)
+      values ('upload_1', 'image.png', 'image/png', 12, 'abc', '__SOURCE_UPLOAD__', '2026-01-01T00:00:09Z')`);
+    db.run(`insert into session_turn_references (provider_session_id, provider_turn_id, references_json, created_at)
+      values ('session-1', 'turn-1', '[{"path":"README.md"}]', '2026-01-01T00:00:10Z')`);
+    db.run(`insert into session_command_events (provider_session_id, command_name, command_args_json, created_at)
+      values ('session-1', 'create_issue', '{}', '2026-01-01T00:00:11Z')`);
   } finally {
     db.close();
   }
@@ -244,5 +314,23 @@ class MemoryWriter {
   write(chunk: Uint8Array | string): boolean {
     this.text += typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
     return true;
+  }
+}
+
+function targetUploadPath(path: string): string {
+  const db = new Database(path, { readonly: true, readwrite: false, strict: true });
+  try {
+    return db.query<{ storage_path: string }, []>("select storage_path from uploads limit 1").get()?.storage_path ?? "";
+  } finally {
+    db.close();
+  }
+}
+
+function setSourceUploadPath(path: string): void {
+  const db = new Database(path, { strict: true });
+  try {
+    db.run("update uploads set storage_path=? where id='upload_1'", [join(dirname(path), "uploads", "images", "image.png")]);
+  } finally {
+    db.close();
   }
 }

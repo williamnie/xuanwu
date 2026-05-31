@@ -7,6 +7,7 @@ export type SqlMigration = {
 };
 
 type MigrationRow = { id: string };
+const REPAIRABLE_MIGRATION_IDS = new Set(["001_base_schema", "003_pi_runtime", "004_safe_go_import_tables"]);
 
 const MIGRATIONS_TABLE_SQL = `
 create table if not exists schema_migrations (
@@ -24,6 +25,7 @@ export function runMigrations(sqlite: SQLiteDatabase, sqlMigrations: SqlMigratio
       sqlite.run("insert into schema_migrations (id) values (?)", [migration.id]);
       applied.add(migration.id);
     }
+    repairKnownSchemaDrift(sqlite, sqlMigrations);
   });
   applyPending.immediate();
 }
@@ -31,4 +33,10 @@ export function runMigrations(sqlite: SQLiteDatabase, sqlMigrations: SqlMigratio
 function loadAppliedMigrationIDs(sqlite: SQLiteDatabase): Set<string> {
   const rows = sqlite.query<MigrationRow, []>("select id from schema_migrations").all();
   return new Set(rows.map((row) => row.id));
+}
+
+function repairKnownSchemaDrift(sqlite: SQLiteDatabase, sqlMigrations: SqlMigration[]): void {
+  for (const migration of sqlMigrations) {
+    if (REPAIRABLE_MIGRATION_IDS.has(migration.id)) sqlite.run(migration.sql);
+  }
 }

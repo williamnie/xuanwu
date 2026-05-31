@@ -89,6 +89,7 @@ export type InterruptInput = {
   session: SessionRef;
   reason?: string;
 };
+export type ApprovalDecision = { decision: string; scope?: string };
 
 export interface ExecutorProvider {
   id: ExecutorProviderId;
@@ -101,6 +102,8 @@ export interface ExecutorProvider {
   listSessions?(input: SessionListInput): Promise<SessionListResult>;
   readSession?(sessionId: string): Promise<Record<string, unknown>>;
   sendSessionMessage?(input: SessionMessageInput): Promise<SessionMessageResult>;
+  listModels?(): Promise<unknown>;
+  resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;
 }
 
 export function isExecutorProviderId(value: string): value is ExecutorProviderId {

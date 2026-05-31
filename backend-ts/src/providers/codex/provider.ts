@@ -3,6 +3,7 @@ import { textInput } from "./threadLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type {
   ExecutorProvider,
+  ApprovalDecision,
   InterruptInput,
   ProviderRecoveryInput,
   ProviderRunInput,
@@ -30,6 +31,8 @@ type CodexIssueAdapter = {
   startTurn(threadID: string, input: Parameters<CodexAdapter["startTurn"]>[1], options?: Parameters<CodexAdapter["startTurn"]>[2]): Promise<TurnStartResult>;
   steerTurn(threadID: string, turnID: string, input: Parameters<CodexAdapter["steerTurn"]>[2]): Promise<TurnStartResult>;
   interruptTurn(threadID: string, turnID: string): Promise<Awaited<ReturnType<CodexAdapter["interruptTurn"]>>>;
+  listModels(): Promise<unknown>;
+  resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;
 };
 
 export class CodexExecutorProvider implements ExecutorProvider {
@@ -107,6 +110,16 @@ export class CodexExecutorProvider implements ExecutorProvider {
     });
     input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
     return { runId: runID(turn), session: sessionRef(turn) };
+  }
+
+  async listModels(): Promise<unknown> {
+    await this.adapter.initialize();
+    return await this.adapter.listModels();
+  }
+
+  async resolveApproval(requestId: string, decision: ApprovalDecision): Promise<void> {
+    if (!this.adapter.resolveApproval) throw new Error("provider codex 暂不支持 approval resolve");
+    await this.adapter.resolveApproval(requestId, decision);
   }
 
   async interrupt(input: InterruptInput): Promise<void> {
