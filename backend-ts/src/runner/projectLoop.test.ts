@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
+import { startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
@@ -106,6 +107,48 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("does not claim another todo while any executor run is still open", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      insertProject(db, { id: "other", provider: provider.id });
+      const running = insertIssue(db, { projectId: "demo", title: "running", status: "in_progress" });
+      const waiting = insertIssue(db, { projectId: "other", title: "waiting" });
+      insertOpenRun(db, running);
+
+      const result = await runProjectLoopOnce({ database: db, projectId: "other", providers: { [provider.id]: provider } });
+
+      expect(result).toEqual({ claimed: false });
+      expect(provider.inputs).toEqual([]);
+      expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, waiting)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("auto-run loop starts one session and leaves remaining todos queued", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "serial-demo", provider: provider.id, autoRun: 1 });
+      const first = insertIssue(db, { projectId: "serial-demo", title: "first" });
+      const second = insertIssue(db, { projectId: "serial-demo", title: "second" });
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "serial-demo");
+      await waitFor(() => provider.inputs.length === 1);
+      await Bun.sleep(20);
+
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+      expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, second)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps issue in progress after provider run completes", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
@@ -150,7 +193,7 @@ describe("Bun project loop claim execution", () => {
   });
 });
 
-type ProjectFixture = { id: string; provider: string };
+type ProjectFixture = { autoRun?: number; id: string; provider: string };
 
 type IssueFixture = {
   createdAt?: string;
@@ -162,9 +205,10 @@ type IssueFixture = {
 
 function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [project.id, project.id, `/tmp/${project.id}`, project.provider, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [project.id, project.id, `/tmp/${project.id}`, project.provider, project.autoRun ?? 0,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -180,4 +224,21 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function insertOpenRun(db: RunnerDatabase, issueID: number): void {
+  db.sqlite.run(
+    `insert into issue_runs (id, issue_id, attempt, status, started_at)
+     values (?, ?, ?, ?, ?)`,
+    [`issue-${issueID}-attempt-1`, issueID, 1, "in_progress", "2026-01-01T00:00:00Z"]
+  );
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition timed out");
 }

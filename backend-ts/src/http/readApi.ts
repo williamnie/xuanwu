@@ -8,7 +8,13 @@ import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
-import { createProject, getProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
+import {
+  createProject,
+  getProject,
+  listProjects,
+  ProjectNotFoundError,
+  updateProject
+} from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -67,7 +73,7 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
   router.post("/api/issues/:id/cancel", (request) => cancelIssueResponse(context, request));
   router.post("/api/issues/:id/verification", async (request) => {
     const body = await parseObjectBody(request);
-    return writeResponse(() => reviewIssueVerification(context.database, issueID(request), body));
+    return writeResponse(() => reviewIssueVerificationAndKickLoop(context, issueID(request), body));
   });
   router.get("/api/issues/:id", (request) => issueResponse(context, request));
   router.patch("/api/issues/:id", async (request) => {
@@ -78,8 +84,16 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssueComment(context.database, issueID(request), body), 201);
   });
-  router.get("/api/issues/:id/events", (request) => writeResponse(() => listIssueEvents(context.database, issueID(request))));
-  router.get("/api/issues/:id/runs", (request) => writeResponse(() => publicIssueRuns(listIssueRuns(context.database, issueID(request)))));
+  router.get("/api/issues/:id/events", (request) => issueEventsResponse(context, request));
+  router.get("/api/issues/:id/runs", (request) => issueRunsResponse(context, request));
+}
+
+function issueEventsResponse(context: ReadApiContext, request: Request): Response {
+  return writeResponse(() => listIssueEvents(context.database, issueID(request)));
+}
+
+function issueRunsResponse(context: ReadApiContext, request: Request): Response {
+  return writeResponse(() => publicIssueRuns(listIssueRuns(context.database, issueID(request))));
 }
 
 function projectResponse(context: ReadApiContext, request: Request): Response {
@@ -100,7 +114,13 @@ function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, un
 
 function updateIssueAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
   const issue = updateIssue(context.database, id, body);
-  if (issue.status === "todo") kickAutoProject(context, issue.project_id);
+  if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
+  return issue;
+}
+
+function reviewIssueVerificationAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
+  const issue = reviewIssueVerification(context.database, id, body);
+  if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
 }
 
@@ -123,11 +143,15 @@ function isQueuedIssue(value: unknown): value is Issue {
 }
 
 async function cancelIssueResponse(context: ReadApiContext, request: Request): Promise<Response> {
-  return asyncWriteResponse(() => cancelIssueWithInterrupt(context.database, issueID(request), {
-    bus: context.bus,
-    interruptTimeoutMs: context.interruptTimeoutMs,
-    providers: context.providers
-  }));
+  return asyncWriteResponse(async () => {
+    const issue = await cancelIssueWithInterrupt(context.database, issueID(request), {
+      bus: context.bus,
+      interruptTimeoutMs: context.interruptTimeoutMs,
+      providers: context.providers
+    });
+    kickAutoProject(context, issue.project_id);
+    return issue;
+  });
 }
 
 function issueResponse(context: ReadApiContext, request: Request): Response {
@@ -227,4 +251,10 @@ function issueID(request: Request): number {
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
+}
+
+const LOOP_RELEASE_STATUSES = new Set(["cancelled", "done", "failed", "pending_verification", "todo"]);
+
+function shouldKickAfterWrite(status: string): boolean {
+  return LOOP_RELEASE_STATUSES.has(status);
 }

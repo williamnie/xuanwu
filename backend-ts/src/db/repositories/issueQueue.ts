@@ -7,6 +7,7 @@ const STATUS_TODO = "todo";
 const STATUS_IN_PROGRESS = "in_progress";
 
 type ClaimedIssueRow = { id: number };
+type CountRow = { count: number };
 
 export function claimNextIssue(db: RunnerDatabase, projectID: string): Issue | null {
   const cleanProjectID = projectID.trim();
@@ -16,7 +17,23 @@ export function claimNextIssue(db: RunnerDatabase, projectID: string): Issue | n
   return issueID > 0 ? getIssue(db, issueID) : null;
 }
 
+export function hasActiveExecutorWork(db: RunnerDatabase): boolean {
+  return countRows(db, `
+    select count(*) as count from issues where status=?
+      union all
+    select count(*) as count from issue_runs where ended_at=''
+  `, [STATUS_IN_PROGRESS]) > 0;
+}
+
+export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
+  const cleanProjectID = projectID.trim();
+  if (cleanProjectID === "") return false;
+  const sql = "select count(*) as count from issues where project_id=? and status=?";
+  return countRows(db, sql, [cleanProjectID, STATUS_TODO]) > 0;
+}
+
 function claimNextIssueID(db: RunnerDatabase, projectID: string): number {
+  if (hasActiveExecutorWork(db)) return 0;
   const row = nextIssueRow(db, projectID);
   if (!row) return 0;
   const timestamp = issueTimestamp();
@@ -40,4 +57,9 @@ function recordClaimEvent(db: RunnerDatabase, issueID: number, timestamp: string
     `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
     [issueID, "issue.status_changed", JSON.stringify({ status: STATUS_IN_PROGRESS }), timestamp]
   );
+}
+
+function countRows(db: RunnerDatabase, sql: string, params: string[] = []): number {
+  return db.sqlite.query<CountRow, string[]>(sql).all(...params)
+    .reduce((sum, row) => sum + row.count, 0);
 }
