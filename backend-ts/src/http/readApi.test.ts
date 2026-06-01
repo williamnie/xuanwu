@@ -107,6 +107,22 @@ describe("Bun projects/issues read API", () => {
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({ id: "demo", name: "Renamed", provider: "codex" });
 
+      const duplicateCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
+        method: "POST",
+        body: JSON.stringify({ id: "demo", name: "Manual", cwd, auto_run: 1, model: "gpt-5.5", sandbox: "danger-full-access" }),
+        headers: { "content-type": "application/json" }
+      }));
+      expect(duplicateCWD.status).toBe(201);
+      expect(await duplicateCWD.json()).toMatchObject({
+        id: "demo",
+        name: "Manual",
+        cwd,
+        auto_run: 1,
+        model: "gpt-5.5",
+        sandbox: "danger-full-access",
+        sort_order: 1
+      });
+
       const projects = await router.handle(new Request(`${BASE_URL}/api/projects`));
       expect((await projects.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["demo"]);
     } finally {

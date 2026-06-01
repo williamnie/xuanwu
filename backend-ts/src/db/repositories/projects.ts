@@ -60,6 +60,8 @@ const PROJECT_COLUMNS = `p.id, p.name, p.cwd, p.provider, p.provider_config_json
 export function createProject(db: RunnerDatabase, input: CreateProjectInput): Project {
   const project = normalizeProjectForWrite(input);
   validateProjectForWrite(project.id, project.cwd);
+  const existing = getProjectByCWD(db, project.cwd);
+  if (existing) return updateProject(db, existing.id, project);
   const timestamp = now();
   const sortOrder = nextProjectSortOrder(db);
   db.sqlite.run(`insert into projects
@@ -101,6 +103,14 @@ export function getProject(db: RunnerDatabase, id: string): Project | null {
   const row = db.sqlite.query<ProjectRow, [string]>(`
     select ${PROJECT_COLUMNS} from projects p left join project_holds h on h.project_id=p.id where p.id = ?
   `).get(projectID);
+  if (!row) return null;
+  return attachAgentProfiles(db, [mapProjectRow(row)])[0] ?? null;
+}
+
+function getProjectByCWD(db: RunnerDatabase, cwd: string): Project | null {
+  const row = db.sqlite.query<ProjectRow, [string]>(`
+    select ${PROJECT_COLUMNS} from projects p left join project_holds h on h.project_id=p.id where p.cwd = ?
+  `).get(cwd);
   if (!row) return null;
   return attachAgentProfiles(db, [mapProjectRow(row)])[0] ?? null;
 }
