@@ -303,6 +303,36 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
+  test("auto-run patch to todo immediately claims and starts provider session", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
+      const issueId = insertIssue(database, { projectId: "demo", title: "Patch queued", status: "triage", sourceSessionId: "" });
+      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+
+      const patched = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "todo" }),
+        headers: { "content-type": "application/json" }
+      }));
+
+      expect(patched.status).toBe(200);
+      await waitFor(() => provider.inputs.length === 1);
+      const row = database.sqlite.query<Record<string, unknown>, [number]>(
+        `select i.status, r.provider_session_id, r.provider_turn_id
+         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
+      ).get(issueId);
+      expect(row).toMatchObject({
+        status: "in_progress",
+        provider_session_id: `fake-session-${issueId}`,
+        provider_turn_id: `fake-turn-${issueId}`
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns stable errors for invalid issue create payloads", async () => {
     const database = await openFixtureDatabase();
     try {

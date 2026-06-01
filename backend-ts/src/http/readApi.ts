@@ -73,7 +73,7 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
   router.get("/api/issues/:id", (request) => issueResponse(context, request));
   router.patch("/api/issues/:id", async (request) => {
     const body = await parseObjectBody(request);
-    return writeResponse(() => updateIssue(context.database, issueID(request), body));
+    return writeResponse(() => updateIssueAndKickLoop(context, issueID(request), body));
   });
   router.post("/api/issues/:id/comments", async (request) => {
     const body = await parseObjectBody(request);
@@ -95,6 +95,12 @@ function actionResponse(context: ReadApiContext, request: Request, action: Issue
 
 function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, unknown>): Issue {
   const issue = createIssue(context.database, body);
+  if (issue.status === "todo") kickAutoProject(context, issue.project_id);
+  return issue;
+}
+
+function updateIssueAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
+  const issue = updateIssue(context.database, id, body);
   if (issue.status === "todo") kickAutoProject(context, issue.project_id);
   return issue;
 }
