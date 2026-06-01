@@ -55,8 +55,6 @@ describe("Bun SQLite database connection", () => {
         "issue_runs",
         "issue_templates",
         "issues",
-        "nightly_batch_items",
-        "nightly_batches",
         "pi_actions",
         "pi_agents",
         "pi_conversations",
@@ -97,8 +95,6 @@ describe("Bun SQLite database connection", () => {
     try {
       raw.run("drop table project_holds");
       raw.run("drop table cron_tasks");
-      raw.run("drop table nightly_batches");
-      raw.run("drop table nightly_batch_items");
     } finally {
       raw.close();
     }
@@ -107,8 +103,6 @@ describe("Bun SQLite database connection", () => {
     try {
       expect(tableNames(repaired)).toContain("project_holds");
       expect(tableNames(repaired)).toContain("cron_tasks");
-      expect(tableNames(repaired)).toContain("nightly_batches");
-      expect(tableNames(repaired)).toContain("nightly_batch_items");
       expect(repaired.sqlite.query("select count(*) as count from schema_migrations where id='004_safe_go_import_tables'").get()).toEqual({ count: 1 });
     } finally {
       repaired.close();

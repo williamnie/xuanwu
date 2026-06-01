@@ -50,19 +50,6 @@ const ISSUE_TEMPLATE_FIELDS = [
   'updated_at',
 ];
 
-const NIGHTLY_BATCH_FIELDS = [
-  'id',
-  'project_id',
-  'policy',
-  'promotion_mode',
-  'status',
-  'current_issue_id',
-  'pause_reason',
-  'items',
-  'created_at',
-  'updated_at',
-];
-
 const CRON_TASK_FIELDS = [
   'id',
   'name',
@@ -135,9 +122,6 @@ export function sameCronTasks(current, next) {
   return sameListByFields(current, next, CRON_TASK_FIELDS);
 }
 
-export function sameNightlyBatches(current, next) {
-  return sameListByFields(current, next, NIGHTLY_BATCH_FIELDS);
-}
 
 function eventIdentity(event, index) {
   if (!event) return '';

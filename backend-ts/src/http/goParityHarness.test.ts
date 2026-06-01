@@ -6,7 +6,7 @@ import { createDefaultRouter, startServer } from "./server.ts";
 import { buildConfig } from "../config/env.ts";
 import {
   createGoParityFixtureDatabase, goAgentProfile, goCronTask, goIssue, goIssueEvent, goIssueRun,
-  goIssueTemplate, goIssueWithLatestRun, goNightlyBatch, goProject, openGoDatabase, writeFrontendFixture
+  goIssueTemplate, goIssueWithLatestRun, goProject, openGoDatabase, writeFrontendFixture
 } from "./goParityFixtures.testSupport.ts";
 
 const tempRoots: string[] = [];
@@ -72,7 +72,7 @@ function parityEndpoints(): string[] {
     "/", "/assets/app.js", "/issues/1", "/health", "/api/projects", "/api/projects/demo",
     "/api/agent-profiles", "/api/issue-templates", "/api/issues", "/api/issues?projectId=demo",
     "/api/issues/1", "/api/issues/1/events", "/api/issues/1/runs", "/api/cron-tasks",
-    "/api/nightly-batches", "/api/nightly-batches?projectId=demo", "/api/sessions/preferences"
+    "/api/sessions/preferences"
   ];
 }
 
@@ -106,6 +106,6 @@ function referenceBodies(): Record<string, unknown> {
     "/api/agent-profiles": [goAgentProfile()], "/api/issue-templates": [goIssueTemplate()],
     "/api/issues": [goIssueWithLatestRun()], "/api/issues/1": goIssue(), "/api/issues/1/events": [goIssueEvent()],
     "/api/issues/1/runs": [goIssueRun()], "/api/cron-tasks": [goCronTask()],
-    "/api/nightly-batches": [goNightlyBatch()], "/api/sessions/preferences": { last_project_id: "demo" }
+    "/api/sessions/preferences": { last_project_id: "demo" }
   };
 }

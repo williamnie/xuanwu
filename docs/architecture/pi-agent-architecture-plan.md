@@ -145,7 +145,7 @@ PI 可执行的 project actions：
 - 建议开启/暂停 auto-run。
 - 建议默认 executor profile。
 - 发现 dirty worktree/hold 并解释原因。
-- 规划 batch/nightly 工作。
+- 规划 PI 驱动的 issue 执行批次。
 - 维护项目级记忆。
 
 第一版不允许 PI 自动修改高风险 project 设置；只允许提出 action proposal，由用户确认。
@@ -297,7 +297,7 @@ Runner Control Plane
   ├─ Issue store/events/runs
   ├─ Provider registry
   ├─ Session adapters
-  ├─ Scheduler/nightly/cron
+  ├─ Scheduler/cron
   └─ Verification/hold/retry
 
 Provider Layer

@@ -77,15 +77,14 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
-  test("covers nightly batch, command, model, usage, upload and advisory issue endpoints", async () => {
+  test("covers command, model, usage, upload and advisory issue endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
     const sessionsDir = await tempDir("codex-runner-bun-empty-sessions-");
     try {
       const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
       await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
-      const issue = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Nightly one", status: "triage" }, 201);
-      const issueTwo = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Nightly two", status: "triage" }, 201);
-      const batch = await requestJSON(router, "/api/nightly-batches", "POST", { project_id: "demo", issue_ids: [issue.id, issueTwo.id], policy: "fail_stop" }, 201);
+      const issue = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Review one", status: "triage" }, 201);
+      const issueTwo = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Draft two", status: "triage" }, 201);
       const commandIssue = await requestJSON(router, "/api/commands", "POST", { command: { name: "issue", args: { project_id: "demo" } }, prompt: "Command issue" });
       const commandRun = await requestJSON(router, "/api/commands", "POST", { command: { name: "run", args: { issue_id: commandIssue.issue.id, confirmed: true } } });
       const commandStatus = await requestJSON(router, "/api/commands", "POST", { command: { name: "status", args: { issue_id: commandIssue.issue.id } } });
@@ -98,8 +97,6 @@ describe("Bun frontend API compatibility", () => {
       const content = await rawRequest(router, `/api/uploads/${upload.id}/content`, "GET");
       const approval = await requestJSON(router, "/api/codex/approvals/req-1/resolve", "POST", { decision: "approved" });
 
-      expect(batch).toMatchObject({ project_id: "demo", current_issue_id: issue.id, status: "active" });
-      expect((batch.items as Array<Record<string, unknown>>)[0]).toMatchObject({ issue_id: issue.id, status: "current" });
       expect(commandIssue).toMatchObject({ summary: expect.stringContaining("created triage issue"), issue: { title: "Command issue" } });
       expect(commandRun).toMatchObject({ summary: expect.stringContaining("enqueued issue"), issue: { status: "todo" } });
       expect(commandStatus).toMatchObject({ summary: expect.stringContaining("issue #"), issue: { id: commandIssue.issue.id } });

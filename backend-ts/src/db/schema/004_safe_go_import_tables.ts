@@ -76,27 +76,6 @@ create table if not exists cron_tasks (
   last_result text not null default ''
 );
 
-create table if not exists nightly_batches (
-  id integer primary key autoincrement,
-  project_id text not null,
-  policy text not null,
-  promotion_mode text not null,
-  status text not null,
-  current_issue_id integer not null default 0,
-  pause_reason text not null default '',
-  created_at text not null,
-  updated_at text not null
-);
-
-create table if not exists nightly_batch_items (
-  batch_id integer not null,
-  issue_id integer not null,
-  position integer not null,
-  status text not null,
-  updated_at text not null,
-  primary key(batch_id, issue_id)
-);
-
 create table if not exists project_holds (
   project_id text primary key,
   reason text not null,
@@ -124,7 +103,5 @@ create index if not exists idx_agent_profiles_provider
 create index if not exists idx_cron_tasks_status_next_run
   on cron_tasks(status, next_run_at);
 
-create index if not exists idx_nightly_batch_items_issue
-  on nightly_batch_items(issue_id);
 `
 };

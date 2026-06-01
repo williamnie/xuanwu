@@ -157,7 +157,6 @@ describe("Bun projects/issues read API", () => {
       const router = createDefaultRouter({ database });
       const templates = await router.handle(new Request(`${BASE_URL}/api/issue-templates`));
       const cron = await router.handle(new Request(`${BASE_URL}/api/cron-tasks`));
-      const nightly = await router.handle(new Request(`${BASE_URL}/api/nightly-batches`));
       const profiles = await router.handle(new Request(`${BASE_URL}/api/agent-profiles`));
 
       expect(templates.status).toBe(200);
@@ -166,8 +165,6 @@ describe("Bun projects/issues read API", () => {
       ]);
       expect(cron.status).toBe(200);
       expect(await cron.json()).toEqual([]);
-      expect(nightly.status).toBe(200);
-      expect(await nightly.json()).toEqual([]);
       expect(profiles.status).toBe(200);
       expect(await profiles.json()).toEqual([]);
     } finally {

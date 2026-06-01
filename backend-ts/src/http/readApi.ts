@@ -5,7 +5,6 @@ import { createIssueComment, listIssueEvents } from "../db/repositories/issueEve
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
 import { listCronTasks } from "../db/repositories/cronTasks.ts";
-import { listNightlyBatches } from "../db/repositories/nightlyBatches.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
@@ -162,7 +161,6 @@ function registerIssuesPageAuxRoutes(router: Router, context: ReadApiContext): v
   router.get("/api/agent-profiles", () => json(listAgentProfiles(context.database)));
   router.get("/api/cron-tasks", () => json(listCronTasks(context.database)));
   router.get("/api/issue-templates", () => json(listIssueTemplates(context.database)));
-  router.get("/api/nightly-batches", (request) => json(listNightlyBatches(context.database, cleanParam(new URL(request.url).searchParams.get("projectId")))));
 }
 
 function projectID(request: Request): string {

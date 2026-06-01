@@ -6,7 +6,6 @@ import {
   RotateCw,
   Terminal,
 } from 'lucide-react';
-import { NightlySelectRow } from '../components/NightlyBatchPanel';
 import { deriveTriageReadiness } from '../utils/issueRefinement';
 import {
   issueFailureReason,
@@ -24,8 +23,6 @@ export default function IssueCard({
   project,
   dragging,
   retrying,
-  nightlySelected,
-  onNightlyToggle,
   onDragStart,
   onDragEnd,
   onOpenIssue,
@@ -49,9 +46,6 @@ export default function IssueCard({
     >
       <div className="kanban-card-title">#{issue.id} {issue.title}</div>
 
-      {issue.status === 'triage' && (
-        <NightlySelectRow issue={issue} selected={nightlySelected} onToggle={onNightlyToggle} />
-      )}
 
       <TriageReadinessBadge readiness={triageReadiness} />
       {issue.status === 'failed' && failureReason && <IssueFailureSummary reason={failureReason} />}

@@ -131,8 +131,6 @@ function clearSafeTargetTables(target: SQLiteDatabase): void {
   target.run("delete from pi_agents");
   target.run("delete from uploads");
   target.run("delete from app_preferences");
-  target.run("delete from nightly_batch_items");
-  target.run("delete from nightly_batches");
   target.run("delete from cron_tasks");
   target.run("delete from project_holds");
   target.run("delete from session_command_events");

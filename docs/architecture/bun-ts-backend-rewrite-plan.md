@@ -182,7 +182,7 @@ codex-issue-runner-bun executable
   ├─ Action Engine
   ├─ Memory Engine
   ├─ Skills / Extensions / MCP Registry
-  ├─ Scheduler / Nightly / Cron
+  ├─ Scheduler / Cron
   ├─ Notification Engine
   ├─ CLI commands
   └─ SQLite Store
@@ -414,7 +414,6 @@ backend-ts/
       verification.ts
     scheduler/
       cron.ts
-      nightly.ts
     cli/
       index.ts
       issue.ts
@@ -453,7 +452,6 @@ backend-ts/
 - `session_turn_references`
 - `session_command_events`
 - `cron_tasks`
-- `nightly_batches`
 - `project_holds`
 - `notification_settings`
 - `uploads`
@@ -1136,7 +1134,7 @@ printf 'header = "Authorization: Bearer %s"\n' "$(cat "$BUN_TOKEN_FILE")" > "$cu
 | CLI | must-pass | Bun binary 的核心 CLI 可替代 Go 日常闭环：`system status/doctor/logs`、`project create`、`issue create/status/update/logs/retry/cancel`，并支持 `--addr`、`--token-file`、`--json`。 | `./dist/codex-issue-runner-bun system logs --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --lines 80 >/tmp/bun-logs.txt`，确认 `/tmp/bun-logs.txt` 不含实际 token；复用 Issues API disposable issue 验证 `issue` 子命令。 |
 | Rollback | must-pass | 正式切换前已有 Go DB/Bun DB 备份、Go binary/plist 可恢复，且 preview 停止不会影响 Go stable。 | `mkdir -p data/backups/p08-cutover && cp "$GO_DB" data/backups/p08-cutover/go-runner.db && cp "$BUN_DB" data/backups/p08-cutover/bun-runner.db`；`test -x dist/codex-issue-runner`；`./scripts/uninstall-bun-launchd.sh --dry-run`；dry-run 后再次 `curl -fsS "http://$GO_ADDR/health" >/dev/null`。 |
 | Observability | must-pass | preview logs、system logs、doctor 输出可用于故障定位，且 redaction 生效。 | `./scripts/deploy-bun-preview.sh --dry-run`；`./dist/codex-issue-runner-bun system logs --addr "$BUN_ADDR" --token-file "$BUN_TOKEN_FILE" --lines 120 >/tmp/bun-logs.txt`；`rg -i 'token' /tmp/bun-logs.txt; rg -i 'secret' /tmp/bun-logs.txt; rg -i 'authorization' /tmp/bun-logs.txt` 只能出现 redacted 文本或无结果。 |
-| Extended frontend parity | can-defer | cron/nightly/notifications/usage/upload 等非切换核心页面若未完整迁移，不阻止 P08.05，但必须在 release notes 中隐藏入口或标注 preview limitation。 | 建 follow-up issue，列出受影响页面、API 路径、用户影响和回滚影响；P08.05 前确认主导航不会把用户引到假成功页面。 |
+| Extended frontend parity | can-defer | cron/notifications/usage/upload 等非切换核心页面若未完整迁移，不阻止 P08.05，但必须在 release notes 中隐藏入口或标注 preview limitation。 | 建 follow-up issue，列出受影响页面、API 路径、用户影响和回滚影响；P08.05 前确认主导航不会把用户引到假成功页面。 |
 | Advanced PI automation | can-defer | PI auto-manage loop、action 自动 approve/execute、memory ranking 的高级体验可延后；PI Chat 与受控 action API 不能延后。 | 建 follow-up issue；`GET /api/pi/actions`、`GET /api/pi/memory` 至少可读，run-once 不得导致服务崩溃或污染 Go DB。 |
 | CLI long tail | can-defer | 与正式切换无关的长尾 CLI 子命令可延后；executor 回写、issue/status/system/project 核心 CLI 不能延后。 | 在 CLI parity follow-up 中列出缺口；P08.05 release notes 写明替代 API/UI 操作。 |
 | One-command rollback | can-defer | 可以先用人工 rollback runbook，不强制 P08.05 前完成一键 rollback 脚本。 | runbook 必须包含 Go launchd 恢复、Go DB backup 恢复、Bun service 停止、health/status smoke，并在维护窗口演练一次 dry-run。 |

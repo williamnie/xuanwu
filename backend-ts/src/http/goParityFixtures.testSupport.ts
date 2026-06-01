@@ -35,8 +35,7 @@ export async function createGoParityFixtureDatabase(path: string): Promise<void>
 function schemaStatements(): string[] {
   return [
     projectsSchema(), projectHoldsSchema(), agentProfilesSchema(), issueTemplatesSchema(), issuesSchema(),
-    issueEventsSchema(), issueRunsSchema(), cronTasksSchema(), nightlyBatchesSchema(), nightlyBatchItemsSchema(),
-    appPreferencesSchema()
+    issueEventsSchema(), issueRunsSchema(), cronTasksSchema(), appPreferencesSchema()
   ];
 }
 
@@ -61,9 +60,6 @@ function fixtureStatements(): string[] {
     `insert into cron_tasks values (1, 'Daily triage', 'demo', 'triage_to_todo', 'daily', '09:00',
       '2026-01-02T01:00:00Z', '2026-01-01T01:00:00Z', 'active', 3, '',
       '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'success', 'promoted')`,
-    `insert into nightly_batches values (1, 'demo', 'fail_stop', 'auto', 'active', 1, '',
-      '2026-01-01T00:05:00Z', '2026-01-01T00:05:01Z')`,
-    `insert into nightly_batch_items values (1, 1, 1, 'current', '2026-01-01T00:05:02Z')`,
     `insert into app_preferences values ('sessions.last_project_id', 'demo', '2026-01-01T00:06:00Z')`
   ];
 }
@@ -144,21 +140,6 @@ function cronTasksSchema(): string {
   )`;
 }
 
-function nightlyBatchesSchema(): string {
-  return `create table nightly_batches (
-    id integer primary key autoincrement, project_id text not null, policy text not null,
-    promotion_mode text not null, status text not null, current_issue_id integer not null default 0,
-    pause_reason text not null default '', created_at text not null, updated_at text not null
-  )`;
-}
-
-function nightlyBatchItemsSchema(): string {
-  return `create table nightly_batch_items (
-    batch_id integer not null, issue_id integer not null, position integer not null,
-    status text not null, updated_at text not null, primary key(batch_id, issue_id)
-  )`;
-}
-
 function appPreferencesSchema(): string {
   return "create table app_preferences (key text primary key, value text not null default '', updated_at text not null)";
 }
@@ -230,13 +211,5 @@ export function goCronTask() {
     next_run_at: "2026-01-02T01:00:00Z", last_run_at: "2026-01-01T01:00:00Z", last_status: "success",
     last_result: "promoted", status: "active", run_count: 3, error: "", last_error: "",
     created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
-  };
-}
-
-export function goNightlyBatch() {
-  return {
-    id: 1, project_id: "demo", policy: "fail_stop", promotion_mode: "auto", status: "active", current_issue_id: 1,
-    pause_reason: "", created_at: "2026-01-01T00:05:00Z", updated_at: "2026-01-01T00:05:01Z",
-    items: [{ batch_id: 1, issue_id: 1, position: 1, status: "current", updated_at: "2026-01-01T00:05:02Z", issue: goIssue() }]
   };
 }

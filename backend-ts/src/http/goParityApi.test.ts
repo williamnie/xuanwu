@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createDefaultRouter } from "./server.ts";
 import {
   createGoParityFixtureDatabase, goAgentProfile, goCronTask, goIssue, goIssueEvent,
-  goIssueRun, goIssueTemplate, goIssueWithLatestRun, goNightlyBatch, goProject, openGoDatabase, type FixtureDatabase
+  goIssueRun, goIssueTemplate, goIssueWithLatestRun, goProject, openGoDatabase, type FixtureDatabase
 } from "./goParityFixtures.testSupport.ts";
 
 const BASE_URL = "http://127.0.0.1:3018";
@@ -49,7 +49,7 @@ function parityCases(): Array<[string, unknown]> {
     ["/api/projects", [goProject()]], ["/api/agent-profiles", [goAgentProfile()]],
     ["/api/issue-templates", [goIssueTemplate()]], ["/api/issues?projectId=demo", [goIssueWithLatestRun()]],
     ["/api/issues/1/events", [goIssueEvent()]], ["/api/issues/1/runs", [goIssueRun()]],
-    ["/api/cron-tasks", [goCronTask()]], ["/api/nightly-batches", [goNightlyBatch()]],
+    ["/api/cron-tasks", [goCronTask()]],
     ["/api/sessions/preferences", { last_project_id: "demo" }]
   ];
 }

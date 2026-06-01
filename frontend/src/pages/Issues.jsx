@@ -4,7 +4,6 @@ import { message } from '../store/toastStore';
 import {
   selectIssueTemplates,
   selectIssues,
-  selectNightlyBatches,
   selectProjects,
   selectRefreshAllData,
   useDataStore,
@@ -16,10 +15,8 @@ import {
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
 import CronTasksPanel from '../components/CronTasksPanel';
-import { NightlyBatchPanel } from '../components/NightlyBatchPanel';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
-import { activeNightlyBatchForProject, canCreateNightlyBatch, selectedNightlyIssues as getSelectedNightlyIssues } from '../utils/nightlyBatch';
 import { deriveTriageReadiness, triageReadinessMoveToTodoNotice } from '../utils/issueRefinement';
 import {
   extractIssueTemplateVariables,
@@ -39,7 +36,6 @@ export default function Issues({
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const issueTemplates = useDataStore(selectIssueTemplates);
-  const nightlyBatches = useDataStore(selectNightlyBatches);
   const refreshAllData = useDataStore(selectRefreshAllData);
 
   // 新建 Issue 的局部表单状态
@@ -55,9 +51,6 @@ export default function Issues({
   const [draggingIssueId, setDraggingIssueId] = useState(null);
   const [draggedOverColumnId, setDraggedOverColumnId] = useState(null);
   const [retryingIssueId, setRetryingIssueId] = useState(null);
-  const [nightlySelection, setNightlySelection] = useState([]);
-  const [nightlyPolicy, setNightlyPolicy] = useState('fail_stop');
-  const [creatingNightlyBatch, setCreatingNightlyBatch] = useState(false);
 
   const stopCardAction = (event) => {
     event.stopPropagation();
@@ -86,37 +79,6 @@ export default function Issues({
     stopCardAction(event);
     if (sessionRef) {
       navigateTo('sessions', null, sessionRef);
-    }
-  };
-  const toggleNightlySelection = (issueId) => {
-    setNightlySelection(prev => (
-      prev.includes(issueId) ? prev.filter(id => id !== issueId) : [...prev, issueId]
-    ));
-  };
-
-  const clearNightlySelection = () => setNightlySelection([]);
-
-  const handleCreateNightlyBatch = async () => {
-    if (nightlySelection.length === 0) {
-      message.warning('请先选择至少一个 Triage issue');
-      return;
-    }
-    const selectedIssues = getSelectedNightlyIssues(triageIssues, nightlySelection);
-    setCreatingNightlyBatch(true);
-    try {
-      await api.createNightlyBatch({
-        project_id: selectedIssues[0]?.project_id || filterProject || '',
-        issue_ids: selectedIssues.map(issue => issue.id),
-        policy: nightlyPolicy,
-        promotion_mode: 'auto',
-      });
-      message.success(`Nightly batch 已创建，首个 issue 已进入 Todo`);
-      setNightlySelection([]);
-      refreshAllData();
-    } catch (err) {
-      message.error(`创建 Nightly batch 失败: ${err.message || '网络异常'}`);
-    } finally {
-      setCreatingNightlyBatch(false);
     }
   };
 
@@ -377,10 +339,6 @@ export default function Issues({
   };
 
   const visibleColumns = getVisibleColumns();
-  const activeNightlyBatch = activeNightlyBatchForProject(nightlyBatches, filterProject);
-  const selectedNightlyIssues = getSelectedNightlyIssues(triageIssues, nightlySelection);
-  const canCreateSelectedNightlyBatch = canCreateNightlyBatch(selectedNightlyIssues);
-
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
 
@@ -391,15 +349,6 @@ export default function Issues({
         </h1>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {selectedNightlyIssues.length > 0 && (
-            <button
-              className="btn btn-secondary"
-              style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-              onClick={clearNightlySelection}
-            >
-              Clear nightly ({selectedNightlyIssues.length})
-            </button>
-          )}
           <CronTasksPanel compact defaultProjectId={filterProject} />
           <button
             className="btn btn-primary"
@@ -411,15 +360,6 @@ export default function Issues({
         </div>
       </div>
 
-      <NightlyBatchPanel
-        batch={activeNightlyBatch}
-        selectedIssues={selectedNightlyIssues}
-        policy={nightlyPolicy}
-        onPolicyChange={setNightlyPolicy}
-        onCreate={handleCreateNightlyBatch}
-        creating={creatingNightlyBatch}
-        canCreate={canCreateSelectedNightlyBatch}
-      />
 
       {/* 核心看板网格组件 */}
       <div className="kanban-board">
@@ -464,8 +404,6 @@ export default function Issues({
                       project={proj}
                       dragging={draggingIssueId === issue.id}
                       retrying={retryingIssueId === issue.id}
-                      nightlySelected={nightlySelection.includes(issue.id)}
-                      onNightlyToggle={toggleNightlySelection}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onOpenIssue={(issueId) => navigateTo('issues', issueId)}

@@ -3,12 +3,9 @@ import { useImmer } from 'use-immer';
 import { api } from '../api/client';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
-import DashboardNightlyBatch from '../components/DashboardNightlyBatch';
-import { activeNightlyBatchForProject } from '../utils/nightlyBatch';
 import {
   selectBackendOnline,
   selectIssues,
-  selectNightlyBatches,
   selectProjects,
   selectRefreshAllData,
   useDataStore,
@@ -28,7 +25,6 @@ export default function Dashboard({
 }) {
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
-  const nightlyBatches = useDataStore(selectNightlyBatches);
   const backendOnline = useDataStore(selectBackendOnline);
   const refreshAllData = useDataStore(selectRefreshAllData);
   const [events, updateEvents] = useImmer([]);
@@ -62,7 +58,6 @@ export default function Dashboard({
   const inProgressIssues = issues.filter(i => i.status === 'in_progress');
   const todoIssues = issues.filter(i => i.status === 'todo');
   const doneIssues = issues.filter(i => i.status === 'done');
-  const activeNightlyBatch = activeNightlyBatchForProject(nightlyBatches);
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -132,7 +127,6 @@ export default function Dashboard({
 
       <CodexUsagePanel />
 
-      <DashboardNightlyBatch batch={activeNightlyBatch} navigateTo={navigateTo} />
 
       {/* 双栏布局 */}
       <div className="grid-cols-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>

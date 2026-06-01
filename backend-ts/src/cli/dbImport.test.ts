@@ -41,8 +41,6 @@ describe("Bun Go DB import command", () => {
     expect(body.tables.issue_runs).toEqual({ source: 1, target: 1 });
     expect(body.tables.agent_profiles).toEqual({ source: 1, target: 1 });
     expect(body.tables.cron_tasks).toEqual({ source: 1, target: 1 });
-    expect(body.tables.nightly_batches).toEqual({ source: 1, target: 1 });
-    expect(body.tables.nightly_batch_items).toEqual({ source: 1, target: 1 });
     expect(body.tables.app_preferences).toEqual({ source: 1, target: 1 });
     expect(body.tables.uploads).toEqual({ source: 1, target: 1 });
     expect(body.tables.session_turn_references).toEqual({ source: 1, target: 1 });
@@ -50,7 +48,7 @@ describe("Bun Go DB import command", () => {
     expect((await stat(sourcePath)).mtimeMs).toBe(sourceMtimeBefore);
     expect(targetCounts(targetPath, [
       "projects", "agent_profiles", "issue_templates", "issues", "issue_events", "issue_runs",
-      "cron_tasks", "nightly_batches", "nightly_batch_items", "app_preferences", "uploads",
+      "cron_tasks", "app_preferences", "uploads",
       "session_turn_references", "session_command_events"
     ])).toEqual({
       agent_profiles: 1,
@@ -60,8 +58,6 @@ describe("Bun Go DB import command", () => {
       issue_runs: 1,
       issue_templates: 1,
       issues: 2,
-      nightly_batch_items: 1,
-      nightly_batches: 1,
       projects: 1,
       session_command_events: 1,
       session_turn_references: 1,
@@ -222,15 +218,6 @@ async function createGoFixtureDatabase(path: string): Promise<void> {
       created_at text not null, updated_at text not null, last_status text not null default '',
       last_result text not null default ''
     )`);
-    db.run(`create table nightly_batches (
-      id integer primary key autoincrement, project_id text not null, policy text not null,
-      promotion_mode text not null, status text not null, current_issue_id integer not null default 0,
-      pause_reason text not null default '', created_at text not null, updated_at text not null
-    )`);
-    db.run(`create table nightly_batch_items (
-      batch_id integer not null, issue_id integer not null, position integer not null,
-      status text not null, updated_at text not null, primary key(batch_id, issue_id)
-    )`);
     db.run(`create table app_preferences (key text primary key, value text not null, updated_at text not null)`);
     db.run(`create table uploads (
       id text primary key, original_name text not null, mime_type text not null, size_bytes integer not null,
@@ -265,10 +252,6 @@ async function createGoFixtureDatabase(path: string): Promise<void> {
       values ('run-1', 1, 1, 'done', '2026-01-01T00:00:03Z', '2026-01-01T00:00:04Z', '{"runtime":"go"}')`);
     db.run(`insert into cron_tasks (name, project_id, action, mode, time_of_day, status, created_at, updated_at)
       values ('Daily', 'demo', 'triage_to_todo', 'daily', '09:00', 'active', '2026-01-01T00:00:05Z', '2026-01-01T00:00:05Z')`);
-    db.run(`insert into nightly_batches (project_id, policy, promotion_mode, status, current_issue_id, created_at, updated_at)
-      values ('demo', 'fail_stop', 'auto', 'active', 1, '2026-01-01T00:00:06Z', '2026-01-01T00:00:06Z')`);
-    db.run(`insert into nightly_batch_items (batch_id, issue_id, position, status, updated_at)
-      values (1, 1, 1, 'current', '2026-01-01T00:00:07Z')`);
     db.run(`insert into app_preferences (key, value, updated_at)
       values ('sessions.last_project_id', 'demo', '2026-01-01T00:00:08Z')`);
     db.run(`insert into uploads (id, original_name, mime_type, size_bytes, sha256, storage_path, created_at)

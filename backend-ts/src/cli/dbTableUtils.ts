@@ -12,8 +12,6 @@ export const SAFE_IMPORT_TABLES = [
   "session_command_events",
   "project_holds",
   "cron_tasks",
-  "nightly_batches",
-  "nightly_batch_items",
   "app_preferences",
   "uploads",
   "pi_agents",

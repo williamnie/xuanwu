@@ -7,7 +7,6 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueTemplate, deleteIssueTemplate, getIssueTemplate, updateIssueTemplate } from "../db/repositories/issueTemplates.ts";
-import { createNightlyBatch, getNightlyBatch, promoteNextNightlyBatchIssue } from "../db/repositories/nightlyBatchWrites.ts";
 import { getNotificationSettings, saveNotificationSettings } from "../db/repositories/notificationSettings.ts";
 import { clearProjectHold, deleteProject, reorderProjects } from "../db/repositories/projectsExtra.ts";
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
@@ -29,7 +28,6 @@ export function registerFrontendCompatRoutes(router: Router, context: FrontendCo
   registerProjectCompatRoutes(router, context);
   registerTemplateRoutes(router, context);
   registerCronRoutes(router, context);
-  registerNightlyRoutes(router, context);
   registerUtilityRoutes(router, context);
   registerUploadRoutes(router, context);
   registerAdvisoryIssueRoutes(router, context);
@@ -63,12 +61,6 @@ function registerCronRoutes(router: Router, context: FrontendCompatContext): voi
   router.post("/api/cron-tasks", async (request) => { const body = await objectBody(request); return writeResponse(() => createCronTask(context.database, body), 201); });
   router.patch("/api/cron-tasks/:id", async (request) => { const body = await objectBody(request); return writeResponse(() => updateCronTask(context.database, numericID(request, "cron task id 不合法"), body)); });
   router.delete("/api/cron-tasks/:id", (request) => writeResponse(() => { deleteCronTask(context.database, numericID(request, "cron task id 不合法")); return null; }, 204));
-}
-
-function registerNightlyRoutes(router: Router, context: FrontendCompatContext): void {
-  router.post("/api/nightly-batches", async (request) => { const body = await objectBody(request); return writeResponse(() => createNightlyBatch(context.database, body), 201); });
-  router.get("/api/nightly-batches/:id", (request) => writeResponse(() => mustNightly(context.database, numericID(request, "nightly batch id 不合法"))));
-  router.post("/api/nightly-batches/:id/promote", (request) => writeResponse(() => promoteNextNightlyBatchIssue(context.database, numericID(request, "nightly batch id 不合法"))));
 }
 
 function registerUtilityRoutes(router: Router, context: FrontendCompatContext): void {
@@ -217,7 +209,6 @@ function uploadContentResponse(db: RunnerDatabase, id: string): Response {
 
 function defaultModels(): Record<string, unknown> { return { data: [{ id: "codex-default", model: "codex-default", displayName: "Codex Default", isDefault: true, hidden: false, defaultReasoningEffort: "", supportedReasoningEfforts: [] }] }; }
 function mustTemplate(db: RunnerDatabase, id: string) { const item = getIssueTemplate(db, id); if (!item) throw new ProjectNotFoundError(); return item; }
-function mustNightly(db: RunnerDatabase, id: number) { const item = getNightlyBatch(db, id); if (!item) throw new ProjectNotFoundError(); return item; }
 function approvalID(request: Request): string { return pathPart(request, 2); }
 function uploadID(request: Request): string { return pathPart(request, 1); }
 function issueID(request: Request): number { return numericPathPart(request, 1, "issue id 不合法"); }
