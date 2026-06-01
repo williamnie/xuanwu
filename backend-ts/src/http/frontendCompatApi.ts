@@ -77,7 +77,6 @@ function registerUtilityRoutes(router: Router, context: FrontendCompatContext): 
   router.get("/api/capabilities", () => json({ skills: [], plugins: [] }));
   router.get("/api/codex/models", async () => asyncResponse(async () => await context.providers?.codex?.listModels?.() ?? defaultModels()));
   router.post("/api/codex/approvals/:id/resolve", async (request) => asyncResponse(async () => resolveApproval(context, approvalID(request), await objectBody(request))));
-  router.get("/api/usage/codex", () => json(emptyUsageReport()));
   router.post("/api/commands", async (request) => { const body = await objectBody(request); return writeResponse(() => executeCommand(context, body)); });
   router.post("/api/system/restart", () => json({ ok: false, message: "Bun runtime restart is managed by launchd" }, { status: 501 }));
 }
@@ -217,7 +216,6 @@ function uploadContentResponse(db: RunnerDatabase, id: string): Response {
 }
 
 function defaultModels(): Record<string, unknown> { return { data: [{ id: "codex-default", model: "codex-default", displayName: "Codex Default", isDefault: true, hidden: false, defaultReasoningEffort: "", supportedReasoningEfforts: [] }] }; }
-function emptyUsageReport(): Record<string, unknown> { return { source: "", events_scanned: 0, summary: {}, daily: [], weekly: [], monthly: [], rate_limits: null, project_usage: [] }; }
 function mustTemplate(db: RunnerDatabase, id: string) { const item = getIssueTemplate(db, id); if (!item) throw new ProjectNotFoundError(); return item; }
 function mustNightly(db: RunnerDatabase, id: number) { const item = getNightlyBatch(db, id); if (!item) throw new ProjectNotFoundError(); return item; }
 function approvalID(request: Request): string { return pathPart(request, 2); }

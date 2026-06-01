@@ -7,6 +7,7 @@ export const ENV_KEYS = {
   dbPath: "CODEX_RUNNER_BUN_DB",
   authToken: "CODEX_RUNNER_BUN_AUTH_TOKEN",
   authTokenFile: "CODEX_RUNNER_BUN_AUTH_TOKEN_FILE",
+  codexSessionsDir: "CODEX_RUNNER_BUN_CODEX_SESSIONS_DIR",
   webDir: "CODEX_RUNNER_BUN_WEB_DIR",
   codexCommand: "CODEX_RUNNER_BUN_CODEX_CMD",
   codexCwd: "CODEX_RUNNER_BUN_CODEX_CWD",
@@ -37,6 +38,7 @@ export type RunnerConfig = {
   dbPath: string;
   authToken: string;
   authTokenFile: string;
+  codexSessionsDir: string;
   webDir: string;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
 };
@@ -47,6 +49,7 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--db": "dbPath",
   "--auth-token": "authToken",
   "--auth-token-file": "authTokenFile",
+  "--codex-sessions-dir": "codexSessionsDir",
   "--web-dir": "webDir",
   "--codex-cmd": "codexCommand",
   "--codex-cwd": "codexCwd",
@@ -70,6 +73,7 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
   return {
     addr: cleanValue(overrides.addr) ?? DEFAULT_ADDR,
     authToken: cleanValue(overrides.authToken) ?? "",
+    codexSessionsDir: cleanValue(overrides.codexSessionsDir) ?? defaultCodexSessionsDir(),
     webDir: cleanValue(overrides.webDir) ?? "",
     ...paths,
     providers: {
@@ -86,6 +90,7 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     dbPath: cleanValue(env[ENV_KEYS.dbPath]),
     authToken: cleanValue(env[ENV_KEYS.authToken]),
     authTokenFile: cleanValue(env[ENV_KEYS.authTokenFile]),
+    codexSessionsDir: cleanValue(env[ENV_KEYS.codexSessionsDir]),
     webDir: cleanValue(env[ENV_KEYS.webDir]),
     codexCommand: cleanValue(env[ENV_KEYS.codexCommand]),
     codexCwd: cleanValue(env[ENV_KEYS.codexCwd]),
@@ -137,6 +142,7 @@ type ProviderRuntimeOverrides = {
   codexCommand?: string;
   codexCwd?: string;
   codexEnv?: string;
+  codexSessionsDir?: string;
   codexTimeoutMs?: number | string;
 };
 
@@ -217,4 +223,9 @@ function parsePositiveInteger(value: number | string | undefined, fallback: numb
   if (text === undefined) return fallback;
   const parsed = Number(text);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function defaultCodexSessionsDir(): string {
+  const home = cleanValue(Bun.env.HOME);
+  return home ? `${home}/.codex/sessions` : "";
 }

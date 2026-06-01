@@ -9,6 +9,7 @@ describe("Bun backend config", () => {
       dbPath: "data-bun/runner.db",
       authToken: "",
       authTokenFile: "data-bun/auth_token",
+      codexSessionsDir: `${Bun.env.HOME}/.codex/sessions`,
       webDir: "",
       providers: {
         codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
@@ -47,6 +48,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.dbPath]: "/tmp/runner-bun.db",
       [ENV_KEYS.authToken]: "env-token",
       [ENV_KEYS.authTokenFile]: "/tmp/token-bun",
+      [ENV_KEYS.codexSessionsDir]: "/tmp/codex-sessions",
       [ENV_KEYS.webDir]: "/tmp/frontend-dist",
       [ENV_KEYS.codexCommand]: "/opt/bin/codex app-server --listen stdio://",
       [ENV_KEYS.codexCwd]: "/tmp/project",
@@ -65,6 +67,7 @@ describe("Bun backend config", () => {
       dbPath: "/tmp/runner-bun.db",
       authToken: "env-token",
       authTokenFile: "/tmp/token-bun",
+      codexSessionsDir: "/tmp/codex-sessions",
       webDir: "/tmp/frontend-dist",
       providers: {
         codex: {
@@ -93,6 +96,7 @@ describe("Bun backend config", () => {
       "--db", "/tmp/cli.db",
       "--auth-token", "cli-token",
       "--auth-token-file", "/tmp/cli-token",
+      "--codex-sessions-dir", "/tmp/cli-sessions",
       "--web-dir", "/tmp/cli-web",
       "--codex-cmd", "cli-codex app-server --listen stdio://",
       "--codex-cwd=/tmp/cli-project",
@@ -111,6 +115,7 @@ describe("Bun backend config", () => {
       dbPath: "/tmp/cli.db",
       authToken: "cli-token",
       authTokenFile: "/tmp/cli-token",
+      codexSessionsDir: "/tmp/cli-sessions",
       webDir: "/tmp/cli-web",
       providers: {
         codex: {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -79,8 +79,9 @@ describe("Bun frontend API compatibility", () => {
 
   test("covers nightly batch, command, model, usage, upload and advisory issue endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
+    const sessionsDir = await tempDir("codex-runner-bun-empty-sessions-");
     try {
-      const router = createDefaultRouter({ database });
+      const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
       await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
       const issue = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Nightly one", status: "triage" }, 201);
       const issueTwo = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Nightly two", status: "triage" }, 201);
@@ -110,6 +111,28 @@ describe("Bun frontend API compatibility", () => {
       expect(content.status).toBe(200);
       expect(content.headers.get("content-type")).toContain("image/png");
       expect(approval).toEqual({ ok: true });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reads Codex usage from configured sessions dir", async () => {
+    const { database } = await openFixtureDatabase();
+    const sessionsDir = await tempDir("codex-runner-bun-sessions-");
+    await writeUsageJSONL(sessionsDir, "2026/05/31/session.jsonl", [
+      `{"timestamp":"2026-05-31T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}}`
+    ]);
+    try {
+      const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
+
+      const usage = await requestJSON(router, "/api/usage/codex", "GET");
+
+      expect(usage).toMatchObject({
+        source: sessionsDir,
+        events_scanned: 1,
+        summary: { all_time: { total_tokens: 15 } },
+        latest_usage: { last_token_usage: { total_tokens: 15 } }
+      });
     } finally {
       database.close();
     }
@@ -154,4 +177,16 @@ function insertHold(db: RunnerDatabase, projectId: string): void {
   db.sqlite.run(`insert into project_holds
     (project_id, reason, message, hold_since, updated_at) values (?, ?, ?, ?, ?)`,
     [projectId, "manual", "waiting", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]);
+}
+
+async function tempDir(prefix: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), prefix));
+  tempRoots.push(root);
+  return root;
+}
+
+async function writeUsageJSONL(root: string, name: string, lines: string[]): Promise<void> {
+  const path = join(root, ...name.split("/"));
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(path, `${lines.join("\n")}\n`);
 }

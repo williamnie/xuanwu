@@ -18,10 +18,12 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiRoutes } from "./piApi.ts";
 import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
+import { registerUsageRoutes } from "./usageApi.ts";
 import type { Router } from "./router.ts";
 
 type ReadApiContext = {
   bus?: EventBus;
+  codexSessionsDir?: string;
   database: RunnerDatabase;
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -36,6 +38,7 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   registerPiRoutes(router, context);
   registerSessionRoutes(router, context);
   registerFrontendCompatRoutes(router, context);
+  registerUsageRoutes(router, context);
 }
 
 function registerProjectRoutes(router: Router, context: ReadApiContext): void {

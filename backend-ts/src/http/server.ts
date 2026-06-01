@@ -16,6 +16,7 @@ type ListenAddress = { hostname: string; port: number };
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
   bus?: EventBus;
+  codexSessionsDir?: string;
   database?: RunnerDatabase;
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -28,6 +29,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   registerEventRoutes(router, { bus });
   if (runtime.database) registerReadApiRoutes(router, {
     bus,
+    codexSessionsDir: runtime.codexSessionsDir,
     database: runtime.database,
     interruptTimeoutMs: runtime.interruptTimeoutMs,
     providers: runtime.providers
@@ -38,16 +40,18 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
 export async function startServer(
   config: RunnerConfig,
   runtime: ServerRuntime,
-  router = createDefaultRouter(runtime)
+  router?: Router
 ): Promise<ReturnType<typeof Bun.serve>> {
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);
-  registerSystemStatusRoute(router, { authToken, config, ...runtime });
-  registerSystemLogsRoute(router, { config });
+  const activeRouter = router ?? createDefaultRouter({ ...runtime, codexSessionsDir: config.codexSessionsDir });
+  registerSystemStatusRoute(activeRouter, { authToken, config, ...runtime });
+  registerSystemLogsRoute(activeRouter, { config });
   return Bun.serve({
     hostname: address.hostname,
+    idleTimeout: 120,
     port: address.port,
-    fetch: createRequestHandler(router, authToken, { webDir: config.webDir })
+    fetch: createRequestHandler(activeRouter, authToken, { webDir: config.webDir })
   });
 }
 
