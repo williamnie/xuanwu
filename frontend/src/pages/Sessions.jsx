@@ -361,9 +361,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     return () => window.removeEventListener('resize', clampToContainer);
   }, [applySessionSidebarWidth]);
 
-  // 客户端风格路由、置顶与搜索状态
+  // 客户端风格路由与置顶状态
   const [activeView, setActiveView] = useState('chat');
-  const [searchTerm, setSearchTerm] = useState('');
   const [sessionListFilter, setSessionListFilter] = useState(SESSION_LIST_FILTER_ALL);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(() => {
     const stored = localStorage.getItem('codex-pinned-sessions');
@@ -971,29 +970,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
             <span>新对话</span>
           </button>
           
-          <button 
-            className={`sidebar-shortcut-item ${activeView === 'search' ? 'active' : ''}`}
-            onClick={() => { setActiveView(activeView === 'search' ? 'new' : 'search'); }}
-          >
-            <span className="sidebar-shortcut-item-icon"><Search size={16} /></span>
-            <span>搜索</span>
-          </button>
-          
         </div>
-
-        {/* 搜索框 */}
-        {activeView === 'search' && (
-          <div className="session-list-search">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="搜索标题 / thread / 项目..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              autoFocus
-            />
-          </div>
-        )}
 
         {/* 置顶会话列表 */}
         {pinnedSessions.length > 0 && (
@@ -1036,8 +1013,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
             savingOrder={savingProjectOrder}
-            autoCollapseEmptyProjects={!searchTerm.trim() && sessionListFilter === SESSION_LIST_FILTER_ALL}
-            searchTerm={searchTerm}
+            autoCollapseEmptyProjects={sessionListFilter === SESSION_LIST_FILTER_ALL}
             filterMode={sessionListFilter}
             onSelect={selectSession}
             onLoadMore={loadMore}
