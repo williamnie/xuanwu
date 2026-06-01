@@ -66,7 +66,7 @@ test('uses persisted workflow snapshot when present', () => {
             label: 'Verify',
             status: 'active',
             updated_at: '2026-05-27T01:02:00Z',
-            evidence_summary: 'go test ./backend/internal/store passed',
+            evidence_summary: 'bun test backend-ts/src/db/database.test.ts passed',
             actor: 'agent',
           },
         ],
@@ -90,7 +90,7 @@ test('uses persisted workflow snapshot when present', () => {
     ['intake', 'done'],
     ['verify', 'active'],
   ]);
-  assert.match(workflow.steps[1].evidence, /go test/);
+  assert.match(workflow.steps[1].evidence, /bun test/);
   assert.equal(workflow.verificationEvidence.found, true);
 });
 

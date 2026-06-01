@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-export const DEFAULT_ADDR = "127.0.0.1:3018";
+export const DEFAULT_ADDR = "127.0.0.1:3008";
 export const DEFAULT_STATE_DIR = "data-bun";
 export const DEFAULT_DB_FILE = "runner.db";
 export const DEFAULT_AUTH_TOKEN_FILE = "auth_token";

@@ -3,7 +3,7 @@ import { EventBus } from "../events/bus.ts";
 import { createRouter } from "./router.ts";
 import { registerEventRoutes } from "./events.ts";
 
-const BASE_URL = "http://127.0.0.1:3018";
+const BASE_URL = "http://127.0.0.1:3008";
 
 describe("Bun SSE events endpoint", () => {
   test("opens an SSE stream, sends heartbeat, and cleans up on close", async () => {

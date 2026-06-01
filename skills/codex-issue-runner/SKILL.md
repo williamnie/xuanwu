@@ -9,30 +9,20 @@ Use the local `codex-issue-runner` CLI to hand bounded work from an agent/provid
 
 ## Preconditions
 
-- The Go stable service should be running at `CODEX_RUNNER_ADDR` or `127.0.0.1:3008`.
-- On the Bun preview branch, use the Bun CLI/binary only with the preview addr `127.0.0.1:3018`; do not point it at the Go stable addr unless doing an explicit cutover.
+- The Bun live service should be running at `CODEX_RUNNER_ADDR` or `127.0.0.1:3008`.
 - The target repository should already be registered as a project. If not, register it first.
 - Prefer explicit project ids, short issue titles, and full markdown bodies in a temp file.
 
-## Runtime Targets
+## Runtime Target
 
-Daily usage remains on Go stable:
+Daily usage:
 
 - Addr: `127.0.0.1:3008`
-- Data/DB: `data/` (`data/app.db` or `data/runner.db`, depending on the running Go service config)
-- Token file: `data/auth_token`
+- Token file: configured service state dir `auth_token`
 - launchd label: `com.xiaobei.codex-issue-runner`
 - CLI: `codex-issue-runner` or repo-local `./dist/codex-issue-runner`
 
-Bun preview is isolated:
-
-- Addr: `127.0.0.1:3018`
-- Data/DB: `data-bun/` and `data-bun/runner.db`
-- Token file: `data-bun/auth_token`
-- launchd label: `com.xiaobei.codex-issue-runner-bun`
-- CLI/binary: `./dist/codex-issue-runner-bun`
-
-Never let Bun preview claim `127.0.0.1:3008`, write Go stable `data/runner.db`, or reuse the Go launchd label. Use the corresponding token file via env or `--token-file`; never paste or print actual token values.
+Use the configured token file via env or `--token-file`; never paste or print actual token values.
 
 ## CLI and Authentication
 
@@ -42,8 +32,6 @@ Before running CLI commands, set the bearer token when the service is auth-prote
 if [ -z "${CODEX_RUNNER_AUTH_TOKEN:-}" ]; then
   if [ -n "${CODEX_RUNNER_AUTH_TOKEN_FILE:-}" ] && [ -f "$CODEX_RUNNER_AUTH_TOKEN_FILE" ]; then
     export CODEX_RUNNER_AUTH_TOKEN="$(cat "$CODEX_RUNNER_AUTH_TOKEN_FILE")"
-  elif [ -f data/auth_token ]; then
-    export CODEX_RUNNER_AUTH_TOKEN="$(cat data/auth_token)"
   fi
 fi
 ```
@@ -52,52 +40,41 @@ Token lookup rules:
 
 - Prefer `CODEX_RUNNER_AUTH_TOKEN` when it is already set.
 - Prefer `CODEX_RUNNER_AUTH_TOKEN_FILE` when it is set.
-- For this repository's source deploy, the default token file is `data/auth_token`.
-- For Bun preview, prefer `CODEX_RUNNER_BUN_AUTH_TOKEN` or `CODEX_RUNNER_BUN_AUTH_TOKEN_FILE`; the default preview token file is `data-bun/auth_token`.
 - For release installs or other projects, the token file lives under that runner's configured state/data directory; do not assume every runner uses the current repo path.
-- If the CLI returns `401 Unauthorized: unauthorized`, retry only after setting `CODEX_RUNNER_AUTH_TOKEN` or passing `--token "$(cat <token-file>)"`.
+- If the CLI returns `401 Unauthorized: unauthorized`, retry only after setting `CODEX_RUNNER_AUTH_TOKEN` or passing `--token-file <token-file>`.
 - When working inside this repo and `codex-issue-runner` on `PATH` is older, prefer `./dist/codex-issue-runner` or reinstall the release/skill before retrying.
-- When validating Bun preview from this repo, prefer `./dist/codex-issue-runner-bun --addr 127.0.0.1:3018 --token-file data-bun/auth_token`.
 - Current subcommands do not implement `--help`; `project --help` is parsed as an unknown project command. Use this skill, repo docs, or source/tests as the CLI reference instead of probing subcommand help.
 - `--json` prints a complete JSON document and may be pretty-printed across multiple lines. Parse the whole stdout; do not treat it as newline-delimited JSON.
 
 ## Smoke Checks
 
 ```bash
-# Go stable daily path
 curl -fsS http://127.0.0.1:3008/health
-codex-issue-runner system status --addr 127.0.0.1:3008 --token-file data/auth_token --json
+codex-issue-runner system status --addr 127.0.0.1:3008 --token-file "$CODEX_RUNNER_AUTH_TOKEN_FILE" --json
 ./scripts/status-launchd.sh
-
-# Bun preview path
-curl -fsS http://127.0.0.1:3018/health
-./dist/codex-issue-runner-bun system status --addr 127.0.0.1:3018 --token-file data-bun/auth_token --json
-./scripts/status-bun-preview.sh
 ```
 
-## Register a Project
+## Create a Project
 
 ```bash
 codex-issue-runner project create \
   --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
-  --id <project-id> \
-  --cwd <absolute-repo-path> \
+  --project <project-id> \
+  --cwd /absolute/path/to/repo \
   --auto-run \
   --json
 ```
 
-Use `--auto-run` when newly created `todo` issues should be picked up automatically.
-
-If you need to confirm a registered project id, the CLI currently has no `project list` command; call the API directly:
+If project list is needed and CLI support is missing, query the API:
 
 ```bash
 curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
   "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/projects"
 ```
 
-## Create an Issue
+## Create Issues
 
-Write the complete task to a temp markdown file, then run:
+Recommended Triage/backlog issue, not auto-run:
 
 ```bash
 codex-issue-runner issue create \
@@ -109,16 +86,7 @@ codex-issue-runner issue create \
   --json
 ```
 
-- The default status is `triage`, but pass `--status triage` explicitly for backlog/triage creation.
-- Omit `--run` when the user only wants a Triage/backlog item.
-- The returned JSON contains the runner issue `id`; keep it for status/log follow-up.
-- When creating from a Codex Session discussion, the CLI automatically uses
-  `CODEX_THREAD_ID` / `CODEX_TURN_ID` as source metadata when present. To set
-  it explicitly, add `--source-session <session-id>`, `--source-turn <turn-id>`,
-  and optionally `--source-excerpt "<short excerpt>"`. This source metadata is
-  separate from the issue execution session (`codex_thread_id`).
-
-To create and immediately enqueue an executable issue, add `--run`:
+Executable issue, enqueue immediately:
 
 ```bash
 codex-issue-runner issue create \
@@ -131,9 +99,7 @@ codex-issue-runner issue create \
   --json
 ```
 
-- `--run` creates the issue and then calls the enqueue endpoint; runner loops claim `todo` issues, not `triage`.
-
-## Inspect or Control an Issue
+## Inspect / Retry / Cancel
 
 ```bash
 codex-issue-runner issue status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
@@ -142,36 +108,34 @@ codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --i
 codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 ```
 
-## Agent Execution Contract
+## Finish Work Explicitly
 
-Every agent/provider that works on a runner issue must explicitly update the issue's final status after completing the directly relevant verification. A completed model turn, chat response, or local code change is not enough.
-
-Preferred success path:
+After direct verification passes:
 
 ```bash
-codex-issue-runner issue update --id <issue-id> --status done --json
+codex-issue-runner issue update \
+  --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" \
+  --id <issue-id> \
+  --status done \
+  --json
 ```
 
-Failure/blocker path:
-
-```bash
-codex-issue-runner issue update --id <issue-id> --status failed --error "<failure reason>" --json
-```
-
-If a provider cannot execute the CLI, it must call the Runner HTTP API with equivalent `PATCH /api/issues/<issue-id>` semantics. Use `CODEX_RUNNER_AUTH_TOKEN` or `--token`; never hard-code or expose tokens.
+If verification is pending:
 
 ```bash
 curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
   -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{"status":"done"}'
+  -d '{"status":"pending_verification","error":"<verification evidence summary>"}'
 ```
 
-## Operating Rules
+Failure or blocker:
 
-- Run the token setup snippet once in the same shell before project/issue/status/update commands when auth may be enabled.
-- Do not enqueue vague planning discussion; ask or summarize into a concrete task first.
-- Put the full acceptance criteria and constraints in the body file, not only the title.
-- Report the created issue id and status back to the user.
-- Before marking an issue `done`, run the smallest verification that proves the change.
-- If the CLI cannot connect, check whether `codex-issue-runner serve` is running before retrying.
+```bash
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR:-127.0.0.1:3008}/api/issues/<issue-id>" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"failed","error":"<failure reason>"}'
+```
+
+Agents/providers must complete direct verification before writing `done`.

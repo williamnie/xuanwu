@@ -8,7 +8,7 @@ import { createRouter, type Router } from "./router.ts";
 import { loadAuthToken } from "./auth.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
-const BASE_URL = "http://127.0.0.1:3018";
+const BASE_URL = "http://127.0.0.1:3008";
 
 async function readBody(response: Response): Promise<string> {
   return await response.text();
@@ -140,7 +140,7 @@ describe("Bun HTTP bearer auth", () => {
     const secret = "fixture-redaction-secret";
     const raw = [
       `Authorization: Bearer ${secret}`,
-      `CODEX_RUNNER_BUN_AUTH_TOKEN=${secret}`,
+      `CODEX_RUNNER_AUTH_TOKEN=${secret}`,
       "generated file: /tmp/data-bun/auth_token"
     ].join("\n");
 

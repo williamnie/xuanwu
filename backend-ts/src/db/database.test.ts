@@ -4,7 +4,6 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ENV_KEYS } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "./database.ts";
 
 const tempRoots: string[] = [];
@@ -24,7 +23,7 @@ afterEach(async () => {
 
 describe("Bun SQLite database connection", () => {
   test("creates the state directory and default runner database", async () => {
-    const root = await tempPath("codex-runner-bun-db-");
+    const root = await tempPath("codex-runner-db-");
     const stateDir = join(root, "state");
     const connection = await openDatabase({ stateDir });
 
@@ -122,37 +121,6 @@ describe("Bun SQLite database connection", () => {
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
-    }
-  });
-
-  test("rejects runtime access to the Go stable database path", async () => {
-    await expect(openDatabase({ dbPath: "data/runner.db" })).rejects.toThrow(
-      "refusing to open Go stable database for Bun runtime without CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB=1"
-    );
-    await expect(openDatabase({ dbPath: "data/app.db" })).rejects.toThrow(
-      "refusing to open Go stable database for Bun runtime without CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB=1"
-    );
-  });
-
-  test("allows explicit parity test access to the Go stable database path", async () => {
-    const previous = Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB;
-    const root = await tempPath("codex-runner-bun-go-db-allow-");
-    const stateDir = join(root, "state");
-    const goDataDir = join(root, "data");
-    const goDb = join(goDataDir, "app.db");
-    await mkdir(goDataDir, { recursive: true });
-    Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB = "1";
-
-    const connection = await openDatabase({ dbPath: goDb, stateDir });
-
-    try {
-      expect(connection.path).toBe(goDb);
-      expect(connection.readonly).toBe(false);
-      expect(tableNames(connection)).toContain("projects");
-    } finally {
-      connection.close();
-      if (previous === undefined) delete Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB;
-      else Bun.env.CODEX_RUNNER_BUN_ALLOW_GO_STABLE_DB = previous;
     }
   });
 

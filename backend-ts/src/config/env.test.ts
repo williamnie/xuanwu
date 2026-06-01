@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { ENV_KEYS, buildConfig, loadConfig } from "./env.ts";
 
 describe("Bun backend config", () => {
-  test("uses Bun preview defaults", () => {
+  test("uses Bun live defaults", () => {
     expect(buildConfig()).toEqual({
-      addr: "127.0.0.1:3018",
+      addr: "127.0.0.1:3008",
       stateDir: "data-bun",
       dbPath: "data-bun/runner.db",
       authToken: "",
@@ -32,7 +32,7 @@ describe("Bun backend config", () => {
 
   test("derives db and auth token paths from overridden state dir", () => {
     expect(buildConfig({ stateDir: "/tmp/codex-bun" })).toMatchObject({
-      addr: "127.0.0.1:3018",
+      addr: "127.0.0.1:3008",
       stateDir: "/tmp/codex-bun",
       dbPath: "/tmp/codex-bun/runner.db",
       authToken: "",
@@ -41,7 +41,7 @@ describe("Bun backend config", () => {
     });
   });
 
-  test("reads Bun-specific environment overrides including provider settings", () => {
+  test("reads runtime environment overrides including provider settings", () => {
     const config = loadConfig([], {
       [ENV_KEYS.addr]: "127.0.0.1:3999",
       [ENV_KEYS.stateDir]: "/tmp/state-bun",

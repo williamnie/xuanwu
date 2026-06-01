@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 
-const BASE_URL = "http://127.0.0.1:3018";
+const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -72,7 +72,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("creates and updates projects with Go-compatible responses", async () => {
+  test("creates and updates projects with backend-compatible responses", async () => {
     const database = await openFixtureDatabase();
     const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
     tempRoots.push(cwd);
@@ -114,7 +114,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("matches Go API failure paths for project writes", async () => {
+  test("matches legacy API failure paths for project writes", async () => {
     const database = await openFixtureDatabase();
     const cwd = await mkdtemp(join(tmpdir(), "codex-runner-bun-project-cwd-"));
     tempRoots.push(cwd);
@@ -172,7 +172,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("matches Go API failure status for invalid and missing issue ids", async () => {
+  test("matches legacy API failure status for invalid and missing issue ids", async () => {
     const database = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database });

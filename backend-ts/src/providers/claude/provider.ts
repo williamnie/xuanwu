@@ -195,7 +195,7 @@ function commandError(stderr: string, exitCode: number, secrets: string[]): stri
 
 function secretValues(env: Record<string, string>): string[] {
   const values = new Set<string>();
-  for (const key of ["CODEX_RUNNER_AUTH_TOKEN", "CODEX_RUNNER_BUN_AUTH_TOKEN", "ANTHROPIC_API_KEY"]) {
+  for (const key of ["CODEX_RUNNER_AUTH_TOKEN", "ANTHROPIC_API_KEY"]) {
     const value = clean(env[key]) || clean(Bun.env[key]);
     if (value !== "") values.add(value);
   }

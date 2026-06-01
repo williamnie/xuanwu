@@ -21,7 +21,7 @@ describe("Bun CLI dispatcher", () => {
   test("gets system status as human summary", async () => {
     const fetcher = fetchStub((request) => {
       expect(request.method).toBe("GET");
-      expect(request.url).toBe("http://127.0.0.1:3018/api/system/status");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/system/status");
       expect(request.headers.get("authorization")).toBeNull();
       return jsonResponse(systemStatusBody());
     });
@@ -44,13 +44,13 @@ describe("Bun CLI dispatcher", () => {
     );
   });
 
-  test("pretty prints JSON and sends token from Bun env", async () => {
+  test("pretty prints JSON and sends token from env", async () => {
     const fetcher = fetchStub((request) => {
       expect(request.headers.get("authorization")).toBe("Bearer env-token");
       return jsonResponse(systemStatusBody());
     });
     const { code, stdout } = await run(["system", "status", "--json"], {
-      env: envMap({ CODEX_RUNNER_BUN_AUTH_TOKEN: "env-token" }),
+      env: envMap({ CODEX_RUNNER_AUTH_TOKEN: "env-token" }),
       fetcher
     });
 
@@ -78,22 +78,22 @@ describe("Bun CLI dispatcher", () => {
   test("reads token from token file env", async () => {
     const file = await tempTokenFile("file-token");
     const fetcher = fetchStub((request) => {
-      expect(request.url).toBe("http://127.0.0.1:3018/api/system/doctor");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/system/doctor");
       expect(request.headers.get("authorization")).toBe("Bearer file-token");
       return jsonResponse(systemStatusBody());
     });
     const { code } = await run(["doctor"], {
-      env: envMap({ CODEX_RUNNER_BUN_AUTH_TOKEN_FILE: file }),
+      env: envMap({ CODEX_RUNNER_AUTH_TOKEN_FILE: file }),
       fetcher
     });
 
     expect(code).toBe(0);
   });
 
-  test("creates project against Bun default addr", async () => {
+  test("creates project against live default addr", async () => {
     const fetcher = fetchStub(async (request) => {
       expect(request.method).toBe("POST");
-      expect(request.url).toBe("http://127.0.0.1:3018/api/projects");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/projects");
       expect(await request.json()).toMatchObject({
         id: "demo",
         cwd: "/tmp/demo",
@@ -133,7 +133,7 @@ describe("Bun CLI dispatcher", () => {
   test("gets system logs with line limit", async () => {
     const fetcher = fetchStub((request) => {
       expect(request.method).toBe("GET");
-      expect(request.url).toBe("http://127.0.0.1:3018/api/system/logs?lines=2");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/system/logs?lines=2");
       return jsonResponse({
         logs: [{
           available: true,

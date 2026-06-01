@@ -11,7 +11,7 @@ describe("Bun HTTP router", () => {
     const router = createRouter();
     router.get("/health", () => json({ status: "ok" }));
 
-    const response = await router.handle(new Request("http://127.0.0.1:3018/health"));
+    const response = await router.handle(new Request("http://127.0.0.1:3008/health"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
@@ -21,7 +21,7 @@ describe("Bun HTTP router", () => {
   test("returns stable JSON for not found paths", async () => {
     const router = createRouter();
 
-    const response = await router.handle(new Request("http://127.0.0.1:3018/missing"));
+    const response = await router.handle(new Request("http://127.0.0.1:3008/missing"));
 
     expect(response.status).toBe(404);
     expect(await readJson(response)).toEqual({ message: "not found" });
@@ -31,7 +31,7 @@ describe("Bun HTTP router", () => {
     const router = createRouter();
     router.get("/health", () => json({ status: "ok" }));
 
-    const response = await router.handle(new Request("http://127.0.0.1:3018/health", {
+    const response = await router.handle(new Request("http://127.0.0.1:3008/health", {
       method: "POST"
     }));
 
@@ -44,7 +44,7 @@ describe("Bun HTTP router", () => {
     const router = createRouter();
     router.post("/echo", async (request) => json(await parseJsonBody(request)));
 
-    const response = await router.handle(new Request("http://127.0.0.1:3018/echo", {
+    const response = await router.handle(new Request("http://127.0.0.1:3008/echo", {
       method: "POST",
       body: "{bad json",
       headers: { "content-type": "application/json" }
@@ -60,7 +60,7 @@ describe("Bun HTTP router", () => {
       throw new Error("secret stack token");
     });
 
-    const response = await router.handle(new Request("http://127.0.0.1:3018/boom"));
+    const response = await router.handle(new Request("http://127.0.0.1:3008/boom"));
     const body = await readJson(response);
 
     expect(response.status).toBe(500);
@@ -75,7 +75,7 @@ describe("Bun HTTP router", () => {
       throw new HttpError(418, "short and stout");
     });
 
-    const response = await router.handle(new Request("http://127.0.0.1:3018/teapot"));
+    const response = await router.handle(new Request("http://127.0.0.1:3008/teapot"));
 
     expect(response.status).toBe(418);
     expect(await readJson(response)).toEqual({ message: "short and stout" });

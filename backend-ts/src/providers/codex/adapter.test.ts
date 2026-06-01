@@ -19,7 +19,7 @@ describe("Codex adapter RPC methods", () => {
     expect(rpc.calls).toEqual([{
       method: "initialize",
       params: {
-        clientInfo: { name: "codex-issue-runner-bun", version: "0.1.0" },
+        clientInfo: { name: "codex-issue-runner", version: "0.1.0" },
         capabilities: { experimentalApi: true }
       }
     }]);

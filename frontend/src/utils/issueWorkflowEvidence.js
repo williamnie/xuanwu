@@ -17,7 +17,7 @@ import {
 import { workflowFromSnapshot } from './issueWorkflowSnapshot.js';
 
 const TERMINAL_STATUSES = new Set(['done', 'failed', 'cancelled']);
-const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|test|tests|vitest|jest|node --test|go test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint/i;
+const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|test|tests|vitest|jest|node --test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint/i;
 
 export function deriveIssueWorkflowEvidence({ issue = {}, events = [], runs = [] } = {}) {
   const snapshotWorkflow = workflowFromSnapshot(issue.workflow_snapshot_json, issue, runs, workflowStep);

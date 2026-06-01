@@ -9,10 +9,9 @@ SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
-DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/app.db}"
+DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
-ALLOWED_ORIGINS="${CODEX_RUNNER_ALLOWED_ORIGINS:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
@@ -32,7 +31,6 @@ Useful environment variables:
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
   CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
   CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
-  CODEX_RUNNER_ALLOWED_ORIGINS=...     Comma-separated browser origin allowlist
 HELP
 }
 
@@ -113,6 +111,11 @@ download_binary() {
   [ -x "$tmp/codex-issue-runner" ] || fail "release asset does not contain executable binary"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   install -m 0755 "$tmp/codex-issue-runner" "$BIN_PATH"
+  if [ -d "$tmp/web" ]; then
+    rm -rf "$STATE_DIR/web"
+    mkdir -p "$STATE_DIR"
+    cp -R "$tmp/web" "$STATE_DIR/web"
+  fi
   rm -rf "$tmp"
   log "installed binary: $BIN_PATH"
 }
@@ -143,12 +146,15 @@ write_macos_plist() {
     <string>serve</string>
     <string>--addr</string>
     <string>$(xml_escape "$ADDR")</string>
+    <string>--state-dir</string>
+    <string>$(xml_escape "$STATE_DIR")</string>
     <string>--db</string>
     <string>$(xml_escape "$DB_PATH")</string>
+    <string>--web-dir</string>
+    <string>$(xml_escape "$STATE_DIR/web")</string>
     <string>--codex-cmd</string>
     <string>$(xml_escape "$codex_cmd")</string>
 $(auth_token_file_macos_args)
-$(allowed_origins_macos_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -179,24 +185,9 @@ ARGS
   fi
 }
 
-allowed_origins_macos_args() {
-  if [ -n "$ALLOWED_ORIGINS" ]; then
-    cat <<ARGS
-    <string>--allowed-origins</string>
-    <string>$(xml_escape "$ALLOWED_ORIGINS")</string>
-ARGS
-  fi
-}
-
 auth_token_file_systemd_args() {
   if [ -n "$AUTH_TOKEN_FILE" ]; then
     printf ' --auth-token-file %q' "$AUTH_TOKEN_FILE"
-  fi
-}
-
-allowed_origins_systemd_args() {
-  if [ -n "$ALLOWED_ORIGINS" ]; then
-    printf ' --allowed-origins %q' "$ALLOWED_ORIGINS"
   fi
 }
 
@@ -242,7 +233,7 @@ Type=simple
 WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
-ExecStart=$BIN_PATH serve --addr $ADDR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)$(allowed_origins_systemd_args)
+ExecStart=$BIN_PATH serve --addr $ADDR --state-dir $STATE_DIR --db $DB_PATH --web-dir $STATE_DIR/web --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2
 

@@ -536,7 +536,7 @@ ${error}` : error;
   }
 
   // 日志解析转换
-  // 将 Go 传过来的原始 issue_events 处理成可在终端渲染的行
+  // 将后端传过来的原始 issue_events 处理成可在终端渲染的行
   const parsedDescription = parseIssueRefinement(issue.description);
   const issueBody = parsedDescription.body;
   const refinement = parsedDescription.refinement;

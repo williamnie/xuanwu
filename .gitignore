@@ -10,8 +10,6 @@ logs/
 /dist/
 /build/
 frontend/dist/
-backend/internal/web/dist/
-backend/bin/
 
 # Dependencies
 node_modules/

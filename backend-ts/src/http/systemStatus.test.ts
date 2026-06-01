@@ -6,7 +6,7 @@ import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter, createRequestHandler, registerSystemStatusRoute } from "./server.ts";
 
-const BASE_URL = "http://127.0.0.1:3018";
+const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function tempPath(prefix: string): Promise<string> {
@@ -54,14 +54,14 @@ describe("Bun system status endpoints", () => {
       expect(body.service.runtime).toBe("bun");
       expect(body.service.version).toBe("0.0.0-dev");
       expect(body.service.build).toMatchObject({
-        artifact: "codex-issue-runner-bun",
+        artifact: "codex-issue-runner",
         bun_version: Bun.version,
         stamp: "",
         version: "0.0.0-dev"
       });
       expect(body.db.ok).toBe(true);
       expect(body.auth.enabled).toBe(true);
-      expect(body.config.addr).toBe("127.0.0.1:3018");
+      expect(body.config.addr).toBe("127.0.0.1:3008");
       expect(body.config.auth_enabled).toBe(true);
       expect(body.config.db_path).toBe("<stateDir>/runner.db");
       expect(body.codex).toMatchObject({
@@ -196,7 +196,7 @@ describe("Bun system status endpoints", () => {
       const claude = body.providers.find((provider) => provider.id === "claude");
 
       expect(response.status).toBe(200);
-      expect(body.listen.addr).toBe("127.0.0.1:3018");
+      expect(body.listen.addr).toBe("127.0.0.1:3008");
       expect(body.db.path).toBe("<stateDir>/runner.db");
       expect(claude).toMatchObject({
         id: "claude",

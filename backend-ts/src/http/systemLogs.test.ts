@@ -6,7 +6,7 @@ import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter, registerSystemLogsRoute } from "./server.ts";
 
-const BASE_URL = "http://127.0.0.1:3018";
+const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function tempPath(prefix: string): Promise<string> {
@@ -50,7 +50,7 @@ describe("Bun system logs API", () => {
     }
   });
 
-  test("reports missing default log files without using Go stable data dir", async () => {
+  test("reports missing default log files without using legacy data dir", async () => {
     const { config, database } = await openFixtureRuntime();
     try {
       const router = createDefaultRouter();

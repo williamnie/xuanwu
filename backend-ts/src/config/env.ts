@@ -2,22 +2,22 @@ import { DEFAULT_ADDR, buildRunnerPaths } from "./paths.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 
 export const ENV_KEYS = {
-  addr: "CODEX_RUNNER_BUN_ADDR",
-  stateDir: "CODEX_RUNNER_BUN_STATE_DIR",
-  dbPath: "CODEX_RUNNER_BUN_DB",
-  authToken: "CODEX_RUNNER_BUN_AUTH_TOKEN",
-  authTokenFile: "CODEX_RUNNER_BUN_AUTH_TOKEN_FILE",
-  codexSessionsDir: "CODEX_RUNNER_BUN_CODEX_SESSIONS_DIR",
-  webDir: "CODEX_RUNNER_BUN_WEB_DIR",
-  codexCommand: "CODEX_RUNNER_BUN_CODEX_CMD",
-  codexCwd: "CODEX_RUNNER_BUN_CODEX_CWD",
-  codexEnv: "CODEX_RUNNER_BUN_CODEX_ENV",
-  codexTimeoutMs: "CODEX_RUNNER_BUN_CODEX_TIMEOUT_MS",
-  claudeCommand: "CODEX_RUNNER_BUN_CLAUDE_CMD",
-  claudeCwd: "CODEX_RUNNER_BUN_CLAUDE_CWD",
-  claudeEnv: "CODEX_RUNNER_BUN_CLAUDE_ENV",
-  claudeModel: "CODEX_RUNNER_BUN_CLAUDE_MODEL",
-  claudeTimeoutMs: "CODEX_RUNNER_BUN_CLAUDE_TIMEOUT_MS"
+  addr: "CODEX_RUNNER_ADDR",
+  stateDir: "CODEX_RUNNER_STATE_DIR",
+  dbPath: "CODEX_RUNNER_DB",
+  authToken: "CODEX_RUNNER_AUTH_TOKEN",
+  authTokenFile: "CODEX_RUNNER_AUTH_TOKEN_FILE",
+  codexSessionsDir: "CODEX_RUNNER_CODEX_SESSIONS_DIR",
+  webDir: "CODEX_RUNNER_WEB_DIR",
+  codexCommand: "CODEX_RUNNER_CODEX_CMD",
+  codexCwd: "CODEX_RUNNER_CODEX_CWD",
+  codexEnv: "CODEX_RUNNER_CODEX_ENV",
+  codexTimeoutMs: "CODEX_RUNNER_CODEX_TIMEOUT_MS",
+  claudeCommand: "CODEX_RUNNER_CLAUDE_CMD",
+  claudeCwd: "CODEX_RUNNER_CLAUDE_CWD",
+  claudeEnv: "CODEX_RUNNER_CLAUDE_ENV",
+  claudeModel: "CODEX_RUNNER_CLAUDE_MODEL",
+  claudeTimeoutMs: "CODEX_RUNNER_CLAUDE_TIMEOUT_MS"
 } as const;
 
 type Env = Record<string, string | undefined>;

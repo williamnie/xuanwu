@@ -3,9 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
+STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$ROOT_DIR/data-bun}"
+DB_PATH="${CODEX_RUNNER_DB:-$STATE_DIR/runner.db}"
+AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 FRONTEND_PORT="${FRONTEND_PORT:-3568}"
-export CODEX_RUNNER_DB="${CODEX_RUNNER_DB:-$ROOT_DIR/data/app.db}"
 
 BACKEND_PID=""
 FRONTEND_PID=""
@@ -27,27 +29,37 @@ require_cmd() {
   fi
 }
 
-require_cmd go
+require_cmd bun
 require_cmd npm
+
+if [ ! -d "$ROOT_DIR/backend-ts/node_modules" ]; then
+  echo "[dev] backend-ts/node_modules not found, running bun install..."
+  (cd "$ROOT_DIR/backend-ts" && bun install)
+fi
 
 if [ ! -d "$ROOT_DIR/frontend/node_modules" ]; then
   echo "[dev] frontend/node_modules not found, running npm install..."
   npm --prefix "$ROOT_DIR/frontend" install
 fi
 
-mkdir -p "$(dirname "$CODEX_RUNNER_DB")"
+mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")"
 
 trap cleanup EXIT INT TERM
 
 echo "[dev] backend  http://$BACKEND_ADDR"
 echo "[dev] frontend http://$FRONTEND_HOST:$FRONTEND_PORT"
-echo "[dev] database $CODEX_RUNNER_DB"
+echo "[dev] state    $STATE_DIR"
+echo "[dev] database $DB_PATH"
 echo "[dev] press Ctrl+C to stop both services"
 echo
 
 (
-  cd "$ROOT_DIR"
-  go run ./backend/cmd/codex-issue-runner -addr "$BACKEND_ADDR"
+  cd "$ROOT_DIR/backend-ts"
+  bun run src/main.ts serve \
+    --addr "$BACKEND_ADDR" \
+    --state-dir "$STATE_DIR" \
+    --db "$DB_PATH" \
+    --auth-token-file "$AUTH_TOKEN_FILE"
 ) &
 BACKEND_PID=$!
 

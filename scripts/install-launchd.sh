@@ -4,14 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
-DB_PATH="${CODEX_RUNNER_DEPLOY_DB:-$ROOT_DIR/data/app.db}"
-AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$(dirname "$DB_PATH")/auth_token}"
+APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
+STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
+DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
+AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
-ALLOWED_ORIGINS="${CODEX_RUNNER_ALLOWED_ORIGINS:-}"
-WEB_DIR="${CODEX_RUNNER_WEB_DIR:-}"
+SOURCE_WEB_DIR="${CODEX_RUNNER_SOURCE_WEB_DIR:-$ROOT_DIR/frontend/dist}"
+WEB_DIR="${CODEX_RUNNER_WEB_DIR:-$STATE_DIR/web}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
-LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$ROOT_DIR/data/bin/codex-issue-runner}"
-LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$ROOT_DIR/data/logs}"
+LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/codex-issue-runner}"
+LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -29,39 +31,10 @@ xml_escape() {
 service_url() {
   if [[ "$ADDR" == 0.0.0.0:* ]]; then
     printf 'http://127.0.0.1:%s' "${ADDR##*:}"
-    return
-  fi
-  if [[ "$ADDR" == :* ]]; then
+  elif [[ "$ADDR" == :* ]]; then
     printf 'http://127.0.0.1%s' "$ADDR"
   else
     printf 'http://%s' "$ADDR"
-  fi
-}
-
-web_dir_args() {
-  if [ -n "$WEB_DIR" ]; then
-    cat <<ARGS
-    <string>--web-dir</string>
-    <string>$(xml_escape "$WEB_DIR")</string>
-ARGS
-  fi
-}
-
-auth_token_file_args() {
-  if [ -n "$AUTH_TOKEN_FILE" ]; then
-    cat <<ARGS
-    <string>--auth-token-file</string>
-    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
-ARGS
-  fi
-}
-
-allowed_origins_args() {
-  if [ -n "$ALLOWED_ORIGINS" ]; then
-    cat <<ARGS
-    <string>--allowed-origins</string>
-    <string>$(xml_escape "$ALLOWED_ORIGINS")</string>
-ARGS
   fi
 }
 
@@ -81,14 +54,31 @@ stage_launchd_binary() {
   fi
 }
 
+stage_web_dir() {
+  rm -rf "$WEB_DIR"
+  mkdir -p "$(dirname "$WEB_DIR")"
+  cp -R "$SOURCE_WEB_DIR" "$WEB_DIR"
+}
+
+wait_for_health() {
+  local url="$1"
+  for _ in {1..120}; do
+    curl -fsS "$url/health" >/dev/null 2>&1 && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
 if [ -z "$CODEX_CMD" ]; then
   echo "[launchd] codex command not found; set CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex" >&2
   exit 1
 fi
 
-"$ROOT_DIR/scripts/build-release.sh"
-mkdir -p "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
+npm --prefix "$ROOT_DIR/frontend" run build
+"$ROOT_DIR/backend-ts/scripts/build-binary.sh"
+mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
 stage_launchd_binary
+stage_web_dir
 write_custom_auth_token_file
 
 cat > "$PLIST" <<PLIST
@@ -106,13 +96,16 @@ cat > "$PLIST" <<PLIST
     <string>serve</string>
     <string>--addr</string>
     <string>$(xml_escape "$ADDR")</string>
+    <string>--state-dir</string>
+    <string>$(xml_escape "$STATE_DIR")</string>
     <string>--db</string>
     <string>$(xml_escape "$DB_PATH")</string>
+    <string>--auth-token-file</string>
+    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
+    <string>--web-dir</string>
+    <string>$(xml_escape "$WEB_DIR")</string>
     <string>--codex-cmd</string>
     <string>$(xml_escape "$CODEX_CMD")</string>
-$(web_dir_args)
-$(auth_token_file_args)
-$(allowed_origins_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -138,21 +131,10 @@ launchctl bootout "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true
 launchctl bootstrap "$DOMAIN" "$PLIST"
 launchctl enable "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
 launchctl kickstart -k "$DOMAIN/$LABEL"
-
-URL="$(service_url)"
-for _ in {1..120}; do
-  if curl -fsS "$URL/health" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.5
-done
+wait_for_health "$(service_url)"
 
 "$ROOT_DIR/scripts/status-launchd.sh"
 echo "[launchd] installed plist: $PLIST"
-if [ -n "$WEB_DIR" ]; then
-  echo "[launchd] web dir override: $WEB_DIR"
-else
-  echo "[launchd] web: embedded in binary"
-fi
 echo "[launchd] binary: $LAUNCHD_BINARY_PATH"
+echo "[launchd] web: $WEB_DIR"
 echo "[launchd] logs: $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"

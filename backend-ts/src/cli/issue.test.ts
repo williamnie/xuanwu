@@ -36,7 +36,7 @@ describe("Bun issue CLI", () => {
         return jsonResponse(issueBody({ id: 42, status: "triage", title: "创建 CLI" }), 201);
       }
       expect(request.method).toBe("POST");
-      expect(request.url).toBe("http://127.0.0.1:3018/api/issues/42/enqueue");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/issues/42/enqueue");
       return jsonResponse(issueBody({ id: 42, status: "todo", title: "创建 CLI" }));
     });
     const { code, stdout, stderr } = await run([
@@ -53,7 +53,7 @@ describe("Bun issue CLI", () => {
   test("updates issue final status and clears non-failed error", async () => {
     const fetcher = fetchStub(async (request) => {
       expect(request.method).toBe("PATCH");
-      expect(request.url).toBe("http://127.0.0.1:3018/api/issues/7");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/issues/7");
       expect(await request.json()).toEqual({ status: "done", error: "" });
       return jsonResponse(issueBody({ id: 7, status: "done", title: "完成任务" }));
     });

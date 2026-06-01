@@ -39,12 +39,6 @@ jobs:
         with:
           ref: ${{ steps.vars.outputs.tag }}
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -56,8 +50,17 @@ jobs:
         run: |
           npm --prefix frontend ci || npm --prefix frontend install
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install backend dependencies
+        run: bun install --cwd backend-ts
+
       - name: Run backend tests
-        run: go test ./backend/...
+        run: bun test
+        working-directory: backend-ts
 
       - name: Package release assets
         env:

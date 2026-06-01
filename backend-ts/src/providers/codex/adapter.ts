@@ -36,7 +36,7 @@ export type {
   TurnStartResult
 } from "./threadLifecycle.ts";
 
-const CLIENT_INFO = { name: "codex-issue-runner-bun", version: "0.1.0" } as const;
+const CLIENT_INFO = { name: "codex-issue-runner", version: "0.1.0" } as const;
 const PROVIDER_CODEX = "codex";
 
 export type CodexRpcClient = {

@@ -11,7 +11,7 @@ import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "..
 import { createPiRunnerActions } from "../pi/runnerActions.ts";
 import { createDefaultRouter } from "./server.ts";
 
-const BASE_URL = "http://127.0.0.1:3018";
+const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {

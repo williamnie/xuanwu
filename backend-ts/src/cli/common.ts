@@ -24,11 +24,9 @@ export type ParsedCommandArgs = {
   values: Record<string, string>;
 };
 
-const DEFAULT_ADDR = "127.0.0.1:3018";
-const BUN_TOKEN_ENV = "CODEX_RUNNER_BUN_AUTH_TOKEN";
-const BUN_TOKEN_FILE_ENV = "CODEX_RUNNER_BUN_AUTH_TOKEN_FILE";
-const GO_TOKEN_ENV = "CODEX_RUNNER_AUTH_TOKEN";
-const GO_TOKEN_FILE_ENV = "CODEX_RUNNER_AUTH_TOKEN_FILE";
+const DEFAULT_ADDR = "127.0.0.1:3008";
+const TOKEN_ENV = "CODEX_RUNNER_AUTH_TOKEN";
+const TOKEN_FILE_ENV = "CODEX_RUNNER_AUTH_TOKEN_FILE";
 
 export function parseCommandArgs(args: string[], specs: FlagSpec[], env: EnvReader): ParsedCommandArgs {
   const parsed = parseCommonArgs(args, env);
@@ -37,7 +35,7 @@ export function parseCommandArgs(args: string[], specs: FlagSpec[], env: EnvRead
 
 export function parseCommonArgs(args: string[], env: EnvReader): ParsedCommonArgs {
   const rest: string[] = [];
-  let addr = env("CODEX_RUNNER_BUN_ADDR")?.trim() || DEFAULT_ADDR;
+  let addr = env("CODEX_RUNNER_ADDR")?.trim() || DEFAULT_ADDR;
   let json = false;
   let token = envToken(env);
 
@@ -91,9 +89,9 @@ function parseSpecificFlags(args: string[], specs: FlagSpec[]): Record<string, s
 }
 
 function envToken(env: EnvReader): string {
-  const direct = clean(env(BUN_TOKEN_ENV)) || clean(env(GO_TOKEN_ENV));
+  const direct = clean(env(TOKEN_ENV));
   if (direct) return direct;
-  return readTokenFile(clean(env(BUN_TOKEN_FILE_ENV)) || clean(env(GO_TOKEN_FILE_ENV)));
+  return readTokenFile(clean(env(TOKEN_FILE_ENV)));
 }
 
 function readTokenFile(path: string): string {

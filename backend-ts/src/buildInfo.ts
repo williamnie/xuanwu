@@ -1,5 +1,5 @@
 const DEFAULT_VERSION = "0.0.0-dev";
-const ARTIFACT_NAME = "codex-issue-runner-bun";
+const ARTIFACT_NAME = "codex-issue-runner";
 
 export type BunBuildInfo = {
   artifact: string;
@@ -12,8 +12,8 @@ export function bunBuildInfo(): BunBuildInfo {
   return {
     artifact: ARTIFACT_NAME,
     bun_version: Bun.version,
-    stamp: clean(process.env.CODEX_RUNNER_BUN_BUILD_STAMP) ?? "",
-    version: clean(process.env.CODEX_RUNNER_BUN_BUILD_VERSION) ?? DEFAULT_VERSION
+    stamp: clean(process.env.CODEX_RUNNER_BUILD_STAMP) ?? "",
+    version: clean(process.env.CODEX_RUNNER_BUILD_VERSION) ?? DEFAULT_VERSION
   };
 }
 

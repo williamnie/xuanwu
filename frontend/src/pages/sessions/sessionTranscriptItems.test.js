@@ -27,13 +27,13 @@ test('reasoning summary text remains visible when provided', () => {
 });
 
 test('function call transcript items expose arguments instead of an empty type label', () => {
-  const item = { type: 'function_call', name: 'exec_command', arguments: '{"cmd":"go test ./backend/..."}' };
+  const item = { type: 'function_call', name: 'exec_command', arguments: '{"cmd":"bun test"}' };
 
   assert.equal(isRenderableToolItem(item), true);
   const display = toolDisplayForItem(item);
   assert.equal(display.kind, 'generic');
   assert.equal(display.title, '调用工具：exec_command');
-  assert.match(display.body, /"cmd": "go test \.\/backend\/\.\.\."/);
+  assert.match(display.body, /"cmd": "bun test"/);
 });
 
 test('tool output transcript items expose output text', () => {
