@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
+import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 
 const BASE_URL = "http://127.0.0.1:3018";
 const tempRoots: string[] = [];
@@ -246,6 +247,62 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
+  test("auto-run todo issue create immediately claims and starts provider session", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
+      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+
+      const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "demo", title: "Auto todo", status: "todo" }),
+        headers: { "content-type": "application/json" }
+      }));
+
+      expect(created.status).toBe(201);
+      const body = await created.json() as Record<string, unknown>;
+      await waitFor(() => provider.inputs.length === 1);
+      const row = database.sqlite.query<Record<string, unknown>, [number]>(
+        `select i.status, r.provider_session_id, r.provider_turn_id
+         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
+      ).get(Number(body.id));
+      expect(row).toMatchObject({
+        status: "in_progress",
+        provider_session_id: `fake-session-${body.id}`,
+        provider_turn_id: `fake-turn-${body.id}`
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("auto-run enqueue immediately claims and starts provider session", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
+      const issueId = insertIssue(database, { projectId: "demo", title: "Queued", status: "triage", sourceSessionId: "" });
+      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+
+      const enqueued = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/enqueue`, { method: "POST" }));
+
+      expect(enqueued.status).toBe(200);
+      await waitFor(() => provider.inputs.length === 1);
+      const row = database.sqlite.query<Record<string, unknown>, [number]>(
+        `select i.status, r.provider_session_id, r.provider_turn_id
+         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
+      ).get(issueId);
+      expect(row).toMatchObject({
+        status: "in_progress",
+        provider_session_id: `fake-session-${issueId}`,
+        provider_turn_id: `fake-turn-${issueId}`
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns stable errors for invalid issue create payloads", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -270,14 +327,15 @@ describe("Bun projects/issues read API", () => {
   });
 });
 
-type ProjectFixture = { id: string; name: string; sortOrder: number };
+type ProjectFixture = { autoRun?: number; id: string; name: string; provider?: string; sortOrder: number };
 type IssueFixture = { projectId: string; sourceSessionId: string; status: string; title: string };
 
 function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [project.id, project.name, `/tmp/${project.id}`, project.sortOrder, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [project.id, project.name, `/tmp/${project.id}`, project.provider ?? "codex", project.autoRun ?? 0,
+      project.sortOrder, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -290,4 +348,27 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+class FakeExecutionProvider implements ExecutorProvider {
+  readonly id = "fake-execution-only" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput) {
+    this.inputs.push(input);
+    return {
+      runId: `fake-run-${input.issueId}`,
+      session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
+    };
+  }
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await Bun.sleep(10);
+  }
+  throw new Error("timed out waiting for condition");
 }

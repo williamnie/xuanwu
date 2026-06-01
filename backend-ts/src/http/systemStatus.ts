@@ -4,6 +4,7 @@ import { bunBuildInfo } from "../buildInfo.ts";
 import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
+import { runningProjectLoopCount } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 type SystemStatusContext = {
@@ -26,7 +27,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     security: { warnings: securityWarnings(context.config.addr, context.authEnabled) },
     codex: codexStatus(context.config),
     providers,
-    runner: runnerStatus()
+    runner: runnerStatus(context.database)
   };
 }
 
@@ -255,15 +256,19 @@ function hasConfiguredApiKey(env: Record<string, string>, provider: string): boo
   return keys.some((key) => (env[key] ?? Bun.env[key] ?? "").trim() !== "");
 }
 
-function runnerStatus(): Record<string, number> {
+function runnerStatus(database: RunnerDatabase): Record<string, number> {
   return {
-    auto_run_projects: 0,
-    running_loops: 0,
-    held_projects: 0,
-    in_progress_issues: 0,
-    running_issues: 0,
-    running_sessions: 0
+    auto_run_projects: countRows(database, "select count(*) as count from projects where auto_run=1"),
+    running_loops: runningProjectLoopCount(),
+    held_projects: countRows(database, "select count(*) as count from project_holds"),
+    in_progress_issues: countRows(database, "select count(*) as count from issues where status='in_progress'"),
+    running_issues: countRows(database, "select count(*) as count from issue_runs where ended_at=''"),
+    running_sessions: countRows(database, "select count(*) as count from agent_sessions where status in ('running','inProgress')")
   };
+}
+
+function countRows(database: RunnerDatabase, sql: string): number {
+  return database.sqlite.query<{ count: number }, []>(sql).get()?.count ?? 0;
 }
 
 function doctorProvider(provider: ProviderStatus): Record<string, unknown> {

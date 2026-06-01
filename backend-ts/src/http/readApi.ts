@@ -11,6 +11,7 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { createProject, getProject, listProjects, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
+import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import { registerSessionRoutes } from "./sessionApi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
@@ -54,7 +55,7 @@ function registerIssueCollectionRoutes(router: Router, context: ReadApiContext):
   router.get("/api/issues", (request) => json(publicIssues(listIssues(context.database, issueFilter(request)))));
   router.post("/api/issues", async (request) => {
     const body = await parseObjectBody(request);
-    return writeResponse(() => createIssue(context.database, body), 201);
+    return writeResponse(() => createIssueAndKickLoop(context, body), 201);
   });
 }
 
@@ -85,12 +86,32 @@ function projectResponse(context: ReadApiContext, request: Request): Response {
   return json(project);
 }
 
-function actionResponse(
-  context: ReadApiContext,
-  request: Request,
-  action: (db: RunnerDatabase, id: number) => unknown
-): Response {
-  return writeResponse(() => action(context.database, issueID(request)));
+function actionResponse(context: ReadApiContext, request: Request, action: IssueAction): Response {
+  return writeResponse(() => actionAndKickLoop(context, action, issueID(request)));
+}
+
+function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, unknown>): Issue {
+  const issue = createIssue(context.database, body);
+  if (issue.status === "todo") kickAutoProject(context, issue.project_id);
+  return issue;
+}
+
+type IssueAction = (db: RunnerDatabase, id: number) => unknown;
+
+function actionAndKickLoop(context: ReadApiContext, action: IssueAction, id: number): unknown {
+  const output = action(context.database, id);
+  if (isQueuedIssue(output)) kickAutoProject(context, output.project_id);
+  return output;
+}
+
+function kickAutoProject(context: ReadApiContext, projectID: string): void {
+  const project = getProject(context.database, projectID);
+  if ((project?.auto_run ?? 0) !== 1) return;
+  startProjectLoop({ database: context.database, providers: context.providers }, projectID);
+}
+
+function isQueuedIssue(value: unknown): value is Issue {
+  return Boolean(value && typeof value === "object" && (value as Issue).status === "todo");
 }
 
 async function cancelIssueResponse(context: ReadApiContext, request: Request): Promise<Response> {

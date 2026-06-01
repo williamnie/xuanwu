@@ -13,7 +13,7 @@ import { clearProjectHold, deleteProject, reorderProjects } from "../db/reposito
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { createImageUpload, mustGetUpload } from "../db/repositories/uploads.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
-import { runProjectLoopOnce } from "../runner/projectLoop.ts";
+import { isProjectLoopActive, startProjectLoop as startManagedProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -24,8 +24,6 @@ export type FrontendCompatContext = { bus?: EventBus; database: RunnerDatabase; 
 type CommandPayload = { args?: Record<string, unknown>; name?: string; target?: { id?: string; type?: string }; type?: string };
 
 const loopStates = new Map<string, string>();
-const activeLoops = new Set<string>();
-
 export function registerFrontendCompatRoutes(router: Router, context: FrontendCompatContext): void {
   registerAgentProfileRoutes(router, context);
   registerProjectCompatRoutes(router, context);
@@ -110,28 +108,18 @@ function hasIssueExecutionProvider(context: FrontendCompatContext, projectID: st
 }
 
 function startProjectLoop(context: FrontendCompatContext, projectID: string): void {
-  if (activeLoops.has(projectID)) return;
-  activeLoops.add(projectID);
-  void (async () => {
-    try {
-      while ((getProject(context.database, projectID)?.auto_run ?? 0) === 1) {
-        const result = await runProjectLoopOnce({ database: context.database, projectId: projectID, providers: context.providers ?? {} });
-        if (!result.claimed) break;
-      }
-    } catch (error) {
-      console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", projectId: projectID, error: error instanceof Error ? error.message : String(error) }));
-    } finally {
-      activeLoops.delete(projectID);
-      if ((getProject(context.database, projectID)?.auto_run ?? 0) !== 1) loopStates.set(projectID, "stopped");
-    }
-  })();
+  startManagedProjectLoop({ database: context.database, providers: context.providers, onError: logProjectLoopError }, projectID);
 }
 
 function projectLoopStatus(db: RunnerDatabase, projectID: string): string {
   const project = getProject(db, projectID);
   if (!project) throw new HttpError(404, "资源不存在");
-  if (activeLoops.has(projectID)) return "running";
+  if (isProjectLoopActive(projectID)) return "running";
   return loopStates.get(projectID) ?? (project.auto_run === 1 ? "running" : "stopped");
+}
+
+function logProjectLoopError(error: unknown, projectID: string): void {
+  console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", projectId: projectID, error: error instanceof Error ? error.message : String(error) }));
 }
 
 function projectReferencesResponse(db: RunnerDatabase, request: Request): Response {

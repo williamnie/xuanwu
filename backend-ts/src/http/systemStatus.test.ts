@@ -105,6 +105,31 @@ describe("Bun system status endpoints", () => {
       });
       expect(body.providers.some((provider) => provider.id === "pi")).toBe(false);
       expect(body.runner.running_loops).toBe(0);
+      expect(body.runner.auto_run_projects).toBe(0);
+      expect(body.runner.in_progress_issues).toBe(0);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports runner counts from database state", async () => {
+    const { config, database } = await openFixtureRuntime();
+    try {
+      insertRunnerStatusFixture(database);
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, { authToken: "", config, database });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const body = await response.json() as SystemStatusBody;
+
+      expect(response.status).toBe(200);
+      expect(body.runner).toMatchObject({
+        auto_run_projects: 1,
+        held_projects: 1,
+        in_progress_issues: 1,
+        running_issues: 1,
+        running_sessions: 1
+      });
     } finally {
       database.close();
     }
@@ -252,13 +277,27 @@ async function writeFakeExecutable(dir: string, name: string, version: string): 
   await writeFile(path, `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "${version}"; fi\n`, { mode: 0o755 });
 }
 
+function insertRunnerStatusFixture(database: RunnerDatabase): void {
+  database.sqlite.run(`insert into projects (id, name, cwd, auto_run, created_at, updated_at)
+    values ('demo', 'Demo', '/tmp/demo', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
+  database.sqlite.run(`insert into issues (project_id, title, status, created_at, updated_at)
+    values ('demo', 'Running', 'in_progress', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
+  database.sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, started_at)
+    values ('issue-1-attempt-1', 1, 1, 'in_progress', '2026-01-01T00:00:00Z')`);
+  database.sqlite.run(`insert into project_holds (project_id, reason, message, hold_since, updated_at)
+    values ('demo', 'manual', 'waiting', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
+  database.sqlite.run(`insert into agent_sessions
+    (session_key, provider, provider_session_id, project_id, issue_id, status, created_at, updated_at)
+    values ('codex:thread-1', 'codex', 'thread-1', 'demo', 1, 'running', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`);
+}
+
 type SystemStatusBody = {
   auth: { enabled: boolean };
   config: { addr: string; auth_enabled: boolean; db_path: string };
   db: { ok: boolean };
   codex: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
-  runner: { running_loops: number };
+  runner: Record<string, number>;
   service: {
     alive: boolean;
     build: Record<string, unknown>;

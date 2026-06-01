@@ -8,7 +8,7 @@ import { startServer } from "./http/server.ts";
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
-import { runProjectLoopOnce } from "./runner/projectLoop.ts";
+import { startProjectLoop } from "./runner/projectLoopManager.ts";
 import { recoverInProgressIssues } from "./runner/recovery.ts";
 import { redactSensitiveText } from "./util/redact.ts";
 
@@ -59,7 +59,7 @@ async function startAutoRunLoops(
   const projects = database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
-  for (const project of projects) runAutoProject(database, project.id, providers);
+  for (const project of projects) startProjectLoop({ database, providers, onError: logProjectLoopError }, project.id);
   createPiAutoManageScheduler({
     database,
     onError: (error) => {
@@ -69,24 +69,8 @@ async function startAutoRunLoops(
   }).start();
 }
 
-function runAutoProject(
-  database: Awaited<ReturnType<typeof openDatabase>>,
-  projectId: string,
-  providers: ReturnType<typeof executorProviders>
-): void {
-  void (async () => {
-    while (true) {
-      const result = await runProjectLoopOnce({ database, projectId, providers });
-      if (!result.claimed) break;
-    }
-  })().catch((error) => {
-    console.error(JSON.stringify({
-      ok: false,
-      service: "codex-issue-runner backend-ts",
-      projectId,
-      error: safeError(error)
-    }));
-  });
+function logProjectLoopError(error: unknown, projectId: string): void {
+  console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", projectId, error: safeError(error) }));
 }
 
 function safeError(error: unknown): string {
