@@ -6,7 +6,7 @@ import { buildCronRunSummary } from '../utils/cronTaskSummary';
 import {
   selectCronTasks,
   selectProjects,
-  selectRefreshAllData,
+  selectRefreshData,
   useDataStore,
 } from '../store/dataStore';
 
@@ -48,7 +48,7 @@ function statusLabel(status) {
 export default function CronTasksPanel({ compact = false, defaultProjectId = '' }) {
   const projects = useDataStore(selectProjects);
   const cronTasks = useDataStore(selectCronTasks);
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
   const [open, setOpen] = useState(!compact);
   const [form, setForm] = useState({
     projectId: defaultProjectId,
@@ -64,16 +64,24 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
   }, [cronTasks, defaultProjectId]);
 
   useEffect(() => {
+    if (open && compact) {
+      refreshData(['projects', 'cronTasks']);
+    }
     if (compact && !open) {
       setForm(prev => ({ ...prev, projectId: defaultProjectId }));
     }
-  }, [compact, defaultProjectId, open]);
+  }, [compact, defaultProjectId, open, refreshData]);
 
   const updateField = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleProjectOptionsFocus = () => {
+    refreshData(['projects']);
+  };
+
   const handleOpen = () => {
+    refreshData(['projects', 'cronTasks']);
     setForm(prev => ({
       ...prev,
       projectId: defaultProjectId,
@@ -88,7 +96,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
     setError('');
     try {
       await api.createCronTask(buildPayload(form, projects));
-      await refreshAllData();
+      await refreshData(['cronTasks']);
       setForm(prev => ({ ...prev, runAt: defaultRunAt() }));
       if (compact) setOpen(false);
     } catch (err) {
@@ -102,7 +110,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
     const status = task.status === 'active' ? 'paused' : 'active';
     try {
       await api.updateCronTask(task.id, { status });
-      refreshAllData();
+      refreshData(['cronTasks']);
     } catch (err) {
       message.error(err.message || '更新 cron 任务失败');
     }
@@ -112,7 +120,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
     if (!window.confirm(`删除定时任务「${task.name}」？`)) return;
     try {
       await api.deleteCronTask(task.id);
-      refreshAllData();
+      refreshData(['cronTasks']);
     } catch (err) {
       message.error(err.message || '删除 cron 任务失败');
     }
@@ -128,7 +136,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
           <div className="modal-overlay">
             <div className="glass-card modal-content" style={{ maxWidth: '680px', padding: '22px' }}>
               <PanelHeader onClose={() => setOpen(false)} />
-              {renderForm({ projects, form, updateField, error, submitting, handleSubmit, minRunAt: minOnceRunAt() })}
+              {renderForm({ projects, form, updateField, error, submitting, handleSubmit, handleProjectOptionsFocus, minRunAt: minOnceRunAt() })}
               {renderTaskList({ tasks: visibleTasks, projects, handleToggleStatus, handleDelete })}
             </div>
           </div>
@@ -140,7 +148,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <PanelHeader />
-      {renderForm({ projects, form, updateField, error, submitting, handleSubmit, minRunAt: minOnceRunAt() })}
+      {renderForm({ projects, form, updateField, error, submitting, handleSubmit, handleProjectOptionsFocus, minRunAt: minOnceRunAt() })}
       {renderTaskList({ tasks: visibleTasks, projects, handleToggleStatus, handleDelete })}
     </section>
   );
@@ -166,12 +174,12 @@ function PanelHeader({ onClose }) {
   );
 }
 
-function renderForm({ projects, form, updateField, error, submitting, handleSubmit, minRunAt }) {
+function renderForm({ projects, form, updateField, error, submitting, handleSubmit, handleProjectOptionsFocus, minRunAt }) {
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr auto', gap: '12px', alignItems: 'end' }}>
       <div className="form-group" style={{ marginBottom: 0 }}>
         <label>运行范围</label>
-        <select className="form-control" value={form.projectId} onChange={(e) => updateField('projectId', e.target.value)}>
+        <select className="form-control" value={form.projectId} onFocus={handleProjectOptionsFocus} onChange={(e) => updateField('projectId', e.target.value)}>
           <option value="">所有项目的 Triage</option>
           {projects.map(project => (
             <option key={project.id} value={project.id}>{project.name}</option>

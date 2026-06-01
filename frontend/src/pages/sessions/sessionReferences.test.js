@@ -61,3 +61,13 @@ test('composer content can be prompt text or attached references', () => {
   assert.equal(hasComposerContent(' hello ', []), true);
   assert.equal(hasComposerContent('', [{ type: 'issue', id: '95' }]), true);
 });
+
+test('issue references remain sendable before the global issue list is loaded', () => {
+  const details = buildReferenceDetails([
+    { type: 'issue', id: '95', label: 'Composer chips' },
+  ], { issues: [], projects: [] });
+
+  assert.equal(details[0].status, 'ready');
+  assert.match(details[0].summary, /#95/);
+  assert.equal(referenceValidation(details).hasErrors, false);
+});

@@ -78,5 +78,8 @@ create index if not exists idx_issues_queue
 
 create index if not exists idx_issue_runs_issue
   on issue_runs(issue_id, attempt);
+
+create index if not exists idx_issue_events_issue_type
+  on issue_events(issue_id, type);
 `
 };

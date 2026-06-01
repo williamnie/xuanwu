@@ -5,7 +5,7 @@ import {
   selectBackendOnline,
   selectIssues,
   selectProjects,
-  selectRefreshAllData,
+  selectRefreshData,
   useDataStore,
 } from '../store/dataStore';
 import { 
@@ -64,7 +64,7 @@ export default function Projects() {
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const backendOnline = useDataStore(selectBackendOnline);
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
   const [ui, updateUi] = useImmer({
     syncing: false,
     syncResult: null,
@@ -158,7 +158,7 @@ export default function Projects() {
       updateUi(draft => {
         draft.syncResult = result;
       });
-      await refreshAllData();
+      await refreshData(['projects', 'issues']);
     } catch (err) {
       updateUi(draft => {
         draft.syncResult = { error: err.message || '同步 Codex 项目失败' };
@@ -238,7 +238,7 @@ export default function Projects() {
       updateUi(draft => {
         draft.isModalOpen = false;
       });
-      refreshAllData();
+      refreshData(['projects', 'issues']);
     } catch (err) {
       updateUi(draft => {
         draft.formError = err.message || '操作失败';
@@ -290,7 +290,7 @@ export default function Projects() {
     if (window.confirm('确定要删除该项目吗？关联的 Issue 也会被删除！')) {
       try {
         await api.deleteProject(id);
-        refreshAllData();
+        refreshData(['projects', 'issues']);
       } catch (err) {
         message.error(err.message || '删除失败');
       }
@@ -301,7 +301,7 @@ export default function Projects() {
     const nextAutoRun = proj.auto_run === 1 ? 0 : 1;
     try {
       await api.updateProject(proj.id, { auto_run: nextAutoRun });
-      refreshAllData();
+      refreshData(['projects', 'issues']);
     } catch {
       message.error('更新自动执行配置失败');
     }
@@ -310,7 +310,7 @@ export default function Projects() {
   const handleStartLoop = async (id) => {
     try {
       await api.startProjectLoop(id);
-      refreshAllData();
+      refreshData(['projects', 'issues']);
     } catch (err) {
       message.error('启动 Loop 失败: ' + err.message);
     }
@@ -319,7 +319,7 @@ export default function Projects() {
   const handleStopLoop = async (id) => {
     try {
       await api.stopProjectLoop(id);
-      refreshAllData();
+      refreshData(['projects', 'issues']);
     } catch (err) {
       message.error('停止 Loop 失败: ' + err.message);
     }
@@ -338,7 +338,7 @@ export default function Projects() {
       updateUi(draft => {
         draft.resumingHoldProjectId = '';
       });
-      refreshAllData();
+      refreshData(['projects', 'issues']);
     }
   };
 

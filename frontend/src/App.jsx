@@ -36,22 +36,16 @@ const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'cron_task.error',
 ]);
 
+const PAGE_DATA_SLICES = {
+  cron: ['cronTasks'],
+  dashboard: ['projects', 'issues'],
+  issues: ['issues'],
+  projects: ['projects', 'issues'],
+};
+
 function getReconcileSlices(currentPage, selectedIssueId) {
-  if (currentPage === 'issues') {
-    return selectedIssueId
-      ? ['projects', 'issues']
-      : ['projects', 'issues', 'issueTemplates', 'cronTasks'];
-  }
-  if (currentPage === 'projects') {
-    return ['projects', 'issues'];
-  }
-  if (currentPage === 'cron') {
-    return ['projects', 'cronTasks'];
-  }
-  if (currentPage === 'dashboard') {
-    return ['projects', 'issues'];
-  }
-  return [];
+  if (currentPage === 'issues' && selectedIssueId) return ['issues'];
+  return PAGE_DATA_SLICES[currentPage] || [];
 }
 
 export default function App() {

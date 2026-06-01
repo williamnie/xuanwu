@@ -5,7 +5,7 @@ import IssueEditModal from '../components/IssueEditModal';
 import IssueWorkflowEvidencePanel from '../components/IssueWorkflowEvidencePanel';
 import { message } from '../store/toastStore';
 import {
-  selectRefreshAllData,
+  selectRefreshData,
   useDataStore,
 } from '../store/dataStore';
 import {
@@ -98,6 +98,15 @@ function issueLogAgentPayload(payload) {
     status: payload.status || '',
     error: payload.error || '',
   };
+}
+
+async function readOptional(read, label, fallback = null) {
+  try {
+    return await read();
+  } catch (error) {
+    console.error(label, error);
+    return fallback;
+  }
 }
 
 function commandLineText(agent) {
@@ -193,7 +202,7 @@ function issueProviderIdentity(issue, runs) {
 }
 
 export default function IssueDetail({ issueId, navigateTo }) {
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
@@ -219,40 +228,33 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const shouldFollowTerminalRef = useRef(true);
   const lastScrolledEventKeyRef = useRef('');
 
-  const loadIssueData = useCallback(async () => {
+  const loadIssueData = useCallback(async (options = {}) => {
+    const { includeProfiles = false } = options;
     try {
       const issueData = await api.getIssue(issueId);
       let projData = null;
       let eventList = [];
       let runList = [];
-      let profileList = [];
+      let profileList;
 
       if (issueData) {
-        // 加载关联项目
-        try {
-          projData = await api.getProject(issueData.project_id);
-        } catch (e) {
-          console.error('获取关联项目失败:', e);
-        }
-
-        // 加载现有事件日志
-        try {
-          eventList = await api.getIssueEvents(issueId);
-        } catch (e) {
-          console.error('获取日志事件失败:', e);
-        }
-
-        try {
-          runList = await api.getIssueRuns(issueId);
-        } catch (e) {
-          console.error('获取运行历史失败:', e);
-        }
-
-        try {
-          profileList = await api.getAgentProfiles();
-        } catch (e) {
-          console.error('获取 Agent Profiles 失败:', e);
-        }
+        const [
+          nextProject,
+          nextEvents,
+          nextRuns,
+          nextProfiles,
+        ] = await Promise.all([
+          readOptional(() => api.getProject(issueData.project_id), '获取关联项目失败:'),
+          readOptional(() => api.getIssueEvents(issueId), '获取日志事件失败:', []),
+          readOptional(() => api.getIssueRuns(issueId), '获取运行历史失败:', []),
+          includeProfiles
+            ? readOptional(() => api.getAgentProfiles(), '获取 Agent Profiles 失败:', [])
+            : Promise.resolve(undefined),
+        ]);
+        projData = nextProject;
+        eventList = nextEvents || [];
+        runList = nextRuns || [];
+        profileList = Array.isArray(nextProfiles) ? nextProfiles : undefined;
       }
 
       updateDetailState(draft => {
@@ -268,8 +270,8 @@ export default function IssueDetail({ issueId, navigateTo }) {
         if (!sameIssueRuns(draft.runs, runList || [])) {
           draft.runs = runList || [];
         }
-        if (!sameAgentProfiles(draft.profiles, profileList || [])) {
-          draft.profiles = profileList || [];
+        if (Array.isArray(profileList) && !sameAgentProfiles(draft.profiles, profileList)) {
+          draft.profiles = profileList;
         }
         if (draft.error !== null) {
           draft.error = null;
@@ -289,7 +291,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
   }, [issueId, updateDetailState]);
 
   useEffect(() => {
-    loadIssueData();
+    loadIssueData({ includeProfiles: true });
 
     // 订阅 SSE 实时事件以追加最新日志
     const unsubscribe = api.subscribeToEvents((data) => {
@@ -417,7 +419,7 @@ ${error}` : error;
       await api.reviewIssueVerification(issueId, { action, comment });
       message.success('验证处理已提交');
       loadIssueData();
-      refreshAllData();
+      refreshData(['issues']);
     } catch (err) {
       message.error('验证处理失败: ' + err.message);
     }
@@ -499,8 +501,8 @@ ${error}` : error;
     setRefinementDraft(null);
     setRefinementDraftError('');
     setIsEditModalOpen(false);
-    refreshAllData();
-  }, [refreshAllData, updateDetailState]);
+    refreshData(['issues']);
+  }, [refreshData, updateDetailState]);
 
   const handleCopyText = useCallback(async (text) => {
     try {

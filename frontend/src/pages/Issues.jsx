@@ -5,7 +5,7 @@ import {
   selectIssueTemplates,
   selectIssues,
   selectProjects,
-  selectRefreshAllData,
+  selectRefreshData,
   useDataStore,
 } from '../store/dataStore';
 import {
@@ -36,7 +36,7 @@ export default function Issues({
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const issueTemplates = useDataStore(selectIssueTemplates);
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
 
   // 新建 Issue 的局部表单状态
   const [formTitle, setFormTitle] = useState('');
@@ -62,7 +62,7 @@ export default function Issues({
     try {
       await api.retryIssue(issueId);
       message.success(`Issue #${issueId} 已重新加入队列`);
-      refreshAllData();
+      refreshData(['issues']);
     } catch (err) {
       message.error(`重新执行失败: ${err.message || '网络异常'}`);
     } finally {
@@ -153,7 +153,7 @@ export default function Issues({
       }
 
       // 成功后重新加载数据，保证即时同步
-      refreshAllData();
+      refreshData(['issues']);
     } catch (err) {
       console.error('更新 Issue 状态失败:', err);
       message.error(`更改状态失败: ${err.message || '网络异常'}`);
@@ -163,12 +163,13 @@ export default function Issues({
   // 当模态框打开时重置表单输入内容，防止共享项目列表更新时清空用户输入
   useEffect(() => {
     if (isNewIssueOpen) {
+      refreshData(['projects', 'issueTemplates']);
       setFormTitle(sourceMetadata?.suggested_title || '');
       setFormDescription(sourceMetadata?.source_excerpt || '');
       setFormPriority(0);
       setFormError('');
     }
-  }, [isNewIssueOpen, sourceMetadata]);
+  }, [isNewIssueOpen, refreshData, sourceMetadata]);
 
   useEffect(() => {
     if (!isNewIssueOpen) return;
@@ -246,7 +247,7 @@ export default function Issues({
       setIsNewIssueOpen(false);
       setFormTitle('');
       setFormDescription('');
-      refreshAllData();
+      refreshData(['issues']);
     } catch (err) {
       setFormError(err.message || '新建 Issue 失败');
     } finally {

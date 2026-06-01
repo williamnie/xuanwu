@@ -7,7 +7,7 @@ import {
   selectBackendOnline,
   selectIssues,
   selectProjects,
-  selectRefreshAllData,
+  selectRefreshData,
   useDataStore,
 } from '../store/dataStore';
 import { 
@@ -26,7 +26,7 @@ export default function Dashboard({
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
   const backendOnline = useDataStore(selectBackendOnline);
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
   const [events, updateEvents] = useImmer([]);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function Dashboard({
             <h4 style={{ color: 'var(--error)', fontWeight: 600, marginBottom: '2px' }}>连接后端 API 失败</h4>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>无法连接到 Runner 后端服务。请确认当前 API 入口已启动且 /api/* 接口可用。</p>
           </div>
-          <button className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={refreshAllData}>
+          <button className="btn btn-secondary" style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '0.8rem' }} onClick={() => refreshData(['projects', 'issues'])}>
             重试连接
           </button>
         </div>

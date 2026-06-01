@@ -8,7 +8,7 @@ import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import PromptEditor from '../components/editor/PromptEditor';
-import { selectIssues, selectProjects, selectRefreshData, selectSetProjects, useDataStore } from '../store/dataStore';
+import { selectProjects, selectRefreshData, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
 import {
   approvalsForSession,
@@ -79,6 +79,7 @@ const PAGE_SIZE = 50;
 const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
 const DEFAULT_SESSION_PROVIDER = 'codex';
+const EMPTY_CAPABILITIES = { skills: [], plugins: [] };
 const SESSION_SIDEBAR_WIDTH_KEY = 'codex-session-sidebar-width';
 const SESSION_SIDEBAR_DEFAULT_WIDTH = 260;
 const SESSION_SIDEBAR_MIN_WIDTH = 220;
@@ -198,7 +199,6 @@ function NewSessionComposerActions({ settings, models, sending, canSubmit, onMod
 
 export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const projects = useDataStore(selectProjects);
-  const issues = useDataStore(selectIssues);
   const refreshData = useDataStore(selectRefreshData);
   const setProjects = useDataStore(selectSetProjects);
   const [sessions, setSessions] = useState([]);
@@ -218,7 +218,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [models, setModels] = useState([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState('');
-  const [capabilities, setCapabilities] = useState({ skills: [], plugins: [] });
   const [pathReferences, setPathReferences] = useState({ files: [], folders: [] });
   const [message, setMessage] = useState('');
   const [messageReferences, setMessageReferences] = useState([]);
@@ -395,20 +394,21 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     const sessionCwd = selectedSession?.cwd || selectedSession?.path || '';
     return projects.find((project) => project.cwd === sessionCwd) || null;
   }, [projects, selectedSession]);
+  const referenceIssues = useMemo(() => [], []);
   const sessionComposerSuggestions = useMemo(() => buildSessionComposerSuggestions({
     projects,
-    issues,
+    issues: referenceIssues,
     currentProject: selectedSessionProject,
     linkedIssues: selectedSession?.source_issues || [],
-    capabilities,
+    capabilities: EMPTY_CAPABILITIES,
     pathReferences,
-  }), [capabilities, issues, pathReferences, projects, selectedSession?.source_issues, selectedSessionProject]);
+  }), [pathReferences, projects, referenceIssues, selectedSession?.source_issues, selectedSessionProject]);
   const newSessionReferenceDetails = useMemo(() => buildReferenceDetails(promptReferences, {
-    issues, projects, currentProjectId: projectId,
-  }), [issues, projectId, projects, promptReferences]);
+    issues: referenceIssues, projects, currentProjectId: projectId,
+  }), [projectId, projects, promptReferences, referenceIssues]);
   const messageReferenceDetails = useMemo(() => buildReferenceDetails(messageReferences, {
-    issues, projects, currentProjectId: selectedSessionProject?.id || '',
-  }), [issues, messageReferences, projects, selectedSessionProject?.id]);
+    issues: referenceIssues, projects, currentProjectId: selectedSessionProject?.id || '',
+  }), [messageReferences, projects, referenceIssues, selectedSessionProject?.id]);
   const newSessionReferenceValidation = useMemo(
     () => referenceValidation(newSessionReferenceDetails),
     [newSessionReferenceDetails],
@@ -430,7 +430,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   ), [message, projectId, prompt, selectedSessionProject?.id]);
 
   useEffect(() => {
-    refreshData(['projects', 'issues']);
+    refreshData(['projects']);
   }, [refreshData]);
 
   const loadFirstPage = useCallback(async () => {
@@ -505,18 +505,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
   }, []);
 
-  const loadCapabilities = useCallback(async () => {
-    try {
-      const result = await api.getCapabilities();
-      setCapabilities({
-        skills: Array.isArray(result?.skills) ? result.skills : [],
-        plugins: Array.isArray(result?.plugins) ? result.plugins : [],
-      });
-    } catch {
-      setCapabilities({ skills: [], plugins: [] });
-    }
-  }, []);
-
   useEffect(() => {
     if (!pathSearchRequest) {
       setPathReferences({ files: [], folders: [] });
@@ -565,7 +553,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   }, [selectedId, loadSelected]);
 
   useEffect(() => { loadModels(); }, [loadModels]);
-  useEffect(() => { loadCapabilities(); }, [loadCapabilities]);
   useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
 
   const scheduleListRefresh = useCallback(() => {
@@ -799,7 +786,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setResult: setPromptCommandResult,
       setError: setPromptCommandError,
       afterSuccess: async () => {
-        await refreshData(['issues', 'projects']);
+        await refreshData(['issues']);
         setPrompt('');
         setPromptReferences([]);
       },
@@ -813,7 +800,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setResult: setMessageCommandResult,
       setError: setMessageCommandError,
       afterSuccess: async () => {
-        await refreshData(['issues', 'projects']);
+        await refreshData(['issues']);
         setMessage('');
         setMessageReferences([]);
       },

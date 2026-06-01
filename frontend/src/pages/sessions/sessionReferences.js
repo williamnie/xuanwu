@@ -94,6 +94,10 @@ function referenceDetail(reference, context) {
 }
 
 function issueDetail(reference, issues = [], currentProjectId = '') {
+  if (!Array.isArray(issues) || issues.length === 0) {
+    const id = reference.id ? `#${reference.id}` : 'Issue';
+    return withStatus(reference, 'ready', '', `${id} · ${reference.label || '已附加 issue reference'}`);
+  }
   const issue = issues.find((item) => String(item.id) === String(reference.id));
   if (!reference.id || !issue) return withStatus(reference, 'error', 'Issue 不存在或未加载。', '缺少 issue context');
   const crossProject = currentProjectId && issue.project_id && issue.project_id !== currentProjectId;

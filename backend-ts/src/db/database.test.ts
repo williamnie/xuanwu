@@ -75,8 +75,10 @@ describe("Bun SQLite database connection", () => {
         { id: "001_base_schema" },
         { id: "002_agent_sessions_runtime" },
         { id: "003_pi_runtime" },
-        { id: "004_safe_go_import_tables" }
+        { id: "004_safe_go_import_tables" },
+        { id: "005_read_performance_indexes" }
       ]);
+      expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
     } finally {
       connection.close();
     }
@@ -117,7 +119,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 4 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 5 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -185,5 +187,10 @@ function tableNames(connection: RunnerDatabase): string[] {
 
 function columnNames(connection: RunnerDatabase, table: string): string[] {
   return connection.sqlite.query(`pragma table_info(${table})`).all()
+    .map((row) => (row as { name: string }).name);
+}
+
+function indexNames(connection: RunnerDatabase, table: string): string[] {
+  return connection.sqlite.query(`pragma index_list(${table})`).all()
     .map((row) => (row as { name: string }).name);
 }

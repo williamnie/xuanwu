@@ -7,6 +7,10 @@
 import { authHeader, clearAuthToken } from './authToken';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+const EVENT_SOURCE_CLOSED = 2;
+
+let sharedEventSource = null;
+const eventSubscribers = new Set();
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -65,29 +69,50 @@ async function responseError(response) {
 }
 
 function subscribeToEvents(onEvent, onError, onOpen) {
-  const eventSource = new EventSource(`${API_BASE}/api/events`);
+  const subscriber = { onEvent, onError, onOpen };
+  eventSubscribers.add(subscriber);
+  ensureSharedEventSource();
 
-  eventSource.onopen = () => {
-    if (onOpen) {
-      onOpen();
+  return () => {
+    eventSubscribers.delete(subscriber);
+    if (eventSubscribers.size === 0) {
+      sharedEventSource?.close();
+      sharedEventSource = null;
     }
   };
+}
 
-  eventSource.onmessage = (event) => {
-    try {
-      onEvent(JSON.parse(event.data));
-    } catch (err) {
-      console.error('解析 SSE 消息失败:', err, event.data);
+function ensureSharedEventSource() {
+  if (sharedEventSource && sharedEventSource.readyState !== EVENT_SOURCE_CLOSED) {
+    return sharedEventSource;
+  }
+
+  sharedEventSource = new EventSource(`${API_BASE}/api/events`);
+  sharedEventSource.onopen = () => {
+    for (const subscriber of eventSubscribers) {
+      subscriber.onOpen?.();
     }
   };
-
-  eventSource.onerror = (err) => {
-    if (onError) {
-      onError(err);
+  sharedEventSource.onmessage = (event) => {
+    dispatchEventMessage(event);
+  };
+  sharedEventSource.onerror = (err) => {
+    for (const subscriber of eventSubscribers) {
+      subscriber.onError?.(err);
     }
   };
+  return sharedEventSource;
+}
 
-  return () => eventSource.close();
+function dispatchEventMessage(event) {
+  try {
+    const data = JSON.parse(event.data);
+    for (const subscriber of eventSubscribers) {
+      subscriber.onEvent?.(data);
+    }
+  } catch (err) {
+    console.error('解析 SSE 消息失败:', err, event.data);
+  }
 }
 
 export const api = {

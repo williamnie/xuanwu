@@ -3,7 +3,7 @@ import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import {
   selectIssueTemplates,
-  selectRefreshAllData,
+  selectRefreshData,
   useDataStore,
 } from '../store/dataStore';
 import { FileText, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
@@ -26,7 +26,7 @@ function defaultTemplateContent(templates) {
 
 export default function IssueTemplatesPanel() {
   const templates = useDataStore(selectIssueTemplates);
-  const refreshAllData = useDataStore(selectRefreshAllData);
+  const refreshData = useDataStore(selectRefreshData);
   const [modal, setModal] = useState(EMPTY_MODAL);
 
   const openCreateModal = () => {
@@ -75,7 +75,7 @@ export default function IssueTemplatesPanel() {
         await api.updateIssueTemplate(modal.id, payload);
       }
       closeModal();
-      await refreshAllData();
+      await refreshData(['issueTemplates']);
     } catch (err) {
       setModal(current => ({ ...current, error: err.message || '保存模板失败', saving: false }));
     }
@@ -84,7 +84,7 @@ export default function IssueTemplatesPanel() {
   const setDefaultTemplate = async (template) => {
     try {
       await api.updateIssueTemplate(template.id, { is_default: 1 });
-      await refreshAllData();
+      await refreshData(['issueTemplates']);
     } catch (err) {
       message.error(err.message || '设置默认模板失败');
     }
@@ -94,7 +94,7 @@ export default function IssueTemplatesPanel() {
     if (!window.confirm(`确定删除模板「${template.name}」吗？`)) return;
     try {
       await api.deleteIssueTemplate(template.id);
-      await refreshAllData();
+      await refreshData(['issueTemplates']);
     } catch (err) {
       message.error(err.message || '删除模板失败');
     }
