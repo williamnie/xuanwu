@@ -72,7 +72,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
 
   async readSession(sessionId: string): Promise<ThreadSummary> {
     await this.adapter.initialize();
-    return await this.adapter.readThread(sessionId.trim());
+    return await this.adapter.resumeThread(sessionId.trim());
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {

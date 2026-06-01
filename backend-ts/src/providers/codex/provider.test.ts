@@ -1,19 +1,26 @@
 import { describe, expect, test } from "bun:test";
 import { CodexExecutorProvider } from "./provider.ts";
-import type { CodexInitializeResult, ThreadStartResult, TurnStartResult } from "./adapter.ts";
+import type { CodexInitializeResult, ThreadStartResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import type { CodexUserInput, ThreadStartInput, TurnStartOptions } from "./threadLifecycle.ts";
 
 class FakeCodexIssueAdapter {
   readonly calls: Array<{ method: string; params?: unknown }> = [];
+  readThreadResult: ThreadSummary | null = null;
+  resumeThreadResult: ThreadSummary | null = null;
 
   async initialize(): Promise<CodexInitializeResult> {
     this.calls.push({ method: "initialize" });
     return { protocolVersion: "fixture", capabilities: {} };
   }
 
-  async resumeThread(threadID: string) {
+  async readThread(threadID: string): Promise<ThreadSummary> {
+    this.calls.push({ method: "thread/read", params: { threadID } });
+    return this.readThreadResult ?? this.threadSummary(threadID);
+  }
+
+  async resumeThread(threadID: string): Promise<ThreadSummary> {
     this.calls.push({ method: "thread/resume", params: { threadID } });
-    return { id: `codex:${threadID}`, provider: "codex" as const, provider_session_id: threadID, sessionId: threadID, ephemeral: false };
+    return this.resumeThreadResult ?? this.threadSummary(threadID);
   }
 
   async startThread(input: ThreadStartInput): Promise<ThreadStartResult> {
@@ -39,6 +46,10 @@ class FakeCodexIssueAdapter {
   async interruptTurn(threadID: string, turnID: string) {
     this.calls.push({ method: "turn/interrupt", params: { threadID, turnID } });
     return { ok: true as const, provider_session_id: threadID, turn_id: turnID };
+  }
+
+  private threadSummary(threadID: string): ThreadSummary {
+    return { id: `codex:${threadID}`, provider: "codex", provider_session_id: threadID, sessionId: threadID, ephemeral: false };
   }
 }
 
@@ -96,6 +107,41 @@ describe("Codex executor provider", () => {
           }
         }
       }
+    ]);
+  });
+
+  test("reads manual Sessions API detail through resume to hydrate transcript", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    adapter.readThreadResult = {
+      id: "codex:thread-1",
+      provider: "codex",
+      provider_session_id: "thread-1",
+      sessionId: "thread-1",
+      ephemeral: false,
+      status: { type: "notLoaded" },
+      turns: []
+    };
+    adapter.resumeThreadResult = {
+      id: "codex:thread-1",
+      provider: "codex",
+      provider_session_id: "thread-1",
+      sessionId: "thread-1",
+      ephemeral: false,
+      status: { type: "loaded" },
+      turns: [{ id: "turn-1", items: [{ type: "agentMessage", text: "hydrated" }] }]
+    };
+
+    const detail = await new CodexExecutorProvider(adapter).readSession("thread-1");
+
+    expect(detail).toMatchObject({
+      id: "codex:thread-1",
+      provider_session_id: "thread-1",
+      status: { type: "loaded" },
+      turns: [{ id: "turn-1" }]
+    });
+    expect(adapter.calls).toEqual([
+      { method: "initialize" },
+      { method: "thread/resume", params: { threadID: "thread-1" } }
     ]);
   });
 
