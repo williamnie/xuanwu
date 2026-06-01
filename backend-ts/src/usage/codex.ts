@@ -1,6 +1,6 @@
 import { addDimensionUsage, finishDimensions, newDimensionState } from "./dimensions.ts";
 import { addUsage, dayKey, isoWeekKey, monthKey, normalizeRateLimits, timestamp, timestampMs, tokenUsage, zeroUsage } from "./helpers.ts";
-import { readUsageRecords } from "./reader.ts";
+import { readUsageSnapshot } from "./reader.ts";
 import type { RateLimits, TokenEvent, TokenUsage, UsageOptions, UsageRecord, UsageReport } from "./types.ts";
 
 const MAX_DAILY_PERIODS = 31;
@@ -16,11 +16,19 @@ export async function readCodexUsage(input: {
 }): Promise<UsageReport> {
   const root = input.root.trim();
   if (root === "") throw new Error("codex sessions dir 未配置");
-  return aggregateUsage(root, await readUsageRecords(root), input.now ?? new Date(), input.options ?? {});
+  const snapshot = await readUsageSnapshot(root);
+  return aggregateUsage(root, snapshot.records, input.now ?? new Date(), input.options ?? {}, snapshot.cache);
 }
 
-function aggregateUsage(root: string, records: UsageRecord[], now: Date, options: UsageOptions): UsageReport {
+function aggregateUsage(
+  root: string,
+  records: UsageRecord[],
+  now: Date,
+  options: UsageOptions,
+  cache: Record<string, number>
+): UsageReport {
   const state = newUsageState(root, now, options);
+  state.cache = cache;
   for (const record of filteredRecords(records, options.limit ?? 0)) addRecord(state, record);
   return finishUsageState(state);
 }
@@ -40,6 +48,7 @@ function addRecord(state: UsageState, record: UsageRecord): void {
 function newUsageState(root: string, now: Date, options: UsageOptions) {
   return {
     daily: new Map<string, TokenUsage>(),
+    cache: {} as Record<string, number>,
     dimensions: newDimensionState(options),
     events_scanned: 0,
     generated_at: now.toISOString(),
@@ -97,6 +106,7 @@ function finishUsageState(state: UsageState): UsageReport {
     source: state.root,
     generated_at: state.generated_at,
     events_scanned: state.events_scanned,
+    cache: state.cache,
     ...(state.latest_usage ? { latest_usage: state.latest_usage } : {}),
     rate_limits: state.rate_limits,
     summary: state.summary,

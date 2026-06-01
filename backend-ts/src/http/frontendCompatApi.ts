@@ -17,6 +17,7 @@ import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
+import { syncCodexProjects } from "./projectSync.ts";
 import type { Router } from "./router.ts";
 
 export type FrontendCompatContext = { bus?: EventBus; database: RunnerDatabase; providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>> };
@@ -47,7 +48,7 @@ function registerProjectCompatRoutes(router: Router, context: FrontendCompatCont
   router.post("/api/projects/:id/loop/stop", (request) => projectLoopResponse(context, projectIDAt(request, 1), 0));
   router.post("/api/projects/:id/hold/resume", (request) => writeResponse(() => clearProjectHold(context.database, projectIDAt(request, 1))));
   router.get("/api/projects/:id/references/search", (request) => projectReferencesResponse(context.database, request));
-  router.post("/api/projects/sync/codex", () => json({ source: "bun", summary: { discovered: 0, created: 0, existing: 0, skipped: 0 }, created: [], existing: [], skipped: [] }));
+  router.post("/api/projects/sync/codex", () => writeResponse(() => syncCodexProjects(context.database)));
 }
 
 function registerTemplateRoutes(router: Router, context: FrontendCompatContext): void {

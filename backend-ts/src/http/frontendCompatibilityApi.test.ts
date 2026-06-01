@@ -28,6 +28,81 @@ afterEach(async () => {
 });
 
 describe("Bun frontend API compatibility", () => {
+  test("syncs missing local Codex workspace roots", async () => {
+    const { cwd, database } = await openFixtureDatabase();
+    const second = await tempDir("codex-runner-bun-sync-second-");
+    const missing = join(second, "missing");
+    const statePath = join(second, "codex-state.json");
+    await writeFile(statePath, JSON.stringify({
+      "electron-saved-workspace-roots": [cwd, second, missing],
+      "active-workspace-roots": [second],
+      "remote-projects": [{ hostId: "remote-ssh-discovered:claw", remotePath: "/home/xiaobei/project" }]
+    }));
+    const previousStatePath = Bun.env.CODEX_RUNNER_CODEX_STATE;
+    try {
+      Bun.env.CODEX_RUNNER_CODEX_STATE = statePath;
+      const router = createDefaultRouter({ database });
+      await requestJSON(router, "/api/projects", "POST", { id: "project", cwd }, 201);
+
+      const result = await requestJSON(router, "/api/projects/sync/codex", "POST", {});
+      const again = await requestJSON(router, "/api/projects/sync/codex", "POST", {});
+
+      expect(result).toMatchObject({
+        source: statePath,
+        summary: { discovered: 4, created: 1, existing: 1, skipped: 2 },
+        created: [{ id: expect.any(String), name: expect.any(String), cwd: second, auto_run: 0, model: "codex-default" }],
+        existing: [{ id: "project", cwd }],
+        skipped: [
+          { cwd: missing, reason: "path_not_found" },
+          { cwd: "remote-ssh-discovered:claw:/home/xiaobei/project", reason: "remote_project" }
+        ]
+      });
+      expect(again.summary).toMatchObject({ discovered: 4, created: 0, existing: 2, skipped: 2 });
+    } finally {
+      if (previousStatePath === undefined) delete Bun.env.CODEX_RUNNER_CODEX_STATE;
+      else Bun.env.CODEX_RUNNER_CODEX_STATE = previousStatePath;
+      database.close();
+    }
+  });
+
+  test("skips Codex workspace roots from TCC sensitive folders", async () => {
+    const { database } = await openFixtureDatabase();
+    const root = await tempDir("codex-runner-bun-sync-sensitive-");
+    const documents = join(root, "Documents", "safe-project");
+    const downloads = join(root, "Downloads", "download-project");
+    const music = join(root, "Music", "audio-project");
+    const icloud = join(root, "Library", "Mobile Documents", "com~apple~CloudDocs", "cloud-project");
+    const statePath = join(root, "codex-state.json");
+    await mkdir(documents, { recursive: true });
+    await mkdir(downloads, { recursive: true });
+    await mkdir(music, { recursive: true });
+    await mkdir(icloud, { recursive: true });
+    await writeFile(statePath, JSON.stringify({
+      "electron-saved-workspace-roots": [documents, downloads, music, icloud]
+    }));
+    const previousStatePath = Bun.env.CODEX_RUNNER_CODEX_STATE;
+    try {
+      Bun.env.CODEX_RUNNER_CODEX_STATE = statePath;
+      const router = createDefaultRouter({ database });
+
+      const result = await requestJSON(router, "/api/projects/sync/codex", "POST", {});
+
+      expect(result).toMatchObject({
+        summary: { discovered: 4, created: 1, existing: 0, skipped: 3 },
+        created: [{ cwd: documents }],
+        skipped: [
+          { cwd: downloads, reason: "sensitive_folder" },
+          { cwd: music, reason: "sensitive_folder" },
+          { cwd: icloud, reason: "sensitive_folder" }
+        ]
+      });
+    } finally {
+      if (previousStatePath === undefined) delete Bun.env.CODEX_RUNNER_CODEX_STATE;
+      else Bun.env.CODEX_RUNNER_CODEX_STATE = previousStatePath;
+      database.close();
+    }
+  });
+
   test("covers project loop, profile, template, cron, notification and reference endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
     try {
