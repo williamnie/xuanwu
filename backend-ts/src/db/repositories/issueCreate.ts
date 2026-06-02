@@ -29,9 +29,16 @@ export const VALID_ISSUE_STATUSES = new Set([
   "failed",
   "cancelled"
 ]);
+const DEFAULT_ISSUE_TEMPLATE_ID = "default";
+const DEFAULT_ISSUE_TEMPLATE_CONTENT = "{{issue.description}}";
+
+type IssueTemplateSnapshot = {
+  content: string;
+  id: string;
+};
 
 export function createIssue(db: RunnerDatabase, input: CreateIssueInput): Issue {
-  const issue = normalizeIssueForWrite(input);
+  const issue = normalizeIssueForWrite(db, input);
   validateIssueForCreate(db, issue);
   const timestamp = issueTimestamp();
   const insertIssue = db.transaction((record: NormalizedIssueWrite) => {
@@ -67,23 +74,58 @@ function projectExists(db: RunnerDatabase, id: string): boolean {
   return (row?.count ?? 0) > 0;
 }
 
-function normalizeIssueForWrite(input: CreateIssueInput): NormalizedIssueWrite {
+function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): NormalizedIssueWrite {
   const description = cleanString(input.description);
   const title = cleanString(input.title) || deriveIssueTitle(description);
+  const template = resolveIssueTemplateSnapshot(
+    db,
+    cleanString(input.template_id),
+    cleanString(input.prompt_template)
+  );
   return {
     project_id: cleanString(input.project_id),
     title,
     description,
     status: cleanString(input.status) || "triage",
     priority: integerInput(input.priority),
-    template_id: cleanString(input.template_id),
-    prompt_template: cleanString(input.prompt_template),
+    template_id: template.id,
+    prompt_template: template.content,
     agent_profile_id: normalizeIdentifier(input.agent_profile_id),
     source_session_id: normalizeSourceSessionID(input.source_session_id),
     source_turn_id: cleanString(input.source_turn_id),
     source_excerpt: cleanString(input.source_excerpt),
     workflow_snapshot_json: cleanString(input.workflow_snapshot_json)
   };
+}
+
+function resolveIssueTemplateSnapshot(
+  db: RunnerDatabase,
+  templateID: string,
+  promptTemplate: string
+): IssueTemplateSnapshot {
+  if (promptTemplate !== "") return { id: templateID, content: promptTemplate };
+  const template = templateID === "" ? defaultTemplateSnapshot(db) : templateSnapshotByID(db, templateID);
+  if (template) return template;
+  if (templateID === "" || templateID === DEFAULT_ISSUE_TEMPLATE_ID) return fallbackTemplateSnapshot();
+  throw new Error("issue template 不存在");
+}
+
+function templateSnapshotByID(db: RunnerDatabase, templateID: string): IssueTemplateSnapshot | null {
+  const row = db.sqlite.query<IssueTemplateSnapshot, [string]>(
+    "select id, content from issue_templates where id=?"
+  ).get(templateID);
+  return row ? { id: row.id.trim(), content: row.content.trim() } : null;
+}
+
+function defaultTemplateSnapshot(db: RunnerDatabase): IssueTemplateSnapshot | null {
+  const row = db.sqlite.query<IssueTemplateSnapshot, []>(`
+    select id, content from issue_templates order by is_default desc, created_at asc limit 1
+  `).get();
+  return row ? { id: row.id.trim(), content: row.content.trim() } : null;
+}
+
+function fallbackTemplateSnapshot(): IssueTemplateSnapshot {
+  return { id: DEFAULT_ISSUE_TEMPLATE_ID, content: DEFAULT_ISSUE_TEMPLATE_CONTENT };
 }
 
 function mustGetIssue(db: RunnerDatabase, id: number): Issue {

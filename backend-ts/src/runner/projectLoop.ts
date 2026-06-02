@@ -6,6 +6,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { failIssueExecution } from "./statusGate.ts";
+import { renderIssuePromptTemplate } from "./issuePromptTemplate.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
@@ -39,7 +40,7 @@ async function runClaimedIssue(
       issueId: issue.id,
       projectId: project.id,
       cwd: project.cwd,
-      prompt: issuePrompt(issue),
+      prompt: issuePrompt(project, issue),
       model: project.model,
       approvalPolicy: project.approval_policy,
       sandbox: project.sandbox
@@ -72,6 +73,11 @@ function projectProvider(project: Project, providers: ProjectLoopInput["provider
   return provider;
 }
 
-function issuePrompt(issue: Issue): string {
+function issuePrompt(project: Project, issue: Issue): string {
+  const templated = issue.prompt_template.trim();
+  if (templated !== "") {
+    const rendered = renderIssuePromptTemplate(templated, { project, issue }).trim();
+    if (rendered !== "") return rendered;
+  }
   return issue.description.trim() || issue.title.trim();
 }

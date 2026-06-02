@@ -77,6 +77,7 @@ import './sessions/SessionsClient.css';
 
 const PAGE_SIZE = 50;
 const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
+const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
 const DEFAULT_SESSION_PROVIDER = 'codex';
 const EMPTY_CAPABILITIES = { skills: [], plugins: [] };
@@ -551,6 +552,12 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     lastSelectedIdRef.current = selectedId;
     loadSelected(isSwitching);
   }, [selectedId, loadSelected]);
+
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const interval = window.setInterval(() => loadSelected(false), SESSION_DETAIL_RECONCILE_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [loadSelected, selectedId]);
 
   useEffect(() => { loadModels(); }, [loadModels]);
   useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
