@@ -58,6 +58,10 @@ describe("Bun SQLite database connection", () => {
         "pi_actions",
         "pi_agents",
         "pi_conversations",
+        "pi_delegations",
+        "pi_heartbeat_controls",
+        "pi_heartbeat_events",
+        "pi_heartbeat_runs",
         "pi_memory_items",
         "project_holds",
         "project_pi_settings",
@@ -78,11 +82,14 @@ describe("Bun SQLite database connection", () => {
         { id: "003_pi_runtime" },
         { id: "004_safe_go_import_tables" },
         { id: "005_read_performance_indexes" },
-        { id: "006_pi_action_gate_audit" }
+        { id: "006_pi_action_gate_audit" },
+        { id: "007_pi_heartbeat_orchestrator" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
       expect(indexNames(connection, "pi_action_events")).toContain("idx_pi_action_events_action");
+      expect(indexNames(connection, "pi_heartbeat_events")).toContain("idx_pi_heartbeat_events_run");
+      expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
     } finally {
       connection.close();
     }
@@ -123,7 +130,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 6 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 7 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
