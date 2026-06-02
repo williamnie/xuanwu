@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getPiMemoryItem, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "./memoryTools.ts";
 
 describe("PI memory tools", () => {
@@ -56,6 +56,22 @@ describe("PI memory tools", () => {
       expect((candidateSearch.details as { items: Array<{ id: string }> }).items.map((item) => item.id))
         .toEqual([String(candidate.details.id)]);
       expect(listPiMemoryItems(fixture.db, { disabled: 0 })).toEqual([]);
+      const memorySearchActions = listPiActions(fixture.db).filter((item) => item.action_type === "memory.search");
+      expect(memorySearchActions).toHaveLength(2);
+      expect(memorySearchActions.every((item) => item.status === "completed")).toBe(true);
+      const action = listPiActions(fixture.db).find((item) => item.action_type === "memory.write_candidate");
+      expect(action).toMatchObject({
+        conversation_id: "conv-1",
+        gate_decision: "execute",
+        project_id: "demo",
+        status: "completed"
+      });
+      expect(listPiActionEvents(fixture.db, { actionId: action?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "execution_started",
+        "execution_result"
+      ]);
     } finally {
       await fixture.close();
     }

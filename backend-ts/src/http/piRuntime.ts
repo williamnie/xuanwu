@@ -1,23 +1,29 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { getModel, type Model } from "@earendil-works/pi-ai";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
-import type { PiAgent, PiConversation } from "../db/repositories/pi.ts";
+import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
-import type { AppEvent, EventBus } from "../events/bus.ts";
+import type { PiGatePolicy } from "../pi/actionGate.ts";
+import type { EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
+import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
 export type RuntimeSessionInput = {
   agent: PiAgent;
+  authorization?: PiGatePolicy;
   bus?: EventBus;
   conversationID: string;
+  delegationID?: string;
+  heartbeatID?: string;
   project?: Project;
   sessionFile?: string;
+  source?: string;
 };
 
 const PI_RUNTIME_ROOT = "pi-runtime";
@@ -74,24 +80,28 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
       tools: [...PI_ALLOWED_TOOLS],
       customTools: createPiProjectTools(db, input.project, {
+        authorization: input.authorization,
         bus: input.bus,
-        conversationID: input.conversationID
+        conversationID: input.conversationID,
+        delegationID: input.delegationID,
+        heartbeatID: input.heartbeatID,
+        source: input.source
       })
     });
+    const cleanupSdkAudit = installPiSdkToolAudit(db, session, {
+      authorization: input.authorization,
+      bus: input.bus,
+      conversationID: input.conversationID,
+      delegationID: input.delegationID,
+      heartbeatID: input.heartbeatID,
+      projectID: input.project?.id
+    });
     if (input.agent.name !== "") session.setSessionName(input.agent.name);
-    return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider) };
+    return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, cleanupSdkAudit) };
   } catch (error) {
     cleanupRuntimeProvider();
     throw error;
   }
-}
-
-export function publishPiSessionEvent(
-  bus: EventBus | undefined,
-  conversation: PiConversation,
-  event: AgentSessionEvent
-): void {
-  bus?.publish(piAppEvent(conversation, event));
 }
 
 export async function ensurePiSessionFile(session: {
@@ -163,8 +173,13 @@ function isLocalSmokeFauxAgent(agent: PiAgent): boolean {
   return agent.model_provider === PI_SMOKE_FAUX_PROVIDER && agent.model_id === PI_SMOKE_FAUX_MODEL;
 }
 
-function disposePiRuntimeSession(session: AgentSession, cleanupRuntimeProvider: RuntimeCleanup): void {
+function disposePiRuntimeSession(
+  session: AgentSession,
+  cleanupRuntimeProvider: RuntimeCleanup,
+  cleanupSdkAudit: RuntimeCleanup = noopRuntimeCleanup
+): void {
   try {
+    cleanupSdkAudit();
     session.dispose();
   } finally {
     cleanupRuntimeProvider();
@@ -172,74 +187,6 @@ function disposePiRuntimeSession(session: AgentSession, cleanupRuntimeProvider: 
 }
 
 function noopRuntimeCleanup(): void {}
-
-function piAppEvent(conversation: PiConversation, event: AgentSessionEvent): AppEvent {
-  return {
-    type: "pi.conversation.event",
-    conversationId: conversation.id,
-    projectId: conversation.project_id,
-    provider: "pi-sdk",
-    agent_event_type: event.type,
-    status: piEventStatus(event),
-    text: piEventText(event),
-    payload: JSON.stringify(piEventPayload(event)),
-    created_at: new Date().toISOString()
-  };
-}
-
-function piEventStatus(event: AgentSessionEvent): string {
-  if (event.type === "agent_start") return "running";
-  if (event.type === "agent_end") return event.willRetry ? "retrying" : "completed";
-  if (event.type === "message_update" && event.message.errorMessage) return "failed";
-  return "";
-}
-
-function piEventText(event: AgentSessionEvent): string {
-  if (event.type === "message_update") {
-    const assistantEvent = event.assistantMessageEvent;
-    if ("delta" in assistantEvent) return assistantEvent.delta;
-    if ("content" in assistantEvent) return assistantEvent.content;
-  }
-  if (event.type === "message_end" && event.message.role === "assistant") {
-    return collectTextContent(event.message.content);
-  }
-  return "";
-}
-
-function piEventPayload(event: AgentSessionEvent): Record<string, unknown> {
-  const payload: Record<string, unknown> = { type: event.type };
-  if (event.type === "message_start" || event.type === "message_end") payload.role = event.message.role;
-  if (event.type === "message_update") {
-    payload.role = event.message.role;
-    payload.assistant_event_type = event.assistantMessageEvent.type;
-  }
-  if (isToolEvent(event)) {
-    payload.tool_call_id = event.toolCallId;
-    payload.tool_name = event.toolName;
-  }
-  if (event.type === "tool_execution_end") payload.is_error = event.isError;
-  return payload;
-}
-
-function collectTextContent(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((block): block is { type: "text"; text: string } => (
-      typeof block === "object" && block !== null &&
-      "type" in block && block.type === "text" &&
-      "text" in block && typeof block.text === "string"
-    ))
-    .map((block) => block.text)
-    .join("\n");
-}
-
-type PiToolEvent = Extract<AgentSessionEvent, {
-  type: "tool_execution_start" | "tool_execution_update" | "tool_execution_end";
-}>;
-
-function isToolEvent(event: AgentSessionEvent): event is PiToolEvent {
-  return ["tool_execution_start", "tool_execution_update", "tool_execution_end"].includes(event.type);
-}
 
 type PiModelRegistry = { find(provider: string, modelID: string): Model<any> | undefined };
 

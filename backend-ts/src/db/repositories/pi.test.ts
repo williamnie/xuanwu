@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../database.ts";
 import { getIssue, listIssues } from "./issues.ts";
 import {
   createPiAction,
+  createPiActionEvent,
   createPiAgent,
   createPiConversation,
   createPiMemoryItem,
@@ -20,6 +21,7 @@ import {
   getPiConversation,
   getPiMemoryItem,
   getProjectPiSettings,
+  listPiActionEvents,
   listPiActions,
   listPiAgents,
   listPiConversations,
@@ -122,7 +124,32 @@ describe("PI runtime repositories", () => {
         status: "proposed",
         payload_json: "{\"title\":\"x\"}"
       });
-      expect(action).toMatchObject({ risk_level: "low", requires_confirmation: 0, result_json: "{}" });
+      expect(action).toMatchObject({
+        risk_level: "low",
+        requires_confirmation: 0,
+        result_json: "{}",
+        source: "",
+        gate_decision: ""
+      });
+      const auditEvent = createPiActionEvent(db, {
+        action_id: action.id,
+        actor: "pi",
+        decision: "ask",
+        event_type: "gate_decision",
+        project_id: "demo",
+        reason: "requires confirmation"
+      });
+      expect(auditEvent).toMatchObject({
+        action_id: "action-1",
+        actor: "pi",
+        decision: "ask",
+        event_type: "gate_decision",
+        project_id: "demo",
+        reason: "requires confirmation"
+      });
+      expect(listPiActionEvents(db, { actionId: "action-1" }).map((event) => event.event_type)).toEqual([
+        "gate_decision"
+      ]);
       expect(updatePiAction(db, "action-1", {
         result_json: "{\"ok\":true}",
         status: "done"

@@ -16,9 +16,13 @@ export function createPiProjectTools(
   return [
     ...createPiRunnerActionTools(createPiRunnerActions(db, { ...context, project })),
     ...createPiMemoryTools(db, {
+      authorization: context.authorization,
       bus: context.bus,
       conversationID: context.conversationID,
-      projectID: project?.id
+      delegationID: context.delegationID,
+      heartbeatID: context.heartbeatID,
+      projectID: project?.id,
+      source: context.source
     })
   ];
 }

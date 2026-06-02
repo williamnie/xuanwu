@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { classifyPiActionRisk } from "./actionEngine.ts";
+import { classifyPiActionRisk, gatePiActionEnvelope } from "./actionEngine.ts";
 
 describe("PI action engine risk classifier", () => {
   test("classifies safe, confirm-required, and high-risk actions", () => {
@@ -19,4 +19,41 @@ describe("PI action engine risk classifier", () => {
       riskLevel: "high"
     });
   });
+
+  test("gates attended confirmations and delegated authorization envelopes", () => {
+    const confirmEnvelope = {
+      action_type: "issue.enqueue",
+      issue_id: 7,
+      payload: { issue_id: 7 },
+      project_id: "demo",
+      rationale: "ready to run",
+      requires_confirmation: true,
+      risk_level: "medium",
+      source: "pi_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(confirmEnvelope, { mode: "attended" })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+    expect(gatePiActionEnvelope({ ...confirmEnvelope, action_type: "issue.comment", requires_confirmation: false, risk_level: "low" }, {
+      authorizedActions: [{ action_type: "issue.comment", issue_id: 7, project_id: "demo" }],
+      mode: "delegated"
+    })).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope(confirmEnvelope, {
+      authorizedActions: [{ action_type: "issue.enqueue", issue_id: 7, project_id: "demo" }],
+      mode: "delegated"
+    })).toMatchObject({
+      decision: "execute",
+      reason: expect.stringContaining("authorization envelope")
+    });
+    expect(gatePiActionEnvelope({ ...confirmEnvelope, action_type: "issue.comment", requires_confirmation: false, risk_level: "low" }, {
+      authorizedActions: [{ action_type: "issue.comment", issue_id: 8, project_id: "demo" }],
+      mode: "delegated"
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("delegated")
+    });
+  });
+
 });

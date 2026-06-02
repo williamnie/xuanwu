@@ -1,6 +1,7 @@
 import { Bot, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import SessionComposer from './sessions/SessionComposer';
+import PiActionAuditPanel from './PiActionAuditPanel';
 import { shortId, usePiChatState } from './piChatState';
 import './PiChat.css';
 import './PiChatSidebar.css';
@@ -32,6 +33,7 @@ function PiChatSidebar({ navigateTo, state }) {
       />
       <AgentSelect agents={state.agents} selected={state.selectedAgentId} onChange={state.setSelectedAgentId} />
       <AgentStatus agent={state.selectedAgent} />
+      <PiActionAuditPanel />
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending || !state.selectedAgentId}>
         <MessageSquarePlus size={15} /> 新建 Runner 会话
       </button>

@@ -19,10 +19,10 @@ import { piConversationDetail } from "./piConversationTranscript.ts";
 import {
   createOrRestorePiRuntime,
   createPiRuntimeSession,
-  publishPiSessionEvent,
   type PiRuntimeResult,
   type PiRuntimeSession
 } from "./piRuntime.ts";
+import { publishPiSessionEvent } from "./piSessionEvents.ts";
 import type { Router } from "./router.ts";
 
 type PiConversationContext = { bus?: EventBus; database: RunnerDatabase };

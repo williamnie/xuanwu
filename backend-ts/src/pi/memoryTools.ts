@@ -6,12 +6,13 @@ import {
   listPiMemoryItems,
   type PiMemoryItem
 } from "../db/repositories/pi.ts";
+import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 
 export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_write_candidate"] as const;
 
 type MemoryToolName = (typeof PI_MEMORY_TOOL_NAMES)[number];
-type MemoryContext = { bus?: EventBus; conversationID?: string; projectID?: string };
+type MemoryContext = PiActionContext & { projectID?: string };
 type MemoryExecutor<TParams extends TSchema> = (params: Static<TParams>) => unknown;
 
 const objectOptions = { additionalProperties: false };
@@ -36,10 +37,20 @@ const memoryWriteCandidateParams = Type.Object({
 export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext = {}): ToolDefinition[] {
   return [
     memoryTool("memory_search", "Memory Search", "Search active PI memory items; candidates are opt-in.",
-      memorySearchParams, (params) => searchMemory(db, context, params)),
+      memorySearchParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
+        actionType: "memory.search",
+        payload: params,
+        projectID: defaultScopeID(cleanString(params.scope) || "project", context),
+        execute: () => searchMemory(db, context, params)
+      })),
     memoryTool("memory_write_candidate", "Memory Write Candidate",
       "Write a disabled PI memory candidate for later review; does not promote long-term memory directly.",
-      memoryWriteCandidateParams, (params) => writeMemoryCandidate(db, context, params))
+      memoryWriteCandidateParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
+        actionType: "memory.write_candidate",
+        payload: params,
+        projectID: defaultScopeID(cleanString(params.scope) || "project", context),
+        execute: () => writeMemoryCandidate(db, context, params)
+      }))
   ];
 }
 

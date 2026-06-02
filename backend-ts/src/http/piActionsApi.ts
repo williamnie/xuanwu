@@ -1,20 +1,18 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
-import { createIssue } from "../db/repositories/issueCreate.ts";
-import { enqueueIssue } from "../db/repositories/issueActions.ts";
-import { createIssueComment } from "../db/repositories/issueEvents.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { dispatchPiAction } from "./piActionDispatch.ts";
 import {
   getPiAction,
+  listPiActionEvents,
   listPiActions,
   updatePiAction,
   type PiAction,
-  type PiActionFilter
+  type PiActionFilter,
+  type PiActionInput
 } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
-import { publishPiActionEvent } from "../pi/actionEngine.ts";
-import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
-import { HttpError, json } from "./errors.ts";
+import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { HttpError, json, parseJsonBody } from "./errors.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { Router } from "./router.ts";
 
 type PiActionsContext = {
@@ -25,23 +23,68 @@ type PiActionsContext = {
 
 export function registerPiActionRoutes(router: Router, context: PiActionsContext): void {
   router.get("/api/pi/actions", (request) => json(listPiActions(context.database, piActionFilter(request))));
+  router.get("/api/pi/actions/:id/events", (request) => json(listPiActionEvents(context.database, { actionId: actionID(request) })));
+  router.get("/api/pi/audit-events", (request) => json(listPiActionEvents(context.database, piActionEventFilter(request))));
   router.post("/api/pi/actions/:id/approve", async (request) => json(await approveAction(context, actionID(request))));
   router.post("/api/pi/actions/:id/reject", (request) => json(rejectAction(context, actionID(request))));
+  router.post("/api/pi/actions/:id/request-changes", async (request) => json(await requestChangesAction(context, actionID(request), request)));
+  router.post("/api/pi/actions/:id/snooze", async (request) => json(await snoozeAction(context, actionID(request), request)));
   router.post("/api/pi/actions/:id/execute", async (request) => json(await executeAction(context, actionID(request))));
 }
 
 async function approveAction(context: PiActionsContext, id: string): Promise<PiAction> {
   const action = requireAction(context.database, id);
   if (isTerminal(action) || action.status === "executing") return action;
-  const approved = action.status === "approved" ? action : writeAction(context, action, "approved", approvedResult(action));
-  publishPiActionEvent(context.bus, "pi.action_approved", approved);
+  const approved = action.status === "approved" ? action : approvePendingAction(context, action);
   return await executeAction(context, approved.id);
 }
 
 function rejectAction(context: PiActionsContext, id: string): PiAction {
   const action = requireAction(context.database, id);
   if (action.status === "rejected" || isExecuted(action)) return action;
-  return writeAction(context, action, "rejected", statusResult(action, "rejected"), "pi.action_rejected");
+  const rejected = writeAction(context, action, "rejected", statusResult(action, "rejected"), "pi.action_rejected");
+  recordPiActionAuditEvent(context.database, rejected, "approval_decision", {
+    actor: "user", decision: "reject", reason: "user rejected action"
+  });
+  return rejected;
+}
+
+async function requestChangesAction(context: PiActionsContext, id: string, request: Request): Promise<PiAction> {
+  const action = requireAction(context.database, id);
+  if (isExecuted(action)) return action;
+  const body = await parseObjectBody(request);
+  const comment = cleanString(body.comment || body.reason || body.requested_changes);
+  const next = updatePiAction(context.database, action.id, {
+    decided_by: cleanString(body.actor) || "user",
+    requested_changes: comment,
+    result_json: JSON.stringify({ ...statusResult(action, "changes_requested"), requested_changes: comment }),
+    status: "changes_requested"
+  });
+  recordPiActionAuditEvent(context.database, next, "approval_decision", {
+    actor: next.decided_by, decision: "request_changes", reason: comment
+  });
+  publishPiActionEvent(context.bus, "pi.action_changes_requested", next);
+  return next;
+}
+
+async function snoozeAction(context: PiActionsContext, id: string, request: Request): Promise<PiAction> {
+  const action = requireAction(context.database, id);
+  if (isExecuted(action)) return action;
+  const body = await parseObjectBody(request);
+  const until = cleanString(body.until || body.snoozed_until);
+  const reason = cleanString(body.reason) || "user snoozed action";
+  const next = updatePiAction(context.database, action.id, {
+    decided_by: cleanString(body.actor) || "user",
+    gate_decision: "snooze",
+    result_json: JSON.stringify({ ...statusResult(action, "snoozed"), snoozed_until: until }),
+    snoozed_until: until,
+    status: "snoozed"
+  });
+  recordPiActionAuditEvent(context.database, next, "approval_decision", {
+    actor: next.decided_by, decision: "snooze", reason
+  });
+  publishPiActionEvent(context.bus, "pi.action_snoozed", next);
+  return next;
 }
 
 async function executeAction(context: PiActionsContext, id: string): Promise<PiAction> {
@@ -53,52 +96,34 @@ async function executeAction(context: PiActionsContext, id: string): Promise<PiA
   }
   const executing = action.status === "executing"
     ? action
-    : writeAction(context, action, "executing", statusResult(action, "executing"), "pi.action_executing");
+    : writeExecutingAction(context, action);
   try {
-    return completeAction(context, executing, await dispatchAction(context, executing));
+    return completeAction(context, executing, await dispatchPiAction(context, executing));
   } catch (error) {
-    return writeAction(context, executing, "failed", { error: safeError(error) }, "pi.action_failed");
+    const failed = writeAction(context, executing, "failed", { error: safeError(error) }, "pi.action_failed");
+    recordPiActionAuditEvent(context.database, failed, "execution_error", { actor: "executor", error: safeError(error) });
+    return failed;
   }
-}
-
-async function dispatchAction(context: PiActionsContext, action: PiAction): Promise<unknown> {
-  const db = context.database;
-  const payload = parsePayload(action);
-  switch (action.action_type) {
-    case "issue.create":
-      return createIssue(db, payload);
-    case "issue.enqueue":
-      return enqueueIssue(db, positivePayloadID(payload, "issue_id"));
-    case "issue.comment":
-      return createIssueComment(db, positivePayloadID(payload, "issue_id"), payload);
-    case "issue.update_refinement":
-      return updateIssue(db, positivePayloadID(payload, "issue_id"), objectPayload(payload.patch));
-    case "session.steer":
-      return await steerSession(context, payload);
-    default:
-      throw new Error(`unsupported PI action type: ${action.action_type}`);
-  }
-}
-
-async function steerSession(context: PiActionsContext, payload: Record<string, unknown>): Promise<unknown> {
-  const providerID = sessionProviderID(payload);
-  const sessionID = sessionProviderSessionID(payload);
-  const prompt = cleanString(payload.prompt);
-  if (prompt === "") throw new Error("prompt is required");
-  const provider = context.providers?.[providerID];
-  if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
-  const result = await provider.sendSessionMessage({
-    mode: "steer",
-    prompt,
-    sessionId: sessionID,
-    turnId: latestSessionTurnID(context.database, providerID, sessionID, payload)
-  });
-  persistSteeredSession(context.database, providerID, sessionID, result.turn_id);
-  return result;
 }
 
 function completeAction(context: PiActionsContext, action: PiAction, result: unknown): PiAction {
-  return writeAction(context, action, "completed", result ?? null, "pi.action_completed");
+  const completed = writeAction(context, action, "completed", result ?? null, "pi.action_completed");
+  recordPiActionAuditEvent(context.database, completed, "execution_result", { actor: "executor", result });
+  return completed;
+}
+
+function approvePendingAction(context: PiActionsContext, action: PiAction): PiAction {
+  const approved = writeAction(context, action, "approved", approvedResult(action), "pi.action_approved", { approved_by: "user" });
+  recordPiActionAuditEvent(context.database, approved, "approval_decision", {
+    actor: approved.approved_by || "user", decision: "approve", reason: "user approved action"
+  });
+  return approved;
+}
+
+function writeExecutingAction(context: PiActionsContext, action: PiAction): PiAction {
+  const executing = writeAction(context, action, "executing", statusResult(action, "executing"), "pi.action_executing");
+  recordPiActionAuditEvent(context.database, executing, "execution_started", { actor: "gate", decision: "execute" });
+  return executing;
 }
 
 function writeAction(
@@ -106,9 +131,10 @@ function writeAction(
   action: PiAction,
   status: string,
   result: unknown,
-  eventType?: string
+  eventType?: string,
+  patch: PiActionInput = {}
 ): PiAction {
-  const next = updatePiAction(context.database, action.id, { status, result_json: JSON.stringify(result) });
+  const next = updatePiAction(context.database, action.id, { ...patch, status, result_json: JSON.stringify(result) });
   if (eventType) publishPiActionEvent(context.bus, eventType, next);
   return next;
 }
@@ -125,25 +151,6 @@ function requireAction(db: RunnerDatabase, id: string): PiAction {
   const action = getPiAction(db, id);
   if (!action) throw new HttpError(404, "资源不存在");
   return action;
-}
-
-function parsePayload(action: PiAction): Record<string, unknown> {
-  try {
-    const value = JSON.parse(action.payload_json || "{}") as unknown;
-    return objectPayload(value);
-  } catch {
-    throw new Error("PI action payload_json is invalid");
-  }
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function positivePayloadID(payload: Record<string, unknown>, key: string): number {
-  const id = payload[key];
-  if (typeof id === "number" && Number.isSafeInteger(id) && id > 0) return id;
-  throw new Error(`${key} is required`);
 }
 
 function isFinished(action: PiAction): boolean {
@@ -163,6 +170,26 @@ function actionID(request: Request): string {
   const value = parts[parts.indexOf("actions") + 1]?.trim() ?? "";
   if (value === "") throw new HttpError(400, "PI action id 不能为空");
   return decodeURIComponent(value);
+}
+
+function piActionEventFilter(request: Request) {
+  const params = new URL(request.url).searchParams;
+  return {
+    actionId: cleanParam(params.get("action_id")),
+    conversationId: cleanParam(params.get("conversation_id")),
+    issueId: positiveID(params.get("issue_id")),
+    projectId: cleanParam(params.get("project_id"))
+  };
+}
+
+async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {
+  try {
+    const body = await parseJsonBody(request);
+    return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  } catch (error) {
+    if (error instanceof HttpError) return {};
+    throw error;
+  }
 }
 
 function piActionFilter(request: Request): PiActionFilter {
@@ -192,59 +219,4 @@ function cleanString(value: unknown): string {
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : "PI action failed";
-}
-
-function sessionProviderID(payload: Record<string, unknown>): ExecutorProviderId {
-  const sessionKey = cleanString(payload.session_key);
-  const provider = cleanString(payload.provider) || sessionKey.split(":")[0] || "codex";
-  if (isExecutorProviderId(provider)) return provider;
-  throw new Error("session provider 暂不支持");
-}
-
-function sessionProviderSessionID(payload: Record<string, unknown>): string {
-  const id = cleanString(payload.provider_session_id) || sessionIDFromKey(cleanString(payload.session_key));
-  if (id === "") throw new Error("session id 不能为空");
-  return id;
-}
-
-function sessionIDFromKey(sessionKey: string): string {
-  const separator = sessionKey.indexOf(":");
-  return separator < 0 ? sessionKey : sessionKey.slice(separator + 1).trim();
-}
-
-function latestSessionTurnID(
-  db: RunnerDatabase,
-  providerID: ExecutorProviderId,
-  sessionID: string,
-  payload: Record<string, unknown>
-): string {
-  const payloadTurnID = cleanString(payload.provider_turn_id) || cleanString(payload.turn_id);
-  if (payloadTurnID !== "") return payloadTurnID;
-  const session = getAgentSession(db, `${providerID}:${sessionID}`);
-  return rawRefTurnID(session?.raw_ref);
-}
-
-function rawRefTurnID(rawRef: string | undefined): string {
-  if (!rawRef) return "";
-  try {
-    const parsed = JSON.parse(rawRef) as Record<string, unknown>;
-    return cleanString(parsed.provider_turn_id);
-  } catch {
-    return "";
-  }
-}
-
-function persistSteeredSession(
-  db: RunnerDatabase,
-  provider: ExecutorProviderId,
-  sessionID: string,
-  turnID: string
-): void {
-  if (turnID === "") return;
-  upsertAgentSession(db, {
-    provider,
-    provider_session_id: sessionID,
-    raw_ref: { provider_turn_id: turnID },
-    status: "running"
-  });
 }

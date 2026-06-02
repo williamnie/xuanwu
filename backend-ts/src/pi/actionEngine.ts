@@ -1,13 +1,22 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { createPiAction, type PiAction } from "../db/repositories/pi.ts";
+import {
+  createPiAction,
+  createPiActionEvent,
+  getPiAction,
+  updatePiAction,
+  type PiAction
+} from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 
-export type PiRiskGate = "safe" | "confirm" | "high";
-export type PiRiskClassification = {
-  gate: PiRiskGate;
-  requiresConfirmation: boolean;
-  riskLevel: "low" | "medium" | "high";
-};
+export { classifyPiActionRisk, gatePiActionEnvelope } from "./actionGate.ts";
+import {
+  classifyPiActionRisk,
+  gatePiActionEnvelope,
+  type PiActionDecision,
+  type PiActionEnvelope,
+  type PiGateDecision,
+  type PiGatePolicy
+} from "./actionGate.ts";
 
 export type PiActionRequest = {
   actionType: string;
@@ -19,124 +28,208 @@ export type PiActionRequest = {
 };
 
 export type PiActionContext = {
+  authorization?: PiGatePolicy;
   bus?: EventBus;
   conversationID?: string;
+  delegationID?: string;
+  heartbeatID?: string;
+  source?: string;
 };
 
 type SafeActionInput = PiActionRequest & { execute: () => unknown };
-
-const SAFE_ACTIONS = new Set([
-  "issue.comment",
-  "issue.list",
-  "issue.read",
-  "project.list",
-  "project.status",
-  "session.list",
-  "session.read_summary"
-]);
-
-const CONFIRM_ACTIONS = new Set([
-  "issue.create",
-  "issue.enqueue",
-  "issue.update_refinement"
-]);
-
-const HIGH_RISK_ACTIONS = new Set(["session.steer"]);
-
-export function classifyPiActionRisk(actionType: string): PiRiskClassification {
-  if (SAFE_ACTIONS.has(actionType)) return risk("safe", "low");
-  if (CONFIRM_ACTIONS.has(actionType)) return risk("confirm", "medium");
-  if (HIGH_RISK_ACTIONS.has(actionType)) return risk("high", "high");
-  return risk("high", "high");
-}
+type AuditInput = {
+  actor?: string;
+  decision?: string;
+  error?: string;
+  payload?: unknown;
+  reason?: string;
+  result?: unknown;
+};
 
 export function executeSafePiAction(db: RunnerDatabase, context: PiActionContext, input: SafeActionInput) {
-  const classification = classifyPiActionRisk(input.actionType);
-  if (classification.requiresConfirmation) throw new Error("action requires confirmation");
-  try {
-    const result = input.execute();
-    completedAction(db, context, input, result);
-    return result;
-  } catch (error) {
-    failedAction(db, context, input, safeError(error));
-    throw error;
-  }
+  const gated = createGatedPiAction(db, context, input);
+  if (gated.decision.decision !== "execute") return actionResultFromRecord(gated.action);
+  return executePiActionWithAudit(db, context, gated.action, input.execute);
 }
 
 export function createPendingPiAction(
   db: RunnerDatabase,
   context: PiActionContext,
-  input: PiActionRequest
+  input: PiActionRequest,
+  execute?: () => unknown
 ) {
+  const gated = createGatedPiAction(db, context, input);
+  if (gated.decision.decision === "execute" && execute) {
+    executePiActionWithAudit(db, context, gated.action, execute);
+    return actionResultFromRecord(requireStoredPiAction(db, gated.action.id));
+  }
+  return actionResultFromRecord(gated.action);
+}
+
+export function recordPiActionAuditEvent(
+  db: RunnerDatabase,
+  action: PiAction,
+  eventType: string,
+  input: AuditInput = {}
+): void {
+  createPiActionEvent(db, {
+    action_id: action.id,
+    actor: cleanString(input.actor),
+    conversation_id: action.conversation_id,
+    decision: cleanString(input.decision),
+    delegation_id: action.delegation_id,
+    error: cleanString(input.error),
+    event_type: eventType,
+    heartbeat_id: action.heartbeat_id,
+    issue_id: action.issue_id,
+    payload_json: JSON.stringify(input.payload ?? {}),
+    project_id: action.project_id,
+    reason: cleanString(input.reason),
+    result_json: JSON.stringify(input.result ?? {})
+  });
+}
+
+function createGatedPiAction(
+  db: RunnerDatabase,
+  context: PiActionContext,
+  input: PiActionRequest
+): { action: PiAction; decision: PiGateDecision } {
   const classification = classifyPiActionRisk(input.actionType);
-  const id = crypto.randomUUID();
-  const result = actionResult(id, input, classification, "pending");
-  const action = createPiActionRecord(db, context, input, result, JSON.stringify(result));
+  const envelope = actionEnvelope(input, classification, context);
+  const candidate = createPiActionRecord(db, context, input, envelope);
+  recordPiActionAuditEvent(db, candidate, "candidate", { actor: "pi", payload: envelope });
+  const decision = gatePiActionEnvelope(envelope, context.authorization);
+  return { action: persistGateDecision(db, context, candidate, decision), decision };
+}
+
+function persistGateDecision(
+  db: RunnerDatabase,
+  context: PiActionContext,
+  action: PiAction,
+  decision: PiGateDecision
+): PiAction {
+  const nextStatus = gateStatus(decision.decision);
+  const result = { ...actionResult(action.id, { ...action, status: nextStatus }), decision: decision.decision };
+  const next = updatePiAction(db, action.id, {
+    gate_decision: decision.decision,
+    gate_reason: decision.reason,
+    result_json: JSON.stringify(result),
+    status: nextStatus
+  });
+  recordPiActionAuditEvent(db, next, "gate_decision", {
+    actor: "gate", decision: decision.decision, reason: decision.reason, result
+  });
+  if (decision.decision === "ask") recordPendingApproval(db, context, next, decision.reason);
+  publishGateEvent(context.bus, decision.decision, next);
+  return next;
+}
+
+function recordPendingApproval(
+  db: RunnerDatabase,
+  context: PiActionContext,
+  action: PiAction,
+  reason: string
+): void {
+  recordPiActionAuditEvent(db, action, "pending_approval", { actor: "gate", decision: "ask", reason });
   publishPiActionEvent(context.bus, "pi.action_pending", action);
-  return result;
 }
 
-function completedAction(db: RunnerDatabase, context: PiActionContext, input: PiActionRequest, result: unknown) {
-  const classification = classifyPiActionRisk(input.actionType);
-  const id = crypto.randomUUID();
-  const output = {
-    ...actionResult(id, input, classification, "completed"),
-    result,
-    result_json: JSON.stringify(result ?? null)
-  };
-  const action = createPiActionRecord(db, context, input, output, JSON.stringify(result ?? null));
-  publishPiActionEvent(context.bus, "pi.action_completed", action);
-  return output;
-}
-
-function failedAction(db: RunnerDatabase, context: PiActionContext, input: PiActionRequest, error: string): void {
-  const classification = classifyPiActionRisk(input.actionType);
-  const id = crypto.randomUUID();
-  const output = { ...actionResult(id, input, classification, "failed"), error };
-  const action = createPiActionRecord(db, context, input, output, JSON.stringify({ error }));
-  publishPiActionEvent(context.bus, "pi.action_failed", action);
+function executePiActionWithAudit(
+  db: RunnerDatabase,
+  context: PiActionContext,
+  action: PiAction,
+  execute: () => unknown
+) {
+  const executing = updatePiAction(db, action.id, { status: "executing" });
+  recordPiActionAuditEvent(db, executing, "execution_started", { actor: "gate", decision: "execute" });
+  publishPiActionEvent(context.bus, "pi.action_executing", executing);
+  try {
+    const result = execute();
+    const completed = updatePiAction(db, action.id, { result_json: JSON.stringify(result ?? null), status: "completed" });
+    recordPiActionAuditEvent(db, completed, "execution_result", { actor: "executor", result });
+    publishPiActionEvent(context.bus, "pi.action_completed", completed);
+    return result;
+  } catch (error) {
+    const failed = updatePiAction(db, action.id, { result_json: JSON.stringify({ error: safeError(error) }), status: "failed" });
+    recordPiActionAuditEvent(db, failed, "execution_error", { actor: "executor", error: safeError(error) });
+    publishPiActionEvent(context.bus, "pi.action_failed", failed);
+    throw error;
+  }
 }
 
 function createPiActionRecord(
   db: RunnerDatabase,
   context: PiActionContext,
   input: PiActionRequest,
-  output: ReturnType<typeof actionResult>,
-  resultJSON: string
+  envelope: PiActionEnvelope
 ): PiAction {
   return createPiAction(db, {
-    id: output.action_id,
+    id: crypto.randomUUID(),
     action_type: input.actionType,
     conversation_id: cleanString(input.conversationID) || cleanString(context.conversationID),
+    delegation_id: cleanString(envelope.delegation_id),
+    heartbeat_id: cleanString(envelope.heartbeat_id),
     issue_id: input.issueID ?? 0,
     payload_json: JSON.stringify(input.payload),
     project_id: cleanString(input.projectID),
     rationale: cleanString(input.rationale),
-    requires_confirmation: output.requires_confirmation ? 1 : 0,
-    result_json: resultJSON,
-    risk_level: output.risk_level,
-    status: output.status
+    requires_confirmation: envelope.requires_confirmation ? 1 : 0,
+    risk_level: envelope.risk_level,
+    source: envelope.source,
+    status: "candidate"
   });
 }
 
-function actionResult(
-  id: string,
+function actionEnvelope(
   input: PiActionRequest,
-  classification: PiRiskClassification,
-  status: string
-) {
+  classification: { requiresConfirmation: boolean; riskLevel: PiActionEnvelope["risk_level"] },
+  context: PiActionContext
+): PiActionEnvelope {
   return {
-    action_id: id,
     action_type: input.actionType,
+    delegation_id: cleanString(context.delegationID),
+    heartbeat_id: cleanString(context.heartbeatID),
     issue_id: input.issueID ?? 0,
+    payload: input.payload,
+    project_id: cleanString(input.projectID),
+    rationale: cleanString(input.rationale),
     requires_confirmation: classification.requiresConfirmation,
     risk_level: classification.riskLevel,
-    status
+    source: cleanString(context.source) || "pi_tool"
   };
 }
 
-function risk(gate: PiRiskGate, riskLevel: PiRiskClassification["riskLevel"]): PiRiskClassification {
-  return { gate, requiresConfirmation: gate !== "safe", riskLevel };
+function requireStoredPiAction(db: RunnerDatabase, id: string): PiAction {
+  const action = getPiAction(db, id);
+  if (!action) throw new Error("PI action missing after execution");
+  return action;
+}
+
+function actionResult(id: string, action: Pick<PiAction, "action_type" | "issue_id" | "requires_confirmation" | "risk_level" | "status">) {
+  return {
+    action_id: id,
+    action_type: action.action_type,
+    issue_id: action.issue_id,
+    requires_confirmation: action.requires_confirmation === 1,
+    risk_level: action.risk_level,
+    status: action.status
+  };
+}
+
+function actionResultFromRecord(action: PiAction) {
+  return { ...actionResult(action.id, action), decision: action.gate_decision };
+}
+
+function gateStatus(decision: PiActionDecision): string {
+  if (decision === "execute") return "approved";
+  if (decision === "ask") return "pending";
+  if (decision === "snooze") return "snoozed";
+  return "denied";
+}
+
+function publishGateEvent(bus: EventBus | undefined, decision: PiActionDecision, action: PiAction): void {
+  if (decision === "deny") publishPiActionEvent(bus, "pi.action_denied", action);
+  if (decision === "snooze") publishPiActionEvent(bus, "pi.action_snoozed", action);
 }
 
 export function publishPiActionEvent(bus: EventBus | undefined, type: string, action: PiAction): void {
@@ -152,6 +245,7 @@ function piActionEvent(type: string, action: PiAction): AppEvent {
     payload: JSON.stringify({
       action_id: action.id,
       action_type: action.action_type,
+      decision: action.gate_decision,
       requires_confirmation: action.requires_confirmation === 1,
       risk_level: action.risk_level,
       status: action.status
