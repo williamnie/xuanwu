@@ -7,7 +7,7 @@ export type SqlMigration = {
 };
 
 type MigrationRow = { id: string };
-const REPAIRABLE_MIGRATION_IDS = new Set(["001_base_schema", "003_pi_runtime", "004_safe_go_import_tables"]);
+const REPAIRABLE_MIGRATION_IDS = new Set(["001_base_schema", "003_pi_runtime", "004_safe_go_import_tables", "008_cron_schedule_layer"]);
 
 const MIGRATIONS_TABLE_SQL = `
 create table if not exists schema_migrations (

@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../database.ts";
 
 export type CronTask = {
   action: string;
+  action_payload_json: string;
   created_at: string;
   error: string;
   id: number;
@@ -13,21 +14,34 @@ export type CronTask = {
   name: string;
   next_run_at: string;
   project_id: string;
+  quiet_hours_json: string;
   run_count: number;
+  schedule_expr: string;
   status: string;
   time_of_day: string;
+  timezone: string;
+  missed_run_policy: string;
   updated_at: string;
+  working_hours_json: string;
 };
 
 type CronTaskRow = Omit<CronTask, "last_error">;
 
-const CRON_TASK_COLUMNS = `id, name, project_id, action, mode, time_of_day,
-  next_run_at, last_run_at, last_status, last_result, status, run_count,
-  error, created_at, updated_at`;
+const CRON_TASK_COLUMNS = `c.id, c.name, c.project_id, c.action, c.mode, c.time_of_day,
+  c.next_run_at, c.last_run_at, c.last_status, c.last_result, c.status, c.run_count,
+  c.error, c.created_at, c.updated_at,
+  coalesce(s.schedule_expr, '') as schedule_expr,
+  coalesce(s.timezone, 'UTC') as timezone,
+  coalesce(s.missed_run_policy, 'run_immediately') as missed_run_policy,
+  coalesce(s.quiet_hours_json, '{}') as quiet_hours_json,
+  coalesce(s.working_hours_json, '{}') as working_hours_json,
+  coalesce(s.action_payload_json, '{}') as action_payload_json`;
 
 export function listCronTasks(db: RunnerDatabase): CronTask[] {
   return db.sqlite.query<CronTaskRow, []>(`
-    select ${CRON_TASK_COLUMNS} from cron_tasks order by created_at desc
+    select ${CRON_TASK_COLUMNS} from cron_tasks c
+    left join cron_task_schedules s on s.cron_task_id=c.id
+    order by c.created_at desc
   `).all().map(mapCronTaskRow);
 }
 
@@ -49,7 +63,13 @@ function mapCronTaskRow(row: CronTaskRow): CronTask {
     error,
     last_error: error,
     created_at: requiredString(row.created_at, "cron_tasks.created_at"),
-    updated_at: requiredString(row.updated_at, "cron_tasks.updated_at")
+    updated_at: requiredString(row.updated_at, "cron_tasks.updated_at"),
+    schedule_expr: optionalString(row.schedule_expr),
+    timezone: optionalString(row.timezone) || "UTC",
+    missed_run_policy: optionalString(row.missed_run_policy) || "run_immediately",
+    quiet_hours_json: optionalString(row.quiet_hours_json) || "{}",
+    working_hours_json: optionalString(row.working_hours_json) || "{}",
+    action_payload_json: optionalString(row.action_payload_json) || "{}"
   };
 }
 

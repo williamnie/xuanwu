@@ -1,8 +1,14 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
+import { runDueCronTasks } from "./cronExecutor.ts";
 
 export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: string };
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
+export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
+  cron: { executed: number; failed: number; scanned: number; skipped: number };
+  delegations: { scanned: number; skipped: number; started: number };
+};
 
 export type PiAutoManageCycleInput = {
   database: RunnerDatabase;
@@ -42,7 +48,7 @@ export function createPiAutoManageScheduler<Timer = unknown>(
     timer = clock.setTimeout(tick, intervalMs);
   };
   const tick = () => {
-    void runPiAutoManageCycle(input).catch((error) => {
+    void runScheduleLayerCycle(input).catch((error) => {
       input.onError?.(error);
     }).finally(() => {
       if (!stopped) schedule();
@@ -75,6 +81,13 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
     result.started += 1;
   }
   return result;
+}
+
+export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
+  const cron = await runDueCronTasks({ database: input.database, runProjectCycle: input.runProjectCycle });
+  const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
+  const projects = await runPiAutoManageCycle(input);
+  return { ...projects, cron, delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started } };
 }
 
 function listAutoManagedProjects(db: RunnerDatabase): EnabledProjectRow[] {

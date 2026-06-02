@@ -5,6 +5,7 @@ import { safeGoImportTablesMigration } from "./004_safe_go_import_tables.ts";
 import { readPerformanceIndexesMigration } from "./005_read_performance_indexes.ts";
 import { piActionGateAuditMigration } from "./006_pi_action_gate_audit.ts";
 import { piHeartbeatOrchestratorMigration } from "./007_pi_heartbeat_orchestrator.ts";
+import { cronScheduleLayerMigration } from "./008_cron_schedule_layer.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -13,5 +14,6 @@ export const migrations = [
   safeGoImportTablesMigration,
   readPerformanceIndexesMigration,
   piActionGateAuditMigration,
-  piHeartbeatOrchestratorMigration
+  piHeartbeatOrchestratorMigration,
+  cronScheduleLayerMigration
 ];
