@@ -10,7 +10,7 @@ export const PI_ALLOWED_TOOLS = [...PI_READ_ONLY_TOOLS, ...PI_RUNNER_ACTION_TOOL
 
 export function createPiProjectTools(
   db: RunnerDatabase,
-  project: Project,
+  project?: Project,
   context: Omit<PiRunnerActionContext, "project"> = {}
 ): ToolDefinition[] {
   return [
@@ -18,7 +18,7 @@ export function createPiProjectTools(
     ...createPiMemoryTools(db, {
       bus: context.bus,
       conversationID: context.conversationID,
-      projectID: project.id
+      projectID: project?.id
     })
   ];
 }

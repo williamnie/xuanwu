@@ -28,6 +28,7 @@ export default function SessionComposer({
   running,
   interruptState,
   selectedId,
+  placeholder = "给当前 Codex session 发送消息...",
   queuedMessages = [],
   followMode = false,
   onFollowModeChange = null,
@@ -84,7 +85,7 @@ export default function SessionComposer({
       <PromptEditor
         value={value}
         onChange={onChange}
-        placeholder="给当前 Codex session 发送消息..."
+        placeholder={placeholder}
         minHeight={84}
         variant="composer"
         footerControls={(

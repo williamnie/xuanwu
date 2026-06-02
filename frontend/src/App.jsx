@@ -7,6 +7,7 @@ import Projects from './pages/Projects';
 import Issues from './pages/Issues';
 import IssueDetail from './pages/IssueDetail';
 import Sessions from './pages/Sessions';
+import PiChat from './pages/PiChat';
 import Cron from './pages/Cron';
 import Settings from './pages/Settings';
 import AppSidebar from './components/AppSidebar';
@@ -233,7 +234,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' ? 'in-sessions-page' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' || currentPage === 'pi-chat' ? 'in-sessions-page' : ''}`}>
       <ToastContainer />
       {sidebarCollapsed && (
         <button
@@ -287,6 +288,8 @@ export default function App() {
               theme={theme}
               toggleTheme={toggleTheme}
             />
+          ) : currentPage === 'pi-chat' ? (
+            <PiChat navigateTo={navigateTo} />
           ) : currentPage === 'projects' ? (
             <Projects />
           ) : currentPage === 'cron' ? (

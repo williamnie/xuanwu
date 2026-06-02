@@ -115,13 +115,31 @@ function safeListSessions(db: RunnerDatabase, context: PiRunnerActionContext, in
 }
 
 function safeProjectStatus(db: RunnerDatabase, context: PiRunnerActionContext, input: ProjectStatusInput) {
-  const projectID = scopedProjectID(input.project_id, context);
+  const projectID = cleanString(input.project_id) || (context.project?.id ?? "");
+  if (projectID === "") return safeGlobalProjectStatus(db, context);
   return executeSafePiAction(db, context, {
     actionType: "project.status",
     payload: { project_id: projectID },
     projectID,
     execute: () => createProjectStatusSnapshot(db, projectID)
   });
+}
+
+function safeGlobalProjectStatus(db: RunnerDatabase, context: PiRunnerActionContext) {
+  return executeSafePiAction(db, context, {
+    actionType: "project.status",
+    payload: {},
+    execute: () => ({ items: listProjects(db).map(projectStatusSummary) })
+  });
+}
+
+function projectStatusSummary(project: Project) {
+  return {
+    id: project.id,
+    name: project.name,
+    provider: project.provider,
+    status: project.hold_reason ? `hold:${project.hold_reason}` : "active"
+  };
 }
 
 function safeReadIssue(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueReadInput) {

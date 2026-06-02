@@ -120,6 +120,20 @@ test('live stream parser keeps reasoning deltas readable', () => {
   assert.equal(parsed.reasoningText, '检查运行态。');
 });
 
+test('live stream parser maps PI conversation SSE assistant updates to session-style deltas', () => {
+  const parsed = parseLiveSessionEvents([
+    {
+      type: 'pi.conversation.event',
+      agent_event_type: 'message_update',
+      text: 'PI reply',
+      payload: JSON.stringify({ type: 'message_update', role: 'assistant' }),
+    },
+  ]);
+
+  assert.equal(parsed.agentMessageText, 'PI reply');
+  assert.equal(parsed.tools.length, 0);
+});
+
 test('live stream parser exposes pending approval events', () => {
   const parsed = parseLiveSessionEvents([
     {

@@ -16,8 +16,8 @@ describe("PI runner action tools", () => {
   test("defines schemas and delegates tool calls to the action layer", async () => {
     const calls: Array<[string, unknown]> = [];
     const tools = createPiRunnerActionTools(fakeActions(calls));
-    const issueRead = toolByName(tools, "issue.read");
-    const steer = toolByName(tools, "session.steer_proposal");
+    const issueRead = toolByName(tools, "issue_read");
+    const steer = toolByName(tools, "session_steer_proposal");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
@@ -46,17 +46,17 @@ describe("PI runner action tools", () => {
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Queue me" });
       insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-1" });
 
-      const createIssue = await runTool(tools, "issue.create_proposal", {
+      const createIssue = await runTool(tools, "issue_create_proposal", {
         description: "New scoped issue",
         title: "New issue"
       });
-      const updateRefinement = await runTool(tools, "issue.update_refinement", {
+      const updateRefinement = await runTool(tools, "issue_update_refinement", {
         issue_id: issueID,
         acceptance_criteria: "- passes",
         verification_plan: "bun test"
       });
-      const enqueue = await runTool(tools, "issue.enqueue_proposal", { issue_id: issueID, rationale: "ready" });
-      const steer = await runTool(tools, "session.steer_proposal", {
+      const enqueue = await runTool(tools, "issue_enqueue_proposal", { issue_id: issueID, rationale: "ready" });
+      const steer = await runTool(tools, "session_steer_proposal", {
         session_key: "codex:thread-1",
         prompt: "Please adjust the plan"
       });
@@ -96,6 +96,24 @@ describe("PI runner action tools", () => {
       expect(JSON.parse(steerAction?.payload_json ?? "{}")).toMatchObject({
         progress_context: expect.stringContaining("state=active")
       });
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("global Runner project_status summarizes all projects without project_id", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db);
+
+      expect(actions.projectStatus({})).toMatchObject({
+        items: [{ id: fixture.project.id, name: fixture.project.name, status: "active" }]
+      });
+      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "project.status",
+        project_id: "",
+        payload_json: "{}"
+      }));
     } finally {
       await fixture.close();
     }

@@ -1,6 +1,7 @@
 import {
   CalendarClock,
   ChevronLeft,
+  BotMessageSquare,
   FolderGit2,
   Layers,
   ListTodo,
@@ -73,6 +74,12 @@ export default function AppSidebar({
         <button className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Layers size={16} /> Sessions
+          </span>
+        </button>
+
+        <button className={`nav-item ${currentPage === 'pi-chat' ? 'active' : ''}`} onClick={() => navigateTo('pi-chat')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BotMessageSquare size={16} /> Runner
           </span>
         </button>
 

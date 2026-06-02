@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
+import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
@@ -21,6 +22,7 @@ export default function Settings() {
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
         <RuntimeStatusPanel />
         <ProviderAvailabilityPanel />
+        <PiAgentSettingsPanel />
         <RestartPanel />
         <NotificationSettingsPanel />
         <CronTasksPanel />

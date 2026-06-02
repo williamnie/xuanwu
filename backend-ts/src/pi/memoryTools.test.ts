@@ -15,8 +15,8 @@ describe("PI memory tools", () => {
         conversationID: "conv-1",
         projectID: "demo"
       });
-      const search = toolByName(tools, "memory.search");
-      const writeCandidate = toolByName(tools, "memory.write_candidate");
+      const search = toolByName(tools, "memory_search");
+      const writeCandidate = toolByName(tools, "memory_write_candidate");
 
       expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_MEMORY_TOOL_NAMES].sort());
       expect(validateArgs(search, { query: "minimal", scope: "project" })).toEqual({

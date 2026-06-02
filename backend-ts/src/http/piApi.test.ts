@@ -174,6 +174,43 @@ describe("Bun PI settings API", () => {
     }
   });
 
+  test("creates global Runner conversations without binding a project", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertAgent(database, "pi-default", 1);
+      const router = createDefaultRouter({ database });
+
+      const created = await request(router, "/api/pi/conversations", "POST", {
+        id: "runner-global",
+        title: "Runner"
+      });
+
+      expect(created.status).toBe(201);
+      const body = await created.json() as Record<string, unknown>;
+      expect(body).toMatchObject({
+        id: "runner-global",
+        project_id: "",
+        pi_agent_id: "pi-default",
+        pi_session_id: "runner-global",
+        status: "active",
+        title: "Runner"
+      });
+      expect(String(body.session_file)).toContain(".runner/sessions/runner/");
+      expect(String(body.session_file)).toContain("_runner-global.jsonl");
+      expect(existsSync(String(body.session_file))).toBe(true);
+      expect(getAgentSession(database, "pi-sdk:runner-global")).toMatchObject({
+        provider: "pi-sdk",
+        provider_session_id: "runner-global",
+        agent_role: "pi_manager",
+        project_id: "",
+        status: "active",
+        title: "Runner"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns stable errors for invalid PI agent writes", async () => {
     const database = await openFixtureDatabase();
     try {

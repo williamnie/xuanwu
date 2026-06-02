@@ -1,8 +1,8 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { Model } from "@earendil-works/pi-ai";
+import { getModel, type Model } from "@earendil-works/pi-ai";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent, PiConversation } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -16,13 +16,15 @@ export type RuntimeSessionInput = {
   agent: PiAgent;
   bus?: EventBus;
   conversationID: string;
-  project: Project;
+  project?: Project;
   sessionFile?: string;
 };
 
 const PI_RUNTIME_ROOT = "pi-runtime";
 const PI_AGENT_DIR = "agent";
-const PI_SESSIONS_DIR = "sessions";
+const RUNNER_RUNTIME_ROOT = ".runner";
+const RUNNER_SESSIONS_DIR = "sessions";
+const RUNNER_AGENT_DIR = "runner";
 const PI_SMOKE_FAUX_PROVIDER = "pi-smoke-faux";
 const PI_SMOKE_FAUX_API = "pi-smoke-faux-api";
 const PI_SMOKE_FAUX_MODEL = "faux-1";
@@ -47,27 +49,28 @@ export async function createOrRestorePiRuntime(
 }
 
 export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeSessionInput) {
-  const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot(input.project.cwd));
+  const context = runtimeContext(db, input.project);
+  const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot(context.cwd));
   const paths = piRuntimePaths(db);
   await mkdir(dirname(paths.authPath), { recursive: true });
-  await mkdir(paths.sessionDir, { recursive: true });
+  await mkdir(context.sessionDir, { recursive: true });
 
   const authStorage = sdk.pi.AuthStorage.create(paths.authPath);
   const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
   const sessionManager = input.sessionFile
-    ? sdk.pi.SessionManager.open(input.sessionFile, paths.sessionDir, input.project.cwd)
-    : sdk.pi.SessionManager.create(input.project.cwd, paths.sessionDir, { id: input.conversationID });
+    ? sdk.pi.SessionManager.open(input.sessionFile, context.sessionDir, context.cwd)
+    : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });
   const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, input.agent);
   try {
     const { session } = await sdk.pi.createAgentSession({
-      cwd: input.project.cwd,
+      cwd: context.cwd,
       agentDir: paths.agentDir,
       authStorage,
       model: resolvePiModel(modelRegistry, input.agent),
       modelRegistry,
       resourceLoader: emptyResourceLoader(sdk),
       sessionManager,
-      settingsManager: sdk.pi.SettingsManager.create(input.project.cwd, paths.agentDir),
+      settingsManager: sdk.pi.SettingsManager.create(context.cwd, paths.agentDir),
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
       tools: [...PI_ALLOWED_TOOLS],
       customTools: createPiProjectTools(db, input.project, {
@@ -113,8 +116,19 @@ function piRuntimePaths(db: RunnerDatabase) {
   return {
     agentDir,
     authPath: join(agentDir, "auth.json"),
-    modelsPath: join(agentDir, "models.json"),
-    sessionDir: join(stateDir, PI_RUNTIME_ROOT, PI_SESSIONS_DIR)
+    modelsPath: join(agentDir, "models.json")
+  };
+}
+
+function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
+  if (project) return {
+    cwd: project.cwd,
+    sessionDir: join(dirname(db.path), PI_RUNTIME_ROOT, "sessions")
+  };
+  const cwd = resolve(dirname(db.path), "..");
+  return {
+    cwd,
+    sessionDir: join(cwd, RUNNER_RUNTIME_ROOT, RUNNER_SESSIONS_DIR, RUNNER_AGENT_DIR)
   };
 }
 
@@ -231,7 +245,38 @@ type PiModelRegistry = { find(provider: string, modelID: string): Model<any> | u
 
 function resolvePiModel(modelRegistry: PiModelRegistry, agent: PiAgent) {
   if (agent.model_provider === "" || agent.model_id === "") return undefined;
-  return modelRegistry.find(agent.model_provider, agent.model_id);
+  const model = modelRegistry.find(agent.model_provider, agent.model_id);
+  if (!model) return undefined;
+  return withBuiltInModelMetadata(model, agent);
+}
+
+function withBuiltInModelMetadata(model: Model<any>, agent: PiAgent): Model<any> {
+  const builtIn = getModel(agent.model_provider, agent.model_id);
+  if (!builtIn || !isDefaultCustomModelMetadata(model)) return model;
+  return {
+    ...model,
+    name: builtIn.name,
+    reasoning: builtIn.reasoning,
+    thinkingLevelMap: builtIn.thinkingLevelMap,
+    input: builtIn.input,
+    cost: builtIn.cost,
+    contextWindow: builtIn.contextWindow,
+    maxTokens: builtIn.maxTokens,
+    compat: model.compat ?? builtIn.compat
+  };
+}
+
+function isDefaultCustomModelMetadata(model: Model<any>): boolean {
+  return model.name === model.id &&
+    model.reasoning === false &&
+    model.contextWindow === 128000 &&
+    model.maxTokens === 16384 &&
+    model.input.length === 1 &&
+    model.input[0] === "text" &&
+    model.cost.input === 0 &&
+    model.cost.output === 0 &&
+    model.cost.cacheRead === 0 &&
+    model.cost.cacheWrite === 0;
 }
 
 function normalizeThinkingLevel(value: string): ThinkingLevel {

@@ -2,9 +2,11 @@
 /data/
 /data-bun/*
 !/data-bun/.gitignore
+/backend-ts/data-bun/
 *.db
 *.db-*
 logs/
+.runner/
 
 # Build outputs
 /dist/

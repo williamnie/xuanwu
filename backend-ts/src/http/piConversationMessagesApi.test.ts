@@ -52,6 +52,7 @@ describe("Bun PI conversation message API", () => {
         conversation_id: "conv-msg",
         pi_session_id: "conv-msg",
         status: "completed",
+        title: "hello",
         text: "pi reply",
         message_count: 2
       });
@@ -65,6 +66,105 @@ describe("Bun PI conversation message API", () => {
       });
       expect(firstEvent?.issueId).toBeUndefined();
       expect(faux.state.callCount).toBe(1);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("derives stable conversation title from markdown prompt", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-title-faux-api", provider: "pi-title-faux" });
+    try {
+      faux.setResponses([fauxAssistantMessage("ok")]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-title-faux");
+      writeFauxModelsConfig(database, "pi-title-faux");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-title", project_id: "demo", pi_agent_id: "pi-faux", title: "New conversation"
+      });
+      const message = await request(router, "/api/pi/conversations/conv-title/messages", {
+        prompt: "帮我看下 **Runner Markdown** 渲染"
+      });
+      expect(message.status).toBe(201);
+      expect(await message.json()).toMatchObject({ conversation_id: "conv-title", title: "帮我看下 Runner Markdown 渲染" });
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("reads persisted PI conversation transcript for history switching", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertFauxAgent(database);
+      const sessionFile = writeConversationSession(database, "conv-history", [
+        sessionMessage("user-1", "user", "hello runner"),
+        sessionMessage("assistant-1", "assistant", "history reply")
+      ]);
+      insertConversation(database, {
+        id: "conv-history",
+        projectId: "demo",
+        sessionFile
+      });
+      const response = await createDefaultRouter({ database })
+        .handle(new Request(`${BASE_URL}/api/pi/conversations/conv-history`));
+      const body = await response.json() as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(body.message_count).toBe(2);
+      expect(body.transcript).toEqual([
+        {
+          id: "user-1",
+          role: "user",
+          text: "hello runner",
+          created_at: "2026-01-01T00:00:00Z",
+          meta: { conversation_id: "conv-history", pi_session_id: "conv-history" }
+        },
+        {
+          id: "assistant-1",
+          role: "assistant",
+          text: "history reply",
+          created_at: "2026-01-01T00:00:00Z",
+          meta: { conversation_id: "conv-history", pi_session_id: "conv-history" }
+        }
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("returns provider errors as visible Runner text", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-error-faux-api", provider: "pi-error-faux" });
+    try {
+      const errorReply = fauxAssistantMessage([], {
+        stopReason: "error",
+        errorMessage: "fatal provider failure CODEX_API_KEY=fixture-secret"
+      });
+      faux.setResponses([errorReply]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-error-faux");
+      writeFauxModelsConfig(database, "pi-error-faux");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-provider-error",
+        project_id: "demo",
+        pi_agent_id: "pi-faux"
+      });
+
+      const message = await request(router, "/api/pi/conversations/conv-provider-error/messages", {
+        prompt: "hello"
+      });
+      const body = await message.json() as Record<string, unknown>;
+
+      expect(message.status).toBe(201);
+      expect(body.status).toBe("failed");
+      expect(body.text).toContain("Runner 执行失败：fatal provider failure");
+      expect(body.text).toContain("CODEX_API_KEY=[redacted]");
+      expect(JSON.stringify(body)).not.toContain("fixture-secret");
     } finally {
       faux.unregister();
       database.close();
@@ -120,11 +220,11 @@ function request(router: ReturnType<typeof createDefaultRouter>, path: string, b
   }));
 }
 
-function insertFauxAgent(db: RunnerDatabase): void {
+function insertFauxAgent(db: RunnerDatabase, provider = "pi-test-faux"): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", "pi-test-faux", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    ["pi-faux", "PI Faux", provider, "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -136,20 +236,58 @@ function insertProject(db: RunnerDatabase, id: string): void {
   );
 }
 
-function writeFauxModelsConfig(db: RunnerDatabase): void {
+function writeFauxModelsConfig(
+  db: RunnerDatabase,
+  provider = "pi-test-faux",
+  modelOverride: Record<string, unknown> = {}
+): void {
   const agentDir = join(db.path, "..", "pi-runtime", "agent");
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(join(agentDir, "models.json"), JSON.stringify({
     providers: {
-      "pi-test-faux": {
-        api: "pi-test-faux-api",
+      [provider]: {
+        api: `${provider}-api`,
         apiKey: "test",
         baseUrl: "http://localhost:0",
-        models: [{ id: "faux-1" }]
+        models: [{ id: "faux-1", ...modelOverride }]
       }
     }
   }));
   if (!existsSync(join(agentDir, "models.json"))) throw new Error("models config missing");
+}
+
+function insertConversation(
+  db: RunnerDatabase,
+  input: { id: string; projectId: string; sessionFile: string }
+): void {
+  db.sqlite.run(
+    `insert into pi_conversations
+      (id, project_id, pi_agent_id, title, status, session_file, pi_session_id, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [input.id, input.projectId, "pi-faux", "History", "active", input.sessionFile,
+      input.id, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function writeConversationSession(
+  db: RunnerDatabase,
+  id: string,
+  entries: Array<Record<string, unknown>>
+): string {
+  const dir = join(db.path, "..", "pi-runtime", "sessions");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `fixture_${id}.jsonl`);
+  writeFileSync(file, entries.map((entry) => JSON.stringify(entry)).join("\n"));
+  return file;
+}
+
+function sessionMessage(id: string, role: string, text: string): Record<string, unknown> {
+  return {
+    type: "message",
+    id,
+    timestamp: "2026-01-01T00:00:00Z",
+    message: { role, content: [{ type: "text", text }] }
+  };
 }
 
 async function until(check: () => boolean): Promise<void> {

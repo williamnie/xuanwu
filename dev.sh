@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
+BACKEND_ADDR="${CODEX_RUNNER_DEV_ADDR:-127.0.0.1:3569}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$ROOT_DIR/data-bun}"
 DB_PATH="${CODEX_RUNNER_DB:-$STATE_DIR/runner.db}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
@@ -29,6 +29,25 @@ require_cmd() {
   fi
 }
 
+backend_api_target() {
+  local host port url_host
+  host="${1%:*}"
+  port="${1##*:}"
+  case "$host" in
+    "" | "0.0.0.0" | "::" | "[::]")
+      host="127.0.0.1"
+      ;;
+  esac
+  url_host="$host"
+  if [[ "$url_host" == *:* && "$url_host" != \[*\] ]]; then
+    url_host="[$url_host]"
+  fi
+  printf 'http://%s:%s\n' "$url_host" "$port"
+}
+
+BACKEND_API_ADDR="$(backend_api_target "$BACKEND_ADDR")"
+FRONTEND_API_TARGET="${VITE_API_TARGET:-$BACKEND_API_ADDR}"
+
 require_cmd bun
 require_cmd npm
 
@@ -48,6 +67,8 @@ trap cleanup EXIT INT TERM
 
 echo "[dev] backend  http://$BACKEND_ADDR"
 echo "[dev] frontend http://$FRONTEND_HOST:$FRONTEND_PORT"
+echo "[dev] api proxy $FRONTEND_API_TARGET"
+echo "[dev] runner  $BACKEND_API_ADDR"
 echo "[dev] state    $STATE_DIR"
 echo "[dev] database $DB_PATH"
 echo "[dev] press Ctrl+C to stop both services"
@@ -55,6 +76,7 @@ echo
 
 (
   cd "$ROOT_DIR/backend-ts"
+  export CODEX_RUNNER_ADDR="$BACKEND_API_ADDR"
   bun run src/main.ts serve \
     --addr "$BACKEND_ADDR" \
     --state-dir "$STATE_DIR" \
@@ -65,6 +87,7 @@ BACKEND_PID=$!
 
 (
   cd "$ROOT_DIR/frontend"
+  export VITE_API_TARGET="$FRONTEND_API_TARGET"
   npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
 ) &
 FRONTEND_PID=$!

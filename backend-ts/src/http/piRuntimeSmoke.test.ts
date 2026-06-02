@@ -63,11 +63,11 @@ describe("Bun PI runtime v1 smoke", () => {
     try {
       faux.setResponses([
         fauxAssistantMessage([
-          fauxToolCall("issue.create_proposal", {
+          fauxToolCall("issue_create_proposal", {
             description: "Follow-up body",
             title: "Follow-up issue"
           }, { id: "issue-proposal" }),
-          fauxToolCall("memory.write_candidate", {
+          fauxToolCall("memory_write_candidate", {
             kind: "preference",
             content: "Prefer PI memory candidates before long-term memory"
           }, { id: "memory-candidate" })

@@ -40,8 +40,8 @@ describe("PI project tools", () => {
       writeFauxModelsConfig(db);
       faux.setResponses([
         fauxAssistantMessage([
-          fauxToolCall("project.status", {}, { id: "status" }),
-          fauxToolCall("issue.enqueue_proposal", { issue_id: 1, rationale: "ready" }, { id: "enqueue" }),
+          fauxToolCall("project_status", {}, { id: "status" }),
+          fauxToolCall("issue_enqueue_proposal", { issue_id: 1, rationale: "ready" }, { id: "enqueue" }),
           fauxToolCall("read", { path: "README.md", limit: 5 }, { id: "read" }),
           fauxToolCall("write", { path: "blocked.txt", content: "must-not-write" }, { id: "write" }),
           fauxToolCall("edit", {
@@ -55,17 +55,17 @@ describe("PI project tools", () => {
       const { probes, runtime } = await runToolProbeSession(db, projectCwd);
 
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
-        "find", "grep", "issue.comment", "issue.create_proposal", "issue.enqueue_proposal",
-        "issue.list", "issue.read", "issue.update_refinement", "ls", "memory.search",
-        "memory.write_candidate", "project.list", "project.status", "read", "session.list",
-        "session.read_summary", "session.steer_proposal"
+        "find", "grep", "issue_comment", "issue_create_proposal", "issue_enqueue_proposal",
+        "issue_list", "issue_read", "issue_update_refinement", "ls", "memory_search",
+        "memory_write_candidate", "project_list", "project_status", "read", "session_list",
+        "session_read_summary", "session_steer_proposal"
       ]);
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
-      expect(probes.get("project.status")?.isError).toBe(false);
-      expect(probes.get("project.status")?.text).toContain('"total_issues": 2');
-      expect(probes.get("project.status")?.text).toContain('"todo": 1');
-      expect(probes.get("issue.enqueue_proposal")?.isError).toBe(false);
-      expect(probes.get("issue.enqueue_proposal")?.text).toContain('"requires_confirmation": true');
+      expect(probes.get("project_status")?.isError).toBe(false);
+      expect(probes.get("project_status")?.text).toContain('"total_issues": 2');
+      expect(probes.get("project_status")?.text).toContain('"todo": 1');
+      expect(probes.get("issue_enqueue_proposal")?.isError).toBe(false);
+      expect(probes.get("issue_enqueue_proposal")?.text).toContain('"requires_confirmation": true');
       expect(listPiActions(db, { status: "pending" }).map((action) => action.action_type)).toEqual(["issue.enqueue"]);
       expect(probes.get("read")?.isError).toBe(false);
       expect(probes.get("write")?.isError).toBe(true);
@@ -81,13 +81,49 @@ describe("PI project tools", () => {
       db.close();
     }
   });
+
+  test("global Runner tool calls do not fail when project_id is omitted", async () => {
+    const { db, projectCwd } = await openFixture();
+    const faux = registerFauxProvider({ api: "pi-global-tools-api", provider: "pi-global-tools" });
+    try {
+      insertProject(db, "demo", projectCwd);
+      insertAgent(db, { api: "pi-global-tools", provider: "pi-global-tools" });
+      writeFauxModelsConfig(db, { api: "pi-global-tools-api", provider: "pi-global-tools" });
+      faux.setResponses([
+        fauxAssistantMessage([fauxToolCall("project_status", {}, { id: "global-status" })], { stopReason: "toolUse" }),
+        fauxAssistantMessage("done")
+      ]);
+      const runtime = await createPiRuntimeSession(db, {
+        agent: agentRecord({ model_provider: "pi-global-tools" }),
+        conversationID: "conv-global-tools"
+      });
+      const probes = new Map<string, { isError: boolean; text: string }>();
+      const unsubscribe = runtime.session.subscribe((event) => {
+        if (event.type !== "tool_execution_end") return;
+        probes.set(event.toolName, { isError: event.isError, text: collectText(event.result.content) });
+      });
+
+      await runtime.session.prompt("Check global status", { expandPromptTemplates: false, source: "rpc" });
+      unsubscribe();
+      runtime.dispose();
+
+      expect(probes.get("project_status")?.isError).toBe(false);
+      expect(probes.get("project_status")?.text).toContain('"items"');
+      expect(probes.get("project_status")?.text).toContain('"demo"');
+    } finally {
+      faux.unregister();
+      db.close();
+    }
+  });
+
 });
 
-function agentRecord() {
+function agentRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: "pi-faux", name: "PI Faux", provider: "pi-sdk", model_provider: "pi-tools", model_id: "faux-1",
     thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
-    created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
+    created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+    ...overrides
   };
 }
 
@@ -125,11 +161,11 @@ function collectText(content: unknown): string {
   }).join("\n");
 }
 
-function insertAgent(db: RunnerDatabase): void {
+function insertAgent(db: RunnerDatabase, overrides: { api?: string; provider?: string } = {}): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", "pi-tools", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    ["pi-faux", "PI Faux", overrides.provider ?? "pi-tools", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -149,13 +185,14 @@ function insertIssue(db: RunnerDatabase, issue: { day: number; projectId: string
   );
 }
 
-function writeFauxModelsConfig(db: RunnerDatabase): void {
+function writeFauxModelsConfig(db: RunnerDatabase, overrides: { api?: string; provider?: string } = {}): void {
   const agentDir = join(db.path, "..", "pi-runtime", "agent");
+  const provider = overrides.provider ?? "pi-tools";
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(join(agentDir, "models.json"), JSON.stringify({
     providers: {
-      "pi-tools": {
-        api: "pi-tools-api",
+      [provider]: {
+        api: overrides.api ?? "pi-tools-api",
         apiKey: "test",
         baseUrl: "http://localhost:0",
         models: [{ id: "faux-1" }]

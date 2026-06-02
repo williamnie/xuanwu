@@ -316,6 +316,7 @@ function appendFallbackItem(state, event) {
 }
 
 function agentEventType(event) {
+  if (event?.type === 'pi.conversation.event') return piAgentEventType(event);
   if (event?.agent_event_type) return event.agent_event_type;
   const method = event?.method || event?.raw_method || '';
   if (method === 'item/agentMessage/delta') return 'agent.message.delta';
@@ -327,6 +328,18 @@ function agentEventType(event) {
   if (method === 'turn/completed') return 'agent.turn.completed';
   if (method === 'error') return 'agent.error';
   return '';
+}
+
+function piAgentEventType(event) {
+  const type = event?.agent_event_type || eventPayload(event).type || '';
+  if (type === 'agent_start') return 'agent.turn.started';
+  if (type === 'agent_end') return 'agent.turn.completed';
+  if (type === 'message_update' && eventPayload(event).role === 'assistant') return 'agent.message.delta';
+  if (type === 'message_end' && eventPayload(event).role === 'assistant') return 'agent.message.delta';
+  if (type === 'tool_execution_start') return 'agent.command.started';
+  if (type === 'tool_execution_update') return 'agent.command.output_delta';
+  if (type === 'tool_execution_end') return 'agent.command.completed';
+  return type;
 }
 
 function isReasoningMethod(method) {

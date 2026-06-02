@@ -1,3 +1,4 @@
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
@@ -6,12 +7,15 @@ import {
   getPiConversation,
   listPiAgents,
   listPiConversations,
+  updatePiConversation,
   type PiAgent,
   type PiConversation
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import { piConversationDetail } from "./piConversationTranscript.ts";
 import {
   createOrRestorePiRuntime,
   createPiRuntimeSession,
@@ -51,7 +55,7 @@ async function piConversationCreateResponse(context: PiConversationContext, requ
 function piConversationResponse(context: PiConversationContext, request: Request): Response {
   const conversation = getPiConversation(context.database, pathPart(request, "conversations"));
   if (!conversation) throw new HttpError(404, "资源不存在");
-  return json(conversation);
+  return json(piConversationDetail(conversation));
 }
 
 async function piConversationMessageResponse(context: PiConversationContext, request: Request): Promise<Response> {
@@ -69,7 +73,7 @@ async function createConversationWithRuntime(
   context: PiConversationContext,
   body: Record<string, unknown>
 ): Promise<PiConversation> {
-  const project = conversationProject(context.database, cleanString(body.project_id));
+  const project = optionalConversationProject(context.database, cleanString(body.project_id));
   const agent = conversationAgent(context.database, cleanString(body.pi_agent_id));
   const id = cleanString(body.id) || crypto.randomUUID();
   const runtime = await createOrRestorePiRuntime(context.database, {
@@ -82,10 +86,10 @@ async function createConversationWithRuntime(
     body,
     id,
     piAgentID: agent.id,
-    projectID: project.id,
+    projectID: project?.id ?? "",
     runtime
   }));
-  persistPiSessionIndex(context.database, conversation, project);
+  persistPiSessionIndex(context.database, conversation);
   return conversation;
 }
 
@@ -116,18 +120,20 @@ async function sendPiConversationMessage(
   if (prompt === "") throw new HttpError(400, "prompt is required");
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
-  const runtime = await openConversationRuntime(context, conversation);
+  const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
+  const runtime = await openConversationRuntime(context, titledConversation);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
     await runtime.session.prompt(prompt, { expandPromptTemplates: false, source: "rpc" });
-    persistPiSessionIndex(context.database, conversation, requireConversationProject(context.database, conversation));
+    persistPiSessionIndex(context.database, titledConversation);
     return {
-      conversation_id: conversation.id,
+      conversation_id: titledConversation.id,
       pi_session_id: runtime.session.sessionId,
       session_file: runtime.session.sessionFile ?? "",
       status: runtime.session.state.errorMessage ? "failed" : "completed",
-      text: runtime.session.getLastAssistantText() ?? "",
+      title: titledConversation.title,
+      text: piConversationResultText(runtime.session),
       message_count: runtime.session.state.messages.length
     };
   } finally {
@@ -137,6 +143,39 @@ async function sendPiConversationMessage(
   }
 }
 
+function ensureConversationTitle(
+  db: RunnerDatabase,
+  conversation: PiConversation,
+  prompt: string
+): PiConversation {
+  if (!shouldReplaceConversationTitle(conversation.title)) return conversation;
+  const title = deriveConversationTitle(prompt);
+  if (title === "" || title === conversation.title) return conversation;
+  return updatePiConversation(db, conversation.id, { title });
+}
+
+function shouldReplaceConversationTitle(title: string): boolean {
+  const text = cleanString(title);
+  return text === "" || text === "Runner" || text === "New conversation" || /^Runner\s*·/.test(text);
+}
+
+function deriveConversationTitle(prompt: string): string {
+  const text = cleanString(prompt)
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replace(/[*_~>#-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return truncateTitle(text);
+}
+
+function truncateTitle(text: string): string {
+  const limit = 48;
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+
 async function interruptPiConversation(context: PiConversationContext, id: string) {
   const active = activePiRuns.get(id);
   if (!active) return { interrupted: false };
@@ -144,16 +183,33 @@ async function interruptPiConversation(context: PiConversationContext, id: strin
   return { interrupted: true, conversation_id: id, pi_session_id: active.sessionId };
 }
 
+function piConversationResultText(session: AgentSession): string {
+  const text = session.getLastAssistantText();
+  if (text) return text;
+  const error = session.state.errorMessage || lastAssistantErrorMessage(session);
+  if (error === "Request was aborted") return "";
+  return error ? `Runner 执行失败：${redactSensitiveText(error)}` : "";
+}
+
+function lastAssistantErrorMessage(session: AgentSession): string {
+  const messages = session.state.messages.slice().reverse();
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    const error = message.errorMessage?.trim();
+    if (error) return error;
+  }
+  return "";
+}
+
 function persistPiSessionIndex(
   db: RunnerDatabase,
-  conversation: PiConversation,
-  project: Project
+  conversation: PiConversation
 ): void {
   upsertAgentSession(db, {
     provider: PI_SESSION_PROVIDER,
     provider_session_id: conversation.pi_session_id,
     agent_role: PI_SESSION_ROLE,
-    project_id: project.id,
+    project_id: conversation.project_id,
     title: conversation.title,
     preview: "",
     status: conversation.status,
@@ -162,7 +218,9 @@ function persistPiSessionIndex(
 }
 
 async function openConversationRuntime(context: PiConversationContext, conversation: PiConversation) {
-  const project = requireConversationProject(context.database, conversation);
+  const project = conversation.project_id === ""
+    ? undefined
+    : requireConversationProject(context.database, conversation);
   const agent = requireConversationAgent(context.database, conversation);
   return createPiRuntimeSession(context.database, {
     agent,
@@ -173,8 +231,8 @@ async function openConversationRuntime(context: PiConversationContext, conversat
   });
 }
 
-function conversationProject(db: RunnerDatabase, id: string): Project {
-  if (id === "") throw new HttpError(400, "project_id is required");
+function optionalConversationProject(db: RunnerDatabase, id: string): Project | undefined {
+  if (id === "") return undefined;
   const project = getProject(db, id);
   if (!project) throw new HttpError(404, "资源不存在");
   return project;

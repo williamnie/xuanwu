@@ -307,6 +307,45 @@ export const api = {
 
   getCapabilities: () => request('/api/capabilities'),
 
+  getPiAgents: () => request('/api/pi/agents'),
+
+  createPiAgent: (agent) => request('/api/pi/agents', {
+    method: 'POST',
+    body: JSON.stringify(agent),
+  }),
+
+  updatePiAgent: (id, updates) => request(`/api/pi/agents/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  getPiProviderSettings: () => request('/api/pi/provider-settings'),
+
+  updatePiProviderSettings: (id, settings) => request(`/api/pi/provider-settings/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  }),
+
+  getPiConversations: ({ projectId = '', status = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append('project_id', projectId);
+    if (status) params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/conversations${query}`);
+  },
+
+  createPiConversation: (conversation) => request('/api/pi/conversations', {
+    method: 'POST',
+    body: JSON.stringify(conversation),
+  }),
+
+  getPiConversation: (id) => request(`/api/pi/conversations/${encodeURIComponent(id)}`),
+
+  sendPiConversationMessage: (id, message) => request(`/api/pi/conversations/${encodeURIComponent(id)}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
+  }),
+
   searchProjectReferences: (id, { type = '', query = '', limit = 40 } = {}) => {
     const params = new URLSearchParams();
     if (type) params.append('type', type);

@@ -1,0 +1,175 @@
+.pi-chat-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pi-chat-main {
+  overflow: hidden;
+  padding: 0;
+}
+
+.pi-chat-main-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.pi-chat-main-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pi-chat-main-header span,
+.pi-chat-main-header small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pi-chat-main-header strong {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-chat-thread {
+  background:
+    linear-gradient(180deg, rgba(14, 165, 233, 0.025), transparent 30%),
+    var(--bg-card);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.pi-chat-empty {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  text-align: center;
+}
+
+.pi-chat-empty strong {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.pi-chat-bubble {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  max-width: min(780px, 88%);
+  padding: 12px 14px;
+}
+
+.pi-chat-bubble.user {
+  align-self: flex-end;
+  background: var(--primary-gradient);
+  border-color: transparent;
+  color: white;
+}
+
+.pi-chat-bubble.assistant {
+  align-self: flex-start;
+  background: var(--bg-card-hover);
+}
+
+.pi-chat-bubble.error {
+  align-self: flex-start;
+  background: var(--error-bg);
+  border-color: var(--error-glow);
+  color: var(--error);
+}
+
+.pi-chat-bubble-role {
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  opacity: 0.74;
+  text-transform: uppercase;
+}
+
+.pi-chat-markdown {
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.pi-chat-bubble.user .pi-chat-markdown {
+  color: white;
+}
+
+.pi-chat-bubble.user .pi-chat-markdown :not(pre) > code {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+.pi-chat-bubble.user .pi-chat-markdown blockquote {
+  border-left-color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.pi-chat-markdown :where(ol, ul) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.24rem;
+}
+
+.pi-chat-markdown strong {
+  color: inherit;
+}
+
+.pi-chat-bubble-meta {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  margin-top: 8px;
+  opacity: 0.62;
+}
+
+.pi-chat-thinking {
+  align-items: center;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: 0.82rem;
+  gap: 7px;
+}
+
+.pi-chat-composer {
+  border-top: 1px solid var(--border-color);
+}
+
+.pi-chat-composer .session-composer {
+  border-top: 0;
+  padding: 14px;
+}
+
+.pi-chat-error {
+  color: var(--error);
+  padding: 20px;
+}
+
+@media (max-width: 960px) {
+  .pi-chat-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .pi-chat-page {
+    padding-top: 8px;
+  }
+}

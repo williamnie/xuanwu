@@ -8,7 +8,7 @@ import {
 } from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 
-export const PI_MEMORY_TOOL_NAMES = ["memory.search", "memory.write_candidate"] as const;
+export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_write_candidate"] as const;
 
 type MemoryToolName = (typeof PI_MEMORY_TOOL_NAMES)[number];
 type MemoryContext = { bus?: EventBus; conversationID?: string; projectID?: string };
@@ -35,9 +35,9 @@ const memoryWriteCandidateParams = Type.Object({
 
 export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext = {}): ToolDefinition[] {
   return [
-    memoryTool("memory.search", "Memory Search", "Search active PI memory items; candidates are opt-in.",
+    memoryTool("memory_search", "Memory Search", "Search active PI memory items; candidates are opt-in.",
       memorySearchParams, (params) => searchMemory(db, context, params)),
-    memoryTool("memory.write_candidate", "Memory Write Candidate",
+    memoryTool("memory_write_candidate", "Memory Write Candidate",
       "Write a disabled PI memory candidate for later review; does not promote long-term memory directly.",
       memoryWriteCandidateParams, (params) => writeMemoryCandidate(db, context, params))
   ];
@@ -108,9 +108,9 @@ function summaryItem(item: PiMemoryItem): PiMemoryItem {
 }
 
 function defaultScopeID(scope: string, context: MemoryContext): string | undefined {
-  if (scope === "" || scope === "project") return cleanString(context.projectID) || undefined;
   if (scope === "conversation") return cleanString(context.conversationID) || undefined;
-  return undefined;
+  if (scope === "global") return "runner";
+  return cleanString(context.projectID) || "runner";
 }
 
 function publishMemoryCandidate(bus: EventBus | undefined, item: PiMemoryItem): void {
