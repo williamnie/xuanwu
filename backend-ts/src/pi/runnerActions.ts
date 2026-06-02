@@ -1,17 +1,23 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { enqueueIssue } from "../db/repositories/issueActions.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { getAgentSession, listAgentSessions } from "../db/repositories/agentSessions.ts";
 import type { EventBus } from "../events/bus.ts";
-import { createPendingPiAction, executeSafePiAction } from "./actionEngine.ts";
+import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import { serializeRefinement, type RefinementField } from "./runnerActionRefinement.ts";
 import { observeSessionProgress } from "./sessionObserver.ts";
+import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStateDiagnosisInput, type IssueStateRepairProposalInput } from "./runnerIssueStateActions.ts";
 
 export type PiRunnerActionLayer = {
   commentIssue(input: IssueCommentInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
+  createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
+  diagnoseIssueState(input: IssueStateDiagnosisInput): unknown;
   createSessionSteerProposal(input: SessionSteerProposalInput): unknown;
   createUpdateRefinementProposal(input: IssueUpdateRefinementInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
@@ -23,11 +29,7 @@ export type PiRunnerActionLayer = {
   readSessionSummary(input: SessionReadSummaryInput): unknown;
 };
 
-export type PiRunnerActionContext = {
-  bus?: EventBus;
-  conversationID?: string;
-  project?: Project;
-};
+export type PiRunnerActionContext = PiActionContext & { project?: Project };
 
 type IssueListInput = { project_id?: string; status?: string };
 type IssueReadInput = { id: number };
@@ -71,16 +73,27 @@ export function createPiRunnerActions(
       projectID: issueProjectID(db, input.issue_id, context),
       execute: () => createIssueComment(db, input.issue_id, { author: "agent", body: input.body })
     }),
-    createIssueProposal: (input) => createPendingPiAction(db, context, issueCreateProposal(input, context)),
+    createIssueProposal: (input) => {
+      const proposal = issueCreateProposal(input, context);
+      return createPendingPiAction(db, context, proposal, () => createIssue(db, proposal.payload));
+    },
+    createIssueStateRepairProposal: (input) => createIssueStateRepairProposal(db, context, input),
+    diagnoseIssueState: (input) => safeIssueStateDiagnosis(db, context, input),
     createSessionSteerProposal: (input) => createPendingPiAction(db, context, sessionSteerProposal(db, input)),
-    createUpdateRefinementProposal: (input) => createPendingPiAction(db, context, refinementProposal(db, input)),
-    enqueueIssueProposal: (input) => createPendingPiAction(db, context, {
-      actionType: "issue.enqueue",
-      issueID: input.issue_id,
-      payload: { issue_id: input.issue_id },
-      projectID: issueProjectID(db, input.issue_id, context),
-      rationale: input.rationale
-    }),
+    createUpdateRefinementProposal: (input) => {
+      const proposal = refinementProposal(db, input);
+      return createPendingPiAction(db, context, proposal, () => updateIssue(db, input.issue_id, objectPayload(proposal.payload.patch)));
+    },
+    enqueueIssueProposal: (input) => {
+      const proposal = {
+        actionType: "issue.enqueue",
+        issueID: input.issue_id,
+        payload: { issue_id: input.issue_id },
+        projectID: issueProjectID(db, input.issue_id, context),
+        rationale: input.rationale
+      };
+      return createPendingPiAction(db, context, proposal, () => enqueueIssue(db, input.issue_id));
+    },
     listIssues: (input) => safeListIssues(db, context, input),
     listProjects: () => executeSafePiAction(db, context, {
       actionType: "project.list",
@@ -93,6 +106,7 @@ export function createPiRunnerActions(
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
 }
+
 
 function safeListIssues(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueListInput) {
   const filter = normalizeIssueFilter(input, context);
@@ -268,6 +282,10 @@ function issueDescription(input: IssueCreateProposalInput): string {
     verification_plan: input.verification_plan
   });
   return refinement || input.description;
+}
+
+function objectPayload(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function cleanObject(input: Record<string, string>): Record<string, string> {

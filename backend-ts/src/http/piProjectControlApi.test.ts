@@ -3,9 +3,9 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getProjectPiSettings, listPiConversations } from "../db/repositories/pi.ts";
+import { getProjectPiSettings, listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -53,11 +53,33 @@ describe("Bun project PI control API", () => {
       expect(listPiConversations(database, { projectId: "demo" })).toHaveLength(1);
       expect(faux.state.callCount).toBe(1);
       expect(promptContext).toContain("Project status snapshot");
+      expect(promptContext).toContain("Issue state diagnostics");
       expect(promptContext).toContain("Failed issue");
       const promptText = JSON.parse(promptContext).messages[0].content[0].text;
       expect(promptText).toContain('"failed": 1');
     } finally {
       faux.unregister();
+      database.close();
+    }
+  });
+
+  test("issue-state endpoint returns diagnostics and batch target progress", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const weakDone = insertIssue(database, { projectId: "demo", status: "done", title: "Weak done" });
+      const pending = insertIssue(database, { projectId: "demo", status: "todo", title: "Todo target" });
+      const router = createDefaultRouter({ database });
+
+      const path = `/api/projects/demo/pi/issue-state?target_issue_ids=${weakDone},${pending}&target_label=tonight&target_status=done&deadline_at=2026-01-01T23:59:59Z`;
+      const response = await router.handle(new Request(`${BASE_URL}${path}`));
+      const body = await response.json() as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({ batch_targets: [expect.objectContaining({ done: 1, label: "tonight", off_track_issue_ids: [pending] })] });
+      expect(body.diagnostics).toContainEqual(expect.objectContaining({ code: "done_missing_verification_evidence", issue_id: weakDone,
+        recommended_actions: [expect.objectContaining({ action_type: "issue.state_repair" })] }));
+    } finally {
       database.close();
     }
   });
@@ -100,13 +122,53 @@ describe("Bun project PI control API", () => {
       expect(notifications).toHaveLength(1);
       expect(notifications[0]).toMatchObject({ event: "pi.needs_user", issue_id: 1 });
       expect(event).toMatchObject({ type: "pi.needs_user", issueId: 1, projectId: "demo" });
-      expect(actionCandidates).toEqual([
-        expect.objectContaining({ action_type: "issue.retry_proposal", payload: { issue_id: 2 } })
-      ]);
+      expect(actionCandidates).toContainEqual(expect.objectContaining({ action_type: "issue.retry_proposal", payload: { issue_id: 2 } }));
+      expect(actionCandidates).toContainEqual(expect.objectContaining({ action_type: "issue.state_repair", issue_id: 1 }));
       expect(json).toContain("[redacted]");
       expect(json).toContain("[redacted-path]");
       expect(json).not.toContain("fixture-secret");
       expect(json).not.toContain("/Users/secret");
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("manager cycle runs PI tools in delegated mode and denies uncovered mutations", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-control-delegated-api", provider: "pi-control-delegated" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_comment", { issue_id: 1, body: "delegated mutation" }, { id: "comment" }),
+          fauxToolCall("memory_write_candidate", {
+            kind: "preference",
+            content: "must not write memory"
+          }, { id: "memory" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("cycle done")
+      ]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-control-delegated");
+      writeFauxModelsConfig(database, "pi-control-delegated");
+      insertIssue(database, { projectId: "demo", status: "todo", title: "Do not mutate" });
+      const router = createDefaultRouter({ database });
+
+      const response = await post(router, "/api/projects/demo/pi/run-once");
+      const denied = listPiActions(database, { status: "denied" });
+      const audit = listPiActionEvents(database, { actionId: denied[0]?.id ?? "" });
+
+      expect(response.status).toBe(201);
+      expect(denied).toContainEqual(expect.objectContaining({
+        action_type: "issue.comment",
+        delegation_id: expect.stringContaining("demo"),
+        gate_decision: "deny",
+        heartbeat_id: expect.stringContaining("pi-cycle")
+      }));
+      expect(audit.map((event) => event.event_type)).toEqual(["candidate", "gate_decision"]);
+      expect(audit[1]).toMatchObject({ decision: "deny" });
+      expect(listEvents(database)).toEqual([]);
+      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([]);
     } finally {
       faux.unregister();
       database.close();
@@ -159,7 +221,6 @@ describe("Bun project PI control API", () => {
     }
   });
 });
-
 function post(router: ReturnType<typeof createDefaultRouter>, path: string): Promise<Response> {
   return router.handle(new Request(`${BASE_URL}${path}`, {
     method: "POST",
@@ -167,7 +228,6 @@ function post(router: ReturnType<typeof createDefaultRouter>, path: string): Pro
     headers: { "content-type": "application/json" }
   }));
 }
-
 async function nextEvent(events: ReturnType<EventBus["subscribe"]>, type: string) {
   for (let index = 0; index < 20; index += 1) {
     const event = await events.next();
@@ -175,14 +235,12 @@ async function nextEvent(events: ReturnType<EventBus["subscribe"]>, type: string
   }
   return undefined;
 }
-
 function insertAgent(db: RunnerDatabase, id: string, enabled: number): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, enabled, created_at, updated_at) values (?, ?, ?, ?, ?)`,
     [id, id, enabled, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
-
 function insertFauxAgent(db: RunnerDatabase, provider = "pi-control-faux"): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
@@ -191,7 +249,6 @@ function insertFauxAgent(db: RunnerDatabase, provider = "pi-control-faux"): void
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
-
 function insertProject(db: RunnerDatabase, id: string): void {
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
@@ -200,10 +257,9 @@ function insertProject(db: RunnerDatabase, id: string): void {
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
-
 function insertIssue(db: RunnerDatabase, issue: {
   autoRetryNextAt?: string; autoRetryReason?: string; error?: string; projectId: string; status: string; title: string;
-}): void {
+}): number {
   db.sqlite.run(
     `insert into issues
       (project_id, title, status, error, auto_retry_next_at, auto_retry_reason, created_at, updated_at)
@@ -212,8 +268,10 @@ function insertIssue(db: RunnerDatabase, issue: {
       issue.autoRetryNextAt ?? "", issue.autoRetryReason ?? "",
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+  const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
+  if (!row) throw new Error("missing issue id");
+  return row.id;
 }
-
 function writeFauxModelsConfig(db: RunnerDatabase, provider = "pi-control-faux"): void {
   const agentDir = join(db.path, "..", "pi-runtime", "agent");
   mkdirSync(agentDir, { recursive: true });
@@ -228,4 +286,7 @@ function writeFauxModelsConfig(db: RunnerDatabase, provider = "pi-control-faux")
     }
   }));
   if (!existsSync(join(agentDir, "models.json"))) throw new Error("models config missing");
+}
+function listEvents(db: RunnerDatabase): Array<{ type: string }> {
+  return db.sqlite.query<{ type: string }, []>("select type from issue_events order by id asc").all();
 }

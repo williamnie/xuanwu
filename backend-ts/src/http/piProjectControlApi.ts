@@ -15,13 +15,15 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
 import { publishNeedsUserFindingNotifications } from "../notifications/piNotifier.ts";
 import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
+import { diagnoseIssueState } from "../pi/issueStateManager.ts";
+import type { PiGatePolicy } from "../pi/actionGate.ts";
 import { HttpError, json } from "./errors.ts";
 import {
   createPiRuntimeSession,
   ensurePiSessionFile,
-  publishPiSessionEvent,
   type PiRuntimeSession
 } from "./piRuntime.ts";
+import { publishPiSessionEvent } from "./piSessionEvents.ts";
 import type { Router } from "./router.ts";
 
 type PiProjectControlContext = { bus?: EventBus; database: RunnerDatabase };
@@ -34,8 +36,36 @@ const activeProjectPiRuns = new Map<string, PiRuntimeSession["session"]>();
 
 export function registerPiProjectControlRoutes(router: Router, context: PiProjectControlContext): void {
   router.post("/api/projects/:id/pi/run-once", (request) => runOnceResponse(context, request));
+  router.get("/api/projects/:id/pi/issue-state", (request) => issueStateResponse(context, request));
   router.post("/api/projects/:id/pi/pause", (request) => projectPiSettingsActionResponse(context, request, "pause"));
   router.post("/api/projects/:id/pi/resume", (request) => projectPiSettingsActionResponse(context, request, "resume"));
+}
+
+
+function issueStateResponse(context: PiProjectControlContext, request: Request): Response {
+  const id = projectID(request);
+  requireProject(context.database, id);
+  return json(diagnoseIssueState(context.database, issueStateOptions(id, request)));
+}
+
+function issueStateOptions(projectIDValue: string, request: Request) {
+  const params = new URL(request.url).searchParams;
+  const targetIDs = targetIssueIDs(params);
+  if (targetIDs.length === 0) return { projectID: projectIDValue };
+  return {
+    batchTarget: {
+      deadline_at: cleanString(params.get("deadline_at")),
+      issue_ids: targetIDs,
+      label: cleanString(params.get("target_label")) || "batch",
+      status: cleanString(params.get("target_status")) || "done"
+    },
+    projectID: projectIDValue
+  };
+}
+
+function targetIssueIDs(params: URLSearchParams): number[] {
+  return params.getAll("target_issue_ids").flatMap((value) => value.split(","))
+    .map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value > 0);
 }
 
 async function runOnceResponse(context: PiProjectControlContext, request: Request): Promise<Response> {
@@ -56,14 +86,28 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
   const agent = requireRunnableAgent(context.database, settings.pi_agent_id, "run manager cycle");
   if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "PI manager cycle is already running");
-  const snapshot = createProjectStatusSnapshot(context.database, project.id);
+  const state = await createManagerCycleState(context, project, agent);
+  activeProjectPiRuns.set(project.id, state.runtime.session);
+  try {
+    return await executeManagerCycle(context, project, cycleSettings, state);
+  } finally {
+    if (activeProjectPiRuns.get(project.id) === state.runtime.session) activeProjectPiRuns.delete(project.id);
+    state.unsubscribe();
+    state.runtime.dispose();
+  }
+}
 
+async function createManagerCycleState(context: PiProjectControlContext, project: Project, agent: PiAgent) {
   const conversationID = crypto.randomUUID();
   const runtime = await createPiRuntimeSession(context.database, {
     agent,
+    authorization: managerCycleAuthorization(project.id),
     bus: context.bus,
     conversationID,
-    project
+    delegationID: `pi-cycle:${project.id}`,
+    heartbeatID: `pi-cycle:${project.id}:${conversationID}`,
+    project,
+    source: "pi_manager_cycle"
   });
   const conversation = createPiConversation(context.database, {
     id: conversationID,
@@ -76,26 +120,30 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   });
   persistPiSessionIndex(context.database, conversation, project);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
-  activeProjectPiRuns.set(project.id, runtime.session);
-  try {
-    await runtime.session.prompt(managerCyclePrompt(project, cycleSettings, snapshot), {
-      expandPromptTemplates: false,
-      source: "rpc"
-    });
-    await ensurePiSessionFile(runtime.session);
-    persistPiSessionIndex(context.database, conversation, project);
-    const notifications = publishNeedsUserFindingNotifications({
-      bus: context.bus,
-      findings: snapshot.findings,
-      notifyOnNeedsUser: cycleSettings.notify_on_needs_user !== 0,
-      project
-    });
-    return managerCycleResult(conversation, runtime.session, cycleSettings, snapshot, notifications);
-  } finally {
-    if (activeProjectPiRuns.get(project.id) === runtime.session) activeProjectPiRuns.delete(project.id);
-    unsubscribe();
-    runtime.dispose();
-  }
+  return { conversation, runtime, unsubscribe };
+}
+
+async function executeManagerCycle(
+  context: PiProjectControlContext,
+  project: Project,
+  settings: ProjectPiSettings,
+  state: Awaited<ReturnType<typeof createManagerCycleState>>
+) {
+  const snapshot = createProjectStatusSnapshot(context.database, project.id);
+  const issueState = diagnoseIssueState(context.database, { projectID: project.id });
+  await state.runtime.session.prompt(managerCyclePrompt(project, settings, snapshot, issueState), {
+    expandPromptTemplates: false,
+    source: "rpc"
+  });
+  await ensurePiSessionFile(state.runtime.session);
+  persistPiSessionIndex(context.database, state.conversation, project);
+  const notifications = publishNeedsUserFindingNotifications({
+    bus: context.bus,
+    findings: snapshot.findings,
+    notifyOnNeedsUser: settings.notify_on_needs_user !== 0,
+    project
+  });
+  return managerCycleResult(state.conversation, state.runtime.session, settings, snapshot, issueState, notifications);
 }
 
 function persistProjectPiAutoManage(
@@ -152,10 +200,26 @@ function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation,
   });
 }
 
+function managerCycleAuthorization(projectID: string): PiGatePolicy {
+  return {
+    authorizedActions: [
+      { action_type: "issue.list", project_id: projectID },
+      { action_type: "issue.read", project_id: projectID },
+      { action_type: "issue.state_diagnose", project_id: projectID },
+      { action_type: "project.list" },
+      { action_type: "project.status", project_id: projectID },
+      { action_type: "session.list", project_id: projectID },
+      { action_type: "session.read_summary", project_id: projectID }
+    ],
+    mode: "delegated"
+  };
+}
+
 function managerCyclePrompt(
   project: Project,
   settings: ProjectPiSettings,
-  snapshot: ReturnType<typeof createProjectStatusSnapshot>
+  snapshot: ReturnType<typeof createProjectStatusSnapshot>,
+  issueState: ReturnType<typeof diagnoseIssueState>
 ): string {
   return [
     "Run exactly one PI manager cycle for this codex-issue-runner project.",
@@ -163,6 +227,8 @@ function managerCyclePrompt(
     `Project name: ${project.name}`,
     "Project status snapshot:",
     JSON.stringify(snapshot, null, 2),
+    "Issue state diagnostics:",
+    JSON.stringify(issueState, null, 2),
     "Create PI action proposals for concrete next steps; execute only safe read/comment tools.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."
@@ -174,13 +240,18 @@ function managerCycleResult(
   session: PiRuntimeSession["session"],
   settings: ProjectPiSettings,
   snapshot: ReturnType<typeof createProjectStatusSnapshot>,
+  issueState: ReturnType<typeof diagnoseIssueState>,
   notifications: ReturnType<typeof publishNeedsUserFindingNotifications>
 ) {
   return {
-    action_candidates: snapshot.findings.flatMap((finding) => finding.action_candidate ? [finding.action_candidate] : []),
+    action_candidates: [
+      ...snapshot.findings.flatMap((finding) => finding.action_candidate ? [finding.action_candidate] : []),
+      ...issueState.diagnostics.flatMap((item) => item.recommended_actions)
+    ],
     auto_manage: settings.auto_manage,
     conversation_id: conversation.id,
     message_count: session.state.messages.length,
+    issue_state: issueState,
     notifications,
     pi_session_id: session.sessionId,
     project_id: conversation.project_id,
@@ -216,4 +287,8 @@ function projectID(request: Request): string {
   const value = parts[parts.indexOf("projects") + 1]?.trim() ?? "";
   if (value === "") throw new HttpError(400, "project id 不能为空");
   return decodeURIComponent(value);
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

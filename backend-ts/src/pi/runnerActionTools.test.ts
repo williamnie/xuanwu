@@ -7,7 +7,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import type { AgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { getPiAction, listPiActions } from "../db/repositories/pi.ts";
+import { getPiAction, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions, type PiRunnerActionLayer } from "./runnerActions.ts";
 import { createPiRunnerActionTools, PI_RUNNER_ACTION_TOOL_NAMES } from "./runnerActionTools.ts";
@@ -17,10 +17,12 @@ describe("PI runner action tools", () => {
     const calls: Array<[string, unknown]> = [];
     const tools = createPiRunnerActionTools(fakeActions(calls));
     const issueRead = toolByName(tools, "issue_read");
+    const diagnose = toolByName(tools, "issue_state_diagnose");
     const steer = toolByName(tools, "session_steer_proposal");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(diagnose, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(steer, { session_key: "codex:thread-1", prompt: "adjust" })).toEqual({
       session_key: "codex:thread-1",
       prompt: "adjust"
@@ -30,10 +32,12 @@ describe("PI runner action tools", () => {
     expect(() => validateArgs(steer, { session_key: "codex:thread-1", prompt: " " })).toThrow(/Validation failed/);
 
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
+    await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await steer.execute("tool-2", { session_key: "codex:thread-1", prompt: "adjust" }, undefined, undefined, {} as never);
 
     expect(calls).toEqual([
       ["readIssue", { id: 7 }],
+      ["diagnoseIssueState", { project_id: "demo" }],
       ["createSessionSteerProposal", { session_key: "codex:thread-1", prompt: "adjust" }]
     ]);
   });
@@ -150,10 +154,18 @@ describe("PI runner action tools", () => {
       const commentAction = completedActions.find((action) => action.action_type === "issue.comment");
       expect(getPiAction(fixture.db, commentAction?.id ?? "")).toMatchObject({
         action_type: "issue.comment",
+        gate_decision: "execute",
         issue_id: issueID,
         result_json: expect.stringContaining("issue.comment"),
+        source: "pi_tool",
         status: "completed"
       });
+      expect(listPiActionEvents(fixture.db, { actionId: commentAction?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "execution_started",
+        "execution_result"
+      ]);
       expect(listIssueEvents(fixture.db, issueID).map((event) => event.type)).toEqual([
         "issue.comment"
       ]);
@@ -191,24 +203,27 @@ describe("PI runner action tools", () => {
       });
       expect(action).toMatchObject({
         action_type: "issue.enqueue",
+        decision: "ask",
         requires_confirmation: true,
         risk_level: "medium",
         status: "pending"
       });
+      expect(listPiActionEvents(fixture.db, { actionId: action.action_id }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "pending_approval"
+      ]);
     } finally {
       await fixture.close();
     }
   });
 });
-
 function projectIDs(result: unknown): string[] {
   return (result as { items: Project[] }).items.map((project) => project.id);
 }
-
 function sessionKeys(result: unknown): string[] {
   return (result as { items: AgentSession[] }).items.map((session) => session.session_key);
 }
-
 function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
   const record = (name: string) => (input: unknown) => {
     calls.push([name, input]);
@@ -217,6 +232,8 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
   return {
     commentIssue: record("commentIssue"),
     createIssueProposal: record("createIssueProposal"),
+    createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
+    diagnoseIssueState: record("diagnoseIssueState"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
     createUpdateRefinementProposal: record("createUpdateRefinementProposal"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
@@ -228,7 +245,6 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     readSessionSummary: record("readSessionSummary")
   };
 }
-
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-action-tools-"));
   const db = await openDatabase({ stateDir: join(root, "state") });
@@ -241,7 +257,6 @@ async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDataba
   if (!project) throw new Error("missing fixture project");
   return { db, project, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
-
 function insertIssue(db: RunnerDatabase, input: { projectID: string; status: string; title: string }): number {
   db.sqlite.run(
     `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
@@ -251,7 +266,6 @@ function insertIssue(db: RunnerDatabase, input: { projectID: string; status: str
   if (!row) throw new Error("missing issue id");
   return row.id;
 }
-
 function insertAgentSession(db: RunnerDatabase, input: { projectID: string; sessionKey: string }): void {
   const [, sessionID] = input.sessionKey.split(":");
   db.sqlite.run(
@@ -264,17 +278,14 @@ function insertAgentSession(db: RunnerDatabase, input: { projectID: string; sess
     ]
   );
 }
-
 function toolByName(tools: ReturnType<typeof createPiRunnerActionTools>, name: string) {
   const tool = tools.find((candidate) => candidate.name === name);
   if (!tool) throw new Error(`missing tool ${name}`);
   return tool;
 }
-
 function validateArgs(tool: ReturnType<typeof toolByName>, args: Record<string, unknown>) {
   return validateToolArguments(tool as never, { name: tool.name, arguments: args } as never);
 }
-
 async function runTool(
   tools: ReturnType<typeof createPiRunnerActionTools>,
   name: string,

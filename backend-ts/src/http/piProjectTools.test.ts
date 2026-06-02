@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listPiActions } from "../db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -56,7 +56,8 @@ describe("PI project tools", () => {
 
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "find", "grep", "issue_comment", "issue_create_proposal", "issue_enqueue_proposal",
-        "issue_list", "issue_read", "issue_update_refinement", "ls", "memory_search",
+        "issue_list", "issue_read", "issue_state_diagnose", "issue_state_repair_proposal",
+        "issue_update_refinement", "ls", "memory_search",
         "memory_write_candidate", "project_list", "project_status", "read", "session_list",
         "session_read_summary", "session_steer_proposal"
       ]);
@@ -68,6 +69,18 @@ describe("PI project tools", () => {
       expect(probes.get("issue_enqueue_proposal")?.text).toContain('"requires_confirmation": true');
       expect(listPiActions(db, { status: "pending" }).map((action) => action.action_type)).toEqual(["issue.enqueue"]);
       expect(probes.get("read")?.isError).toBe(false);
+      const readAction = listPiActions(db).find((action) => action.action_type === "sdk.read");
+      expect(readAction).toMatchObject({
+        gate_decision: "execute",
+        source: "pi_sdk_tool",
+        status: "completed"
+      });
+      expect(listPiActionEvents(db, { actionId: readAction?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "execution_started",
+        "execution_result"
+      ]);
       expect(probes.get("write")?.isError).toBe(true);
       expect(probes.get("write")?.text).toContain("Tool write not found");
       expect(probes.get("edit")?.isError).toBe(true);

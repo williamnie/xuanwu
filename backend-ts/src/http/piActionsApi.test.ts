@@ -143,6 +143,29 @@ describe("Bun PI actions API", () => {
     }
   });
 
+  test("approve executes issue state repair proposals through dispatcher", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id, { error: "network error", status: "failed" });
+      const action = createPiRunnerActions(database, { project })
+        .createIssueStateRepairProposal({ issue_id: issueID }) as { action_id: string };
+
+      const response = await postAction(createDefaultRouter({ database }), action.action_id, "approve");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "todo", error: "" });
+      expect(listEvents(database).map((event) => event.type)).toEqual([
+        "issue.status_changed",
+        "issue.state_manager_repair"
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("execute steers approved session actions through provider once", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionSteerProvider();
@@ -171,6 +194,9 @@ describe("Bun PI actions API", () => {
       database.close();
     }
   });
+
+
+
 });
 
 function postAction(
@@ -194,10 +220,10 @@ function insertProject(db: RunnerDatabase, id: string): void {
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectID: string): number {
+function insertIssue(db: RunnerDatabase, projectID: string, patch: Record<string, string> = {}): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [projectID, "Queue me", "triage", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, status, error, created_at, updated_at) values (?, ?, ?, ?, ?, ?)`,
+    [projectID, "Queue me", patch.status ?? "triage", patch.error ?? "", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing issue id");
