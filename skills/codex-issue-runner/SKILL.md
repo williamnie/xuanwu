@@ -1,6 +1,6 @@
 ---
 name: codex-issue-runner
-description: Create, enqueue, inspect, retry, cancel, or finish local Codex Issue Runner issues from Codex. Use when the user asks Codex to hand work to codex-issue-runner, create a local runner issue, automate an issue loop, enqueue a task for autonomous execution, or check runner issue status/logs.
+description: Create, enqueue, inspect, retry, cancel, delete, or finish local Codex Issue Runner issues from Codex. Use when the user asks Codex to hand work to codex-issue-runner, create a local runner issue, automate an issue loop, enqueue a task for autonomous execution, delete stale runner issues, or check runner issue status/logs.
 ---
 
 # Codex Issue Runner
@@ -99,14 +99,17 @@ codex-issue-runner issue create \
   --json
 ```
 
-## Inspect / Retry / Cancel
+## Inspect / Retry / Cancel / Delete
 
 ```bash
 codex-issue-runner issue status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 codex-issue-runner issue logs --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id>
 codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
+codex-issue-runner issue delete --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id <issue-id> --json
 ```
+
+`issue delete` physically removes the issue and cascades its issue logs/runs/comments. Running `in_progress` issues are protected: cancel them first, then delete if removal is still intended.
 
 ## Finish Work Explicitly
 

@@ -207,6 +207,94 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
+  test("deletes non-running issues and cascades issue history", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      const issueId = insertIssue(database, {
+        projectId: "demo",
+        title: "Delete me",
+        status: "cancelled",
+        sourceSessionId: ""
+      });
+      database.sqlite.run(
+        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+        [issueId, "issue.comment", '{"body":"old"}', "2026-01-01T00:00:00Z"]
+      );
+      database.sqlite.run(
+        `insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
+         values (?, ?, ?, ?, ?, ?)`,
+        [`issue-${issueId}-attempt-1`, issueId, 1, "cancelled", "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"]
+      );
+      const router = createDefaultRouter({ database });
+
+      const deleted = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, { method: "DELETE" }));
+      const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
+      const rows = database.sqlite.query<{ count: number }, [number]>(
+        `select count(*) as count from issue_events where issue_id=?
+         union all
+         select count(*) as count from issue_runs where issue_id=?`
+      ).all(issueId, issueId).map(row => row.count);
+
+      expect(deleted.status).toBe(204);
+      expect(readBack.status).toBe(404);
+      expect(rows).toEqual([0, 0]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects deleting in-progress issues", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      const issueId = insertIssue(database, {
+        projectId: "demo",
+        title: "Running",
+        status: "in_progress",
+        sourceSessionId: ""
+      });
+      const router = createDefaultRouter({ database });
+
+      const deleted = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, { method: "DELETE" }));
+      const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
+
+      expect(deleted.status).toBe(400);
+      expect(await deleted.json()).toEqual({ message: "运行中的 issue 不能删除，请先取消执行" });
+      expect(readBack.status).toBe(200);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects deleting issues with an open run even when issue status drifted", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      const issueId = insertIssue(database, {
+        projectId: "demo",
+        title: "Open run",
+        status: "todo",
+        sourceSessionId: ""
+      });
+      database.sqlite.run(
+        `insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
+         values (?, ?, ?, ?, ?, '')`,
+        [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", "2026-01-01T00:00:00Z"]
+      );
+      const router = createDefaultRouter({ database });
+
+      const deleted = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, { method: "DELETE" }));
+      const readBack = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
+
+      expect(deleted.status).toBe(400);
+      expect(await deleted.json()).toEqual({ message: "运行中的 issue 不能删除，请先取消执行" });
+      expect(readBack.status).toBe(200);
+    } finally {
+      database.close();
+    }
+  });
+
   test("creates issues with default triage status and persists creation history", async () => {
     const database = await openFixtureDatabase();
     try {

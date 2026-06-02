@@ -32,6 +32,7 @@ import {
   ClipboardCheck,
   History,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
@@ -212,6 +213,8 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const [refinementDraftGenerating, setRefinementDraftGenerating] = useState(false);
   const [verifierGenerating, setVerifierGenerating] = useState(false);
   const [verifierError, setVerifierError] = useState('');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingIssue, setDeletingIssue] = useState(false);
   const [detailState, updateDetailState] = useImmer({
     issue: null,
     project: null,
@@ -343,6 +346,8 @@ ${error}` : error;
     setRefinementDraftGenerating(false);
     setVerifierGenerating(false);
     setVerifierError('');
+    setDeleteConfirmOpen(false);
+    setDeletingIssue(false);
   }, [issueId]);
 
   const updateTerminalFollowState = useCallback(() => {
@@ -393,13 +398,30 @@ ${error}` : error;
   };
 
   const handleCancel = async () => {
-    if (window.confirm('确定要取消执行当前任务吗？')) {
-      try {
-        await api.cancelIssue(issueId);
-        loadIssueData();
-      } catch (err) {
-        message.error('取消任务失败: ' + err.message);
-      }
+    try {
+      await api.cancelIssue(issueId);
+      loadIssueData();
+    } catch (err) {
+      message.error('取消任务失败: ' + err.message);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (issue?.status === 'in_progress') {
+      message.warning('运行中的 Issue 不能删除，请先中断取消');
+      setDeleteConfirmOpen(false);
+      return;
+    }
+    setDeletingIssue(true);
+    try {
+      await api.deleteIssue(issueId);
+      message.success(`Issue #${issueId} 已删除`);
+      refreshData(['issues']);
+      navigateTo('issues');
+    } catch (err) {
+      message.error('删除任务失败: ' + err.message);
+    } finally {
+      setDeletingIssue(false);
     }
   };
 
@@ -744,8 +766,23 @@ ${error}` : error;
               <RotateCw size={14} /> 重新执行
             </button>
           )}
+
+          {issue.status !== 'in_progress' && (
+            <button className="btn btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
+              <Trash2 size={14} /> 删除
+            </button>
+          )}
         </div>
       </div>
+
+      {deleteConfirmOpen && (
+        <IssueDeleteConfirmModal
+          issue={issue}
+          deleting={deletingIssue}
+          onCancel={() => setDeleteConfirmOpen(false)}
+          onConfirm={handleDelete}
+        />
+      )}
 
       {/* 主面板内容 */}
       <div className="issue-detail-grid grid-cols-3">
@@ -1021,6 +1058,30 @@ function moveToTodoReadinessNotice(issue, events) {
   });
   if (!readiness || readiness.ready) return '';
   return triageReadinessMoveToTodoNotice(readiness);
+}
+
+function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
+  return (
+    <div className="modal-overlay">
+      <div className="glass-card modal-content issue-delete-modal">
+        <div className="issue-delete-modal-header">
+          <Trash2 size={18} color="var(--error)" />
+          <h3>删除 Issue #{issue.id}</h3>
+        </div>
+        <p className="issue-delete-modal-copy">
+          将物理删除「{issue.title}」及其日志、运行记录和评论。此操作不可恢复。
+        </p>
+        <div className="issue-delete-modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={deleting}>
+            取消
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={deleting}>
+            {deleting ? '删除中...' : '确认删除'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function IssueRefinement({ issue, refinement, recommendation, readiness, onEdit, onMoveToTodo, onGenerateDraft, draftError, draftGenerating }) {

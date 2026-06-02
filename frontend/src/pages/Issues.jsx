@@ -12,6 +12,7 @@ import {
   Plus,
   X,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
 import CronTasksPanel from '../components/CronTasksPanel';
@@ -51,6 +52,8 @@ export default function Issues({
   const [draggingIssueId, setDraggingIssueId] = useState(null);
   const [draggedOverColumnId, setDraggedOverColumnId] = useState(null);
   const [retryingIssueId, setRetryingIssueId] = useState(null);
+  const [issueToDelete, setIssueToDelete] = useState(null);
+  const [deletingIssueId, setDeletingIssueId] = useState(null);
 
   const stopCardAction = (event) => {
     event.stopPropagation();
@@ -79,6 +82,30 @@ export default function Issues({
     stopCardAction(event);
     if (sessionRef) {
       navigateTo('sessions', null, sessionRef);
+    }
+  };
+
+  const handleRequestDeleteIssue = (event, issue) => {
+    stopCardAction(event);
+    if (issue.status === 'in_progress') {
+      message.warning('运行中的 Issue 不能删除，请先中断取消');
+      return;
+    }
+    setIssueToDelete(issue);
+  };
+
+  const handleConfirmDeleteIssue = async () => {
+    if (!issueToDelete) return;
+    setDeletingIssueId(issueToDelete.id);
+    try {
+      await api.deleteIssue(issueToDelete.id);
+      message.success(`Issue #${issueToDelete.id} 已删除`);
+      setIssueToDelete(null);
+      refreshData(['issues']);
+    } catch (err) {
+      message.error(`删除失败: ${err.message || '网络异常'}`);
+    } finally {
+      setDeletingIssueId(null);
     }
   };
 
@@ -410,6 +437,7 @@ export default function Issues({
                       onOpenIssue={(issueId) => navigateTo('issues', issueId)}
                       onOpenLog={handleOpenIssueLog}
                       onOpenSession={handleOpenSession}
+                      onRequestDelete={handleRequestDeleteIssue}
                       onRetry={handleRetryIssue}
                       getRelativeTime={getRelativeTime}
                     />
@@ -553,6 +581,39 @@ export default function Issues({
         </div>
       )}
 
+      {issueToDelete && (
+        <IssueDeleteConfirmModal
+          issue={issueToDelete}
+          deleting={deletingIssueId === issueToDelete.id}
+          onCancel={() => setIssueToDelete(null)}
+          onConfirm={handleConfirmDeleteIssue}
+        />
+      )}
+
+    </div>
+  );
+}
+
+function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
+  return (
+    <div className="modal-overlay">
+      <div className="glass-card modal-content issue-delete-modal">
+        <div className="issue-delete-modal-header">
+          <Trash2 size={18} color="var(--error)" />
+          <h3>删除 Issue #{issue.id}</h3>
+        </div>
+        <p className="issue-delete-modal-copy">
+          将物理删除「{issue.title}」及其日志、运行记录和评论。此操作不可恢复。
+        </p>
+        <div className="issue-delete-modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={deleting}>
+            取消
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={deleting}>
+            {deleting ? '删除中...' : '确认删除'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

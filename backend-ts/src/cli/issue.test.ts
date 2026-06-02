@@ -114,6 +114,20 @@ describe("Bun issue CLI", () => {
     expect(JSON.parse(cancel.stdout)).toMatchObject({ status: "cancelled" });
   });
 
+  test("deletes issue with DELETE request and returns deletion summary", async () => {
+    const fetcher = fetchStub((request) => {
+      expect(request.method).toBe("DELETE");
+      expect(request.url).toBe("http://127.0.0.1:3008/api/issues/9");
+      return new Response(null, { status: 204 });
+    });
+
+    const deleted = await run(["issue", "delete", "--id", "9", "--json"], { fetcher });
+
+    expect(deleted.code).toBe(0);
+    expect(deleted.stderr).toBe("");
+    expect(JSON.parse(deleted.stdout)).toEqual({ deleted: true, id: 9 });
+  });
+
   test("rejects unknown issue subcommands without falling into serve mode", async () => {
     const { code, stderr } = await run(["issue", "missing"], { fetcher: fetchStub() });
 

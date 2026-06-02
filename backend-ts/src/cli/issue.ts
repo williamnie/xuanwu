@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { parseCommandArgs } from "./common.ts";
-import { getJSON, patchJSON, postJSON } from "./http.ts";
-import { formatIssue, formatIssueEvents } from "./output.ts";
+import { deleteJSON, getJSON, patchJSON, postJSON } from "./http.ts";
+import { formatIssue, formatIssueEvents, formatJSON } from "./output.ts";
 import type { EnvReader, Fetcher, IssueDTO, IssueEventDTO } from "./types.ts";
 
 const CREATE_FLAGS = [
@@ -38,6 +38,7 @@ export async function runIssue(args: string[], env: EnvReader, fetcher: Fetcher)
   if (command === "create") return await createIssue(args.slice(1), env, fetcher);
   if (command === "status") return await getIssue(args.slice(1), env, fetcher);
   if (command === "update") return await updateIssue(args.slice(1), env, fetcher);
+  if (command === "delete") return await deleteIssueCommand(args.slice(1), env, fetcher);
   if (command === "logs") return await getIssueLogs(args.slice(1), env, fetcher);
   if (command === "retry" || command === "cancel" || command === "enqueue") return await issueAction(command, args.slice(1), env, fetcher);
   if (REVIEW_ACTIONS.has(command)) return await verificationAction(command, args.slice(1), env, fetcher);
@@ -74,6 +75,14 @@ async function getIssueLogs(args: string[], env: EnvReader, fetcher: Fetcher): P
   const { common, values } = parseCommandArgs(args, [...ID_FLAGS], env);
   const events = await getJSON<IssueEventDTO[]>(fetcher, common, `/api/issues/${issueID(values.id)}/events`);
   return formatIssueEvents(events, common.json);
+}
+
+async function deleteIssueCommand(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
+  const { common, values } = parseCommandArgs(args, [...ID_FLAGS], env);
+  const id = issueID(values.id);
+  await deleteJSON(fetcher, common, `/api/issues/${id}`);
+  const summary = { deleted: true, id: Number(id) };
+  return common.json ? formatJSON(summary) : `deleted issue #${id}\n`;
 }
 
 async function issueAction(action: string, args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {

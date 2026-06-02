@@ -189,16 +189,19 @@ git push origin v0.1.0
   --status triage \
   --json
 
-# 查询状态 / 日志 / 重试 / 取消
+# 查询状态 / 日志 / 重试 / 取消 / 删除
 ./dist/codex-issue-runner issue status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42
 ./dist/codex-issue-runner issue logs --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42
 ./dist/codex-issue-runner issue update --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --status done --json
 ./dist/codex-issue-runner issue retry --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --json
 ./dist/codex-issue-runner issue cancel --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --json
+./dist/codex-issue-runner issue delete --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --id 42 --json
 
 # 查看 runner / DB / Codex command 只读健康摘要
 ./dist/codex-issue-runner system status --addr "${CODEX_RUNNER_ADDR:-127.0.0.1:3008}" --json
 ```
+
+`issue delete` 会物理删除 issue，并级联清理其日志、运行记录和评论；运行中的 `in_progress` issue 有保护，必须先 cancel 后才能 delete。
 
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
 当前 CLI 子命令不实现 `--help`，`--json` 输出是完整 JSON 文档且可能跨多行。

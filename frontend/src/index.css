@@ -1048,9 +1048,48 @@ input:checked + .slider:before {
   border-color: var(--primary-glow);
 }
 
+.kanban-card-action-btn.danger {
+  color: var(--error);
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 .kanban-card-action-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.issue-delete-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 460px;
+}
+
+.issue-delete-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.issue-delete-modal-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.issue-delete-modal-copy {
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-delete-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 /* Issue workflow/evidence panel */

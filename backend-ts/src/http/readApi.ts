@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
+import { deleteIssue, enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
@@ -80,6 +80,10 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
     const body = await parseObjectBody(request);
     return writeResponse(() => updateIssueAndKickLoop(context, issueID(request), body));
   });
+  router.delete("/api/issues/:id", (request) => writeResponse(() => {
+    deleteIssue(context.database, issueID(request));
+    return null;
+  }, 204));
   router.post("/api/issues/:id/comments", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssueComment(context.database, issueID(request), body), 201);

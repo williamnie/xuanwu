@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("Bun Issues page write smoke", () => {
-  test("covers create edit comment enqueue retry cancel API flow used by the frontend", async () => {
+  test("covers create edit comment enqueue retry cancel delete API flow used by the frontend", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -50,6 +50,8 @@ describe("Bun Issues page write smoke", () => {
       const cancelled = await requestJSON(router, `/api/issues/${id}/cancel`, "POST", {});
       const events = await requestJSON(router, `/api/issues/${id}/events`, "GET") as Array<Record<string, unknown>>;
       const issues = await requestJSON(router, "/api/issues?projectId=demo", "GET") as Array<Record<string, unknown>>;
+      const deleted = await requestNoContent(router, `/api/issues/${id}`, "DELETE");
+      const afterDelete = await requestJSON(router, "/api/issues?projectId=demo", "GET") as Array<Record<string, unknown>>;
 
       expect(edited).toMatchObject({ description: "Edited body", priority: 1, title: "Edited smoke" });
       expect(comment).toMatchObject({ issue_id: id, type: "issue.comment" });
@@ -65,11 +67,23 @@ describe("Bun Issues page write smoke", () => {
       ]);
       expect(issues).toHaveLength(1);
       expect(issues[0]).toMatchObject({ id, comment_count: 1, status: "cancelled" });
+      expect(deleted.status).toBe(204);
+      expect(afterDelete).toHaveLength(0);
     } finally {
       database.close();
     }
   });
 });
+
+async function requestNoContent(
+  router: ReturnType<typeof createDefaultRouter>,
+  path: string,
+  method: string
+): Promise<Response> {
+  const response = await router.handle(new Request(`${BASE_URL}${path}`, { method }));
+  expect(response.status).toBe(204);
+  return response;
+}
 
 async function requestJSON(
   router: ReturnType<typeof createDefaultRouter>,

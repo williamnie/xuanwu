@@ -271,6 +271,10 @@ export const api = {
     method: 'POST',
   }),
 
+  deleteIssue: (id) => request(`/api/issues/${id}`, {
+    method: 'DELETE',
+  }),
+
   reviewIssueVerification: (id, review) => request(`/api/issues/${id}/verification`, {
     method: 'POST',
     body: JSON.stringify(review),

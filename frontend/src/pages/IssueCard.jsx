@@ -5,6 +5,7 @@ import {
   Link2,
   RotateCw,
   Terminal,
+  Trash2,
 } from 'lucide-react';
 import { deriveTriageReadiness } from '../utils/issueRefinement';
 import {
@@ -28,6 +29,7 @@ export default function IssueCard({
   onOpenIssue,
   onOpenLog,
   onOpenSession,
+  onRequestDelete,
   onRetry,
   getRelativeTime,
 }) {
@@ -57,6 +59,7 @@ export default function IssueCard({
         retrying={retrying}
         onOpenLog={onOpenLog}
         onOpenSession={onOpenSession}
+        onRequestDelete={onRequestDelete}
         onRetry={onRetry}
       />
       <IssueCardFooter issue={issue} project={project} getRelativeTime={getRelativeTime} />
@@ -112,10 +115,11 @@ function RunMiniField({ label, value, mono = false }) {
   );
 }
 
-function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRetry }) {
+function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRequestDelete, onRetry }) {
   const showRetry = issue.status === 'failed';
   const showLog = issue.status === 'in_progress' || hasRuntime;
-  if (!showRetry && !showLog && !sessionRef) return null;
+  const canDelete = issue.status !== 'in_progress';
+  if (!showRetry && !showLog && !sessionRef && !canDelete) return null;
   return (
     <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
       {sessionRef && (
@@ -131,6 +135,11 @@ function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog,
       {showRetry && (
         <button type="button" className="kanban-card-action-btn retry" disabled={retrying} onClick={(event) => onRetry(event, issue.id)}>
           <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
+        </button>
+      )}
+      {canDelete && (
+        <button type="button" className="kanban-card-action-btn danger" onClick={(event) => onRequestDelete(event, issue)}>
+          <Trash2 size={12} /> Delete
         </button>
       )}
     </div>

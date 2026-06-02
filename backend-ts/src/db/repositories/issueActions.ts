@@ -29,6 +29,22 @@ export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_canc
   return mustGetIssue(db, issue.id);
 }
 
+export function deleteIssue(db: RunnerDatabase, id: number): void {
+  const issue = mustGetIssue(db, id);
+  if (issue.status === "in_progress" || hasOpenIssueRun(db, issue.id)) {
+    throw new Error("运行中的 issue 不能删除，请先取消执行");
+  }
+  const result = db.sqlite.run("delete from issues where id=?", [issue.id]);
+  if (result.changes === 0) throw new ProjectNotFoundError();
+}
+
+function hasOpenIssueRun(db: RunnerDatabase, issueID: number): boolean {
+  const row = db.sqlite.query<{ count: number }, [number]>(
+    "select count(*) as count from issue_runs where issue_id=? and ended_at=''"
+  ).get(issueID);
+  return (row?.count ?? 0) > 0;
+}
+
 function queueIssue(db: RunnerDatabase, issue: Issue): Issue {
   const timestamp = issueTimestamp();
   const write = db.transaction((record: Issue) => {

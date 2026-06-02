@@ -13,6 +13,10 @@ export async function patchJSON<T>(fetcher: Fetcher, flags: CommonFlags, path: s
   return requestJSON<T>(fetcher, flags, "PATCH", path, body);
 }
 
+export async function deleteJSON<T>(fetcher: Fetcher, flags: CommonFlags, path: string): Promise<T | null> {
+  return requestJSON<T>(fetcher, flags, "DELETE", path);
+}
+
 async function requestJSON<T>(
   fetcher: Fetcher,
   flags: CommonFlags,
@@ -29,6 +33,7 @@ async function requestJSON<T>(
     method
   });
   if (!response.ok) throw new Error(redactKnownToken(await responseError(response), flags.token));
+  if (response.status === 204) return null as T;
   return await response.json() as T;
 }
 
