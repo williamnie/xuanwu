@@ -64,7 +64,8 @@ describe("PI MCP registry and envelope tools", () => {
         authorization: {
           allowedMcpCapabilities: ["docs:resource:runbook"],
           authorizedActions: [{ action_type: "mcp.resource.read", project_id: project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: project.id }
         },
         project
       });
@@ -95,7 +96,8 @@ describe("PI MCP registry and envelope tools", () => {
         authorization: {
           allowedMcpCapabilities: ["docs:resource:runbook"],
           authorizedActions: [{ action_type: "issue.create", project_id: project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: project.id }
         },
         project
       });

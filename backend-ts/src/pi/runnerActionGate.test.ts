@@ -17,14 +17,16 @@ describe("PI runner action gate", () => {
       const denied = createPiRunnerActions(fixture.db, {
         authorization: {
           authorizedActions: [{ action_type: "issue.comment", issue_id: issueID + 1, project_id: fixture.project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
         },
         project: fixture.project
       }).commentIssue({ issue_id: issueID, body: "not covered" }) as { action_id: string; decision: string; status: string };
       const allowed = createPiRunnerActions(fixture.db, {
         authorization: {
           authorizedActions: [{ action_type: "issue.comment", issue_id: issueID, project_id: fixture.project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
         },
         project: fixture.project
       }).commentIssue({ issue_id: issueID, body: "covered" }) as { action_id: string; decision: string; status: string };
@@ -56,7 +58,8 @@ describe("PI runner action gate", () => {
       const actions = createPiRunnerActions(fixture.db, {
         authorization: {
           authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: fixture.project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
         },
         project: fixture.project
       });

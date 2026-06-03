@@ -130,9 +130,14 @@ function managerPolicy(projectID: string) {
       { action_type: "project.status", project_id: projectID },
       { action_type: "session.list", project_id: projectID },
       { action_type: "session.read_summary", project_id: projectID },
-      { action_type: "memory.search", project_id: projectID }
+      { action_type: "memory.search", project_id: projectID },
+      { action_type: "sdk.read", project_id: projectID },
+      { action_type: "sdk.grep", project_id: projectID },
+      { action_type: "sdk.find", project_id: projectID },
+      { action_type: "sdk.ls", project_id: projectID }
     ],
-    mode: "delegated" as const
+    mode: "delegated" as const,
+    scope: { project_id: projectID }
   };
 }
 

@@ -57,7 +57,8 @@ describe("PI skill intent tools", () => {
         authorization: {
           allowedSkillIntents: ["codex-issue-runner"],
           authorizedActions: [{ action_type: "issue.create", project_id: project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: project.id }
         },
         project
       });

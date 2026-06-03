@@ -48,18 +48,21 @@ describe("PI action engine risk classifier", () => {
     });
     expect(gatePiActionEnvelope({ ...confirmEnvelope, action_type: "issue.comment", requires_confirmation: false, risk_level: "low" }, {
       authorizedActions: [{ action_type: "issue.comment", issue_id: 7, project_id: "demo" }],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({ decision: "execute" });
     expect(gatePiActionEnvelope(confirmEnvelope, {
       authorizedActions: [{ action_type: "issue.enqueue", issue_id: 7, project_id: "demo" }],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({
       decision: "execute",
       reason: expect.stringContaining("authorization envelope")
     });
     expect(gatePiActionEnvelope({ ...confirmEnvelope, action_type: "issue.comment", requires_confirmation: false, risk_level: "low" }, {
       authorizedActions: [{ action_type: "issue.comment", issue_id: 8, project_id: "demo" }],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({
       decision: "deny",
       reason: expect.stringContaining("delegated")
@@ -79,12 +82,14 @@ describe("PI action engine risk classifier", () => {
     expect(gatePiActionEnvelope(envelope, {
       allowedMcpCapabilities: ["docs:resource:runbook"],
       authorizedActions: [{ action_type: "mcp.resource.read", project_id: "demo" }],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({ decision: "execute" });
     expect(gatePiActionEnvelope(envelope, {
       allowedMcpCapabilities: ["docs:resource:other"],
       authorizedActions: [{ action_type: "mcp.resource.read", project_id: "demo" }],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({
       decision: "deny",
       reason: expect.stringContaining("MCP")

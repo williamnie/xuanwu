@@ -1,4 +1,5 @@
 import type { PiGateDecisionValue, PiWorkMode } from "./policyTypes.ts";
+import { matchPiAuthorizationPolicyScope } from "./authorizationScope.ts";
 
 export type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
@@ -54,6 +55,8 @@ export type PiAuthorizationScope = {
   heartbeatId?: string;
   issue_id?: number | string;
   issueId?: number | string;
+  issue_ids?: Array<number | string> | string;
+  issueIds?: Array<number | string> | string;
   project_id?: string;
   projectId?: string;
 };
@@ -105,7 +108,8 @@ export function decidePiAuthorization(
   const windowDecision = authorizationWindowDecision(policy);
   if (windowDecision) return windowDecision;
   if (!allowedActionType(envelope, policy)) return { decision: "deny", reason: "action is not covered by allowed_actions" };
-  if (!scopeMatches(envelope, policy)) return { decision: "deny", reason: "action scope does not match authorization scope" };
+  const scopeDecision = matchPiAuthorizationPolicyScope(envelope, policy);
+  if (!scopeDecision.matched) return { decision: "deny", reason: scopeDecision.reason };
   if (!authorizedMcpCapabilities(envelope, policy.allowedMcpCapabilities)) {
     return { decision: "deny", reason: "MCP capability is not covered by authorization allowlist" };
   }
@@ -118,10 +122,10 @@ export function decidePiAuthorization(
     if (!delegatedActionCovered(envelope, policy)) {
       return { decision: "deny", reason: "delegated action is not covered by authorization envelope" };
     }
-    return { decision: "execute", reason: "delegated action is covered by authorization envelope" };
+    return { decision: "execute", reason: withScopeReason("delegated action is covered by authorization envelope", scopeDecision.reason) };
   }
   if (riskGate === "confirm" || riskGate === "high") return { decision: "ask", reason: "risk requires user confirmation" };
-  return { decision: "execute", reason: "low-risk action is allowed by gate" };
+  return { decision: "execute", reason: withScopeReason("low-risk action is allowed by gate", scopeDecision.reason) };
 }
 
 function authorizedSkillIntents(envelope: PiActionEnvelope, allowed: string[] | undefined): boolean {
@@ -187,25 +191,6 @@ function authorizationWindowDecision(policy: PiGatePolicy): PiGateDecision | und
   return undefined;
 }
 
-function scopeMatches(envelope: PiActionEnvelope, policy: PiGatePolicy): boolean {
-  const scopes = scopeList(policy);
-  return scopes.length === 0 || scopes.some((scope) => scopeMatchesOne(envelope, scope));
-}
-
-function scopeList(policy: PiGatePolicy): PiAuthorizationScope[] {
-  if (Array.isArray(policy.scopes)) return policy.scopes;
-  if (Array.isArray(policy.scope)) return policy.scope;
-  return policy.scope ? [policy.scope] : [];
-}
-
-function scopeMatchesOne(envelope: PiActionEnvelope, scope: PiAuthorizationScope): boolean {
-  return optionalMatch(scope.project_id ?? scope.projectId, envelope.project_id ?? "") &&
-    optionalNumberOrStringMatch(scope.issue_id ?? scope.issueId, envelope.issue_id ?? 0) &&
-    optionalMatch(scope.goal_id ?? scope.goalId, envelope.goal_id ?? "") &&
-    optionalMatch(scope.delegation_id ?? scope.delegationId, envelope.delegation_id ?? "") &&
-    optionalMatch(scope.heartbeat_id ?? scope.heartbeatId, envelope.heartbeat_id ?? "");
-}
-
 function delegatedActionCovered(envelope: PiActionEnvelope, policy: PiGatePolicy): boolean {
   const authorized = policy.authorizedActions ?? [];
   if (authorized.length > 0) return authorizedByEnvelope(envelope, authorized);
@@ -249,12 +234,6 @@ function optionalNumberMatch(expected: number | undefined, actual: number): bool
   return expected === undefined || expected === 0 || expected === actual;
 }
 
-function optionalNumberOrStringMatch(expected: number | string | undefined, actual: number): boolean {
-  if (expected === undefined || expected === "" || expected === 0) return true;
-  const numeric = typeof expected === "number" ? expected : Number.parseInt(cleanString(expected), 10);
-  return Number.isFinite(numeric) && numeric === actual;
-}
-
 function timeMs(value: unknown): number | undefined {
   if (value instanceof Date) return value.getTime();
   const text = cleanString(value);
@@ -283,4 +262,9 @@ function cleanID(value: unknown): string {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function withScopeReason(reason: string, scopeReason: string): string {
+  const scope = cleanString(scopeReason);
+  return scope === "" ? reason : `${reason}; ${scope}`;
 }

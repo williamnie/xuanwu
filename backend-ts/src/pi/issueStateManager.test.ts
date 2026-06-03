@@ -192,7 +192,8 @@ describe("Issue State Manager PI actions", () => {
       const result = createPiRunnerActions(fixture.db, {
         authorization: {
           authorizedActions: [{ action_type: "issue.state_repair", issue_id: issueID, project_id: fixture.project.id }],
-          mode: "delegated"
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
         },
         project: fixture.project
       }).createIssueStateRepairProposal({ issue_id: issueID }) as { decision: string; status: string };

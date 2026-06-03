@@ -39,19 +39,23 @@ describe("PI authorization decision", () => {
   test("delegated mode executes only actions covered by allowed_actions", () => {
     expect(decidePiAuthorization(BASE, {
       allowed_actions: ["issue.comment"],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({ decision: "execute" });
     expect(decidePiAuthorization(BASE, {
       allowed_actions: ["issue.read"],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({ decision: "deny" });
     expect(decidePiAuthorization(BASE, {
       allowed_actions: ["issue.comment"],
       authorizedActions: [{ action_type: "issue.comment", issue_id: 8, project_id: "demo" }],
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({ decision: "deny" });
     expect(decidePiAuthorization({ ...BASE, action_type: "sdk.read" }, {
-      mode: "delegated"
+      mode: "delegated",
+      scope: { project_id: "demo" }
     })).toMatchObject({ decision: "deny" });
   });
 
@@ -90,6 +94,61 @@ describe("PI authorization decision", () => {
       mode: "delegated",
       scope: { project_id: "other" }
     })).toMatchObject({ decision: "deny" });
+  });
+
+  test("matches issue/project/goal scopes and explains scope decisions", () => {
+    expect(decidePiAuthorization(BASE, {
+      allowed_actions: ["issue.comment"],
+      mode: "delegated"
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("authorization scope is empty")
+    });
+
+    expect(decidePiAuthorization(BASE, {
+      allowed_actions: ["issue.comment"],
+      mode: "delegated",
+      scope: { issue_ids: [7, 8], project_id: "demo" }
+    })).toMatchObject({
+      decision: "execute",
+      reason: expect.stringContaining("scope matched issue 7")
+    });
+
+    expect(decidePiAuthorization({ ...BASE, action_type: "project.status", issue_id: 0 }, {
+      allowed_actions: ["project.status"],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "execute",
+      reason: expect.stringContaining("scope matched project demo")
+    });
+
+    expect(decidePiAuthorization({ ...BASE, project_id: "other" }, {
+      allowed_actions: ["issue.comment"],
+      mode: "delegated",
+      scope: { issue_ids: [7], project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("project scope demo does not match action project other")
+    });
+
+    expect(decidePiAuthorization(BASE, {
+      allowed_actions: ["issue.comment"],
+      mode: "delegated",
+      scope: {}
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("authorization scope is empty")
+    });
+
+    expect(decidePiAuthorization(BASE, {
+      allowed_actions: ["issue.comment"],
+      mode: "delegated",
+      scope: { goal_id: "night-run", issue_ids: [7, 8], project_id: "demo" }
+    })).toMatchObject({
+      decision: "execute",
+      reason: expect.stringContaining("scope matched goal night-run issue 7")
+    });
   });
 });
 
