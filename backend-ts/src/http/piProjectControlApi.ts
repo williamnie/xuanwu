@@ -208,6 +208,7 @@ function managerCycleAuthorization(project: Project): PiGatePolicy {
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed ?? [],
     allowedSkillIntents: parseSkillPolicy(project.default_skill_policy).allowed ?? [],
     authorizedActions: [
+      { action_type: "agent.profile_recommend", project_id: projectID },
       { action_type: "issue.list", project_id: projectID },
       { action_type: "issue.read", project_id: projectID },
       { action_type: "issue.state_diagnose", project_id: projectID },
@@ -243,11 +244,13 @@ function managerCyclePrompt(
     JSON.stringify(snapshot, null, 2),
     "Issue state diagnostics:",
     JSON.stringify(issueState, null, 2),
+    "Agent roles: PI manager plans/authorizes/schedules; executor executes issues; verifier checks completion evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
     "Project default skill policy:",
     JSON.stringify(parseSkillPolicy(project.default_skill_policy), null, 2),
     "Project default MCP policy:",
     JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
-    "Create PI action proposals for concrete next steps; execute only safe read/comment tools.",
+    "Use role workflow tools for executor, verifier, reviewer, reporter proposals when needed; all role actions must go through action gate and audit.",
+    "Create PI action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."
   ].join("\n");

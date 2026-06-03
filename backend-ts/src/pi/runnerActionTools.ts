@@ -4,6 +4,13 @@ import { createPiMcpActionTools, PI_MCP_TOOL_NAMES } from "./mcpToolDefinitions.
 import type { PiRunnerActionLayer } from "./runnerActions.ts";
 
 export const PI_RUNNER_ACTION_TOOL_NAMES = [
+  "agent_profile_recommend",
+  "executor_profile_assign_proposal",
+  "executor_issue_create_proposal",
+  "verification_workflow_request",
+  "review_workflow_request",
+  "report_workflow_request",
+  "needs_user_escalation",
   "issue_list",
   "issue_read",
   "issue_create_proposal",
@@ -36,12 +43,64 @@ const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, p
 
 export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
+    ...agentOrchestrationTools(actions),
     ...issueActionTools(actions),
     ...projectActionTools(actions),
     ...sessionActionTools(actions),
     ...skillActionTools(actions),
     ...createPiMcpActionTools(actions)
   ];
+}
+
+function agentOrchestrationTools(actions: PiRunnerActionLayer): ToolDefinition[] {
+  return [
+    actionTool("agent_profile_recommend", "Agent Profile Recommend",
+      "Recommend executor provider/profile/skill intent strategy for an issue or project.",
+      Type.Object({
+        agent_profile_id: optionalString,
+        issue_id: Type.Optional(positiveID),
+        project_id: optionalString,
+        role: optionalString
+      }, objectOptions), actions.recommendExecutorProfile),
+    actionTool("executor_profile_assign_proposal", "Executor Profile Assign Proposal",
+      "Create a pending proposal to assign or recommend an executor profile for an issue.",
+      Type.Object({ agent_profile_id: optionalString, issue_id: positiveID, rationale: optionalString }, objectOptions),
+      actions.assignExecutorProfileProposal),
+    workflowTool("executor_issue_create_proposal", "Executor Issue Create Proposal", actions.createExecutorIssueProposal),
+    workflowTool("verification_workflow_request", "Verifier Workflow Request", actions.createVerificationWorkflow),
+    workflowTool("review_workflow_request", "Reviewer Workflow Request", actions.createReviewWorkflow),
+    workflowTool("report_workflow_request", "Reporter Workflow Request", actions.createReportWorkflow),
+    actionTool("needs_user_escalation", "Needs User Escalation",
+      "Create a pending needs_user escalation comment proposal for an issue.",
+      Type.Object({ issue_id: positiveID, reason: requiredText, requested_action: optionalString }, objectOptions),
+      actions.escalateNeedsUser)
+  ];
+}
+
+function workflowTool(
+  name: ActionToolName,
+  label: string,
+  executeAction: (params: Static<ReturnType<typeof workflowParams>>) => unknown
+): ToolDefinition {
+  const parameters = workflowParams();
+  return actionTool(name, label,
+    "Create a pending role-specific agent workflow issue linked to a parent issue or project.",
+    parameters, executeAction as ActionExecutor<typeof parameters>);
+}
+
+function workflowParams() {
+  return Type.Object({
+    agent_profile_id: optionalString,
+    instructions: optionalString,
+    project_id: optionalString,
+    rationale: optionalString,
+    recommended_skill_intents: skillIntentList,
+    report_type: optionalString,
+    required_skill_intents: skillIntentList,
+    target_issue_id: Type.Optional(positiveID),
+    title: optionalString,
+    verification_plan: optionalString
+  }, objectOptions);
 }
 
 function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {

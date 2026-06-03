@@ -16,12 +16,19 @@ describe("PI runner action tools", () => {
   test("defines schemas and delegates tool calls to the action layer", async () => {
     const calls: Array<[string, unknown]> = [];
     const tools = createPiRunnerActionTools(fakeActions(calls));
+    const recommendProfile = toolByName(tools, "agent_profile_recommend");
+    const verifier = toolByName(tools, "verification_workflow_request");
     const issueRead = toolByName(tools, "issue_read");
     const diagnose = toolByName(tools, "issue_state_diagnose");
     const steer = toolByName(tools, "session_steer_proposal");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
+    expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
+      target_issue_id: 1,
+      instructions: "verify"
+    });
     expect(validateArgs(diagnose, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(steer, { session_key: "codex:thread-1", prompt: "adjust" })).toEqual({
       session_key: "codex:thread-1",
@@ -31,11 +38,15 @@ describe("PI runner action tools", () => {
     expect(() => validateArgs(issueRead, { id: 1, unexpected: true })).toThrow(/Validation failed/);
     expect(() => validateArgs(steer, { session_key: "codex:thread-1", prompt: " " })).toThrow(/Validation failed/);
 
+    await recommendProfile.execute("tool-profile", { issue_id: 1, role: "executor" }, undefined, undefined, {} as never);
+    await verifier.execute("tool-verifier", { target_issue_id: 1, instructions: "verify" }, undefined, undefined, {} as never);
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await steer.execute("tool-2", { session_key: "codex:thread-1", prompt: "adjust" }, undefined, undefined, {} as never);
 
     expect(calls).toEqual([
+      ["recommendExecutorProfile", { issue_id: 1, role: "executor" }],
+      ["createVerificationWorkflow", { target_issue_id: 1, instructions: "verify" }],
       ["readIssue", { id: 7 }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["createSessionSteerProposal", { session_key: "codex:thread-1", prompt: "adjust" }]
@@ -217,6 +228,68 @@ describe("PI runner action tools", () => {
       await fixture.close();
     }
   });
+
+  test("orchestrates role workflows through gated PI actions and issue linkage", async () => {
+    const fixture = await openFixture();
+    try {
+      insertAgentProfile(fixture.db, {
+        id: "verifier-codex",
+        name: "Verifier Codex",
+        skillIntents: "[\"verification-before-completion\"]"
+      });
+      insertAgentProfile(fixture.db, { id: "reporter-codex", name: "Reporter Codex", skillIntents: "[\"codex-issue-runner\"]" });
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "pending_verification", title: "Ready" });
+
+      const recommendation = actions.recommendExecutorProfile({ issue_id: issueID, role: "verifier" });
+      const verifier = actions.createVerificationWorkflow({
+        target_issue_id: issueID,
+        instructions: "Check tests and evidence",
+        verification_plan: "bun test",
+        rationale: "ready for verifier"
+      }) as { action_id: string };
+      const reporter = actions.createReportWorkflow({ report_type: "nightly", title: "Nightly report" }) as { action_id: string };
+      const reviewer = actions.createReviewWorkflow({ target_issue_id: issueID, instructions: "review patch" }) as { action_id: string };
+      const escalation = actions.escalateNeedsUser({
+        issue_id: issueID,
+        reason: "missing production smoke",
+        requested_action: "provide smoke window"
+      }) as { action_id: string };
+
+      expect(recommendation).toMatchObject({ agent_role: "verifier", profile_id: "verifier-codex" });
+      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "agent.profile_recommend",
+        gate_decision: "execute",
+        project_id: fixture.project.id
+      }));
+      expect(getPiAction(fixture.db, verifier.action_id)).toMatchObject({
+        action_type: "agent.workflow_request",
+        issue_id: issueID,
+        status: "pending"
+      });
+      expect(JSON.parse(getPiAction(fixture.db, verifier.action_id)?.payload_json ?? "{}")).toMatchObject({
+        agent_profile_id: "verifier-codex",
+        source_excerpt: expect.stringContaining(`parent_issue_id=${issueID}`),
+        workflow_snapshot_json: expect.stringContaining("\"agent_role\":\"verifier\"")
+      });
+      expect(JSON.parse(getPiAction(fixture.db, reporter.action_id)?.payload_json ?? "{}")).toMatchObject({
+        title: "Nightly report",
+        workflow_snapshot_json: expect.stringContaining("\"agent_role\":\"reporter\"")
+      });
+      expect(JSON.parse(getPiAction(fixture.db, reviewer.action_id)?.payload_json ?? "{}")).toMatchObject({
+        title: expect.stringContaining(`Reviewer: #${issueID}`),
+        workflow_snapshot_json: expect.stringContaining("\"agent_role\":\"reviewer\"")
+      });
+      expect(getPiAction(fixture.db, escalation.action_id)).toMatchObject({
+        action_type: "needs_user.escalate",
+        issue_id: issueID,
+        status: "pending"
+      });
+      expect(getIssue(fixture.db, issueID)?.comment_count).toBe(0);
+    } finally {
+      await fixture.close();
+    }
+  });
 });
 function projectIDs(result: unknown): string[] {
   return (result as { items: Project[] }).items.map((project) => project.id);
@@ -231,9 +304,15 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
   };
   return {
     commentIssue: record("commentIssue"),
+    assignExecutorProfileProposal: record("assignExecutorProfileProposal"),
+    createExecutorIssueProposal: record("createExecutorIssueProposal"),
     createIssueProposal: record("createIssueProposal"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
+    createReportWorkflow: record("createReportWorkflow"),
+    createReviewWorkflow: record("createReviewWorkflow"),
+    createVerificationWorkflow: record("createVerificationWorkflow"),
     diagnoseIssueState: record("diagnoseIssueState"),
+    escalateNeedsUser: record("escalateNeedsUser"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
     createUpdateRefinementProposal: record("createUpdateRefinementProposal"),
     callMcpTool: record("callMcpTool"),
@@ -250,10 +329,26 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     readMcpResource: record("readMcpResource"),
     readSessionSummary: record("readSessionSummary"),
     readSkill: record("readSkill"),
+    recommendExecutorProfile: record("recommendExecutorProfile"),
     recommendMcpRequirements: record("recommendMcpRequirements"),
     recommendSkills: record("recommendSkills"),
     auditSkillIntents: record("auditSkillIntents")
   };
+}
+
+function insertAgentProfile(
+  db: RunnerDatabase,
+  input: { id: string; name: string; skillIntents: string }
+): void {
+  db.sqlite.run(
+    `insert into agent_profiles (id, name, provider, model, reasoning_effort,
+      approval_policy, sandbox, skill_intents_json, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id, input.name, "codex", "gpt-test", "high", "never",
+      "workspace-write", input.skillIntents, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+    ]
+  );
 }
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-action-tools-"));

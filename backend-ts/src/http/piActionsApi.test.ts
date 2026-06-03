@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getIssue } from "../db/repositories/issues.ts";
+import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { createPiAction, getPiAction, listPiActions, updatePiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
@@ -195,6 +195,58 @@ describe("Bun PI actions API", () => {
     }
   });
 
+  test("approve executes role workflow and needs_user escalation actions", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id, { status: "pending_verification" });
+      insertAgentProfile(database, "executor-codex");
+      const actions = createPiRunnerActions(database, { project });
+      const assign = actions.assignExecutorProfileProposal({
+        agent_profile_id: "executor-codex",
+        issue_id: issueID,
+        rationale: "use executor profile"
+      }) as { action_id: string };
+      const verify = actions.createVerificationWorkflow({
+        target_issue_id: issueID,
+        instructions: "verify evidence",
+        verification_plan: "bun test"
+      }) as { action_id: string };
+      const escalation = actions.escalateNeedsUser({
+        issue_id: issueID,
+        reason: "missing approval",
+        requested_action: "confirm deploy window"
+      }) as { action_id: string };
+      const router = createDefaultRouter({ database });
+
+      const assigned = await postAction(router, assign.action_id, "approve");
+      const verified = await postAction(router, verify.action_id, "approve");
+      const escalated = await postAction(router, escalation.action_id, "approve");
+      const created = listIssues(database, { projectId: "demo" }).find((issue) => issue.id !== issueID);
+
+      expect(assigned.status).toBe(200);
+      expect(verified.status).toBe(200);
+      expect(escalated.status).toBe(200);
+      expect(await verified.json()).toMatchObject({ id: verify.action_id, status: "completed" });
+      expect(await escalated.json()).toMatchObject({ id: escalation.action_id, status: "completed" });
+      expect(getIssue(database, issueID)).toMatchObject({ agent_profile_id: "executor-codex" });
+      expect(created).toMatchObject({
+        agent_profile_id: "",
+        status: "triage",
+        title: expect.stringContaining(`Verifier: #${issueID}`)
+      });
+      expect(JSON.parse(created?.workflow_snapshot_json ?? "{}")).toMatchObject({
+        agent_role: "verifier",
+        parent_issue_id: issueID
+      });
+      expect(listEvents(database).map((event) => event.type)).toEqual(["issue.created", "issue.comment"]);
+      expect(listEvents(database)[1]?.payload).toContain("needs_user");
+    } finally {
+      database.close();
+    }
+  });
+
 
 
 });
@@ -209,6 +261,14 @@ function postAction(
     body: "{}",
     headers: { "content-type": "application/json" }
   }));
+}
+
+function insertAgentProfile(db: RunnerDatabase, id: string): void {
+  db.sqlite.run(
+    `insert into agent_profiles (id, name, provider, model, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [id, id, "codex", "gpt-test", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

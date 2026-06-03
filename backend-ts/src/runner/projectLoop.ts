@@ -11,6 +11,7 @@ import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
+import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
@@ -25,35 +26,50 @@ export type ProjectLoopResult =
 
 export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<ProjectLoopResult> {
   const project = mustGetProject(input.database, input.projectId);
-  const provider = projectProvider(project, input.providers);
   const issue = claimNextIssue(input.database, project.id);
   if (!issue) return { claimed: false };
-  const run = await runClaimedIssue(input, project, provider, issue);
+  const run = await runClaimedIssue(input, project, issue);
   return { claimed: true, issue, run };
 }
 
 async function runClaimedIssue(
   input: ProjectLoopInput,
   project: Project,
-  provider: ExecutorProvider,
   issue: Issue
 ): Promise<ProviderRunResult> {
+  const selection = resolveExecutorSelection(input.database, project, issue);
+  const provider = selectedProvider(project, selection, input.providers);
   try {
     return await runIssueWithProvider(provider, {
+      agentProfileId: selection.profile_id,
+      agentRole: selection.agent_role,
+      capabilitySummary: provider.capabilities.join(","),
       database: input.database,
       issueId: issue.id,
       projectId: project.id,
       cwd: project.cwd,
       prompt: buildIssuePrompt(project, issue),
-      model: project.model,
-      approvalPolicy: project.approval_policy,
-      sandbox: project.sandbox
+      model: selection.model || project.model,
+      reasoningEffort: selection.reasoning_effort,
+      approvalPolicy: selection.approval_policy || project.approval_policy,
+      sandbox: selection.sandbox || project.sandbox,
+      selectionReason: selection.reason
     });
   } catch (error) {
     if (issueAlreadyClosed(input.database, issue.id)) return { runId: "interrupted" };
     failIssueExecution(input.database, issue.id, error, provider.id);
     return { runId: "failed" };
   }
+}
+
+function selectedProvider(
+  project: Project,
+  selection: AgentRecommendation,
+  providers: ProjectLoopInput["providers"]
+): ExecutorProvider {
+  const preferred = isExecutorProviderId(selection.provider) ? providers[selection.provider] : undefined;
+  if (preferred) return preferred;
+  return projectProvider(project, providers);
 }
 
 function issueAlreadyClosed(db: RunnerDatabase, issueID: number): boolean {

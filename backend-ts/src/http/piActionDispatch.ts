@@ -29,6 +29,15 @@ export async function dispatchPiAction(
       return updateIssue(context.database, positivePayloadID(payload, "issue_id"), objectPayload(payload.patch));
     case "issue.state_repair":
       return applyIssueStateRepair(context.database, payload);
+    case "agent.executor_assign":
+      return updateIssue(context.database, positivePayloadID(payload, "issue_id"), objectPayload(payload.patch));
+    case "agent.workflow_request":
+      return createIssue(context.database, payload);
+    case "needs_user.escalate":
+      return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), {
+        author: "agent",
+        body: cleanString(payload.body)
+      });
     case "session.steer":
       return await steerSession(context, payload);
     default:

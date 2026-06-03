@@ -32,13 +32,17 @@ export type PiGatePolicy = {
 export type PiGateDecision = { decision: PiActionDecision; reason: string };
 
 const SAFE_ACTIONS = new Set([
+  "agent.profile_recommend",
   "issue.comment", "issue.list", "issue.read", "issue.state_diagnose", "project.list", "project.status",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read"
 ]);
-const CONFIRM_ACTIONS = new Set(["issue.create", "issue.enqueue", "issue.update_refinement", "issue.state_repair"]);
+const CONFIRM_ACTIONS = new Set([
+  "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue",
+  "issue.update_refinement", "issue.state_repair", "needs_user.escalate"
+]);
 const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);
 
 export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {

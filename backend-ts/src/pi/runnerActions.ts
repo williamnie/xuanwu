@@ -16,8 +16,9 @@ import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import { serializeRefinement, type RefinementField } from "./runnerActionRefinement.ts";
 import { observeSessionProgress } from "./sessionObserver.ts";
 import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStateDiagnosisInput, type IssueStateRepairProposalInput } from "./runnerIssueStateActions.ts";
+import { createPiAgentOrchestrationActions, type PiAgentOrchestrationActionLayer } from "./agentOrchestrationActions.ts";
 
-export type PiRunnerActionLayer = PiMcpActionLayer & {
+export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
   createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
@@ -86,6 +87,7 @@ export function createPiRunnerActions(
   context: PiRunnerActionContext = {}
 ): PiRunnerActionLayer {
   return {
+    ...createPiAgentOrchestrationActions(db, context),
     ...createPiMcpActions(db, { ...context, projectID: context.project?.id }),
     commentIssue: (input) => executeSafePiAction(db, context, {
       actionType: "issue.comment",

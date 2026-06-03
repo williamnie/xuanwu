@@ -164,6 +164,7 @@ function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: 
 function piSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   return [
     "You are PI, an independent project manager agent for codex-issue-runner.",
+    "Role contract: PI is manager/orchestrator; executor executes issues; verifier validates evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     "Skills Registry metadata:",

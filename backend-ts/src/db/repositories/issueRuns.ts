@@ -3,7 +3,14 @@ import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 
 export type IssueRunRuntimeInput = {
-  issue_run_id?: string; metadata?: unknown; provider?: string; provider_session_id?: string; provider_turn_id?: string;
+  agent_profile_id?: string;
+  capability_summary?: string;
+  issue_run_id?: string;
+  metadata?: unknown;
+  provider?: string;
+  provider_session_id?: string;
+  provider_turn_id?: string;
+  selection_reason?: string;
 };
 
 type RuntimeTarget = { args: Array<number | string>; sql: string };
@@ -48,10 +55,17 @@ function updateTargetIssueRunRuntime(db: RunnerDatabase, issueID: number, input:
     provider_turn_id=case when ?<>'' then ? else provider_turn_id end,
     codex_thread_id=case when ?='codex' and ?<>'' then ? when ?<>'codex' then '' else codex_thread_id end,
     codex_turn_id=case when ?='codex' and ?<>'' then ? when ?<>'codex' then '' else codex_turn_id end,
+    agent_profile_id=case when ?<>'' then ? else agent_profile_id end,
+    capability_summary=case when ?<>'' then ? else capability_summary end,
+    selection_reason=case when ?<>'' then ? else selection_reason end,
     runtime_metadata_json=case when ?<>'{}' then ? else runtime_metadata_json end
     where ${target.sql}`,
     [provider, sessionID, sessionID, turnID, turnID, provider, sessionID, sessionID,
-      provider, provider, turnID, turnID, provider, metadata, metadata, ...target.args]);
+      provider, provider, turnID, turnID, provider,
+      cleanString(input.agent_profile_id), cleanString(input.agent_profile_id),
+      cleanString(input.capability_summary), cleanString(input.capability_summary),
+      cleanString(input.selection_reason), cleanString(input.selection_reason),
+      metadata, metadata, ...target.args]);
 }
 
 function runtimeTarget(issueID: number, input: IssueRunRuntimeInput): RuntimeTarget {

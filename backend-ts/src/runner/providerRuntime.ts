@@ -5,11 +5,15 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
+  agentProfileId?: string;
+  agentRole?: string;
+  capabilitySummary?: string;
   database?: RunnerDatabase;
   onLog?: ProviderRunInput["onEvent"];
   onRunComplete?: (output: ProviderRuntimeComplete) => void;
   onRunStart?: (input: ProviderRuntimeStart) => void;
   onRuntimeEvent?: ProviderRunInput["onEvent"];
+  selectionReason?: string;
 };
 
 export type ProviderRuntimeStart = {
@@ -103,14 +107,18 @@ type PersistRuntimeInput = {
 
 function persistRuntime(args: PersistRuntimeInput): void {
   updateIssueRuntime(args.db, args.input.issueId, {
+    agent_profile_id: args.input.agentProfileId,
+    capability_summary: args.input.capabilitySummary,
     issue_run_id: args.issueRunId,
+    metadata: args.metadata,
     provider: args.provider,
     provider_session_id: args.session.sessionId,
     provider_turn_id: args.session.turnId,
-    metadata: args.metadata
+    selection_reason: args.input.selectionReason
   });
   if (args.session.sessionId === "") return;
   upsertAgentSession(args.db, {
+    agent_role: args.input.agentRole,
     provider: args.provider,
     provider_session_id: args.session.sessionId,
     project_id: args.input.projectId,

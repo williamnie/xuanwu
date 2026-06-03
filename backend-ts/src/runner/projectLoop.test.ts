@@ -165,6 +165,44 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("uses assigned executor profile for provider options and session linkage", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      insertAgentProfile(db, {
+        id: "executor-fake",
+        model: "profile-model",
+        provider: provider.id
+      });
+      const issueId = insertIssue(db, {
+        agentProfileId: "executor-fake",
+        projectId: "demo",
+        title: "profile selected"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      expect(provider.inputs[0]).toMatchObject({
+        approvalPolicy: "on-request",
+        model: "profile-model",
+        reasoningEffort: "high",
+        sandbox: "danger-full-access"
+      });
+      expect(latestRun(db, issueId)).toMatchObject({
+        agent_profile_id: "executor-fake",
+        capability_summary: "issue_execution",
+        selection_reason: "issue assigned agent_profile_id"
+      });
+      expect(getAgentSession(db, `fake-execution-only:fake-session-${issueId}`)).toMatchObject({
+        agent_role: "executor",
+        issue_id: issueId
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("marks provider failures failed and closes the open run with redacted error", async () => {
     const db = await openFixtureDatabase();
     const provider = new FailingExecutionProvider();
@@ -196,6 +234,7 @@ describe("Bun project loop claim execution", () => {
 type ProjectFixture = { autoRun?: number; id: string; provider: string };
 
 type IssueFixture = {
+  agentProfileId?: string;
   createdAt?: string;
   priority?: number;
   projectId: string;
@@ -217,13 +256,32 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const priority = issue.priority ?? 0;
   const createdAt = issue.createdAt ?? "2026-01-01T00:00:00Z";
   db.sqlite.run(
-    `insert into issues (project_id, title, status, priority, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [issue.projectId, issue.title, status, priority, createdAt, createdAt]
+    `insert into issues (project_id, title, status, priority, agent_profile_id, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [issue.projectId, issue.title, status, priority, issue.agentProfileId ?? "", createdAt, createdAt]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function insertAgentProfile(db: RunnerDatabase, input: { id: string; model: string; provider: string }): void {
+  db.sqlite.run(
+    `insert into agent_profiles (id, name, provider, model, reasoning_effort,
+      approval_policy, sandbox, skill_intents_json, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.id, input.id, input.provider, input.model, "high", "on-request",
+      "danger-full-access", "[]", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+    ]
+  );
+}
+
+function latestRun(db: RunnerDatabase, issueId: number): Record<string, unknown> | null {
+  return db.sqlite.query<Record<string, unknown>, [number]>(
+    `select agent_profile_id, capability_summary, selection_reason
+     from issue_runs where issue_id=? order by attempt desc limit 1`
+  ).get(issueId);
 }
 
 function insertOpenRun(db: RunnerDatabase, issueID: number): void {
