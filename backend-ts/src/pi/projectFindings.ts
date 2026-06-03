@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { defaultFindingCategory, defaultFindingReason, evaluateProjectFailedRetryPolicy, type FailedRetryDecision } from "./failedRetryPolicy.ts";
 import { matchFailurePattern } from "./failurePatterns.ts";
 
 export type ProjectFindingCategory = "blocked" | "needs_user" | "transient" | "verification_needed";
@@ -31,17 +32,14 @@ export type ProjectFinding = {
 
 export type ProjectFindingScanOptions = { now?: Date; staleAfterMs?: number };
 
-type IssueFindingRow = {
-  auto_retry_next_at: unknown; auto_retry_reason: unknown; codex_thread_id: unknown;
-  error: unknown; id: unknown; project_id: unknown; status: unknown; title: unknown; updated_at: unknown;
-};
+type IssueFindingRow = { attempt_count: unknown; auto_retry_next_at: unknown; auto_retry_reason: unknown;
+  codex_thread_id: unknown; error: unknown; id: unknown; project_id: unknown; status: unknown; title: unknown; updated_at: unknown };
 type StaleIssueRow = IssueFindingRow & {
   run_activity_at: unknown; session_activity_at: unknown; session_key: unknown; session_status: unknown;
 };
-type HoldFindingRow = {
-  hold_since: unknown; last_check_error: unknown; message: unknown; project_id: unknown;
-  reason: unknown; updated_at: unknown;
-};
+type HoldFindingRow = { hold_since: unknown; last_check_error: unknown; message: unknown;
+  project_id: unknown; reason: unknown; updated_at: unknown };
+type IssueFindingContext = { now: Date };
 
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 const PROJECT_HOLD_ISSUE_ID = 0;
@@ -55,19 +53,20 @@ export function scanProjectFindings(
 ): ProjectFinding[] {
   const id = projectID.trim();
   if (id === "") throw new Error("project id is required");
-  return [...issueFindings(db, id), ...staleFindings(db, id, options), ...holdFindings(db, id)];
+  return [...issueFindings(db, id, options), ...staleFindings(db, id, options), ...holdFindings(db, id)];
 }
 
-function issueFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
+function issueFindings(db: RunnerDatabase, projectID: string, options: ProjectFindingScanOptions): ProjectFinding[] {
+  const context = { now: options.now ?? new Date() };
   return db.sqlite.query<IssueFindingRow, [string]>(`
-    select id, project_id, title, status, error, codex_thread_id, auto_retry_next_at,
+    select id, project_id, title, status, error, attempt_count, codex_thread_id, auto_retry_next_at,
       auto_retry_reason, updated_at from issues
     where project_id=? and (
       status in ('failed', 'pending_verification')
       or (status='todo' and auto_retry_next_at <> '')
     )
     order by case status when 'failed' then 0 else 1 end, updated_at asc, id asc
-  `).all(projectID).map((row) => mapIssueFinding(db, projectID, row));
+  `).all(projectID).map((row) => mapIssueFinding(db, projectID, row, context));
 }
 
 function holdFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
@@ -78,17 +77,23 @@ function holdFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
   `).all(projectID).map(mapHoldFinding);
 }
 
-function mapIssueFinding(db: RunnerDatabase, projectID: string, row: IssueFindingRow): ProjectFinding {
+function mapIssueFinding(
+  db: RunnerDatabase,
+  projectID: string,
+  row: IssueFindingRow,
+  context: IssueFindingContext
+): ProjectFinding {
   const status = optionalString(row.status, "unknown");
   const issueID = integerValue(row.id);
   const rawDetail = optionalString(row.error) || optionalString(row.title);
   const detail = redactFindingText(rawDetail);
   const pattern = matchFailurePattern(db, projectID, rawDetail);
-  const category = pattern?.category ?? issueFindingCategory(row);
+  const policy = retryDecision(db, projectID, row, pattern?.category ?? issueFindingCategory(row), context);
+  const category = policy?.category ?? pattern?.category ?? issueFindingCategory(row);
   const message = issueMessage(status, issueID, detail, pattern?.recommendation);
-  const reason = pattern ? "failure_pattern" : issueReason(status, category);
+  const reason = pattern ? "failure_pattern" : policy?.reason ?? defaultFindingReason(status, category);
   return {
-    action_candidate: issueActionCandidate(row, category),
+    action_candidate: issueActionCandidate(row, category, policy?.retry_candidate),
     category,
     issue_id: issueID,
     message,
@@ -185,30 +190,48 @@ function issueMessage(status: string, issueID: number, detail: string, recommend
 }
 
 function issueFindingCategory(row: IssueFindingRow): ProjectFindingCategory {
-  const status = optionalString(row.status);
-  const detail = optionalString(row.error) || optionalString(row.title);
-  if (status === "pending_verification") return "verification_needed";
-  if (optionalString(row.auto_retry_next_at) !== "" || isTransientText(detail)) return "transient";
-  return isNeedsUserText(detail) ? "needs_user" : "blocked";
-}
-
-function issueReason(status: string, category: ProjectFindingCategory): string {
-  if (category === "transient") return "transient_retry_waiting";
-  if (category === "needs_user") return "needs_user";
-  return status === "failed" ? "issue_failed" : "pending_verification";
+  return defaultFindingCategory({
+    autoRetryNextAt: optionalString(row.auto_retry_next_at),
+    detail: optionalString(row.error) || optionalString(row.title),
+    status: optionalString(row.status)
+  });
 }
 
 function issueActionCandidate(
   row: IssueFindingRow,
-  category: ProjectFindingCategory
+  category: ProjectFindingCategory,
+  retryCandidate = category === "transient"
 ): ProjectFindingActionCandidate | undefined {
-  if (category !== "transient") return undefined;
+  if (category !== "transient" || !retryCandidate) return undefined;
   const issueID = integerValue(row.id);
   return {
     action_type: "issue.retry_proposal",
     payload: { issue_id: issueID },
     rationale: `Retry issue #${issueID} after transient failure: ${redactFindingText(optionalString(row.auto_retry_reason))}`
   };
+}
+
+function retryDecision(
+  db: RunnerDatabase,
+  projectID: string,
+  row: IssueFindingRow,
+  category: ProjectFindingCategory,
+  context: IssueFindingContext
+): FailedRetryDecision | undefined {
+  return evaluateProjectFailedRetryPolicy({
+    attemptCount: attemptCount(row),
+    autoRetryNextAt: optionalString(row.auto_retry_next_at),
+    category,
+    db,
+    now: context.now,
+    projectID,
+    status: optionalString(row.status),
+    updatedAt: optionalString(row.updated_at)
+  });
+}
+
+function attemptCount(row: IssueFindingRow): number {
+  return typeof row.attempt_count === "number" && Number.isInteger(row.attempt_count) ? row.attempt_count : 0;
 }
 
 function issueNotification(
@@ -257,28 +280,6 @@ function formatDuration(ms: number): string {
   const minutes = Math.max(0, Math.round(ms / 60_000));
   return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`;
 }
-
-function isNeedsUserText(value: string): boolean {
-  const lower = value.toLowerCase();
-  return [
-    "needs user", "need user", "user input", "human", "manual", "approval denied",
-    "requires confirmation", "waiting for user", "blocked by user"
-  ].some((token) => lower.includes(token));
-}
-
-function isTransientText(value: string): boolean {
-  const lower = value.toLowerCase().trim();
-  if (lower === "") return false;
-  if (["permission denied", "approval denied", "runner paused", "usage limit",
-    "authentication failed", "api returned 401", "api returned 429", "verification failed",
-    "test failed", "tests failed", "exit status", "command timed out"
-  ].some((token) => lower.includes(token))) return false;
-  return lower === "eof" || ["stream disconnected before completion", "transport error",
-    "network error", "error decoding response body", "connection reset", "unexpected eof",
-    ": eof", " eof", "timeout", "timed out", "deadline exceeded"
-  ].some((token) => lower.includes(token));
-}
-
 function tableExists(db: RunnerDatabase, table: string): boolean {
   const row = db.sqlite.query<{ name: string }, [string]>(
     "select name from sqlite_master where type='table' and name=?"
