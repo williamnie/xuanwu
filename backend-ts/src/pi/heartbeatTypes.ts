@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiDelegation } from "../db/repositories/pi.ts";
 import type { PiActionEnvelope } from "./actionGate.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
 import type { ProjectStatusSnapshot } from "./projectSnapshot.ts";
 
 export type HeartbeatKind = "project" | "delegation" | "session_watchdog" | "cron" | "provider_health" | "daily_summary";
@@ -77,12 +78,24 @@ export type HeartbeatSignals = {
   usage_cost: { status: string; total_tokens: number };
 };
 export type HeartbeatPolicy = {
+  authorization?: PiGatePolicy;
+  authorization_summary?: Record<string, unknown>;
   executor_busy: boolean;
   paused: boolean;
   propose_only: boolean;
 };
+export type HeartbeatActionSummary = {
+  action_id: string;
+  action_type: string;
+  decision?: string;
+  issue_id?: number;
+  requires_confirmation?: boolean;
+  risk_level?: string;
+  status: string;
+};
 export type HeartbeatResult = {
   action_candidates: HeartbeatActionCandidate[];
+  action_results?: HeartbeatActionSummary[];
   actions_proposed: number;
   delegation_id: string;
   error: string;

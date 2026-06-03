@@ -105,14 +105,14 @@ describe("PI heartbeat orchestrator", () => {
         issue_id: issueID
       }));
 
-      const action = db.sqlite.query<{ project_id: string; result_json: string }, []>(
-        "select project_id, result_json from pi_actions order by created_at desc limit 1"
+      const action = db.sqlite.query<{ gate_decision: string; heartbeat_id: string; project_id: string; status: string }, []>(
+        "select gate_decision, heartbeat_id, project_id, status from pi_actions order by created_at desc limit 1"
       ).get();
       expect(action?.project_id).toBe("project-a");
-      expect(JSON.parse(action?.result_json ?? "{}")).toMatchObject({
-        delegation_id: "delegation-a",
+      expect(action).toMatchObject({
+        gate_decision: "deny",
         heartbeat_id: result.runs[0]?.heartbeat_id,
-        source: "pi_heartbeat"
+        status: "denied"
       });
     } finally {
       db.close();
