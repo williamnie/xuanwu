@@ -22,9 +22,10 @@ import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
 import { registerPiHeartbeatRoutes } from "./piHeartbeatApi.ts";
+import { registerPiReportRoutes } from "./piReportsApi.ts";
 import type { Router } from "./router.ts";
 
-type PiApiContext = { bus?: EventBus; database: RunnerDatabase };
+type PiApiContext = { bus?: EventBus; codexSessionsDir?: string; database: RunnerDatabase };
 
 type SettingsPatch = Partial<Pick<ProjectPiSettings,
   "auto_enqueue" | "auto_manage" | "auto_triage" | "max_actions_per_cycle" |
@@ -45,6 +46,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiProviderSettingsRoutes(router, context);
   registerPiProjectControlRoutes(router, context);
   registerPiHeartbeatRoutes(router, context);
+  registerPiReportRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
 }

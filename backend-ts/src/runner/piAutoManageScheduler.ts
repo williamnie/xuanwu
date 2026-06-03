@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { EventBus } from "../events/bus.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
 
@@ -11,6 +12,8 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
 };
 
 export type PiAutoManageCycleInput = {
+  bus?: EventBus;
+  codexSessionsDir?: string;
   database: RunnerDatabase;
   runProjectCycle: PiAutoManageProjectCycle;
 };
@@ -84,7 +87,12 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 }
 
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
-  const cron = await runDueCronTasks({ database: input.database, runProjectCycle: input.runProjectCycle });
+  const cron = await runDueCronTasks({
+    bus: input.bus,
+    codexSessionsDir: input.codexSessionsDir,
+    database: input.database,
+    runProjectCycle: input.runProjectCycle
+  });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const projects = await runPiAutoManageCycle(input);
   return { ...projects, cron, delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started } };

@@ -111,6 +111,31 @@ describe("Cron due executor", () => {
     }
   });
 
+  test("scheduled generate_report writes PI report summary details", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "project-a", 1);
+      insertIssue(db, "project-a", "done", "bun test passed");
+      insertIssue(db, "project-a", "failed", "approval denied; waiting for user input");
+      insertCronTask(db, {
+        action: "generate_report",
+        mode: "once",
+        nextRunAt: "2026-06-02T09:59:00.000Z",
+        projectID: "project-a"
+      });
+
+      const result = await runDueCronTasks({ database: db, now: NOW });
+
+      expect(result).toEqual({ executed: 1, failed: 0, scanned: 1, skipped: 0 });
+      expect(cronRow(db).last_result).toContain("pi report daily_project_digest");
+      expect(cronRow(db).last_result).toContain("completed=1");
+      expect(cronRow(db).last_result).toContain("failed=1");
+      expect(cronRow(db).last_result).toContain("needs_user=1");
+    } finally {
+      db.close();
+    }
+  });
+
   test("skips missed recurring runs when policy is skip", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -155,11 +180,11 @@ function insertProject(db: RunnerDatabase, id: string, autoRun: number): void {
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectID: string, status: string): number {
+function insertIssue(db: RunnerDatabase, projectID: string, status: string, error = ""): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?)`,
-    [projectID, `${status} issue`, status, "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
+    `insert into issues (project_id, title, status, error, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [projectID, `${status} issue`, status, error, "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
   );
   return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
 }

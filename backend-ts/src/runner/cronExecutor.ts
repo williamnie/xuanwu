@@ -2,9 +2,11 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { listCronTasks, type CronTask } from "../db/repositories/cronTasks.ts";
 import { createPiDelegation } from "../db/repositories/pi.ts";
+import type { EventBus } from "../events/bus.ts";
 import { syncCodexProjects } from "../http/projectSync.ts";
 import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "../pi/heartbeatOrchestrator.ts";
 import { scanProjectFindings } from "../pi/projectFindings.ts";
+import { buildPiReport } from "../pi/reports.ts";
 import type { PiAutoManageProjectCycle } from "./piAutoManageScheduler.ts";
 import { startProjectLoop as defaultStartProjectLoop, type ProjectLoopRuntime } from "./projectLoopManager.ts";
 import { nextRunAfter, quietHoursResumeAt, scheduleRunMode } from "../schedule/cronSchedule.ts";
@@ -12,6 +14,8 @@ import { nextRunAfter, quietHoursResumeAt, scheduleRunMode } from "../schedule/c
 export type CronExecutorResult = { executed: number; failed: number; scanned: number; skipped: number };
 
 export type CronExecutorInput = ProjectLoopRuntime & {
+  bus?: EventBus;
+  codexSessionsDir?: string;
   now?: Date;
   runProjectCycle?: PiAutoManageProjectCycle;
   startProjectLoop?: (runtime: ProjectLoopRuntime, projectID: string) => void;
@@ -85,7 +89,7 @@ async function executeCronAction(input: CronExecutorInput, task: CronTask, now: 
     case "run_pi_cycle":
       return await runPiCycle(input, task);
     case "generate_report":
-      return generateReport(input.database, task);
+      return await generateReport(input, task, now);
     case "check_stale_sessions":
       return checkStaleSessions(input.database, task, now);
     case "sync_projects":
@@ -131,13 +135,22 @@ async function runPiCycle(input: CronExecutorInput, task: CronTask): Promise<Cro
   return { detail: `ran PI cycle for ${projectID}`, projectIDs: [projectID] };
 }
 
-function generateReport(db: RunnerDatabase, task: CronTask): CronActionResult {
-  const rows = db.sqlite.query<{ count: number; status: string }, string[]>(`
-    select status, count(*) as count from issues
-    ${task.project_id === "" ? "" : "where project_id=?"}
-    group by status order by status asc
-  `).all(...(task.project_id === "" ? [] : [task.project_id]));
-  return { detail: `report ${JSON.stringify(Object.fromEntries(rows.map((row) => [row.status, row.count])))}` };
+async function generateReport(input: CronExecutorInput, task: CronTask, now: Date): Promise<CronActionResult> {
+  const payload = parsePayload(task);
+  const report = await buildPiReport({
+    bus: input.bus,
+    codexSessionsDir: input.codexSessionsDir,
+    database: input.database,
+    now,
+    projectID: task.project_id,
+    since: cleanString(payload.since),
+    type: cleanString(payload.type) || "daily_project_digest",
+    until: cleanString(payload.until)
+  });
+  const summary = report.summary;
+  return {
+    detail: `pi report ${report.type} completed=${summary.completed ?? 0} failed=${summary.failed ?? 0} needs_user=${summary.needs_user ?? 0}`
+  };
 }
 
 function checkStaleSessions(db: RunnerDatabase, task: CronTask, now: Date): CronActionResult {

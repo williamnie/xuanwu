@@ -3,6 +3,7 @@ import { formatBunVersion } from "./buildInfo.ts";
 import { commandMode } from "./mainMode.ts";
 import { loadConfig } from "./config/env.ts";
 import { openDatabase } from "./db/database.ts";
+import { EventBus } from "./events/bus.ts";
 import { runProjectPiCycle } from "./http/piProjectControlApi.ts";
 import { startServer } from "./http/server.ts";
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
@@ -26,8 +27,9 @@ if (!serve) {
 const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 const providers = executorProviders(config);
-const server = await startServer(config, { database, providers });
-void startAutoRunLoops(database, providers);
+const bus = new EventBus();
+const server = await startServer(config, { bus, database, providers });
+void startAutoRunLoops(database, providers, bus, config.codexSessionsDir);
 
 console.log(JSON.stringify({
   ok: true,
@@ -51,7 +53,9 @@ function executorProviders(config: ReturnType<typeof loadConfig>) {
 
 async function startAutoRunLoops(
   database: Awaited<ReturnType<typeof openDatabase>>,
-  providers: ReturnType<typeof executorProviders>
+  providers: ReturnType<typeof executorProviders>,
+  bus: EventBus,
+  codexSessionsDir: string
 ): Promise<void> {
   await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
@@ -61,6 +65,8 @@ async function startAutoRunLoops(
   ).all();
   for (const project of projects) startProjectLoop({ database, providers, onError: logProjectLoopError }, project.id);
   createPiAutoManageScheduler({
+    bus,
+    codexSessionsDir,
     database,
     onError: (error) => {
       console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
