@@ -19,6 +19,7 @@ import { registerPiCommandCenterRoutes } from "./piCommandCenterApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
 import { registerPiDelegationRoutes } from "./piDelegationsApi.ts";
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
+import { registerPiMcpRegistryRoutes } from "./piMcpRegistryApi.ts";
 import { registerPiProjectPolicyRoutes } from "./piProjectPolicyApi.ts";
 import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
@@ -45,6 +46,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiConversationRoutes(router, context);
   registerPiDelegationRoutes(router, context);
   registerPiMemoryRoutes(router, context);
+  registerPiMcpRegistryRoutes(router);
   registerPiProjectPolicyRoutes(router, context);
   registerPiProviderSettingsRoutes(router, context);
   registerPiProjectControlRoutes(router, context);

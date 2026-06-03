@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { listMcpRegistry, readMcpCapability, recommendMcpRequirements } from "./registry.ts";
+import { listMcpRegistry, readMcpCapability, readMcpRegistry, recommendMcpRequirements } from "./registry.ts";
 
 const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
 
@@ -51,6 +51,28 @@ describe("PI MCP capability registry", () => {
     expect(recommended.map((item) => item.id)).toContain("docs:resource:runbook");
     expect(recommended[0]).toMatchObject({ reason: expect.stringContaining("runbook") });
   });
+  test("reports unavailable server readiness diagnostics", () => {
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
+      id: "offline-docs",
+      status: "unavailable",
+      readiness: "auth_missing",
+      resources: [{ name: "runbook", description: "Deployment runbook" }]
+    }] });
+
+    const registry = readMcpRegistry();
+
+    expect(registry.servers[0]).toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "server_unavailable", server_id: "offline-docs" }),
+        expect.objectContaining({ code: "server_not_ready", readiness: "auth_missing" })
+      ]),
+      id: "offline-docs",
+      readiness: "auth_missing",
+      status: "unavailable"
+    });
+    expect(registry.diagnostics).toEqual(registry.servers[0].diagnostics);
+  });
+
 });
 
 function docsServer() {

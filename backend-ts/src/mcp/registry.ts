@@ -21,6 +21,7 @@ export type McpCapability = {
 
 export type McpServerRegistry = {
   capabilities: McpCapability[];
+  diagnostics: McpRegistryDiagnostic[];
   id: string;
   permissions: McpPermission[];
   readiness: string;
@@ -30,6 +31,17 @@ export type McpServerRegistry = {
   tools: McpCapability[];
 };
 
+export type McpRegistryDiagnostic = {
+  code: "registry_file_unavailable" | "registry_json_invalid" | "server_not_ready" | "server_unavailable";
+  message: string;
+  readiness?: string;
+  server_id: string;
+  severity: "warning";
+  source_path: string;
+  status?: string;
+};
+
+export type McpRegistry = { diagnostics: McpRegistryDiagnostic[]; servers: McpServerRegistry[] };
 export type McpRecommendationInput = { description?: string; issue?: unknown; title?: string };
 export type McpRequirementRecommendation = McpCapability & { reason: string; score: number };
 export type McpRegistryOptions = { registryJson?: string };
@@ -42,9 +54,17 @@ const MAX_CAPABILITIES_PER_SERVER = 160;
 const DEFAULT_REGISTRY = "{}";
 
 export function listMcpRegistry(options: McpRegistryOptions = {}): McpServerRegistry[] {
-  const config = registryConfig(options);
+  return readMcpRegistry(options).servers;
+}
+
+export function readMcpRegistry(options: McpRegistryOptions = {}): McpRegistry {
+  const diagnostics: McpRegistryDiagnostic[] = [];
+  const config = registryConfig(options, diagnostics);
   const servers = Array.isArray(config.servers) ? config.servers : [];
-  return servers.map((server) => normalizeServer(objectValue(server))).filter(Boolean).slice(0, MAX_SERVERS) as McpServerRegistry[];
+  const normalized = servers.map((server) => normalizeServer(objectValue(server))).filter(Boolean)
+    .slice(0, MAX_SERVERS) as McpServerRegistry[];
+  diagnostics.push(...normalized.flatMap((server) => server.diagnostics));
+  return { diagnostics, servers: normalized };
 }
 
 export function readMcpCapability(id: string, options: McpRegistryOptions = {}): McpCapability | null {
@@ -97,16 +117,22 @@ export function normalizeMcpCapabilityIDs(value: unknown): string[] {
   return parseMcpCapabilityList(value);
 }
 
-function registryConfig(options: McpRegistryOptions): Record<string, unknown> {
-  const text = options.registryJson ?? Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON ?? registryFileText() ?? DEFAULT_REGISTRY;
+function registryConfig(options: McpRegistryOptions, diagnostics: McpRegistryDiagnostic[]): Record<string, unknown> {
+  const text = options.registryJson ?? Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON ?? registryFileText(diagnostics) ?? DEFAULT_REGISTRY;
   const parsed = parseJSON(text);
+  if (text.trim() !== "" && !isRegistryObject(parsed)) {
+    diagnostics.push(diagnostic("registry_json_invalid", "registry", "MCP registry JSON is invalid"));
+  }
   return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
 }
 
-function registryFileText(): string | undefined {
+function registryFileText(diagnostics: McpRegistryDiagnostic[]): string | undefined {
   const path = cleanString(Bun.env.CODEX_RUNNER_MCP_REGISTRY_FILE);
   if (path === "") return undefined;
-  try { return readFileSync(path, "utf8"); } catch { return DEFAULT_REGISTRY; }
+  try { return readFileSync(path, "utf8"); } catch {
+    diagnostics.push(diagnostic("registry_file_unavailable", "registry-file", "MCP registry file is unavailable"));
+    return DEFAULT_REGISTRY;
+  }
 }
 
 function normalizeServer(server: RawServer): McpServerRegistry | null {
@@ -115,14 +141,17 @@ function normalizeServer(server: RawServer): McpServerRegistry | null {
   const resources = rawCapabilities(server.resources).map((item) => normalizeCapability(id, "resource", item));
   const tools = rawCapabilities(server.tools).map((item) => normalizeCapability(id, "tool", item));
   const capabilities = [...resources, ...tools].filter(Boolean).slice(0, MAX_CAPABILITIES_PER_SERVER) as McpCapability[];
+  const status = cleanString(server.status) || "unknown";
+  const readiness = cleanString(server.readiness) || cleanString(server.ready) || "unknown";
   return {
     capabilities,
+    diagnostics: serverDiagnostics(id, status, readiness),
     id,
     permissions: permissionsFromServer(server, capabilities),
-    readiness: cleanString(server.readiness) || cleanString(server.ready) || "unknown",
+    readiness,
     resources: capabilities.filter((item) => item.kind === "resource"),
     risk_level: riskLevel(server.risk_level ?? server.risk, capabilities),
-    status: cleanString(server.status) || "unknown",
+    status,
     tools: capabilities.filter((item) => item.kind === "tool")
   };
 }
@@ -188,6 +217,26 @@ function publicCapability(capability: McpCapability): McpCapability {
   return safe;
 }
 
+function serverDiagnostics(id: string, status: string, readiness: string): McpRegistryDiagnostic[] {
+  const diagnostics: McpRegistryDiagnostic[] = [];
+  if (isUnavailableStatus(status)) {
+    diagnostics.push(diagnostic("server_unavailable", id, `MCP server ${id} is unavailable`, status, readiness));
+  }
+  if (isNotReady(readiness)) {
+    diagnostics.push(diagnostic("server_not_ready", id, `MCP server ${id} readiness is ${readiness}`, status, readiness));
+  }
+  return diagnostics;
+}
+
+function isUnavailableStatus(status: string): boolean {
+  return ["disabled", "error", "failed", "missing", "offline", "unavailable"].includes(status.toLowerCase());
+}
+
+function isNotReady(readiness: string): boolean {
+  const value = readiness.toLowerCase();
+  return value !== "" && !["available", "ready", "unknown"].includes(value);
+}
+
 function issueText(issue: unknown): string {
   const object = objectValue(issue);
   return `${cleanString(object.title)} ${cleanString(object.description)}`;
@@ -203,6 +252,28 @@ function objectValue(value: unknown): Record<string, unknown> {
 
 function parseJSON(text: string): unknown {
   try { return JSON.parse(text) as unknown; } catch { return undefined; }
+}
+
+function isRegistryObject(value: unknown): boolean {
+  return value !== undefined && typeof value === "object" && !Array.isArray(value);
+}
+
+function diagnostic(
+  code: McpRegistryDiagnostic["code"],
+  source: string,
+  message: string,
+  status = "",
+  readiness = ""
+): McpRegistryDiagnostic {
+  return {
+    code,
+    message,
+    ...(readiness === "" ? {} : { readiness }),
+    server_id: code.startsWith("server_") ? source : "",
+    severity: "warning",
+    source_path: `mcp-registry:${source}`,
+    ...(status === "" ? {} : { status })
+  };
 }
 
 function normalizeID(value: unknown): string {
