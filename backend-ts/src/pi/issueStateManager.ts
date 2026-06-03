@@ -85,7 +85,7 @@ function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManage
   const events = listIssueEvents(db, issue.id);
   const latestRun = runs.at(-1);
   if (issue.status === "todo" && todoNeedsRuntime(runs, sessions)) return [todoWithoutSession(db, issue, latestRun, sessions[0], now)];
-  if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, options, now);
+  if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, events, options, now);
   if (issue.status === "failed") return [failedDiagnostic(issue, options, now)];
   if (issue.status === "pending_verification") return pendingDiagnostic(issue, options, now);
   if (issue.status === "done" && !hasVerificationEvidence(issue, latestRun, events)) return [doneMissingEvidence(issue, latestRun, events)];
@@ -113,19 +113,20 @@ function inProgressDiagnostics(
   issue: Issue,
   latestRun: IssueRun | undefined,
   sessions: AgentSession[],
+  events: IssueEvent[],
   options: IssueStateManagerOptions,
   now: Date
 ): IssueStateDiagnostic[] {
   const session = sessions[0];
-  if (runEnded(latestRun) || terminalSession(session)) return [inProgressEnded(issue, latestRun, session)];
+  if (runEnded(latestRun) || terminalSession(session)) return [inProgressEnded(issue, latestRun, session, events)];
   if (staleIssue(issue, latestRun, session, options, now)) return [staleInProgress(issue, latestRun, session, now)];
   return [];
 }
 
-function inProgressEnded(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined): IssueStateDiagnostic {
+function inProgressEnded(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, events: IssueEvent[]): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "issue still in_progress"), runEvidence(run), sessionEvidence(session)]);
   const failed = isFailureStatus(run?.status) || isFailureStatus(session?.status) || cleanString(run?.error) !== "";
-  const patch = failed ? { error: run?.error || "session ended with failure", status: "failed" } : { status: "pending_verification" };
+  const patch = failed ? { error: run?.error || "session ended with failure", status: "failed" } : { status: hasVerificationEvidence(issue, run, events) ? "done" : "pending_verification" };
   return diagnostic(issue, "in_progress_session_ended", "repair", evidence, [action(issue, "patch_status", evidence, "Align issue status with ended runtime session.", patch)]);
 }
 
