@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
@@ -76,6 +77,10 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
   const projects = listAutoManagedProjects(input.database);
   const result: PiAutoManageCycleResult = { projects: projects.length, skipped: 0, started: 0 };
   for (const project of projects) {
+    if (isProjectHeartbeatPaused(input.database, project.project_id)) {
+      result.skipped += 1;
+      continue;
+    }
     if (activeProjectCycles.has(project.project_id)) {
       result.skipped += 1;
       continue;
@@ -96,6 +101,10 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const projects = await runPiAutoManageCycle(input);
   return { ...projects, cron, delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started } };
+}
+
+export function isProjectHeartbeatPaused(db: RunnerDatabase, projectID: string): boolean {
+  return isPiHeartbeatPaused(db, { scopeId: projectID, scopeType: "project" });
 }
 
 function listAutoManagedProjects(db: RunnerDatabase): EnabledProjectRow[] {

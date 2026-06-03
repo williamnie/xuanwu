@@ -112,10 +112,16 @@ export function resumePiHeartbeat(db: RunnerDatabase, input: PiHeartbeatControlS
 export function diagnosePiHeartbeat(db: RunnerDatabase, input: Omit<PiHeartbeatControlScope, "reason">) {
   const scope = normalizeScope(input);
   const control = getHeartbeatControl(db, scope);
+  const recentRuns = listPiHeartbeatRuns(db, scopeFilter(scope)).slice(0, 10);
+  const paused = control?.paused === 1;
   return {
+    active: !paused,
     control: control ? { ...control, paused: control.paused === 1 } : null,
+    last_error: recentRuns.find((run) => run.status === "failed" && run.error !== "")?.error ?? "",
+    paused,
     recent_events: listPiHeartbeatEvents(db, scopeFilter(scope)).slice(-20),
-    recent_runs: listPiHeartbeatRuns(db, scopeFilter(scope)).slice(0, 10)
+    recent_runs: recentRuns,
+    status: paused ? "paused" : "active"
   };
 }
 
@@ -127,6 +133,10 @@ export function listActivePiDelegations(db: RunnerDatabase, nowText: string): Pi
   return db.sqlite.query<Record<string, unknown>, [string, string]>(`
     select ${DELEGATION_COLUMNS} from ${DELEGATION_TABLE}
     where status=? and (next_heartbeat_at='' or next_heartbeat_at<=?)
+      and not exists (
+        select 1 from ${CONTROL_TABLE}
+        where scope_type='project' and scope_id=${DELEGATION_TABLE}.project_id and paused=1
+      )
     order by next_heartbeat_at asc, created_at asc, id asc
   `).all("active", nowText).map(mapDelegation);
 }

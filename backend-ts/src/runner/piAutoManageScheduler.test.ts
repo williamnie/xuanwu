@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 
 class FakePiCycleRunner {
@@ -119,6 +120,24 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("does not run auto-managed project cycles while heartbeat is paused", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "paused-heartbeat", 1);
+      insertAgent(db, "pi-default");
+      insertSettings(db, "paused-heartbeat", 1, 7);
+      pausePiHeartbeat(db, { scopeId: "paused-heartbeat", scopeType: "project" });
+
+      const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+
+      expect(result).toEqual({ projects: 1, started: 0, skipped: 1 });
+      expect(runner.calls).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("continues auto-manage when one delegation heartbeat fails", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
@@ -133,6 +152,23 @@ describe("PI auto-manage scheduler", () => {
       expect(result.delegations).toMatchObject({ scanned: 1, started: 1, skipped: 0 });
       expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0 });
       expect(runner.calls).toEqual([{ maxActions: 5, projectId: "enabled" }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not run delegation heartbeats while project heartbeat is paused", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "project-a", 1);
+      insertDelegation(db, "delegation-paused", "project-a");
+      pausePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" });
+
+      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+
+      expect(result.delegations).toEqual({ scanned: 0, skipped: 0, started: 0 });
+      expect(heartbeatRunCount(db)).toBe(0);
     } finally {
       db.close();
     }
@@ -195,6 +231,10 @@ function insertDelegation(db: DB, id: string, projectID: string): void {
      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, projectID, "Delegation", "active", "{}", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+function heartbeatRunCount(db: DB): number {
+  return db.sqlite.query<{ count: number }, []>("select count(*) as count from pi_heartbeat_runs").get()?.count ?? 0;
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {

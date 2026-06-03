@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { listCronTasks, type CronTask } from "../db/repositories/cronTasks.ts";
-import { createPiDelegation } from "../db/repositories/pi.ts";
+import { createPiDelegation, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import { syncCodexProjects } from "../http/projectSync.ts";
 import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "../pi/heartbeatOrchestrator.ts";
@@ -21,7 +21,7 @@ export type CronExecutorInput = ProjectLoopRuntime & {
   startProjectLoop?: (runtime: ProjectLoopRuntime, projectID: string) => void;
 };
 
-type CronActionResult = { detail: string; projectIDs?: string[] };
+type CronActionResult = { detail: string; projectIDs?: string[]; skipped?: boolean };
 
 const activeCronTasks = new Set<number>();
 const TERMINAL_ONCE_STATUS = "done";
@@ -61,6 +61,10 @@ async function runCronTask(input: CronExecutorInput, task: CronTask, now: Date):
     }
     try {
       const actionResult = await executeCronAction(input, task, now);
+      if (actionResult.skipped === true) {
+        persistCronSkip(input.database, task, now, nextRun(task, now), actionResult.detail);
+        return "skipped";
+      }
       persistCronSuccess(input.database, task, now, actionResult.detail);
       kickProjects(input, actionResult.projectIDs ?? []);
       return "executed";
@@ -130,9 +134,18 @@ function startDelegation(db: RunnerDatabase, task: CronTask, now: Date): CronAct
 
 async function runPiCycle(input: CronExecutorInput, task: CronTask): Promise<CronActionResult> {
   const projectID = requiredProjectID(task);
+  if (isProjectHeartbeatPaused(input.database, projectID)) return skippedCronResult("heartbeat paused");
   if (input.runProjectCycle) await input.runProjectCycle({ maxActions: 5, projectId: projectID });
   else await runPiHeartbeatOnce({ database: input.database, kind: "cron", projectID, trigger: "cron" });
   return { detail: `ran PI cycle for ${projectID}`, projectIDs: [projectID] };
+}
+
+function skippedCronResult(detail: string): CronActionResult {
+  return { detail, skipped: true };
+}
+
+function isProjectHeartbeatPaused(db: RunnerDatabase, projectID: string): boolean {
+  return isPiHeartbeatPaused(db, { scopeId: projectID, scopeType: "project" });
 }
 
 async function generateReport(input: CronExecutorInput, task: CronTask, now: Date): Promise<CronActionResult> {

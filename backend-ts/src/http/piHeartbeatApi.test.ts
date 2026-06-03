@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createPiHeartbeatRun } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -54,6 +55,32 @@ describe("PI heartbeat API", () => {
       expect(await skipped.json()).toMatchObject({ status: "skipped", skip_reason: "heartbeat is paused" });
       expect(resumed.status).toBe(200);
       expect(await resumed.json()).toMatchObject({ paused: 0 });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("diagnostics exposes active paused and last_error status", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      createPiHeartbeatRun(database, {
+        error: "collector boom",
+        finished_at: "2026-06-02T09:02:00Z",
+        id: "hb-failed",
+        kind: "project",
+        project_id: "demo",
+        started_at: "2026-06-02T09:01:00Z",
+        status: "failed"
+      });
+      const router = createDefaultRouter({ database });
+
+      const active = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi/heartbeat/diagnostics`));
+      await request(router, "/api/projects/demo/pi/heartbeat/pause", "POST", { reason: "maintenance" });
+      const paused = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi/heartbeat/diagnostics`));
+
+      expect(await active.json()).toMatchObject({ active: true, last_error: "collector boom", paused: false, status: "active" });
+      expect(await paused.json()).toMatchObject({ active: false, last_error: "collector boom", paused: true, status: "paused" });
     } finally {
       database.close();
     }

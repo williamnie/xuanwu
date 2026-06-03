@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
 
 const tempRoots: string[] = [];
@@ -102,6 +103,42 @@ describe("Cron due executor", () => {
       expect(cronRow(db)).toMatchObject({
         error: "cycle boom",
         last_status: "failed",
+        next_run_at: "2026-06-03T18:30:00.000Z",
+        run_count: 1,
+        status: "active"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("skips scheduled PI cycle while project heartbeat is paused", async () => {
+    const db = await openFixtureDatabase();
+    const calls: string[] = [];
+    try {
+      insertProject(db, "project-a", 1);
+      pausePiHeartbeat(db, { scopeId: "project-a", scopeType: "project" });
+      insertCronTask(db, {
+        action: "run_pi_cycle",
+        mode: "daily",
+        nextRunAt: "2026-06-02T09:59:00.000Z",
+        projectID: "project-a",
+        timeOfDay: "18:30"
+      });
+
+      const result = await runDueCronTasks({
+        database: db,
+        now: NOW,
+        runProjectCycle: async ({ projectId }) => {
+          calls.push(projectId);
+        }
+      });
+
+      expect(result).toEqual({ executed: 0, failed: 0, scanned: 1, skipped: 1 });
+      expect(calls).toEqual([]);
+      expect(cronRow(db)).toMatchObject({
+        last_result: "heartbeat paused",
+        last_status: "skipped",
         next_run_at: "2026-06-03T18:30:00.000Z",
         run_count: 1,
         status: "active"
