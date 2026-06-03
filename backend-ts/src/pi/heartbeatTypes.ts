@@ -5,14 +5,74 @@ import type { ProjectStatusSnapshot } from "./projectSnapshot.ts";
 
 export type HeartbeatKind = "project" | "delegation" | "session_watchdog" | "cron" | "provider_health" | "daily_summary";
 export type HeartbeatActionCandidate = PiActionEnvelope;
+export type HeartbeatIssueRunSignal = {
+  attempt: number;
+  ended_at: string;
+  error: string;
+  exit_reason: string;
+  issue_id: number;
+  provider: string;
+  provider_session_id: string;
+  run_id: string;
+  runtime_metadata: unknown;
+  started_at: string;
+  status: string;
+};
+export type HeartbeatAgentSessionSignal = {
+  agent_role: string;
+  issue_id: number;
+  provider: string;
+  provider_session_id: string;
+  raw_ref: unknown;
+  session_key: string;
+  status: string;
+  title: string;
+  updated_at: string;
+};
+export type HeartbeatProjectSettingsSignal = {
+  pi_settings: {
+    auto_enqueue: number;
+    auto_manage: number;
+    auto_triage: number;
+    max_actions_per_cycle: number;
+    notify_on_needs_user: number;
+    pi_agent_id: string;
+  } | null;
+  project: {
+    approval_policy: string;
+    auto_run: number;
+    cwd: string;
+    default_agent_profile_id: string;
+    default_mcp_policy: unknown;
+    default_skill_policy: unknown;
+    id: string;
+    model: string;
+    name: string;
+    provider: string;
+    provider_config: unknown;
+    sandbox: string;
+  };
+};
 export type HeartbeatSignals = {
+  agent_sessions: {
+    recent: HeartbeatAgentSessionSignal[];
+    status_counts: Record<string, number>;
+    total: number;
+  };
   cron: { active: number; due: number; total: number };
   delegations: { active: number; due: number };
   issues: { status_counts: Record<string, number>; total: number };
+  issue_runs: {
+    open: number;
+    recent: HeartbeatIssueRunSignal[];
+    status_counts: Record<string, number>;
+    total: number;
+  };
   memory: { active: number; pinned: number };
   memory_items?: Array<{ confidence: string; content: string; kind: string; scope: string; scope_id: string }>;
   pi_conversations: { active: number; total: number };
   project?: ProjectStatusSnapshot;
+  project_settings: HeartbeatProjectSettingsSignal;
   provider_health: { provider: string; status: string };
   usage_cost: { status: string; total_tokens: number };
 };

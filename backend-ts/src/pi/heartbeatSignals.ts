@@ -1,23 +1,124 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
-import { listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
+import { getProjectPiSettings, listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
+import { redactAuditJsonText } from "../db/repositories/pi/auditRedaction.ts";
 import { containsSensitiveMemoryContent } from "./memoryPolicy.ts";
-import type { HeartbeatSignals } from "./heartbeatTypes.ts";
+import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
+import type {
+  HeartbeatAgentSessionSignal,
+  HeartbeatIssueRunSignal,
+  HeartbeatProjectSettingsSignal,
+  HeartbeatSignals
+} from "./heartbeatTypes.ts";
 import { iso } from "./heartbeatOrchestratorSupport.ts";
+
+const SIGNAL_LIMIT = 8;
 
 export function collectProjectHeartbeatSignals(db: RunnerDatabase, projectID: string, now: Date): HeartbeatSignals {
   const snapshot = createProjectStatusSnapshot(db, projectID);
   const nowText = iso(now);
   return {
+    agent_sessions: agentSessionSignals(db, projectID),
     cron: cronSignals(db, projectID, nowText),
     delegations: delegationSignals(db, projectID, nowText),
     issues: { status_counts: snapshot.issue_status_counts, total: snapshot.total_issues },
+    issue_runs: issueRunSignals(db, projectID),
     memory: memorySignals(db, projectID),
     memory_items: memoryItems(db, projectID),
     pi_conversations: conversationSignals(db, projectID),
     project: snapshot,
+    project_settings: projectSettings(db, projectID),
     provider_health: providerHealth(db, projectID),
     usage_cost: usageCost()
+  };
+}
+
+function issueRunSignals(db: RunnerDatabase, projectID: string) {
+  const rows = db.sqlite.query<Record<string, unknown>, [string]>(`
+    select ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider, ir.provider_session_id,
+      ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.runtime_metadata_json
+    from issue_runs ir join issues i on i.id=ir.issue_id
+    where i.project_id=?
+    order by coalesce(nullif(ir.ended_at, ''), ir.started_at) desc, ir.attempt desc, ir.id asc
+  `).all(projectID);
+  return {
+    open: rows.filter((row) => text(row.ended_at) === "").length,
+    recent: rows.slice(0, SIGNAL_LIMIT).map(mapIssueRunSignal),
+    status_counts: countStatuses(rows),
+    total: rows.length
+  };
+}
+
+function mapIssueRunSignal(row: Record<string, unknown>): HeartbeatIssueRunSignal {
+  return {
+    attempt: integer(row.attempt),
+    ended_at: text(row.ended_at),
+    error: safeText(row.error),
+    exit_reason: safeText(row.exit_reason),
+    issue_id: integer(row.issue_id),
+    provider: text(row.provider, "codex"),
+    provider_session_id: text(row.provider_session_id),
+    run_id: text(row.id),
+    runtime_metadata: safeJson(row.runtime_metadata_json),
+    started_at: text(row.started_at),
+    status: text(row.status, "unknown")
+  };
+}
+
+function agentSessionSignals(db: RunnerDatabase, projectID: string) {
+  const rows = db.sqlite.query<Record<string, unknown>, [string]>(`
+    select session_key, provider, provider_session_id, agent_role, project_id, issue_id,
+      title, status, raw_ref, updated_at
+    from agent_sessions where project_id=? order by updated_at desc, session_key asc
+  `).all(projectID);
+  return {
+    recent: rows.slice(0, SIGNAL_LIMIT).map(mapAgentSessionSignal),
+    status_counts: countStatuses(rows),
+    total: rows.length
+  };
+}
+
+function mapAgentSessionSignal(row: Record<string, unknown>): HeartbeatAgentSessionSignal {
+  return {
+    agent_role: text(row.agent_role),
+    issue_id: integer(row.issue_id),
+    provider: text(row.provider),
+    provider_session_id: text(row.provider_session_id),
+    raw_ref: safeJson(row.raw_ref),
+    session_key: text(row.session_key),
+    status: text(row.status, "unknown"),
+    title: safeText(row.title),
+    updated_at: text(row.updated_at)
+  };
+}
+
+function projectSettings(db: RunnerDatabase, projectID: string): HeartbeatProjectSettingsSignal {
+  const project = getProject(db, projectID);
+  if (!project) throw new Error("project not found");
+  const settings = getProjectPiSettings(db, projectID);
+  return {
+    pi_settings: settings ? {
+      auto_enqueue: settings.auto_enqueue,
+      auto_manage: settings.auto_manage,
+      auto_triage: settings.auto_triage,
+      max_actions_per_cycle: settings.max_actions_per_cycle,
+      notify_on_needs_user: settings.notify_on_needs_user,
+      pi_agent_id: settings.pi_agent_id
+    } : null,
+    project: {
+      approval_policy: project.approval_policy,
+      auto_run: project.auto_run,
+      cwd: project.cwd === "" ? "" : snapshotPath(project.cwd),
+      default_agent_profile_id: project.default_agent_profile_id,
+      default_mcp_policy: safeJson(project.default_mcp_policy),
+      default_skill_policy: safeJson(project.default_skill_policy),
+      id: project.id,
+      model: project.model,
+      name: safeText(project.name),
+      provider: project.provider,
+      provider_config: safeJson(project.provider_config_json),
+      sandbox: project.sandbox
+    }
   };
 }
 
@@ -48,7 +149,7 @@ function memoryItems(db: RunnerDatabase, projectID: string) {
     ...listPiMemoryItems(db, { disabled: 0, scope: "project", scopeId: projectID }),
     ...listPiMemoryItems(db, { disabled: 0, scope: "global" })
   ].filter((item) => !containsSensitiveMemoryContent(item.content));
-  return items.slice(0, 8).map(memorySummary);
+  return items.slice(0, SIGNAL_LIMIT).map(memorySummary);
 }
 
 function memorySummary(item: PiMemoryItem) {
@@ -79,4 +180,40 @@ function usageCost() {
 
 function countRows(db: RunnerDatabase, sql: string, params: string[]): number {
   return db.sqlite.query<{ count: number }, string[]>(sql).get(...params)?.count ?? 0;
+}
+
+function countStatuses(rows: Array<Record<string, unknown>>): Record<string, number> {
+  return rows.reduce<Record<string, number>>((counts, row) => {
+    const status = text(row.status, "unknown");
+    counts[status] = (counts[status] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function safeJson(value: unknown): unknown {
+  const redacted = redactAuditJsonText(text(value) || "{}");
+  try {
+    return JSON.parse(redacted) as unknown;
+  } catch {
+    return "[redacted]";
+  }
+}
+
+function safeText(value: unknown): string {
+  const redacted = redactAuditJsonText(JSON.stringify(text(value)));
+  const parsed = JSON.parse(redacted) as unknown;
+  return typeof parsed === "string" ? parsed : "";
+}
+
+function snapshotPath(value: string): string {
+  const parts = value.trim().split(/[\\/]+/).filter(Boolean);
+  return parts.length === 0 ? "[redacted-path]" : `[redacted-path]/${safeText(parts.at(-1))}`;
+}
+
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
+}
+
+function integer(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) ? value : 0;
 }

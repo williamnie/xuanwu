@@ -239,11 +239,30 @@ function skippedResult(ctx: ReturnType<typeof heartbeatContext>, reason: string)
 
 function emptySignals(): HeartbeatSignals {
   return {
+    agent_sessions: { recent: [], status_counts: {}, total: 0 },
     cron: { active: 0, due: 0, total: 0 },
     delegations: { active: 0, due: 0 },
     issues: { status_counts: {}, total: 0 },
+    issue_runs: { open: 0, recent: [], status_counts: {}, total: 0 },
     memory: { active: 0, pinned: 0 },
     pi_conversations: { active: 0, total: 0 },
+    project_settings: {
+      pi_settings: null,
+      project: {
+        approval_policy: "",
+        auto_run: 0,
+        cwd: "",
+        default_agent_profile_id: "",
+        default_mcp_policy: {},
+        default_skill_policy: {},
+        id: "",
+        model: "",
+        name: "",
+        provider: "",
+        provider_config: {},
+        sandbox: ""
+      }
+    },
     provider_health: { provider: "", status: "unknown" },
     usage_cost: { status: "not_configured", total_tokens: 0 }
   };
