@@ -4,7 +4,8 @@ import {
   PI_GATE_DECISIONS,
   PI_RISK_LEVELS,
   PI_WORK_MODES,
-  normalizePiModePolicy
+  normalizePiModePolicy,
+  resolvePiWorkMode
 } from "./policyTypes.ts";
 
 describe("PI mode and risk policy types", () => {
@@ -46,5 +47,63 @@ describe("PI mode and risk policy types", () => {
         forbidden: "deny"
       }
     });
+  });
+
+  test("resolves explicit session or task mode before delegation and project default", () => {
+    const activeDelegation = {
+      authorization_json: JSON.stringify({ expires_at: "2026-06-03T10:00:00.000Z", mode: "delegated" }),
+      status: "active"
+    };
+    const base = {
+      activeDelegation,
+      now: "2026-06-03T09:00:00.000Z",
+      projectDefault: { mode: "attended" }
+    };
+
+    expect(resolvePiWorkMode({ ...base, sessionMode: "manual" })).toEqual({
+      mode: "manual",
+      source: "explicit"
+    });
+    expect(resolvePiWorkMode({ ...base, sessionMode: "manual", taskMode: "autonomous" })).toEqual({
+      mode: "autonomous",
+      source: "explicit"
+    });
+  });
+
+  test("resolves active unexpired delegation before project default", () => {
+    expect(resolvePiWorkMode({
+      activeDelegation: {
+        authorization_json: JSON.stringify({ expires_at: "2026-06-03T10:00:00.000Z", mode: "delegated" }),
+        status: "active"
+      },
+      now: "2026-06-03T09:00:00.000Z",
+      projectDefault: { mode: "attended" }
+    })).toEqual({
+      mode: "delegated",
+      source: "delegation"
+    });
+  });
+
+  test("ignores expired delegation and falls back to project default", () => {
+    expect(resolvePiWorkMode({
+      activeDelegation: {
+        authorization_json: JSON.stringify({ expires_at: "2026-06-03T08:00:00.000Z", mode: "delegated" }),
+        status: "active"
+      },
+      now: "2026-06-03T09:00:00.000Z",
+      projectDefault: { mode: "attended" }
+    })).toEqual({
+      mode: "attended",
+      source: "project_default"
+    });
+  });
+
+  test("defaults resolution to manual while policy normalization stays attended", () => {
+    expect(resolvePiWorkMode()).toEqual({ mode: "manual", source: "manual" });
+    expect(resolvePiWorkMode({ projectDefault: { mode: "auto" } })).toEqual({
+      mode: "manual",
+      source: "manual"
+    });
+    expect(normalizePiModePolicy(undefined).mode).toBe("attended");
   });
 });
