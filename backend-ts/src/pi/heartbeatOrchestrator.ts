@@ -7,6 +7,7 @@ import {
   type PiDelegation
 } from "../db/repositories/pi.ts";
 import { applyHeartbeatActionPlan, heartbeatAuthorizationPolicy, heartbeatAuthorizationSummary } from "./heartbeatActionExecution.ts";
+import { generateFailurePatternMemoryCandidates } from "./failurePatternCandidates.ts";
 import { collectProjectHeartbeatSignals } from "./heartbeatSignals.ts";
 import { planHeartbeatActions } from "./heartbeatPlanner.ts";
 import { heartbeatContext, isPaused, iso, recordHeartbeatEvent, safeError, updateDelegationTick } from "./heartbeatOrchestratorSupport.ts";
@@ -119,6 +120,8 @@ async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof 
     recordHeartbeatEvent(input.database, ctx, "plan_actions", { count: plan.length });
     recordHeartbeatEvent(input.database, ctx, "authorization_gate", policy.authorization_summary);
     const proposed = applyHeartbeatActionPlan(input.database, ctx, policy, plan);
+    const patternCandidates = generateFailurePatternMemoryCandidates(input.database, ctx.projectID);
+    if (patternCandidates.length > 0) recordHeartbeatEvent(input.database, ctx, "failure_pattern_memory", { count: patternCandidates.length });
     const result = completedResult(ctx, signals, policy, plan, proposed);
     recordHeartbeatEvent(input.database, ctx, "audit", {
       actions_executed: result.executed_actions.length,
