@@ -152,7 +152,14 @@ describe("Bun frontend API compatibility", () => {
       expect(pausedCron).toMatchObject({ id: cron.id, status: "paused" });
       expect(deletedCron.status).toBe(204);
       expect(settings).toMatchObject({ events: ["done"], active_start: "09:00", active_end: "18:30" });
-      expect(capabilities).toMatchObject({ skills: expect.any(Array), plugins: expect.any(Array) });
+      expect(Array.isArray(capabilities.skills)).toBe(true);
+      expect(Array.isArray(capabilities.plugins)).toBe(true);
+      const runnerSkill = (capabilities.skills as Array<Record<string, unknown>>).find((item) => item.id === "codex-issue-runner");
+      expect(runnerSkill).toMatchObject({
+        id: "codex-issue-runner",
+        source_path: "repo:skills/codex-issue-runner/SKILL.md"
+      });
+      expect(JSON.stringify(capabilities)).not.toContain(cwd);
     } finally {
       database.close();
     }

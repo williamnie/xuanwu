@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
-import { getSkillMetadata, listSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
+import { getSkillMetadata, readSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
@@ -267,7 +267,7 @@ function safeListSkills(db: RunnerDatabase, context: PiRunnerActionContext) {
   return executeSafePiAction(db, context, {
     actionType: "skill.list",
     payload: {},
-    execute: () => ({ items: listSkillRegistry() })
+    execute: () => readSkillRegistry()
   });
 }
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getSkillMetadata, listSkillRegistry, recommendSkillIntents } from "./registry.ts";
+import { getSkillMetadata, listSkillRegistry, readSkillRegistry, recommendSkillIntents } from "./registry.ts";
 
 const tempRoots: string[] = [];
 
@@ -21,9 +21,11 @@ describe("PI skill registry", () => {
       name: "codex-issue-runner"
     });
 
-    const skills = listSkillRegistry({ roots: [{ path: join(root, "skills") }] });
-    const skill = getSkillMetadata("codex-issue-runner", { roots: [{ path: join(root, "skills") }] });
+    const registry = readSkillRegistry({ roots: [{ label: "fixture", path: join(root, "skills") }] });
+    const skills = listSkillRegistry({ roots: [{ label: "fixture", path: join(root, "skills") }] });
+    const skill = getSkillMetadata("codex-issue-runner", { roots: [{ label: "fixture", path: join(root, "skills") }] });
 
+    expect(registry.diagnostics).toEqual([]);
     expect(skills).toHaveLength(1);
     expect(skill).toMatchObject({
       allowed_roles: expect.arrayContaining(["pi", "executor"]),
@@ -31,9 +33,12 @@ describe("PI skill registry", () => {
       id: "codex-issue-runner",
       name: "codex-issue-runner",
       risk_level: "medium",
-      source_path: skillPath,
+      source_path: "fixture:codex-issue-runner/SKILL.md",
       trigger_rules: expect.stringContaining("runner issues")
     });
+    expect(skill?.source_path).not.toContain(root);
+    expect(JSON.stringify(registry)).not.toContain(root);
+    expect(skillPath).toContain("SKILL.md");
   });
 
   test("recommends skill intents from issue text", async () => {
@@ -54,6 +59,45 @@ describe("PI skill registry", () => {
 
     expect(recommendations.map((item) => item.id)).toContain("codex-issue-runner");
     expect(recommendations[0]).toMatchObject({ reason: expect.stringContaining("matched") });
+  });
+
+  test("reports bad or missing skill files without leaking absolute roots", async () => {
+    const root = await fixtureRoot();
+    await writeSkill(root, "healthy", {
+      description: "Use when healthy skill metadata should be visible.",
+      name: "healthy"
+    });
+    await mkdir(join(root, "skills", "broken"), { recursive: true });
+    await writeFile(join(root, "skills", "broken", "SKILL.md"), "# Missing front matter");
+
+    const registry = readSkillRegistry({
+      roots: [
+        { label: "fixture", path: join(root, "skills") },
+        { label: "missing-fixture", path: join(root, "missing-skills") }
+      ]
+    });
+
+    expect(registry.items.map((item) => item.id)).toEqual(["healthy"]);
+    expect(registry.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "missing_front_matter",
+        source_path: "fixture:broken/SKILL.md"
+      }),
+      expect.objectContaining({
+        code: "root_missing",
+        source_path: "missing-fixture"
+      })
+    ]));
+    expect(JSON.stringify(registry)).not.toContain(root);
+  });
+
+  test("default registry includes repo-local skills", () => {
+    const skill = getSkillMetadata("codex-issue-runner");
+
+    expect(skill).toMatchObject({
+      id: "codex-issue-runner",
+      source_path: "repo:skills/codex-issue-runner/SKILL.md"
+    });
   });
 });
 

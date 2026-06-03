@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type SkillMetadata = {
   allowed_roles: string[];
@@ -13,7 +14,16 @@ export type SkillMetadata = {
   trigger_rules: string;
 };
 
-export type SkillRegistryOptions = { roots?: Array<{ path: string; prefix?: string }> };
+export type SkillRegistryDiagnostic = {
+  code: "missing_description" | "missing_front_matter" | "read_error" | "root_missing" | "root_not_directory";
+  message: string;
+  severity: "warning";
+  source_path: string;
+};
+
+export type SkillRegistry = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
+export type SkillRegistryRoot = { label?: string; path: string; prefix?: string };
+export type SkillRegistryOptions = { roots?: SkillRegistryRoot[] };
 export type SkillRecommendationInput = { description?: string; title?: string };
 export type SkillRecommendation = SkillMetadata & { reason: string; score: number };
 
@@ -21,15 +31,20 @@ const MAX_DEPTH = 6;
 const MAX_SKILLS = 160;
 
 export function listSkillRegistry(options: SkillRegistryOptions = {}): SkillMetadata[] {
+  return readSkillRegistry(options).items;
+}
+
+export function readSkillRegistry(options: SkillRegistryOptions = {}): SkillRegistry {
+  const diagnostics: SkillRegistryDiagnostic[] = [];
   const found = new Map<string, SkillMetadata>();
   for (const root of registryRoots(options)) {
-    for (const file of findSkillFiles(root.path, 0)) {
-      const skill = readSkillFile(file, root);
+    for (const file of findSkillFiles(root, 0, diagnostics)) {
+      const skill = readSkillFile(file, root, diagnostics);
       if (skill && !found.has(skill.id)) found.set(skill.id, skill);
-      if (found.size >= MAX_SKILLS) return sortedSkills([...found.values()]);
+      if (found.size >= MAX_SKILLS) return { diagnostics, items: sortedSkills([...found.values()]) };
     }
   }
-  return sortedSkills([...found.values()]);
+  return { diagnostics, items: sortedSkills([...found.values()]) };
 }
 
 export function getSkillMetadata(id: string, options: SkillRegistryOptions = {}): SkillMetadata | null {
@@ -50,42 +65,53 @@ export function recommendSkillIntents(
     .slice(0, 8);
 }
 
-function registryRoots(options: SkillRegistryOptions): Array<{ path: string; prefix?: string }> {
+function registryRoots(options: SkillRegistryOptions): SkillRegistryRoot[] {
   if (options.roots?.length) return options.roots;
   const home = Bun.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
+  const repo = repoRoot();
   return [
-    { path: join(home, "skills") },
-    { path: join(home, "superpowers", "skills"), prefix: "superpowers" },
-    { path: join(home, "plugins", "cache") }
+    { label: "repo", path: join(repo, "skills") },
+    { label: "codex-home", path: join(home, "skills") },
+    { label: "codex-superpowers", path: join(home, "superpowers", "skills"), prefix: "superpowers" },
+    { label: "codex-plugins", path: join(home, "plugins", "cache") }
   ];
 }
 
-function findSkillFiles(root: string, depth: number): string[] {
-  if (depth > MAX_DEPTH || !existsSync(root)) return [];
-  const stat = safeStat(root);
-  if (!stat?.isDirectory()) return [];
-  const skill = join(root, "SKILL.md");
+function findSkillFiles(root: SkillRegistryRoot, depth: number, diagnostics: SkillRegistryDiagnostic[]): string[] {
+  if (depth > MAX_DEPTH) return [];
+  if (!existsSync(root.path)) return rootMissing(root, depth, diagnostics);
+  const stat = safeStat(root.path);
+  if (!stat?.isDirectory()) return rootNotDirectory(root, depth, diagnostics);
+  const skill = join(root.path, "SKILL.md");
   if (existsSync(skill)) return [skill];
-  return safeReadDir(root).flatMap((name) => findSkillFiles(join(root, name), depth + 1));
+  return safeReadDir(root.path, root, diagnostics).flatMap((name) => (
+    findSkillFiles({ ...root, path: join(root.path, name) }, depth + 1, diagnostics)
+  ));
 }
 
-function readSkillFile(path: string, root: { path: string; prefix?: string }): SkillMetadata | null {
-  const text = safeReadFile(path);
-  if (text === "") return null;
+function readSkillFile(path: string, root: SkillRegistryRoot, diagnostics: SkillRegistryDiagnostic[]): SkillMetadata | null {
+  const text = safeReadFile(path, root, diagnostics);
+  if (text === undefined) return null;
+  if (!hasFrontMatter(text)) return badSkill(root, path, diagnostics, "missing_front_matter", "SKILL.md missing front matter");
   const frontMatter = parseFrontMatter(text);
   const id = normalizeID(root.prefix ? `${root.prefix}:${parentName(path)}` : parentName(path));
   const name = normalizeID(frontMatter.name) || id;
   const description = clean(frontMatter.description);
+  if (description === "") return badSkill(root, path, diagnostics, "missing_description", "SKILL.md missing description");
   return {
     allowed_roles: allowedRoles(description),
     description,
     id,
     name,
     risk_level: riskLevel(`${name} ${description}`),
-    source_path: path,
+    source_path: publicPath(path, root),
     summary: description,
     trigger_rules: description || `Use when ${name} is requested.`
   };
+}
+
+function hasFrontMatter(text: string): boolean {
+  return text.startsWith("---") && text.indexOf("\n---", 3) >= 0;
 }
 
 function parseFrontMatter(text: string): Record<string, string> {
@@ -131,20 +157,49 @@ function parentName(path: string): string {
   return path.split(/[\\/]+/).at(-2) ?? "skill";
 }
 
+function publicPath(path: string, root: SkillRegistryRoot): string {
+  const label = clean(root.label) || clean(root.prefix) || "skill-root";
+  const base = label === "repo" ? repoRoot() : root.path;
+  return `${label}:${relative(base, path).replaceAll("\\", "/")}`;
+}
+
+function repoRoot(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+}
+
 function normalizeID(value: unknown): string {
   return clean(value).toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-function safeReadDir(path: string): string[] {
-  try { return readdirSync(path); } catch { return []; }
+function safeReadDir(path: string, root: SkillRegistryRoot, diagnostics: SkillRegistryDiagnostic[]): string[] {
+  try { return readdirSync(path); } catch { diagnostics.push(diagnostic("read_error", publicPath(path, root), "Cannot read skill directory")); return []; }
 }
 
-function safeReadFile(path: string): string {
-  try { return readFileSync(path, "utf8"); } catch { return ""; }
+function safeReadFile(path: string, root: SkillRegistryRoot, diagnostics: SkillRegistryDiagnostic[]): string | undefined {
+  try { return readFileSync(path, "utf8"); } catch { diagnostics.push(diagnostic("read_error", publicPath(path, root), "Cannot read skill file")); return undefined; }
 }
 
 function safeStat(path: string) {
   try { return statSync(path); } catch { return undefined; }
+}
+
+function rootMissing(root: SkillRegistryRoot, depth: number, diagnostics: SkillRegistryDiagnostic[]): string[] {
+  if (depth === 0) diagnostics.push(diagnostic("root_missing", clean(root.label) || "skill-root", "Skill root is missing"));
+  return [];
+}
+
+function rootNotDirectory(root: SkillRegistryRoot, depth: number, diagnostics: SkillRegistryDiagnostic[]): string[] {
+  if (depth === 0) diagnostics.push(diagnostic("root_not_directory", clean(root.label) || "skill-root", "Skill root is not a directory"));
+  return [];
+}
+
+function badSkill(root: SkillRegistryRoot, path: string, diagnostics: SkillRegistryDiagnostic[], code: SkillRegistryDiagnostic["code"], message: string): null {
+  diagnostics.push(diagnostic(code, publicPath(path, root), message));
+  return null;
+}
+
+function diagnostic(code: SkillRegistryDiagnostic["code"], source_path: string, message: string): SkillRegistryDiagnostic {
+  return { code, message, severity: "warning", source_path };
 }
 
 function clean(value: unknown): string {

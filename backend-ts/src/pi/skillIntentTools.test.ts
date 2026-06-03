@@ -26,6 +26,8 @@ describe("PI skill intent tools", () => {
   test("lists, reads, recommends, and audits skill intents through PI tools", async () => {
     const { db, project, root } = await openFixture();
     await writeSkill(root, "codex-issue-runner", "Use when working on runner PI issues and verification.");
+    await writeSkill(root, "local-fixture", "Use when local fixture skill metadata should be visible.");
+    await writeBadSkill(root, "broken");
     Bun.env.CODEX_HOME = root;
     try {
       const issueID = insertIssue(db, project.id, "todo", "PI runner issue");
@@ -41,8 +43,14 @@ describe("PI skill intent tools", () => {
         project_id: project.id,
         title: "PI runner"
       });
+      const list = await runTool(tools, "skill_list", {});
       const audit = await runTool(tools, "skill_intent_audit", { issue_id: issueID });
 
+      expect(list.details.items.map((item: { id: string }) => item.id)).toContain("local-fixture");
+      expect(list.details.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "missing_front_matter", source_path: "codex-home:broken/SKILL.md" })
+      ]));
+      expect(JSON.stringify(list.details)).not.toContain(root);
       expect(recommend.details.items.map((item: { id: string }) => item.id)).toContain("codex-issue-runner");
       expect(audit.details).toMatchObject({ issue_id: issueID, status: "ok" });
     } finally {
@@ -105,6 +113,12 @@ async function writeSkill(root: string, id: string, description: string): Promis
   const dir = join(root, "skills", id);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "SKILL.md"), `---\nname: ${id}\ndescription: ${description}\n---\n`);
+}
+
+async function writeBadSkill(root: string, id: string): Promise<void> {
+  const dir = join(root, "skills", id);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "SKILL.md"), "# Missing front matter");
 }
 
 function insertIssue(db: RunnerDatabase, projectID: string, status: string, title: string): number {
