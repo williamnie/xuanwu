@@ -39,6 +39,7 @@ export type PiGatePolicy = {
   allowed_actions?: string[];
   allowedMcpCapabilities?: string[];
   allowedSkillIntents?: string[];
+  allowed_skill_intents?: string[];
   authorizedActions?: PiAuthorizedAction[];
   expiresAt?: string;
   expires_at?: string;
@@ -122,7 +123,7 @@ export function decidePiAuthorization(
   const mode = policy.mode ?? "attended";
   if (mode === "manual") return { decision: "ask", reason: "manual mode requires user approval" };
   if (mode === "delegated" || mode === "autonomous") {
-    if (!authorizedSkillIntents(envelope, policy.allowedSkillIntents)) {
+    if (!authorizedSkillIntents(envelope, policy.allowedSkillIntents ?? policy.allowed_skill_intents)) {
       return { decision: "deny", reason: "delegated skill intent is not covered by authorization allowlist" };
     }
     if (!delegatedActionCovered(envelope, policy)) {

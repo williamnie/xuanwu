@@ -59,6 +59,30 @@ describe("PI authorization decision", () => {
     })).toMatchObject({ decision: "deny" });
   });
 
+  test("delegated mode denies skill intents outside snake_case authorization allowlist", () => {
+    const action = {
+      ...BASE,
+      action_type: "issue.create",
+      payload: {
+        project_id: "demo",
+        required_skill_intents: ["browser:control-in-app-browser"]
+      },
+      requires_confirmation: true,
+      risk_level: "medium"
+    };
+
+    expect(decidePiAuthorization(action, {
+      allowed_actions: ["issue.create"],
+      allowed_skill_intents: ["codex-issue-runner"],
+      authorizedActions: [{ action_type: "issue.create", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: "delegated skill intent is not covered by authorization allowlist"
+    });
+  });
+
   test("forbidden actions and forbidden risk always deny", () => {
     expect(decidePiAuthorization(BASE, {
       allowed_actions: ["issue.comment"],

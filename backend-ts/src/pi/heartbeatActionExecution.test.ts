@@ -51,6 +51,7 @@ describe("PI heartbeat action execution", () => {
       const issueID = insertIssue(db, "project-a", "todo");
       insertDelegation(db, "delegation-a", "project-a", {
         allowed_actions: ["issue.enqueue"],
+        allowed_skill_intents: ["codex-issue-runner"],
         authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: "project-a" }],
         mode: "delegated",
         scope: { project_id: "project-a" }
@@ -62,6 +63,7 @@ describe("PI heartbeat action execution", () => {
 
       expect(run?.executed_actions).toHaveLength(1);
       expect(run).toMatchObject({ actions_proposed: 1, status: "completed" });
+      expect(run?.policy.authorization_summary).toMatchObject({ allowed_skill_intents: ["codex-issue-runner"] });
       expect(getPiAction(db, actionID)).toMatchObject({ gate_decision: "execute", status: "completed" });
       expect(listPiActionEvents(db, { actionId: actionID }).map((event) => event.event_type)).toEqual([
         "candidate", "gate_decision", "execution_started", "execution_result"
@@ -118,10 +120,12 @@ function insertProject(db: RunnerDatabase, id: string, provider = "codex"): void
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectID: string, status: string): number {
+function insertIssue(db: RunnerDatabase, projectID: string, status: string, skills: string[] = []): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [projectID, `${status} issue`, status, "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
+    `insert into issues
+       (project_id, title, status, recommended_skill_intents_json, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [projectID, `${status} issue`, status, JSON.stringify(skills), "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
   );
   return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
 }

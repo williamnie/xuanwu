@@ -81,7 +81,7 @@ describe("Bun projects/issues read API", () => {
 
       const created = await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST",
-        body: JSON.stringify({ id: "demo", cwd }),
+        body: JSON.stringify({ id: "demo", cwd, default_skill_policy: { allowed: ["codex-issue-runner"] } }),
         headers: { "content-type": "application/json" }
       }));
       expect(created.status).toBe(201);
@@ -90,6 +90,7 @@ describe("Bun projects/issues read API", () => {
         name: basename(cwd),
         cwd,
         provider: "codex",
+        default_skill_policy: "{\"allowed\":[\"codex-issue-runner\"]}",
         auto_run: 0,
         model: "codex-default",
         approval_policy: "never",
@@ -101,11 +102,16 @@ describe("Bun projects/issues read API", () => {
 
       const patched = await router.handle(new Request(`${BASE_URL}/api/projects/demo`, {
         method: "PATCH",
-        body: JSON.stringify({ name: "Renamed", provider: "CODEX" }),
+        body: JSON.stringify({ default_skill_policy: { recommended: ["verification-before-completion"] }, name: "Renamed", provider: "CODEX" }),
         headers: { "content-type": "application/json" }
       }));
       expect(patched.status).toBe(200);
-      expect(await patched.json()).toMatchObject({ id: "demo", name: "Renamed", provider: "codex" });
+      expect(await patched.json()).toMatchObject({
+        default_skill_policy: "{\"recommended\":[\"verification-before-completion\"]}",
+        id: "demo",
+        name: "Renamed",
+        provider: "codex"
+      });
 
       const duplicateCWD = await router.handle(new Request(`${BASE_URL}/api/projects`, {
         method: "POST",
@@ -307,6 +313,8 @@ describe("Bun projects/issues read API", () => {
           project_id: "demo",
           title: "Create API",
           description: "Issue body",
+          required_skill_intents: ["codex-issue-runner"],
+          recommended_skill_intents: ["verification-before-completion"],
           priority: 4,
           template_id: "custom-template",
           prompt_template: "snapshot body",
@@ -338,6 +346,8 @@ describe("Bun projects/issues read API", () => {
         source_session_id: "thread-source",
         source_turn_id: "turn-source",
         source_excerpt: "讨论摘录",
+        required_skill_intents: "[\"codex-issue-runner\"]",
+        recommended_skill_intents: "[\"verification-before-completion\"]",
         workflow_snapshot_json: '{"steps":[]}'
       });
       expect(await readBack.json()).toMatchObject(createdIssue);
@@ -484,11 +494,17 @@ describe("Bun projects/issues read API", () => {
         method: "POST",
         body: JSON.stringify({ project_id: "demo", title: "bad", status: "bogus" })
       }));
+      const invalidSkill = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "demo", required_skill_intents: ["bad skill"], title: "bad" })
+      }));
 
       expect(missingProject.status).toBe(404);
       expect(await missingProject.json()).toEqual({ message: "资源不存在" });
       expect(invalidStatus.status).toBe(400);
       expect(await invalidStatus.json()).toEqual({ message: "status 不合法" });
+      expect(invalidSkill.status).toBe(400);
+      expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
     } finally {
       database.close();
     }

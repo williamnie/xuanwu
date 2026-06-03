@@ -26,6 +26,7 @@ describe("PI delegations API", () => {
       const created = await request(router, "/api/pi/delegations", "POST", {
         authorization: {
           allowed_actions: ["issue.enqueue"],
+          allowed_skill_intents: ["codex-issue-runner"],
           audit_source: "api-test",
           expires_at: "2026-06-04T08:00:00Z",
           forbidden_actions: ["session.steer"],
@@ -47,6 +48,7 @@ describe("PI delegations API", () => {
       expect(created.status).toBe(201);
       expect(body).toMatchObject({
         allowed_actions_json: "[\"issue.enqueue\"]",
+        allowed_skill_intents_json: "[\"codex-issue-runner\"]",
         audit_source: "api-test",
         expires_at: "2026-06-04T08:00:00Z",
         forbidden_actions_json: "[\"session.steer\"]",
@@ -95,6 +97,7 @@ describe("PI delegations API", () => {
 
       const patched = await request(router, `/api/pi/delegations/${id}`, "PATCH", {
         allowed_actions: ["issue.enqueue", "issue.state_repair"],
+        allowed_skill_intents: ["codex-issue-runner", "verification-before-completion"],
         audit_source: "user",
         expires_at: "2026-06-04T09:00:00Z",
         forbidden_actions: ["session.steer"],
@@ -107,6 +110,7 @@ describe("PI delegations API", () => {
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({
         allowed_actions_json: "[\"issue.enqueue\",\"issue.state_repair\"]",
+        allowed_skill_intents_json: "[\"codex-issue-runner\",\"verification-before-completion\"]",
         audit_source: "user",
         expires_at: "2026-06-04T09:00:00Z",
         forbidden_actions_json: "[\"session.steer\"]",
@@ -144,6 +148,10 @@ describe("PI delegations API", () => {
         authorization: "{not-json",
         project_id: "demo"
       });
+      const invalidSkill = await request(router, "/api/pi/delegations", "POST", {
+        allowed_skill_intents: ["bad skill"],
+        project_id: "demo"
+      });
 
       expect(unauthorized.status).toBe(401);
       expect(await unauthorized.json()).toEqual({ message: "unauthorized" });
@@ -153,6 +161,8 @@ describe("PI delegations API", () => {
       expect(await invalidStatus.json()).toEqual({ message: "unsupported PI delegation status: archived" });
       expect(invalidAuthorization.status).toBe(400);
       expect(await invalidAuthorization.json()).toEqual({ message: "authorization 必须是合法 JSON" });
+      expect(invalidSkill.status).toBe(400);
+      expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
     } finally {
       database.close();
     }

@@ -82,6 +82,7 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "issues")).toContain("required_mcp_capabilities_json");
       expect(columnNames(connection, "projects")).toContain("default_skill_policy_json");
       expect(columnNames(connection, "projects")).toContain("default_mcp_policy_json");
+      expect(columnNames(connection, "pi_delegations")).toContain("allowed_skill_intents_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("verification_policy_json");
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
@@ -101,7 +102,8 @@ describe("Bun SQLite database connection", () => {
         { id: "011_pi_reports" },
         { id: "012_pi_delegation_envelope" },
         { id: "013_project_pi_policy" },
-        { id: "014_cron_task_claims" }
+        { id: "014_cron_task_claims" },
+        { id: "015_pi_delegation_skill_intents" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -112,6 +114,7 @@ describe("Bun SQLite database connection", () => {
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
+        allowed_skill_intents_json: "'[]'",
         audit_source: "''",
         expires_at: "''",
         forbidden_actions_json: "'[]'",
@@ -162,7 +165,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 14 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 15 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

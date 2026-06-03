@@ -26,6 +26,7 @@ describe("PI delegation migration", () => {
     try {
       expect(columnNames(migrated, "pi_delegations")).toEqual(expect.arrayContaining([
         "allowed_actions_json",
+        "allowed_skill_intents_json",
         "audit_source",
         "expires_at",
         "forbidden_actions_json",
@@ -37,6 +38,7 @@ describe("PI delegation migration", () => {
       expect(migrationRow(migrated)).toEqual({ id: "012_pi_delegation_envelope" });
       expect(legacyDelegationRow(migrated)).toEqual({
         allowed_actions_json: "[]",
+        allowed_skill_intents_json: "[]",
         audit_source: "",
         authorization_json: "{\"mode\":\"delegated\"}",
         expires_at: "",
@@ -99,7 +101,7 @@ function columnNames(connection: RunnerDatabase, table: string): string[] {
 function legacyDelegationRow(connection: RunnerDatabase): unknown {
   return connection.sqlite.query(`
     select id, authorization_json, scope_json, starts_at, expires_at,
-      allowed_actions_json, forbidden_actions_json, audit_source
+      allowed_actions_json, forbidden_actions_json, allowed_skill_intents_json, audit_source
     from pi_delegations where id='legacy-delegation'
   `).get();
 }

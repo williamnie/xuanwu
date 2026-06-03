@@ -36,6 +36,10 @@ export function heartbeatAuthorizationPolicy(input: HeartbeatInput, ctx: Heartbe
   return cleanPolicy({
     ...auth,
     allowed_actions: listValue(auth.allowed_actions ?? auth.allowedActions, delegation?.allowed_actions_json),
+    allowed_skill_intents: listValue(
+      auth.allowed_skill_intents ?? auth.allowedSkillIntents,
+      delegation?.allowed_skill_intents_json
+    ),
     forbidden_actions: listValue(auth.forbidden_actions ?? auth.forbiddenActions, delegation?.forbidden_actions_json),
     mode: workMode(auth.mode, delegation ? "delegated" : "attended"),
     now: ctx.nowText,
@@ -48,6 +52,7 @@ export function heartbeatAuthorizationPolicy(input: HeartbeatInput, ctx: Heartbe
 export function heartbeatAuthorizationSummary(policy: PiGatePolicy): Record<string, unknown> {
   return {
     allowed_actions: policy.allowed_actions ?? [],
+    allowed_skill_intents: policy.allowed_skill_intents ?? policy.allowedSkillIntents ?? [],
     forbidden_actions: policy.forbidden_actions ?? [],
     mode: policy.mode ?? "attended",
     scope_present: policy.scope !== undefined || policy.scopes !== undefined,

@@ -4,6 +4,9 @@ export type SkillPolicy = {
   required?: string[];
 };
 
+const SKILL_INTENT_ID_RE = /^[a-z0-9_:-]+(?:\/[a-z0-9_:-]+)*$/;
+const MAX_SKILL_INTENT_ID_LENGTH = 128;
+
 export function normalizeSkillIntentList(value: unknown): string {
   return JSON.stringify(parseSkillIntentList(value));
 }
@@ -68,11 +71,19 @@ function cleanList(values: string[]): string[] {
   const out: string[] = [];
   for (const value of values) {
     const id = cleanString(value).toLowerCase();
-    if (id === "" || seen.has(id)) continue;
+    if (id === "") continue;
+    assertValidSkillIntentID(id);
+    if (seen.has(id)) continue;
     seen.add(id);
     out.push(id);
   }
   return out;
+}
+
+function assertValidSkillIntentID(id: string): void {
+  if (id.length > MAX_SKILL_INTENT_ID_LENGTH || !SKILL_INTENT_ID_RE.test(id)) {
+    throw new Error(`skill id 不合法: ${id}`);
+  }
 }
 
 function cleanString(value: unknown): string {
