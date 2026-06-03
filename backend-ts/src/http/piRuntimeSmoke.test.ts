@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getPiMemoryItem, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
+import { createPiDelegation, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
+import { createPiRuntimeSession } from "./piRuntime.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -114,6 +116,58 @@ describe("Bun PI runtime v1 smoke", () => {
       database.close();
     }
   });
+
+  test("injects only authorized skill metadata into PI runtime prompt and audits the summary", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo", JSON.stringify({
+        allowed: ["codex-issue-runner"],
+        recommended: ["codex-issue-runner", "verification-before-completion"]
+      }));
+      const issue = createIssue(database, {
+        project_id: "demo",
+        recommended_skill_intents: ["verification-before-completion"],
+        required_skill_intents: ["codex-issue-runner"],
+        title: "Skill scoped issue"
+      });
+      createPiDelegation(database, {
+        allowed_skill_intents_json: ["codex-issue-runner"],
+        id: "delegation-a",
+        project_id: "demo"
+      });
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+
+      const runtime = await createPiRuntimeSession(database, {
+        agent: agentRecord(),
+        authorization: {
+          allowedSkillIntents: ["codex-issue-runner", "verification-before-completion"],
+          mode: "delegated"
+        },
+        conversationID: "conv-skill-context",
+        delegationID: "delegation-a",
+        issueID: issue.id,
+        project: projectRecord("demo")
+      });
+      const prompt = runtime.session.systemPrompt;
+      runtime.dispose();
+
+      expect(prompt).toContain("Relevant Skill Metadata:");
+      expect(prompt).toContain('"id": "codex-issue-runner"');
+      expect(prompt).not.toContain('"id": "verification-before-completion"');
+      const events = listPiActionEvents(database, { conversationId: "conv-skill-context" });
+      expect(events.map((event) => event.event_type)).toContain("skill_prompt_context_injected");
+      const audit = JSON.parse(events.find((event) => event.event_type === "skill_prompt_context_injected")?.payload_json ?? "{}");
+      expect(audit).toMatchObject({
+        injected_skill_ids: ["codex-issue-runner"],
+        scope: { delegation_id: "delegation-a", issue_id: issue.id, project_id: "demo" },
+        unauthorized_skill_intents: ["verification-before-completion"]
+      });
+      expect(JSON.stringify(audit)).toContain("Create, enqueue, inspect");
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function post(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {
@@ -150,11 +204,33 @@ function insertFauxAgent(db: RunnerDatabase): void {
   );
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
+function agentRecord() {
+  return {
+    id: "pi-faux", name: "PI Faux", provider: "pi-sdk", model_provider: "pi-smoke-faux", model_id: "faux-1",
+    thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
+    created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
+  };
+}
+
+function projectRecord(id: string) {
+  return {
+    id, name: id, cwd: `/tmp/${id}`, provider: "codex", provider_config_json: "{}", auto_run: 0,
+    model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
+    sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+    default_mcp_policy: "{}", default_skill_policy: JSON.stringify({
+      allowed: ["codex-issue-runner"],
+      recommended: ["codex-issue-runner", "verification-before-completion"]
+    }),
+    loop_status: "stopped", provider_capabilities: []
+  };
+}
+
+function insertProject(db: RunnerDatabase, id: string, skillPolicy = "{}"): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', 1,
+    `insert into projects
+       (id, name, cwd, provider, provider_config_json, default_skill_policy_json, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', skillPolicy, 1,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }

@@ -10,7 +10,7 @@ import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
-import { listSkillRegistry } from "../skills/registry.ts";
+import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
@@ -26,6 +26,7 @@ export type RuntimeSessionInput = {
   conversationID: string;
   delegationID?: string;
   heartbeatID?: string;
+  issueID?: number;
   project?: Project;
   sessionFile?: string;
   source?: string;
@@ -148,13 +149,14 @@ function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
 }
 
 function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: RunnerDatabase) {
+  const systemPrompt = piSystemPrompt(input, db);
   return {
     getAgentsFiles: () => ({ agentsFiles: [] }),
     getAppendSystemPrompt: () => [],
     getExtensions: () => ({ extensions: [], errors: [], runtime: sdk.pi.createExtensionRuntime() }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
-    getSystemPrompt: () => piSystemPrompt(input, db),
+    getSystemPrompt: () => systemPrompt,
     getThemes: () => ({ themes: [], diagnostics: [] }),
     extendResources: () => {},
     reload: async () => {}
@@ -162,17 +164,14 @@ function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: 
 }
 
 function piSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
+  const skillContext = buildSkillPromptContext(db, input);
+  recordSkillPromptContextAudit(db, input, skillContext.audit);
   return [
     "You are PI, an independent project manager agent for codex-issue-runner.",
     "Role contract: PI is manager/orchestrator; executor executes issues; verifier validates evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
-    "Skills Registry metadata:",
-    JSON.stringify(listSkillRegistry().slice(0, 24).map((skill) => ({
-      id: skill.id, name: skill.name, description: skill.description,
-      trigger_rules: skill.trigger_rules, risk_level: skill.risk_level,
-      source_path: skill.source_path, allowed_roles: skill.allowed_roles
-    })), null, 2),
+    skillContext.promptSection,
     "MCP Capability Registry metadata:",
     JSON.stringify(publicMcpRegistry().slice(0, 24), null, 2),
     "Project default skill policy:",
