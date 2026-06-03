@@ -85,6 +85,40 @@ describe("PI runner action gate", () => {
       await fixture.close();
     }
   });
+
+  test("delegated authorization does not auto-execute covered high-risk proposals", async () => {
+    const fixture = await openFixture();
+    try {
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-1" });
+      const result = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "session.steer", project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        project: fixture.project
+      }).createSessionSteerProposal({
+        prompt: "change running executor",
+        session_key: "codex:thread-1"
+      }) as { action_id: string; decision: string; status: string };
+      const stored = getPiAction(fixture.db, result.action_id);
+
+      expect(result).toMatchObject({ decision: "ask", status: "pending" });
+      expect(stored).toMatchObject({
+        action_type: "session.steer",
+        gate_decision: "ask",
+        risk_level: "high",
+        status: "pending"
+      });
+      expect(listPiActionEvents(fixture.db, { actionId: result.action_id }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "pending_approval"
+      ]);
+    } finally {
+      await fixture.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {
@@ -108,4 +142,15 @@ function insertIssue(db: RunnerDatabase, input: { projectID: string; status: str
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing issue id");
   return row.id;
+}
+
+function insertAgentSession(db: RunnerDatabase, input: { projectID: string; sessionKey: string }): void {
+  const [, sessionID] = input.sessionKey.split(":");
+  db.sqlite.run(
+    `insert into agent_sessions
+      (session_key, provider, provider_session_id, project_id, title, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [input.sessionKey, "codex", sessionID, input.projectID, "Thread 1", "running",
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
 }

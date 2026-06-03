@@ -128,6 +128,7 @@ export function decidePiAuthorization(
     if (!delegatedActionCovered(envelope, policy)) {
       return { decision: "deny", reason: "delegated action is not covered by authorization envelope" };
     }
+    if (riskGate === "high") return { decision: "ask", reason: "high-risk action requires user confirmation" };
     return { decision: "execute", reason: withScopeReason("delegated action is covered by authorization envelope", scopeDecision.reason) };
   }
   if (riskGate === "confirm" || riskGate === "high") return { decision: "ask", reason: "risk requires user confirmation" };

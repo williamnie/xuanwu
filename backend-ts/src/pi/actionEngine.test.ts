@@ -100,4 +100,24 @@ describe("PI action engine risk classifier", () => {
     })).toMatchObject({ decision: "deny" });
   });
 
+  test("delegated authorization does not bypass high-risk confirmation", () => {
+    const envelope = {
+      action_type: "session.steer",
+      payload: { prompt: "change running executor", session_key: "codex:thread-1" },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "high",
+      source: "pi_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, {
+      authorizedActions: [{ action_type: "session.steer", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+  });
+
 });
