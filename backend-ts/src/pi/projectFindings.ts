@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { matchFailurePattern } from "./failurePatterns.ts";
 
 export type ProjectFindingCategory = "blocked" | "needs_user" | "transient" | "verification_needed";
 
@@ -28,10 +29,7 @@ export type ProjectFinding = {
   updated_at: string;
 };
 
-export type ProjectFindingScanOptions = {
-  now?: Date;
-  staleAfterMs?: number;
-};
+export type ProjectFindingScanOptions = { now?: Date; staleAfterMs?: number };
 
 type IssueFindingRow = {
   auto_retry_next_at: unknown; auto_retry_reason: unknown; codex_thread_id: unknown;
@@ -69,7 +67,7 @@ function issueFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] 
       or (status='todo' and auto_retry_next_at <> '')
     )
     order by case status when 'failed' then 0 else 1 end, updated_at asc, id asc
-  `).all(projectID).map((row) => mapIssueFinding(row));
+  `).all(projectID).map((row) => mapIssueFinding(db, projectID, row));
 }
 
 function holdFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
@@ -80,12 +78,15 @@ function holdFindings(db: RunnerDatabase, projectID: string): ProjectFinding[] {
   `).all(projectID).map(mapHoldFinding);
 }
 
-function mapIssueFinding(row: IssueFindingRow): ProjectFinding {
+function mapIssueFinding(db: RunnerDatabase, projectID: string, row: IssueFindingRow): ProjectFinding {
   const status = optionalString(row.status, "unknown");
   const issueID = integerValue(row.id);
-  const detail = redactFindingText(optionalString(row.error) || optionalString(row.title));
-  const category = issueFindingCategory(row);
-  const message = `${issueLead(status, issueID)}${detail ? `: ${detail}` : ""}`;
+  const rawDetail = optionalString(row.error) || optionalString(row.title);
+  const detail = redactFindingText(rawDetail);
+  const pattern = matchFailurePattern(db, projectID, rawDetail);
+  const category = pattern?.category ?? issueFindingCategory(row);
+  const message = issueMessage(status, issueID, detail, pattern?.recommendation);
+  const reason = pattern ? "failure_pattern" : issueReason(status, category);
   return {
     action_candidate: issueActionCandidate(row, category),
     category,
@@ -93,7 +94,7 @@ function mapIssueFinding(row: IssueFindingRow): ProjectFinding {
     message,
     notification: issueNotification(category, message),
     project_id: optionalString(row.project_id),
-    reason: issueReason(status, category),
+    reason,
     severity: category === "verification_needed" || category === "transient" ? "needs_review" : "blocked",
     status,
     title: redactFindingText(optionalString(row.title)),
@@ -175,6 +176,12 @@ function issueLead(status: string, issueID: number): string {
   if (status === "failed") return `Issue #${issueID} failed`;
   if (status === "todo") return `Issue #${issueID} is waiting for transient retry`;
   return `Issue #${issueID} is pending verification`;
+}
+
+function issueMessage(status: string, issueID: number, detail: string, recommendation: string | undefined): string {
+  const base = `${issueLead(status, issueID)}${detail ? `: ${detail}` : ""}`;
+  if (!recommendation) return base;
+  return `${base}; known failure pattern: ${redactFindingText(recommendation)}`;
 }
 
 function issueFindingCategory(row: IssueFindingRow): ProjectFindingCategory {

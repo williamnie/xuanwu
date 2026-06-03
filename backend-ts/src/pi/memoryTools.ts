@@ -8,6 +8,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
+import { memoryRejectedResult } from "./memoryPolicy.ts";
 
 export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_write_candidate"] as const;
 
@@ -72,7 +73,9 @@ function writeMemoryCandidate(
   db: RunnerDatabase,
   context: MemoryContext,
   input: Static<typeof memoryWriteCandidateParams>
-): PiMemoryItem {
+): PiMemoryItem | { reason: string; rejected: true } {
+  const rejected = memoryRejectedResult(input.content);
+  if (rejected) return rejected;
   const scope = cleanString(input.scope) || "project";
   const item = createPiMemoryItem(db, {
     id: crypto.randomUUID(),
@@ -138,7 +141,7 @@ function memoryCandidateEvent(item: PiMemoryItem): AppEvent {
   };
 }
 
-function toolResult(details: unknown): AgentToolResult {
+function toolResult(details: unknown): AgentToolResult<unknown> {
   return {
     content: [{ type: "text", text: JSON.stringify(details, null, 2) ?? "null" }],
     details

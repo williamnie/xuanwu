@@ -8,6 +8,7 @@ import {
   type PiMemoryItemFilter,
   type PiMemoryItemInput
 } from "../db/repositories/pi.ts";
+import { assertMemoryContentSafe } from "../pi/memoryPolicy.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -16,6 +17,8 @@ type PiMemoryContext = { database: RunnerDatabase };
 export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext): void {
   router.get("/api/pi/memory", (request) => json(listPiMemoryItems(context.database, memoryFilter(request))));
   router.post("/api/pi/memory", async (request) => createMemoryResponse(context, request));
+  router.post("/api/pi/memory/:id/promote", (request) => reviewMemoryResponse(context, request, 0));
+  router.post("/api/pi/memory/:id/disable", (request) => reviewMemoryResponse(context, request, 1));
   router.patch("/api/pi/memory/:id", async (request) => patchMemoryResponse(context, request));
   router.delete("/api/pi/memory/:id", (request) => deleteMemoryResponse(context, request));
 }
@@ -36,6 +39,12 @@ function deleteMemoryResponse(context: PiMemoryContext, request: Request): Respo
   const id = memoryID(request);
   if (!getPiMemoryItem(context.database, id)) throw new HttpError(404, "资源不存在");
   return json({ deleted: deletePiMemoryItem(context.database, id) });
+}
+
+function reviewMemoryResponse(context: PiMemoryContext, request: Request, disabled: number): Promise<Response> {
+  const id = memoryID(request);
+  if (!getPiMemoryItem(context.database, id)) throw new HttpError(404, "资源不存在");
+  return writeResponse(() => updatePiMemoryItem(context.database, id, { disabled }));
 }
 
 async function writeResponse(write: () => unknown | Promise<unknown>, status = 200): Promise<Response> {
@@ -66,8 +75,18 @@ function normalizeMemoryInput(input: Record<string, unknown>, isCreate: boolean)
   for (const field of FLAG_FIELDS) {
     if (hasValue(input, field)) output[field] = integerFlag(input[field]);
   }
+  if (hasValue(output as Record<string, unknown>, "content")) assertSafeContent(cleanString(output.content));
   if (isCreate && cleanString(output.id) === "") output.id = crypto.randomUUID();
   return output;
+}
+
+function assertSafeContent(content: string): void {
+  try {
+    assertMemoryContentSafe(content);
+  } catch (error) {
+    if (error instanceof Error) throw new HttpError(400, error.message);
+    throw error;
+  }
 }
 
 const STRING_FIELDS = [

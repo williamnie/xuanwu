@@ -75,6 +75,64 @@ describe("Bun PI memory API", () => {
       database.close();
     }
   });
+
+  test("promotes and disables memory candidates through explicit review actions", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/memory", "POST", {
+        id: "candidate-1",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_policy",
+        content: "Keep patches narrow",
+        disabled: true,
+        confidence: "medium"
+      });
+
+      const promoted = await request(router, "/api/pi/memory/candidate-1/promote", "POST", {});
+      const disabled = await request(router, "/api/pi/memory/candidate-1/disable", "POST", {});
+      const edited = await request(router, "/api/pi/memory/candidate-1", "PATCH", {
+        content: "Keep patches narrow and verified",
+        confidence: "high"
+      });
+
+      expect(promoted.status).toBe(200);
+      expect(await promoted.json()).toMatchObject({ id: "candidate-1", disabled: 0 });
+      expect(disabled.status).toBe(200);
+      expect(await disabled.json()).toMatchObject({ id: "candidate-1", disabled: 1 });
+      expect(edited.status).toBe(200);
+      expect(await edited.json()).toMatchObject({
+        content: "Keep patches narrow and verified",
+        confidence: "high",
+        disabled: 1
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects memory writes that contain high-sensitive secrets", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+
+      const response = await request(router, "/api/pi/memory", "POST", {
+        id: "secret-memory",
+        scope: "project",
+        scope_id: "demo",
+        kind: "provider_runtime",
+        content: "OPENAI_API_KEY=fixture-secret should not be stored"
+      });
+      const list = await router.handle(new Request(`${BASE_URL}/api/pi/memory?scope=project&scope_id=demo`));
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: "memory content contains sensitive data" });
+      expect(await list.json()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function request(

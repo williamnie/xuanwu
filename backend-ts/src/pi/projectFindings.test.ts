@@ -196,6 +196,37 @@ describe("PI failed/pending/hold scanner", () => {
       db.close();
     }
   });
+
+  test("uses confirmed failure pattern memory to classify retry and escalation", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const knownFailure = insertIssue(db, {
+        day: 5,
+        error: "provider returned quota exhaustion on model gpt-test",
+        status: "failed",
+        title: "Provider quota"
+      });
+      insertFailurePatternMemory(db, {
+        category: "needs_user",
+        match: "quota exhaustion",
+        recommendation: "Escalate to user before retrying provider quota failures."
+      });
+
+      const findings = scanProjectFindings(db, "demo");
+      const finding = findings.find((item) => item.issue_id === knownFailure);
+
+      expect(finding).toMatchObject({
+        category: "needs_user",
+        reason: "failure_pattern",
+        notification: { type: "pi.needs_user" }
+      });
+      expect(finding?.message).toContain("known failure pattern");
+      expect(finding?.message).toContain("Escalate to user");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function createProjectHoldsTable(db: RunnerDatabase): void {
@@ -256,6 +287,16 @@ function insertProject(db: RunnerDatabase, id: string): void {
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertFailurePatternMemory(db: RunnerDatabase, content: Record<string, string>): void {
+  db.sqlite.run(
+    `insert into pi_memory_items
+      (id, scope, scope_id, kind, content, confidence, disabled, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ["failure-pattern-quota", "project", "demo", "failure_pattern", JSON.stringify(content), "high", 0,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

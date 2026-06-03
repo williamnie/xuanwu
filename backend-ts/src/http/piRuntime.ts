@@ -13,6 +13,7 @@ import { parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
+import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
 
@@ -78,7 +79,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       authStorage,
       model: resolvePiModel(modelRegistry, input.agent),
       modelRegistry,
-      resourceLoader: emptyResourceLoader(sdk, input),
+      resourceLoader: emptyResourceLoader(sdk, input, db),
       sessionManager,
       settingsManager: sdk.pi.SettingsManager.create(context.cwd, paths.agentDir),
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
@@ -146,21 +147,21 @@ function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
   };
 }
 
-function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput) {
+function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: RunnerDatabase) {
   return {
     getAgentsFiles: () => ({ agentsFiles: [] }),
     getAppendSystemPrompt: () => [],
     getExtensions: () => ({ extensions: [], errors: [], runtime: sdk.pi.createExtensionRuntime() }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
-    getSystemPrompt: () => piSystemPrompt(input),
+    getSystemPrompt: () => piSystemPrompt(input, db),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     extendResources: () => {},
     reload: async () => {}
   };
 }
 
-function piSystemPrompt(input: RuntimeSessionInput): string {
+function piSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
   return [
     "You are PI, an independent project manager agent for codex-issue-runner.",
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
@@ -176,7 +177,8 @@ function piSystemPrompt(input: RuntimeSessionInput): string {
     "Project default skill policy:",
     JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2),
     "Project default MCP policy:",
-    JSON.stringify(parseMcpPolicy(input.project?.default_mcp_policy), null, 2)
+    JSON.stringify(parseMcpPolicy(input.project?.default_mcp_policy), null, 2),
+    buildPiMemoryPromptContext(db, { projectID: input.project?.id })
   ].join("\n");
 }
 

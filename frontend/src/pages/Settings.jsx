@@ -6,6 +6,7 @@ import { message } from '../store/toastStore';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
 import NotificationSettingsPanel from './NotificationSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
+import PiMemoryPanel from './PiMemoryPanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
@@ -23,6 +24,7 @@ export default function Settings() {
         <RuntimeStatusPanel />
         <ProviderAvailabilityPanel />
         <PiAgentSettingsPanel />
+        <PiMemoryPanel />
         <RestartPanel />
         <NotificationSettingsPanel />
         <CronTasksPanel />

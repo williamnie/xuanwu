@@ -51,10 +51,11 @@ describe("PI memory tools", () => {
         source_id: "conv-1",
         source_type: "pi.conversation"
       });
-      expect(getPiMemoryItem(fixture.db, String(candidate.details.id))).toMatchObject({ disabled: 1 });
+      const candidateDetails = candidate.details as { id: string };
+      expect(getPiMemoryItem(fixture.db, String(candidateDetails.id))).toMatchObject({ disabled: 1 });
       expect((activeSearch.details as { items: unknown[] }).items).toEqual([]);
       expect((candidateSearch.details as { items: Array<{ id: string }> }).items.map((item) => item.id))
-        .toEqual([String(candidate.details.id)]);
+        .toEqual([String(candidateDetails.id)]);
       expect(listPiMemoryItems(fixture.db, { disabled: 0 })).toEqual([]);
       const memorySearchActions = listPiActions(fixture.db).filter((item) => item.action_type === "memory.search");
       expect(memorySearchActions).toHaveLength(2);
@@ -72,6 +73,30 @@ describe("PI memory tools", () => {
         "execution_started",
         "execution_result"
       ]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("does not persist sensitive memory candidates from PI tools", async () => {
+    const fixture = await openFixture();
+    try {
+      const writeCandidate = toolByName(createPiMemoryTools(fixture.db, {
+        conversationID: "conv-secret",
+        projectID: "demo"
+      }), "memory_write_candidate");
+
+      const result = await writeCandidate.execute("tool-secret", {
+        kind: "provider_runtime",
+        content: "CODEX_RUNNER_AUTH_TOKEN=fixture-secret",
+        confidence: "high"
+      }, undefined, undefined, {} as never);
+
+      expect(result.details).toEqual({
+        rejected: true,
+        reason: "memory content contains sensitive data"
+      });
+      expect(listPiMemoryItems(fixture.db)).toEqual([]);
     } finally {
       await fixture.close();
     }

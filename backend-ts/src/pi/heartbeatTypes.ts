@@ -16,6 +16,7 @@ export type HeartbeatSignals = {
   delegations: { active: number; due: number };
   issues: { status_counts: Record<string, number>; total: number };
   memory: { active: number; pinned: number };
+  memory_items?: Array<{ confidence: string; content: string; kind: string; scope: string; scope_id: string }>;
   pi_conversations: { active: number; total: number };
   project?: ProjectStatusSnapshot;
   provider_health: { provider: string; status: string };
