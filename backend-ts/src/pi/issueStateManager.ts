@@ -1,19 +1,18 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
-import { createIssueComment, listIssueEvents, recordIssueEvent, type IssueEvent } from "../db/repositories/issueEvents.ts";
+import { listIssueEvents, type IssueEvent } from "../db/repositories/issueEvents.ts";
 import { hasActiveExecutorWork } from "../db/repositories/issueQueue.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { defaultFindingCategory, evaluateFailedRetryPolicy, projectRetryPolicy, type FailedRetryPolicy } from "./failedRetryPolicy.ts";
 import { hasVerificationEvidence, pendingVerificationDiagnostics } from "./issueStateVerification.ts";
+export { applyIssueStateRepair } from "./issueStateRepairExecutor.ts";
 
 export type IssueStateEvidence = {
   ref: string; source: "event" | "issue" | "policy" | "project" | "run" | "session"; summary: string; timestamp: string;
 };
-export type IssueStateRepairOperation = "comment" | "enqueue" | "patch_status" | "retry";
+export type IssueStateRepairOperation = "comment" | "enqueue" | "move_status" | "patch_status" | "retry";
 export type IssueStateSuggestedOperation = "enqueue" | "kick_project_loop";
 export type IssueStateAction = {
   action_type: "issue.state_repair"; evidence_refs: string[]; issue_id: number;
@@ -60,16 +59,6 @@ export function recommendedRepairPayload(
   const action = diagnostic.recommended_actions.find((item) => !options.operation || item.operation === options.operation) ?? diagnostic.recommended_actions[0];
   if (!action) throw new Error("diagnosis has no repair action");
   return { ...action, diagnosis_code: diagnostic.code, evidence: diagnostic.evidence };
-}
-
-export function applyIssueStateRepair(db: RunnerDatabase, payload: Record<string, unknown>): unknown {
-  const issueID = positiveID(payload.issue_id);
-  const operation = cleanString(payload.operation) as IssueStateRepairOperation;
-  const evidence = Array.isArray(payload.evidence) ? payload.evidence : [];
-  const diagnosis = cleanString(payload.diagnosis_code);
-  const result = executeRepair(db, issueID, operation, payload);
-  recordIssueEvent(db, issueID, "issue.state_manager_repair", { diagnosis_code: diagnosis, evidence, operation });
-  return result;
 }
 
 function candidateIssues(db: RunnerDatabase, options: IssueStateManagerOptions): Issue[] {
@@ -184,15 +173,6 @@ function needsUserAction(issue: Issue, evidence: IssueStateEvidence[]): IssueSta
   });
 }
 
-function executeRepair(db: RunnerDatabase, issueID: number, operation: IssueStateRepairOperation, payload: Record<string, unknown>): unknown {
-  if (operation === "enqueue") return enqueueIssue(db, issueID);
-  if (operation === "retry") return retryIssue(db, issueID);
-  const patch = objectPayload(payload.patch);
-  if (operation === "patch_status") return updateIssue(db, issueID, patch);
-  if (operation === "comment") return createIssueComment(db, issueID, { author: "agent", body: cleanString(patch.body) || cleanString(payload.rationale) });
-  throw new Error("unsupported issue state repair operation");
-}
-
 function issueSessions(db: RunnerDatabase, issue: Issue): AgentSession[] {
   return listAgentSessions(db, { projectId: issue.project_id }).filter((session) => session.issue_id === issue.id || (
     issue.codex_thread_id !== "" && session.provider === "codex" && session.provider_session_id === issue.codex_thread_id
@@ -263,8 +243,6 @@ function latestActivity(issue: Issue, run: IssueRun | undefined, session: AgentS
     .sort((left, right) => finiteTime(parseTime(left), 0) - finiteTime(parseTime(right), 0))
     .at(-1) ?? issue.updated_at;
 }
-function objectPayload(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function positiveID(value: unknown): number { if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value; throw new Error("issue_id is required"); }
 function compact<T>(items: Array<T | undefined>): T[] { return items.filter((item): item is T => item !== undefined); }
 function todoNeedsRuntime(runs: IssueRun[], sessions: AgentSession[]): boolean {
   return !runs.some(openRun) && !sessions.some(activeSession);
