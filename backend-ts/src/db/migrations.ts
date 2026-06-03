@@ -15,7 +15,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "007_pi_heartbeat_orchestrator",
   "008_cron_schedule_layer",
   "011_pi_reports",
-  "012_pi_delegation_envelope"
+  "012_pi_delegation_envelope",
+  "013_project_pi_policy"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

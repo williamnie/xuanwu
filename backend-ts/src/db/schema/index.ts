@@ -10,6 +10,7 @@ import { skillsRegistryIntentsMigration } from "./009_skills_registry_intents.ts
 import { mcpRegistryEnvelopeMigration } from "./010_mcp_registry_envelope.ts";
 import { piReportsMigration } from "./011_pi_reports.ts";
 import { piDelegationEnvelopeMigration } from "./012_pi_delegation_envelope.ts";
+import { projectPiPolicyMigration } from "./013_project_pi_policy.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -23,5 +24,6 @@ export const migrations = [
   skillsRegistryIntentsMigration,
   mcpRegistryEnvelopeMigration,
   piReportsMigration,
-  piDelegationEnvelopeMigration
+  piDelegationEnvelopeMigration,
+  projectPiPolicyMigration
 ];
