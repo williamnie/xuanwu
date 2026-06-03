@@ -10,7 +10,6 @@ export type ParsedSchedule = {
 type CronLikeSchedule = {
   mode: string; next_run_at: string; quiet_hours_json?: string; time_of_day: string; timezone?: string; working_hours_json?: string;
 };
-
 type ZonedParts = {
   day: number; hour: number; minute: number; month: number; second: number; weekday: number; year: number;
 };
@@ -18,11 +17,7 @@ type ZonedParts = {
 const DEFAULT_TIMEZONE = "UTC";
 const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Shanghai";
 const DEFAULT_WORKING_HOURS = "{}";
-const WEEKDAY_POLICY = JSON.stringify({
-  after_hours_mode: "delegated",
-  attended_hours: { end: "18:00", start: "09:00" },
-  weekdays: [1, 2, 3, 4, 5]
-});
+const WEEKDAY_POLICY = JSON.stringify({ after_hours_mode: "delegated", attended_hours: { end: "18:00", start: "09:00" }, weekdays: [1, 2, 3, 4, 5] });
 
 export function parseScheduleExpression(expression: string, options: ScheduleParseOptions = {}): ParsedSchedule {
   const text = expression.trim();
@@ -58,29 +53,30 @@ export function nextRunAfter(task: CronLikeSchedule, now: Date): string {
 
 export function scheduleRunMode(task: CronLikeSchedule, now: Date): "attended" | "delegated" {
   const policy = parseObject(task.working_hours_json);
-  if (policy.after_hours_mode !== "delegated") return "attended";
+  if (policy.after_hours_mode !== undefined && policy.after_hours_mode !== "delegated") return "attended";
+  if (policy.after_hours_mode !== "delegated" && !hasWorkingHoursPolicy(policy)) return "attended";
   const timezone = cleanTimezone(task.timezone);
   const parts = zonedParts(now, timezone);
   const weekdays = numberArray(policy.weekdays);
   if (weekdays.length > 0 && !weekdays.includes(parts.weekday)) return "attended";
-  const attended = parseAttendedHours(policy.attended_hours);
-  const scheduled = parseTimeOfDay(task.time_of_day, parts.hour, parts.minute);
-  const minutes = scheduled.hour * 60 + scheduled.minute;
+  const attended = parseAttendedHours(policy.attended_hours ?? policy);
+  const minutes = parts.hour * 60 + parts.minute;
   return minutes < attended.start || minutes >= attended.end ? "delegated" : "attended";
 }
 
 export function quietHoursResumeAt(task: CronLikeSchedule, now: Date): string {
-  const quiet = parseQuietHours(task.quiet_hours_json);
-  if (!quiet) return "";
   const timezone = cleanTimezone(task.timezone);
   const parts = zonedParts(now, timezone);
   const minutes = parts.hour * 60 + parts.minute;
-  if (!isInsideWindow(minutes, quiet.start, quiet.end)) return "";
-  const end = splitMinutes(quiet.end);
-  const dayOffset = quiet.start > quiet.end && minutes >= quiet.start ? 1 : 0;
-  const target = addDaysToParts({ ...parts, hour: end.hour, minute: end.minute, second: 0 }, dayOffset);
-  const resume = zonedTimeToUtc(target, timezone);
-  return (resume.getTime() <= now.getTime() ? addZonedDays(resume, 1, timezone, end) : resume).toISOString();
+  for (const quiet of parseQuietHours(task.quiet_hours_json)) {
+    if (!isInsideWindow(minutes, quiet.start, quiet.end)) continue;
+    const end = splitMinutes(quiet.end);
+    const dayOffset = quiet.start > quiet.end && minutes >= quiet.start ? 1 : 0;
+    const target = addDaysToParts({ ...parts, hour: end.hour, minute: end.minute, second: 0 }, dayOffset);
+    const resume = zonedTimeToUtc(target, timezone);
+    return (resume.getTime() <= now.getTime() ? addZonedDays(resume, 1, timezone, end) : resume).toISOString();
+  }
+  return "";
 }
 
 function parsedDaily(base: Date, timezone: string, time: string, workingHours = DEFAULT_WORKING_HOURS): ParsedSchedule {
@@ -229,6 +225,8 @@ function workingDays(value: string | undefined): number[] {
   return numberArray(parseObject(value).weekdays);
 }
 
+function hasWorkingHoursPolicy(policy: Record<string, unknown>): boolean { return policy.start !== undefined || policy.end !== undefined || policy.attended_hours !== undefined || policy.weekdays !== undefined; }
+
 function numberArray(value: unknown): number[] {
   return Array.isArray(value) ? value.filter((item): item is number => Number.isInteger(item)) : [];
 }
@@ -238,10 +236,16 @@ function parseAttendedHours(value: unknown): { end: number; start: number } {
   return { end: minutesOf(String(hours.end ?? "18:00")), start: minutesOf(String(hours.start ?? "09:00")) };
 }
 
-function parseQuietHours(value: unknown): { end: number; start: number } | null {
+function parseQuietHours(value: unknown): Array<{ end: number; start: number }> {
   const quiet = parseObject(value);
-  const startText = typeof quiet.start === "string" ? quiet.start : "";
-  const endText = typeof quiet.end === "string" ? quiet.end : "";
+  const windows = Array.isArray(quiet.daily) ? quiet.daily : [quiet];
+  return windows.map(quietWindow).filter((item): item is { end: number; start: number } => item !== null);
+}
+
+function quietWindow(value: unknown): { end: number; start: number } | null {
+  const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const startText = typeof input.start === "string" ? input.start : "";
+  const endText = typeof input.end === "string" ? input.end : "";
   if (!isTime(startText) || !isTime(endText) || startText === endText) return null;
   return { end: minutesOf(endText), start: minutesOf(startText) };
 }

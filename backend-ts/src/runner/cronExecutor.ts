@@ -4,6 +4,7 @@ import type { CronTask } from "../db/repositories/cronTasks.ts";
 import type { EventBus } from "../events/bus.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import type { PiAutoManageProjectCycle } from "./piAutoManageScheduler.ts";
+import { cronTaskWithProjectPolicy } from "../schedule/cronTaskPolicy.ts";
 import { startProjectLoop as defaultStartProjectLoop, type ProjectLoopRuntime } from "./projectLoopManager.ts";
 import { nextRunAfter, quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 import { dispatchScheduleAction, type ScheduleActionResult } from "./scheduleActionDispatcher.ts";
@@ -36,26 +37,27 @@ export async function runDueCronTasks(input: CronExecutorInput): Promise<CronExe
 async function runCronTask(input: CronExecutorInput, task: CronTask, now: Date): Promise<"executed" | "failed" | "skipped"> {
   activeCronTasks.add(task.id);
   try {
-    const quietResumeAt = quietHoursResumeAt(task, now);
+    const effectiveTask = cronTaskWithProjectPolicy(input.database, task);
+    const quietResumeAt = quietHoursResumeAt(effectiveTask, now);
     if (quietResumeAt !== "") {
-      recordCronTaskSkip(input.database, { nextRunAt: quietResumeAt, now, result: `quiet hours until ${quietResumeAt}`, task });
+      recordCronTaskSkip(input.database, { nextRunAt: quietResumeAt, now, result: `quiet hours until ${quietResumeAt}`, task: effectiveTask });
       return "skipped";
     }
-    if (shouldSkipMissedRun(task, now)) {
-      recordCronTaskSkip(input.database, { nextRunAt: nextRun(task, now), now, result: "missed run skipped by policy", task });
+    if (shouldSkipMissedRun(effectiveTask, now)) {
+      recordCronTaskSkip(input.database, { nextRunAt: nextRun(effectiveTask, now), now, result: "missed run skipped by policy", task: effectiveTask });
       return "skipped";
     }
     try {
-      const actionResult = await executeCronAction(input, task, now);
+      const actionResult = await executeCronAction(input, effectiveTask, now);
       if (actionResult.skipped === true) {
-        recordCronTaskSkip(input.database, { nextRunAt: nextRun(task, now), now, result: actionResult.detail, task });
+        recordCronTaskSkip(input.database, { nextRunAt: nextRun(effectiveTask, now), now, result: actionResult.detail, task: effectiveTask });
         return "skipped";
       }
-      recordCronTaskSuccess(input.database, { now, result: actionResult.detail, task });
+      recordCronTaskSuccess(input.database, { now, result: actionResult.detail, task: effectiveTask });
       kickProjects(input, actionResult.projectIDs ?? []);
       return "executed";
     } catch (error) {
-      recordCronTaskError(input.database, { now, result: safeError(error), task });
+      recordCronTaskError(input.database, { now, result: safeError(error), task: effectiveTask });
       return "failed";
     }
   } finally {
