@@ -6,7 +6,7 @@ import { listCronTasks, type CronTask } from "./cronTasks.ts";
 
 type CronInput = Partial<Record<keyof CronTask, unknown>>;
 const DEFAULT_ACTION = "triage_to_todo";
-const ACTIONS = new Set(["triage_to_todo", "start_delegation", "run_pi_cycle", "enqueue_issues", "generate_report", "check_stale_sessions", "sync_projects"]);
+const ACTIONS = new Set(["triage_to_todo", "start_delegation", "run_heartbeat", "run_pi_cycle", "enqueue_issues", "generate_report", "check_stale_sessions", "sync_projects"]);
 const STATUSES = new Set(["active", "paused", "done"]);
 const MODES = new Set(["once", "daily", "weekly", "monthly"]);
 const MISSED_POLICIES = new Set(["skip", "run_immediately", "catch_up_once"]);

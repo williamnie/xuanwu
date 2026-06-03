@@ -123,6 +123,7 @@ describe("Bun frontend API compatibility", () => {
       const patchedTemplate = await requestJSON(router, "/api/issue-templates/custom-template", "PATCH", { is_default: 1 });
       const deletedTemplate = await rawRequest(router, "/api/issue-templates/custom-template", "DELETE");
       const cron = await requestJSON(router, "/api/cron-tasks", "POST", { project_id: "demo", mode: "once", next_run_at: "2999-01-01T00:00:00Z" }, 201);
+      const heartbeatCron = await requestJSON(router, "/api/cron-tasks", "POST", { action: "run_heartbeat", project_id: "demo", mode: "once", next_run_at: "2999-01-02T00:00:00Z" }, 201);
       const pausedCron = await requestJSON(router, `/api/cron-tasks/${cron.id}`, "PATCH", { status: "paused" });
       const deletedCron = await rawRequest(router, `/api/cron-tasks/${cron.id}`, "DELETE");
       const settings = await requestJSON(router, "/api/notifications/settings", "PATCH", { events: ["done"], active_start: "09:00", active_end: "18:30" });
@@ -143,6 +144,7 @@ describe("Bun frontend API compatibility", () => {
       expect(patchedTemplate).toMatchObject({ id: "custom-template", is_default: 1 });
       expect(deletedTemplate.status).toBe(204);
       expect(cron).toMatchObject({ id: expect.any(Number), project_id: "demo", status: "active" });
+      expect(heartbeatCron).toMatchObject({ action: "run_heartbeat", project_id: "demo", status: "active" });
       expect(pausedCron).toMatchObject({ id: cron.id, status: "paused" });
       expect(deletedCron.status).toBe(204);
       expect(settings).toMatchObject({ events: ["done"], active_start: "09:00", active_end: "18:30" });
