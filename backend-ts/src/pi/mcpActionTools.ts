@@ -1,15 +1,17 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
+  isMcpServerAuthorized,
+  type McpCapability,
   listMcpResources,
   publicMcpRegistry,
   readMcpCapability,
   readMcpResource,
+  readMcpServer,
   recommendMcpRequirements
 } from "../mcp/registry.ts";
-import { createPendingPiAction, executeSafePiAction, type PiActionContext, type PiActionRequest } from "./actionEngine.ts";
+import { executeSafePiAction, type PiActionContext, type PiActionRequest } from "./actionEngine.ts";
 
 export type PiMcpActionLayer = {
-  callMcpTool(input: McpToolCallInput): unknown;
   listMcpRegistry(input: McpRegistryListInput): unknown;
   listMcpResources(input: McpResourceListInput): unknown;
   readMcpCapability(input: McpCapabilityReadInput): unknown;
@@ -23,12 +25,10 @@ type McpCapabilityReadInput = { capability_id: string };
 type McpRequirementRecommendInput = { description?: string; project_id?: string; title?: string };
 type McpResourceListInput = { server_id?: string };
 type McpResourceReadInput = { capability_id: string };
-type McpToolCallInput = { args?: Record<string, unknown>; capability_id: string; rationale?: string };
 
 export function createPiMcpActions(db: RunnerDatabase, context: McpActionContext = {}): PiMcpActionLayer {
   const mcpContext = { ...context, source: context.source || "pi_mcp_tool" };
   return {
-    callMcpTool: (input) => callMcpTool(db, mcpContext, input),
     listMcpRegistry: () => safeMcpRegistry(db, mcpContext),
     listMcpResources: (input) => safeMcpResources(db, mcpContext, input),
     readMcpCapability: (input) => safeMcpCapability(db, mcpContext, input),
@@ -52,7 +52,7 @@ function safeMcpCapability(db: RunnerDatabase, context: McpActionContext, input:
     actionType: "mcp.capability.read",
     payload: { capability_id: capabilityID },
     projectID: cleanString(context.projectID),
-    execute: () => readMcpCapability(capabilityID) ?? { id: capabilityID, missing: true }
+    execute: () => publicMcpCapability(readMcpCapability(capabilityID)) ?? { id: capabilityID, missing: true }
   });
 }
 
@@ -67,46 +67,55 @@ function safeMcpRecommend(db: RunnerDatabase, context: McpActionContext, input: 
 }
 
 function safeMcpResources(db: RunnerDatabase, context: McpActionContext, input: McpResourceListInput) {
-  return executeSafePiAction(db, context, {
+  const serverID = cleanString(input.server_id);
+  const server = serverID === "" ? null : readMcpServer(serverID);
+  const request = {
     actionType: "mcp.resource.list",
-    payload: cleanPayload({ server_id: input.server_id ?? "" }),
-    projectID: cleanString(context.projectID),
-    execute: () => ({ items: listMcpResources(input.server_id) })
+    payload: cleanPayload({ server_id: serverID }),
+    projectID: cleanString(context.projectID)
+  };
+  if (serverID !== "" && (!server || !isMcpServerAuthorized(server))) {
+    return denyMcpAction(db, context, request);
+  }
+  return executeSafePiAction(db, context, {
+    ...request,
+    execute: () => ({ items: listMcpResources(serverID) })
   });
 }
 
 function safeMcpResource(db: RunnerDatabase, context: McpActionContext, input: McpResourceReadInput) {
   const capabilityID = cleanString(input.capability_id);
   const capability = readMcpCapability(capabilityID);
+  const server = capability ? readMcpServer(capability.server_id) : null;
   const request: PiActionRequest = {
     actionType: "mcp.resource.read",
     payload: { capability_id: capabilityID },
     projectID: cleanString(context.projectID),
     riskOverride: capability ? { requiresConfirmation: capability.requires_confirmation, riskLevel: capability.risk_level } : { requiresConfirmation: true, riskLevel: "high" }
   };
-  if (!capability?.read_only) return createPendingPiAction(db, context, request);
+  if (!capability?.read_only || !server || !isMcpServerAuthorized(server)) return denyMcpAction(db, context, request);
   return executeSafePiAction(db, context, { ...request, execute: () => readMcpResource(capabilityID) });
 }
 
-function callMcpTool(db: RunnerDatabase, context: McpActionContext, input: McpToolCallInput) {
-  const capabilityID = cleanString(input.capability_id);
-  const capability = readMcpCapability(capabilityID);
-  const payload = { args: sanitizeArgs(input.args), capability_id: capabilityID };
-  return createPendingPiAction(db, context, {
-    actionType: "mcp.tool.call",
-    payload,
-    projectID: cleanString(context.projectID),
-    rationale: input.rationale ?? `MCP tool ${capabilityID}`,
-    riskOverride: capability ? { requiresConfirmation: capability.requires_confirmation, riskLevel: capability.risk_level } : undefined
+function denyMcpAction(db: RunnerDatabase, context: McpActionContext, request: PiActionRequest) {
+  const forbidden = [request.actionType];
+  return executeSafePiAction(db, {
+    ...context,
+    authorization: { ...context.authorization, forbiddenActions: forbidden, forbidden_actions: forbidden }
+  }, {
+    ...request,
+    execute: () => ({ denied: true })
   });
-}
-
-function sanitizeArgs(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function cleanPayload(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => cleanString(value) !== ""));
+}
+
+function publicMcpCapability(capability: McpCapability | null): Omit<McpCapability, "content"> | null {
+  if (!capability) return null;
+  const { content: _content, ...safe } = capability;
+  return safe;
 }
 
 function cleanString(value: unknown): string {

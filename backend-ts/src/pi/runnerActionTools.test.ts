@@ -315,7 +315,6 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     escalateNeedsUser: record("escalateNeedsUser"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
     createUpdateRefinementProposal: record("createUpdateRefinementProposal"),
-    callMcpTool: record("callMcpTool"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
     listIssues: record("listIssues"),
     listMcpRegistry: record("listMcpRegistry"),

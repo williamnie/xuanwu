@@ -34,9 +34,9 @@ describe("PI MCP registry and envelope tools", () => {
         "mcp_capability_read",
         "mcp_requirement_recommend",
         "mcp_resource_list",
-        "mcp_resource_read",
-        "mcp_tool_call"
+        "mcp_resource_read"
       ]));
+      expect(toolNames(tools)).not.toContain("mcp_tool_call");
       expect(validateToolArguments(toolByName(tools, "mcp_capability_read") as never, {
         name: "mcp_capability_read",
         arguments: { capability_id: "docs:resource:runbook" }
@@ -121,21 +121,29 @@ describe("PI MCP registry and envelope tools", () => {
     }
   });
 
-  test("keeps high-risk MCP resources and tool calls behind the action gate by default", async () => {
+  test("denies high-risk or offline MCP resources and records audit", async () => {
     const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), offlineServer()] });
     try {
       const actions = createPiRunnerActions(db, { project });
 
       const resource = actions.readMcpResource({ capability_id: "docs:resource:secret" }) as { decision: string; risk_level: string; status: string };
-      const pending = actions.callMcpTool({
-        args: { id: "runbook" },
-        capability_id: "docs:tool:delete_doc",
-        rationale: "cleanup obsolete docs"
-      }) as { decision: string; risk_level: string; status: string };
+      const offlineList = actions.listMcpResources({ server_id: "offline-docs" }) as { decision: string; status: string };
+      const offlineRead = actions.readMcpResource({ capability_id: "offline-docs:resource:guide" }) as { decision: string; status: string };
+      const deniedActions = listPiActions(db, { status: "denied" });
 
-      expect(resource).toMatchObject({ decision: "ask", risk_level: "high", status: "pending" });
-      expect(pending).toMatchObject({ decision: "ask", risk_level: "high", status: "pending" });
+      expect(resource).toMatchObject({ decision: "deny", risk_level: "high", status: "denied" });
+      expect(offlineList).toMatchObject({ decision: "deny", status: "denied" });
+      expect(offlineRead).toMatchObject({ decision: "deny", status: "denied" });
+      expect(deniedActions.map((item) => item.action_type).sort()).toEqual([
+        "mcp.resource.list",
+        "mcp.resource.read",
+        "mcp.resource.read"
+      ]);
+      expect(listPiActionEvents(db, { actionId: deniedActions[0]?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision"
+      ]);
     } finally {
       db.close();
     }
@@ -156,6 +164,17 @@ async function openFixture(): Promise<{ db: RunnerDatabase; project: Project; ro
   const project = getProject(db, "demo");
   if (!project) throw new Error("missing project");
   return { db, project, root };
+}
+
+function offlineServer() {
+  return {
+    id: "offline-docs",
+    status: "unavailable",
+    readiness: "auth_missing",
+    resources: [
+      { name: "guide", description: "Offline guide", content: "must not leak" }
+    ]
+  };
 }
 
 function docsServer() {

@@ -7,8 +7,7 @@ export const PI_MCP_TOOL_NAMES = [
   "mcp_capability_read",
   "mcp_requirement_recommend",
   "mcp_resource_list",
-  "mcp_resource_read",
-  "mcp_tool_call"
+  "mcp_resource_read"
 ] as const;
 
 type McpToolName = (typeof PI_MCP_TOOL_NAMES)[number];
@@ -29,9 +28,7 @@ export function createPiMcpActionTools(actions: PiMcpActionLayer): ToolDefinitio
     mcpTool("mcp_resource_list", "MCP Resource List", "List read-only MCP resources visible to PI.",
       Type.Object({ server_id: optionalString }, objectOptions), actions.listMcpResources),
     mcpTool("mcp_resource_read", "MCP Resource Read", "Read a read-only MCP resource through the action gate.",
-      Type.Object({ capability_id: requiredText }, objectOptions), actions.readMcpResource),
-    mcpTool("mcp_tool_call", "MCP Tool Call Proposal", "Create a gated MCP tool call proposal; high-risk tools require confirmation.",
-      Type.Object({ args: Type.Optional(Type.Record(Type.String(), Type.Unknown())), capability_id: requiredText, rationale: optionalString }, objectOptions), actions.callMcpTool)
+      Type.Object({ capability_id: requiredText }, objectOptions), actions.readMcpResource)
   ];
 }
 

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { listMcpRegistry, readMcpCapability, readMcpRegistry, recommendMcpRequirements } from "./registry.ts";
+import {
+  listMcpRegistry,
+  listMcpResources,
+  readMcpCapability,
+  readMcpRegistry,
+  readMcpResource,
+  recommendMcpRequirements
+} from "./registry.ts";
 
 const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
 
@@ -71,6 +78,30 @@ describe("PI MCP capability registry", () => {
       status: "unavailable"
     });
     expect(registry.diagnostics).toEqual(registry.servers[0].diagnostics);
+  });
+
+  test("lists and reads only authorized read-only resources", () => {
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer(), {
+      id: "offline-docs",
+      status: "unavailable",
+      readiness: "auth_missing",
+      resources: [{ name: "guide", description: "Offline guide", content: "must not leak" }]
+    }] });
+
+    expect(listMcpResources().map((item) => item.id)).toEqual(["docs:resource:runbook"]);
+    expect(listMcpResources("offline-docs")).toEqual([]);
+    expect(readMcpResource("docs:resource:runbook")).toMatchObject({
+      capability: { id: "docs:resource:runbook", read_only: true },
+      content: "deploy safely"
+    });
+    expect(readMcpResource("docs:resource:secret")).toMatchObject({
+      capability: { id: "docs:resource:secret", read_only: false },
+      forbidden: true
+    });
+    expect(readMcpResource("offline-docs:resource:guide")).toMatchObject({
+      capability: { id: "offline-docs:resource:guide" },
+      unauthorized: true
+    });
   });
 
 });

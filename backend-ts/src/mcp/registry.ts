@@ -72,18 +72,40 @@ export function readMcpCapability(id: string, options: McpRegistryOptions = {}):
   return listMcpRegistry(options).flatMap((server) => server.capabilities).find((capability) => capability.id === wanted) ?? null;
 }
 
+export function readMcpServer(id: string, options: McpRegistryOptions = {}): McpServerRegistry | null {
+  const wanted = normalizeID(id);
+  return listMcpRegistry(options).find((server) => server.id === wanted) ?? null;
+}
+
+export function isMcpServerAuthorized(server: Pick<McpServerRegistry, "readiness" | "status">): boolean {
+  return !isUnavailableStatus(server.status) && !isNotReady(server.readiness);
+}
+
 export function listMcpResources(serverID = "", options: McpRegistryOptions = {}): McpCapability[] {
   const wantedServer = normalizeID(serverID);
   return listMcpRegistry(options)
     .filter((server) => wantedServer === "" || server.id === wantedServer)
+    .filter(isMcpServerAuthorized)
     .flatMap((server) => server.resources)
     .filter((resource) => resource.read_only)
     .map(publicCapability);
 }
 
 export function readMcpResource(capabilityID: string, options: McpRegistryOptions = {}) {
-  const capability = readMcpCapability(capabilityID, options);
+  const registry = listMcpRegistry(options);
+  const capability = registry.flatMap((server) => server.resources).find((item) => item.id === normalizeID(capabilityID));
   if (!capability || capability.kind !== "resource") return { capability_id: normalizeID(capabilityID), missing: true };
+  const server = registry.find((item) => item.id === capability.server_id);
+  if (!server || !isMcpServerAuthorized(server)) {
+    return {
+      capability: publicCapability(capability),
+      reason: "MCP server is not authorized or ready",
+      unauthorized: true
+    };
+  }
+  if (!capability.read_only) {
+    return { capability: publicCapability(capability), forbidden: true, reason: "MCP resource is not read-only" };
+  }
   return { capability: publicCapability(capability), content: capability.content ?? null };
 }
 

@@ -60,7 +60,7 @@ describe("PI project tools", () => {
         "issue_list", "issue_read", "issue_state_diagnose", "issue_state_repair_proposal",
         "issue_update_refinement", "ls", "mcp_capability_read", "mcp_registry_list",
         "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
-        "mcp_tool_call", "memory_search", "memory_write_candidate", "needs_user_escalation",
+        "memory_search", "memory_write_candidate", "needs_user_escalation",
         "project_list", "project_status", "read", "report_workflow_request", "review_workflow_request", "session_list",
         "session_read_summary", "session_steer_proposal", "skill_intent_audit",
         "skill_list", "skill_read", "skill_recommend", "verification_workflow_request"
