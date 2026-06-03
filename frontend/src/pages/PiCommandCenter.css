@@ -1,0 +1,182 @@
+.pi-command-center {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  padding: 24px 0;
+}
+
+.pi-command-hero,
+.pi-command-grid,
+.pi-command-module,
+.pi-command-card,
+.pi-command-row,
+.pi-command-actions,
+.pi-command-tabs,
+.pi-command-form {
+  min-width: 0;
+}
+
+.pi-command-hero {
+  background:
+    radial-gradient(circle at 14% 20%, rgba(14, 165, 233, 0.18), transparent 28%),
+    linear-gradient(135deg, var(--bg-card), var(--bg-primary));
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  overflow: hidden;
+  padding: 22px;
+}
+
+.pi-command-kicker,
+.pi-command-label,
+.pi-command-tab,
+.pi-command-micro {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pi-command-hero h1 {
+  font-size: clamp(2rem, 5vw, 3.6rem);
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+  margin: 8px 0 10px;
+}
+
+.pi-command-hero p,
+.pi-command-row p,
+.pi-command-card p {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.pi-command-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.pi-command-card,
+.pi-command-module {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.pi-command-card strong {
+  color: var(--text-primary);
+  display: block;
+  font-size: 1.7rem;
+  letter-spacing: -0.04em;
+  margin-top: 4px;
+}
+
+.pi-command-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pi-command-tab {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 9px 12px;
+}
+
+.pi-command-tab.active {
+  background: var(--primary-gradient);
+  border-color: transparent;
+  color: #fff;
+}
+
+.pi-command-module {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pi-command-module h2 {
+  align-items: center;
+  display: flex;
+  font-size: 1.05rem;
+  gap: 8px;
+}
+
+.pi-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pi-command-row {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.pi-command-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.pi-command-title strong,
+.pi-command-row code {
+  overflow-wrap: anywhere;
+}
+
+.pi-command-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.pi-command-form {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr 1.3fr auto;
+}
+
+.pi-command-form textarea {
+  grid-column: 1 / -1;
+}
+
+.pi-command-empty,
+.pi-command-error {
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  padding: 14px;
+}
+
+.pi-command-error {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+@media (max-width: 960px) {
+  .pi-command-hero,
+  .pi-command-form,
+  .pi-command-row {
+    grid-template-columns: 1fr;
+  }
+}

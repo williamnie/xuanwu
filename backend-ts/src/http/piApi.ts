@@ -15,7 +15,9 @@ import {
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiActionRoutes } from "./piActionsApi.ts";
+import { registerPiCommandCenterRoutes } from "./piCommandCenterApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
+import { registerPiDelegationRoutes } from "./piDelegationsApi.ts";
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
@@ -36,7 +38,9 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.patch("/api/pi/agents/:id", (request) => patchPiAgentResponse(context, request));
   router.delete("/api/pi/agents/:id", (request) => deletePiAgentResponse(context, request));
   registerPiActionRoutes(router, context);
+  registerPiCommandCenterRoutes(router, context);
   registerPiConversationRoutes(router, context);
+  registerPiDelegationRoutes(router, context);
   registerPiMemoryRoutes(router, context);
   registerPiProviderSettingsRoutes(router, context);
   registerPiProjectControlRoutes(router, context);

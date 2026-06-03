@@ -350,6 +350,48 @@ export const api = {
     body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
   }),
 
+  getPiCommandCenter: () => request('/api/pi/command-center'),
+
+  getProjectPiSettings: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`),
+
+  updateProjectPiSettings: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  pauseProjectPiAutonomousMode: (id, reason = 'paused from command center') => request(`/api/projects/${encodeURIComponent(id)}/pi/pause`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
+
+  resumeProjectPiAutonomousMode: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi/resume`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  getPiDelegations: ({ projectId = '', status = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append('project_id', projectId);
+    if (status) params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/delegations${query}`);
+  },
+
+  createPiDelegation: (delegation) => request('/api/pi/delegations', {
+    method: 'POST',
+    body: JSON.stringify(delegation),
+  }),
+
+  pausePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/pause`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  resumePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/resume`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   searchProjectReferences: (id, { type = '', query = '', limit = 40 } = {}) => {
     const params = new URLSearchParams();
     if (type) params.append('type', type);
