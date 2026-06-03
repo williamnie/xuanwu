@@ -1,3 +1,5 @@
+import type { PiGateDecisionValue, PiWorkMode } from "./policyTypes.ts";
+
 export type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
 export type PiRiskClassification = {
@@ -5,8 +7,8 @@ export type PiRiskClassification = {
   requiresConfirmation: boolean;
   riskLevel: PiRiskLevel;
 };
-export type PiActionDecision = "execute" | "ask" | "deny" | "snooze";
-export type PiActionMode = "attended" | "delegated";
+export type PiActionDecision = PiGateDecisionValue;
+export type PiActionMode = PiWorkMode;
 export type PiActionEnvelope = {
   action_type: string;
   delegation_id?: string;
