@@ -103,7 +103,8 @@ describe("Cron due executor", () => {
       expect(result).toEqual({ executed: 0, failed: 1, scanned: 1, skipped: 0 });
       expect(cronRow(db)).toMatchObject({
         error: "cycle boom",
-        last_status: "failed",
+        last_result: "cycle boom",
+        last_status: "error",
         next_run_at: "2026-06-03T18:30:00.000Z",
         run_count: 1,
         status: "active"
@@ -244,8 +245,7 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-cron-executor-"));
-  tempRoots.push(root);
-  return root;
+  tempRoots.push(root); return root;
 }
 
 function insertProject(db: RunnerDatabase, id: string, autoRun: number): void {
@@ -294,10 +294,6 @@ function insertCronTask(db: RunnerDatabase, input: {
   return id;
 }
 
-function cronRow(db: RunnerDatabase) {
-  return db.sqlite.query<Record<string, unknown>, []>("select * from cron_tasks limit 1").get() ?? {};
-}
+function cronRow(db: RunnerDatabase) { return db.sqlite.query<Record<string, unknown>, []>("select * from cron_tasks limit 1").get() ?? {}; }
 
-function issueStatus(db: RunnerDatabase, issueID: number): string {
-  return db.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueID)?.status ?? "";
-}
+function issueStatus(db: RunnerDatabase, issueID: number): string { return db.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueID)?.status ?? ""; }

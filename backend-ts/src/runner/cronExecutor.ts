@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { claimDueCronTasks } from "../db/repositories/cronTaskClaims.ts";
+import { recordCronTaskError, recordCronTaskSkip, recordCronTaskSuccess } from "../db/repositories/cronTaskResults.ts";
 import type { CronTask } from "../db/repositories/cronTasks.ts";
 import { createPiDelegation, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -25,7 +26,6 @@ export type CronExecutorInput = ProjectLoopRuntime & {
 type CronActionResult = { detail: string; projectIDs?: string[]; skipped?: boolean };
 
 const activeCronTasks = new Set<number>();
-const TERMINAL_ONCE_STATUS = "done";
 
 export async function runDueCronTasks(input: CronExecutorInput): Promise<CronExecutorResult> {
   const now = input.now ?? new Date();
@@ -43,24 +43,24 @@ async function runCronTask(input: CronExecutorInput, task: CronTask, now: Date):
   try {
     const quietResumeAt = quietHoursResumeAt(task, now);
     if (quietResumeAt !== "") {
-      persistCronSkip(input.database, task, now, quietResumeAt, `quiet hours until ${quietResumeAt}`);
+      recordCronTaskSkip(input.database, { nextRunAt: quietResumeAt, now, result: `quiet hours until ${quietResumeAt}`, task });
       return "skipped";
     }
     if (shouldSkipMissedRun(task, now)) {
-      persistCronSkip(input.database, task, now, nextRun(task, now), "missed run skipped by policy");
+      recordCronTaskSkip(input.database, { nextRunAt: nextRun(task, now), now, result: "missed run skipped by policy", task });
       return "skipped";
     }
     try {
       const actionResult = await executeCronAction(input, task, now);
       if (actionResult.skipped === true) {
-        persistCronSkip(input.database, task, now, nextRun(task, now), actionResult.detail);
+        recordCronTaskSkip(input.database, { nextRunAt: nextRun(task, now), now, result: actionResult.detail, task });
         return "skipped";
       }
-      persistCronSuccess(input.database, task, now, actionResult.detail);
+      recordCronTaskSuccess(input.database, { now, result: actionResult.detail, task });
       kickProjects(input, actionResult.projectIDs ?? []);
       return "executed";
     } catch (error) {
-      persistCronFailure(input.database, task, now, safeError(error));
+      recordCronTaskError(input.database, { now, result: safeError(error), task });
       return "failed";
     }
   } finally {
@@ -168,53 +168,9 @@ function syncProjects(db: RunnerDatabase): CronActionResult {
   return { detail: `sync projects created=${result.summary.created} existing=${result.summary.existing} skipped=${result.summary.skipped}` };
 }
 
-function persistCronSuccess(db: RunnerDatabase, task: CronTask, now: Date, detail: string): void {
-  persistCronRun(db, task, now, {
-    error: "",
-    lastResult: detail,
-    lastStatus: "success",
-    nextRunAt: nextRun(task, now),
-    status: nextStatus(task)
-  });
-}
-
-function persistCronFailure(db: RunnerDatabase, task: CronTask, now: Date, error: string): void {
-  persistCronRun(db, task, now, {
-    error,
-    lastResult: "",
-    lastStatus: "failed",
-    nextRunAt: nextRun(task, now),
-    status: task.mode === "once" ? TERMINAL_ONCE_STATUS : "active"
-  });
-}
-
-function persistCronSkip(db: RunnerDatabase, task: CronTask, now: Date, nextRunAt: string, reason: string): void {
-  persistCronRun(db, task, now, {
-    error: "",
-    lastResult: reason,
-    lastStatus: "skipped",
-    nextRunAt,
-    status: "active"
-  });
-}
-
-function persistCronRun(db: RunnerDatabase, task: CronTask, now: Date, input: {
-  error: string; lastResult: string; lastStatus: string; nextRunAt: string; status: string;
-}): void {
-  db.sqlite.run(`update cron_tasks set last_run_at=?, last_status=?, last_result=?,
-    run_count=run_count+1, error=?, next_run_at=?, status=?, claim_token='',
-    claim_started_at='', updated_at=? where id=?`,
-    [now.toISOString(), input.lastStatus, input.lastResult, input.error, input.nextRunAt,
-      input.status, now.toISOString(), task.id]);
-}
-
 function nextRun(task: CronTask, now: Date): string {
   if (task.mode === "once") return "";
   return nextRunAfter(task, now);
-}
-
-function nextStatus(task: CronTask): string {
-  return task.mode === "once" ? TERMINAL_ONCE_STATUS : "active";
 }
 
 function kickProjects(input: CronExecutorInput, projectIDs: string[]): void {

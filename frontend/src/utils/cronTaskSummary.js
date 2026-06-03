@@ -1,4 +1,5 @@
 const LAST_STATUS_LABELS = {
+  error: 'Error',
   success: 'Success',
   skipped: 'Skipped',
   failed: 'Failed',
@@ -27,7 +28,7 @@ export function resolveLastStatus(task = {}, error = '') {
 
 export function cronRunStatusBadgeClass(status) {
   if (status === 'success') return 'done';
-  if (status === 'failed') return 'failed';
+  if (status === 'failed' || status === 'error') return 'failed';
   if (status === 'skipped') return 'triage';
   return 'todo';
 }

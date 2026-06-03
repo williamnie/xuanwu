@@ -28,3 +28,17 @@ test('falls back to existing error as last failure', () => {
   assert.equal(summary.badgeClass, 'failed');
   assert.match(summary.error, /runner unavailable/);
 });
+
+test('summarizes explicit cron error status', () => {
+  const summary = buildCronRunSummary({
+    error: 'cycle boom',
+    last_result: 'cycle boom',
+    last_run_at: '2026-05-26T04:00:00Z',
+    last_status: 'error',
+  });
+
+  assert.equal(summary.statusLabel, 'Error');
+  assert.equal(summary.badgeClass, 'failed');
+  assert.equal(summary.result, 'cycle boom');
+  assert.equal(summary.error, 'cycle boom');
+});
