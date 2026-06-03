@@ -93,7 +93,8 @@ function safeMcpResource(db: RunnerDatabase, context: McpActionContext, input: M
     projectID: cleanString(context.projectID),
     riskOverride: capability ? { requiresConfirmation: capability.requires_confirmation, riskLevel: capability.risk_level } : { requiresConfirmation: true, riskLevel: "high" }
   };
-  if (!capability?.read_only || !server || !isMcpServerAuthorized(server)) return denyMcpAction(db, context, request);
+  if (!capability || !server || !isMcpServerAuthorized(server)) return denyMcpAction(db, context, request);
+  if (capability.permission !== "read") return denyMcpAction(db, context, request);
   return executeSafePiAction(db, context, { ...request, execute: () => readMcpResource(capabilityID) });
 }
 

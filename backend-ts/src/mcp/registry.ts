@@ -103,7 +103,7 @@ export function readMcpResource(capabilityID: string, options: McpRegistryOption
       unauthorized: true
     };
   }
-  if (!capability.read_only) {
+  if (capability.permission !== "read") {
     return { capability: publicCapability(capability), forbidden: true, reason: "MCP resource is not read-only" };
   }
   return { capability: publicCapability(capability), content: capability.content ?? null };

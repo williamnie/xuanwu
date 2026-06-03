@@ -148,6 +148,75 @@ describe("PI MCP registry and envelope tools", () => {
       db.close();
     }
   });
+
+  test("routes non-low MCP resources through gate as confirmation instead of silent deny", async () => {
+    const { db, project } = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    try {
+      const actions = createPiRunnerActions(db, { project });
+      const result = actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
+        decision: string;
+        risk_level: string;
+        status: string;
+      };
+      const action = listPiActions(db).find((item) => item.action_type === "mcp.resource.read");
+
+      expect(result).toMatchObject({ decision: "ask", risk_level: "medium", status: "pending" });
+      expect(action).toMatchObject({
+        action_type: "mcp.resource.read",
+        gate_decision: "ask",
+        requires_confirmation: 1,
+        risk_level: "medium",
+        status: "pending"
+      });
+      expect(listPiActionEvents(db, { actionId: action?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "pending_approval"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("executes delegated read-permission MCP resources when allowlist covers them", async () => {
+    const { db, project } = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    try {
+      const actions = createPiRunnerActions(db, {
+        authorization: {
+          allowed_mcp_capabilities: ["docs:resource:internal"],
+          authorizedActions: [{ action_type: "mcp.resource.read", project_id: project.id }],
+          mode: "delegated",
+          scope: { project_id: project.id }
+        },
+        project
+      });
+      const result = actions.readMcpResource({ capability_id: "docs:resource:internal" }) as {
+        content: string;
+        decision?: string;
+        status?: string;
+      };
+      const action = listPiActions(db).find((item) => item.action_type === "mcp.resource.read");
+
+      expect(result).toMatchObject({ content: "needs approval" });
+      expect(action).toMatchObject({
+        action_type: "mcp.resource.read",
+        gate_decision: "execute",
+        requires_confirmation: 1,
+        risk_level: "medium",
+        status: "completed"
+      });
+      expect(listPiActionEvents(db, { actionId: action?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "execution_started",
+        "execution_result"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; project: Project; root: string }> {
@@ -186,6 +255,7 @@ function docsServer() {
     risk_level: "low",
     resources: [
       { name: "runbook", description: "Deployment runbook and operations guide", content: "deploy safely" },
+      { name: "internal", description: "Internal deployment note", content: "needs approval", risk_level: "medium" },
       { name: "secret", description: "Sensitive vault record", permission: "admin", risk_level: "high" }
     ],
     tools: [

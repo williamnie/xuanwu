@@ -98,6 +98,44 @@ describe("PI action engine risk classifier", () => {
       allowedMcpCapabilities: ["docs:resource:other"],
       mode: "attended"
     })).toMatchObject({ decision: "deny" });
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: undefined,
+      mode: "attended"
+    })).toMatchObject({ decision: "execute" });
+  });
+
+  test("MCP gate honors delegation allowlist aliases and keeps high-risk calls pending", () => {
+    const envelope = {
+      action_type: "mcp.tool.call",
+      payload: { capability_id: "docs:tool:delete_doc", input: { id: "runbook" } },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "high",
+      source: "pi_mcp_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, { mode: "attended" })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:tool:delete_doc"],
+      authorizedActions: [{ action_type: "mcp.tool.call", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "ask",
+      reason: expect.stringContaining("confirmation")
+    });
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:tool:search"],
+      authorizedActions: [{ action_type: "mcp.tool.call", project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("MCP")
+    });
   });
 
   test("delegated authorization does not bypass high-risk confirmation", () => {

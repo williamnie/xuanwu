@@ -38,6 +38,7 @@ export type PiGatePolicy = {
   allowedActions?: string[];
   allowed_actions?: string[];
   allowedMcpCapabilities?: string[];
+  allowed_mcp_capabilities?: string[];
   allowedSkillIntents?: string[];
   allowed_skill_intents?: string[];
   authorizedActions?: PiAuthorizedAction[];
@@ -117,7 +118,7 @@ export function decidePiAuthorization(
   if (!allowedActionType(envelope, policy)) return { decision: "deny", reason: "action is not covered by allowed_actions" };
   const scopeDecision = matchPiAuthorizationPolicyScope(envelope, policy);
   if (!scopeDecision.matched) return { decision: "deny", reason: scopeDecision.reason };
-  if (!authorizedMcpCapabilities(envelope, policy.allowedMcpCapabilities)) {
+  if (!authorizedMcpCapabilities(envelope, policy)) {
     return { decision: "deny", reason: "MCP capability is not covered by authorization allowlist" };
   }
   const mode = policy.mode ?? "attended";
@@ -152,8 +153,9 @@ function skillIntentsFromPayload(payload: Record<string, unknown>): string[] {
   ];
 }
 
-function authorizedMcpCapabilities(envelope: PiActionEnvelope, allowed: string[] | undefined): boolean {
-  if (!allowed) return true;
+function authorizedMcpCapabilities(envelope: PiActionEnvelope, policy: PiGatePolicy): boolean {
+  const allowed = mcpCapabilityAllowlist(policy);
+  if (allowed === undefined) return true;
   const requested = [
     ...stringList(envelope.payload.capability_id),
     ...stringList(envelope.payload.capability_ids),
@@ -163,6 +165,14 @@ function authorizedMcpCapabilities(envelope: PiActionEnvelope, allowed: string[]
   if (requested.length === 0) return true;
   const allowlist = new Set(allowed.map(cleanID).filter(Boolean));
   return requested.every((id) => allowlist.has(cleanID(id)));
+}
+
+function mcpCapabilityAllowlist(policy: PiGatePolicy): string[] | undefined {
+  if (policy.allowedMcpCapabilities === undefined && policy.allowed_mcp_capabilities === undefined) return undefined;
+  return [
+    ...stringList(policy.allowedMcpCapabilities),
+    ...stringList(policy.allowed_mcp_capabilities)
+  ];
 }
 
 function actionRiskGate(envelope: PiActionEnvelope): PiRiskGate | "forbidden" {
