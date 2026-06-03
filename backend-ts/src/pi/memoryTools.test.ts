@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
+import {
+  createPiMemoryItem,
+  getPiMemoryItem,
+  listPiActionEvents,
+  listPiActions,
+  listPiMemoryItems
+} from "../db/repositories/pi.ts";
 import { createPiMemoryTools, PI_MEMORY_TOOL_NAMES } from "./memoryTools.ts";
 
 describe("PI memory tools", () => {
@@ -101,6 +107,40 @@ describe("PI memory tools", () => {
       await fixture.close();
     }
   });
+
+  test("retrieves project policy memory with correct project/global scope and redaction", async () => {
+    const fixture = await openFixture();
+    try {
+      seedProjectPolicyFixture(fixture.db);
+      const search = toolByName(createPiMemoryTools(fixture.db, { projectID: "demo" }), "memory_search");
+
+      expect(validateArgs(search, { kind: "project_policy_memory", scope: "project" }))
+        .toMatchObject({ kind: "project_policy_memory", scope: "project" });
+      const allRelevant = await search.execute("tool-project", {
+        query: "Prefer"
+      }, undefined, undefined, {} as never);
+      const projectPolicy = await search.execute("tool-policy", {
+        kind: "project_policy_memory",
+        query: "runner",
+        scope: "project"
+      }, undefined, undefined, {} as never);
+      const sensitive = await search.execute("tool-secret", {
+        query: "fixture-secret",
+        scope: "project"
+      }, undefined, undefined, {} as never);
+
+      expect(itemIds(allRelevant.details)).toEqual(expect.arrayContaining([
+        "global-user-preference",
+        "project-policy-memory"
+      ]));
+      expect(itemIds(allRelevant.details)).not.toContain("other-project-memory");
+      expect(itemIds(projectPolicy.details)).toEqual(["project-policy-memory"]);
+      expect(itemIds(sensitive.details)).toEqual([]);
+      expect(JSON.stringify(sensitive.details)).not.toContain("fixture-secret");
+    } finally {
+      await fixture.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase }> {
@@ -117,4 +157,44 @@ function toolByName(tools: ReturnType<typeof createPiMemoryTools>, name: string)
 
 function validateArgs(tool: ReturnType<typeof toolByName>, args: Record<string, unknown>) {
   return validateToolArguments(tool as never, { name: tool.name, arguments: args } as never);
+}
+
+function seedMemory(db: RunnerDatabase, item: {
+  content: string; id: string; kind: string; scope: string; scope_id: string;
+}) {
+  return createPiMemoryItem(db, {
+    ...item,
+    confidence: "high",
+    disabled: 0
+  });
+}
+
+function seedProjectPolicyFixture(db: RunnerDatabase): void {
+  seedMemory(db, policyMemory("project-policy-memory", "demo",
+    "Prefer verification evidence before marking runner issues done"));
+  seedMemory(db, {
+    id: "global-user-preference",
+    scope: "global",
+    scope_id: "runner",
+    kind: "user_preference",
+    content: "Prefer concise Chinese progress updates"
+  });
+  seedMemory(db, {
+    id: "global-policy-memory",
+    scope: "global",
+    scope_id: "runner",
+    kind: "project_policy_memory",
+    content: "Prefer runner-level housekeeping"
+  });
+  seedMemory(db, policyMemory("other-project-memory", "other", "Prefer broad refactors"));
+  seedMemory(db, policyMemory("sensitive-memory", "demo", "CODEX_RUNNER_AUTH_TOKEN=fixture-secret"));
+}
+
+function policyMemory(id: string, scopeID: string, content: string) {
+  return { id, scope: "project", scope_id: scopeID, kind: "project_policy_memory", content };
+}
+
+function itemIds(details: unknown): string[] {
+  const items = (details as { items?: Array<{ id: string }> }).items ?? [];
+  return items.map((item) => item.id).sort();
 }

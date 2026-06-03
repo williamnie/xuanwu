@@ -4,11 +4,12 @@ import type { RunnerDatabase } from "../db/database.ts";
 import {
   createPiMemoryItem,
   listPiMemoryItems,
-  type PiMemoryItem
+  type PiMemoryItem,
+  type PiMemoryItemFilter
 } from "../db/repositories/pi.ts";
 import { executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
-import { memoryRejectedResult } from "./memoryPolicy.ts";
+import { containsSensitiveMemoryContent, memoryRejectedResult } from "./memoryPolicy.ts";
 
 export const PI_MEMORY_TOOL_NAMES = ["memory_search", "memory_write_candidate"] as const;
 
@@ -22,6 +23,7 @@ const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 
 const memorySearchParams = Type.Object({
   include_candidates: Type.Optional(Type.Boolean()),
+  kind: optionalString,
   query: optionalString,
   scope: optionalString,
   scope_id: optionalString
@@ -60,13 +62,11 @@ function searchMemory(
   context: MemoryContext,
   input: Static<typeof memorySearchParams>
 ) {
-  const scope = cleanString(input.scope) || "project";
-  const items = listPiMemoryItems(db, {
-    disabled: input.include_candidates ? undefined : 0,
-    scope,
-    scopeId: cleanString(input.scope_id) || defaultScopeID(scope, context)
-  });
-  return { items: filterByQuery(items, input.query).map(summaryItem) };
+  const requestedScope = cleanString(input.scope);
+  const scope = requestedScope || "project";
+  const items = searchableScopes(scope, context, input, requestedScope === "")
+    .flatMap((filter) => listPiMemoryItems(db, filter));
+  return { items: filterMemoryItems(items, input).map(summaryItem) };
 }
 
 function writeMemoryCandidate(
@@ -115,6 +115,34 @@ function filterByQuery(items: PiMemoryItem[], query: unknown): PiMemoryItem[] {
   const needle = cleanString(query).toLowerCase();
   if (needle === "") return items;
   return items.filter((item) => `${item.kind}\n${item.content}`.toLowerCase().includes(needle));
+}
+
+function filterMemoryItems(items: PiMemoryItem[], input: Static<typeof memorySearchParams>): PiMemoryItem[] {
+  const kind = cleanString(input.kind);
+  const visible = items.filter((item) => !containsSensitiveMemoryContent(item.content));
+  const typed = kind === "" ? visible : visible.filter((item) => item.kind === kind);
+  return filterByQuery(typed, input.query);
+}
+
+function searchableScopes(
+  scope: string,
+  context: MemoryContext,
+  input: Static<typeof memorySearchParams>,
+  includeGlobalFallback: boolean
+): PiMemoryItemFilter[] {
+  const disabled = input.include_candidates ? undefined : 0;
+  const scopeId = cleanString(input.scope_id);
+  if (scope !== "project" || scopeId !== "" || !includeGlobalFallback) {
+    return [{
+      disabled,
+      scope,
+      scopeId: scopeId || defaultScopeID(scope, context)
+    }];
+  }
+  return [
+    { disabled, scope: "project", scopeId: defaultScopeID("project", context) },
+    { disabled, scope: "global", scopeId: defaultScopeID("global", context) }
+  ];
 }
 
 function summaryItem(item: PiMemoryItem): PiMemoryItem {
