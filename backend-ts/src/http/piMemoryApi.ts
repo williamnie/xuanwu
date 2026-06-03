@@ -17,6 +17,8 @@ type PiMemoryContext = { database: RunnerDatabase };
 export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext): void {
   router.get("/api/pi/memory", (request) => json(listPiMemoryItems(context.database, memoryFilter(request))));
   router.post("/api/pi/memory", async (request) => createMemoryResponse(context, request));
+  router.post("/api/pi/memory/candidates", async (request) => createCandidateResponse(context, request));
+  router.post("/api/pi/memory/:id/approve", (request) => reviewMemoryResponse(context, request, 0));
   router.post("/api/pi/memory/:id/promote", (request) => reviewMemoryResponse(context, request, 0));
   router.post("/api/pi/memory/:id/disable", (request) => reviewMemoryResponse(context, request, 1));
   router.patch("/api/pi/memory/:id", async (request) => patchMemoryResponse(context, request));
@@ -25,6 +27,12 @@ export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext)
 
 async function createMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {
   const body = normalizeMemoryInput(await parseObjectBody(request), true);
+  return writeResponse(() => createPiMemoryItem(context.database, body), 201);
+}
+
+async function createCandidateResponse(context: PiMemoryContext, request: Request): Promise<Response> {
+  const body = normalizeMemoryInput(await parseObjectBody(request), true);
+  body.disabled = 1;
   return writeResponse(() => createPiMemoryItem(context.database, body), 201);
 }
 
@@ -96,11 +104,19 @@ const FLAG_FIELDS = ["pinned", "disabled"] as const;
 
 function memoryFilter(request: Request): PiMemoryItemFilter {
   const params = new URL(request.url).searchParams;
+  const statusDisabled = statusParam(params.get("status"));
   return {
-    disabled: disabledParam(params.get("disabled")),
+    disabled: statusDisabled ?? disabledParam(params.get("disabled")),
     scope: cleanString(params.get("scope")),
     scopeId: cleanString(params.get("scope_id"))
   };
+}
+
+function statusParam(value: string | null): number | undefined {
+  const text = cleanString(value).toLowerCase();
+  if (text === "active") return 0;
+  if (text === "candidate" || text === "disabled") return 1;
+  return undefined;
 }
 
 function disabledParam(value: string | null): number | undefined {

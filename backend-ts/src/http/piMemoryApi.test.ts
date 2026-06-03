@@ -112,6 +112,55 @@ describe("Bun PI memory API", () => {
     }
   });
 
+  test("creates candidates disabled by default and approves them as active memory", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+
+      const created = await request(router, "/api/pi/memory/candidates", "POST", {
+        id: "candidate-2",
+        scope: "project",
+        scope_id: "demo",
+        kind: "session_outcome",
+        content: "Verify before marking done",
+        source_type: "pi.conversation",
+        source_id: "conv-review",
+        confidence: "low",
+        disabled: false
+      });
+      const activeBeforeApprove = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=active`
+      ));
+      const candidates = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=candidate`
+      ));
+      const approved = await request(router, "/api/pi/memory/candidate-2/approve", "POST", {});
+      const activeAfterApprove = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=active`
+      ));
+
+      expect(created.status).toBe(201);
+      expect(await created.json()).toMatchObject({
+        confidence: "low",
+        disabled: 1,
+        source_id: "conv-review",
+        source_type: "pi.conversation"
+      });
+      expect(await activeBeforeApprove.json()).toEqual([]);
+      expect((await candidates.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["candidate-2"]);
+      expect(await approved.json()).toMatchObject({
+        confidence: "low",
+        disabled: 0,
+        source_id: "conv-review",
+        source_type: "pi.conversation"
+      });
+      expect((await activeAfterApprove.json() as Array<Record<string, unknown>>).map((item) => item.id))
+        .toEqual(["candidate-2"]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("rejects memory writes that contain high-sensitive secrets", async () => {
     const database = await openFixtureDatabase();
     try {
