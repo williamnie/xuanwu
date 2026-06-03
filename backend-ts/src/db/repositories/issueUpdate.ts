@@ -9,6 +9,7 @@ import {
   normalizeSourceSessionID,
   VALID_ISSUE_STATUSES
 } from "./issueCreate.ts";
+import { normalizeSkillIntentList } from "../../skills/intents.ts";
 import { ProjectNotFoundError } from "./projects.ts";
 
 export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>>;
@@ -23,6 +24,8 @@ type NormalizedIssuePatch = {
   description: string;
   error: string;
   priority: number;
+  recommended_skill_intents: string;
+  required_skill_intents: string;
   source_excerpt: string;
   source_session_id: string;
   source_turn_id: string;
@@ -35,6 +38,8 @@ const PATCH_FIELDS = [
   "description",
   "status",
   "priority",
+  "required_skill_intents",
+  "recommended_skill_intents",
   "error",
   "source_session_id",
   "source_turn_id",
@@ -58,10 +63,12 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
   const timestamp = issueTimestamp();
   const write = db.transaction((record: NormalizedIssuePatch) => {
     db.sqlite.run(`update issues set title=?, description=?, status=?, priority=?,
+      required_skill_intents_json=?, recommended_skill_intents_json=?,
       agent_profile_id=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
       codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?, auto_retry_reason=?,
       error=?, updated_at=? where id=?`,
       [record.title, record.description, record.status, record.priority,
+        record.required_skill_intents, record.recommended_skill_intents,
         record.agent_profile_id, record.source_session_id, record.source_turn_id,
         record.source_excerpt, record.codex_thread_id, record.codex_turn_id,
         record.auto_retry_next_at, record.auto_retry_reason, record.error,
@@ -95,6 +102,9 @@ function normalizePatchField(field: keyof NormalizedIssuePatch, value: unknown):
       return normalizeIdentifier(value);
     case "priority":
       return integerInput(value);
+    case "required_skill_intents":
+    case "recommended_skill_intents":
+      return normalizeSkillIntentList(value);
     case "source_session_id":
       return normalizeSourceSessionID(value);
     default:
@@ -114,6 +124,8 @@ function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
     description: issue.description,
     status: issue.status,
     priority: issue.priority,
+    required_skill_intents: issue.required_skill_intents,
+    recommended_skill_intents: issue.recommended_skill_intents,
     error: issue.error,
     source_session_id: issue.source_session_id,
     source_turn_id: issue.source_turn_id,

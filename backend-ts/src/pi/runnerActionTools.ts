@@ -15,7 +15,11 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "project_list",
   "session_list",
   "session_read_summary",
-  "session_steer_proposal"
+  "session_steer_proposal",
+  "skill_list",
+  "skill_read",
+  "skill_recommend",
+  "skill_intent_audit"
 ] as const;
 
 type ActionToolName = (typeof PI_RUNNER_ACTION_TOOL_NAMES)[number];
@@ -25,12 +29,14 @@ const objectOptions = { additionalProperties: false };
 const optionalString = Type.Optional(Type.String());
 const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 const positiveID = Type.Integer({ minimum: 1 });
+const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 
 export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
     ...issueActionTools(actions),
     ...projectActionTools(actions),
-    ...sessionActionTools(actions)
+    ...sessionActionTools(actions),
+    ...skillActionTools(actions)
   ];
 }
 
@@ -48,7 +54,9 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         project_id: optionalString,
         rationale: optionalString,
         title: optionalString,
-        verification_plan: optionalString
+        verification_plan: optionalString,
+        required_skill_intents: skillIntentList,
+        recommended_skill_intents: skillIntentList
       }, objectOptions), actions.createIssueProposal),
     issueStateDiagnoseTool(actions),
     issueStateRepairTool(actions),
@@ -100,7 +108,9 @@ function issueRefinementTool(actions: PiRunnerActionLayer): ToolDefinition {
       recommended_provider: optionalString,
       risk_level: optionalString,
       risks: optionalString,
-      verification_plan: optionalString
+      verification_plan: optionalString,
+      required_skill_intents: skillIntentList,
+      recommended_skill_intents: skillIntentList
     }, objectOptions), actions.createUpdateRefinementProposal);
 }
 
@@ -123,6 +133,19 @@ function sessionActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Create a high-risk pending proposal to steer a running executor session.",
       Type.Object({ prompt: requiredText, rationale: optionalString, session_key: requiredText }, objectOptions),
       actions.createSessionSteerProposal)
+  ];
+}
+
+function skillActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
+  return [
+    actionTool("skill_list", "Skill List", "List Codex skills metadata visible to PI.",
+      Type.Object({}, objectOptions), actions.listSkills),
+    actionTool("skill_read", "Skill Read", "Read one Codex skill metadata record by id.",
+      Type.Object({ id: requiredText }, objectOptions), actions.readSkill),
+    actionTool("skill_recommend", "Skill Recommend", "Recommend required or recommended skill intents for an issue/project prompt.",
+      Type.Object({ description: optionalString, project_id: optionalString, title: optionalString }, objectOptions), actions.recommendSkills),
+    actionTool("skill_intent_audit", "Skill Intent Audit", "Audit whether a completed session used the expected skill intents.",
+      Type.Object({ issue_id: positiveID, issue_run_id: optionalString, used_skill_intents: skillIntentList }, objectOptions), actions.auditSkillIntents)
   ];
 }
 

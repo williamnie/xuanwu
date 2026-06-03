@@ -7,6 +7,8 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
+import { parseSkillPolicy } from "../skills/intents.ts";
+import { listSkillRegistry } from "../skills/registry.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
@@ -74,7 +76,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       authStorage,
       model: resolvePiModel(modelRegistry, input.agent),
       modelRegistry,
-      resourceLoader: emptyResourceLoader(sdk),
+      resourceLoader: emptyResourceLoader(sdk, input),
       sessionManager,
       settingsManager: sdk.pi.SettingsManager.create(context.cwd, paths.agentDir),
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
@@ -142,18 +144,33 @@ function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
   };
 }
 
-function emptyResourceLoader(sdk: SmokeRuntime) {
+function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput) {
   return {
     getAgentsFiles: () => ({ agentsFiles: [] }),
     getAppendSystemPrompt: () => [],
     getExtensions: () => ({ extensions: [], errors: [], runtime: sdk.pi.createExtensionRuntime() }),
     getPrompts: () => ({ prompts: [], diagnostics: [] }),
     getSkills: () => ({ skills: [], diagnostics: [] }),
-    getSystemPrompt: () => "You are PI, an independent project manager agent for codex-issue-runner.",
+    getSystemPrompt: () => piSystemPrompt(input),
     getThemes: () => ({ themes: [], diagnostics: [] }),
     extendResources: () => {},
     reload: async () => {}
   };
+}
+
+function piSystemPrompt(input: RuntimeSessionInput): string {
+  return [
+    "You are PI, an independent project manager agent for codex-issue-runner.",
+    "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
+    "Skills Registry metadata:",
+    JSON.stringify(listSkillRegistry().slice(0, 24).map((skill) => ({
+      id: skill.id, name: skill.name, description: skill.description,
+      trigger_rules: skill.trigger_rules, risk_level: skill.risk_level,
+      source_path: skill.source_path, allowed_roles: skill.allowed_roles
+    })), null, 2),
+    "Project default skill policy:",
+    JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2)
+  ].join("\n");
 }
 
 function ensureRuntimeProvider(sdk: SmokeRuntime, agent: PiAgent): RuntimeCleanup {

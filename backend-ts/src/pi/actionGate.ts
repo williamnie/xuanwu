@@ -22,13 +22,14 @@ export type PiActionEnvelope = {
 export type PiAuthorizedAction = Partial<Pick<PiActionEnvelope,
   "action_type" | "delegation_id" | "heartbeat_id" | "issue_id" | "project_id"
 >> & { payload?: Record<string, unknown> };
-export type PiGatePolicy = { authorizedActions?: PiAuthorizedAction[]; mode?: PiActionMode };
+export type PiGatePolicy = { allowedSkillIntents?: string[]; authorizedActions?: PiAuthorizedAction[]; mode?: PiActionMode };
 export type PiGateDecision = { decision: PiActionDecision; reason: string };
 
 const SAFE_ACTIONS = new Set([
   "issue.comment", "issue.list", "issue.read", "issue.state_diagnose", "project.list", "project.status",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
-  "sdk.read", "sdk.grep", "sdk.find", "sdk.ls"
+  "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
+  "skill.list", "skill.read", "skill.recommend", "skill.intent_audit"
 ]);
 const CONFIRM_ACTIONS = new Set(["issue.create", "issue.enqueue", "issue.update_refinement", "issue.state_repair"]);
 const HIGH_RISK_ACTIONS = new Set(["session.steer"]);
@@ -46,6 +47,9 @@ export function gatePiActionEnvelope(
 ): PiGateDecision {
   if (cleanString(envelope.snoozed_until) !== "") return { decision: "snooze", reason: "action is snoozed" };
   if ((policy.mode ?? "attended") === "delegated") {
+    if (!authorizedSkillIntents(envelope, policy.allowedSkillIntents)) {
+      return { decision: "deny", reason: "delegated skill intent is not covered by authorization allowlist" };
+    }
     if (!authorizedByEnvelope(envelope, policy.authorizedActions ?? [])) {
       return { decision: "deny", reason: "delegated action is not covered by authorization envelope" };
     }
@@ -53,6 +57,33 @@ export function gatePiActionEnvelope(
   }
   if (envelope.requires_confirmation) return { decision: "ask", reason: "risk requires user confirmation" };
   return { decision: "execute", reason: "low-risk action is allowed by gate" };
+}
+
+function authorizedSkillIntents(envelope: PiActionEnvelope, allowed: string[] | undefined): boolean {
+  if (!allowed) return true;
+  const requested = skillIntentsFromPayload(envelope.payload);
+  if (requested.length === 0) return true;
+  const allowlist = new Set(allowed.map(cleanString).filter(Boolean));
+  return requested.every((id) => allowlist.has(id));
+}
+
+function skillIntentsFromPayload(payload: Record<string, unknown>): string[] {
+  return [
+    ...stringList(payload.skill_intents),
+    ...stringList(payload.required_skill_intents),
+    ...stringList(payload.recommended_skill_intents)
+  ];
+}
+
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(cleanString).filter(Boolean);
+  const text = cleanString(value);
+  if (text === "") return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed.map(cleanString).filter(Boolean);
+  } catch {}
+  return text.split(/\n|,/).map(cleanString).filter(Boolean);
 }
 
 function authorizedByEnvelope(envelope: PiActionEnvelope, authorized: PiAuthorizedAction[]): boolean {

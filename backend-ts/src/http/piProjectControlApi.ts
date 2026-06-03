@@ -17,6 +17,7 @@ import { publishNeedsUserFindingNotifications } from "../notifications/piNotifie
 import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
 import { diagnoseIssueState } from "../pi/issueStateManager.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
+import { parseSkillPolicy } from "../skills/intents.ts";
 import { HttpError, json } from "./errors.ts";
 import {
   createPiRuntimeSession,
@@ -101,7 +102,7 @@ async function createManagerCycleState(context: PiProjectControlContext, project
   const conversationID = crypto.randomUUID();
   const runtime = await createPiRuntimeSession(context.database, {
     agent,
-    authorization: managerCycleAuthorization(project.id),
+    authorization: managerCycleAuthorization(project),
     bus: context.bus,
     conversationID,
     delegationID: `pi-cycle:${project.id}`,
@@ -200,8 +201,10 @@ function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation,
   });
 }
 
-function managerCycleAuthorization(projectID: string): PiGatePolicy {
+function managerCycleAuthorization(project: Project): PiGatePolicy {
+  const projectID = project.id;
   return {
+    allowedSkillIntents: parseSkillPolicy(project.default_skill_policy).allowed ?? [],
     authorizedActions: [
       { action_type: "issue.list", project_id: projectID },
       { action_type: "issue.read", project_id: projectID },
@@ -209,7 +212,11 @@ function managerCycleAuthorization(projectID: string): PiGatePolicy {
       { action_type: "project.list" },
       { action_type: "project.status", project_id: projectID },
       { action_type: "session.list", project_id: projectID },
-      { action_type: "session.read_summary", project_id: projectID }
+      { action_type: "session.read_summary", project_id: projectID },
+      { action_type: "skill.list" },
+      { action_type: "skill.read" },
+      { action_type: "skill.recommend" },
+      { action_type: "skill.intent_audit", project_id: projectID }
     ],
     mode: "delegated"
   };
@@ -229,6 +236,8 @@ function managerCyclePrompt(
     JSON.stringify(snapshot, null, 2),
     "Issue state diagnostics:",
     JSON.stringify(issueState, null, 2),
+    "Project default skill policy:",
+    JSON.stringify(parseSkillPolicy(project.default_skill_policy), null, 2),
     "Create PI action proposals for concrete next steps; execute only safe read/comment tools.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."

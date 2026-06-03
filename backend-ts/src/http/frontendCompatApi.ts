@@ -12,6 +12,7 @@ import { clearProjectHold, deleteProject, reorderProjects } from "../db/reposito
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { createImageUpload, mustGetUpload } from "../db/repositories/uploads.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
+import { listSkillRegistry } from "../skills/registry.ts";
 import { isProjectLoopActive, startProjectLoop as startManagedProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
@@ -67,7 +68,7 @@ function registerCronRoutes(router: Router, context: FrontendCompatContext): voi
 function registerUtilityRoutes(router: Router, context: FrontendCompatContext): void {
   router.get("/api/notifications/settings", () => json(getNotificationSettings(context.database)));
   router.patch("/api/notifications/settings", async (request) => json(saveNotificationSettings(context.database, await objectBody(request))));
-  router.get("/api/capabilities", () => json({ skills: [], plugins: [] }));
+  router.get("/api/capabilities", () => json({ skills: listSkillRegistry(), plugins: [] }));
   router.get("/api/codex/models", async () => asyncResponse(async () => await context.providers?.codex?.listModels?.() ?? defaultModels()));
   router.post("/api/codex/approvals/:id/resolve", async (request) => asyncResponse(async () => resolveApproval(context, approvalID(request), await objectBody(request))));
   router.post("/api/commands", async (request) => { const body = await objectBody(request); return writeResponse(() => executeCommand(context, body)); });

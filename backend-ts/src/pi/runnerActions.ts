@@ -1,6 +1,9 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
+import { getSkillMetadata, listSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
+import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
@@ -20,6 +23,10 @@ export type PiRunnerActionLayer = {
   diagnoseIssueState(input: IssueStateDiagnosisInput): unknown;
   createSessionSteerProposal(input: SessionSteerProposalInput): unknown;
   createUpdateRefinementProposal(input: IssueUpdateRefinementInput): unknown;
+  listSkills(input: SkillListInput): unknown;
+  readSkill(input: SkillReadInput): unknown;
+  recommendSkills(input: SkillRecommendInput): unknown;
+  auditSkillIntents(input: SkillIntentAuditInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
   listIssues(input: IssueListInput): unknown;
   listProjects(input: ProjectListInput): unknown;
@@ -38,6 +45,8 @@ type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueUpdateRefinementInput = Partial<Record<RefinementField, string>> & {
   issue_id: number;
   rationale?: string;
+  recommended_skill_intents?: string[];
+  required_skill_intents?: string[];
 };
 type IssueCreateProposalInput = {
   acceptance_criteria?: string;
@@ -46,8 +55,14 @@ type IssueCreateProposalInput = {
   rationale?: string;
   title?: string;
   verification_plan?: string;
+  recommended_skill_intents?: string[];
+  required_skill_intents?: string[];
 };
 type ProjectListInput = {};
+type SkillListInput = {};
+type SkillReadInput = { id: string };
+type SkillRecommendInput = { description?: string; project_id?: string; title?: string };
+type SkillIntentAuditInput = { issue_id: number; issue_run_id?: string; used_skill_intents?: string[] };
 type ProjectStatusInput = { project_id?: string };
 type SessionListInput = { project_id?: string; provider?: string };
 type SessionReadSummaryInput = { session_key: string };
@@ -84,6 +99,7 @@ export function createPiRunnerActions(
       const proposal = refinementProposal(db, input);
       return createPendingPiAction(db, context, proposal, () => updateIssue(db, input.issue_id, objectPayload(proposal.payload.patch)));
     },
+    auditSkillIntents: (input) => safeSkillIntentAudit(db, context, input),
     enqueueIssueProposal: (input) => {
       const proposal = {
         actionType: "issue.enqueue",
@@ -95,6 +111,7 @@ export function createPiRunnerActions(
       return createPendingPiAction(db, context, proposal, () => enqueueIssue(db, input.issue_id));
     },
     listIssues: (input) => safeListIssues(db, context, input),
+    listSkills: () => safeListSkills(db, context),
     listProjects: () => executeSafePiAction(db, context, {
       actionType: "project.list",
       payload: {},
@@ -102,6 +119,8 @@ export function createPiRunnerActions(
     }),
     listSessions: (input) => safeListSessions(db, context, input),
     projectStatus: (input) => safeProjectStatus(db, context, input),
+    readSkill: (input) => safeReadSkill(db, context, input),
+    recommendSkills: (input) => safeRecommendSkills(db, context, input),
     readIssue: (input) => safeReadIssue(db, context, input),
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
@@ -188,6 +207,8 @@ function issueCreateProposal(
       project_id: projectID,
       title: input.title ?? "",
       description: issueDescription(input),
+      required_skill_intents: parseSkillIntentList(input.required_skill_intents),
+      recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
       status: "triage"
     },
     projectID,
@@ -219,11 +240,52 @@ function refinementProposal(db: RunnerDatabase, input: IssueUpdateRefinementInpu
     issueID: issue.id,
     payload: {
       issue_id: issue.id,
-      patch: { description: serializeRefinement(issue.description, input) }
+      patch: cleanObjectPayload({
+        description: serializeRefinement(issue.description, input),
+        required_skill_intents: parseSkillIntentList(input.required_skill_intents),
+        recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents)
+      })
     },
     projectID: issue.project_id,
     rationale: input.rationale
   };
+}
+
+function safeListSkills(db: RunnerDatabase, context: PiRunnerActionContext) {
+  return executeSafePiAction(db, context, {
+    actionType: "skill.list",
+    payload: {},
+    execute: () => ({ items: listSkillRegistry() })
+  });
+}
+
+function safeReadSkill(db: RunnerDatabase, context: PiRunnerActionContext, input: SkillReadInput) {
+  return executeSafePiAction(db, context, {
+    actionType: "skill.read",
+    payload: { id: cleanString(input.id) },
+    execute: () => getSkillMetadata(input.id) ?? { id: cleanString(input.id), missing: true }
+  });
+}
+
+function safeRecommendSkills(db: RunnerDatabase, context: PiRunnerActionContext, input: SkillRecommendInput) {
+  const projectID = cleanString(input.project_id) || (context.project?.id ?? "");
+  return executeSafePiAction(db, context, {
+    actionType: "skill.recommend",
+    payload: cleanObjectPayload({ project_id: projectID, title: input.title ?? "", description: input.description ?? "" }),
+    projectID,
+    execute: () => ({ items: recommendSkillIntents(input) })
+  });
+}
+
+function safeSkillIntentAudit(db: RunnerDatabase, context: PiRunnerActionContext, input: SkillIntentAuditInput) {
+  const issue = mustGetIssue(db, input.issue_id);
+  return executeSafePiAction(db, context, {
+    actionType: "skill.intent_audit",
+    issueID: issue.id,
+    payload: cleanObjectPayload({ issue_id: issue.id, issue_run_id: input.issue_run_id ?? "", used_skill_intents: input.used_skill_intents ?? [] }),
+    projectID: issue.project_id,
+    execute: () => auditIssueSkillIntents(db, issue.id, { issueRunID: input.issue_run_id, usedSkillIntents: input.used_skill_intents })
+  });
 }
 
 function normalizeIssueFilter(input: IssueListInput, context: PiRunnerActionContext) {
@@ -290,6 +352,12 @@ function objectPayload(value: unknown): Record<string, unknown> {
 
 function cleanObject(input: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== "")) as Record<string, string>;
+}
+
+function cleanObjectPayload(input: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => (
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== ""
+  )));
 }
 
 function cleanString(value: unknown): string {

@@ -15,13 +15,17 @@ const CREATE_FLAGS = [
   { name: "source-session" },
   { name: "source-turn" },
   { name: "source-excerpt" },
+  { name: "required-skill" },
+  { name: "recommended-skill" },
   { boolean: true, name: "run" }
 ] as const;
 
 const UPDATE_FLAGS = [
   { name: "id", required: true },
   { name: "status" },
-  { name: "error" }
+  { name: "error" },
+  { name: "required-skill" },
+  { name: "recommended-skill" }
 ] as const;
 
 const ID_FLAGS = [{ name: "id", required: true }] as const;
@@ -65,8 +69,8 @@ async function getIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promi
 
 async function updateIssue(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const { common, values } = parseCommandArgs(args, [...UPDATE_FLAGS], env);
-  const payload = updatePayload(values.status ?? "", values.error ?? "");
-  if (Object.keys(payload).length === 0) throw new Error("--status or --error is required");
+  const payload = updatePayload(values.status ?? "", values.error ?? "", values["required-skill"] ?? "", values["recommended-skill"] ?? "");
+  if (Object.keys(payload).length === 0) throw new Error("--status, --error, --required-skill or --recommended-skill is required");
   const issue = await patchJSON<IssueDTO>(fetcher, common, `/api/issues/${issueID(values.id)}`, payload);
   return formatIssue(issue, common.json);
 }
@@ -125,12 +129,14 @@ function createPayload(values: Record<string, string>, env: EnvReader, body: str
     template_id: values.template ?? "",
     source_session_id: values["source-session"] ?? env("CODEX_THREAD_ID") ?? "",
     source_turn_id: values["source-turn"] ?? env("CODEX_TURN_ID") ?? "",
-    source_excerpt: values["source-excerpt"] ?? ""
+    source_excerpt: values["source-excerpt"] ?? "",
+    required_skill_intents: intentList(values["required-skill"]),
+    recommended_skill_intents: intentList(values["recommended-skill"])
   };
 }
 
-function updatePayload(status: string, error: string): Record<string, string> {
-  const payload: Record<string, string> = {};
+function updatePayload(status: string, error: string, requiredSkill = "", recommendedSkill = ""): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
   const cleanStatus = status.trim();
   const cleanError = error.trim();
   if (cleanStatus !== "") {
@@ -138,12 +144,18 @@ function updatePayload(status: string, error: string): Record<string, string> {
     if (cleanStatus !== "failed") payload.error = "";
   }
   if (cleanError !== "") payload.error = cleanError;
+  if (requiredSkill.trim() !== "") payload.required_skill_intents = intentList(requiredSkill);
+  if (recommendedSkill.trim() !== "") payload.recommended_skill_intents = intentList(recommendedSkill);
   return payload;
 }
 
 async function issueBody(body: string, bodyFile: string): Promise<string> {
   if (bodyFile.trim() === "") return body.trim();
   return (await readFile(bodyFile, "utf8")).trim();
+}
+
+function intentList(value: string | undefined): string[] {
+  return (value ?? "").split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
 }
 
 function issueID(value: string): string {

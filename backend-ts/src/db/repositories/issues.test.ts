@@ -55,6 +55,8 @@ describe("issue read repository", () => {
         priority: 3,
         template_id: "",
         prompt_template: "",
+        required_skill_intents: "[]",
+        recommended_skill_intents: "[]",
         agent_profile_id: "",
         source_session_id: "thread-1",
         source_turn_id: "",

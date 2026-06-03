@@ -7,6 +7,8 @@ import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { failIssueExecution } from "./statusGate.ts";
 import { renderIssuePromptTemplate } from "./issuePromptTemplate.ts";
+import { parseSkillPolicy } from "../skills/intents.ts";
+import { listSkillRegistry } from "../skills/registry.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
@@ -77,7 +79,28 @@ function issuePrompt(project: Project, issue: Issue): string {
   const templated = issue.prompt_template.trim();
   if (templated !== "") {
     const rendered = renderIssuePromptTemplate(templated, { project, issue }).trim();
-    if (rendered !== "") return rendered;
+    if (rendered !== "") return withSkillIntentContext(project, issue, rendered);
   }
-  return issue.description.trim() || issue.title.trim();
+  return withSkillIntentContext(project, issue, issue.description.trim() || issue.title.trim());
+}
+
+function withSkillIntentContext(project: Project, issue: Issue, prompt: string): string {
+  if (!hasSkillIntentContext(project, issue)) return prompt.trim();
+  const skillContext = [
+    "",
+    "## Skill Intent Context",
+    `Required skill intents: ${issue.required_skill_intents}`,
+    `Recommended skill intents: ${issue.recommended_skill_intents}`,
+    `Project default skill policy: ${JSON.stringify(parseSkillPolicy(project.default_skill_policy))}`,
+    `Available skills metadata: ${JSON.stringify(listSkillRegistry().slice(0, 24).map(skillSummary))}`
+  ].join("\n");
+  return `${prompt.trim()}${skillContext}`.trim();
+}
+
+function hasSkillIntentContext(project: Project, issue: Issue): boolean {
+  return issue.required_skill_intents !== "[]" || issue.recommended_skill_intents !== "[]" || project.default_skill_policy !== "{}";
+}
+
+function skillSummary(skill: ReturnType<typeof listSkillRegistry>[number]) {
+  return { id: skill.id, name: skill.name, description: skill.description, risk_level: skill.risk_level, allowed_roles: skill.allowed_roles };
 }

@@ -59,7 +59,8 @@ describe("PI project tools", () => {
         "issue_list", "issue_read", "issue_state_diagnose", "issue_state_repair_proposal",
         "issue_update_refinement", "ls", "memory_search",
         "memory_write_candidate", "project_list", "project_status", "read", "session_list",
-        "session_read_summary", "session_steer_proposal"
+        "session_read_summary", "session_steer_proposal", "skill_intent_audit",
+        "skill_list", "skill_read", "skill_recommend"
       ]);
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project_status")?.isError).toBe(false);
@@ -145,7 +146,7 @@ function projectRecord(cwd: string) {
     id: "demo", name: "Demo", cwd, provider: "codex", provider_config_json: "{}", auto_run: 0,
     model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
     sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
-    loop_status: "stopped", provider_capabilities: []
+    default_skill_policy: "{}", loop_status: "stopped", provider_capabilities: []
   };
 }
 

@@ -21,6 +21,8 @@ type IssueRow = {
   priority: unknown;
   project_id: unknown;
   prompt_template: unknown;
+  recommended_skill_intents_json: unknown;
+  required_skill_intents_json: unknown;
   source_excerpt: unknown;
   source_session_id: unknown;
   source_turn_id: unknown;
@@ -46,6 +48,7 @@ type IssueRunRow = {
   provider_session_id: unknown;
   provider_turn_id: unknown;
   runtime_metadata_json: unknown;
+  skill_intent_audit_json: unknown;
   selection_reason: unknown;
   started_at: unknown;
   status: unknown;
@@ -66,6 +69,7 @@ export type IssueRun = {
   provider_session_id: string;
   provider_turn_id: string;
   runtime_metadata_json: string;
+  skill_intent_audit_json: string;
   selection_reason: string;
   started_at: string;
   status: string;
@@ -87,6 +91,8 @@ export type Issue = {
   priority: number;
   project_id: string;
   prompt_template: string;
+  recommended_skill_intents: string;
+  required_skill_intents: string;
   source_excerpt: string;
   source_session_id: string;
   source_turn_id: string;
@@ -98,7 +104,7 @@ export type Issue = {
 };
 
 const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
-  template_id, prompt_template, agent_profile_id, source_session_id,
+  template_id, prompt_template, required_skill_intents_json, recommended_skill_intents_json, agent_profile_id, source_session_id,
   source_turn_id, source_excerpt, codex_thread_id, codex_turn_id,
   attempt_count,
   (select count(*) from issue_events where issue_id=issues.id and type='issue.comment') as comment_count,
@@ -109,7 +115,7 @@ const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
 const ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
   ir.provider_session_id, ir.provider_turn_id, ir.codex_thread_id, ir.codex_turn_id,
   ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.agent_profile_id,
-  ir.capability_summary, ir.selection_reason, ir.runtime_metadata_json`;
+  ir.capability_summary, ir.selection_reason, ir.runtime_metadata_json, ir.skill_intent_audit_json`;
 
 export function listIssues(db: RunnerDatabase, filter: IssueFilter = {}): Issue[] {
   const query = buildIssueListQuery(filter);
@@ -190,6 +196,8 @@ function mapIssueRow(row: IssueRow): Issue {
     priority: integerValue(row.priority, "issues.priority"),
     template_id: optionalString(row.template_id),
     prompt_template: optionalString(row.prompt_template),
+    required_skill_intents: optionalString(row.required_skill_intents_json, "[]"),
+    recommended_skill_intents: optionalString(row.recommended_skill_intents_json, "[]"),
     agent_profile_id: optionalString(row.agent_profile_id),
     source_session_id: optionalString(row.source_session_id),
     source_turn_id: optionalString(row.source_turn_id),
@@ -225,7 +233,8 @@ function mapIssueRunRow(row: IssueRunRow): IssueRun {
     agent_profile_id: optionalString(row.agent_profile_id),
     capability_summary: optionalString(row.capability_summary),
     selection_reason: optionalString(row.selection_reason),
-    runtime_metadata_json: optionalString(row.runtime_metadata_json, "{}")
+    runtime_metadata_json: optionalString(row.runtime_metadata_json, "{}"),
+    skill_intent_audit_json: optionalString(row.skill_intent_audit_json, "{}")
   };
 }
 

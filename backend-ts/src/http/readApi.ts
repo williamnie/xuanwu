@@ -7,6 +7,7 @@ import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
 import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import {
   createProject,
@@ -118,6 +119,7 @@ function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, un
 
 function updateIssueAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
   const issue = updateIssue(context.database, id, body);
+  if (terminalForSkillAudit(issue.status)) safeAuditSkillIntents(context.database, issue.id);
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
 }
@@ -261,4 +263,12 @@ const LOOP_RELEASE_STATUSES = new Set(["cancelled", "done", "failed", "pending_v
 
 function shouldKickAfterWrite(status: string): boolean {
   return LOOP_RELEASE_STATUSES.has(status);
+}
+
+function terminalForSkillAudit(status: string): boolean {
+  return ["cancelled", "done", "failed", "pending_verification"].includes(status);
+}
+
+function safeAuditSkillIntents(db: RunnerDatabase, issueID: number): void {
+  try { auditIssueSkillIntents(db, issueID); } catch {}
 }
