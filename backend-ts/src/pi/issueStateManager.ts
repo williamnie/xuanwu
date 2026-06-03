@@ -1,18 +1,22 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents, recordIssueEvent, type IssueEvent } from "../db/repositories/issueEvents.ts";
+import { hasActiveExecutorWork } from "../db/repositories/issueQueue.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 export type IssueStateEvidence = {
-  ref: string; source: "event" | "issue" | "policy" | "run" | "session"; summary: string; timestamp: string;
+  ref: string; source: "event" | "issue" | "policy" | "project" | "run" | "session"; summary: string; timestamp: string;
 };
 export type IssueStateRepairOperation = "comment" | "enqueue" | "patch_status" | "retry";
+export type IssueStateSuggestedOperation = "enqueue" | "kick_project_loop";
 export type IssueStateAction = {
   action_type: "issue.state_repair"; evidence_refs: string[]; issue_id: number;
   operation: IssueStateRepairOperation; patch?: Record<string, string>; rationale: string;
+  suggested_operation?: IssueStateSuggestedOperation;
 };
 export type IssueStateDiagnostic = {
   code: string; evidence: IssueStateEvidence[]; issue_id: number; project_id: string;
@@ -80,7 +84,7 @@ function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManage
   const sessions = issueSessions(db, issue);
   const events = listIssueEvents(db, issue.id);
   const latestRun = runs.at(-1);
-  if (issue.status === "todo" && !latestRun && sessions.length === 0) return [todoWithoutSession(issue)];
+  if (issue.status === "todo" && todoNeedsRuntime(runs, sessions)) return [todoWithoutSession(db, issue, latestRun, sessions[0], now)];
   if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, options, now);
   if (issue.status === "failed") return [failedDiagnostic(issue, options, now)];
   if (issue.status === "pending_verification") return pendingDiagnostic(issue, options, now);
@@ -88,9 +92,21 @@ function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManage
   return [];
 }
 
-function todoWithoutSession(issue: Issue): IssueStateDiagnostic {
-  const evidence = [issueEvidence(issue, "todo issue has no issue_run or agent_session yet")];
-  return diagnostic(issue, "todo_without_session", "watch", evidence, [action(issue, "enqueue", evidence, "Re-enqueue or kick the project loop for todo issue without runtime session.")]);
+function todoWithoutSession(
+  db: RunnerDatabase,
+  issue: Issue,
+  latestRun: IssueRun | undefined,
+  latestSession: AgentSession | undefined,
+  now: Date
+): IssueStateDiagnostic {
+  const evidence = compact([
+    issueEvidence(issue, "todo issue has no active issue_run or agent_session"),
+    runEvidence(latestRun),
+    sessionEvidence(latestSession),
+    projectRunnerEvidence(db, issue, now)
+  ]);
+  const suggested = todoSuggestedOperation(db, issue);
+  return diagnostic(issue, "todo_without_session", "watch", evidence, [action(issue, "enqueue", evidence, "Re-enqueue or kick the project loop for todo issue without active runtime session.", undefined, suggested)]);
 }
 
 function inProgressDiagnostics(
@@ -149,8 +165,23 @@ function diagnostic(issue: Issue, code: string, severity: IssueStateDiagnostic["
   return { code, evidence, issue_id: issue.id, project_id: issue.project_id, recommended_actions: actions, severity, status: issue.status, title: safeText(issue.title) };
 }
 
-function action(issue: Issue, operation: IssueStateRepairOperation, evidence: IssueStateEvidence[], rationale: string, patch?: Record<string, string>): IssueStateAction {
-  return { action_type: "issue.state_repair", evidence_refs: evidence.map((item) => item.ref), issue_id: issue.id, operation, ...(patch ? { patch } : {}), rationale };
+function action(
+  issue: Issue,
+  operation: IssueStateRepairOperation,
+  evidence: IssueStateEvidence[],
+  rationale: string,
+  patch?: Record<string, string>,
+  suggestedOperation?: IssueStateSuggestedOperation
+): IssueStateAction {
+  return {
+    action_type: "issue.state_repair",
+    evidence_refs: evidence.map((item) => item.ref),
+    issue_id: issue.id,
+    operation,
+    ...(patch ? { patch } : {}),
+    rationale,
+    ...(suggestedOperation ? { suggested_operation: suggestedOperation } : {})
+  };
 }
 
 function needsUserAction(issue: Issue, evidence: IssueStateEvidence[]): IssueStateAction {
@@ -201,6 +232,12 @@ function policyEvidence(issue: Issue, options: IssueStateManagerOptions, now: Da
 function issueEvidence(issue: Issue, summary: string): IssueStateEvidence {
   return { ref: `issue:${issue.id}`, source: "issue", summary: safeText(summary), timestamp: issue.updated_at };
 }
+function projectRunnerEvidence(db: RunnerDatabase, issue: Issue, now: Date): IssueStateEvidence | undefined {
+  const project = getProject(db, issue.project_id);
+  if (!project) return undefined;
+  const busy = hasActiveExecutorWork(db) ? 1 : 0;
+  return { ref: `project:${project.id}:runner`, source: "project", summary: `project auto_run=${project.auto_run}; runner executor_busy=${busy}`, timestamp: iso(now) };
+}
 function runEvidence(run: IssueRun | undefined): IssueStateEvidence | undefined {
   return run ? { ref: `run:${run.id}`, source: "run", summary: safeText(`attempt ${run.attempt} ${run.status}; ended_at=${run.ended_at}`), timestamp: run.ended_at || run.started_at } : undefined;
 }
@@ -231,6 +268,13 @@ function latestActivity(issue: Issue, run: IssueRun | undefined, session: AgentS
 function objectPayload(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function positiveID(value: unknown): number { if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value; throw new Error("issue_id is required"); }
 function compact<T>(items: Array<T | undefined>): T[] { return items.filter((item): item is T => item !== undefined); }
+function todoNeedsRuntime(runs: IssueRun[], sessions: AgentSession[]): boolean {
+  return !runs.some(openRun) && !sessions.some(activeSession);
+}
+function todoSuggestedOperation(db: RunnerDatabase, issue: Issue): IssueStateSuggestedOperation {
+  return (getProject(db, issue.project_id)?.auto_run ?? 0) === 1 ? "kick_project_loop" : "enqueue";
+}
+function openRun(run: IssueRun): boolean { return run.ended_at === ""; }
 function runEnded(run: IssueRun | undefined): boolean { return Boolean(run?.ended_at); }
 function terminalSession(session: AgentSession | undefined): boolean { return ["completed", "done", "failed", "error"].includes(normalize(session?.status ?? "")); }
 function activeSession(session: AgentSession | undefined): boolean { return ["active", "running", "inprogress", "busy"].includes(normalize(session?.status ?? "")); }

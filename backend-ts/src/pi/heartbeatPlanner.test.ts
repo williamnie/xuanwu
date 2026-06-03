@@ -46,7 +46,7 @@ describe("PI heartbeat planner", () => {
     expect(candidates).toContainEqual(expect.objectContaining({
       action_type: "issue.enqueue",
       issue_id: 1,
-      payload: { issue_id: 1 },
+      payload: expect.objectContaining({ issue_id: 1, suggested_operation: "kick_project_loop" }),
       project_id: "demo",
       source: "pi_heartbeat"
     }));
@@ -93,6 +93,66 @@ describe("PI heartbeat planner", () => {
     });
 
     expect(planHeartbeatActions(signals, { now: NOW, projectID: "demo" })).toEqual([]);
+  });
+
+  test("plans kick/enqueue candidate for todo with only ended historical run and session", () => {
+    const signals = baseSignals({
+      agent_sessions: {
+        recent: [{
+          agent_role: "executor",
+          issue_id: 1,
+          provider: "codex",
+          provider_session_id: "thread-old",
+          raw_ref: {},
+          session_key: "codex:thread-old",
+          status: "done",
+          title: "Ended session",
+          updated_at: "2026-06-02T09:30:00Z"
+        }],
+        status_counts: { done: 1 },
+        total: 1
+      },
+      issue_runs: {
+        open: 0,
+        recent: [{
+          attempt: 1,
+          ended_at: "2026-06-02T09:20:00Z",
+          error: "",
+          exit_reason: "provider_completed",
+          issue_id: 1,
+          provider: "codex",
+          provider_session_id: "thread-old",
+          run_id: "run-old",
+          runtime_metadata: {},
+          started_at: "2026-06-02T09:00:00Z",
+          status: "done"
+        }],
+        status_counts: { done: 1 },
+        total: 1
+      },
+      project: {
+        ...baseSignals().project!,
+        latest_issues: [
+          { id: 1, status: "todo", title: "Requeued", updated_at: "2026-06-02T09:40:00Z" }
+        ],
+        recent_runs: [{
+          attempt: 1,
+          ended_at: "2026-06-02T09:20:00Z",
+          exit_reason: "provider_completed",
+          issue_id: 1,
+          provider: "codex",
+          run_id: "run-old",
+          started_at: "2026-06-02T09:00:00Z",
+          status: "done"
+        }]
+      }
+    });
+
+    expect(planHeartbeatActions(signals, { now: NOW, projectID: "demo" })).toContainEqual(expect.objectContaining({
+      action_type: "issue.enqueue",
+      issue_id: 1,
+      payload: expect.objectContaining({ suggested_operation: "kick_project_loop" })
+    }));
   });
 });
 

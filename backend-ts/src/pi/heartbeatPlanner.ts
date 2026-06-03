@@ -57,13 +57,13 @@ function actionCandidate(finding: ProjectFinding, projectID: string): HeartbeatA
 
 function todoWithoutSessionCandidates(signals: HeartbeatSignals, context: PlannerContext): HeartbeatActionCandidate[] {
   return latestIssues(signals)
-    .filter((issue) => issue.status === "todo" && !hasIssueSession(signals, issue.id) && !hasOpenIssueRun(signals, issue.id))
+    .filter((issue) => issue.status === "todo" && !hasActiveIssueSession(signals, issue.id) && !hasOpenIssueRun(signals, issue.id))
     .map((issue) => candidate({
       actionType: "issue.enqueue",
       issueID: issue.id,
-      payload: { issue_id: issue.id },
+      payload: { issue_id: issue.id, suggested_operation: todoSuggestedOperation(signals) },
       projectID: context.projectID,
-      rationale: `Enqueue todo issue #${issue.id} because heartbeat signals show no linked session.`
+      rationale: `Enqueue or kick todo issue #${issue.id} because heartbeat signals show no active linked runtime.`
     }));
 }
 
@@ -129,14 +129,22 @@ function latestIssues(signals: HeartbeatSignals): IssueSummary[] {
   return signals.project?.latest_issues ?? [];
 }
 
-function hasIssueSession(signals: HeartbeatSignals, issueID: number): boolean {
+function hasActiveIssueSession(signals: HeartbeatSignals, issueID: number): boolean {
   return [...signals.agent_sessions.recent, ...(signals.project?.recent_sessions ?? []), ...(signals.project?.session_progress ?? [])]
-    .some((session) => session.issue_id === issueID);
+    .some((session) => session.issue_id === issueID && activeSessionStatus(session.status));
 }
 
 function hasOpenIssueRun(signals: HeartbeatSignals, issueID: number): boolean {
   return [...signals.issue_runs.recent, ...(signals.project?.recent_runs ?? [])]
     .some((run) => run.issue_id === issueID && (run.ended_at === "" || run.status === "in_progress"));
+}
+
+function activeSessionStatus(status: string): boolean {
+  return ["active", "busy", "inprogress", "running"].includes(status.toLowerCase().replace(/[_\s-]/g, ""));
+}
+
+function todoSuggestedOperation(signals: HeartbeatSignals): string {
+  return signals.project_settings.project.auto_run === 1 ? "kick_project_loop" : "enqueue";
 }
 
 function isRetryableFinding(finding: ProjectFinding): boolean {
