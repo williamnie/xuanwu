@@ -15,6 +15,7 @@ type ProjectRow = {
   created_at: unknown;
   cwd: unknown;
   default_agent_profile_id: unknown;
+  default_mcp_policy_json: unknown;
   default_skill_policy_json: unknown;
   id: unknown;
   model: unknown;
@@ -39,6 +40,7 @@ export type Project = {
   cwd: string;
   default_agent_profile?: AgentProfile;
   default_agent_profile_id: string;
+  default_mcp_policy: string;
   default_skill_policy: string;
   hold?: ProjectHold;
   id: string;
@@ -54,7 +56,8 @@ export type Project = {
 };
 
 const PROJECT_COLUMNS = `p.id, p.name, p.cwd, p.provider, p.provider_config_json, p.auto_run,
-  p.model, p.approval_policy, p.sandbox, p.default_agent_profile_id, p.default_skill_policy_json, p.sort_order,
+  p.model, p.approval_policy, p.sandbox, p.default_agent_profile_id, p.default_skill_policy_json,
+  p.default_mcp_policy_json, p.sort_order,
   p.created_at, p.updated_at, h.reason, h.message, h.hold_since, h.next_check_at,
   h.last_check_at, h.last_check_error`;
 
@@ -68,11 +71,13 @@ export function createProject(db: RunnerDatabase, input: CreateProjectInput): Pr
   const sortOrder = nextProjectSortOrder(db);
   db.sqlite.run(`insert into projects
     (id, name, cwd, provider, provider_config_json, auto_run, model,
-     approval_policy, sandbox, default_agent_profile_id, default_skill_policy_json, sort_order, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     approval_policy, sandbox, default_agent_profile_id, default_skill_policy_json, default_mcp_policy_json,
+     sort_order, created_at, updated_at)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [project.id, project.name, project.cwd, project.provider, project.provider_config_json,
       project.auto_run, project.model, project.approval_policy, project.sandbox,
-      project.default_agent_profile_id, project.default_skill_policy, sortOrder, timestamp, timestamp]);
+      project.default_agent_profile_id, project.default_skill_policy, project.default_mcp_policy,
+      sortOrder, timestamp, timestamp]);
   return mustGetProject(db, project.id);
 }
 
@@ -85,10 +90,10 @@ export function updateProject(db: RunnerDatabase, id: string, input: UpdateProje
   validateProjectForWrite(projectID, next.cwd);
   db.sqlite.run(`update projects set name=?, cwd=?, provider=?, provider_config_json=?,
     auto_run=?, model=?, approval_policy=?, sandbox=?, default_agent_profile_id=?,
-    default_skill_policy_json=?, updated_at=? where id=?`,
+    default_skill_policy_json=?, default_mcp_policy_json=?, updated_at=? where id=?`,
     [next.name, next.cwd, next.provider, next.provider_config_json, next.auto_run,
       next.model, next.approval_policy, next.sandbox, next.default_agent_profile_id,
-      next.default_skill_policy, now(), projectID]);
+      next.default_skill_policy, next.default_mcp_policy, now(), projectID]);
   return mustGetProject(db, projectID);
 }
 
@@ -129,6 +134,7 @@ function mapProjectRow(row: ProjectRow): Project {
     approval_policy: optionalString(row.approval_policy, "never"),
     sandbox: optionalString(row.sandbox, "workspace-write"),
     default_agent_profile_id: optionalString(row.default_agent_profile_id),
+    default_mcp_policy: optionalString(row.default_mcp_policy_json, "{}"),
     default_skill_policy: optionalString(row.default_skill_policy_json, "{}"),
     sort_order: integerValue(row.sort_order, "projects.sort_order"),
     created_at: requiredString(row.created_at, "projects.created_at"),
@@ -186,6 +192,7 @@ function projectToWriteShape(project: Project): NormalizedProjectWrite {
     approval_policy: project.approval_policy,
     sandbox: project.sandbox,
     default_agent_profile_id: project.default_agent_profile_id,
+    default_mcp_policy: project.default_mcp_policy,
     default_skill_policy: project.default_skill_policy
   };
 }

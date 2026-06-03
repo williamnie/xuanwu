@@ -1,5 +1,6 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
+import { parseMcpPolicy } from "../mcp/policy.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   createPiConversation,
@@ -224,6 +225,10 @@ async function openConversationRuntime(context: PiConversationContext, conversat
   const agent = requireConversationAgent(context.database, conversation);
   return createPiRuntimeSession(context.database, {
     agent,
+    authorization: project ? {
+      allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,
+      mode: "attended"
+    } : undefined,
     bus: context.bus,
     conversationID: conversation.id,
     project,

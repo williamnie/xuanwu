@@ -9,6 +9,7 @@ import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { getAgentSession, listAgentSessions } from "../db/repositories/agentSessions.ts";
+import { createPiMcpActions, type PiMcpActionLayer } from "./mcpActionTools.ts";
 import type { EventBus } from "../events/bus.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
@@ -16,7 +17,7 @@ import { serializeRefinement, type RefinementField } from "./runnerActionRefinem
 import { observeSessionProgress } from "./sessionObserver.ts";
 import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStateDiagnosisInput, type IssueStateRepairProposalInput } from "./runnerIssueStateActions.ts";
 
-export type PiRunnerActionLayer = {
+export type PiRunnerActionLayer = PiMcpActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
   createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
@@ -47,6 +48,8 @@ type IssueUpdateRefinementInput = Partial<Record<RefinementField, string>> & {
   rationale?: string;
   recommended_skill_intents?: string[];
   required_skill_intents?: string[];
+  recommended_mcp_capabilities?: string[];
+  required_mcp_capabilities?: string[];
 };
 type IssueCreateProposalInput = {
   acceptance_criteria?: string;
@@ -57,6 +60,8 @@ type IssueCreateProposalInput = {
   verification_plan?: string;
   recommended_skill_intents?: string[];
   required_skill_intents?: string[];
+  recommended_mcp_capabilities?: string[];
+  required_mcp_capabilities?: string[];
 };
 type ProjectListInput = {};
 type SkillListInput = {};
@@ -81,6 +86,7 @@ export function createPiRunnerActions(
   context: PiRunnerActionContext = {}
 ): PiRunnerActionLayer {
   return {
+    ...createPiMcpActions(db, { ...context, projectID: context.project?.id }),
     commentIssue: (input) => executeSafePiAction(db, context, {
       actionType: "issue.comment",
       issueID: input.issue_id,
@@ -209,6 +215,8 @@ function issueCreateProposal(
       description: issueDescription(input),
       required_skill_intents: parseSkillIntentList(input.required_skill_intents),
       recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
+      required_mcp_capabilities: input.required_mcp_capabilities ?? [],
+      recommended_mcp_capabilities: input.recommended_mcp_capabilities ?? [],
       status: "triage"
     },
     projectID,
@@ -243,7 +251,9 @@ function refinementProposal(db: RunnerDatabase, input: IssueUpdateRefinementInpu
       patch: cleanObjectPayload({
         description: serializeRefinement(issue.description, input),
         required_skill_intents: parseSkillIntentList(input.required_skill_intents),
-        recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents)
+        recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
+        required_mcp_capabilities: input.required_mcp_capabilities ?? [],
+        recommended_mcp_capabilities: input.recommended_mcp_capabilities ?? []
       })
     },
     projectID: issue.project_id,

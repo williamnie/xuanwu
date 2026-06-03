@@ -16,6 +16,7 @@ import type { EventBus } from "../events/bus.ts";
 import { publishNeedsUserFindingNotifications } from "../notifications/piNotifier.ts";
 import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
 import { diagnoseIssueState } from "../pi/issueStateManager.ts";
+import { parseMcpPolicy } from "../mcp/policy.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { HttpError, json } from "./errors.ts";
@@ -204,6 +205,7 @@ function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation,
 function managerCycleAuthorization(project: Project): PiGatePolicy {
   const projectID = project.id;
   return {
+    allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed ?? [],
     allowedSkillIntents: parseSkillPolicy(project.default_skill_policy).allowed ?? [],
     authorizedActions: [
       { action_type: "issue.list", project_id: projectID },
@@ -216,7 +218,12 @@ function managerCycleAuthorization(project: Project): PiGatePolicy {
       { action_type: "skill.list" },
       { action_type: "skill.read" },
       { action_type: "skill.recommend" },
-      { action_type: "skill.intent_audit", project_id: projectID }
+      { action_type: "skill.intent_audit", project_id: projectID },
+      { action_type: "mcp.registry.list", project_id: projectID },
+      { action_type: "mcp.capability.read", project_id: projectID },
+      { action_type: "mcp.requirement.recommend", project_id: projectID },
+      { action_type: "mcp.resource.list", project_id: projectID },
+      { action_type: "mcp.resource.read", project_id: projectID }
     ],
     mode: "delegated"
   };
@@ -238,6 +245,8 @@ function managerCyclePrompt(
     JSON.stringify(issueState, null, 2),
     "Project default skill policy:",
     JSON.stringify(parseSkillPolicy(project.default_skill_policy), null, 2),
+    "Project default MCP policy:",
+    JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
     "Create PI action proposals for concrete next steps; execute only safe read/comment tools.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."

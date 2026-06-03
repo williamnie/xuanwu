@@ -7,6 +7,8 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
+import { parseMcpPolicy } from "../mcp/policy.ts";
+import { publicMcpRegistry } from "../mcp/registry.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
@@ -162,14 +164,19 @@ function piSystemPrompt(input: RuntimeSessionInput): string {
   return [
     "You are PI, an independent project manager agent for codex-issue-runner.",
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
+    "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     "Skills Registry metadata:",
     JSON.stringify(listSkillRegistry().slice(0, 24).map((skill) => ({
       id: skill.id, name: skill.name, description: skill.description,
       trigger_rules: skill.trigger_rules, risk_level: skill.risk_level,
       source_path: skill.source_path, allowed_roles: skill.allowed_roles
     })), null, 2),
+    "MCP Capability Registry metadata:",
+    JSON.stringify(publicMcpRegistry().slice(0, 24), null, 2),
     "Project default skill policy:",
-    JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2)
+    JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2),
+    "Project default MCP policy:",
+    JSON.stringify(parseMcpPolicy(input.project?.default_mcp_policy), null, 2)
   ].join("\n");
 }
 

@@ -7,6 +7,7 @@ import { piActionGateAuditMigration } from "./006_pi_action_gate_audit.ts";
 import { piHeartbeatOrchestratorMigration } from "./007_pi_heartbeat_orchestrator.ts";
 import { cronScheduleLayerMigration } from "./008_cron_schedule_layer.ts";
 import { skillsRegistryIntentsMigration } from "./009_skills_registry_intents.ts";
+import { mcpRegistryEnvelopeMigration } from "./010_mcp_registry_envelope.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -17,5 +18,6 @@ export const migrations = [
   piActionGateAuditMigration,
   piHeartbeatOrchestratorMigration,
   cronScheduleLayerMigration,
-  skillsRegistryIntentsMigration
+  skillsRegistryIntentsMigration,
+  mcpRegistryEnvelopeMigration
 ];

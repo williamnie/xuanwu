@@ -236,13 +236,23 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     diagnoseIssueState: record("diagnoseIssueState"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
     createUpdateRefinementProposal: record("createUpdateRefinementProposal"),
+    callMcpTool: record("callMcpTool"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
     listIssues: record("listIssues"),
+    listMcpRegistry: record("listMcpRegistry"),
+    listMcpResources: record("listMcpResources"),
     listProjects: record("listProjects"),
     listSessions: record("listSessions"),
     projectStatus: record("projectStatus"),
+    listSkills: record("listSkills"),
     readIssue: record("readIssue"),
-    readSessionSummary: record("readSessionSummary")
+    readMcpCapability: record("readMcpCapability"),
+    readMcpResource: record("readMcpResource"),
+    readSessionSummary: record("readSessionSummary"),
+    readSkill: record("readSkill"),
+    recommendMcpRequirements: record("recommendMcpRequirements"),
+    recommendSkills: record("recommendSkills"),
+    auditSkillIntents: record("auditSkillIntents")
   };
 }
 async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDatabase; project: Project }> {

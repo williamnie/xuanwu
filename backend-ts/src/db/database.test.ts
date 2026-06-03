@@ -77,7 +77,9 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
       expect(columnNames(connection, "issues")).toContain("workflow_snapshot_json");
       expect(columnNames(connection, "issues")).toContain("required_skill_intents_json");
+      expect(columnNames(connection, "issues")).toContain("required_mcp_capabilities_json");
       expect(columnNames(connection, "projects")).toContain("default_skill_policy_json");
+      expect(columnNames(connection, "projects")).toContain("default_mcp_policy_json");
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
       expect(connection.sqlite.query("select id from schema_migrations").all()).toEqual([
@@ -89,7 +91,8 @@ describe("Bun SQLite database connection", () => {
         { id: "006_pi_action_gate_audit" },
         { id: "007_pi_heartbeat_orchestrator" },
         { id: "008_cron_schedule_layer" },
-        { id: "009_skills_registry_intents" }
+        { id: "009_skills_registry_intents" },
+        { id: "010_mcp_registry_envelope" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -136,7 +139,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 9 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 10 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

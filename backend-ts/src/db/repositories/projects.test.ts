@@ -60,6 +60,7 @@ describe("project read repository", () => {
         approval_policy: "never",
         sandbox: "workspace-write",
         default_agent_profile_id: "",
+        default_mcp_policy: "{}",
         default_skill_policy: "{}",
         loop_status: "stopped",
         sort_order: 1,

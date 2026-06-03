@@ -1,5 +1,6 @@
 import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { createPiMcpActionTools, PI_MCP_TOOL_NAMES } from "./mcpToolDefinitions.ts";
 import type { PiRunnerActionLayer } from "./runnerActions.ts";
 
 export const PI_RUNNER_ACTION_TOOL_NAMES = [
@@ -19,7 +20,8 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "skill_list",
   "skill_read",
   "skill_recommend",
-  "skill_intent_audit"
+  "skill_intent_audit",
+  ...PI_MCP_TOOL_NAMES
 ] as const;
 
 type ActionToolName = (typeof PI_RUNNER_ACTION_TOOL_NAMES)[number];
@@ -30,13 +32,15 @@ const optionalString = Type.Optional(Type.String());
 const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 const positiveID = Type.Integer({ minimum: 1 });
 const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
+const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 
 export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
     ...issueActionTools(actions),
     ...projectActionTools(actions),
     ...sessionActionTools(actions),
-    ...skillActionTools(actions)
+    ...skillActionTools(actions),
+    ...createPiMcpActionTools(actions)
   ];
 }
 
@@ -56,7 +60,9 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         title: optionalString,
         verification_plan: optionalString,
         required_skill_intents: skillIntentList,
-        recommended_skill_intents: skillIntentList
+        recommended_skill_intents: skillIntentList,
+        required_mcp_capabilities: mcpCapabilityList,
+        recommended_mcp_capabilities: mcpCapabilityList
       }, objectOptions), actions.createIssueProposal),
     issueStateDiagnoseTool(actions),
     issueStateRepairTool(actions),
@@ -110,7 +116,9 @@ function issueRefinementTool(actions: PiRunnerActionLayer): ToolDefinition {
       risks: optionalString,
       verification_plan: optionalString,
       required_skill_intents: skillIntentList,
-      recommended_skill_intents: skillIntentList
+      recommended_skill_intents: skillIntentList,
+      required_mcp_capabilities: mcpCapabilityList,
+      recommended_mcp_capabilities: mcpCapabilityList
     }, objectOptions), actions.createUpdateRefinementProposal);
 }
 
@@ -168,7 +176,7 @@ function actionTool<TParams extends TSchema>(
   };
 }
 
-function toolResult(details: unknown): AgentToolResult {
+function toolResult(details: unknown): AgentToolResult<unknown> {
   return {
     content: [{ type: "text", text: JSON.stringify(details, null, 2) ?? "null" }],
     details

@@ -1,5 +1,6 @@
 import type { Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
+import { parseMcpPolicy } from "../mcp/policy.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 
 const TEMPLATE_TOKEN_RE = /\{\{([^{}]+)\}\}/g;
@@ -28,7 +29,10 @@ function issuePromptTemplateValues(project: Project, issue: Issue): Record<strin
     "issue.priority": String(issue.priority),
     "issue.required_skill_intents": issue.required_skill_intents,
     "issue.recommended_skill_intents": issue.recommended_skill_intents,
-    "project.default_skill_policy": JSON.stringify(parseSkillPolicy(project.default_skill_policy))
+    "issue.required_mcp_capabilities": issue.required_mcp_capabilities,
+    "issue.recommended_mcp_capabilities": issue.recommended_mcp_capabilities,
+    "project.default_skill_policy": JSON.stringify(parseSkillPolicy(project.default_skill_policy)),
+    "project.default_mcp_policy": JSON.stringify(parseMcpPolicy(project.default_mcp_policy))
   };
 }
 

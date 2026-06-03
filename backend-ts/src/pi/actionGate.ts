@@ -1,8 +1,9 @@
 export type PiRiskGate = "safe" | "confirm" | "high";
+export type PiRiskLevel = "low" | "medium" | "high";
 export type PiRiskClassification = {
   gate: PiRiskGate;
   requiresConfirmation: boolean;
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: PiRiskLevel;
 };
 export type PiActionDecision = "execute" | "ask" | "deny" | "snooze";
 export type PiActionMode = "attended" | "delegated";
@@ -22,19 +23,32 @@ export type PiActionEnvelope = {
 export type PiAuthorizedAction = Partial<Pick<PiActionEnvelope,
   "action_type" | "delegation_id" | "heartbeat_id" | "issue_id" | "project_id"
 >> & { payload?: Record<string, unknown> };
-export type PiGatePolicy = { allowedSkillIntents?: string[]; authorizedActions?: PiAuthorizedAction[]; mode?: PiActionMode };
+export type PiGatePolicy = {
+  allowedMcpCapabilities?: string[];
+  allowedSkillIntents?: string[];
+  authorizedActions?: PiAuthorizedAction[];
+  mode?: PiActionMode;
+};
 export type PiGateDecision = { decision: PiActionDecision; reason: string };
 
 const SAFE_ACTIONS = new Set([
   "issue.comment", "issue.list", "issue.read", "issue.state_diagnose", "project.list", "project.status",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
-  "skill.list", "skill.read", "skill.recommend", "skill.intent_audit"
+  "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
+  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read"
 ]);
 const CONFIRM_ACTIONS = new Set(["issue.create", "issue.enqueue", "issue.update_refinement", "issue.state_repair"]);
-const HIGH_RISK_ACTIONS = new Set(["session.steer"]);
+const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);
 
-export function classifyPiActionRisk(actionType: string): PiRiskClassification {
+export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {
+  const base = baseRisk(actionType);
+  const riskLevel = isRiskLevel(override.riskLevel) ? override.riskLevel : base.riskLevel;
+  const requiresConfirmation = override.requiresConfirmation ?? base.requiresConfirmation;
+  return { gate: gateFor(riskLevel, requiresConfirmation), requiresConfirmation, riskLevel };
+}
+
+function baseRisk(actionType: string): PiRiskClassification {
   if (SAFE_ACTIONS.has(actionType)) return risk("safe", "low");
   if (CONFIRM_ACTIONS.has(actionType)) return risk("confirm", "medium");
   if (HIGH_RISK_ACTIONS.has(actionType)) return risk("high", "high");
@@ -46,6 +60,9 @@ export function gatePiActionEnvelope(
   policy: PiGatePolicy = {}
 ): PiGateDecision {
   if (cleanString(envelope.snoozed_until) !== "") return { decision: "snooze", reason: "action is snoozed" };
+  if (!authorizedMcpCapabilities(envelope, policy.allowedMcpCapabilities)) {
+    return { decision: "deny", reason: "MCP capability is not covered by authorization allowlist" };
+  }
   if ((policy.mode ?? "attended") === "delegated") {
     if (!authorizedSkillIntents(envelope, policy.allowedSkillIntents)) {
       return { decision: "deny", reason: "delegated skill intent is not covered by authorization allowlist" };
@@ -73,6 +90,19 @@ function skillIntentsFromPayload(payload: Record<string, unknown>): string[] {
     ...stringList(payload.required_skill_intents),
     ...stringList(payload.recommended_skill_intents)
   ];
+}
+
+function authorizedMcpCapabilities(envelope: PiActionEnvelope, allowed: string[] | undefined): boolean {
+  if (!allowed) return true;
+  const requested = [
+    ...stringList(envelope.payload.capability_id),
+    ...stringList(envelope.payload.capability_ids),
+    ...stringList(envelope.payload.required_mcp_capabilities),
+    ...stringList(envelope.payload.recommended_mcp_capabilities)
+  ];
+  if (requested.length === 0) return true;
+  const allowlist = new Set(allowed.map(cleanID).filter(Boolean));
+  return requested.every((id) => allowlist.has(cleanID(id)));
 }
 
 function stringList(value: unknown): string[] {
@@ -111,8 +141,22 @@ function optionalNumberMatch(expected: number | undefined, actual: number): bool
   return expected === undefined || expected === 0 || expected === actual;
 }
 
-function risk(gate: PiRiskGate, riskLevel: PiRiskClassification["riskLevel"]): PiRiskClassification {
+function gateFor(riskLevel: PiRiskLevel, requiresConfirmation: boolean): PiRiskGate {
+  if (riskLevel === "high") return "high";
+  if (requiresConfirmation) return "confirm";
+  return "safe";
+}
+
+function risk(gate: PiRiskGate, riskLevel: PiRiskLevel): PiRiskClassification {
   return { gate, requiresConfirmation: gate !== "safe", riskLevel };
+}
+
+function isRiskLevel(value: unknown): value is PiRiskLevel {
+  return value === "low" || value === "medium" || value === "high";
+}
+
+function cleanID(value: unknown): string {
+  return cleanString(value).toLowerCase();
 }
 
 function cleanString(value: unknown): string {

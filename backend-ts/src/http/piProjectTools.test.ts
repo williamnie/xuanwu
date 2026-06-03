@@ -57,8 +57,10 @@ describe("PI project tools", () => {
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "find", "grep", "issue_comment", "issue_create_proposal", "issue_enqueue_proposal",
         "issue_list", "issue_read", "issue_state_diagnose", "issue_state_repair_proposal",
-        "issue_update_refinement", "ls", "memory_search",
-        "memory_write_candidate", "project_list", "project_status", "read", "session_list",
+        "issue_update_refinement", "ls", "mcp_capability_read", "mcp_registry_list",
+        "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
+        "mcp_tool_call", "memory_search", "memory_write_candidate", "project_list",
+        "project_status", "read", "session_list",
         "session_read_summary", "session_steer_proposal", "skill_intent_audit",
         "skill_list", "skill_read", "skill_recommend"
       ]);
@@ -146,7 +148,7 @@ function projectRecord(cwd: string) {
     id: "demo", name: "Demo", cwd, provider: "codex", provider_config_json: "{}", auto_run: 0,
     model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
     sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
-    default_skill_policy: "{}", loop_status: "stopped", provider_capabilities: []
+    default_mcp_policy: "{}", default_skill_policy: "{}", loop_status: "stopped", provider_capabilities: []
   };
 }
 

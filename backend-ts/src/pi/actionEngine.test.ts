@@ -18,6 +18,16 @@ describe("PI action engine risk classifier", () => {
       requiresConfirmation: true,
       riskLevel: "high"
     });
+    expect(classifyPiActionRisk("mcp.resource.read")).toEqual({
+      gate: "safe",
+      requiresConfirmation: false,
+      riskLevel: "low"
+    });
+    expect(classifyPiActionRisk("mcp.tool.call", { riskLevel: "high" })).toEqual({
+      gate: "high",
+      requiresConfirmation: true,
+      riskLevel: "high"
+    });
   });
 
   test("gates attended confirmations and delegated authorization envelopes", () => {
@@ -54,6 +64,35 @@ describe("PI action engine risk classifier", () => {
       decision: "deny",
       reason: expect.stringContaining("delegated")
     });
+  });
+
+  test("MCP actions require capability allowlist when policy provides one", () => {
+    const envelope = {
+      action_type: "mcp.resource.read",
+      payload: { capability_id: "docs:resource:runbook" },
+      project_id: "demo",
+      requires_confirmation: false,
+      risk_level: "low",
+      source: "pi_mcp_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: ["docs:resource:runbook"],
+      authorizedActions: [{ action_type: "mcp.resource.read", project_id: "demo" }],
+      mode: "delegated"
+    })).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: ["docs:resource:other"],
+      authorizedActions: [{ action_type: "mcp.resource.read", project_id: "demo" }],
+      mode: "delegated"
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("MCP")
+    });
+    expect(gatePiActionEnvelope(envelope, {
+      allowedMcpCapabilities: ["docs:resource:other"],
+      mode: "attended"
+    })).toMatchObject({ decision: "deny" });
   });
 
 });

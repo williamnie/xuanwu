@@ -57,6 +57,8 @@ describe("issue read repository", () => {
         prompt_template: "",
         required_skill_intents: "[]",
         recommended_skill_intents: "[]",
+        required_mcp_capabilities: "[]",
+        recommended_mcp_capabilities: "[]",
         agent_profile_id: "",
         source_session_id: "thread-1",
         source_turn_id: "",

@@ -7,6 +7,8 @@ import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { failIssueExecution } from "./statusGate.ts";
 import { renderIssuePromptTemplate } from "./issuePromptTemplate.ts";
+import { parseMcpPolicy } from "../mcp/policy.ts";
+import { publicMcpRegistry } from "../mcp/registry.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
@@ -42,7 +44,7 @@ async function runClaimedIssue(
       issueId: issue.id,
       projectId: project.id,
       cwd: project.cwd,
-      prompt: issuePrompt(project, issue),
+      prompt: buildIssuePrompt(project, issue),
       model: project.model,
       approvalPolicy: project.approval_policy,
       sandbox: project.sandbox
@@ -75,13 +77,21 @@ function projectProvider(project: Project, providers: ProjectLoopInput["provider
   return provider;
 }
 
-function issuePrompt(project: Project, issue: Issue): string {
+export function buildIssuePromptForTest(project: Project, issue: Issue): string {
+  return buildIssuePrompt(project, issue);
+}
+
+function buildIssuePrompt(project: Project, issue: Issue): string {
   const templated = issue.prompt_template.trim();
   if (templated !== "") {
     const rendered = renderIssuePromptTemplate(templated, { project, issue }).trim();
-    if (rendered !== "") return withSkillIntentContext(project, issue, rendered);
+    if (rendered !== "") return withRunnerContext(project, issue, rendered);
   }
-  return withSkillIntentContext(project, issue, issue.description.trim() || issue.title.trim());
+  return withRunnerContext(project, issue, issue.description.trim() || issue.title.trim());
+}
+
+function withRunnerContext(project: Project, issue: Issue, prompt: string): string {
+  return withMcpRequirementContext(project, issue, withSkillIntentContext(project, issue, prompt));
 }
 
 function withSkillIntentContext(project: Project, issue: Issue, prompt: string): string {
@@ -99,6 +109,23 @@ function withSkillIntentContext(project: Project, issue: Issue, prompt: string):
 
 function hasSkillIntentContext(project: Project, issue: Issue): boolean {
   return issue.required_skill_intents !== "[]" || issue.recommended_skill_intents !== "[]" || project.default_skill_policy !== "{}";
+}
+
+function withMcpRequirementContext(project: Project, issue: Issue, prompt: string): string {
+  if (!hasMcpRequirementContext(project, issue)) return prompt.trim();
+  const mcpContext = [
+    "",
+    "## MCP Requirement Context",
+    `Required MCP capabilities: ${issue.required_mcp_capabilities}`,
+    `Recommended MCP capabilities: ${issue.recommended_mcp_capabilities}`,
+    `Project default MCP policy: ${JSON.stringify(parseMcpPolicy(project.default_mcp_policy))}`,
+    `Available MCP registry: ${JSON.stringify(publicMcpRegistry().slice(0, 24))}`
+  ].join("\n");
+  return `${prompt.trim()}${mcpContext}`.trim();
+}
+
+function hasMcpRequirementContext(project: Project, issue: Issue): boolean {
+  return issue.required_mcp_capabilities !== "[]" || issue.recommended_mcp_capabilities !== "[]" || project.default_mcp_policy !== "{}";
 }
 
 function skillSummary(skill: ReturnType<typeof listSkillRegistry>[number]) {

@@ -14,6 +14,7 @@ import {
   gatePiActionEnvelope,
   type PiActionDecision,
   type PiActionEnvelope,
+  type PiRiskLevel,
   type PiGateDecision,
   type PiGatePolicy
 } from "./actionGate.ts";
@@ -25,6 +26,7 @@ export type PiActionRequest = {
   payload: Record<string, unknown>;
   projectID?: string;
   rationale?: string;
+  riskOverride?: { requiresConfirmation?: boolean; riskLevel?: PiRiskLevel };
 };
 
 export type PiActionContext = {
@@ -94,7 +96,7 @@ function createGatedPiAction(
   context: PiActionContext,
   input: PiActionRequest
 ): { action: PiAction; decision: PiGateDecision } {
-  const classification = classifyPiActionRisk(input.actionType);
+  const classification = classifyPiActionRisk(input.actionType, input.riskOverride);
   const envelope = actionEnvelope(input, classification, context);
   const candidate = createPiActionRecord(db, context, input, envelope);
   recordPiActionAuditEvent(db, candidate, "candidate", { actor: "pi", payload: envelope });

@@ -1,4 +1,5 @@
 import { basename, sep } from "node:path";
+import { normalizeMcpPolicy } from "../../mcp/policy.ts";
 import { normalizeSkillPolicy } from "../../skills/intents.ts";
 
 export type ProjectWriteInput = Partial<Record<keyof NormalizedProjectWrite, unknown>>;
@@ -7,6 +8,7 @@ export type NormalizedProjectPatch = Partial<NormalizedProjectWrite>;
 
 export type NormalizedProjectWrite = {
   approval_policy: string;
+  default_mcp_policy: string;
   default_skill_policy: string;
   auto_run: number;
   cwd: string;
@@ -32,6 +34,7 @@ export function normalizeProjectForWrite(input: ProjectWriteInput): NormalizedPr
     approval_policy: cleanString(input.approval_policy) || "never",
     sandbox: cleanString(input.sandbox) || "workspace-write",
     default_agent_profile_id: normalizeIdentifier(input.default_agent_profile_id),
+    default_mcp_policy: normalizeMcpPolicy(input.default_mcp_policy),
     default_skill_policy: normalizeSkillPolicy(input.default_skill_policy)
   };
 }
@@ -48,6 +51,7 @@ export function normalizeProjectPatch(current: NormalizedProjectWrite, input: Pr
   if (hasPatchValue(input, "approval_policy")) patch.approval_policy = cleanString(input.approval_policy);
   if (hasPatchValue(input, "sandbox")) patch.sandbox = cleanString(input.sandbox);
   if (hasPatchValue(input, "default_agent_profile_id")) patch.default_agent_profile_id = normalizeIdentifier(input.default_agent_profile_id);
+  if (hasPatchValue(input, "default_mcp_policy")) patch.default_mcp_policy = normalizeMcpPolicy(input.default_mcp_policy);
   if (hasPatchValue(input, "default_skill_policy")) patch.default_skill_policy = normalizeSkillPolicy(input.default_skill_policy);
   return patch;
 }

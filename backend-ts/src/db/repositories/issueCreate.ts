@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 import { getIssue, type Issue } from "./issues.ts";
 import { ProjectNotFoundError } from "./projects.ts";
+import { normalizeMcpCapabilityList } from "../../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../../skills/intents.ts";
 
 export type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>>;
@@ -11,7 +12,9 @@ type NormalizedIssueWrite = {
   priority: number;
   project_id: string;
   prompt_template: string;
+  recommended_mcp_capabilities: string;
   recommended_skill_intents: string;
+  required_mcp_capabilities: string;
   required_skill_intents: string;
   source_excerpt: string;
   source_session_id: string;
@@ -47,12 +50,14 @@ export function createIssue(db: RunnerDatabase, input: CreateIssueInput): Issue 
   const insertIssue = db.transaction((record: NormalizedIssueWrite) => {
     db.sqlite.run(`insert into issues
       (project_id, title, description, status, priority, template_id,
-       prompt_template, required_skill_intents_json, recommended_skill_intents_json, agent_profile_id,
+       prompt_template, required_skill_intents_json, recommended_skill_intents_json,
+       required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id,
        source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json, created_at, updated_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [record.project_id, record.title, record.description, record.status, record.priority,
         record.template_id, record.prompt_template, record.required_skill_intents,
-        record.recommended_skill_intents, record.agent_profile_id, record.source_session_id,
+        record.recommended_skill_intents, record.required_mcp_capabilities,
+        record.recommended_mcp_capabilities, record.agent_profile_id, record.source_session_id,
         record.source_turn_id, record.source_excerpt, record.workflow_snapshot_json, timestamp, timestamp]);
     const id = lastInsertID(db);
     db.sqlite.run(
@@ -95,6 +100,8 @@ function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): No
     prompt_template: template.content,
     required_skill_intents: normalizeSkillIntentList(input.required_skill_intents),
     recommended_skill_intents: normalizeSkillIntentList(input.recommended_skill_intents),
+    required_mcp_capabilities: normalizeMcpCapabilityList(input.required_mcp_capabilities),
+    recommended_mcp_capabilities: normalizeMcpCapabilityList(input.recommended_mcp_capabilities),
     agent_profile_id: normalizeIdentifier(input.agent_profile_id),
     source_session_id: normalizeSourceSessionID(input.source_session_id),
     source_turn_id: cleanString(input.source_turn_id),
