@@ -7,7 +7,7 @@ import {
   updatePiHeartbeatRun
 } from "../db/repositories/pi.ts";
 import { collectProjectHeartbeatSignals } from "./heartbeatSignals.ts";
-import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
+import { planHeartbeatActions } from "./heartbeatPlanner.ts";
 import { heartbeatContext, isPaused, iso, recordHeartbeatEvent, safeError, updateDelegationTick } from "./heartbeatOrchestratorSupport.ts";
 import type {
   DelegationHeartbeatInput,
@@ -114,7 +114,7 @@ function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof heartb
     recordHeartbeatEvent(input.database, ctx, "collect_signals", signals);
     const policy = evaluatePolicies(input.database);
     recordHeartbeatEvent(input.database, ctx, "evaluate_policies", policy);
-    const plan = planActions(signals, ctx.projectID);
+    const plan = planHeartbeatActions(signals, { now: ctx.now, projectID: ctx.projectID });
     recordHeartbeatEvent(input.database, ctx, "plan_actions", { count: plan.length });
     recordHeartbeatEvent(input.database, ctx, "authorization_gate", policy);
     const proposed = proposeActions(input.database, ctx, plan);
@@ -140,21 +140,6 @@ function collectSignals(input: HeartbeatInput, projectID: string): HeartbeatSign
 
 function evaluatePolicies(db: RunnerDatabase): HeartbeatPolicy {
   return { executor_busy: hasActiveExecutorWork(db), paused: false, propose_only: true };
-}
-
-function planActions(signals: HeartbeatSignals, projectID: string): HeartbeatActionCandidate[] {
-  return (signals.project?.findings ?? []).flatMap((finding) => {
-    if (!finding.action_candidate) return [];
-    return [normalizePiActionEnvelope({
-      action_type: finding.action_candidate.action_type,
-      payload: finding.action_candidate.payload,
-      issue_id: finding.issue_id > 0 ? finding.issue_id : undefined,
-      project_id: projectID,
-      rationale: finding.action_candidate.rationale,
-      risk_level: "medium",
-      source: "pi_heartbeat"
-    })];
-  });
 }
 
 function proposeActions(db: RunnerDatabase, ctx: ReturnType<typeof heartbeatContext>, plan: HeartbeatActionCandidate[]) {
