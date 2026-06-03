@@ -24,6 +24,7 @@ import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
 import { registerPiHeartbeatRoutes } from "./piHeartbeatApi.ts";
 import { registerPiReportRoutes } from "./piReportsApi.ts";
+import { registerPiSkillRoutes } from "./piSkillsApi.ts";
 import type { Router } from "./router.ts";
 
 type PiApiContext = { bus?: EventBus; codexSessionsDir?: string; database: RunnerDatabase };
@@ -49,6 +50,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiProjectControlRoutes(router, context);
   registerPiHeartbeatRoutes(router, context);
   registerPiReportRoutes(router, context);
+  registerPiSkillRoutes(router);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
 }
