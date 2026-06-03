@@ -119,6 +119,25 @@ describe("PI heartbeat orchestrator", () => {
     }
   });
 
+
+  test("continues delegation batch when one delegation references a missing project", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "project-a");
+      insertDelegation(db, "delegation-bad", "missing-project");
+      insertDelegation(db, "delegation-good", "project-a");
+
+      const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
+
+      expect(result).toMatchObject({ scanned: 2, skipped: 0, started: 2 });
+      expect(result.runs.map((run) => run.status)).toEqual(["failed", "completed"]);
+      expect(result.runs[0]).toMatchObject({ error: "project not found", project_id: "missing-project" });
+      expect(result.runs[1]).toMatchObject({ project_id: "project-a", status: "completed" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("respects global executor serialization by only proposing while executor work is active", async () => {
     const db = await openFixtureDatabase();
     try {

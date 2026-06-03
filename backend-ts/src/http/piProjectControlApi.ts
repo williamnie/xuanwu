@@ -34,7 +34,7 @@ type ProjectPiControlAction = "pause" | "resume";
 
 const PI_SESSION_PROVIDER = "pi-sdk";
 const PI_SESSION_ROLE = "pi_manager";
-const activeProjectPiRuns = new Map<string, PiRuntimeSession["session"]>();
+const activeProjectPiRuns = new Map<string, PiRuntimeSession["session"] | "pending">();
 
 export function registerPiProjectControlRoutes(router: Router, context: PiProjectControlContext): void {
   router.post("/api/projects/:id/pi/run-once", (request) => runOnceResponse(context, request));
@@ -42,7 +42,6 @@ export function registerPiProjectControlRoutes(router: Router, context: PiProjec
   router.post("/api/projects/:id/pi/pause", (request) => projectPiSettingsActionResponse(context, request, "pause"));
   router.post("/api/projects/:id/pi/resume", (request) => projectPiSettingsActionResponse(context, request, "resume"));
 }
-
 
 function issueStateResponse(context: PiProjectControlContext, request: Request): Response {
   const id = projectID(request);
@@ -88,8 +87,15 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
   const agent = requireRunnableAgent(context.database, settings.pi_agent_id, "run manager cycle");
   if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "PI manager cycle is already running");
-  const state = await createManagerCycleState(context, project, agent);
-  activeProjectPiRuns.set(project.id, state.runtime.session);
+  activeProjectPiRuns.set(project.id, "pending");
+  let state: Awaited<ReturnType<typeof createManagerCycleState>>;
+  try {
+    state = await createManagerCycleState(context, project, agent);
+    activeProjectPiRuns.set(project.id, state.runtime.session);
+  } catch (error) {
+    if (activeProjectPiRuns.get(project.id) === "pending") activeProjectPiRuns.delete(project.id);
+    throw error;
+  }
   try {
     return await executeManagerCycle(context, project, cycleSettings, state);
   } finally {
@@ -209,16 +215,11 @@ function managerCycleAuthorization(project: Project): PiGatePolicy {
     allowedSkillIntents: parseSkillPolicy(project.default_skill_policy).allowed ?? [],
     authorizedActions: [
       { action_type: "agent.profile_recommend", project_id: projectID },
-      { action_type: "issue.list", project_id: projectID },
-      { action_type: "issue.read", project_id: projectID },
-      { action_type: "issue.state_diagnose", project_id: projectID },
-      { action_type: "project.list" },
-      { action_type: "project.status", project_id: projectID },
-      { action_type: "session.list", project_id: projectID },
-      { action_type: "session.read_summary", project_id: projectID },
-      { action_type: "skill.list" },
-      { action_type: "skill.read" },
-      { action_type: "skill.recommend" },
+      { action_type: "issue.list", project_id: projectID }, { action_type: "issue.read", project_id: projectID },
+      { action_type: "issue.state_diagnose", project_id: projectID }, { action_type: "project.list" },
+      { action_type: "project.status", project_id: projectID }, { action_type: "session.list", project_id: projectID },
+      { action_type: "session.read_summary", project_id: projectID }, { action_type: "memory.search", project_id: projectID },
+      { action_type: "skill.list" }, { action_type: "skill.read" }, { action_type: "skill.recommend" },
       { action_type: "skill.intent_audit", project_id: projectID },
       { action_type: "mcp.registry.list", project_id: projectID },
       { action_type: "mcp.capability.read", project_id: projectID },

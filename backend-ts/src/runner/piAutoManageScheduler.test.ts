@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiAutoManageScheduler, runPiAutoManageCycle } from "./piAutoManageScheduler.ts";
+import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 
 class FakePiCycleRunner {
   active = 0;
@@ -119,6 +119,25 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("continues auto-manage when one delegation heartbeat fails", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "enabled", 1);
+      insertAgent(db, "pi-default");
+      insertSettings(db, "enabled", 1, 5);
+      insertDelegation(db, "delegation-bad", "missing-project");
+
+      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+
+      expect(result.delegations).toMatchObject({ scanned: 1, started: 1, skipped: 0 });
+      expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0 });
+      expect(runner.calls).toEqual([{ maxActions: 5, projectId: "enabled" }]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("skips reentrant cycles for the same project", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
@@ -166,6 +185,15 @@ function insertSettings(db: DB, projectID: string, autoManage: number, maxAction
      (project_id, pi_agent_id, auto_manage, max_actions_per_cycle, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,
     [projectID, agentID, autoManage, maxActions, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertDelegation(db: DB, id: string, projectID: string): void {
+  db.sqlite.run(
+    `insert into pi_delegations
+     (id, project_id, title, status, intent_json, authorization_json, next_heartbeat_at, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, projectID, "Delegation", "active", "{}", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

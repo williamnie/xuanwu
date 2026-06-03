@@ -4,30 +4,15 @@ export type ScheduleParseOptions = {
 };
 
 export type ParsedSchedule = {
-  mode: string;
-  next_run_at: string;
-  time_of_day: string;
-  timezone: string;
-  working_hours_json: string;
+  mode: string; next_run_at: string; time_of_day: string; timezone: string; working_hours_json: string;
 };
 
 type CronLikeSchedule = {
-  mode: string;
-  next_run_at: string;
-  quiet_hours_json?: string;
-  time_of_day: string;
-  timezone?: string;
-  working_hours_json?: string;
+  mode: string; next_run_at: string; quiet_hours_json?: string; time_of_day: string; timezone?: string; working_hours_json?: string;
 };
 
 type ZonedParts = {
-  day: number;
-  hour: number;
-  minute: number;
-  month: number;
-  second: number;
-  weekday: number;
-  year: number;
+  day: number; hour: number; minute: number; month: number; second: number; weekday: number; year: number;
 };
 
 const DEFAULT_TIMEZONE = "UTC";
@@ -50,7 +35,7 @@ export function parseScheduleExpression(expression: string, options: SchedulePar
   if (/今晚|今天/.test(text)) {
     return {
       mode: "once",
-      next_run_at: zonedTimeToUtc(todayParts(base, timezone, hour, 0), timezone).toISOString(),
+      next_run_at: nextOnceRun(base, timezone, hour, 0).toISOString(),
       time_of_day: time,
       timezone,
       working_hours_json: DEFAULT_WORKING_HOURS
@@ -66,7 +51,7 @@ export function nextRunAfter(task: CronLikeSchedule, now: Date): string {
   const base = validDate(task.next_run_at) ?? now;
   const parts = zonedParts(base, timezone);
   const time = parseTimeOfDay(task.time_of_day, parts.hour, parts.minute);
-  const nextParts = advanceParts(mode, { ...parts, hour: time.hour, minute: time.minute, second: 0 });
+  const nextParts = advanceCandidateParts(mode, { ...parts, hour: time.hour, minute: time.minute, second: 0 }, timezone, now);
   return normalizeCandidate(nextParts, timezone, workingDays(task.working_hours_json), now).toISOString();
 }
 
@@ -107,6 +92,12 @@ function parsedDaily(base: Date, timezone: string, time: string, workingHours = 
   };
 }
 
+function nextOnceRun(base: Date, timezone: string, hour: number, minute: number): Date {
+  let candidate = zonedTimeToUtc(todayParts(base, timezone, hour, minute), timezone);
+  if (candidate.getTime() <= base.getTime()) candidate = addZonedDays(candidate, 1, timezone, { hour, minute });
+  return candidate;
+}
+
 function nextDailyRun(time: string, base: Date, timezone: string, workingHours: string): Date {
   const parts = zonedParts(base, timezone);
   const parsed = parseTimeOfDay(time, parts.hour, parts.minute);
@@ -127,10 +118,20 @@ function normalizeCandidate(parts: ZonedParts, timezone: string, weekdays: numbe
   return candidate;
 }
 
-function advanceParts(mode: string, parts: ZonedParts): ZonedParts {
-  if (mode === "daily") return addDaysToParts(parts, 1);
-  if (mode === "weekly") return addDaysToParts(parts, 7);
-  if (mode === "monthly") return addMonthsToParts(parts, 1);
+function advanceCandidateParts(mode: string, parts: ZonedParts, timezone: string, now: Date): ZonedParts {
+  let periods = 1;
+  let candidate = advanceParts(mode, parts, periods);
+  for (let i = 0; i < 370 && zonedTimeToUtc(candidate, timezone).getTime() <= now.getTime(); i += 1) {
+    periods += 1;
+    candidate = advanceParts(mode, parts, periods);
+  }
+  return candidate;
+}
+
+function advanceParts(mode: string, parts: ZonedParts, periods = 1): ZonedParts {
+  if (mode === "daily") return addDaysToParts(parts, periods);
+  if (mode === "weekly") return addDaysToParts(parts, periods * 7);
+  if (mode === "monthly") return addMonthsToParts(parts, periods);
   throw new Error(`unsupported schedule mode ${mode}`);
 }
 

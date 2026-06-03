@@ -34,7 +34,7 @@ const DEFAULT_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
 const DEFAULT_PENDING_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
-const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|test|tests|vitest|jest|node --test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint/i;
+const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|tests?\s+(?:passed|failed|ok)|(?:vitest|jest|node --test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint)\s+(?:passed|failed|ok|success|succeeded)/i;
 
 export function diagnoseIssueState(db: RunnerDatabase, options: IssueStateManagerOptions = {}): IssueStateManagerResult {
   const now = options.now ?? new Date();
@@ -194,7 +194,7 @@ function normalizedBatchTargets(options: IssueStateManagerOptions): IssueStateBa
 
 function policyEvidence(issue: Issue, options: IssueStateManagerOptions, now: Date): IssueStateEvidence {
   const max = options.maxRetries ?? DEFAULT_MAX_RETRIES;
-  const next = nextRetryAt(issue, options);
+  const next = finiteTime(nextRetryAt(issue, options), now.getTime());
   return { ref: `policy:retry:${issue.id}`, source: "policy", summary: `attempts=${issue.attempt_count}/${max}; next_retry_at=${iso(new Date(next))}; now=${iso(now)}`, timestamp: iso(now) };
 }
 
@@ -215,14 +215,18 @@ function latestEventEvidence(events: IssueEvent[]): IssueStateEvidence | undefin
 function nextRetryAt(issue: Issue, options: IssueStateManagerOptions): number {
   const explicit = parseTime(issue.auto_retry_next_at);
   if (Number.isFinite(explicit)) return explicit;
-  return parseTime(issue.updated_at) + (options.retryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS);
+  const updated = parseTime(issue.updated_at);
+  return Number.isFinite(updated) ? updated + (options.retryCooldownMs ?? DEFAULT_RETRY_COOLDOWN_MS) : Number.NEGATIVE_INFINITY;
 }
 function staleIssue(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, options: IssueStateManagerOptions, now: Date): boolean {
   if (activeSession(session)) return false;
   return now.getTime() - parseTime(latestActivity(issue, run, session)) >= (options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS);
 }
 function latestActivity(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined): string {
-  return [issue.updated_at, run?.ended_at ?? "", run?.started_at ?? "", session?.updated_at ?? ""].filter(Boolean).sort().at(-1) ?? issue.updated_at;
+  return [issue.updated_at, run?.ended_at ?? "", run?.started_at ?? "", session?.updated_at ?? ""]
+    .filter(Boolean)
+    .sort((left, right) => finiteTime(parseTime(left), 0) - finiteTime(parseTime(right), 0))
+    .at(-1) ?? issue.updated_at;
 }
 function objectPayload(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function positiveID(value: unknown): number { if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value; throw new Error("issue_id is required"); }
@@ -232,6 +236,7 @@ function terminalSession(session: AgentSession | undefined): boolean { return ["
 function activeSession(session: AgentSession | undefined): boolean { return ["active", "running", "inprogress", "busy"].includes(normalize(session?.status ?? "")); }
 function isFailureStatus(value: string | undefined): boolean { return ["failed", "error", "failure"].includes(normalize(value ?? "")); }
 function parseTime(value: string): number { const time = Date.parse(value); return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY; }
+function finiteTime(value: number, fallback: number): number { return Number.isFinite(value) ? value : fallback; }
 function duration(ms: number): string { const minutes = Math.max(0, Math.round(ms / 60_000)); return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`; }
 function needsUserText(value: string): boolean { return /needs user|need user|user input|human|manual|approval denied|requires confirmation|waiting for user|blocked by user/i.test(value); }
 function transientText(value: string): boolean { return /eof|transport error|network error|connection reset|unexpected eof|timeout|timed out|deadline exceeded|stream disconnected/i.test(value) && !/approval denied|permission denied|test failed|tests failed|verification failed|401|429/i.test(value); }

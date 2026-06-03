@@ -16,6 +16,20 @@ describe("Cron schedule parser", () => {
     });
   });
 
+  test("moves today one-shot schedules to tomorrow when the time already passed", () => {
+    const parsed = parseScheduleExpression("今晚 8 点", {
+      base: new Date("2026-06-02T14:00:00Z"),
+      timezone: "Asia/Shanghai"
+    });
+
+    expect(parsed).toMatchObject({
+      mode: "once",
+      next_run_at: "2026-06-03T12:00:00.000Z",
+      time_of_day: "20:00",
+      timezone: "Asia/Shanghai"
+    });
+  });
+
   test("parses daily morning schedules", () => {
     const parsed = parseScheduleExpression("每天早上 9 点", {
       base: new Date("2026-06-02T00:30:00Z"),
@@ -62,6 +76,24 @@ describe("Cron schedule parser", () => {
       timezone: "Asia/Shanghai",
       working_hours_json: "{}"
     }, new Date("2026-02-01T00:00:00Z"))).toBe("2026-02-28T01:00:00.000Z");
+  });
+
+  test("catches missed weekly and monthly runs by their schedule period", () => {
+    expect(nextRunAfter({
+      mode: "weekly",
+      next_run_at: "2026-01-01T09:00:00.000Z",
+      time_of_day: "09:00",
+      timezone: "UTC",
+      working_hours_json: "{}"
+    }, new Date("2026-01-20T00:00:00Z"))).toBe("2026-01-22T09:00:00.000Z");
+
+    expect(nextRunAfter({
+      mode: "monthly",
+      next_run_at: "2026-01-31T09:00:00.000Z",
+      time_of_day: "09:00",
+      timezone: "UTC",
+      working_hours_json: "{}"
+    }, new Date("2026-04-10T00:00:00Z"))).toBe("2026-04-30T09:00:00.000Z");
   });
 
   test("moves long-missed daily runs to the next future slot", () => {

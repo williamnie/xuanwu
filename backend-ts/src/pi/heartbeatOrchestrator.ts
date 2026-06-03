@@ -38,7 +38,17 @@ export async function runDelegationHeartbeatsOnce(input: DelegationHeartbeatInpu
   const delegations = listActivePiDelegations(input.database, iso(now));
   const result: DelegationHeartbeatResult = { runs: [], scanned: delegations.length, skipped: 0, started: 0 };
   for (const delegation of delegations) {
-    const run = await runPiHeartbeatOnce({
+    const run = await runDelegationHeartbeat(input, delegation, now);
+    result.runs.push(run);
+    if (run.status === "skipped") result.skipped += 1;
+    else result.started += 1;
+  }
+  return result;
+}
+
+async function runDelegationHeartbeat(input: DelegationHeartbeatInput, delegation: { id: string; project_id: string }, now: Date): Promise<HeartbeatResult> {
+  try {
+    return await runPiHeartbeatOnce({
       database: input.database,
       delegation,
       kind: "delegation",
@@ -46,10 +56,40 @@ export async function runDelegationHeartbeatsOnce(input: DelegationHeartbeatInpu
       projectID: delegation.project_id,
       trigger: "delegation"
     });
-    result.runs.push(run);
-    if (run.status === "skipped") result.skipped += 1;
-    else result.started += 1;
+  } catch (error) {
+    return persistFailedDelegationHeartbeat(input, delegation, now, safeError(error));
   }
+}
+
+function persistFailedDelegationHeartbeat(
+  input: DelegationHeartbeatInput,
+  delegation: { id: string; project_id: string },
+  now: Date,
+  error: string
+): HeartbeatResult {
+  const nowText = iso(now);
+  const ctx = {
+    delegationID: delegation.id,
+    heartbeatID: `delegation:${delegation.project_id}:${delegation.id}:${crypto.randomUUID()}`,
+    key: `delegation:${delegation.project_id}:${delegation.id}`,
+    kind: "delegation" as const,
+    now,
+    nowText,
+    projectID: delegation.project_id
+  };
+  const result = failedResult(ctx, error);
+  createPiHeartbeatRun(input.database, {
+    id: ctx.heartbeatID,
+    kind: ctx.kind,
+    project_id: ctx.projectID,
+    delegation_id: ctx.delegationID,
+    status: result.status,
+    trigger: "delegation",
+    started_at: nowText,
+    ...storedRunResult(result, nowText)
+  });
+  recordHeartbeatEvent(input.database, ctx, "error", {}, result.error);
+  updateDelegationTick(input.database, delegation, nowText, result.next_tick_at);
   return result;
 }
 
