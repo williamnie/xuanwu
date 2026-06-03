@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createDefaultRouter } from "./server.ts";
+import { getPiDelegation } from "../db/repositories/pi.ts";
+import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -59,6 +60,99 @@ describe("PI delegations API", () => {
       expect((await listed.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([id]);
       expect(await paused.json()).toMatchObject({ id, status: "paused" });
       expect(await resumed.json()).toMatchObject({ id, status: "active" });
+      expect(getPiDelegation(database, id)).toMatchObject({ id, status: "active" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("updates and expires persisted delegation authorizations", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const router = createDefaultRouter({ database });
+      const created = await request(router, "/api/pi/delegations", "POST", {
+        authorization: {
+          allowed_actions: ["issue.enqueue"],
+          expires_at: "2026-06-04T08:00:00Z",
+          mode: "delegated",
+          scope: { issue_ids: [101, 102], project_id: "demo" },
+          starts_at: "2026-06-03T20:00:00Z"
+        },
+        project_id: "demo",
+        title: "Tonight issues"
+      });
+      const createdBody = await created.json() as Record<string, unknown>;
+      const id = String(createdBody.id);
+
+      expect(created.status).toBe(201);
+      expect(createdBody).toMatchObject({
+        expires_at: "2026-06-04T08:00:00Z",
+        scope_json: "{\"issue_ids\":[101,102],\"project_id\":\"demo\"}",
+        starts_at: "2026-06-03T20:00:00Z",
+        status: "active"
+      });
+
+      const patched = await request(router, `/api/pi/delegations/${id}`, "PATCH", {
+        allowed_actions: ["issue.enqueue", "issue.state_repair"],
+        audit_source: "user",
+        expires_at: "2026-06-04T09:00:00Z",
+        forbidden_actions: ["session.steer"],
+        scope: { issue_ids: [101, 102, 103], project_id: "demo" },
+        title: "Tonight selected issues"
+      });
+      const expired = await request(router, `/api/pi/delegations/${id}/expire`, "POST", {});
+      const detail = await router.handle(new Request(`${BASE_URL}/api/pi/delegations/${id}`));
+
+      expect(patched.status).toBe(200);
+      expect(await patched.json()).toMatchObject({
+        allowed_actions_json: "[\"issue.enqueue\",\"issue.state_repair\"]",
+        audit_source: "user",
+        expires_at: "2026-06-04T09:00:00Z",
+        forbidden_actions_json: "[\"session.steer\"]",
+        scope_json: "{\"issue_ids\":[101,102,103],\"project_id\":\"demo\"}",
+        status: "active",
+        title: "Tonight selected issues"
+      });
+      expect(expired.status).toBe(200);
+      expect(await expired.json()).toMatchObject({ id, status: "expired" });
+      expect(await detail.json()).toMatchObject({ id, status: "expired" });
+      expect(getPiDelegation(database, id)).toMatchObject({ id, status: "expired" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("returns clear errors for unauthorized and invalid delegation requests", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const router = createDefaultRouter({ database });
+      const protectedHandler = createRequestHandler(router, "secret-token");
+
+      const unauthorized = await protectedHandler(new Request(`${BASE_URL}/api/pi/delegations`));
+      const missingProject = await request(router, "/api/pi/delegations", "POST", {
+        authorization: { mode: "delegated" },
+        title: "No project"
+      });
+      const invalidStatus = await request(router, "/api/pi/delegations", "POST", {
+        authorization: { mode: "delegated", scope: { project_id: "demo" } },
+        project_id: "demo",
+        status: "archived"
+      });
+      const invalidAuthorization = await request(router, "/api/pi/delegations", "POST", {
+        authorization: "{not-json",
+        project_id: "demo"
+      });
+
+      expect(unauthorized.status).toBe(401);
+      expect(await unauthorized.json()).toEqual({ message: "unauthorized" });
+      expect(missingProject.status).toBe(400);
+      expect(await missingProject.json()).toEqual({ message: "project_id 不能为空" });
+      expect(invalidStatus.status).toBe(400);
+      expect(await invalidStatus.json()).toEqual({ message: "unsupported PI delegation status: archived" });
+      expect(invalidAuthorization.status).toBe(400);
+      expect(await invalidAuthorization.json()).toEqual({ message: "authorization 必须是合法 JSON" });
     } finally {
       database.close();
     }

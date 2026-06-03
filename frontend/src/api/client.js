@@ -359,6 +359,13 @@ export const api = {
     body: JSON.stringify(updates),
   }),
 
+  getProjectPiPolicy: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-policy`),
+
+  updateProjectPiPolicy: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-policy`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
   pauseProjectPiAutonomousMode: (id, reason = 'paused from command center') => request(`/api/projects/${encodeURIComponent(id)}/pi/pause`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
@@ -388,6 +395,16 @@ export const api = {
   }),
 
   resumePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/resume`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  updatePiDelegation: (id, updates) => request(`/api/pi/delegations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  expirePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/expire`, {
     method: 'POST',
     body: JSON.stringify({}),
   }),
