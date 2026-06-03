@@ -43,6 +43,23 @@ describe("Cron schedule parser", () => {
     });
   });
 
+  test("defaults Chinese schedules to Asia/Shanghai timezone", () => {
+    const parsed = parseScheduleExpression("每天早上 9 点", {
+      base: new Date("2026-06-02T00:30:00Z")
+    });
+
+    expect(parsed).toMatchObject({
+      next_run_at: "2026-06-02T01:00:00.000Z",
+      timezone: "Asia/Shanghai"
+    });
+  });
+
+  test("returns a clear error for unsupported natural language schedules", () => {
+    expect(() => parseScheduleExpression("下周三晚上 8 点", {
+      base: new Date("2026-06-02T00:30:00Z")
+    })).toThrow("schedule expression unsupported");
+  });
+
   test("parses weekday after-work schedules as delegated working-hours policy", () => {
     const parsed = parseScheduleExpression("工作日下班后", {
       base: new Date("2026-06-05T09:00:00Z"),

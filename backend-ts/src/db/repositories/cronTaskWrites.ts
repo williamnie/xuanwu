@@ -132,7 +132,7 @@ function mustGetCronTask(db: RunnerDatabase, id: number): CronTask {
 function parsedSchedule(input: CronInput, base: Date) {
   const scheduleExpr = cleanString(input.schedule_expr);
   if (scheduleExpr === "") return { mode: "", next_run_at: "", time_of_day: "", timezone: "", working_hours_json: "{}" };
-  return parseScheduleExpression(scheduleExpr, { base, timezone: cleanString(input.timezone) || "UTC" });
+  return parseScheduleExpression(scheduleExpr, { base, timezone: cleanString(input.timezone) || undefined });
 }
 
 function upsertScheduleMeta(db: RunnerDatabase, id: number, task: CronTask, timestamp: string): void {

@@ -16,6 +16,7 @@ type ZonedParts = {
 };
 
 const DEFAULT_TIMEZONE = "UTC";
+const DEFAULT_SCHEDULE_TIMEZONE = "Asia/Shanghai";
 const DEFAULT_WORKING_HOURS = "{}";
 const WEEKDAY_POLICY = JSON.stringify({
   after_hours_mode: "delegated",
@@ -25,7 +26,7 @@ const WEEKDAY_POLICY = JSON.stringify({
 
 export function parseScheduleExpression(expression: string, options: ScheduleParseOptions = {}): ParsedSchedule {
   const text = expression.trim();
-  const timezone = cleanTimezone(options.timezone);
+  const timezone = cleanTimezone(options.timezone ?? DEFAULT_SCHEDULE_TIMEZONE);
   const base = options.base ?? new Date();
   if (/工作日.*下班后/.test(text)) return parsedDaily(base, timezone, "18:30", WEEKDAY_POLICY);
   const hour = parseHour(text);

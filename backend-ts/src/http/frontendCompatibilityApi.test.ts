@@ -123,6 +123,8 @@ describe("Bun frontend API compatibility", () => {
       const patchedTemplate = await requestJSON(router, "/api/issue-templates/custom-template", "PATCH", { is_default: 1 });
       const deletedTemplate = await rawRequest(router, "/api/issue-templates/custom-template", "DELETE");
       const cron = await requestJSON(router, "/api/cron-tasks", "POST", { project_id: "demo", mode: "once", next_run_at: "2999-01-01T00:00:00Z" }, 201);
+      const naturalCron = await requestJSON(router, "/api/cron-tasks", "POST", { action: "run_heartbeat", project_id: "demo", schedule_expr: "每天早上 9 点" }, 201);
+      const invalidCron = await requestError(router, "/api/cron-tasks", "POST", { action: "run_heartbeat", project_id: "demo", schedule_expr: "下周三晚上 8 点" });
       const heartbeatCron = await requestJSON(router, "/api/cron-tasks", "POST", { action: "run_heartbeat", project_id: "demo", mode: "once", next_run_at: "2999-01-02T00:00:00Z" }, 201);
       const pausedCron = await requestJSON(router, `/api/cron-tasks/${cron.id}`, "PATCH", { status: "paused" });
       const deletedCron = await rawRequest(router, `/api/cron-tasks/${cron.id}`, "DELETE");
@@ -144,6 +146,8 @@ describe("Bun frontend API compatibility", () => {
       expect(patchedTemplate).toMatchObject({ id: "custom-template", is_default: 1 });
       expect(deletedTemplate.status).toBe(204);
       expect(cron).toMatchObject({ id: expect.any(Number), project_id: "demo", status: "active" });
+      expect(naturalCron).toMatchObject({ action: "run_heartbeat", mode: "daily", time_of_day: "09:00", timezone: "Asia/Shanghai" });
+      expect(invalidCron).toMatchObject({ message: "schedule expression unsupported" });
       expect(heartbeatCron).toMatchObject({ action: "run_heartbeat", project_id: "demo", status: "active" });
       expect(pausedCron).toMatchObject({ id: cron.id, status: "paused" });
       expect(deletedCron.status).toBe(204);
@@ -223,6 +227,15 @@ async function requestJSON(
   const response = await rawRequest(router, path, method, body);
   expect(response.status).toBe(expectedStatus);
   return await response.json();
+}
+
+async function requestError(
+  router: ReturnType<typeof createDefaultRouter>,
+  path: string,
+  method: string,
+  body?: Record<string, unknown>
+): Promise<any> {
+  return await requestJSON(router, path, method, body, 400);
 }
 
 function rawRequest(
