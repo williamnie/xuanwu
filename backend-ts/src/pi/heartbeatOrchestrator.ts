@@ -7,6 +7,7 @@ import {
   updatePiHeartbeatRun
 } from "../db/repositories/pi.ts";
 import { collectProjectHeartbeatSignals } from "./heartbeatSignals.ts";
+import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
 import { heartbeatContext, isPaused, iso, recordHeartbeatEvent, safeError, updateDelegationTick } from "./heartbeatOrchestratorSupport.ts";
 import type {
   DelegationHeartbeatInput,
@@ -144,14 +145,15 @@ function evaluatePolicies(db: RunnerDatabase): HeartbeatPolicy {
 function planActions(signals: HeartbeatSignals, projectID: string): HeartbeatActionCandidate[] {
   return (signals.project?.findings ?? []).flatMap((finding) => {
     if (!finding.action_candidate) return [];
-    return [{
+    return [normalizePiActionEnvelope({
       action_type: finding.action_candidate.action_type,
-      issue_id: finding.issue_id > 0 ? finding.issue_id : undefined,
       payload: finding.action_candidate.payload,
+      issue_id: finding.issue_id > 0 ? finding.issue_id : undefined,
       project_id: projectID,
       rationale: finding.action_candidate.rationale,
-      risk_level: "medium" as const
-    }];
+      risk_level: "medium",
+      source: "pi_heartbeat"
+    })];
   });
 }
 
@@ -159,6 +161,8 @@ function proposeActions(db: RunnerDatabase, ctx: ReturnType<typeof heartbeatCont
   return plan.map((candidate) => {
     const action = createPiAction(db, {
       action_type: candidate.action_type,
+      delegation_id: ctx.delegationID,
+      heartbeat_id: ctx.heartbeatID,
       id: crypto.randomUUID(),
       issue_id: candidate.issue_id ?? 0,
       payload_json: JSON.stringify(candidate.payload),
@@ -167,6 +171,7 @@ function proposeActions(db: RunnerDatabase, ctx: ReturnType<typeof heartbeatCont
       requires_confirmation: 1,
       result_json: JSON.stringify({ delegation_id: ctx.delegationID, heartbeat_id: ctx.heartbeatID, source: "pi_heartbeat" }),
       risk_level: candidate.risk_level,
+      source: candidate.source,
       status: "pending"
     });
     recordHeartbeatEvent(db, ctx, "action_proposed", candidate);

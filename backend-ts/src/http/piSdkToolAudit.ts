@@ -3,7 +3,8 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiAction, updatePiAction, type PiAction } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
-import { classifyPiActionRisk, gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
+import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
+import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 
 type SdkAuditContext = {
@@ -69,19 +70,16 @@ function startSdkAction(
   const toolName = cleanString(hook.toolCall.name);
   if (!READ_ONLY_TOOL_NAMES.has(toolName)) return null;
   const actionType = `sdk.${toolName}`;
-  const classification = classifyPiActionRisk(actionType);
   const payload = sdkPayload(hook.toolCall.id, toolName, hook.args);
-  const envelope = {
+  const envelope = normalizePiActionEnvelope({
     action_type: actionType,
     delegation_id: cleanString(context.delegationID),
     heartbeat_id: cleanString(context.heartbeatID),
     payload,
     project_id: cleanString(context.projectID),
     rationale: "SDK read-only tool call",
-    requires_confirmation: classification.requiresConfirmation,
-    risk_level: classification.riskLevel,
     source: SOURCE
-  };
+  });
   const candidate = createPiAction(db, {
     id: crypto.randomUUID(),
     action_type: actionType,

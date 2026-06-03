@@ -8,6 +8,11 @@ export type PiRiskClassification = {
   requiresConfirmation: boolean;
   riskLevel: PiRiskLevel;
 };
+export type PiActionEnvelopeRisk = {
+  gate: PiRiskGate | "forbidden";
+  level: PiRiskLevel;
+  requires_confirmation: boolean;
+};
 export type PiActionDecision = PiGateDecisionValue;
 export type PiActionMode = PiWorkMode;
 export type PiActionEnvelope = {
@@ -20,6 +25,7 @@ export type PiActionEnvelope = {
   project_id?: string;
   rationale?: string;
   requires_confirmation: boolean;
+  risk?: PiActionEnvelopeRisk;
   risk_gate?: PiRiskGate | "forbidden";
   risk_level: PiRiskClassification["riskLevel"];
   snoozed_until?: string;

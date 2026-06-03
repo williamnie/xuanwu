@@ -10,14 +10,13 @@ import type { AppEvent, EventBus } from "../events/bus.ts";
 
 export { classifyPiActionRisk, decidePiAuthorization, gatePiActionEnvelope } from "./actionGate.ts";
 import {
-  classifyPiActionRisk,
   gatePiActionEnvelope,
   type PiActionDecision,
   type PiActionEnvelope,
-  type PiRiskLevel,
   type PiGateDecision,
   type PiGatePolicy
 } from "./actionGate.ts";
+import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
 
 export type PiActionRequest = {
   actionType: string;
@@ -26,7 +25,7 @@ export type PiActionRequest = {
   payload: Record<string, unknown>;
   projectID?: string;
   rationale?: string;
-  riskOverride?: { requiresConfirmation?: boolean; riskLevel?: PiRiskLevel };
+  riskOverride?: { requiresConfirmation?: boolean; riskLevel?: PiActionEnvelope["risk_level"] };
 };
 
 export type PiActionContext = {
@@ -96,8 +95,7 @@ function createGatedPiAction(
   context: PiActionContext,
   input: PiActionRequest
 ): { action: PiAction; decision: PiGateDecision } {
-  const classification = classifyPiActionRisk(input.actionType, input.riskOverride);
-  const envelope = actionEnvelope(input, classification, context);
+  const envelope = actionEnvelope(input, context);
   const candidate = createPiActionRecord(db, context, input, envelope);
   recordPiActionAuditEvent(db, candidate, "candidate", { actor: "pi", payload: envelope });
   const decision = gatePiActionEnvelope(envelope, context.authorization);
@@ -167,14 +165,14 @@ function createPiActionRecord(
 ): PiAction {
   return createPiAction(db, {
     id: crypto.randomUUID(),
-    action_type: input.actionType,
+    action_type: envelope.action_type,
     conversation_id: cleanString(input.conversationID) || cleanString(context.conversationID),
     delegation_id: cleanString(envelope.delegation_id),
     heartbeat_id: cleanString(envelope.heartbeat_id),
-    issue_id: input.issueID ?? 0,
-    payload_json: JSON.stringify(input.payload),
-    project_id: cleanString(input.projectID),
-    rationale: cleanString(input.rationale),
+    issue_id: envelope.issue_id ?? 0,
+    payload_json: JSON.stringify(envelope.payload),
+    project_id: cleanString(envelope.project_id),
+    rationale: cleanString(envelope.rationale),
     requires_confirmation: envelope.requires_confirmation ? 1 : 0,
     risk_level: envelope.risk_level,
     source: envelope.source,
@@ -184,10 +182,9 @@ function createPiActionRecord(
 
 function actionEnvelope(
   input: PiActionRequest,
-  classification: { requiresConfirmation: boolean; riskLevel: PiActionEnvelope["risk_level"] },
   context: PiActionContext
 ): PiActionEnvelope {
-  return {
+  return normalizePiActionEnvelope({
     action_type: input.actionType,
     delegation_id: cleanString(context.delegationID),
     heartbeat_id: cleanString(context.heartbeatID),
@@ -195,10 +192,10 @@ function actionEnvelope(
     payload: input.payload,
     project_id: cleanString(input.projectID),
     rationale: cleanString(input.rationale),
-    requires_confirmation: classification.requiresConfirmation,
-    risk_level: classification.riskLevel,
+    requires_confirmation: input.riskOverride?.requiresConfirmation,
+    risk_level: input.riskOverride?.riskLevel,
     source: cleanString(context.source) || "pi_tool"
-  };
+  });
 }
 
 function requireStoredPiAction(db: RunnerDatabase, id: string): PiAction {

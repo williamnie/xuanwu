@@ -1,16 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiDelegation } from "../db/repositories/pi.ts";
+import type { PiActionEnvelope } from "./actionGate.ts";
 import type { ProjectStatusSnapshot } from "./projectSnapshot.ts";
 
 export type HeartbeatKind = "project" | "delegation" | "session_watchdog" | "cron" | "provider_health" | "daily_summary";
-export type HeartbeatActionCandidate = {
-  action_type: string;
-  issue_id?: number;
-  payload: Record<string, unknown>;
-  project_id: string;
-  rationale: string;
-  risk_level: "low" | "medium" | "high";
-};
+export type HeartbeatActionCandidate = PiActionEnvelope;
 export type HeartbeatSignals = {
   cron: { active: number; due: number; total: number };
   delegations: { active: number; due: number };
