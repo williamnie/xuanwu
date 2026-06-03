@@ -17,6 +17,7 @@ import {
   deletePiConversation,
   deletePiMemoryItem,
   deleteProjectPiSettings,
+  expirePiDelegation,
   getPiAction,
   getPiAgent,
   getPiConversation,
@@ -30,6 +31,8 @@ import {
   listPiDelegations,
   listPiMemoryItems,
   listProjectPiSettings,
+  pausePiDelegation,
+  resumePiDelegation,
   updatePiAction,
   updatePiAgent,
   updatePiConversation,
@@ -225,6 +228,29 @@ describe("PI runtime repositories", () => {
         scope_json: "{\"issue_id\":224}",
         status: "paused"
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("enforces delegation pause resume expire lifecycle transitions", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      createPiDelegation(db, { id: "delegation-life", project_id: "demo", status: "active" });
+      expect(pausePiDelegation(db, "delegation-life")).toMatchObject({ status: "paused" });
+      expect(resumePiDelegation(db, "delegation-life")).toMatchObject({ status: "active" });
+      expect(pausePiDelegation(db, "delegation-life")).toMatchObject({ status: "paused" });
+      expect(expirePiDelegation(db, "delegation-life")).toMatchObject({ status: "expired" });
+      expect(listPiDelegations(db, { status: "expired" }).map((item) => item.id)).toEqual(["delegation-life"]);
+
+      createPiDelegation(db, { id: "delegation-active-expire", project_id: "demo" });
+      expect(expirePiDelegation(db, "delegation-active-expire")).toMatchObject({ status: "expired" });
+      expect(() => resumePiDelegation(db, "delegation-life"))
+        .toThrow("cannot transition PI delegation delegation-life from expired to active");
+      expect(() => pausePiDelegation(db, "delegation-life"))
+        .toThrow("cannot transition PI delegation delegation-life from expired to paused");
+      expect(() => updatePiDelegation(db, "delegation-life", { status: "archived" }))
+        .toThrow("unsupported PI delegation status: archived");
     } finally {
       db.close();
     }

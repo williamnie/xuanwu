@@ -15,6 +15,7 @@ import type { PiDelegation } from "./heartbeats.ts";
 
 export type PiDelegationInput = PatchInput<PiDelegation>;
 export type PiDelegationFilter = { projectId?: string; status?: string };
+export type PiDelegationStatus = "active" | "paused" | "expired";
 
 const TABLE = "pi_delegations";
 const COLUMNS = `id, project_id, title, status, intent_json, authorization_json,
@@ -50,8 +51,23 @@ export function listPiDelegations(db: RunnerDatabase, filter: PiDelegationFilter
 }
 
 export function updatePiDelegation(db: RunnerDatabase, id: string, input: PiDelegationInput): PiDelegation {
-  updateByID<PiDelegation>(db, TABLE, UPDATE_COLUMNS, id, normalizeDelegationPatch(input));
+  const patch = normalizeDelegationPatch(input);
+  const current = patch.status === undefined ? null : requirePiDelegation(db, id);
+  if (current && patch.status) assertTransition(current, patch.status);
+  updateByID<PiDelegation>(db, TABLE, UPDATE_COLUMNS, id, patch);
   return mustGetPiDelegation(db, id);
+}
+
+export function pausePiDelegation(db: RunnerDatabase, id: string): PiDelegation {
+  return updatePiDelegation(db, id, { status: "paused" });
+}
+
+export function resumePiDelegation(db: RunnerDatabase, id: string): PiDelegation {
+  return updatePiDelegation(db, id, { status: "active" });
+}
+
+export function expirePiDelegation(db: RunnerDatabase, id: string): PiDelegation {
+  return updatePiDelegation(db, id, { status: "expired" });
 }
 
 function normalizeDelegationCreate(input: PiDelegationInput): PiDelegation {
@@ -62,7 +78,7 @@ function normalizeDelegationCreate(input: PiDelegationInput): PiDelegation {
     id: cleanString(input.id) || crypto.randomUUID(),
     project_id: requiredString(input.project_id, "project_id"),
     title: cleanString(input.title),
-    status: cleanString(input.status) || "active",
+    status: delegationStatus(input.status, "active"),
     intent_json: jsonText(input.intent_json, "{}"),
     authorization_json: authorization,
     scope_json: jsonField(input.scope_json, jsonObjectField(auth.scope ?? auth.scopes, "{}")),
@@ -85,7 +101,8 @@ function normalizeDelegationPatch(input: PiDelegationInput): PiDelegationInput {
     authorization_json: input.authorization_json === undefined ? undefined : jsonText(input.authorization_json, "{}"),
     forbidden_actions_json: input.forbidden_actions_json === undefined ? undefined : jsonField(input.forbidden_actions_json, "[]"),
     intent_json: input.intent_json === undefined ? undefined : jsonText(input.intent_json, "{}"),
-    scope_json: input.scope_json === undefined ? undefined : jsonField(input.scope_json, "{}")
+    scope_json: input.scope_json === undefined ? undefined : jsonField(input.scope_json, "{}"),
+    status: patchStatus(input)
   };
 }
 
@@ -93,6 +110,18 @@ function mustGetPiDelegation(db: RunnerDatabase, id: string): PiDelegation {
   const delegation = getPiDelegation(db, id);
   if (!delegation) throw new Error("PI delegation missing after write");
   return delegation;
+}
+
+function requirePiDelegation(db: RunnerDatabase, id: string): PiDelegation {
+  const delegation = getPiDelegation(db, id);
+  if (!delegation) throw new Error(`PI delegation ${cleanString(id)} not found`);
+  return delegation;
+}
+
+function assertTransition(current: PiDelegation, next: PiDelegationStatus): void {
+  const allowed = current.status === "expired" ? ["expired"] : ["active", "paused", "expired"];
+  if (allowed.includes(next)) return;
+  throw new Error(`cannot transition PI delegation ${current.id} from ${current.status} to ${next}`);
 }
 
 function mapDelegation(row: Record<string, unknown>): PiDelegation {
@@ -139,6 +168,17 @@ function objectValue(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function patchStatus(input: PiDelegationInput): PiDelegationStatus | undefined {
+  if (!Object.hasOwn(input, "status") || input.status === undefined || input.status === null) return undefined;
+  return delegationStatus(input.status);
+}
+
+function delegationStatus(value: unknown, fallback?: PiDelegationStatus): PiDelegationStatus {
+  const status = cleanString(value) || fallback || "";
+  if (status === "active" || status === "paused" || status === "expired") return status;
+  throw new Error(`unsupported PI delegation status: ${status || "<empty>"}`);
 }
 
 function placeholders(count: number): string {
