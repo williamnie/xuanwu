@@ -65,6 +65,48 @@ describe("PI heartbeat planner", () => {
     expect(candidates.every((candidate) => candidate.rationale && candidate.rationale.length > 0)).toBe(true);
   });
 
+
+  test("uses project policy timeout and plans verifier workflow when configured", () => {
+    const signals = baseSignals({
+      project_settings: {
+        ...baseSignals().project_settings,
+        pi_policy: {
+          concurrency_policy: { max_parallel_issues: 1, max_parallel_pi_cycles: 1 },
+          default_mode: "manual",
+          quiet_hours: {},
+          retry_policy: { enabled: false, max_attempts: 0, backoff_minutes: [] },
+          timezone: "UTC",
+          verification_policy: {
+            evidence_required: true,
+            on_timeout: "request_verifier",
+            pending_timeout_minutes: 60
+          },
+          working_hours: {}
+        }
+      },
+      project: {
+        ...baseSignals().project!,
+        latest_issues: [
+          { id: 4, status: "pending_verification", title: "Old enough", updated_at: "2026-06-02T08:59:00Z" },
+          { id: 5, status: "pending_verification", title: "Too recent", updated_at: "2026-06-02T09:30:00Z" }
+        ]
+      }
+    });
+
+    const candidates = planHeartbeatActions(signals, { now: NOW, projectID: "demo" });
+
+    expect(candidates).toContainEqual(expect.objectContaining({
+      action_type: "agent.workflow_request",
+      issue_id: 4,
+      payload: expect.objectContaining({
+        role: "verifier",
+        target_issue_id: 4,
+        reason: "pending_verification_timeout"
+      })
+    }));
+    expect(candidates.map((candidate) => candidate.issue_id)).not.toContain(5);
+  });
+
   test("does not plan actions when signals show no actionable issue state", () => {
     const signals = baseSignals({
       agent_sessions: {
@@ -184,6 +226,7 @@ function baseSignals(overrides: Partial<HeartbeatSignals> = {}): HeartbeatSignal
       total_issues: 0
     },
     project_settings: {
+      pi_policy: undefined,
       pi_settings: null,
       project: {
         approval_policy: "default",

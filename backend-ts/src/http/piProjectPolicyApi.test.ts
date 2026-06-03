@@ -29,6 +29,7 @@ describe("PI project policy API", () => {
         quiet_hours: { daily: [{ end: "08:00", start: "22:00" }] },
         retry_policy: { enabled: true, max_attempts: 2, backoff_minutes: [15, 60] },
         timezone: "Asia/Shanghai",
+        verification_policy: { evidence_required: true, on_timeout: "request_verifier", pending_timeout_minutes: 90 },
         working_hours: { end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] }
       });
       const readBack = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-policy`));
@@ -50,6 +51,7 @@ describe("PI project policy API", () => {
       expect(JSON.parse(String(body.quiet_hours_json))).toEqual({ daily: [{ end: "08:00", start: "22:00" }] });
       expect(JSON.parse(String(body.retry_policy_json))).toEqual({ enabled: true, max_attempts: 2, backoff_minutes: [15, 60] });
       expect(JSON.parse(String(body.concurrency_policy_json))).toEqual({ max_parallel_issues: 1, max_parallel_pi_cycles: 1 });
+      expect(JSON.parse(String(body.verification_policy_json))).toEqual({ evidence_required: true, on_timeout: "request_verifier", pending_timeout_minutes: 90 });
       expect(await readBack.json()).toMatchObject(body);
     } finally {
       database.close();
@@ -90,11 +92,16 @@ describe("PI project policy API", () => {
       const invalidRetry = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
         retry_policy: "not-json"
       });
+      const invalidVerification = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        verification_policy: "not-json"
+      });
 
       expect(invalidMode.status).toBe(400);
       expect(await invalidMode.json()).toEqual({ message: "default_mode 不合法" });
       expect(invalidRetry.status).toBe(400);
       expect(await invalidRetry.json()).toEqual({ message: "retry_policy 必须是合法 JSON object" });
+      expect(invalidVerification.status).toBe(400);
+      expect(await invalidVerification.json()).toEqual({ message: "verification_policy 必须是合法 JSON object" });
     } finally {
       database.close();
     }

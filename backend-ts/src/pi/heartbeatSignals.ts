@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { getProjectPiSettings, listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
+import { getProjectPiSettings, readProjectPiPolicy, listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
 import { redactAuditJsonText } from "../db/repositories/pi/auditRedaction.ts";
 import { containsSensitiveMemoryContent } from "./memoryPolicy.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
@@ -97,6 +97,7 @@ function projectSettings(db: RunnerDatabase, projectID: string): HeartbeatProjec
   if (!project) throw new Error("project not found");
   const settings = getProjectPiSettings(db, projectID);
   return {
+    pi_policy: projectPiPolicy(db, projectID),
     pi_settings: settings ? {
       auto_enqueue: settings.auto_enqueue,
       auto_manage: settings.auto_manage,
@@ -119,6 +120,19 @@ function projectSettings(db: RunnerDatabase, projectID: string): HeartbeatProjec
       provider_config: safeJson(project.provider_config_json),
       sandbox: project.sandbox
     }
+  };
+}
+
+function projectPiPolicy(db: RunnerDatabase, projectID: string) {
+  const policy = readProjectPiPolicy(db, projectID);
+  return {
+    concurrency_policy: safeJson(policy.concurrency_policy_json) as Record<string, unknown>,
+    default_mode: policy.default_mode,
+    quiet_hours: safeJson(policy.quiet_hours_json) as Record<string, unknown>,
+    retry_policy: safeJson(policy.retry_policy_json) as Record<string, unknown>,
+    timezone: policy.timezone,
+    verification_policy: safeJson(policy.verification_policy_json) as Record<string, unknown>,
+    working_hours: safeJson(policy.working_hours_json) as Record<string, unknown>
   };
 }
 

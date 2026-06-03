@@ -8,6 +8,7 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { defaultFindingCategory, evaluateFailedRetryPolicy, projectRetryPolicy, type FailedRetryPolicy } from "./failedRetryPolicy.ts";
+import { hasVerificationEvidence, pendingVerificationDiagnostics } from "./issueStateVerification.ts";
 
 export type IssueStateEvidence = {
   ref: string; source: "event" | "issue" | "policy" | "project" | "run" | "session"; summary: string; timestamp: string;
@@ -35,10 +36,8 @@ export type IssueStateBatchProgress = {
 };
 
 const DEFAULT_MAX_RETRIES = 3, DEFAULT_RETRY_COOLDOWN_MS = 30 * 60 * 1000;
-const DEFAULT_PENDING_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
-const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|tests?\s+(?:passed|failed|ok)|(?:vitest|jest|node --test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint)\s+(?:passed|failed|ok|success|succeeded)/i;
 
 export function diagnoseIssueState(db: RunnerDatabase, options: IssueStateManagerOptions = {}): IssueStateManagerResult {
   const now = options.now ?? new Date();
@@ -87,7 +86,7 @@ function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManage
   if (issue.status === "todo" && todoNeedsRuntime(runs, sessions)) return [todoWithoutSession(db, issue, latestRun, sessions[0], now)];
   if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, events, options, now);
   if (issue.status === "failed") return [failedDiagnostic(db, issue, options, now)];
-  if (issue.status === "pending_verification") return pendingDiagnostic(issue, options, now);
+  if (issue.status === "pending_verification") return pendingVerificationDiagnostics(db, issue, events, options.pendingVerificationTimeoutMs, now);
   if (issue.status === "done" && !hasVerificationEvidence(issue, latestRun, events)) return [doneMissingEvidence(issue, latestRun, events)];
   return [];
 }
@@ -151,13 +150,6 @@ function nonRetryableFailedDiagnostic(issue: Issue, retry: ReturnType<typeof fai
   return diagnostic(issue, "blocked_escalation", "blocked", evidence, [needsUserAction(issue, evidence)]);
 }
 
-function pendingDiagnostic(issue: Issue, options: IssueStateManagerOptions, now: Date): IssueStateDiagnostic[] {
-  const age = now.getTime() - parseTime(issue.updated_at);
-  if (age < (options.pendingVerificationTimeoutMs ?? DEFAULT_PENDING_TIMEOUT_MS)) return [];
-  const evidence = [issueEvidence(issue, `pending verification for ${duration(age)}`)];
-  return [diagnostic(issue, "pending_verification_timeout", "needs_user", evidence, [action(issue, "comment", evidence, "Escalate timed-out verification for user review.", { body: `State manager: issue #${issue.id} has been pending verification for ${duration(age)}.` })])];
-}
-
 function doneMissingEvidence(issue: Issue, run: IssueRun | undefined, events: IssueEvent[]): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "status done without verification evidence"), runEvidence(run), latestEventEvidence(events)]);
   return diagnostic(issue, "done_missing_verification_evidence", "repair", evidence, [action(issue, "patch_status", evidence, "Move weak done issue back to pending verification for evidence review.", { status: "pending_verification" })]);
@@ -207,11 +199,6 @@ function issueSessions(db: RunnerDatabase, issue: Issue): AgentSession[] {
   ));
 }
 
-function hasVerificationEvidence(issue: Issue, run: IssueRun | undefined, events: IssueEvent[]): boolean {
-  if (VERIFY_PATTERN.test(issue.error) || VERIFY_PATTERN.test(run?.error ?? "")) return true;
-  return events.some((event) => event.type === "issue.verification_reviewed" || event.type === "issue.verification_report" || VERIFY_PATTERN.test(event.payload));
-}
-
 function batchProgress(issues: Issue[], targets: IssueStateBatchTarget[]): IssueStateBatchProgress[] {
   const byID = new Map(issues.map((issue) => [issue.id, issue]));
   return targets.map((target) => {
@@ -250,7 +237,6 @@ function latestEventEvidence(events: IssueEvent[]): IssueStateEvidence | undefin
   const event = events.at(-1);
   return event ? { ref: `event:${event.id}`, source: "event", summary: safeText(`${event.type}: ${event.payload.slice(0, 160)}`), timestamp: event.created_at } : undefined;
 }
-
 function failedRetry(db: RunnerDatabase, issue: Issue, options: IssueStateManagerOptions, now: Date) {
   const detail = issue.error || issue.auto_retry_reason || issue.title;
   return evaluateFailedRetryPolicy({

@@ -31,6 +31,15 @@ export type HeartbeatAgentSessionSignal = {
   updated_at: string;
 };
 export type HeartbeatProjectSettingsSignal = {
+  pi_policy?: {
+    concurrency_policy: Record<string, unknown>;
+    default_mode: string;
+    quiet_hours: Record<string, unknown>;
+    retry_policy: Record<string, unknown>;
+    timezone: string;
+    verification_policy: Record<string, unknown>;
+    working_hours: Record<string, unknown>;
+  };
   pi_settings: {
     auto_enqueue: number;
     auto_manage: number;

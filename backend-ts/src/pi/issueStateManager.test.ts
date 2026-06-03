@@ -50,7 +50,7 @@ describe("Issue State Manager diagnosis", () => {
         updatedAt: "2026-01-01T00:00:00Z"
       });
       const pending = insertIssue(fixture.db, {
-        error: "tests passed; waiting for acceptance",
+        error: "waiting for acceptance",
         status: "pending_verification",
         title: "Pending too long",
         updatedAt: "2026-01-01T00:00:00Z"
@@ -93,6 +93,7 @@ describe("Issue State Manager diagnosis", () => {
       await fixture.close();
     }
   });
+
 
   test("honors retry cooldown, max retry, needs-user escalation, and batch targets", async () => {
     const fixture = await openFixture();
@@ -240,6 +241,7 @@ function insertIssue(db: RunnerDatabase, issue: {
   if (!row) throw new Error("missing issue id");
   return row.id;
 }
+
 
 function insertRun(db: RunnerDatabase, issueID: number, run: { endedAt: string; sessionID: string; status: string }): void {
   db.sqlite.run(

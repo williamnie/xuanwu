@@ -82,6 +82,7 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "issues")).toContain("required_mcp_capabilities_json");
       expect(columnNames(connection, "projects")).toContain("default_skill_policy_json");
       expect(columnNames(connection, "projects")).toContain("default_mcp_policy_json");
+      expect(columnNames(connection, "project_pi_policies")).toContain("verification_policy_json");
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
       expect(connection.sqlite.query("select id from schema_migrations").all()).toEqual([
@@ -114,6 +115,9 @@ describe("Bun SQLite database connection", () => {
         scope_json: "'{}'",
         starts_at: "''",
         status: "'active'"
+      });
+      expect(columnDefaults(connection, "project_pi_policies")).toMatchObject({
+        verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
       });
     } finally {
       connection.close();

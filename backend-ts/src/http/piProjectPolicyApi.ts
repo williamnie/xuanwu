@@ -29,6 +29,7 @@ async function patchPolicyResponse(context: PiProjectPolicyContext, request: Req
     quiet_hours_json: body.quiet_hours,
     retry_policy_json: body.retry_policy,
     timezone: body.timezone,
+    verification_policy_json: body.verification_policy,
     working_hours_json: body.working_hours
   }));
 }
@@ -40,6 +41,7 @@ function normalizePolicyBody(body: Record<string, unknown>) {
     quiet_hours: objectField(body, ["quiet_hours_json", "quiet_hours"], "quiet_hours"),
     retry_policy: objectField(body, ["retry_policy_json", "retry_policy"], "retry_policy"),
     timezone: stringField(body, "timezone"),
+    verification_policy: objectField(body, ["verification_policy_json", "verification_policy"], "verification_policy"),
     working_hours: objectField(body, ["working_hours_json", "working_hours"], "working_hours")
   };
 }

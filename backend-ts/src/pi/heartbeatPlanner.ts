@@ -1,4 +1,5 @@
 import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
+import { pendingVerificationTimeoutCandidates } from "./heartbeatVerificationPlanner.ts";
 import type { HeartbeatActionCandidate, HeartbeatSignals } from "./heartbeatTypes.ts";
 import type { ProjectFinding } from "./projectFindings.ts";
 
@@ -9,9 +10,6 @@ export type HeartbeatPlannerOptions = {
 };
 
 type IssueSummary = { id: number; status: string; title: string; updated_at: string };
-type PendingIssue = Pick<IssueSummary, "id" | "updated_at">;
-
-const DEFAULT_PENDING_VERIFICATION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const HEARTBEAT_SOURCE = "pi_heartbeat";
 
 export function planHeartbeatActions(
@@ -20,8 +18,7 @@ export function planHeartbeatActions(
 ): HeartbeatActionCandidate[] {
   const projectID = plannerProjectID(signals, options.projectID);
   const now = options.now ?? new Date();
-  const timeout = options.pendingVerificationTimeoutMs ?? DEFAULT_PENDING_VERIFICATION_TIMEOUT_MS;
-  const context = { now, pendingVerificationTimeoutMs: timeout, projectID };
+  const context = { now, pendingVerificationTimeoutMs: options.pendingVerificationTimeoutMs, projectID };
   return uniqueCandidates([
     ...findingCandidates(signals, context),
     ...todoWithoutSessionCandidates(signals, context),
@@ -29,7 +26,9 @@ export function planHeartbeatActions(
   ]);
 }
 
-type PlannerContext = { now: Date; pendingVerificationTimeoutMs: number; projectID: string };
+type PlannerContext = {
+  now: Date; pendingVerificationTimeoutMs?: number; projectID: string;
+};
 
 function findingCandidates(signals: HeartbeatSignals, context: PlannerContext): HeartbeatActionCandidate[] {
   return (signals.project?.findings ?? []).flatMap((finding) => {
@@ -65,39 +64,6 @@ function todoWithoutSessionCandidates(signals: HeartbeatSignals, context: Planne
       projectID: context.projectID,
       rationale: `Enqueue or kick todo issue #${issue.id} because heartbeat signals show no active linked runtime.`
     }));
-}
-
-function pendingVerificationTimeoutCandidates(
-  signals: HeartbeatSignals,
-  context: PlannerContext
-): HeartbeatActionCandidate[] {
-  return pendingVerificationIssues(signals)
-    .filter((issue) => isTimedOut(issue.updated_at, context.now, context.pendingVerificationTimeoutMs))
-    .map((issue) => candidate({
-      actionType: "needs_user.escalate",
-      issueID: issue.id,
-      payload: {
-        body: `Heartbeat planner: issue #${issue.id} has been pending verification for ${duration(ageMs(issue.updated_at, context.now))}.`,
-        issue_id: issue.id,
-        reason: "pending_verification_timeout",
-        requested_action: "review or request verifier follow-up"
-      },
-      projectID: context.projectID,
-      rationale: timeoutRationale(issue, context.now)
-    }));
-}
-
-function pendingVerificationIssues(signals: HeartbeatSignals): PendingIssue[] {
-  const map = new Map<number, PendingIssue>();
-  for (const issue of latestIssues(signals).filter((item) => item.status === "pending_verification")) {
-    map.set(issue.id, issue);
-  }
-  for (const finding of signals.project?.findings ?? []) {
-    if (finding.status === "pending_verification" && finding.issue_id > 0 && !map.has(finding.issue_id)) {
-      map.set(finding.issue_id, { id: finding.issue_id, updated_at: finding.updated_at });
-    }
-  }
-  return [...map.values()];
 }
 
 function candidate(input: {
@@ -150,24 +116,6 @@ function todoSuggestedOperation(signals: HeartbeatSignals): string {
 function isRetryableFinding(finding: ProjectFinding): boolean {
   return finding.issue_id > 0 && finding.category === "transient" &&
     (finding.status === "failed" || finding.reason === "transient_retry_waiting");
-}
-
-function isTimedOut(updatedAt: string, now: Date, timeoutMs: number): boolean {
-  return ageMs(updatedAt, now) >= timeoutMs;
-}
-
-function ageMs(updatedAt: string, now: Date): number {
-  const updated = Date.parse(updatedAt);
-  return Number.isFinite(updated) ? now.getTime() - updated : 0;
-}
-
-function duration(ms: number): string {
-  const minutes = Math.max(0, Math.round(ms / 60_000));
-  return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`;
-}
-
-function timeoutRationale(issue: PendingIssue, now: Date): string {
-  return `Escalate issue #${issue.id} because it has been pending verification for ${duration(ageMs(issue.updated_at, now))}.`;
 }
 
 function plannerProjectID(signals: HeartbeatSignals, projectID: string | undefined): string {
