@@ -29,7 +29,9 @@ export type PiHeartbeatControl = {
 };
 export type PiDelegation = {
   id: string; project_id: string; title: string; status: string; intent_json: string;
-  authorization_json: string; next_heartbeat_at: string; last_heartbeat_at: string;
+  authorization_json: string; scope_json: string; starts_at: string; expires_at: string;
+  allowed_actions_json: string; forbidden_actions_json: string; audit_source: string;
+  next_heartbeat_at: string; last_heartbeat_at: string;
   created_at: string; updated_at: string;
 };
 
@@ -49,7 +51,8 @@ const EVENT_COLUMNS = `id, heartbeat_id, project_id, delegation_id, event_type,
   message, payload_json, error, created_at`;
 const CONTROL_COLUMNS = `scope_type, scope_id, paused, reason, updated_at`;
 const DELEGATION_COLUMNS = `id, project_id, title, status, intent_json, authorization_json,
-  next_heartbeat_at, last_heartbeat_at, created_at, updated_at`;
+  scope_json, starts_at, expires_at, allowed_actions_json, forbidden_actions_json,
+  audit_source, next_heartbeat_at, last_heartbeat_at, created_at, updated_at`;
 const RUN_UPDATE_COLUMNS = [
   "kind", "project_id", "delegation_id", "status", "trigger", "started_at", "finished_at",
   "next_tick_at", "error", "signals_json", "policy_json", "action_plan_json", "result_json"
@@ -228,6 +231,10 @@ function mapDelegation(row: Record<string, unknown>): PiDelegation {
     id: requiredString(row.id, "pi_delegations.id"), project_id: optionalString(row.project_id),
     title: optionalString(row.title), status: requiredString(row.status, "pi_delegations.status"),
     intent_json: optionalString(row.intent_json) || "{}", authorization_json: optionalString(row.authorization_json) || "{}",
+    scope_json: optionalString(row.scope_json) || "{}", starts_at: optionalString(row.starts_at),
+    expires_at: optionalString(row.expires_at), allowed_actions_json: optionalString(row.allowed_actions_json) || "[]",
+    forbidden_actions_json: optionalString(row.forbidden_actions_json) || "[]",
+    audit_source: optionalString(row.audit_source),
     next_heartbeat_at: optionalString(row.next_heartbeat_at), last_heartbeat_at: optionalString(row.last_heartbeat_at),
     created_at: requiredString(row.created_at, "created_at"), updated_at: requiredString(row.updated_at, "updated_at")
   };

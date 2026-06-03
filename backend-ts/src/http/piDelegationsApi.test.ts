@@ -23,7 +23,15 @@ describe("PI delegations API", () => {
       const router = createDefaultRouter({ database });
 
       const created = await request(router, "/api/pi/delegations", "POST", {
-        authorization: { allowed_actions: ["issue.enqueue"], mode: "delegated" },
+        authorization: {
+          allowed_actions: ["issue.enqueue"],
+          audit_source: "api-test",
+          expires_at: "2026-06-04T08:00:00Z",
+          forbidden_actions: ["session.steer"],
+          mode: "delegated",
+          scope: { project_id: "demo" },
+          starts_at: "2026-06-03T20:00:00Z"
+        },
         intent: { goal: "clear failed issues overnight" },
         next_heartbeat_at: "2026-06-03T21:00:00Z",
         project_id: "demo",
@@ -36,7 +44,17 @@ describe("PI delegations API", () => {
       const resumed = await request(router, `/api/pi/delegations/${id}/resume`, "POST", {});
 
       expect(created.status).toBe(201);
-      expect(body).toMatchObject({ project_id: "demo", status: "active", title: "Night autonomous window" });
+      expect(body).toMatchObject({
+        allowed_actions_json: "[\"issue.enqueue\"]",
+        audit_source: "api-test",
+        expires_at: "2026-06-04T08:00:00Z",
+        forbidden_actions_json: "[\"session.steer\"]",
+        project_id: "demo",
+        scope_json: "{\"project_id\":\"demo\"}",
+        starts_at: "2026-06-03T20:00:00Z",
+        status: "active",
+        title: "Night autonomous window"
+      });
       expect(String(body.authorization_json)).toContain("issue.enqueue");
       expect((await listed.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([id]);
       expect(await paused.json()).toMatchObject({ id, status: "paused" });

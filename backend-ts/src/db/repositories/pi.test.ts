@@ -9,6 +9,7 @@ import {
   createPiActionEvent,
   createPiAgent,
   createPiConversation,
+  createPiDelegation,
   createPiMemoryItem,
   createProjectPiSettings,
   deletePiAction,
@@ -19,17 +20,20 @@ import {
   getPiAction,
   getPiAgent,
   getPiConversation,
+  getPiDelegation,
   getPiMemoryItem,
   getProjectPiSettings,
   listPiActionEvents,
   listPiActions,
   listPiAgents,
   listPiConversations,
+  listPiDelegations,
   listPiMemoryItems,
   listProjectPiSettings,
   updatePiAction,
   updatePiAgent,
   updatePiConversation,
+  updatePiDelegation,
   updatePiMemoryItem,
   updateProjectPiSettings
 } from "./pi.ts";
@@ -174,6 +178,53 @@ describe("PI runtime repositories", () => {
       expect(getPiMemoryItem(db, "mem-1")).toBeNull();
       expect(deletePiConversation(db, "conv-1")).toBe(true);
       expect(getPiConversation(db, "conv-1")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("persists delegation envelope fields with explicit defaults", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const delegation = createPiDelegation(db, {
+        authorization_json: JSON.stringify({
+          allowed_actions: ["issue.enqueue"],
+          audit_source: "user",
+          expires_at: "2026-06-04T08:00:00Z",
+          forbidden_actions: ["session.steer"],
+          mode: "delegated",
+          scope: { project_id: "demo" },
+          starts_at: "2026-06-03T20:00:00Z"
+        }),
+        id: "delegation-1",
+        project_id: "demo",
+        title: "Night window"
+      });
+
+      expect(delegation).toMatchObject({
+        allowed_actions_json: "[\"issue.enqueue\"]",
+        audit_source: "user",
+        expires_at: "2026-06-04T08:00:00Z",
+        forbidden_actions_json: "[\"session.steer\"]",
+        scope_json: "{\"project_id\":\"demo\"}",
+        starts_at: "2026-06-03T20:00:00Z",
+        status: "active"
+      });
+      expect(getPiDelegation(db, "delegation-1")).toMatchObject(delegation);
+      expect(listPiDelegations(db, { projectId: "demo" }).map((item) => item.id)).toEqual(["delegation-1"]);
+
+      const updated = updatePiDelegation(db, "delegation-1", {
+        allowed_actions_json: ["issue.comment"],
+        audit_source: "cron",
+        scope_json: { issue_id: 224 },
+        status: "paused"
+      });
+      expect(updated).toMatchObject({
+        allowed_actions_json: "[\"issue.comment\"]",
+        audit_source: "cron",
+        scope_json: "{\"issue_id\":224}",
+        status: "paused"
+      });
     } finally {
       db.close();
     }

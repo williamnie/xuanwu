@@ -94,13 +94,25 @@ describe("Bun SQLite database connection", () => {
         { id: "008_cron_schedule_layer" },
         { id: "009_skills_registry_intents" },
         { id: "010_mcp_registry_envelope" },
-        { id: "011_pi_reports" }
+        { id: "011_pi_reports" },
+        { id: "012_pi_delegation_envelope" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
       expect(indexNames(connection, "pi_action_events")).toContain("idx_pi_action_events_action");
       expect(indexNames(connection, "pi_heartbeat_events")).toContain("idx_pi_heartbeat_events_run");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
+      expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_window");
+
+      expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
+        allowed_actions_json: "'[]'",
+        audit_source: "''",
+        expires_at: "''",
+        forbidden_actions_json: "'[]'",
+        scope_json: "'{}'",
+        starts_at: "''",
+        status: "'active'"
+      });
     } finally {
       connection.close();
     }
@@ -141,7 +153,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 11 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 12 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -210,6 +222,14 @@ function tableNames(connection: RunnerDatabase): string[] {
 function columnNames(connection: RunnerDatabase, table: string): string[] {
   return connection.sqlite.query(`pragma table_info(${table})`).all()
     .map((row) => (row as { name: string }).name);
+}
+
+function columnDefaults(connection: RunnerDatabase, table: string): Record<string, string | null> {
+  return Object.fromEntries(connection.sqlite.query(`pragma table_info(${table})`).all()
+    .map((row) => {
+      const column = row as { dflt_value: string | null; name: string };
+      return [column.name, column.dflt_value];
+    }));
 }
 
 function indexNames(connection: RunnerDatabase, table: string): string[] {

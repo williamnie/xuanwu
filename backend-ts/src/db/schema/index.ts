@@ -9,6 +9,7 @@ import { cronScheduleLayerMigration } from "./008_cron_schedule_layer.ts";
 import { skillsRegistryIntentsMigration } from "./009_skills_registry_intents.ts";
 import { mcpRegistryEnvelopeMigration } from "./010_mcp_registry_envelope.ts";
 import { piReportsMigration } from "./011_pi_reports.ts";
+import { piDelegationEnvelopeMigration } from "./012_pi_delegation_envelope.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -21,5 +22,6 @@ export const migrations = [
   cronScheduleLayerMigration,
   skillsRegistryIntentsMigration,
   mcpRegistryEnvelopeMigration,
-  piReportsMigration
+  piReportsMigration,
+  piDelegationEnvelopeMigration
 ];
