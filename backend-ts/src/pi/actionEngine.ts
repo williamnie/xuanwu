@@ -8,7 +8,7 @@ import {
 } from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 
-export { classifyPiActionRisk, gatePiActionEnvelope } from "./actionGate.ts";
+export { classifyPiActionRisk, decidePiAuthorization, gatePiActionEnvelope } from "./actionGate.ts";
 import {
   classifyPiActionRisk,
   gatePiActionEnvelope,
