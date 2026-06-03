@@ -224,6 +224,57 @@ describe("Bun PI action audit API", () => {
       database.close();
     }
   });
+
+  test("audit timeline endpoint filters by delegation and redacts secrets", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueID = insertIssue(database, "demo");
+      createPiAction(database, {
+        id: "delegated-secret-action",
+        action_type: "issue.comment",
+        delegation_id: "delegation-a",
+        issue_id: issueID,
+        project_id: "demo",
+        status: "failed"
+      });
+      database.sqlite.run(
+        `insert into pi_action_events
+          (action_id, project_id, issue_id, event_type, actor, reason, payload_json, result_json, error, delegation_id, created_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["delegated-secret-action", "demo", issueID, "execution_error", "executor",
+          "failed with Authorization: Bearer bearer-secret",
+          JSON.stringify({ token: "payload-secret", cwd: "/Users/secret/project" }),
+          JSON.stringify({ path: "/tmp/secret/out.txt" }),
+          "OPENAI_API_KEY=error-secret at /Users/secret/log.txt",
+          "delegation-a", "2026-01-01T00:00:00Z"]
+      );
+      database.sqlite.run(
+        `insert into pi_action_events
+          (action_id, project_id, issue_id, event_type, delegation_id, created_at)
+         values (?, ?, ?, ?, ?, ?)`,
+        ["other-action", "demo", issueID, "gate_decision", "delegation-b", "2026-01-01T00:00:01Z"]
+      );
+
+      const response = await createDefaultRouter({ database }).handle(
+        new Request(`${BASE_URL}/api/pi/audit-events?project_id=demo&issue_id=${issueID}&delegation_id=delegation-a`)
+      );
+      const body = await response.json() as Array<Record<string, unknown>>;
+      const text = JSON.stringify(body);
+
+      expect(response.status).toBe(200);
+      expect(body.map((event) => event.action_id)).toEqual(["delegated-secret-action"]);
+      expect(text).toContain("[redacted]");
+      expect(text).toContain("[redacted-path]");
+      expect(text).not.toContain("bearer-secret");
+      expect(text).not.toContain("payload-secret");
+      expect(text).not.toContain("error-secret");
+      expect(text).not.toContain("/Users/secret");
+      expect(text).not.toContain("/tmp/secret");
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function postAction(

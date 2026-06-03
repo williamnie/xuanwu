@@ -15,6 +15,7 @@ import {
   updateByID,
   type PatchInput
 } from "./common.ts";
+import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 
 export type PiAction = {
   id: string; project_id: string; issue_id: number; conversation_id: string; action_type: string;
@@ -33,7 +34,13 @@ export type PiActionEvent = {
 export type PiActionInput = PatchInput<PiAction>;
 export type PiActionEventInput = PatchInput<PiActionEvent>;
 export type PiActionFilter = { conversationId?: string; issueId?: number; projectId?: string; status?: string };
-export type PiActionEventFilter = { actionId?: string; conversationId?: string; issueId?: number; projectId?: string };
+export type PiActionEventFilter = {
+  actionId?: string;
+  conversationId?: string;
+  delegationId?: string;
+  issueId?: number;
+  projectId?: string;
+};
 
 const TABLE = "pi_actions";
 const EVENT_TABLE = "pi_action_events";
@@ -103,7 +110,8 @@ export function listPiActionEvents(db: RunnerDatabase, filter: PiActionEventFilt
     ["action_id=?", filter.actionId],
     ["project_id=?", filter.projectId],
     ["conversation_id=?", filter.conversationId],
-    ["issue_id=?", filter.issueId]
+    ["issue_id=?", filter.issueId],
+    ["delegation_id=?", filter.delegationId]
   ], "id asc"));
 }
 
@@ -151,9 +159,10 @@ function normalizeEventCreate(input: PiActionEventInput): PiActionEvent {
     id: 0, action_id: cleanString(input.action_id), project_id: cleanString(input.project_id),
     issue_id: integerInput(input.issue_id), conversation_id: cleanString(input.conversation_id),
     event_type: cleanString(input.event_type), actor: cleanString(input.actor),
-    decision: cleanString(input.decision), reason: cleanString(input.reason),
-    payload_json: jsonText(input.payload_json, "{}"), result_json: jsonText(input.result_json, "{}"),
-    error: cleanString(input.error), delegation_id: cleanString(input.delegation_id),
+    decision: cleanString(input.decision), reason: redactAuditText(cleanString(input.reason)),
+    payload_json: redactAuditJsonText(jsonText(input.payload_json, "{}")),
+    result_json: redactAuditJsonText(jsonText(input.result_json, "{}")),
+    error: redactAuditText(cleanString(input.error)), delegation_id: cleanString(input.delegation_id),
     heartbeat_id: cleanString(input.heartbeat_id), created_at: ""
   };
 }
@@ -185,9 +194,10 @@ function mapPiActionEvent(row: Record<string, unknown>): PiActionEvent {
     project_id: optionalString(row.project_id), issue_id: integerValue(row.issue_id, "pi_action_events.issue_id"),
     conversation_id: optionalString(row.conversation_id),
     event_type: requiredString(row.event_type, "pi_action_events.event_type"),
-    actor: optionalString(row.actor), decision: optionalString(row.decision), reason: optionalString(row.reason),
-    payload_json: optionalString(row.payload_json), result_json: optionalString(row.result_json),
-    error: optionalString(row.error), delegation_id: optionalString(row.delegation_id),
+    actor: optionalString(row.actor), decision: optionalString(row.decision), reason: redactAuditText(optionalString(row.reason)),
+    payload_json: redactAuditJsonText(optionalString(row.payload_json) || "{}"),
+    result_json: redactAuditJsonText(optionalString(row.result_json) || "{}"),
+    error: redactAuditText(optionalString(row.error)), delegation_id: optionalString(row.delegation_id),
     heartbeat_id: optionalString(row.heartbeat_id),
     created_at: requiredString(row.created_at, "pi_action_events.created_at")
   };

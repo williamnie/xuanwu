@@ -205,6 +205,7 @@ function piActionEventFilter(request: Request) {
   return {
     actionId: cleanParam(params.get("action_id")),
     conversationId: cleanParam(params.get("conversation_id")),
+    delegationId: cleanParam(params.get("delegation_id")),
     issueId: positiveID(params.get("issue_id")),
     projectId: cleanParam(params.get("project_id"))
   };

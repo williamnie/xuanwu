@@ -186,6 +186,62 @@ describe("PI runtime repositories", () => {
     }
   });
 
+  test("filters PI action events by delegation with stable redacted timeline rows", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const first = createPiActionEvent(db, {
+        action_id: "action-delegated",
+        delegation_id: "delegation-a",
+        error: "CODEX_API_KEY=fixture-secret at /Users/secret/log.txt",
+        event_type: "execution_error",
+        issue_id: 42,
+        payload_json: JSON.stringify({
+          auth_token: "payload-secret",
+          cwd: "/Users/secret/project",
+          nested: { api_key: "nested-secret" }
+        }),
+        project_id: "demo",
+        result_json: JSON.stringify({ total_tokens: 5, output_path: "/tmp/secret/out.txt" })
+      });
+      createPiActionEvent(db, {
+        action_id: "action-other",
+        delegation_id: "delegation-b",
+        event_type: "gate_decision",
+        issue_id: 42,
+        project_id: "demo"
+      });
+      const second = createPiActionEvent(db, {
+        action_id: "action-delegated",
+        delegation_id: "delegation-a",
+        event_type: "execution_result",
+        issue_id: 42,
+        project_id: "demo"
+      });
+
+      const events = listPiActionEvents(db, { delegationId: "delegation-a", issueId: 42, projectId: "demo" });
+      const payload = JSON.parse(events[0]?.payload_json ?? "{}") as Record<string, unknown>;
+      const result = JSON.parse(events[0]?.result_json ?? "{}") as Record<string, unknown>;
+      const text = JSON.stringify(events);
+
+      expect(events.map((event) => event.id)).toEqual([first.id, second.id]);
+      expect(payload).toMatchObject({
+        auth_token: "[redacted]",
+        cwd: "[redacted-path]",
+        nested: { api_key: "[redacted]" }
+      });
+      expect(result).toMatchObject({ output_path: "[redacted-path]", total_tokens: 5 });
+      expect(events[0]?.error).toContain("CODEX_API_KEY=[redacted]");
+      expect(events[0]?.error).toContain("[redacted-path]");
+      expect(text).not.toContain("fixture-secret");
+      expect(text).not.toContain("payload-secret");
+      expect(text).not.toContain("nested-secret");
+      expect(text).not.toContain("/Users/secret");
+      expect(text).not.toContain("/tmp/secret");
+    } finally {
+      db.close();
+    }
+  });
+
   test("persists delegation envelope fields with explicit defaults", async () => {
     const db = await openFixtureDatabase();
     try {
