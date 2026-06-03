@@ -35,6 +35,7 @@ export function registerPiActionRoutes(router: Router, context: PiActionsContext
 async function approveAction(context: PiActionsContext, id: string): Promise<PiAction> {
   const action = requireAction(context.database, id);
   if (isTerminal(action) || action.status === "executing") return action;
+  assertApprovableGate(action);
   const approved = action.status === "approved" ? action : approvePendingAction(context, action);
   return await executeAction(context, approved.id);
 }
@@ -72,6 +73,7 @@ async function snoozeAction(context: PiActionsContext, id: string, request: Requ
   if (isExecuted(action)) return action;
   const body = await parseObjectBody(request);
   const until = cleanString(body.until || body.snoozed_until);
+  assertSnoozedUntil(until);
   const reason = cleanString(body.reason) || "user snoozed action";
   const next = updatePiAction(context.database, action.id, {
     decided_by: cleanString(body.actor) || "user",
@@ -94,6 +96,7 @@ async function executeAction(context: PiActionsContext, id: string): Promise<PiA
   if (action.status !== "approved") {
     throw new HttpError(400, "PI action must be approved before execute");
   }
+  assertExecutableGate(action);
   const executing = action.status === "executing"
     ? action
     : writeExecutingAction(context, action);
@@ -151,6 +154,31 @@ function requireAction(db: RunnerDatabase, id: string): PiAction {
   const action = getPiAction(db, id);
   if (!action) throw new HttpError(404, "资源不存在");
   return action;
+}
+
+function assertApprovableGate(action: PiAction): void {
+  if (action.status === "denied" || action.gate_decision === "deny") {
+    throw new HttpError(409, "PI action was denied by approval gate");
+  }
+  if (action.status !== "pending" && action.status !== "approved") {
+    throw new HttpError(409, `PI action cannot be approved from status ${action.status}`);
+  }
+  if (action.gate_decision !== "ask" && action.gate_decision !== "execute") {
+    throw new HttpError(409, "PI action must pass approval gate before approve");
+  }
+}
+
+function assertExecutableGate(action: PiAction): void {
+  if (action.gate_decision === "deny") throw new HttpError(409, "PI action was denied by approval gate");
+  if (action.gate_decision === "snooze") throw new HttpError(409, "PI action is snoozed by approval gate");
+  if (action.gate_decision !== "ask" && action.gate_decision !== "execute") {
+    throw new HttpError(409, "PI action must pass approval gate before execute");
+  }
+}
+
+function assertSnoozedUntil(until: string): void {
+  if (until === "") throw new HttpError(400, "snoozed_until 不能为空");
+  if (!Number.isFinite(Date.parse(until))) throw new HttpError(400, "snoozed_until 必须是合法时间");
 }
 
 function isFinished(action: PiAction): boolean {

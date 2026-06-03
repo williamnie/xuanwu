@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
-import { listPiActionEvents } from "../db/repositories/pi.ts";
+import { createPiAction, getPiAction, listPiActionEvents } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions } from "../pi/runnerActions.ts";
 import { createDefaultRouter } from "./server.ts";
@@ -71,6 +71,130 @@ describe("Bun PI action audit API", () => {
     }
   });
 
+  test("snooze requires a next reminder time", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "ready" }) as { action_id: string };
+      const router = createDefaultRouter({ database });
+
+      const response = await postAction(router, action.action_id, "snooze", { reason: "later" });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        message: expect.stringContaining("snoozed_until")
+      });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("execute refuses approved actions that never passed the approval gate", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueID = insertIssue(database, "demo");
+      createPiAction(database, {
+        id: "ungated-approved",
+        action_type: "issue.enqueue",
+        project_id: "demo",
+        status: "approved",
+        payload_json: JSON.stringify({ issue_id: issueID })
+      });
+
+      const response = await postAction(createDefaultRouter({ database }), "ungated-approved", "execute", {});
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        message: expect.stringContaining("approval gate")
+      });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("approve refuses actions denied by the gate", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueID = insertIssue(database, "demo");
+      createPiAction(database, {
+        id: "denied-action",
+        action_type: "issue.enqueue",
+        gate_decision: "deny",
+        gate_reason: "action is forbidden by policy",
+        project_id: "demo",
+        status: "denied",
+        payload_json: JSON.stringify({ issue_id: issueID })
+      });
+
+      const response = await postAction(createDefaultRouter({ database }), "denied-action", "approve", {});
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        message: expect.stringContaining("denied")
+      });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("approve returns a clear error for snoozed or changes-requested actions", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const issueID = insertIssue(database, project.id);
+      const changes = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID }) as { action_id: string };
+      const snoozed = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID }) as { action_id: string };
+      const router = createDefaultRouter({ database });
+      await postAction(router, changes.action_id, "request-changes", { comment: "revise first" });
+      await postAction(router, snoozed.action_id, "snooze", { until: "2026-06-03T12:00:00Z" });
+
+      const approveChanges = await postAction(router, changes.action_id, "approve", {});
+      const approveSnooze = await postAction(router, snoozed.action_id, "approve", {});
+
+      expect(approveChanges.status).toBe(409);
+      expect(approveSnooze.status).toBe(409);
+      expect(getPiAction(database, changes.action_id)).toMatchObject({ status: "changes_requested" });
+      expect(getPiAction(database, snoozed.action_id)).toMatchObject({ status: "snoozed" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("approve leaves ungated pending actions unchanged", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueID = insertIssue(database, "demo");
+      createPiAction(database, {
+        id: "ungated-pending",
+        action_type: "issue.enqueue",
+        project_id: "demo",
+        status: "pending",
+        payload_json: JSON.stringify({ issue_id: issueID })
+      });
+
+      const response = await postAction(createDefaultRouter({ database }), "ungated-pending", "approve", {});
+
+      expect(response.status).toBe(409);
+      expect(getPiAction(database, "ungated-pending")).toMatchObject({ status: "pending" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "triage" });
+    } finally {
+      database.close();
+    }
+  });
+
   test("audit timeline endpoint returns action events across actions", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -105,7 +229,7 @@ describe("Bun PI action audit API", () => {
 function postAction(
   router: ReturnType<typeof createDefaultRouter>,
   id: string,
-  action: "request-changes" | "snooze",
+  action: "approve" | "execute" | "request-changes" | "snooze",
   body: Record<string, unknown>
 ): Promise<Response> {
   return router.handle(new Request(`${BASE_URL}/api/pi/actions/${id}/${action}`, {

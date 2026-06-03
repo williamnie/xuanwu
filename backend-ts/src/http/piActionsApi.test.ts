@@ -123,7 +123,7 @@ describe("Bun PI actions API", () => {
       updatePiAction(database, action.action_id, { status: "approved" });
       createPiAction(database, {
         id: "bad-action",
-        action_type: "issue.enqueue",
+        action_type: "issue.enqueue", gate_decision: "ask",
         status: "approved",
         payload_json: JSON.stringify({ issue_id: 9999 })
       });
@@ -174,7 +174,7 @@ describe("Bun PI actions API", () => {
       insertAgentSession(database, "demo", "codex:thread-1", "turn-1");
       createPiAction(database, {
         id: "steer-action",
-        action_type: "session.steer",
+        action_type: "session.steer", gate_decision: "ask",
         project_id: "demo",
         status: "approved",
         payload_json: JSON.stringify({ prompt: "adjust plan", session_key: "codex:thread-1" })
