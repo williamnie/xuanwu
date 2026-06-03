@@ -313,6 +313,8 @@ describe("Bun projects/issues read API", () => {
           project_id: "demo",
           title: "Create API",
           description: "Issue body",
+          required_mcp_capabilities: ["docs:resource:runbook"],
+          recommended_mcp_capabilities: ["docs:tool:search"],
           required_skill_intents: ["codex-issue-runner"],
           recommended_skill_intents: ["verification-before-completion"],
           priority: 4,
@@ -346,6 +348,8 @@ describe("Bun projects/issues read API", () => {
         source_session_id: "thread-source",
         source_turn_id: "turn-source",
         source_excerpt: "讨论摘录",
+        required_mcp_capabilities: "[\"docs:resource:runbook\"]",
+        recommended_mcp_capabilities: "[\"docs:tool:search\"]",
         required_skill_intents: "[\"codex-issue-runner\"]",
         recommended_skill_intents: "[\"verification-before-completion\"]",
         workflow_snapshot_json: '{"steps":[]}'
@@ -354,6 +358,60 @@ describe("Bun projects/issues read API", () => {
       expect((await list.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([createdIssue.id]);
       expect(event).toEqual({ type: "issue.created", payload: "" });
     } finally {
+      database.close();
+    }
+  });
+
+  test("reads issue MCP requirements with unregistered capability diagnostics", async () => {
+    const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+    const database = await openFixtureDatabase();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [{
+      id: "docs",
+      readiness: "ready",
+      resources: [{ description: "Deployment runbook", name: "runbook" }],
+      status: "enabled"
+    }] });
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1 });
+      const issueId = insertIssue(database, {
+        projectId: "demo",
+        sourceSessionId: "",
+        status: "triage",
+        title: "MCP requirements"
+      });
+      database.sqlite.run(
+        `update issues set required_mcp_capabilities_json=?, recommended_mcp_capabilities_json=? where id=?`,
+        [JSON.stringify(["docs:resource:runbook", "ghost:resource:missing"]), JSON.stringify(["docs:tool:missing"]), issueId]
+      );
+
+      const router = createDefaultRouter({ database });
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`));
+      const body = await response.json() as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        required_mcp_capabilities: "[\"docs:resource:runbook\",\"ghost:resource:missing\"]",
+        recommended_mcp_capabilities: "[\"docs:tool:missing\"]",
+        mcp_requirements: {
+          required: ["docs:resource:runbook", "ghost:resource:missing"],
+          recommended: ["docs:tool:missing"],
+          diagnostics: expect.arrayContaining([
+            expect.objectContaining({
+              capability_id: "ghost:resource:missing",
+              code: "mcp_capability_unregistered",
+              scope: "issue.required"
+            }),
+            expect.objectContaining({
+              capability_id: "docs:tool:missing",
+              code: "mcp_capability_unregistered",
+              scope: "issue.recommended"
+            })
+          ])
+        }
+      });
+    } finally {
+      if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+      else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
       database.close();
     }
   });
@@ -498,6 +556,10 @@ describe("Bun projects/issues read API", () => {
         method: "POST",
         body: JSON.stringify({ project_id: "demo", required_skill_intents: ["bad skill"], title: "bad" })
       }));
+      const invalidMcp = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "demo", required_mcp_capabilities: ["bad mcp"], title: "bad" })
+      }));
 
       expect(missingProject.status).toBe(404);
       expect(await missingProject.json()).toEqual({ message: "资源不存在" });
@@ -505,6 +567,8 @@ describe("Bun projects/issues read API", () => {
       expect(await invalidStatus.json()).toEqual({ message: "status 不合法" });
       expect(invalidSkill.status).toBe(400);
       expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
+      expect(invalidMcp.status).toBe(400);
+      expect(await invalidMcp.json()).toEqual({ message: "MCP capability id 不合法: bad mcp" });
     } finally {
       database.close();
     }

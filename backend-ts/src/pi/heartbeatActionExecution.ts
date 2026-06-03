@@ -36,6 +36,10 @@ export function heartbeatAuthorizationPolicy(input: HeartbeatInput, ctx: Heartbe
   return cleanPolicy({
     ...auth,
     allowed_actions: listValue(auth.allowed_actions ?? auth.allowedActions, delegation?.allowed_actions_json),
+    allowed_mcp_capabilities: listValue(
+      auth.allowed_mcp_capabilities ?? auth.allowedMcpCapabilities,
+      delegation?.allowed_mcp_capabilities_json
+    ),
     allowed_skill_intents: listValue(
       auth.allowed_skill_intents ?? auth.allowedSkillIntents,
       delegation?.allowed_skill_intents_json
@@ -52,6 +56,7 @@ export function heartbeatAuthorizationPolicy(input: HeartbeatInput, ctx: Heartbe
 export function heartbeatAuthorizationSummary(policy: PiGatePolicy): Record<string, unknown> {
   return {
     allowed_actions: policy.allowed_actions ?? [],
+    allowed_mcp_capabilities: policy.allowed_mcp_capabilities ?? policy.allowedMcpCapabilities ?? [],
     allowed_skill_intents: policy.allowed_skill_intents ?? policy.allowedSkillIntents ?? [],
     forbidden_actions: policy.forbidden_actions ?? [],
     mode: policy.mode ?? "attended",

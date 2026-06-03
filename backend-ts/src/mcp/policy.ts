@@ -4,6 +4,9 @@ export type McpPolicy = {
   required?: string[];
 };
 
+const MCP_CAPABILITY_ID_RE = /^[a-z0-9_.:-]+:(resource|tool):[a-z0-9_.:-]+$/;
+const MAX_MCP_CAPABILITY_ID_LENGTH = 160;
+
 export function normalizeMcpCapabilityList(value: unknown): string {
   return JSON.stringify(parseMcpCapabilityList(value));
 }
@@ -60,10 +63,17 @@ function cleanList(values: string[]): string[] {
   for (const value of values) {
     const id = cleanString(value).toLowerCase();
     if (id === "" || seen.has(id)) continue;
+    assertValidMcpCapabilityID(id);
     seen.add(id);
     out.push(id);
   }
   return out;
+}
+
+function assertValidMcpCapabilityID(id: string): void {
+  if (id.length > MAX_MCP_CAPABILITY_ID_LENGTH || !MCP_CAPABILITY_ID_RE.test(id)) {
+    throw new Error(`MCP capability id 不合法: ${id}`);
+  }
 }
 
 function cleanString(value: unknown): string {

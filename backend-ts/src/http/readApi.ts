@@ -13,10 +13,12 @@ import {
   createProject,
   getProject,
   listProjects,
+  type Project,
   ProjectNotFoundError,
   updateProject
 } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
+import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import { registerSessionRoutes } from "./sessionApi.ts";
@@ -61,7 +63,7 @@ function registerProjectRoutes(router: Router, context: ReadApiContext): void {
 }
 
 function registerIssueCollectionRoutes(router: Router, context: ReadApiContext): void {
-  router.get("/api/issues", (request) => json(publicIssues(listIssues(context.database, issueFilter(request)))));
+  router.get("/api/issues", (request) => json(publicIssues(context, listIssues(context.database, issueFilter(request)))));
   router.post("/api/issues", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => createIssueAndKickLoop(context, body), 201);
@@ -163,19 +165,24 @@ async function cancelIssueResponse(context: ReadApiContext, request: Request): P
 function issueResponse(context: ReadApiContext, request: Request): Response {
   const issue = getIssue(context.database, issueID(request));
   if (!issue) throw new HttpError(404, "资源不存在");
-  return json(publicIssue(issue));
+  return json(publicIssue(issue, issueProject(context, issue)));
 }
 
-function publicIssues(issues: Issue[]): PublicIssue[] {
-  return issues.map(publicIssue);
+function publicIssues(context: ReadApiContext, issues: Issue[]): PublicIssue[] {
+  const projects = projectsByID(listProjects(context.database));
+  return issues.map((issue) => publicIssue(issue, projects.get(issue.project_id) ?? null));
 }
 
 type PublicIssueRun = Omit<IssueRun, "runtime_metadata_json">;
-type PublicIssue = Omit<Issue, "latest_run"> & { latest_run?: PublicIssueRun };
+type PublicIssue = Omit<Issue, "latest_run"> & {
+  latest_run?: PublicIssueRun;
+  mcp_requirements: McpRequirementSummary;
+};
 
-function publicIssue(issue: Issue): PublicIssue {
-  if (!issue.latest_run) return issue;
-  return { ...issue, latest_run: publicIssueRun(issue.latest_run) };
+function publicIssue(issue: Issue, project: Project | null): PublicIssue {
+  const mcp_requirements = issueMcpRequirementSummary(issue, project);
+  if (!issue.latest_run) return { ...issue, mcp_requirements };
+  return { ...issue, latest_run: publicIssueRun(issue.latest_run), mcp_requirements };
 }
 
 function publicIssueRuns(runs: IssueRun[]): PublicIssueRun[] {
@@ -185,6 +192,14 @@ function publicIssueRuns(runs: IssueRun[]): PublicIssueRun[] {
 function publicIssueRun(run: IssueRun): PublicIssueRun {
   const { runtime_metadata_json: _runtimeMetadata, ...publicRun } = run;
   return publicRun;
+}
+
+function projectsByID(projects: Project[]): Map<string, Project> {
+  return new Map(projects.map((project) => [project.id, project]));
+}
+
+function issueProject(context: ReadApiContext, issue: Issue): Project | null {
+  return getProject(context.database, issue.project_id);
 }
 
 function registerIssuesPageAuxRoutes(router: Router, context: ReadApiContext): void {

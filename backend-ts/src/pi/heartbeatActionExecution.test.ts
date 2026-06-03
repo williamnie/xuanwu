@@ -51,6 +51,7 @@ describe("PI heartbeat action execution", () => {
       const issueID = insertIssue(db, "project-a", "todo");
       insertDelegation(db, "delegation-a", "project-a", {
         allowed_actions: ["issue.enqueue"],
+        allowed_mcp_capabilities: ["docs:resource:runbook"],
         allowed_skill_intents: ["codex-issue-runner"],
         authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: "project-a" }],
         mode: "delegated",
@@ -63,7 +64,10 @@ describe("PI heartbeat action execution", () => {
 
       expect(run?.executed_actions).toHaveLength(1);
       expect(run).toMatchObject({ actions_proposed: 1, status: "completed" });
-      expect(run?.policy.authorization_summary).toMatchObject({ allowed_skill_intents: ["codex-issue-runner"] });
+      expect(run?.policy.authorization_summary).toMatchObject({
+        allowed_mcp_capabilities: ["docs:resource:runbook"],
+        allowed_skill_intents: ["codex-issue-runner"]
+      });
       expect(getPiAction(db, actionID)).toMatchObject({ gate_decision: "execute", status: "completed" });
       expect(listPiActionEvents(db, { actionId: actionID }).map((event) => event.event_type)).toEqual([
         "candidate", "gate_decision", "execution_started", "execution_result"

@@ -83,6 +83,9 @@ function delegationPatch(body: Record<string, unknown>) {
 function delegationJsonFields(body: Record<string, unknown>) {
   return {
     allowed_actions_json: jsonFieldInput(body, ["allowed_actions_json", "allowed_actions", "allowedActions"], "[]", "allowed_actions"),
+    allowed_mcp_capabilities_json: jsonFieldInput(body, [
+      "allowed_mcp_capabilities_json", "allowed_mcp_capabilities", "allowedMcpCapabilities"
+    ], "[]", "allowed_mcp_capabilities"),
     allowed_skill_intents_json: jsonFieldInput(body, [
       "allowed_skill_intents_json", "allowed_skill_intents", "allowedSkillIntents"
     ], "[]", "allowed_skill_intents"),

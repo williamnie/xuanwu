@@ -26,6 +26,7 @@ describe("PI delegations API", () => {
       const created = await request(router, "/api/pi/delegations", "POST", {
         authorization: {
           allowed_actions: ["issue.enqueue"],
+          allowed_mcp_capabilities: ["docs:resource:runbook"],
           allowed_skill_intents: ["codex-issue-runner"],
           audit_source: "api-test",
           expires_at: "2026-06-04T08:00:00Z",
@@ -48,6 +49,7 @@ describe("PI delegations API", () => {
       expect(created.status).toBe(201);
       expect(body).toMatchObject({
         allowed_actions_json: "[\"issue.enqueue\"]",
+        allowed_mcp_capabilities_json: "[\"docs:resource:runbook\"]",
         allowed_skill_intents_json: "[\"codex-issue-runner\"]",
         audit_source: "api-test",
         expires_at: "2026-06-04T08:00:00Z",
@@ -97,6 +99,7 @@ describe("PI delegations API", () => {
 
       const patched = await request(router, `/api/pi/delegations/${id}`, "PATCH", {
         allowed_actions: ["issue.enqueue", "issue.state_repair"],
+        allowed_mcp_capabilities: ["docs:resource:runbook", "docs:tool:search"],
         allowed_skill_intents: ["codex-issue-runner", "verification-before-completion"],
         audit_source: "user",
         expires_at: "2026-06-04T09:00:00Z",
@@ -110,6 +113,7 @@ describe("PI delegations API", () => {
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({
         allowed_actions_json: "[\"issue.enqueue\",\"issue.state_repair\"]",
+        allowed_mcp_capabilities_json: "[\"docs:resource:runbook\",\"docs:tool:search\"]",
         allowed_skill_intents_json: "[\"codex-issue-runner\",\"verification-before-completion\"]",
         audit_source: "user",
         expires_at: "2026-06-04T09:00:00Z",

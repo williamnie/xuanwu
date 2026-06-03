@@ -6,10 +6,14 @@ import { openDatabase, type RunnerDatabase } from "../database.ts";
 import { createIssue } from "./issueCreate.ts";
 import { updateIssue } from "./issueUpdate.ts";
 import { createProject } from "./projects.ts";
+import { issueMcpRequirementSummary } from "../../mcp/requirements.ts";
 
 const tempRoots: string[] = [];
+const previousRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
 
 afterEach(async () => {
+  if (previousRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -51,6 +55,41 @@ describe("MCP capability persistence", () => {
       db.close();
     }
   });
+
+  test("marks saved requirements that are missing from the MCP registry", async () => {
+    const { cwd, db } = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    try {
+      const project = createProject(db, {
+        cwd,
+        default_mcp_policy: { allowed: ["docs:resource:runbook", "ghost:resource:missing"] },
+        id: "demo"
+      });
+      const issue = createIssue(db, {
+        project_id: project.id,
+        recommended_mcp_capabilities: ["docs:tool:search"],
+        required_mcp_capabilities: ["docs:resource:runbook", "ghost:resource:missing"],
+        title: "MCP diagnostics"
+      });
+
+      const summary = issueMcpRequirementSummary(issue, project);
+
+      expect(summary).toMatchObject({
+        project_allowed: ["docs:resource:runbook", "ghost:resource:missing"],
+        recommended: ["docs:tool:search"],
+        required: ["docs:resource:runbook", "ghost:resource:missing"]
+      });
+      expect(summary.diagnostics).toContainEqual({
+        capability_id: "ghost:resource:missing",
+        code: "mcp_capability_unregistered",
+        message: "MCP capability is not registered: ghost:resource:missing",
+        scope: "issue.required",
+        severity: "warning"
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
@@ -59,4 +98,18 @@ async function openFixture(): Promise<{ cwd: string; db: RunnerDatabase }> {
   const cwd = join(root, "project");
   await mkdir(cwd, { recursive: true });
   return { cwd, db: await openDatabase({ stateDir: join(root, "state") }) };
+}
+
+function docsServer() {
+  return {
+    id: "docs",
+    readiness: "ready",
+    resources: [
+      { content: "deploy safely", description: "Deployment runbook", name: "runbook" }
+    ],
+    status: "enabled",
+    tools: [
+      { description: "Search documentation", name: "search", permission: "read", risk_level: "low" }
+    ]
+  };
 }

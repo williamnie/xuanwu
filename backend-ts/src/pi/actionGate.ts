@@ -156,15 +156,22 @@ function skillIntentsFromPayload(payload: Record<string, unknown>): string[] {
 function authorizedMcpCapabilities(envelope: PiActionEnvelope, policy: PiGatePolicy): boolean {
   const allowed = mcpCapabilityAllowlist(policy);
   if (allowed === undefined) return true;
-  const requested = [
-    ...stringList(envelope.payload.capability_id),
-    ...stringList(envelope.payload.capability_ids),
-    ...stringList(envelope.payload.required_mcp_capabilities),
-    ...stringList(envelope.payload.recommended_mcp_capabilities)
-  ];
+  const requested = mcpCapabilitiesFromPayload(envelope.payload);
   if (requested.length === 0) return true;
   const allowlist = new Set(allowed.map(cleanID).filter(Boolean));
   return requested.every((id) => allowlist.has(cleanID(id)));
+}
+
+function mcpCapabilitiesFromPayload(payload: Record<string, unknown>): string[] {
+  const patch = objectPayload(payload.patch);
+  return [
+    ...stringList(payload.capability_id),
+    ...stringList(payload.capability_ids),
+    ...stringList(payload.required_mcp_capabilities),
+    ...stringList(payload.recommended_mcp_capabilities),
+    ...stringList(patch.required_mcp_capabilities),
+    ...stringList(patch.recommended_mcp_capabilities)
+  ];
 }
 
 function mcpCapabilityAllowlist(policy: PiGatePolicy): string[] | undefined {
@@ -224,6 +231,10 @@ function stringList(value: unknown): string[] {
     if (Array.isArray(parsed)) return parsed.map(cleanString).filter(Boolean);
   } catch {}
   return text.split(/\n|,/).map(cleanString).filter(Boolean);
+}
+
+function objectPayload(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function authorizedByEnvelope(envelope: PiActionEnvelope, authorized: PiAuthorizedAction[]): boolean {

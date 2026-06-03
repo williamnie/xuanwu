@@ -53,6 +53,11 @@ import {
   runSelectionReasonLabel,
   summarizeAgentProfile,
 } from '../utils/agentProfiles';
+import {
+  hasMcpRequirements,
+  issueMcpRequirementSummary,
+  mcpRequirementStatus,
+} from '../utils/mcpRequirements';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -572,6 +577,7 @@ ${error}` : error;
   const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
   const verifierReports = issueVerifierReports(events);
   const profileSummary = summarizeAgentProfile(project?.default_agent_profile);
+  const mcpSummary = issueMcpRequirementSummary(issue);
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
@@ -879,6 +885,8 @@ ${error}` : error;
             navigateTo={navigateTo}
             onCopy={handleCopyText}
           />
+
+          <IssueMcpRequirementsPanel summary={mcpSummary} />
 
           {canGenerateVerifierReport(issue) && (
             <VerifierReportPanel
@@ -1192,6 +1200,50 @@ function RefinementItem({ label, value }) {
         <MarkdownPreview text={value} />
       ) : (
         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>未填写</span>
+      )}
+    </div>
+  );
+}
+
+function IssueMcpRequirementsPanel({ summary }) {
+  const active = hasMcpRequirements(summary);
+  return (
+    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' }}>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>MCP requirements</h3>
+        <span className={`triage-readiness-badge ${summary.diagnostics.length ? 'refined' : active ? 'ready' : 'raw'}`}>
+          {mcpRequirementStatus(summary)}
+        </span>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: 0 }}>
+        这里只显示 issue/project/delegation 的 MCP capability 需求；不会直接执行 MCP。
+      </p>
+      <McpCapabilityGroup label="Required" items={summary.required} />
+      <McpCapabilityGroup label="Recommended" items={summary.recommended} />
+      <McpCapabilityGroup label="Project allowlist" items={summary.projectAllowed} />
+      {summary.diagnostics.length > 0 && (
+        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {summary.diagnostics.map((item, index) => (
+            <span key={`${item.scope}-${item.capability_id}-${index}`}>
+              <AlertTriangle size={13} /> {item.scope}: {item.capability_id} 未注册
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function McpCapabilityGroup({ label, items }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>{label}</span>
+      {items.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {items.map(item => <code key={item} style={{ fontSize: '0.72rem', background: 'rgba(0,0,0,0.08)', padding: '3px 6px', borderRadius: '6px' }}>{item}</code>)}
+        </div>
+      ) : (
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>未声明</span>
       )}
     </div>
   );

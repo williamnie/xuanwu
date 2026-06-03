@@ -13,6 +13,7 @@ import { piDelegationEnvelopeMigration } from "./012_pi_delegation_envelope.ts";
 import { projectPiPolicyMigration } from "./013_project_pi_policy.ts";
 import { cronTaskClaimsMigration } from "./014_cron_task_claims.ts";
 import { piDelegationSkillIntentsMigration } from "./015_pi_delegation_skill_intents.ts";
+import { piDelegationMcpAllowlistMigration } from "./016_pi_delegation_mcp_allowlist.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -29,5 +30,6 @@ export const migrations = [
   piDelegationEnvelopeMigration,
   projectPiPolicyMigration,
   cronTaskClaimsMigration,
-  piDelegationSkillIntentsMigration
+  piDelegationSkillIntentsMigration,
+  piDelegationMcpAllowlistMigration
 ];

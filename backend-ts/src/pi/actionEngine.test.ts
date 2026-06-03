@@ -138,6 +138,37 @@ describe("PI action engine risk classifier", () => {
     });
   });
 
+  test("MCP gate checks nested issue refinement requirement patches", () => {
+    const envelope = {
+      action_type: "issue.update_refinement",
+      issue_id: 7,
+      payload: {
+        issue_id: 7,
+        patch: { required_mcp_capabilities: ["docs:resource:runbook"] }
+      },
+      project_id: "demo",
+      requires_confirmation: true,
+      risk_level: "medium",
+      source: "pi_tool"
+    } as const;
+
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:resource:runbook"],
+      authorizedActions: [{ action_type: "issue.update_refinement", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope(envelope, {
+      allowed_mcp_capabilities: ["docs:resource:other"],
+      authorizedActions: [{ action_type: "issue.update_refinement", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({
+      decision: "deny",
+      reason: expect.stringContaining("MCP")
+    });
+  });
+
   test("delegated authorization does not bypass high-risk confirmation", () => {
     const envelope = {
       action_type: "session.steer",

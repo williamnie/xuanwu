@@ -248,6 +248,7 @@ describe("PI runtime repositories", () => {
       const delegation = createPiDelegation(db, {
         authorization_json: JSON.stringify({
           allowed_actions: ["issue.enqueue"],
+          allowed_mcp_capabilities: ["docs:resource:runbook"],
           allowed_skill_intents: ["codex-issue-runner"],
           audit_source: "user",
           expires_at: "2026-06-04T08:00:00Z",
@@ -263,6 +264,7 @@ describe("PI runtime repositories", () => {
 
       expect(delegation).toMatchObject({
         allowed_actions_json: "[\"issue.enqueue\"]",
+        allowed_mcp_capabilities_json: "[\"docs:resource:runbook\"]",
         allowed_skill_intents_json: "[\"codex-issue-runner\"]",
         audit_source: "user",
         expires_at: "2026-06-04T08:00:00Z",
@@ -276,6 +278,7 @@ describe("PI runtime repositories", () => {
 
       const updated = updatePiDelegation(db, "delegation-1", {
         allowed_actions_json: ["issue.comment"],
+        allowed_mcp_capabilities_json: ["docs:tool:search"],
         allowed_skill_intents_json: ["verification-before-completion"],
         audit_source: "cron",
         scope_json: { issue_id: 224 },
@@ -283,6 +286,7 @@ describe("PI runtime repositories", () => {
       });
       expect(updated).toMatchObject({
         allowed_actions_json: "[\"issue.comment\"]",
+        allowed_mcp_capabilities_json: "[\"docs:tool:search\"]",
         allowed_skill_intents_json: "[\"verification-before-completion\"]",
         audit_source: "cron",
         scope_json: "{\"issue_id\":224}",
