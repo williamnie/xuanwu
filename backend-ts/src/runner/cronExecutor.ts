@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
-import { listCronTasks, type CronTask } from "../db/repositories/cronTasks.ts";
+import { claimDueCronTasks } from "../db/repositories/cronTaskClaims.ts";
+import type { CronTask } from "../db/repositories/cronTasks.ts";
 import { createPiDelegation, isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import { syncCodexProjects } from "../http/projectSync.ts";
@@ -28,23 +29,13 @@ const TERMINAL_ONCE_STATUS = "done";
 
 export async function runDueCronTasks(input: CronExecutorInput): Promise<CronExecutorResult> {
   const now = input.now ?? new Date();
-  const tasks = listDueCronTasks(input.database, now);
+  const tasks = claimDueCronTasks(input.database, now);
   const result: CronExecutorResult = { executed: 0, failed: 0, scanned: tasks.length, skipped: 0 };
   for (const task of tasks) {
-    if (activeCronTasks.has(task.id)) {
-      result.skipped += 1;
-      continue;
-    }
     const status = await runCronTask(input, task, now);
     result[status] += 1;
   }
   return result;
-}
-
-function listDueCronTasks(db: RunnerDatabase, now: Date): CronTask[] {
-  const nowText = now.toISOString();
-  return listCronTasks(db).filter((task) => task.status === "active"
-    && task.next_run_at !== "" && task.next_run_at <= nowText);
 }
 
 async function runCronTask(input: CronExecutorInput, task: CronTask, now: Date): Promise<"executed" | "failed" | "skipped"> {
@@ -211,7 +202,8 @@ function persistCronRun(db: RunnerDatabase, task: CronTask, now: Date, input: {
   error: string; lastResult: string; lastStatus: string; nextRunAt: string; status: string;
 }): void {
   db.sqlite.run(`update cron_tasks set last_run_at=?, last_status=?, last_result=?,
-    run_count=run_count+1, error=?, next_run_at=?, status=?, updated_at=? where id=?`,
+    run_count=run_count+1, error=?, next_run_at=?, status=?, claim_token='',
+    claim_started_at='', updated_at=? where id=?`,
     [now.toISOString(), input.lastStatus, input.lastResult, input.error, input.nextRunAt,
       input.status, now.toISOString(), task.id]);
 }

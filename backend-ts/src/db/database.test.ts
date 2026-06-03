@@ -85,6 +85,8 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "project_pi_policies")).toContain("verification_policy_json");
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
+      expect(columnNames(connection, "cron_tasks")).toContain("claim_token");
+      expect(columnNames(connection, "cron_tasks")).toContain("claim_started_at");
       expect(connection.sqlite.query("select id from schema_migrations").all()).toEqual([
         { id: "001_base_schema" },
         { id: "002_agent_sessions_runtime" },
@@ -98,7 +100,8 @@ describe("Bun SQLite database connection", () => {
         { id: "010_mcp_registry_envelope" },
         { id: "011_pi_reports" },
         { id: "012_pi_delegation_envelope" },
-        { id: "013_project_pi_policy" }
+        { id: "013_project_pi_policy" },
+        { id: "014_cron_task_claims" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -159,7 +162,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 13 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 14 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

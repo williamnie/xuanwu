@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { claimDueCronTasks } from "../db/repositories/cronTaskClaims.ts";
 import { pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
 
@@ -201,12 +202,50 @@ describe("Cron due executor", () => {
       db.close();
     }
   });
+
+  test("claims a due task before action execution to prevent duplicate claims", async () => {
+    const root = await tempRoot();
+    const stateDir = join(root, "state");
+    const firstDb = await openDatabase({ stateDir });
+    const secondDb = await openDatabase({ stateDir });
+    try {
+      insertProject(firstDb, "project-a", 1);
+      const taskID = insertCronTask(firstDb, {
+        action: "run_pi_cycle",
+        mode: "daily",
+        nextRunAt: "2026-06-02T09:59:00.000Z",
+        projectID: "project-a",
+        timeOfDay: "18:30"
+      });
+      let duplicateClaimIDs: number[] = [];
+
+      const result = await runDueCronTasks({
+        database: firstDb,
+        now: NOW,
+        runProjectCycle: async () => {
+          duplicateClaimIDs = claimDueCronTasks(secondDb, NOW).map((task) => task.id);
+        }
+      });
+
+      expect(result).toEqual({ executed: 1, failed: 0, scanned: 1, skipped: 0 });
+      expect(duplicateClaimIDs).toEqual([]);
+      expect(taskID).toBeGreaterThan(0);
+    } finally {
+      firstDb.close();
+      secondDb.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
+  const root = await tempRoot();
+  return openDatabase({ stateDir: join(root, "state") });
+}
+
+async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-cron-executor-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return root;
 }
 
 function insertProject(db: RunnerDatabase, id: string, autoRun: number): void {
@@ -236,7 +275,7 @@ function insertCronTask(db: RunnerDatabase, input: {
   timeOfDay?: string;
   timezone?: string;
   workingHours?: Record<string, unknown>;
-}): void {
+}): number {
   db.sqlite.run(
     `insert into cron_tasks
       (name, project_id, action, mode, time_of_day, next_run_at, status, created_at, updated_at)
@@ -252,6 +291,7 @@ function insertCronTask(db: RunnerDatabase, input: {
     [id, input.timezone ?? "UTC", input.missedPolicy ?? "run_immediately", JSON.stringify(input.actionPayload ?? {}),
       JSON.stringify(input.workingHours ?? {}), "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
   );
+  return id;
 }
 
 function cronRow(db: RunnerDatabase) {

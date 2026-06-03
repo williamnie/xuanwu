@@ -11,6 +11,7 @@ import { mcpRegistryEnvelopeMigration } from "./010_mcp_registry_envelope.ts";
 import { piReportsMigration } from "./011_pi_reports.ts";
 import { piDelegationEnvelopeMigration } from "./012_pi_delegation_envelope.ts";
 import { projectPiPolicyMigration } from "./013_project_pi_policy.ts";
+import { cronTaskClaimsMigration } from "./014_cron_task_claims.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -25,5 +26,6 @@ export const migrations = [
   mcpRegistryEnvelopeMigration,
   piReportsMigration,
   piDelegationEnvelopeMigration,
-  projectPiPolicyMigration
+  projectPiPolicyMigration,
+  cronTaskClaimsMigration
 ];
