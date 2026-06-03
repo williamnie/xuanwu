@@ -14,7 +14,7 @@ export function heartbeatContext(input: HeartbeatInput) {
   if (!getProject(input.database, projectID)) throw new Error("project not found");
   const scope = delegationID || "project";
   const heartbeatID = `${kind}:${projectID}:${scope}:${crypto.randomUUID()}`;
-  return { delegationID, heartbeatID, key: `${kind}:${projectID}:${delegationID}`, kind, now, nowText: iso(now), projectID };
+  return { delegationID, heartbeatID, kind, now, nowText: iso(now), projectID };
 }
 
 export function isPaused(db: RunnerDatabase, ctx: ReturnType<typeof heartbeatContext>): boolean {

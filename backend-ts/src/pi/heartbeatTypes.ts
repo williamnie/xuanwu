@@ -110,7 +110,7 @@ export type HeartbeatResult = {
   status: "completed" | "failed" | "skipped";
 };
 export type HeartbeatInput = {
-  collectSignals?: (input: { database: RunnerDatabase; now: Date; projectID: string }) => HeartbeatSignals;
+  collectSignals?: (input: { database: RunnerDatabase; now: Date; projectID: string }) => HeartbeatSignals | Promise<HeartbeatSignals>;
   database: RunnerDatabase;
   delegation?: PiDelegation;
   kind?: HeartbeatKind;

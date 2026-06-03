@@ -27,12 +27,13 @@ const ERROR_NEXT_MS = 5 * 60_000;
 
 export async function runPiHeartbeatOnce(input: HeartbeatInput): Promise<HeartbeatResult> {
   const ctx = heartbeatContext(input);
-  if (activeHeartbeats.has(ctx.key)) return skippedResult(ctx, "heartbeat already running");
-  activeHeartbeats.add(ctx.key);
+  const lockKeys = heartbeatLockKeys(ctx);
+  if (lockKeys.some((key) => activeHeartbeats.has(key))) return skippedResult(ctx, "heartbeat already running");
+  lockKeys.forEach((key) => activeHeartbeats.add(key));
   try {
-    return runHeartbeatLocked(input, ctx);
+    return await runHeartbeatLocked(input, ctx);
   } finally {
-    activeHeartbeats.delete(ctx.key);
+    lockKeys.forEach((key) => activeHeartbeats.delete(key));
   }
 }
 
@@ -74,7 +75,6 @@ function persistFailedDelegationHeartbeat(
   const ctx = {
     delegationID: delegation.id,
     heartbeatID: `delegation:${delegation.project_id}:${delegation.id}:${crypto.randomUUID()}`,
-    key: `delegation:${delegation.project_id}:${delegation.id}`,
     kind: "delegation" as const,
     now,
     nowText,
@@ -95,7 +95,7 @@ function persistFailedDelegationHeartbeat(
   return result;
 }
 
-function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof heartbeatContext>): HeartbeatResult {
+async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof heartbeatContext>): Promise<HeartbeatResult> {
   if (isPaused(input.database, ctx)) {
     const result = skippedResult(ctx, "heartbeat is paused");
     persistSkippedHeartbeat(input.database, ctx, result);
@@ -111,7 +111,7 @@ function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof heartb
     started_at: ctx.nowText
   });
   try {
-    const signals = collectSignals(input, ctx.projectID);
+    const signals = await collectSignals(input, ctx.projectID);
     recordHeartbeatEvent(input.database, ctx, "collect_signals", signals);
     const policy = evaluatePolicies(input.database, input, ctx);
     recordHeartbeatEvent(input.database, ctx, "evaluate_policies", policy);
@@ -138,9 +138,15 @@ function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof heartb
   }
 }
 
-function collectSignals(input: HeartbeatInput, projectID: string): HeartbeatSignals {
+async function collectSignals(input: HeartbeatInput, projectID: string): Promise<HeartbeatSignals> {
   if (input.collectSignals) return input.collectSignals({ database: input.database, now: input.now ?? new Date(), projectID });
   return collectProjectHeartbeatSignals(input.database, projectID, input.now ?? new Date());
+}
+
+function heartbeatLockKeys(ctx: ReturnType<typeof heartbeatContext>): string[] {
+  const keys = [`project:${ctx.projectID}`];
+  if (ctx.delegationID !== "") keys.push(`delegation:${ctx.projectID}:${ctx.delegationID}`);
+  return keys;
 }
 
 function evaluatePolicies(

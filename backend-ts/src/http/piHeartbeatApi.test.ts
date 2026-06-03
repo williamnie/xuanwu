@@ -58,6 +58,26 @@ describe("PI heartbeat API", () => {
       database.close();
     }
   });
+
+  test("returns skipped for concurrent project heartbeat HTTP calls", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const router = createDefaultRouter({ database });
+
+      const responses = await Promise.all([
+        request(router, "/api/projects/demo/pi/heartbeat/run-once", "POST", {}),
+        request(router, "/api/projects/demo/pi/heartbeat/run-once", "POST", {})
+      ]);
+      const bodies = await Promise.all(responses.map((response) => response.json() as Promise<Record<string, unknown>>));
+
+      expect(responses.map((response) => response.status)).toEqual([201, 201]);
+      expect(bodies.map((body) => body.status).sort()).toEqual(["completed", "skipped"]);
+      expect(bodies).toContainEqual(expect.objectContaining({ skip_reason: "heartbeat already running" }));
+    } finally {
+      database.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
