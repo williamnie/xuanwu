@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiAction, createPiDelegation, createPiHeartbeatEvent, createPiHeartbeatRun } from "../db/repositories/pi.ts";
+import { createPiAction, createPiDelegation, createPiHeartbeatRun } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -17,17 +17,14 @@ afterEach(async () => {
 });
 
 describe("PI Command Center API", () => {
-  test("aggregates mode, delegation, approval, heartbeat, and report signals", async () => {
+  test("aggregates only P11.01 mode, delegation, approval, and heartbeat card signals", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
-      insertIssue(database, "demo", "in_progress", "");
-      insertIssue(database, "demo", "failed", "missing approval");
       insertPiSettings(database, "demo");
       createPiDelegation(database, { project_id: "demo", status: "active", title: "Night window" });
       createPiAction(database, { action_type: "issue.enqueue", id: "act-1", project_id: "demo", status: "pending" });
       createPiHeartbeatRun(database, { id: "hb-1", kind: "project", project_id: "demo", status: "completed" });
-      createPiHeartbeatEvent(database, { event_type: "decide", heartbeat_id: "hb-1", project_id: "demo" });
 
       const response = await createDefaultRouter({ database }).handle(new Request(`${BASE_URL}/api/pi/command-center`));
       const body = await response.json() as Record<string, unknown>;
@@ -37,12 +34,15 @@ describe("PI Command Center API", () => {
       expect(body.overview).toMatchObject({
         active_delegations: 1,
         autonomous_projects: 1,
-        pending_approvals: 1,
-        running_issues: 1
+        pending_approvals: 1
       });
-      expect((body.pending_approvals as Array<Record<string, unknown>>)[0]).toMatchObject({ id: "act-1" });
-      expect((body.heartbeat as Record<string, unknown>).recent_events).toHaveLength(1);
-      expect((body.reports as Record<string, unknown>).failure_summary).toMatchObject({ count: 1 });
+      expect(body.heartbeat).toMatchObject({
+        latest_run: { id: "hb-1", status: "completed" },
+        status: "completed"
+      });
+      expect(body).not.toHaveProperty("projects");
+      expect(body).not.toHaveProperty("reports");
+      expect(body).not.toHaveProperty("audit_events");
     } finally {
       database.close();
     }
@@ -60,14 +60,6 @@ function insertProject(db: RunnerDatabase, id: string): void {
     `insert into projects (id, name, cwd, auto_run, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, 1, 1, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
-  );
-}
-
-function insertIssue(db: RunnerDatabase, projectID: string, status: string, error: string): void {
-  db.sqlite.run(
-    `insert into issues (project_id, title, status, error, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [projectID, `${status} issue`, status, error, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
   );
 }
 
