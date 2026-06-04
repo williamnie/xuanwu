@@ -235,7 +235,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' || currentPage === 'pi-chat' || currentPage === 'pi-command-center' ? 'in-sessions-page' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' || currentPage === 'pi-chat' ? 'in-sessions-page' : ''}`}>
       <ToastContainer />
       {sidebarCollapsed && (
         <button

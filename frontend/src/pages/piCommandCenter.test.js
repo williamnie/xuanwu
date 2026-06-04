@@ -7,6 +7,7 @@ const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', impor
 const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const pageUrl = new URL('./PiCommandCenter.jsx', import.meta.url);
 const pageSource = existsSync(pageUrl) ? readFileSync(pageUrl, 'utf8') : '';
+const sessionsClientCss = readFileSync(new URL('./sessions/SessionsClient.css', import.meta.url), 'utf8');
 
 test('PI Command Center is available as a first-class routed page', () => {
   assert.ok(existsSync(pageUrl), 'PiCommandCenter.jsx should exist');
@@ -36,4 +37,10 @@ test('PI Command Center keeps non-P11.02 framework placeholders read-only', () =
   assert.doesNotMatch(pageSource, /pauseProjectPiAutonomousMode|resumeProjectPiAutonomousMode/);
   assert.match(clientSource, /getPiCommandCenter: \(\) => request\('\/api\/pi\/command-center'\)/);
   assert.doesNotMatch(pageSource, /window\.confirm|window\.alert/);
+});
+
+test('PI Command Center keeps main content scrollable instead of inheriting sessions overflow lock', () => {
+  const appContainerMarkup = appSource.match(/<div className=\{`app-container[\s\S]*?`\}>/)?.[0] || '';
+  assert.match(sessionsClientCss, /\.in-sessions-page \.main-content[\s\S]*overflow: hidden !important/);
+  assert.doesNotMatch(appContainerMarkup, /currentPage === 'pi-command-center'/);
 });
