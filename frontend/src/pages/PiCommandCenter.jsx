@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, CheckCircle2, Command, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
+import PiDelegationsPanel from './PiDelegationsPanel';
 import './PiCommandCenter.css';
 
 const FRAMEWORK_SECTIONS = [
-  ['Delegations', 'P11.02 接入授权窗口列表、暂停/恢复与授权范围说明。'],
   ['Approvals', 'P11.03 接入 pending approvals 队列与审批决策。'],
   ['Heartbeat Timeline', 'P11.04 展示 heartbeat run/event 证据链。'],
   ['Policy', 'P11.05 接入项目 PI policy 编辑器。'],
@@ -22,6 +22,7 @@ export default function PiCommandCenter() {
       <section className="pi-command-grid" aria-label="PI Command Center status cards">
         {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
       </section>
+      <PiDelegationsPanel onChanged={state.reload} />
       <FrameworkPlaceholders />
     </div>
   );
@@ -46,9 +47,9 @@ function Header({ state }) {
   return (
     <section className="pi-command-hero">
       <div>
-        <span className="pi-command-kicker">PI OpenClaw P11.01</span>
+        <span className="pi-command-kicker">PI OpenClaw P11.02</span>
         <h1>Command Center</h1>
-        <p>Command Center 框架页：先集中展示 mode、heartbeat、delegation 与 pending approvals 状态卡片。</p>
+        <p>Command Center：集中展示 mode、heartbeat、delegation 与 pending approvals，并管理授权窗口。</p>
       </div>
       <div className="pi-command-hero-actions">
         <span className="pi-command-micro">{generatedAt(state.data)}</span>

@@ -16,20 +16,20 @@ test('PI Command Center is available as a first-class routed page', () => {
   assert.match(sidebarSource, /Command Center/);
 });
 
-test('PI Command Center renders P11.01 status cards with loading and error states', () => {
+test('PI Command Center renders P11 status cards with loading and error states', () => {
   for (const label of ['Mode', 'Heartbeat', 'Delegation', 'Pending approvals']) {
     assert.match(pageSource, new RegExp(label));
   }
+  assert.match(pageSource, /import PiDelegationsPanel from '\.\/PiDelegationsPanel'/);
+  assert.match(pageSource, /<PiDelegationsPanel onChanged=\{state\.reload\} \/>/);
   assert.match(pageSource, /pi-command-loading/);
   assert.match(pageSource, /pi-command-error/);
   assert.match(pageSource, /api\.getPiCommandCenter\(\)/);
 });
 
-test('PI Command Center framework avoids extra request fan-out and full interactions', () => {
-  assert.doesNotMatch(pageSource, /Promise\.all/);
+test('PI Command Center keeps non-P11.02 framework placeholders read-only', () => {
   assert.doesNotMatch(pageSource, /api\.getCodexUsage/);
   assert.doesNotMatch(pageSource, /piActionGateApi/);
-  assert.doesNotMatch(pageSource, /createPiDelegation|pausePiDelegation|resumePiDelegation/);
   assert.doesNotMatch(pageSource, /pauseProjectPiAutonomousMode|resumeProjectPiAutonomousMode/);
   assert.match(clientSource, /getPiCommandCenter: \(\) => request\('\/api\/pi\/command-center'\)/);
   assert.doesNotMatch(pageSource, /window\.confirm|window\.alert/);

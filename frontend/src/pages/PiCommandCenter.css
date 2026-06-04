@@ -167,3 +167,122 @@
     align-items: flex-start;
   }
 }
+
+.pi-delegations-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.pi-delegations-header p {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+.pi-delegations-form {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+}
+.pi-delegations-form label {
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.74rem;
+  font-weight: 800;
+  gap: 6px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.pi-delegations-wide {
+  grid-column: span 2;
+}
+.pi-delegations-form .btn {
+  min-height: 38px;
+}
+.pi-delegations-error,
+.pi-delegations-empty {
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  padding: 10px 12px;
+}
+.pi-delegations-error {
+  background: var(--error-bg);
+  border-color: rgba(239, 68, 68, 0.26);
+  color: var(--error);
+}
+.pi-delegations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pi-delegations-row {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+}
+.pi-delegations-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.pi-delegations-row-title,
+.pi-delegations-chips {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.pi-delegations-row-title strong {
+  color: var(--text-primary);
+}
+.pi-delegations-row p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0;
+}
+.pi-delegations-chips span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  min-width: 58px;
+  text-transform: uppercase;
+}
+.pi-delegations-chips code {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+}
+@media (max-width: 980px) {
+  .pi-delegations-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 680px) {
+  .pi-delegations-header,
+  .pi-delegations-row {
+    grid-template-columns: 1fr;
+  }
+  .pi-delegations-form,
+  .pi-delegations-row {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pi-delegations-wide {
+    grid-column: auto;
+  }
+}
