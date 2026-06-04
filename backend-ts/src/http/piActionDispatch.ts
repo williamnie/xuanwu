@@ -5,7 +5,10 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { applyIssueStateRepair } from "../pi/issueStateManager.ts";
+import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agentOrchestration.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
+import { getProject, type Project } from "../db/repositories/projects.ts";
+import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
 
 export type PiActionDispatchContext = {
@@ -32,7 +35,7 @@ export async function dispatchPiAction(
     case "agent.executor_assign":
       return updateIssue(context.database, positivePayloadID(payload, "issue_id"), objectPayload(payload.patch));
     case "agent.workflow_request":
-      return createIssue(context.database, payload);
+      return createWorkflowIssue(context, action, payload);
     case "needs_user.escalate":
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), {
         author: "agent",
@@ -43,6 +46,81 @@ export async function dispatchPiAction(
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+function createWorkflowIssue(
+  context: PiActionDispatchContext,
+  action: PiAction,
+  payload: Record<string, unknown>
+): unknown {
+  const issue = createIssue(context.database, workflowIssuePayload(context.database, action, payload));
+  if (issue.status === "todo") startAutoRunWorkflow(context, issue.project_id);
+  return issue;
+}
+
+function workflowIssuePayload(
+  db: RunnerDatabase,
+  action: PiAction,
+  payload: Record<string, unknown>
+): Record<string, unknown> {
+  const base = hasMaterializedWorkflowPayload(payload)
+    ? payload
+    : createAgentWorkflowProposal(db, workflowProject(db, action, payload), workflowInput(action, payload)).payload;
+  return shouldQueueWorkflow(base) ? { ...base, status: "todo" } : base;
+}
+
+function hasMaterializedWorkflowPayload(payload: Record<string, unknown>): boolean {
+  return cleanString(payload.project_id) !== "" && cleanString(payload.title) !== "" &&
+    cleanString(payload.description) !== "";
+}
+
+function workflowProject(db: RunnerDatabase, action: PiAction, payload: Record<string, unknown>): Project | undefined {
+  const projectID = cleanString(payload.project_id) || action.project_id;
+  return projectID === "" ? undefined : getProject(db, projectID) ?? undefined;
+}
+
+function workflowInput(action: PiAction, payload: Record<string, unknown>): AgentWorkflowInput {
+  const target = positiveInputID(payload.target_issue_id) || positiveInputID(payload.issue_id) || action.issue_id || undefined;
+  return {
+    agent_profile_id: cleanString(payload.agent_profile_id),
+    goal_id: cleanString(payload.goal_id),
+    instructions: cleanString(payload.instructions),
+    project_id: cleanString(payload.project_id) || action.project_id,
+    rationale: cleanString(payload.rationale) || action.rationale,
+    recommended_skill_intents: stringList(payload.recommended_skill_intents),
+    report_type: cleanString(payload.report_type),
+    required_skill_intents: stringList(payload.required_skill_intents),
+    role: cleanString(payload.role ?? payload.agent_role),
+    target_issue_id: target,
+    title: cleanString(payload.title),
+    verification_plan: cleanString(payload.verification_plan)
+  };
+}
+
+function shouldQueueWorkflow(payload: Record<string, unknown>): boolean {
+  const role = workflowRole(payload);
+  return role === "verifier" || role === "reviewer";
+}
+
+function workflowRole(payload: Record<string, unknown>): string {
+  return cleanString(payload.role ?? payload.agent_role) || cleanString(workflowSnapshot(payload).agent_role);
+}
+
+function workflowSnapshot(payload: Record<string, unknown>): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(cleanString(payload.workflow_snapshot_json) || "{}") as unknown;
+    return objectPayload(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function startAutoRunWorkflow(context: PiActionDispatchContext, projectID: string): void {
+  const project = getProject(context.database, projectID);
+  const providerID = project?.provider ?? "";
+  if ((project?.auto_run ?? 0) !== 1 || !isExecutorProviderId(providerID)) return;
+  if (!context.providers?.[providerID]?.capabilities.includes("issue_execution")) return;
+  startProjectLoop({ database: context.database, providers: context.providers }, project.id);
 }
 
 function parsePayload(action: PiAction): Record<string, unknown> {
@@ -62,6 +140,23 @@ function positivePayloadID(payload: Record<string, unknown>, key: string): numbe
   const id = payload[key];
   if (typeof id === "number" && Number.isSafeInteger(id) && id > 0) return id;
   throw new Error(`${key} is required`);
+}
+
+function positiveInputID(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
+  const parsed = Number.parseInt(cleanString(value), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(cleanString).filter(Boolean);
+  const text = cleanString(value);
+  if (text === "") return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed.map(cleanString).filter(Boolean);
+  } catch {}
+  return text.split(/\n|,/).map(cleanString).filter(Boolean);
 }
 
 async function steerSession(

@@ -50,6 +50,10 @@ describe("PI failed/pending/hold scanner", () => {
       ]);
       expect(findings[0]?.message).toContain("provider failed");
       expect(findings[1]?.message).toContain("waiting for user acceptance");
+      expect(findings[1]?.action_candidate).toMatchObject({
+        action_type: "agent.workflow_request",
+        payload: { role: "verifier", target_issue_id: pending }
+      });
       expect(findings[2]?.message).toContain("dirty worktree");
       const json = JSON.stringify(findings);
       expect(json).toContain("[redacted]");

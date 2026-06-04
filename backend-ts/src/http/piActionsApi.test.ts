@@ -233,7 +233,7 @@ describe("Bun PI actions API", () => {
       expect(getIssue(database, issueID)).toMatchObject({ agent_profile_id: "executor-codex" });
       expect(created).toMatchObject({
         agent_profile_id: "",
-        status: "triage",
+        status: "todo",
         title: expect.stringContaining(`Verifier: #${issueID}`)
       });
       expect(JSON.parse(created?.workflow_snapshot_json ?? "{}")).toMatchObject({
@@ -246,8 +246,6 @@ describe("Bun PI actions API", () => {
       database.close();
     }
   });
-
-
 
 });
 

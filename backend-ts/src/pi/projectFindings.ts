@@ -2,14 +2,14 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { defaultFindingCategory, defaultFindingReason, evaluateProjectFailedRetryPolicy, type FailedRetryDecision } from "./failedRetryPolicy.ts";
 import { matchFailurePattern } from "./failurePatterns.ts";
+import {
+  retryFindingCandidate,
+  staleSessionSteerCandidate,
+  verifierWorkflowCandidate,
+  type ProjectFindingActionCandidate
+} from "./projectFindingActions.ts";
 
 export type ProjectFindingCategory = "blocked" | "needs_user" | "transient" | "verification_needed";
-
-export type ProjectFindingActionCandidate = {
-  action_type: "issue.retry_proposal" | "session.steer_proposal";
-  payload: Record<string, string | number>;
-  rationale: string;
-};
 
 export type ProjectFindingNotification = {
   message: string;
@@ -202,13 +202,10 @@ function issueActionCandidate(
   category: ProjectFindingCategory,
   retryCandidate = category === "transient"
 ): ProjectFindingActionCandidate | undefined {
+  if (category === "verification_needed") return verifierWorkflowCandidate(integerValue(row.id));
   if (category !== "transient" || !retryCandidate) return undefined;
   const issueID = integerValue(row.id);
-  return {
-    action_type: "issue.retry_proposal",
-    payload: { issue_id: issueID },
-    rationale: `Retry issue #${issueID} after transient failure: ${redactFindingText(optionalString(row.auto_retry_reason))}`
-  };
+  return retryFindingCandidate(issueID, redactFindingText(optionalString(row.auto_retry_reason)));
 }
 
 function retryDecision(
@@ -247,11 +244,7 @@ function issueNotification(
 function staleActionCandidate(row: StaleIssueRow, issueID: number): ProjectFindingActionCandidate | undefined {
   const sessionKey = optionalString(row.session_key);
   if (sessionKey === "") return undefined;
-  return {
-    action_type: "session.steer_proposal",
-    payload: { issue_id: issueID, session_key: sessionKey },
-    rationale: `Ask user whether stale issue #${issueID} should be resumed, cancelled, or retried.`
-  };
+  return staleSessionSteerCandidate(issueID, sessionKey);
 }
 
 function isStale(row: StaleIssueRow, cutoff: Date): boolean {

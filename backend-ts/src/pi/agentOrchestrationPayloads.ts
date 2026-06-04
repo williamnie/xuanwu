@@ -78,8 +78,19 @@ function workflowDescription(
       : `Recommended provider: ${recommendation.provider}`,
     cleanString(input.report_type) ? `Report type: ${cleanString(input.report_type)}` : "",
     cleanString(input.instructions) ? `Instructions: ${cleanString(input.instructions)}` : "",
-    cleanString(input.verification_plan) ? `Verification plan: ${cleanString(input.verification_plan)}` : ""
+    cleanString(input.verification_plan) ? `Verification plan: ${cleanString(input.verification_plan)}` : "",
+    writeBackInstruction(role, target)
   ].filter(Boolean).join("\n");
+}
+
+function writeBackInstruction(role: AgentRole, target: Issue | null): string {
+  if (!target || (role !== "verifier" && role !== "reviewer")) return "";
+  return [
+    "Write-back requirement:",
+    `- Accept parent evidence with: codex-issue-runner issue accept --id ${target.id} --comment "<evidence>"`,
+    `- Request parent changes with: codex-issue-runner issue request-changes --id ${target.id} --comment "<gap>"`,
+    "- Do not close this workflow issue before writing the parent verification result."
+  ].join("\n");
 }
 
 function workflowTitle(role: AgentRole, target: Issue | null, input: AgentWorkflowInput): string {
