@@ -49,17 +49,15 @@ export default function PromptEditorReferences({ details = [], onRemove }) {
 function ContextInspector({ active, items }) {
   const warningCount = items.filter((item) => item.status === 'warning').length;
   const errorCount = items.filter((item) => item.status === 'error').length;
+  const label = referenceLabel(active);
+  const summary = active.summary || '等待上下文摘要';
   return (
-    <div className={`prompt-context-inspector ${active.status}`}>
-      <div className="prompt-context-inspector-head">
-        <span>Context inspector</span>
-        <span>{items.length} attached · {statusText(errorCount, warningCount)}</span>
-      </div>
-      <div className="prompt-context-inspector-body">
-        <strong>{referenceLabel(active)}</strong>
-        <span>{active.summary || '等待上下文摘要'}</span>
-        {active.message && <em>{active.message}</em>}
-      </div>
+    <div className={`prompt-context-inspector ${active.status}`} role="status">
+      <span className="prompt-context-inspector-title">工作上下文</span>
+      <strong>{label}</strong>
+      <span className="prompt-context-inspector-summary" title={summary}>{summary}</span>
+      {active.message && <em title={active.message}>{active.message}</em>}
+      <span className="prompt-context-inspector-status">{items.length} attached · {statusText(errorCount, warningCount)}</span>
     </div>
   );
 }

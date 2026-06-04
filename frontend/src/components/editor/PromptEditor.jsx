@@ -120,7 +120,7 @@ export default function PromptEditor({
     return <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />;
   }
 
-  return (
+  const editorShell = (
     <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''} ${editor.isFocused ? 'focused' : ''}`}>
       {!isComposer && !hideToolbar && <PromptEditorToolbar editor={editor} onPickImage={() => fileInputRef.current?.click()} uploading={uploading} />}
       <EditorContent editor={editor} className={`prompt-editor-content ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />
@@ -135,12 +135,6 @@ export default function PromptEditor({
             });
             setSuggestionMenu(null);
           }}
-        />
-      )}
-      {isComposer && (
-        <PromptEditorReferences
-          details={referenceDetails}
-          onRemove={onRemoveReference}
         />
       )}
       {isComposer && (
@@ -171,6 +165,18 @@ export default function PromptEditor({
           event.target.value = '';
         }}
       />
+    </div>
+  );
+
+  if (!isComposer) return editorShell;
+
+  return (
+    <div className="prompt-editor-composer-stack">
+      <PromptEditorReferences
+        details={referenceDetails}
+        onRemove={onRemoveReference}
+      />
+      {editorShell}
     </div>
   );
 }
