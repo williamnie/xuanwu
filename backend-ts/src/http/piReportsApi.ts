@@ -2,10 +2,17 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getPiReportRecord, listPiReportRecords } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import { buildPiReport } from "../pi/reports.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { providerStatus } from "./systemStatus.ts";
 
-type PiReportsContext = { bus?: EventBus; codexSessionsDir?: string; database: RunnerDatabase };
+type PiReportsContext = {
+  bus?: EventBus;
+  codexSessionsDir?: string;
+  config?: RunnerConfig;
+  database: RunnerDatabase;
+};
 
 export function registerPiReportRoutes(router: Router, context: PiReportsContext): void {
   router.get("/api/pi/reports", (request) => json(listReports(context, request)));
@@ -52,11 +59,16 @@ async function generateReport(context: PiReportsContext, request: Request): Prom
     delegationID: cleanString(body.delegation_id),
     heartbeatID: cleanString(body.heartbeat_id),
     projectID: cleanString(body.project_id),
+    providerStatuses: providerStatuses(context),
     since: cleanString(body.since),
     source: cleanString(body.source),
     type: cleanString(body.type) || "manual",
     until: cleanString(body.until)
   });
+}
+
+function providerStatuses(context: PiReportsContext): Array<Record<string, unknown>> | undefined {
+  return context.config ? providerStatus(context.config) : undefined;
 }
 
 async function objectBody(request: Request): Promise<Record<string, unknown>> {

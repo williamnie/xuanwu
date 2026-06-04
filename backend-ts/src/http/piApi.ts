@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import type { EventBus } from "../events/bus.ts";
 import {
   createPiAgent,
@@ -29,7 +30,12 @@ import { registerPiReportRoutes } from "./piReportsApi.ts";
 import { registerPiSkillRoutes } from "./piSkillsApi.ts";
 import type { Router } from "./router.ts";
 
-type PiApiContext = { bus?: EventBus; codexSessionsDir?: string; database: RunnerDatabase };
+type PiApiContext = {
+  bus?: EventBus;
+  codexSessionsDir?: string;
+  config?: RunnerConfig;
+  database: RunnerDatabase;
+};
 
 type SettingsPatch = Partial<Pick<ProjectPiSettings,
   "auto_enqueue" | "auto_manage" | "auto_triage" | "max_actions_per_cycle" |

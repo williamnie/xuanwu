@@ -29,7 +29,7 @@ const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.st
 const providers = executorProviders(config);
 const bus = new EventBus();
 const server = await startServer(config, { bus, database, providers });
-void startAutoRunLoops(database, providers, bus, config.codexSessionsDir);
+void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config);
 
 console.log(JSON.stringify({
   ok: true,
@@ -55,7 +55,8 @@ async function startAutoRunLoops(
   database: Awaited<ReturnType<typeof openDatabase>>,
   providers: ReturnType<typeof executorProviders>,
   bus: EventBus,
-  codexSessionsDir: string
+  codexSessionsDir: string,
+  config: ReturnType<typeof loadConfig>
 ): Promise<void> {
   await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
@@ -67,6 +68,7 @@ async function startAutoRunLoops(
   createPiAutoManageScheduler({
     bus,
     codexSessionsDir,
+    config,
     database,
     onError: (error) => {
       console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));

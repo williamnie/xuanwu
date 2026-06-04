@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { deleteIssue, enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
@@ -32,6 +33,7 @@ import type { Router } from "./router.ts";
 type ReadApiContext = {
   bus?: EventBus;
   codexSessionsDir?: string;
+  config?: RunnerConfig;
   database: RunnerDatabase;
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;

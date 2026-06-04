@@ -10,18 +10,19 @@ import {
   type PiActionEvent,
   type PiHeartbeatRun
 } from "../db/repositories/pi.ts";
-import { getProject, listProjects, type Project } from "../db/repositories/projects.ts";
+import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
-import { readCodexUsage } from "../usage/codex.ts";
-import type { UsageIssueRef, UsageProjectRef } from "../usage/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { diagnoseIssueState, type IssueStateDiagnostic } from "./issueStateManager.ts";
 import { buildNightRunSummary } from "./nightRunSummary.ts";
+import { reportWarnings, summarizeProviderHealth } from "./reportHealth.ts";
 import { issueReportSummary } from "./reportIssueSummary.ts";
+import { buildUsageCostSummary } from "./reportUsage.ts";
 
 export type PiReportInput = {
   bus?: Pick<EventBus, "publish">; codexSessionsDir?: string; database: RunnerDatabase;
   delegationID?: string; heartbeatID?: string; now?: Date; projectID?: string;
+  providerStatuses?: Array<Record<string, unknown>>;
   since?: string; source?: string; type?: string; until?: string;
 };
 export type PiReport = Record<string, unknown> & {
@@ -77,6 +78,9 @@ function assembleReport(db: RunnerDatabase, input: {
   const completed = input.issues.filter((issue) => issue.status === "done" && !gapIDs.has(issue.id));
   const failed = input.issues.filter((issue) => issue.status === "failed");
   const escalations = blockedEscalations(input.diagnostics);
+  const providerHealth = summarizeProviderHealth(input.project, input.scope.providerStatuses);
+  const warnings = reportWarnings(providerHealth, input.usage);
+  const usageWarnings = warnings.filter((item) => item.source === "usage_cost").length;
   const issueSummaries = input.issues.map(issueReportSummary);
   const completedSummaries = completed.map(issueReportSummary);
   const failedSummaries = failed.map(issueReportSummary);
@@ -96,14 +100,16 @@ function assembleReport(db: RunnerDatabase, input: {
     notification: notificationPlan(db, input.project?.id ?? ""),
     project_id: input.project?.id ?? "",
     project_name: safeText(input.project?.name ?? "All projects"),
-    provider_health: providerHealth(input.project),
+    provider_health: providerHealth,
     summary: {
       blocked: nightSummary.issue_categories.blocked.length,
       completed: completed.length,
       failed: failed.length,
       needs_user: nightSummary.issue_categories.needs_user.length,
       total: input.issues.length,
-      verification_gaps: gaps.length
+      usage_warnings: usageWarnings,
+      verification_gaps: gaps.length,
+      warnings: warnings.length
     },
     summary_text_zh: nightSummary.summary_text_zh,
     source: input.scope.source,
@@ -111,6 +117,7 @@ function assembleReport(db: RunnerDatabase, input: {
     type: input.type,
     usage_cost: input.usage,
     verification_gaps: gaps,
+    warnings,
     window: input.window
   };
 }
@@ -136,7 +143,8 @@ function nightRunSummary(
 }
 
 type ReportScope = {
-  delegationID: string; heartbeatID: string; projectID: string; source: string;
+  delegationID: string; heartbeatID: string; projectID: string;
+  providerStatuses?: Array<Record<string, unknown>>; source: string;
 };
 
 function reportIssues(
@@ -205,43 +213,7 @@ function heartbeatMatches(event: PiActionEvent, scope: ReportScope): boolean {
 }
 
 async function usageSummary(input: PiReportInput, projectID: string): Promise<Record<string, unknown>> {
-  try {
-    const root = clean(input.codexSessionsDir);
-    if (root === "") throw new Error("codex sessions dir 未配置");
-    const report = await readCodexUsage({ root, options: { issues: usageIssues(input.database), projects: usageProjects(input.database) } });
-    const project = projectUsage(report, projectID);
-    const total = projectID === "" ? totalTokens(report) : totalTokens(project);
-    return { status: "available", source: "/api/usage/codex", total_tokens: total, project_usage: project };
-  } catch (error) {
-    return { error: safeText(error instanceof Error ? error.message : String(error)), status: "not_configured", total_tokens: 0 };
-  }
-}
-
-function usageProjects(db: RunnerDatabase): UsageProjectRef[] {
-  return listProjects(db).map((project) => ({ cwd: project.cwd, id: project.id, name: project.name }));
-}
-
-function usageIssues(db: RunnerDatabase): UsageIssueRef[] {
-  return listIssues(db).flatMap((issue) => {
-    const sessionID = issue.codex_thread_id || issue.latest_run?.provider_session_id || issue.latest_run?.codex_thread_id || "";
-    return sessionID ? [{ id: issue.id, project_id: issue.project_id, session_id: sessionID, status: issue.status, title: issue.title }] : [];
-  });
-}
-
-function projectUsage(report: Record<string, unknown>, projectID: string): Record<string, unknown> | undefined {
-  const projects = Array.isArray(report.project_usage) ? report.project_usage as Array<Record<string, unknown>> : [];
-  return projects.find((item) => item.id === projectID);
-}
-
-function totalTokens(value: Record<string, unknown> | undefined): number {
-  const usage = (value?.usage ?? value?.summary) as Record<string, unknown> | undefined;
-  const allTime = usage?.all_time as Record<string, unknown> | undefined;
-  return numberValue(usage?.total_tokens) || numberValue(allTime?.total_tokens);
-}
-
-function providerHealth(project: Project | null): Record<string, unknown> {
-  const warnings = project?.provider ? [] : ["provider missing"];
-  return { provider: project?.provider ?? "", status: warnings.length > 0 ? "warning" : "configured", warnings };
+  return buildUsageCostSummary({ codexSessionsDir: input.codexSessionsDir, database: input.database, projectID });
 }
 
 function notificationPlan(db: RunnerDatabase, projectID: string): Record<string, unknown> {
@@ -272,6 +244,7 @@ function resolveReportScope(input: PiReportInput): ReportScope {
     delegationID,
     heartbeatID: clean(input.heartbeatID),
     projectID: clean(input.projectID) || (delegation?.project_id ?? ""),
+    providerStatuses: input.providerStatuses,
     source: clean(input.source) || (delegationID ? "delegation" : "manual")
   };
 }
@@ -279,10 +252,6 @@ function resolveReportScope(input: PiReportInput): ReportScope {
 function inWindow(value: string, window: { since: string; until: string }): boolean {
   const time = Date.parse(value);
   return Number.isFinite(time) && time >= Date.parse(window.since) && time <= Date.parse(window.until);
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function safeText(value: string): string {

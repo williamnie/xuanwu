@@ -113,7 +113,7 @@ function codexStatus(config: RunnerConfig): Record<string, unknown> {
   };
 }
 
-function providerStatus(config: RunnerConfig): Array<{
+export function providerStatus(config: RunnerConfig): Array<{
   available: boolean;
   capabilities: string[];
   cli: Record<string, unknown>;

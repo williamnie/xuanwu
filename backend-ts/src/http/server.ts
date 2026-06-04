@@ -17,6 +17,7 @@ type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedA
 type DefaultRouterOptions = {
   bus?: EventBus;
   codexSessionsDir?: string;
+  config?: RunnerConfig;
   database?: RunnerDatabase;
   interruptTimeoutMs?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -30,6 +31,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   if (runtime.database) registerReadApiRoutes(router, {
     bus,
     codexSessionsDir: runtime.codexSessionsDir,
+    config: runtime.config,
     database: runtime.database,
     interruptTimeoutMs: runtime.interruptTimeoutMs,
     providers: runtime.providers
@@ -44,7 +46,7 @@ export async function startServer(
 ): Promise<ReturnType<typeof Bun.serve>> {
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);
-  const activeRouter = router ?? createDefaultRouter({ ...runtime, codexSessionsDir: config.codexSessionsDir });
+  const activeRouter = router ?? createDefaultRouter({ ...runtime, codexSessionsDir: config.codexSessionsDir, config });
   registerSystemStatusRoute(activeRouter, { authToken, config, ...runtime });
   registerSystemLogsRoute(activeRouter, { config });
   return Bun.serve({

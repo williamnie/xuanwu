@@ -1,9 +1,11 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createPiAction, createPiActionEvent, createPiDelegation, isPiHeartbeatPaused, updatePiAction } from "../db/repositories/pi.ts";
 import type { CronTask } from "../db/repositories/cronTasks.ts";
 import type { EventBus } from "../events/bus.ts";
 import { syncCodexProjects } from "../http/projectSync.ts";
+import { providerStatus } from "../http/systemStatus.ts";
 import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
 import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
 import { publishPiActionEvent } from "../pi/actionEngine.ts";
@@ -17,6 +19,7 @@ export type ScheduleActionResult = { detail: string; projectIDs?: string[]; skip
 export type ScheduleActionInput = {
   bus?: EventBus;
   codexSessionsDir?: string;
+  config?: RunnerConfig;
   database: RunnerDatabase;
   now: Date;
   runProjectCycle?: PiAutoManageProjectCycle;
@@ -182,6 +185,7 @@ async function generateReport(input: ScheduleActionInput, task: CronTask, now: D
     database: input.database,
     now,
     projectID: task.project_id,
+    providerStatuses: input.config ? providerStatus(input.config) : undefined,
     since: cleanString(payload.since),
     source: "cron_schedule",
     type: cleanString(payload.type) || "daily_project_digest",

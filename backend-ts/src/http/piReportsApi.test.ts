@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -83,7 +84,12 @@ describe("PI reports API", () => {
         code: "done_missing_verification_evidence",
         issue_id: weakDone
       })]);
-      expect(body.usage_cost).toMatchObject({ status: "available", total_tokens: 15 });
+      expect(body.usage_cost).toMatchObject({
+        events_scanned: 1,
+        status: "available",
+        summary: { all_time: { total_tokens: 15 } },
+        total_tokens: 15
+      });
       expect(body.provider_health).toMatchObject({ warnings: [] });
       expect(body.notification.channels).toMatchObject({ mobile: false, sse: true, webhook: false });
 
@@ -101,6 +107,48 @@ describe("PI reports API", () => {
       const detail = await router.handle(new Request(`${BASE_URL}/api/pi/reports/${body.report_id}`));
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({ report_id: body.report_id, project_id: "demo" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("warns when the selected provider is unavailable without leaking provider env", async () => {
+    const root = await tempDir("codex-runner-pi-reports-health-");
+    const database = await openDatabase({ stateDir: join(root, "state") });
+    const sessionsDir = await tempDir("codex-runner-pi-reports-empty-usage-");
+    try {
+      insertProject(database, "demo");
+      const config = buildConfig({
+        codexCommand: "missing-codex-for-pi-report",
+        codexEnv: "CODEX_API_KEY=report-secret,SAFE_ENV=ok",
+        stateDir: join(root, "runtime")
+      });
+      const router = createDefaultRouter({ codexSessionsDir: sessionsDir, config, database });
+
+      const response = await request(router, "/api/pi/reports/generate", {
+        project_id: "demo",
+        since: "2026-06-03T00:00:00Z",
+        until: "2026-06-04T00:00:00Z"
+      });
+      const text = await response.text();
+      const body = JSON.parse(text) as Record<string, any>;
+
+      expect(response.status).toBe(201);
+      expect(body.provider_health).toMatchObject({
+        available: false,
+        provider: "codex",
+        status: "warning"
+      });
+      expect(body.provider_health.warnings).toEqual([expect.objectContaining({
+        code: "provider_unavailable"
+      })]);
+      expect(body.warnings).toEqual([expect.objectContaining({
+        code: "provider_unavailable"
+      })]);
+      expect(text).not.toContain("report-secret");
+      expect(text).not.toContain("CODEX_API_KEY");
+      expect(text).not.toContain("SAFE_ENV");
+      expect(text).not.toContain("missing-codex-for-pi-report");
     } finally {
       database.close();
     }

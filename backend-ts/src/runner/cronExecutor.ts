@@ -1,4 +1,5 @@
 import { claimDueCronTasks } from "../db/repositories/cronTaskClaims.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import { recordCronTaskError, recordCronTaskSkip, recordCronTaskSuccess } from "../db/repositories/cronTaskResults.ts";
 import type { CronTask } from "../db/repositories/cronTasks.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -14,6 +15,7 @@ export type CronExecutorResult = { executed: number; failed: number; scanned: nu
 export type CronExecutorInput = ProjectLoopRuntime & {
   bus?: EventBus;
   codexSessionsDir?: string;
+  config?: RunnerConfig;
   now?: Date;
   runProjectCycle?: PiAutoManageProjectCycle;
   startProjectLoop?: (runtime: ProjectLoopRuntime, projectID: string) => void;
@@ -75,6 +77,7 @@ async function executeCronAction(input: CronExecutorInput, task: CronTask, now: 
   return await dispatchScheduleAction({
     bus: input.bus,
     codexSessionsDir: input.codexSessionsDir,
+    config: input.config,
     database: input.database,
     now,
     runProjectCycle: input.runProjectCycle
