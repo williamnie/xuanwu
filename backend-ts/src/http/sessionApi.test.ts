@@ -100,6 +100,63 @@ describe("Bun Sessions API compatibility", () => {
       database.close();
     }
   });
+
+  test("filters indexed sessions by role without breaking PI session reads", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    try {
+      upsertAgentSession(database, {
+        provider: "pi-sdk",
+        provider_session_id: "conv-1",
+        agent_role: "pi_manager",
+        project_id: "demo",
+        title: "PI manager",
+        raw_ref: { conversation_id: "conv-1" },
+        status: "active"
+      });
+      upsertAgentSession(database, {
+        provider: "codex",
+        provider_session_id: "thread-verifier",
+        agent_role: "verifier",
+        project_id: "demo",
+        issue_id: 260,
+        status: "running"
+      });
+
+      const router = createDefaultRouter({ database, providers: { codex: provider } });
+      const verifierList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=verifier`));
+      const piList = await router.handle(new Request(`${BASE_URL}/api/sessions?role=pi_manager`));
+      const piDetail = await router.handle(new Request(`${BASE_URL}/api/sessions/pi-sdk:conv-1`));
+
+      expect(verifierList.status).toBe(200);
+      expect(await verifierList.json()).toMatchObject({
+        data: [{
+          agent_role: "verifier",
+          id: "codex:thread-verifier",
+          issue_id: 260,
+          provider_session_id: "thread-verifier"
+        }]
+      });
+      expect(piList.status).toBe(200);
+      expect(await piList.json()).toMatchObject({
+        data: [{
+          agent_role: "pi_manager",
+          id: "pi-sdk:conv-1",
+          provider: "pi-sdk",
+          provider_session_id: "conv-1"
+        }]
+      });
+      expect(piDetail.status).toBe(200);
+      expect(await piDetail.json()).toMatchObject({
+        agent_role: "pi_manager",
+        id: "pi-sdk:conv-1",
+        raw_ref: "{\"conversation_id\":\"conv-1\"}"
+      });
+      expect(provider.calls).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
 });
 
 class SessionsProvider implements ExecutorProvider {

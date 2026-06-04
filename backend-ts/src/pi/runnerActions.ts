@@ -70,7 +70,7 @@ type SkillReadInput = { id: string };
 type SkillRecommendInput = { description?: string; project_id?: string; title?: string };
 type SkillIntentAuditInput = { issue_id: number; issue_run_id?: string; used_skill_intents?: string[] };
 type ProjectStatusInput = { project_id?: string };
-type SessionListInput = { project_id?: string; provider?: string };
+type SessionListInput = { project_id?: string; provider?: string; role?: string };
 type SessionReadSummaryInput = { session_key: string };
 type SessionSteerProposalInput = { prompt: string; rationale?: string; session_key: string };
 
@@ -149,7 +149,7 @@ function safeListSessions(db: RunnerDatabase, context: PiRunnerActionContext, in
   const filter = normalizeSessionFilter(input, context);
   return executeSafePiAction(db, context, {
     actionType: "session.list",
-    payload: cleanObject({ project_id: filter.projectId, provider: filter.provider }),
+    payload: cleanObject({ project_id: filter.projectId, provider: filter.provider, role: filter.role }),
     projectID: filter.projectId,
     execute: () => ({ items: listAgentSessions(db, filter) })
   });
@@ -311,7 +311,8 @@ function normalizeIssueFilter(input: IssueListInput, context: PiRunnerActionCont
 function normalizeSessionFilter(input: SessionListInput, context: PiRunnerActionContext) {
   return {
     projectId: cleanString(input.project_id) || (context.project?.id ?? ""),
-    provider: cleanString(input.provider)
+    provider: cleanString(input.provider),
+    role: cleanString(input.role)
   };
 }
 

@@ -59,7 +59,8 @@ describe("PI runner action tools", () => {
       const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
       const tools = createPiRunnerActionTools(actions);
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Queue me" });
-      insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-1" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "verifier", sessionKey: "codex:thread-1" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "reporter", sessionKey: "codex:thread-2" });
 
       const createIssue = await runTool(tools, "issue_create_proposal", {
         description: "New scoped issue",
@@ -139,12 +140,13 @@ describe("PI runner action tools", () => {
     try {
       const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "todo", title: "Read me" });
-      insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-1" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "verifier", sessionKey: "codex:thread-1" });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, role: "reporter", sessionKey: "codex:thread-2" });
 
       expect(actions.listIssues({ status: "todo" })).toMatchObject({ items: [{ id: issueID, title: "Read me" }] });
       expect(actions.readIssue({ id: issueID })).toMatchObject({ id: issueID, title: "Read me" });
       expect(projectIDs(actions.listProjects({}))).toContain(fixture.project.id);
-      expect(sessionKeys(actions.listSessions({}))).toEqual(["codex:thread-1"]);
+      expect(sessionKeys(actions.listSessions({ role: "verifier" }))).toEqual(["codex:thread-1"]);
       expect(actions.readSessionSummary({ session_key: "codex:thread-1" })).toMatchObject({
         progress: expect.objectContaining({ progress_state: "active" })
       });
@@ -370,14 +372,14 @@ function insertIssue(db: RunnerDatabase, input: { projectID: string; status: str
   if (!row) throw new Error("missing issue id");
   return row.id;
 }
-function insertAgentSession(db: RunnerDatabase, input: { projectID: string; sessionKey: string }): void {
+function insertAgentSession(db: RunnerDatabase, input: { projectID: string; role?: string; sessionKey: string }): void {
   const [, sessionID] = input.sessionKey.split(":");
   db.sqlite.run(
     `insert into agent_sessions
-      (session_key, provider, provider_session_id, project_id, title, status, raw_ref, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (session_key, provider, provider_session_id, agent_role, project_id, title, status, raw_ref, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      input.sessionKey, "codex", sessionID, input.projectID, "Thread 1", "running",
+      input.sessionKey, "codex", sessionID, input.role ?? "", input.projectID, "Thread 1", "running",
       '{"provider_turn_id":"turn-1"}', "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
     ]
   );

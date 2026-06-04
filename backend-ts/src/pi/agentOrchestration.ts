@@ -1,3 +1,4 @@
+import { EXECUTION_AGENT_ROLES, isExecutionAgentRole, normalizeExecutionAgentRole, type ExecutionAgentRole } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentProfile, listAgentProfiles, type AgentProfile } from "../db/repositories/agentProfiles.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
@@ -5,8 +6,8 @@ import { getProject, ProjectNotFoundError, type Project } from "../db/repositori
 import { mergeSkillIntents, parseSkillIntentList } from "../skills/intents.ts";
 import { needsUserComment, workflowIssuePayload } from "./agentOrchestrationPayloads.ts";
 
-export const AGENT_ROLES = ["executor", "verifier", "reviewer", "reporter"] as const;
-export type AgentRole = (typeof AGENT_ROLES)[number];
+export const AGENT_ROLES = EXECUTION_AGENT_ROLES;
+export type AgentRole = ExecutionAgentRole;
 
 export type AgentRecommendationInput = {
   agent_profile_id?: string;
@@ -248,13 +249,11 @@ function roleRequiredSkills(role: AgentRole): string[] {
 }
 
 function normalizeAgentRole(value: unknown): AgentRole {
-  const role = cleanString(value) || "executor";
-  if (isAgentRole(role)) return role;
-  throw new Error("agent role 不合法");
+  return normalizeExecutionAgentRole(value);
 }
 
 function isAgentRole(value: string): value is AgentRole {
-  return (AGENT_ROLES as readonly string[]).includes(value);
+  return isExecutionAgentRole(value);
 }
 
 function inputSkill(input: AgentRecommendationInput, key: "recommended_skill_intents" | "required_skill_intents"): unknown {

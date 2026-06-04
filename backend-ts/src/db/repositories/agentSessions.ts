@@ -1,3 +1,4 @@
+import { normalizeAgentSessionRole } from "../../agents/roles.ts";
 import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 
@@ -9,7 +10,7 @@ export type AgentSession = {
 export type AgentSessionInput = Partial<Omit<AgentSession, "created_at" | "raw_ref" | "session_key" | "updated_at">> & {
   provider: string; provider_session_id: string; raw_ref?: unknown;
 };
-export type AgentSessionFilter = { projectId?: string; provider?: string };
+export type AgentSessionFilter = { projectId?: string; provider?: string; role?: string };
 
 type AgentSessionRow = Record<keyof AgentSession, unknown>;
 const SESSION_COLUMNS = `session_key, provider, provider_session_id, agent_role,
@@ -55,7 +56,7 @@ function normalizeSessionInput(input: AgentSessionInput): AgentSession {
   if (providerSessionID === "") throw new Error("provider_session_id is required");
   return {
     session_key: `${provider}:${providerSessionID}`, provider, provider_session_id: providerSessionID,
-    agent_role: cleanString(input.agent_role), project_id: cleanString(input.project_id),
+    agent_role: normalizeAgentSessionRole(input.agent_role), project_id: cleanString(input.project_id),
     issue_id: positiveOrZero(input.issue_id), title: cleanString(input.title),
     preview: cleanString(input.preview), status: cleanString(input.status),
     raw_ref: JSON.stringify(input.raw_ref ?? {}), created_at: "", updated_at: ""
@@ -67,6 +68,7 @@ function buildSessionListQuery(filter: AgentSessionFilter): { args: string[]; sq
   const args: string[] = [];
   addFilter(conditions, args, "provider=?", filter.provider);
   addFilter(conditions, args, "project_id=?", filter.projectId);
+  addFilter(conditions, args, "agent_role=?", normalizeAgentSessionRole(filter.role));
   const where = conditions.length > 0 ? ` where ${conditions.join(" and ")}` : "";
   return { args, sql: `select ${SESSION_COLUMNS} from agent_sessions${where} order by updated_at desc, session_key asc` };
 }

@@ -70,4 +70,46 @@ describe("agent session repository", () => {
       db.close();
     }
   });
+
+  test("expresses PI and worker roles and filters sessions by role", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      upsertAgentSession(db, {
+        provider: "pi-sdk",
+        provider_session_id: "conv-1",
+        agent_role: "pi_manager",
+        project_id: "demo",
+        title: "PI manager"
+      });
+      upsertAgentSession(db, {
+        provider: "codex",
+        provider_session_id: "thread-verifier",
+        agent_role: "verifier",
+        project_id: "demo",
+        issue_id: 260
+      });
+      upsertAgentSession(db, {
+        provider: "codex",
+        provider_session_id: "thread-reporter",
+        agent_role: "reporter",
+        project_id: "demo"
+      });
+
+      expect(listAgentSessions(db, { role: "pi_manager" }).map((session) => session.session_key)).toEqual([
+        "pi-sdk:conv-1"
+      ]);
+      expect(listAgentSessions(db, { projectId: "demo", role: "verifier" })).toMatchObject([{
+        agent_role: "verifier",
+        issue_id: 260,
+        session_key: "codex:thread-verifier"
+      }]);
+      expect(() => upsertAgentSession(db, {
+        provider: "codex",
+        provider_session_id: "thread-unknown",
+        agent_role: "planner"
+      })).toThrow("agent role 不合法");
+    } finally {
+      db.close();
+    }
+  });
 });

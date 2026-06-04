@@ -1,4 +1,5 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
@@ -29,7 +30,6 @@ import type { Router } from "./router.ts";
 type PiConversationContext = { bus?: EventBus; database: RunnerDatabase };
 
 const PI_SESSION_PROVIDER = "pi-sdk";
-const PI_SESSION_ROLE = "pi_manager";
 const activePiRuns = new Map<string, PiRuntimeSession["session"]>();
 
 export function registerPiConversationRoutes(router: Router, context: PiConversationContext): void {
@@ -209,7 +209,7 @@ function persistPiSessionIndex(
   upsertAgentSession(db, {
     provider: PI_SESSION_PROVIDER,
     provider_session_id: conversation.pi_session_id,
-    agent_role: PI_SESSION_ROLE,
+    agent_role: PI_MANAGER_ROLE,
     project_id: conversation.project_id,
     title: conversation.title,
     preview: "",

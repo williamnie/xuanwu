@@ -1,3 +1,4 @@
+import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
@@ -33,7 +34,6 @@ type ProjectPiCycleInput = { maxActions?: number; projectId: string };
 type ProjectPiControlAction = "pause" | "resume";
 
 const PI_SESSION_PROVIDER = "pi-sdk";
-const PI_SESSION_ROLE = "pi_manager";
 const activeProjectPiRuns = new Map<string, PiRuntimeSession["session"] | "pending">();
 
 export function registerPiProjectControlRoutes(router: Router, context: PiProjectControlContext): void {
@@ -199,7 +199,7 @@ function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation,
   upsertAgentSession(db, {
     provider: PI_SESSION_PROVIDER,
     provider_session_id: conversation.pi_session_id,
-    agent_role: PI_SESSION_ROLE,
+    agent_role: PI_MANAGER_ROLE,
     project_id: project.id,
     title: conversation.title,
     preview: "",

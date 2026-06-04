@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { getAgentSession, listAgentSessions, upsertAgentSession, type AgentSession } from "../db/repositories/agentSessions.ts";
 import { getProject, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { lastSessionProject } from "../db/repositories/preferences.ts";
 import { interruptSession } from "../runner/interrupt.ts";
@@ -35,6 +35,8 @@ export function registerSessionRoutes(router: Router, context: SessionApiContext
 }
 
 async function listSessions(context: SessionApiContext, request: Request) {
+  const indexed = indexedSessionList(context, request);
+  if (indexed) return indexed;
   const result = await codexProvider(context).listSessions?.(sessionListInput(request));
   if (!result) throw new Error('provider "codex" 不支持 capability "sessions"');
   return result;
@@ -48,6 +50,8 @@ async function createSession(context: SessionApiContext, body: Record<string, un
 }
 
 async function readSession(context: SessionApiContext, rawSessionID: string) {
+  const indexed = indexedSessionDetail(context.database, rawSessionID);
+  if (indexed) return indexed;
   const result = await codexProvider(context).readSession?.(parseSessionID(rawSessionID));
   if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
   return result;
@@ -70,6 +74,18 @@ function codexProvider(context: SessionApiContext): ExecutorProvider {
 function sessionListInput(request: Request): { cursor: string; limit: number } {
   const params = new URL(request.url).searchParams;
   return { cursor: cleanParam(params.get("cursor")), limit: sessionLimit(params.get("limit")) };
+}
+
+function indexedSessionList(context: SessionApiContext, request: Request): { data: Array<Record<string, unknown>>; nextCursor: string } | null {
+  const params = new URL(request.url).searchParams;
+  const filter = {
+    projectId: cleanParam(params.get("project_id") || params.get("projectId")),
+    provider: cleanParam(params.get("provider")),
+    role: cleanParam(params.get("role") || params.get("agent_role"))
+  };
+  if (!filter.projectId && !filter.provider && !filter.role) return null;
+  const data = listAgentSessions(context.database, filter).map(publicAgentSession);
+  return { data, nextCursor: "" };
 }
 
 function sessionCreateInput(context: SessionApiContext, body: Record<string, unknown>): SessionCreateInput {
@@ -133,6 +149,21 @@ function parseSessionID(rawSessionID: string): string {
   const provider = rawSessionID.slice(0, separator).trim();
   if (provider !== "codex") throw new Error("session provider 暂不支持");
   return rawSessionID.slice(separator + 1).trim();
+}
+
+function indexedSessionDetail(db: RunnerDatabase, rawSessionID: string): Record<string, unknown> | null {
+  const separator = rawSessionID.indexOf(":");
+  if (separator < 0) return null;
+  if (rawSessionID.slice(0, separator).trim() === "codex") return null;
+  return publicAgentSessionOrNull(getAgentSession(db, rawSessionID));
+}
+
+function publicAgentSessionOrNull(session: AgentSession | null): Record<string, unknown> | null {
+  return session ? publicAgentSession(session) : null;
+}
+
+function publicAgentSession(session: AgentSession): Record<string, unknown> {
+  return { ...session, id: session.session_key };
 }
 
 function projectForSession(context: SessionApiContext, projectId: string): Project | null {

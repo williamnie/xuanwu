@@ -193,7 +193,7 @@ function projectActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
 function sessionActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
     actionTool("session_list", "Session List", "List runner-observed sessions through the action layer.",
-      Type.Object({ project_id: optionalString, provider: optionalString }, objectOptions), actions.listSessions),
+      Type.Object({ project_id: optionalString, provider: optionalString, role: optionalString }, objectOptions), actions.listSessions),
     actionTool("session_read_summary", "Session Summary", "Read a runner-observed session summary.",
       Type.Object({ session_key: requiredText }, objectOptions), actions.readSessionSummary),
     actionTool("session_steer_proposal", "Session Steer Proposal",
