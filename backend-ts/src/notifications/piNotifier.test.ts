@@ -1,7 +1,26 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ProjectFinding } from "../pi/projectFindings.ts";
 import { publishNeedsUserFindingNotifications } from "./piNotifier.ts";
+
+const tempRoots: string[] = [];
+
+async function openFixtureDatabase(): Promise<RunnerDatabase> {
+  const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-notifier-"));
+  tempRoots.push(root);
+  return openDatabase({ stateDir: join(root, "state") });
+}
+
+afterEach(async () => {
+  while (tempRoots.length > 0) {
+    const path = tempRoots.pop();
+    if (path) await rm(path, { recursive: true, force: true });
+  }
+});
 
 describe("PI needs-user notification engine", () => {
   test("publishes redacted needs-user payloads through the event bus", async () => {
@@ -53,6 +72,43 @@ describe("PI needs-user notification engine", () => {
     expect(payloads).toEqual([]);
     expect(bus.subscriberCount()).toBe(0);
   });
+
+  test("records needs-user notifications with issue cooldown", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertIssue(database, 7, "demo");
+      const input = {
+        database,
+        findings: [findingRecord({ message: "waiting for user input" })],
+        notifyOnNeedsUser: true,
+        project: { id: "demo", name: "Demo" }
+      };
+
+      const first = publishNeedsUserFindingNotifications({
+        ...input,
+        now: new Date("2026-01-01T00:00:00Z")
+      });
+      const second = publishNeedsUserFindingNotifications({
+        ...input,
+        now: new Date("2026-01-01T00:10:00Z")
+      });
+      const afterCooldown = publishNeedsUserFindingNotifications({
+        ...input,
+        now: new Date("2026-01-01T00:31:00Z")
+      });
+
+      expect(first).toHaveLength(1);
+      expect(second).toEqual([]);
+      expect(afterCooldown).toHaveLength(1);
+      expect(listNotificationRows(database)).toEqual([
+        { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" },
+        { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" }
+      ]);
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function findingRecord(input: { message: string; title?: string }): ProjectFinding {
@@ -68,4 +124,25 @@ function findingRecord(input: { message: string; title?: string }): ProjectFindi
     title: input.title ?? "Needs user",
     updated_at: "2026-01-01T00:00:00Z"
   };
+}
+
+function insertProject(db: RunnerDatabase, id: string): void {
+  db.sqlite.run(
+    `insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertIssue(db: RunnerDatabase, id: number, projectID: string): void {
+  db.sqlite.run(
+    `insert into issues (id, project_id, title, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [id, projectID, "Needs user", "failed", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function listNotificationRows(db: RunnerDatabase): Array<Record<string, unknown>> {
+  return db.sqlite.query<Record<string, unknown>, []>(
+    "select event, issue_id, project_id, read_at from notifications order by id asc"
+  ).all();
 }

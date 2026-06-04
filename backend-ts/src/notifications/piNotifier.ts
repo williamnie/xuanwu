@@ -1,4 +1,6 @@
 import type { AppEvent, EventBus } from "../events/bus.ts";
+import type { RunnerDatabase } from "../db/database.ts";
+import { createNotification } from "../db/repositories/notifications.ts";
 import type { ProjectFinding } from "../pi/projectFindings.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
@@ -16,6 +18,7 @@ export type PiNeedsUserNotificationPayload = {
 
 export type PublishNeedsUserFindingNotificationsInput = {
   bus?: EventBus;
+  database?: RunnerDatabase;
   findings: ProjectFinding[];
   notifyOnNeedsUser: boolean;
   now?: Date;
@@ -29,11 +32,14 @@ export function publishNeedsUserFindingNotifications(
   input: PublishNeedsUserFindingNotificationsInput
 ): PiNeedsUserNotificationPayload[] {
   if (!input.notifyOnNeedsUser) return [];
-  const occurredAt = (input.now ?? new Date()).toISOString();
-  const payloads = input.findings
-    .filter(isNeedsUserFinding)
-    .map((finding) => notificationPayload(input.project, finding, occurredAt));
-  for (const payload of payloads) input.bus?.publish(notificationEvent(payload));
+  const now = input.now ?? new Date();
+  const payloads: PiNeedsUserNotificationPayload[] = [];
+  for (const finding of input.findings.filter(isNeedsUserFinding)) {
+    const payload = notificationPayload(input.project, finding, now.toISOString());
+    if (!recordNotification(input.database, payload, now)) continue;
+    payloads.push(payload);
+    input.bus?.publish(notificationEvent(payload));
+  }
   return payloads;
 }
 
@@ -69,6 +75,22 @@ function notificationEvent(payload: PiNeedsUserNotificationPayload): AppEvent {
     payload: JSON.stringify(payload),
     created_at: payload.occurred_at
   };
+}
+
+function recordNotification(
+  database: RunnerDatabase | undefined,
+  payload: PiNeedsUserNotificationPayload,
+  now: Date
+): boolean {
+  if (!database) return true;
+  return createNotification(database, {
+    event: payload.event,
+    issueID: payload.issue_id,
+    message: payload.message,
+    payload: JSON.stringify(payload),
+    projectID: payload.project_id,
+    title: payload.title
+  }, now) !== null;
 }
 
 function redactNotificationText(value: string): string {

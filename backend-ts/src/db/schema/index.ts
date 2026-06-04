@@ -15,6 +15,7 @@ import { cronTaskClaimsMigration } from "./014_cron_task_claims.ts";
 import { piDelegationSkillIntentsMigration } from "./015_pi_delegation_skill_intents.ts";
 import { piDelegationMcpAllowlistMigration } from "./016_pi_delegation_mcp_allowlist.ts";
 import { projectPiPolicyAllowlistsMigration } from "./017_project_pi_policy_allowlists.ts";
+import { notificationsMigration } from "./018_notifications.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -33,5 +34,6 @@ export const migrations = [
   cronTaskClaimsMigration,
   piDelegationSkillIntentsMigration,
   piDelegationMcpAllowlistMigration,
-  projectPiPolicyAllowlistsMigration
+  projectPiPolicyAllowlistsMigration,
+  notificationsMigration
 ];

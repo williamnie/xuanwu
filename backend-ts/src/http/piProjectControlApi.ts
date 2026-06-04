@@ -147,6 +147,7 @@ async function executeManagerCycle(
   persistPiSessionIndex(context.database, state.conversation, project);
   const notifications = publishNeedsUserFindingNotifications({
     bus: context.bus,
+    database: context.database,
     findings: snapshot.findings,
     notifyOnNeedsUser: settings.notify_on_needs_user !== 0,
     project

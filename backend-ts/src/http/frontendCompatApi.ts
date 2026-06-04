@@ -8,6 +8,7 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueTemplate, deleteIssueTemplate, getIssueTemplate, updateIssueTemplate } from "../db/repositories/issueTemplates.ts";
 import { getNotificationSettings, saveNotificationSettings } from "../db/repositories/notificationSettings.ts";
+import { listNotifications, markNotificationRead } from "../db/repositories/notifications.ts";
 import { clearProjectHold, deleteProject, reorderProjects } from "../db/repositories/projectsExtra.ts";
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
 import { createImageUpload, mustGetUpload } from "../db/repositories/uploads.ts";
@@ -66,6 +67,8 @@ function registerCronRoutes(router: Router, context: FrontendCompatContext): voi
 }
 
 function registerUtilityRoutes(router: Router, context: FrontendCompatContext): void {
+  router.get("/api/notifications", (request) => json(listNotifications(context.database, notificationFilter(request))));
+  router.post("/api/notifications/:id/read", (request) => writeResponse(() => markNotificationRead(context.database, notificationID(request))));
   router.get("/api/notifications/settings", () => json(getNotificationSettings(context.database)));
   router.patch("/api/notifications/settings", async (request) => json(saveNotificationSettings(context.database, await objectBody(request))));
   router.get("/api/capabilities", () => json({ skills: listSkillRegistry(), plugins: [] }));
@@ -214,12 +217,20 @@ function mustTemplate(db: RunnerDatabase, id: string) { const item = getIssueTem
 function approvalID(request: Request): string { return pathPart(request, 2); }
 function uploadID(request: Request): string { return pathPart(request, 1); }
 function issueID(request: Request): number { return numericPathPart(request, 1, "issue id 不合法"); }
+function notificationID(request: Request): number { return numericPathPart(request, 1, "notification id 不合法"); }
 function numericID(request: Request, message: string): number { return numericPathPart(request, 1, message); }
 function numericPathPart(request: Request, index: number, message: string): number { const id = Number(pathPart(request, index)); if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, message); return id; }
 function projectIDAt(request: Request, index: number): string { const id = pathPart(request, index); if (id === "") throw new HttpError(400, "project id 不能为空"); return id; }
 function lastPathPart(request: Request): string { return decodeURIComponent(new URL(request.url).pathname.split("/").filter(Boolean).at(-1) ?? "").trim(); }
 function pathPart(request: Request, indexAfterApi: number): string { return decodeURIComponent(new URL(request.url).pathname.split("/").filter(Boolean).slice(1)[indexAfterApi] ?? "").trim(); }
 function arrayBody(body: Record<string, unknown>, key: string): string[] { return Array.isArray(body[key]) ? body[key].map(String) : []; }
+function notificationFilter(request: Request): { projectID: string; unreadOnly: boolean } {
+  const params = new URL(request.url).searchParams;
+  return {
+    projectID: cleanString(params.get("project_id") || params.get("projectId")),
+    unreadOnly: params.get("unread") === "1" || params.get("unread") === "true"
+  };
+}
 function normalizeCommand(value: unknown): CommandPayload { const raw = value && typeof value === "object" && !Array.isArray(value) ? value as CommandPayload : {}; return { ...raw, name: cleanString(raw.name || raw.type).toLowerCase(), args: raw.args ?? {} }; }
 function commandIssueID(command: CommandPayload): number { return Number(command.args?.issue_id ?? command.args?.id ?? command.target?.id ?? 0); }
 function stateDir(db: RunnerDatabase): string { return db.path.replace(/\/[^/]+$/, ""); }

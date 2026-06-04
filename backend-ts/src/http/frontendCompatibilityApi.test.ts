@@ -201,6 +201,33 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
+  test("lists notifications and marks them read", async () => {
+    const { cwd, database } = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
+      const issue = await requestJSON(router, "/api/issues", "POST", {
+        project_id: "demo",
+        status: "failed",
+        title: "Needs user"
+      }, 201);
+      insertNotification(database, issue.id, "demo");
+
+      const notifications = await requestJSON(router, "/api/notifications?project_id=demo&unread=1", "GET");
+      const read = await requestJSON(router, `/api/notifications/${notifications[0].id}/read`, "POST", {});
+      const unread = await requestJSON(router, "/api/notifications?project_id=demo&unread=1", "GET");
+
+      expect(notifications).toMatchObject([
+        { event: "pi.needs_user", issue_id: issue.id, project_id: "demo", read_at: "" }
+      ]);
+      expect(read).toMatchObject({ id: notifications[0].id, read_at: expect.any(String) });
+      expect(read.read_at).not.toBe("");
+      expect(unread).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("reads Codex usage from configured sessions dir", async () => {
     const { database } = await openFixtureDatabase();
     const sessionsDir = await tempDir("codex-runner-bun-sessions-");
@@ -271,6 +298,16 @@ function insertHold(db: RunnerDatabase, projectId: string): void {
   db.sqlite.run(`insert into project_holds
     (project_id, reason, message, hold_since, updated_at) values (?, ?, ?, ?, ?)`,
     [projectId, "manual", "waiting", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]);
+}
+
+function insertNotification(db: RunnerDatabase, issueID: number, projectID: string): void {
+  db.sqlite.run(
+    `insert into notifications
+      (event, project_id, issue_id, dedupe_key, title, message, payload, created_at, read_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ["pi.needs_user", projectID, issueID, `pi.needs_user:${projectID}:${issueID}`,
+      "Needs user", "Please review", "{}", "2026-01-01T00:00:00Z", ""]
+  );
 }
 
 async function tempDir(prefix: string): Promise<string> {
