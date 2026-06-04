@@ -1,6 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { readProjectPiPolicy, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
+import { normalizeMcpCapabilityList } from "../mcp/policy.ts";
+import { normalizeSkillIntentList } from "../skills/intents.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -22,7 +24,10 @@ async function patchPolicyResponse(context: PiProjectPolicyContext, request: Req
   const id = projectID(request);
   assertProjectExists(context.database, id);
   const body = normalizePolicyBody(await parseObjectBody(request));
-  return json(upsertProjectPiPolicy(context.database, {
+  return writePolicyResponse(() => upsertProjectPiPolicy(context.database, {
+    allowed_actions_json: body.allowed_actions,
+    allowed_mcp_capabilities_json: body.allowed_mcp_capabilities,
+    allowed_skill_intents_json: body.allowed_skill_intents,
     concurrency_policy_json: body.concurrency_policy,
     default_mode: body.default_mode,
     project_id: id,
@@ -36,6 +41,9 @@ async function patchPolicyResponse(context: PiProjectPolicyContext, request: Req
 
 function normalizePolicyBody(body: Record<string, unknown>) {
   return {
+    allowed_actions: listField(body, ["allowed_actions_json", "allowed_actions", "allowedActions"], "allowed_actions"),
+    allowed_mcp_capabilities: mcpField(body),
+    allowed_skill_intents: skillField(body),
     concurrency_policy: objectField(body, ["concurrency_policy_json", "concurrency_policy"], "concurrency_policy"),
     default_mode: policyMode(body),
     quiet_hours: objectField(body, ["quiet_hours_json", "quiet_hours"], "quiet_hours"),
@@ -44,6 +52,16 @@ function normalizePolicyBody(body: Record<string, unknown>) {
     verification_policy: objectField(body, ["verification_policy_json", "verification_policy"], "verification_policy"),
     working_hours: objectField(body, ["working_hours_json", "working_hours"], "working_hours")
   };
+}
+
+function writePolicyResponse(write: () => unknown): Response {
+  try {
+    return json(write());
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    if (error instanceof Error) throw new HttpError(400, error.message);
+    throw error;
+  }
 }
 
 async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {
@@ -84,6 +102,65 @@ function objectValue(value: unknown, label: string): unknown {
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
   } catch {}
   throw new HttpError(400, `${label} 必须是合法 JSON object`);
+}
+
+function skillField(body: Record<string, unknown>): string | undefined {
+  const value = rawField(body, ["allowed_skill_intents_json", "allowed_skill_intents", "allowedSkillIntents"]);
+  return value === undefined ? undefined : checkedList(() => normalizeSkillIntentList(value));
+}
+
+function mcpField(body: Record<string, unknown>): string | undefined {
+  const value = rawField(body, [
+    "allowed_mcp_capabilities_json", "allowed_mcp_capabilities", "allowedMcpCapabilities"
+  ]);
+  return value === undefined ? undefined : checkedList(() => normalizeMcpCapabilityList(value));
+}
+
+function listField(body: Record<string, unknown>, keys: string[], label: string): string | undefined {
+  const value = rawField(body, keys);
+  return value === undefined ? undefined : JSON.stringify(actionList(value, label));
+}
+
+function checkedList(normalize: () => string): string {
+  try {
+    return normalize();
+  } catch (error) {
+    if (error instanceof Error) throw new HttpError(400, error.message);
+    throw error;
+  }
+}
+
+function rawField(body: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) if (Object.hasOwn(body, key)) return body[key];
+  return undefined;
+}
+
+function actionList(value: unknown, label: string): string[] {
+  return cleanActionList(parseList(value), label);
+}
+
+function parseList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  const text = stringValue(value);
+  if (text === "") return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {}
+  return text.split(/[\n,]/);
+}
+
+function cleanActionList(values: string[], label: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const id = stringValue(value).toLowerCase();
+    if (id === "") continue;
+    if (id.length > 128 || !/^[a-z0-9_.:-]+$/.test(id)) throw new HttpError(400, `${label} id 不合法: ${id}`);
+    if (!seen.has(id)) out.push(id);
+    seen.add(id);
+  }
+  return out;
 }
 
 function policyMode(body: Record<string, unknown>): string | undefined {

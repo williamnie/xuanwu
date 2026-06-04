@@ -31,6 +31,9 @@ describe("project PI policy repository", () => {
     try {
       expect(readProjectPiPolicy(db, "demo")).toEqual({
         project_id: "demo",
+        allowed_actions_json: "[]",
+        allowed_mcp_capabilities_json: "[]",
+        allowed_skill_intents_json: "[]",
         default_mode: "manual",
         timezone: "UTC",
         working_hours_json: "{}",
@@ -64,10 +67,16 @@ describe("project PI policy repository", () => {
         quiet_hours_json: quietHours,
         retry_policy_json: retryPolicy,
         concurrency_policy_json: concurrencyPolicy,
+        allowed_actions_json: ["issue.enqueue", "issue.state_repair"],
+        allowed_mcp_capabilities_json: ["docs:resource:runbook"],
+        allowed_skill_intents_json: ["codex-issue-runner"],
         verification_policy_json: verificationPolicy
       });
 
       expect(policy).toMatchObject({ project_id: "demo", default_mode: "delegated", timezone: "Asia/Shanghai" });
+      expect(JSON.parse(policy.allowed_actions_json)).toEqual(["issue.enqueue", "issue.state_repair"]);
+      expect(JSON.parse(policy.allowed_mcp_capabilities_json)).toEqual(["docs:resource:runbook"]);
+      expect(JSON.parse(policy.allowed_skill_intents_json)).toEqual(["codex-issue-runner"]);
       expect(JSON.parse(policy.working_hours_json)).toEqual(workingHours);
       expect(JSON.parse(policy.quiet_hours_json)).toEqual(quietHours);
       expect(JSON.parse(policy.retry_policy_json)).toEqual(retryPolicy);

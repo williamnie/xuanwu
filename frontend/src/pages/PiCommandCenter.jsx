@@ -4,11 +4,10 @@ import { api } from '../api/client';
 import PiActionAuditPanel from './PiActionAuditPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
 import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
+import PiPolicyEditorPanel from './PiPolicyEditorPanel';
 import './PiCommandCenter.css';
 
-const FRAMEWORK_SECTIONS = [
-  ['Policy', 'P11.05 接入项目 PI policy 编辑器。'],
-];
+const FRAMEWORK_SECTIONS = [];
 
 export default function PiCommandCenter() {
   const state = useCommandCenterStatus();
@@ -25,6 +24,7 @@ export default function PiCommandCenter() {
       <PiHeartbeatTimelinePanel />
       <PiActionAuditPanel onChanged={state.reload} variant="command-center" />
       <PiDelegationsPanel onChanged={state.reload} />
+      <PiPolicyEditorPanel onChanged={state.reload} />
       <FrameworkPlaceholders />
     </div>
   );
@@ -86,6 +86,7 @@ function StatusCard({ card, loading }) {
 }
 
 function FrameworkPlaceholders() {
+  if (FRAMEWORK_SECTIONS.length === 0) return null;
   return (
     <section className="pi-command-module" aria-label="Command Center framework placeholders">
       <h2><Command size={18} /> Framework placeholders</h2>

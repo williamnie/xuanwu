@@ -1,4 +1,6 @@
 import type { RunnerDatabase } from "../../database.ts";
+import { normalizeMcpCapabilityList } from "../../../mcp/policy.ts";
+import { normalizeSkillIntentList } from "../../../skills/intents.ts";
 import { cleanString, getByID, now, requiredString } from "./common.ts";
 
 export type ProjectPiPolicyMode = "manual" | "attended" | "delegated" | "autonomous";
@@ -11,6 +13,9 @@ export type ProjectPiVerificationPolicy = {
 };
 export type ProjectPiPolicy = {
   project_id: string;
+  allowed_actions_json: string;
+  allowed_mcp_capabilities_json: string;
+  allowed_skill_intents_json: string;
   default_mode: ProjectPiPolicyMode;
   timezone: string;
   working_hours_json: string;
@@ -26,12 +31,15 @@ export type ProjectPiPolicyInput = Partial<Record<keyof ProjectPiPolicy, unknown
 // project_pi_settings 保持为 agent/auto-manage 执行设置；本表只承载项目 PI 决策 policy。
 const TABLE = "project_pi_policies";
 const COLUMNS = `project_id, default_mode, timezone, working_hours_json, quiet_hours_json,
-  retry_policy_json, concurrency_policy_json, verification_policy_json, created_at, updated_at`;
+  retry_policy_json, concurrency_policy_json, verification_policy_json, allowed_actions_json,
+  allowed_mcp_capabilities_json, allowed_skill_intents_json, created_at, updated_at`;
 const MODES = new Set<ProjectPiPolicyMode>(["manual", "attended", "delegated", "autonomous"]);
 const TIMEOUT_ACTIONS = new Set(["escalate", "request_verifier"]);
 const DEFAULT_RETRY: ProjectPiRetryPolicy = { enabled: false, max_attempts: 0, backoff_minutes: [] };
 const DEFAULT_CONCURRENCY: ProjectPiConcurrencyPolicy = { max_parallel_issues: 1, max_parallel_pi_cycles: 1 };
 const DEFAULT_VERIFICATION: ProjectPiVerificationPolicy = { pending_timeout_minutes: 24 * 60, on_timeout: "escalate", evidence_required: true };
+const ACTION_ID_RE = /^[a-z0-9_.:-]+$/;
+const MAX_ACTION_ID_LENGTH = 128;
 
 export function getProjectPiPolicy(db: RunnerDatabase, projectID: string): ProjectPiPolicy | null {
   return getByID(db, TABLE, COLUMNS, projectID, mapProjectPiPolicy, "project_id");
@@ -46,15 +54,20 @@ export function upsertProjectPiPolicy(db: RunnerDatabase, input: ProjectPiPolicy
   const current = readProjectPiPolicy(db, projectID);
   const record = normalizePolicy({ ...current, ...definedValues(input), project_id: projectID });
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(project_id) do update set default_mode=excluded.default_mode,
       timezone=excluded.timezone, working_hours_json=excluded.working_hours_json,
       quiet_hours_json=excluded.quiet_hours_json, retry_policy_json=excluded.retry_policy_json,
       concurrency_policy_json=excluded.concurrency_policy_json,
-      verification_policy_json=excluded.verification_policy_json, updated_at=excluded.updated_at`,
+      verification_policy_json=excluded.verification_policy_json,
+      allowed_actions_json=excluded.allowed_actions_json,
+      allowed_mcp_capabilities_json=excluded.allowed_mcp_capabilities_json,
+      allowed_skill_intents_json=excluded.allowed_skill_intents_json,
+      updated_at=excluded.updated_at`,
     [record.project_id, record.default_mode, record.timezone, record.working_hours_json,
       record.quiet_hours_json, record.retry_policy_json, record.concurrency_policy_json,
-      record.verification_policy_json, current.created_at || timestamp, timestamp]);
+      record.verification_policy_json, record.allowed_actions_json, record.allowed_mcp_capabilities_json,
+      record.allowed_skill_intents_json, current.created_at || timestamp, timestamp]);
   const saved = getProjectPiPolicy(db, projectID);
   if (!saved) throw new Error("project PI policy missing after write");
   return saved;
@@ -63,6 +76,9 @@ export function upsertProjectPiPolicy(db: RunnerDatabase, input: ProjectPiPolicy
 function defaultProjectPiPolicy(projectID: string): ProjectPiPolicy {
   return {
     project_id: cleanString(projectID),
+    allowed_actions_json: "[]",
+    allowed_mcp_capabilities_json: "[]",
+    allowed_skill_intents_json: "[]",
     default_mode: "manual",
     timezone: "UTC",
     working_hours_json: "{}",
@@ -78,6 +94,9 @@ function defaultProjectPiPolicy(projectID: string): ProjectPiPolicy {
 function normalizePolicy(input: ProjectPiPolicyInput): ProjectPiPolicy {
   return {
     project_id: cleanString(input.project_id),
+    allowed_actions_json: actionList(input.allowed_actions_json),
+    allowed_mcp_capabilities_json: normalizeMcpCapabilityList(input.allowed_mcp_capabilities_json),
+    allowed_skill_intents_json: normalizeSkillIntentList(input.allowed_skill_intents_json),
     default_mode: mode(input.default_mode),
     timezone: timezone(input.timezone),
     working_hours_json: jsonObjectText(input.working_hours_json, "{}"),
@@ -93,6 +112,9 @@ function normalizePolicy(input: ProjectPiPolicyInput): ProjectPiPolicy {
 function mapProjectPiPolicy(row: Record<string, unknown>): ProjectPiPolicy {
   return {
     project_id: requiredString(row.project_id, "project_pi_policies.project_id"),
+    allowed_actions_json: actionList(row.allowed_actions_json),
+    allowed_mcp_capabilities_json: normalizeMcpCapabilityList(row.allowed_mcp_capabilities_json),
+    allowed_skill_intents_json: normalizeSkillIntentList(row.allowed_skill_intents_json),
     default_mode: mode(row.default_mode),
     timezone: timezone(row.timezone),
     working_hours_json: jsonObjectText(row.working_hours_json, "{}"),
@@ -134,6 +156,40 @@ function verificationPolicy(value: unknown): ProjectPiVerificationPolicy {
 function jsonObjectText(value: unknown, fallback: string): string {
   const object = objectValue(value);
   return Object.keys(object).length > 0 ? JSON.stringify(object) : fallback;
+}
+
+function actionList(value: unknown): string {
+  return JSON.stringify(cleanActionList(parseActionList(value)));
+}
+
+function parseActionList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  const text = cleanString(value);
+  if (text === "") return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {}
+  return text.split(/[\n,]/);
+}
+
+function cleanActionList(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const id = cleanString(value).toLowerCase();
+    if (id === "") continue;
+    assertValidActionID(id);
+    if (!seen.has(id)) out.push(id);
+    seen.add(id);
+  }
+  return out;
+}
+
+function assertValidActionID(id: string): void {
+  if (id.length > MAX_ACTION_ID_LENGTH || !ACTION_ID_RE.test(id)) {
+    throw new Error(`allowed_actions id 不合法: ${id}`);
+  }
 }
 
 function objectValue(value: unknown): Record<string, unknown> {

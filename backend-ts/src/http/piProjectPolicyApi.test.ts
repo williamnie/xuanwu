@@ -24,6 +24,9 @@ describe("PI project policy API", () => {
 
       const initial = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-policy`));
       const patched = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        allowed_actions: ["issue.enqueue", "issue.state_repair"],
+        allowed_mcp_capabilities: ["docs:resource:runbook", "docs:tool:search"],
+        allowed_skill_intents: ["codex-issue-runner", "verification-before-completion"],
         concurrency_policy: { max_parallel_issues: 1, max_parallel_pi_cycles: 1 },
         default_mode: "delegated",
         quiet_hours: { daily: [{ end: "08:00", start: "22:00" }] },
@@ -47,6 +50,9 @@ describe("PI project policy API", () => {
         project_id: "demo",
         timezone: "Asia/Shanghai"
       });
+      expect(JSON.parse(String(body.allowed_actions_json))).toEqual(["issue.enqueue", "issue.state_repair"]);
+      expect(JSON.parse(String(body.allowed_mcp_capabilities_json))).toEqual(["docs:resource:runbook", "docs:tool:search"]);
+      expect(JSON.parse(String(body.allowed_skill_intents_json))).toEqual(["codex-issue-runner", "verification-before-completion"]);
       expect(JSON.parse(String(body.working_hours_json))).toEqual({ end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] });
       expect(JSON.parse(String(body.quiet_hours_json))).toEqual({ daily: [{ end: "08:00", start: "22:00" }] });
       expect(JSON.parse(String(body.retry_policy_json))).toEqual({ enabled: true, max_attempts: 2, backoff_minutes: [15, 60] });
@@ -95,6 +101,15 @@ describe("PI project policy API", () => {
       const invalidVerification = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
         verification_policy: "not-json"
       });
+      const invalidAction = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        allowed_actions: ["bad action"]
+      });
+      const invalidSkill = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        allowed_skill_intents: ["bad skill"]
+      });
+      const invalidMcp = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        allowed_mcp_capabilities: ["bad mcp"]
+      });
 
       expect(invalidMode.status).toBe(400);
       expect(await invalidMode.json()).toEqual({ message: "default_mode 不合法" });
@@ -102,6 +117,12 @@ describe("PI project policy API", () => {
       expect(await invalidRetry.json()).toEqual({ message: "retry_policy 必须是合法 JSON object" });
       expect(invalidVerification.status).toBe(400);
       expect(await invalidVerification.json()).toEqual({ message: "verification_policy 必须是合法 JSON object" });
+      expect(invalidAction.status).toBe(400);
+      expect(await invalidAction.json()).toEqual({ message: "allowed_actions id 不合法: bad action" });
+      expect(invalidSkill.status).toBe(400);
+      expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
+      expect(invalidMcp.status).toBe(400);
+      expect(await invalidMcp.json()).toEqual({ message: "MCP capability id 不合法: bad mcp" });
     } finally {
       database.close();
     }

@@ -352,6 +352,10 @@ export const api = {
 
   getPiCommandCenter: () => request('/api/pi/command-center'),
 
+  getPiSkills: () => request('/api/pi/skills'),
+
+  getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities'),
+
   getPiHeartbeatTimeline: ({ projectId = '', issueId = '', limit = 80 } = {}) => {
     const params = new URLSearchParams();
     if (projectId) params.append('project_id', projectId);

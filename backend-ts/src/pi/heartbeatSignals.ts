@@ -132,6 +132,9 @@ function projectSettings(db: RunnerDatabase, projectID: string): HeartbeatProjec
 function projectPiPolicy(db: RunnerDatabase, projectID: string) {
   const policy = readProjectPiPolicy(db, projectID);
   return {
+    allowed_actions: safeJson(policy.allowed_actions_json) as string[],
+    allowed_mcp_capabilities: safeJson(policy.allowed_mcp_capabilities_json) as string[],
+    allowed_skill_intents: safeJson(policy.allowed_skill_intents_json) as string[],
     concurrency_policy: safeJson(policy.concurrency_policy_json) as Record<string, unknown>,
     default_mode: policy.default_mode,
     quiet_hours: safeJson(policy.quiet_hours_json) as Record<string, unknown>,
