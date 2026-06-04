@@ -95,6 +95,33 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
+  test("passes uploaded attachment images to PI SDK prompt", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-image-faux-api", provider: "pi-image-faux" });
+    try {
+      faux.setResponses([(context) => fauxAssistantMessage(imageSummary(context))]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-image-faux");
+      insertUpload(database, "upload_pi_image");
+      writeFauxModelsConfig(database, "pi-image-faux");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-image", project_id: "demo", pi_agent_id: "pi-faux"
+      });
+
+      const message = await request(router, "/api/pi/conversations/conv-image/messages", {
+        prompt: "这张图有什么？\n\n![uploaded image](attachment://upload_pi_image)"
+      });
+      const body = await message.json() as Record<string, unknown>;
+
+      expect(message.status).toBe(201);
+      expect(body.text).toBe(`images=1; mime=image/png; bytes=${PNG_FIXTURE.byteLength}`);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
   test("reads persisted PI conversation transcript for history switching", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -212,6 +239,11 @@ describe("Bun PI conversation message API", () => {
   });
 });
 
+const PNG_FIXTURE = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+  "base64"
+);
+
 function request(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {
   return router.handle(new Request(`${BASE_URL}${path}`, {
     method: "POST",
@@ -225,6 +257,18 @@ function insertFauxAgent(db: RunnerDatabase, provider = "pi-test-faux"): void {
     `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
     ["pi-faux", "PI Faux", provider, "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertUpload(db: RunnerDatabase, id: string): void {
+  const uploadDir = join(db.path, "..", "uploads", "fixtures");
+  const storagePath = join(uploadDir, `${id}.png`);
+  mkdirSync(uploadDir, { recursive: true });
+  writeFileSync(storagePath, PNG_FIXTURE);
+  db.sqlite.run(
+    `insert into uploads (id, original_name, mime_type, size_bytes, sha256, storage_path, created_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [id, "one.png", "image/png", PNG_FIXTURE.byteLength, "fixture-sha", storagePath, "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -296,4 +340,15 @@ async function until(check: () => boolean): Promise<void> {
     await Bun.sleep(10);
   }
   throw new Error("condition timed out");
+}
+
+function imageSummary(context: { messages?: Array<{ content?: unknown[]; role?: string }> }): string {
+  const user = (context.messages ?? []).slice().reverse().find((message) => message.role === "user");
+  const images = (user?.content ?? []).filter(isImageContent);
+  const image = images[0];
+  return `images=${images.length}; mime=${image?.mimeType ?? ""}; bytes=${image ? Buffer.from(image.data, "base64").byteLength : 0}`;
+}
+
+function isImageContent(value: unknown): value is { data: string; mimeType: string; type: string } {
+  return typeof value === "object" && value !== null && (value as { type?: unknown }).type === "image";
 }

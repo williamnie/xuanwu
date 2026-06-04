@@ -17,6 +17,7 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import { piConversationPromptImages } from "./piConversationImages.ts";
 import { piConversationDetail } from "./piConversationTranscript.ts";
 import {
   createOrRestorePiRuntime,
@@ -126,7 +127,11 @@ async function sendPiConversationMessage(
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
-    await runtime.session.prompt(prompt, { expandPromptTemplates: false, source: "rpc" });
+    await runtime.session.prompt(prompt, {
+      expandPromptTemplates: false,
+      images: piConversationPromptImages(context.database, prompt),
+      source: "rpc"
+    });
     persistPiSessionIndex(context.database, titledConversation);
     return {
       conversation_id: titledConversation.id,
