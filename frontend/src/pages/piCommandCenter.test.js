@@ -22,6 +22,8 @@ test('PI Command Center renders P11 status cards with loading and error states',
   }
   assert.match(pageSource, /import PiDelegationsPanel from '\.\/PiDelegationsPanel'/);
   assert.match(pageSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
+  assert.match(pageSource, /import PiHeartbeatTimelinePanel from '\.\/PiHeartbeatTimelinePanel'/);
+  assert.match(pageSource, /<PiHeartbeatTimelinePanel \/>/);
   assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} variant="command-center" \/>/);
   assert.match(pageSource, /<PiDelegationsPanel onChanged=\{state\.reload\} \/>/);
   assert.match(pageSource, /pi-command-loading/);

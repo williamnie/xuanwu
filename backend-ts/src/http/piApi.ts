@@ -24,6 +24,7 @@ import { registerPiProjectPolicyRoutes } from "./piProjectPolicyApi.ts";
 import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
 import { registerPiHeartbeatRoutes } from "./piHeartbeatApi.ts";
+import { registerPiHeartbeatTimelineRoutes } from "./piHeartbeatTimelineApi.ts";
 import { registerPiReportRoutes } from "./piReportsApi.ts";
 import { registerPiSkillRoutes } from "./piSkillsApi.ts";
 import type { Router } from "./router.ts";
@@ -51,6 +52,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiProviderSettingsRoutes(router, context);
   registerPiProjectControlRoutes(router, context);
   registerPiHeartbeatRoutes(router, context);
+  registerPiHeartbeatTimelineRoutes(router, context);
   registerPiReportRoutes(router, context);
   registerPiSkillRoutes(router);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));

@@ -3,10 +3,10 @@ import { Activity, CheckCircle2, Command, Loader2, RefreshCw, ShieldCheck } from
 import { api } from '../api/client';
 import PiActionAuditPanel from './PiActionAuditPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
+import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
 import './PiCommandCenter.css';
 
 const FRAMEWORK_SECTIONS = [
-  ['Heartbeat Timeline', 'P11.04 展示 heartbeat run/event 证据链。'],
   ['Policy', 'P11.05 接入项目 PI policy 编辑器。'],
 ];
 
@@ -22,6 +22,7 @@ export default function PiCommandCenter() {
       <section className="pi-command-grid" aria-label="PI Command Center status cards">
         {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
       </section>
+      <PiHeartbeatTimelinePanel />
       <PiActionAuditPanel onChanged={state.reload} variant="command-center" />
       <PiDelegationsPanel onChanged={state.reload} />
       <FrameworkPlaceholders />

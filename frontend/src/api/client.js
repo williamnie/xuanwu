@@ -352,6 +352,15 @@ export const api = {
 
   getPiCommandCenter: () => request('/api/pi/command-center'),
 
+  getPiHeartbeatTimeline: ({ projectId = '', issueId = '', limit = 80 } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append('project_id', projectId);
+    if (issueId) params.append('issue_id', issueId);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/heartbeat-timeline${query}`);
+  },
+
   getProjectPiSettings: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`),
 
   updateProjectPiSettings: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`, {
