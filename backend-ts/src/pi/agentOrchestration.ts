@@ -1,10 +1,12 @@
 import { EXECUTION_AGENT_ROLES, isExecutionAgentRole, normalizeExecutionAgentRole, type ExecutionAgentRole } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import { getAgentProfile, listAgentProfiles, type AgentProfile } from "../db/repositories/agentProfiles.ts";
+import type { AgentProfile } from "../db/repositories/agentProfiles.ts";
+import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { getProject, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
-import { mergeSkillIntents, parseSkillIntentList } from "../skills/intents.ts";
+import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { needsUserComment, workflowIssuePayload } from "./agentOrchestrationPayloads.ts";
+import { selectRoleProfile, type RoleProfileSelection } from "./roleProfileSelector.ts";
 
 export const AGENT_ROLES = EXECUTION_AGENT_ROLES;
 export type AgentRole = ExecutionAgentRole;
@@ -54,6 +56,7 @@ export type AgentRecommendation = {
   recommended_skill_intents: string[];
   reasoning_effort: string;
   required_skill_intents: string[];
+  selection_reason: string;
   sandbox: string;
 };
 
@@ -65,9 +68,17 @@ export function recommendExecutorProfile(
   const role = normalizeAgentRole(input.role);
   const issue = optionalIssue(db, input.issue_id);
   const project = resolveProject(db, contextProject, issue, input.project_id);
-  const skills = roleSkills(role, issue, input);
-  const profile = selectProfile(db, project, issue, role, skills.required, input.agent_profile_id);
-  return recommendationFor(project, issue, role, skills, profile);
+  const skills = roleSkills(role, project, issue, input);
+  const selection = selectRoleProfile({
+    explicitProfileId: input.agent_profile_id,
+    issueProfileId: issue?.agent_profile_id,
+    profiles: listAgentProfiles(db),
+    projectDefaultProfileId: project.default_agent_profile_id,
+    projectProvider: project.provider,
+    requiredSkillIntents: skills.required,
+    role
+  });
+  return recommendationFor(project, issue, role, skills, selection);
 }
 
 export function createExecutorAssignmentProposal(
@@ -135,8 +146,9 @@ function recommendationFor(
   issue: Issue | null,
   role: AgentRole,
   skills: { recommended: string[]; required: string[] },
-  profile: AgentProfile | null
+  selection: RoleProfileSelection
 ): AgentRecommendation {
+  const profile = selection.profile;
   return {
     agent_role: role,
     approval_policy: profile?.approval_policy || project.approval_policy,
@@ -146,54 +158,25 @@ function recommendationFor(
     profile_name: profile?.name ?? "",
     project_id: project.id,
     provider: profile?.provider || project.provider,
-    reason: profileReason(project, issue, profile),
+    reason: selection.selection_reason,
     recommended_skill_intents: skills.recommended,
     reasoning_effort: profile?.reasoning_effort ?? "",
     required_skill_intents: skills.required,
+    selection_reason: selection.selection_reason,
     sandbox: profile?.sandbox || project.sandbox
   };
 }
 
-function selectProfile(
-  db: RunnerDatabase,
-  project: Project,
-  issue: Issue | null,
-  role: AgentRole,
-  required: string[],
-  explicitID = ""
-): AgentProfile | null {
-  const explicit = profileByID(db, explicitID);
-  if (explicit) return explicit;
-  const issueProfile = role === "executor" ? profileByID(db, issue?.agent_profile_id) : null;
-  if (issueProfile) return issueProfile;
-  const defaultProfile = profileByID(db, project.default_agent_profile_id);
-  return defaultProfile ?? bestProfile(db, project.provider, role, required);
-}
-
-function bestProfile(db: RunnerDatabase, provider: string, role: AgentRole, required: string[]): AgentProfile | null {
-  return listAgentProfiles(db)
-    .map((profile) => ({ profile, score: profileScore(profile, provider, role, required) }))
-    .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score || a.profile.id.localeCompare(b.profile.id))[0]?.profile ?? null;
-}
-
-function profileScore(profile: AgentProfile, provider: string, role: AgentRole, required: string[]): number {
-  const intents = new Set(parseSkillIntentList(profile.skill_intents));
-  const skillScore = required.filter((id) => intents.has(id)).length * 5;
-  const providerScore = profile.provider === provider ? 2 : 0;
-  const roleScore = `${profile.id} ${profile.name}`.toLowerCase().includes(role) ? 3 : 0;
-  const matchScore = skillScore + roleScore;
-  return matchScore === 0 ? 0 : matchScore + providerScore;
-}
-
 function roleSkills(
   role: AgentRole,
+  project: Project,
   issue: Issue | null,
   input: AgentRecommendationInput
 ): { recommended: string[]; required: string[] } {
+  const policy = parseSkillPolicy(project.default_skill_policy);
   return {
-    required: mergeSkillIntents(roleRequiredSkills(role), issue?.required_skill_intents, inputSkill(input, "required_skill_intents")),
-    recommended: mergeSkillIntents(issue?.recommended_skill_intents, inputSkill(input, "recommended_skill_intents"))
+    required: mergeSkillIntents(policy.required, roleRequiredSkills(role), issue?.required_skill_intents, inputSkill(input, "required_skill_intents")),
+    recommended: mergeSkillIntents(policy.recommended, issue?.recommended_skill_intents, inputSkill(input, "recommended_skill_intents"))
   };
 }
 
@@ -230,18 +213,6 @@ function requireIssue(db: RunnerDatabase, id: number): Issue {
   const issue = getIssue(db, id);
   if (!issue) throw new ProjectNotFoundError();
   return issue;
-}
-
-function profileByID(db: RunnerDatabase, id: unknown): AgentProfile | null {
-  const profileID = cleanString(id);
-  return profileID === "" ? null : getAgentProfile(db, profileID);
-}
-
-function profileReason(project: Project, issue: Issue | null, profile: AgentProfile | null): string {
-  if (!profile) return `fallback to project provider ${project.provider}`;
-  if (issue?.agent_profile_id === profile.id) return "issue assigned agent_profile_id";
-  if (project.default_agent_profile_id === profile.id) return "project default_agent_profile_id";
-  return "matched role/provider/skill intent strategy";
 }
 
 function roleRequiredSkills(role: AgentRole): string[] {

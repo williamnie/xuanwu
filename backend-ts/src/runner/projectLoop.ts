@@ -53,7 +53,7 @@ async function runClaimedIssue(
       reasoningEffort: selection.reasoning_effort,
       approvalPolicy: selection.approval_policy || project.approval_policy,
       sandbox: selection.sandbox || project.sandbox,
-      selectionReason: selection.reason
+      selectionReason: selection.selection_reason
     });
   } catch (error) {
     if (issueAlreadyClosed(input.database, issue.id)) return { runId: "interrupted" };
