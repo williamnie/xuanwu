@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, CheckCircle2, Command, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
+import PiActionAuditPanel from './PiActionAuditPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
 import './PiCommandCenter.css';
 
 const FRAMEWORK_SECTIONS = [
-  ['Approvals', 'P11.03 接入 pending approvals 队列与审批决策。'],
   ['Heartbeat Timeline', 'P11.04 展示 heartbeat run/event 证据链。'],
   ['Policy', 'P11.05 接入项目 PI policy 编辑器。'],
 ];
@@ -22,6 +22,7 @@ export default function PiCommandCenter() {
       <section className="pi-command-grid" aria-label="PI Command Center status cards">
         {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
       </section>
+      <PiActionAuditPanel onChanged={state.reload} variant="command-center" />
       <PiDelegationsPanel onChanged={state.reload} />
       <FrameworkPlaceholders />
     </div>

@@ -11,6 +11,14 @@
   padding: 11px;
 }
 
+.pi-action-audit-panel.command-center {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(16, 185, 129, 0.14), transparent 28%),
+    linear-gradient(145deg, var(--bg-card), var(--bg-primary));
+  max-height: none;
+  min-height: 0;
+}
+
 .pi-action-audit-header,
 .pi-action-card-topline,
 .pi-action-decision-row,
@@ -28,6 +36,13 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.pi-action-audit-header p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 3px 0 0;
 }
 
 .pi-action-audit-header span,
@@ -96,6 +111,11 @@
   padding: 9px;
 }
 
+.command-center .pi-action-approval-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
 .pi-action-card-topline {
   gap: 7px;
   justify-content: space-between;
@@ -141,6 +161,41 @@
   margin: 0;
 }
 
+.pi-action-rationale,
+.pi-action-note-field,
+.pi-action-snooze-field,
+.pi-action-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.pi-action-rationale span,
+.pi-action-note-field span,
+.pi-action-snooze-field span,
+.pi-action-scope span {
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pi-action-scope div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pi-action-scope code {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  padding: 2px 7px;
+}
+
 .pi-action-approval-card textarea {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -150,6 +205,25 @@
   min-height: 52px;
   padding: 8px;
   resize: vertical;
+}
+
+.pi-action-snooze-field input {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font: inherit;
+  padding: 7px 8px;
+}
+
+.pi-action-card-error {
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  border-radius: 10px;
+  color: var(--error);
+  font-size: 0.73rem;
+  line-height: 1.4;
+  padding: 8px;
 }
 
 .pi-action-decision-row {

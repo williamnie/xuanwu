@@ -21,6 +21,8 @@ test('PI Command Center renders P11 status cards with loading and error states',
     assert.match(pageSource, new RegExp(label));
   }
   assert.match(pageSource, /import PiDelegationsPanel from '\.\/PiDelegationsPanel'/);
+  assert.match(pageSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
+  assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} variant="command-center" \/>/);
   assert.match(pageSource, /<PiDelegationsPanel onChanged=\{state\.reload\} \/>/);
   assert.match(pageSource, /pi-command-loading/);
   assert.match(pageSource, /pi-command-error/);
@@ -29,7 +31,6 @@ test('PI Command Center renders P11 status cards with loading and error states',
 
 test('PI Command Center keeps non-P11.02 framework placeholders read-only', () => {
   assert.doesNotMatch(pageSource, /api\.getCodexUsage/);
-  assert.doesNotMatch(pageSource, /piActionGateApi/);
   assert.doesNotMatch(pageSource, /pauseProjectPiAutonomousMode|resumeProjectPiAutonomousMode/);
   assert.match(clientSource, /getPiCommandCenter: \(\) => request\('\/api\/pi\/command-center'\)/);
   assert.doesNotMatch(pageSource, /window\.confirm|window\.alert/);

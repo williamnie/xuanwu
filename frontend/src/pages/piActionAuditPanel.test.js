@@ -21,3 +21,15 @@ test('PI action gate client supports approval decisions without native confirm',
   assert.match(clientSource, /\/api\/pi\/audit-events/);
   assert.doesNotMatch(panelSource, /window\.confirm/);
 });
+
+test('PI approvals show rationale, risk, scope, snooze time, and inline action errors', () => {
+  for (const label of ['Rationale', 'Scope', 'Snooze until', 'Decision note']) {
+    assert.match(panelSource, new RegExp(label));
+  }
+  assert.match(panelSource, /action\.risk_level/);
+  assert.match(panelSource, /actionScopeItems\(action\)/);
+  assert.match(panelSource, /type="datetime-local"/);
+  assert.match(panelSource, /isoFromLocalInput\(snoozeTime\)/);
+  assert.match(panelSource, /setActionErrors/);
+  assert.match(panelSource, /role="alert"/);
+});
