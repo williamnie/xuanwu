@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { createPiDelegation, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 import { createDefaultRouter } from "./server.ts";
@@ -135,6 +135,24 @@ describe("Bun PI runtime v1 smoke", () => {
         id: "delegation-a",
         project_id: "demo"
       });
+      createPiMemoryItem(database, {
+        confidence: "high",
+        content: "Issue-specific PI context",
+        id: "issue-memory",
+        kind: "issue_memory",
+        scope: "issue",
+        scope_id: String(issue.id),
+        source_id: "turn-1",
+        source_type: "conversation"
+      });
+      createPiMemoryItem(database, {
+        content: "Disabled memory should stay hidden",
+        disabled: 1,
+        id: "disabled-memory",
+        kind: "decision",
+        scope: "issue",
+        scope_id: String(issue.id)
+      });
       insertFauxAgent(database);
       writeFauxModelsConfig(database);
 
@@ -155,6 +173,9 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(prompt).toContain("Relevant Skill Metadata:");
       expect(prompt).toContain('"id": "codex-issue-runner"');
       expect(prompt).not.toContain('"id": "verification-before-completion"');
+      expect(prompt).toContain("Issue-specific PI context");
+      expect(prompt).toContain("pi_memory_items/issue-memory");
+      expect(prompt).not.toContain("Disabled memory should stay hidden");
       const events = listPiActionEvents(database, { conversationId: "conv-skill-context" });
       expect(events.map((event) => event.event_type)).toContain("skill_prompt_context_injected");
       const audit = JSON.parse(events.find((event) => event.event_type === "skill_prompt_context_injected")?.payload_json ?? "{}");

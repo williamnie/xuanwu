@@ -143,7 +143,31 @@ async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof 
 
 async function collectSignals(input: HeartbeatInput, projectID: string): Promise<HeartbeatSignals> {
   if (input.collectSignals) return input.collectSignals({ database: input.database, now: input.now ?? new Date(), projectID });
-  return collectProjectHeartbeatSignals(input.database, projectID, input.now ?? new Date());
+  return collectProjectHeartbeatSignals(input.database, projectID, input.now ?? new Date(), {
+    issueIDs: scopedIssueIDs(input.delegation)
+  });
+}
+
+function scopedIssueIDs(delegation: PiDelegation | undefined): number[] {
+  const scope = parseJsonObject(delegation?.scope_json);
+  return [...new Set([...numberValues(scope.issue_id), ...numberValues(scope.issue_ids)])];
+}
+
+function parseJsonObject(value: string | undefined): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value ?? "{}") as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function numberValues(value: unknown): number[] {
+  if (Array.isArray(value)) return value.flatMap(numberValues);
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return [value];
+  if (typeof value !== "string") return [];
+  return value.split(",").map((item) => Number.parseInt(item.trim(), 10))
+    .filter((item) => Number.isSafeInteger(item) && item > 0);
 }
 
 function heartbeatLockKeys(ctx: ReturnType<typeof heartbeatContext>): string[] {

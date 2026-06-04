@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiDelegation } from "../db/repositories/pi.ts";
 import type { PiActionEnvelope } from "./actionGate.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
+import type { PiMemoryContextItem } from "./memoryContext.ts";
 import type { ProjectStatusSnapshot } from "./projectSnapshot.ts";
 
 export type HeartbeatKind = "project" | "delegation" | "session_watchdog" | "cron" | "provider_health" | "daily_summary";
@@ -79,7 +80,7 @@ export type HeartbeatSignals = {
     total: number;
   };
   memory: { active: number; pinned: number };
-  memory_items?: Array<{ confidence: string; content: string; kind: string; scope: string; scope_id: string }>;
+  memory_items?: PiMemoryContextItem[];
   pi_conversations: { active: number; total: number };
   project?: ProjectStatusSnapshot;
   project_settings: HeartbeatProjectSettingsSignal;

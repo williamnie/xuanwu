@@ -178,7 +178,11 @@ function piSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string 
     JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2),
     "Project default MCP policy:",
     JSON.stringify(parseMcpPolicy(input.project?.default_mcp_policy), null, 2),
-    buildPiMemoryPromptContext(db, { projectID: input.project?.id })
+    buildPiMemoryPromptContext(db, {
+      conversationID: input.conversationID,
+      issueID: input.issueID,
+      projectID: input.project?.id
+    })
   ].join("\n");
 }
 

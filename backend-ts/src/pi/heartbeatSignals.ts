@@ -1,8 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { getProjectPiSettings, readProjectPiPolicy, listPiMemoryItems, type PiMemoryItem } from "../db/repositories/pi.ts";
+import { getProjectPiSettings, readProjectPiPolicy } from "../db/repositories/pi.ts";
 import { redactAuditJsonText } from "../db/repositories/pi/auditRedaction.ts";
-import { containsSensitiveMemoryContent } from "./memoryPolicy.ts";
+import { collectPiMemoryContextItems } from "./memoryContext.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import type {
   HeartbeatAgentSessionSignal,
@@ -13,8 +13,14 @@ import type {
 import { iso } from "./heartbeatOrchestratorSupport.ts";
 
 const SIGNAL_LIMIT = 8;
+export type HeartbeatSignalScope = { issueIDs?: number[] };
 
-export function collectProjectHeartbeatSignals(db: RunnerDatabase, projectID: string, now: Date): HeartbeatSignals {
+export function collectProjectHeartbeatSignals(
+  db: RunnerDatabase,
+  projectID: string,
+  now: Date,
+  scope: HeartbeatSignalScope = {}
+): HeartbeatSignals {
   const snapshot = createProjectStatusSnapshot(db, projectID);
   const nowText = iso(now);
   return {
@@ -24,7 +30,7 @@ export function collectProjectHeartbeatSignals(db: RunnerDatabase, projectID: st
     issues: { status_counts: snapshot.issue_status_counts, total: snapshot.total_issues },
     issue_runs: issueRunSignals(db, projectID),
     memory: memorySignals(db, projectID),
-    memory_items: memoryItems(db, projectID),
+    memory_items: memoryItems(db, projectID, scope),
     pi_conversations: conversationSignals(db, projectID),
     project: snapshot,
     project_settings: projectSettings(db, projectID),
@@ -158,22 +164,8 @@ function memorySignals(db: RunnerDatabase, projectID: string) {
   };
 }
 
-function memoryItems(db: RunnerDatabase, projectID: string) {
-  const items = [
-    ...listPiMemoryItems(db, { disabled: 0, scope: "project", scopeId: projectID }),
-    ...listPiMemoryItems(db, { disabled: 0, scope: "global" })
-  ].filter((item) => !containsSensitiveMemoryContent(item.content));
-  return items.slice(0, SIGNAL_LIMIT).map(memorySummary);
-}
-
-function memorySummary(item: PiMemoryItem) {
-  return {
-    confidence: item.confidence,
-    content: item.content,
-    kind: item.kind,
-    scope: item.scope,
-    scope_id: item.scope_id
-  };
+function memoryItems(db: RunnerDatabase, projectID: string, scope: HeartbeatSignalScope) {
+  return collectPiMemoryContextItems(db, { issueIDs: scope.issueIDs, limit: SIGNAL_LIMIT, projectID });
 }
 
 function conversationSignals(db: RunnerDatabase, projectID: string) {

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
+import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 
 const tempRoots: string[] = [];
 
@@ -31,9 +31,45 @@ describe("PI heartbeat memory signals", () => {
       const result = await runPiHeartbeatOnce({ database: db, projectID: "demo", now: new Date("2026-06-02T10:00:00Z") });
 
       expect(result.signals.memory_items).toEqual([
-        expect.objectContaining({ content: "Project policy: verify before commit", kind: "project_policy" })
+        expect.objectContaining({
+          content: "Project policy: verify before commit",
+          id: "active-policy",
+          kind: "project_policy",
+          reference: "pi_memory_items/active-policy",
+          source_id: "259",
+          source_type: "issue"
+        })
       ]);
       expect(JSON.stringify(result.signals.memory_items)).not.toContain("Unconfirmed guess");
+
+      const stored = db.sqlite.query<{ result_json: string; signals_json: string }, []>(
+        "select result_json, signals_json from pi_heartbeat_runs"
+      ).get();
+      const resultJson = JSON.parse(stored?.result_json ?? "{}");
+      const signalsJson = JSON.parse(stored?.signals_json ?? "{}");
+      expect(resultJson.signals.memory_items[0]).toMatchObject({ reference: "pi_memory_items/active-policy" });
+      expect(signalsJson.memory_items[0]).toMatchObject({ source_type: "issue", source_id: "259" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("injects delegation issue-scope memory before project memory", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      insertDelegation(db, "delegation-a", "demo", [259]);
+      insertScopedMemory(db, "project-policy", "project", "demo", "Project scoped policy");
+      insertScopedMemory(db, "issue-memory", "issue", "259", "Issue scoped acceptance");
+
+      const result = await runDelegationHeartbeatsOnce({
+        database: db,
+        now: new Date("2026-06-02T10:00:00Z")
+      });
+
+      const items = result.runs[0]?.signals.memory_items ?? [];
+      expect(items.map((item) => item.id)).toEqual(["issue-memory", "project-policy"]);
+      expect(items[0]).toMatchObject({ reference: "pi_memory_items/issue-memory", scope: "issue", scope_id: "259" });
     } finally {
       db.close();
     }
@@ -51,9 +87,30 @@ function insertProject(db: RunnerDatabase, id: string): void {
 function insertMemory(db: RunnerDatabase, id: string, disabled: number, content: string): void {
   db.sqlite.run(
     `insert into pi_memory_items
-      (id, scope, scope_id, kind, content, confidence, disabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, "project", "demo", "project_policy", content, "high", disabled,
+      (id, scope, scope_id, kind, content, source_type, source_id, confidence, disabled, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, "project", "demo", "project_policy", content, "issue", "259", "high", disabled,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertDelegation(db: RunnerDatabase, id: string, projectID: string, issueIDs: number[]): void {
+  db.sqlite.run(
+    `insert into pi_delegations
+      (id, project_id, title, status, intent_json, authorization_json, scope_json, next_heartbeat_at, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, projectID, "Watch scoped issue", "active", "{}", "{}",
+      JSON.stringify({ issue_ids: issueIDs, project_id: projectID }), "2026-06-02T09:59:00Z",
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertScopedMemory(db: RunnerDatabase, id: string, scope: string, scopeID: string, content: string): void {
+  db.sqlite.run(
+    `insert into pi_memory_items
+      (id, scope, scope_id, kind, content, source_type, source_id, confidence, disabled, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, scope, scopeID, "project_policy", content, "issue", "259", "high", 0,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
