@@ -140,11 +140,6 @@ function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
   if (!running && queuedMessages.length === 0) return null;
   return (
     <div className="session-message-queue-panel">
-      {running && (
-        <div className="session-message-queue-hint">
-          当前 Codex 正在运行；发送会排队为下一条消息，不会引导当前响应。
-        </div>
-      )}
       {queuedMessages.length > 0 && (
         <ol className="session-message-queue-list" aria-label="排队消息">
           {queuedMessages.map((item, index) => (
@@ -163,6 +158,11 @@ function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
             </li>
           ))}
         </ol>
+      )}
+      {running && (
+        <div className="session-message-queue-hint" role="status">
+          <span>当前 Codex 正在运行；发送会排队为下一条。</span>
+        </div>
       )}
     </div>
   );
