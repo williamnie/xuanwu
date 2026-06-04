@@ -6,6 +6,7 @@ import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { applyIssueStateRepair } from "../pi/issueStateManager.ts";
 import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agentOrchestration.ts";
+import { createIssueEnqueueCron } from "../pi/runnerIssueScheduleActions.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
@@ -26,6 +27,8 @@ export async function dispatchPiAction(
       return createIssue(context.database, payload);
     case "issue.enqueue":
       return enqueueIssue(context.database, positivePayloadID(payload, "issue_id"));
+    case "issue.schedule_enqueue":
+      return createIssueEnqueueCron(context.database, payload);
     case "issue.comment":
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), payload);
     case "issue.update_refinement":
@@ -118,7 +121,7 @@ function workflowSnapshot(payload: Record<string, unknown>): Record<string, unkn
 function startAutoRunWorkflow(context: PiActionDispatchContext, projectID: string): void {
   const project = getProject(context.database, projectID);
   const providerID = project?.provider ?? "";
-  if ((project?.auto_run ?? 0) !== 1 || !isExecutorProviderId(providerID)) return;
+  if (!project || project.auto_run !== 1 || !isExecutorProviderId(providerID)) return;
   if (!context.providers?.[providerID]?.capabilities.includes("issue_execution")) return;
   startProjectLoop({ database: context.database, providers: context.providers }, project.id);
 }

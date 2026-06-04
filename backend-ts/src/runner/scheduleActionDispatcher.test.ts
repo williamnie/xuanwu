@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import { listPiActionEvents, listPiActions, listPiHeartbeatRuns } from "../db/repositories/pi.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
 
@@ -28,7 +29,7 @@ describe("Schedule action dispatcher", () => {
         projectID: "project-a"
       });
 
-      const result = await runDueCronTasks({ database: db, now: NOW });
+      const result = await runDueCronTasks({ database: db, now: NOW, startProjectLoop: () => {} });
       const action = onlyPiAction(db);
 
       expect(result).toEqual({ executed: 1, failed: 0, scanned: 1, skipped: 0 });
@@ -60,6 +61,34 @@ describe("Schedule action dispatcher", () => {
       expect(heartbeats).toHaveLength(1);
       expect(heartbeats[0]).toMatchObject({ project_id: "project-a", status: "completed", trigger: "cron" });
       expect(cronRow(db)).toMatchObject({ last_result: "ran heartbeat for project-a", last_status: "success", status: "done" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("scheduled enqueue_issues with issue_ids only queues the selected issue", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "project-a");
+      const selectedID = insertIssue(db, "project-a", "Selected issue");
+      const otherID = insertIssue(db, "project-a", "Other issue");
+      insertCronTask(db, {
+        action: "enqueue_issues",
+        actionPayload: { issue_ids: [selectedID] },
+        mode: "once",
+        projectID: "project-a"
+      });
+
+      const result = await runDueCronTasks({ database: db, now: NOW, startProjectLoop: () => {} });
+
+      expect(result).toEqual({ executed: 1, failed: 0, scanned: 1, skipped: 0 });
+      expect(getIssue(db, selectedID)?.status).toBe("todo");
+      expect(getIssue(db, otherID)?.status).toBe("triage");
+      expect(cronRow(db)).toMatchObject({
+        last_result: "enqueued 1 issue(s)",
+        last_status: "success",
+        status: "done"
+      });
     } finally {
       db.close();
     }
@@ -99,6 +128,15 @@ function insertProject(db: RunnerDatabase, id: string): void {
      values (?, ?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, 1, 1, "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
   );
+}
+
+function insertIssue(db: RunnerDatabase, projectID: string, title: string): number {
+  db.sqlite.run(
+    `insert into issues (project_id, title, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?)`,
+    [projectID, title, "triage", "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
+  );
+  return db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get()?.id ?? 0;
 }
 
 function insertCronTask(db: RunnerDatabase, input: {

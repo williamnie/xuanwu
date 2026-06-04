@@ -6,9 +6,9 @@ const panelSource = readFileSync(new URL('./PiActionAuditPanel.jsx', import.meta
 const chatSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
 const clientSource = readFileSync(new URL('../api/piActionGateClient.js', import.meta.url), 'utf8');
 
-test('PI chat exposes action gate pending approvals and audit timeline', () => {
-  assert.match(chatSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
-  assert.match(chatSource, /<PiActionAuditPanel \/>/);
+test('PI chat keeps action approvals out of the runner chat sidebar', () => {
+  assert.doesNotMatch(chatSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
+  assert.doesNotMatch(chatSource, /<PiActionAuditPanel \/>/);
   assert.match(panelSource, /piActionGateApi\.pendingActions\(\)/);
   assert.match(panelSource, /piActionGateApi\.auditEvents\(\)/);
   assert.match(panelSource, /Audit timeline/);

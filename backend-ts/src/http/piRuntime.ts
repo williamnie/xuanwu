@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { getModel, type Model } from "@earendil-works/pi-ai";
+import { getModel, getProviders, type KnownProvider, type Model } from "@earendil-works/pi-ai";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -12,6 +12,7 @@ import { publicMcpRegistry } from "../mcp/registry.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
+import { PI_SAFE_ACTION_TYPES } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
@@ -31,6 +32,19 @@ export type RuntimeSessionInput = {
   sessionFile?: string;
   source?: string;
 };
+
+export const PI_RUNNER_CHAT_ACTIONS = [
+  ...PI_SAFE_ACTION_TYPES,
+  "issue.create",
+  "issue.enqueue",
+  "issue.schedule_enqueue"
+] as const;
+
+export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
+  "issue.create",
+  "issue.enqueue",
+  "issue.schedule_enqueue"
+] as const;
 
 const PI_RUNTIME_ROOT = "pi-runtime";
 const PI_AGENT_DIR = "agent";
@@ -171,6 +185,8 @@ function piSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string 
     "Role contract: PI is manager/orchestrator; executor executes issues; verifier validates evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
+    "Runner Chat workflow: create requested issues directly, then ask in chat whether to run now or schedule for later. If the user says now, call issue_enqueue_proposal. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
+    `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
     skillContext.promptSection,
     "MCP Capability Registry metadata:",
     JSON.stringify(publicMcpRegistry().slice(0, 24), null, 2),
@@ -228,7 +244,9 @@ function resolvePiModel(modelRegistry: PiModelRegistry, agent: PiAgent) {
 }
 
 function withBuiltInModelMetadata(model: Model<any>, agent: PiAgent): Model<any> {
-  const builtIn = getModel(agent.model_provider, agent.model_id);
+  const provider = knownModelProvider(agent.model_provider);
+  if (!provider) return model;
+  const builtIn = getModel(provider, agent.model_id as never);
   if (!builtIn || !isDefaultCustomModelMetadata(model)) return model;
   return {
     ...model,
@@ -241,6 +259,10 @@ function withBuiltInModelMetadata(model: Model<any>, agent: PiAgent): Model<any>
     maxTokens: builtIn.maxTokens,
     compat: model.compat ?? builtIn.compat
   };
+}
+
+function knownModelProvider(provider: string): KnownProvider | undefined {
+  return (getProviders() as string[]).includes(provider) ? provider as KnownProvider : undefined;
 }
 
 function isDefaultCustomModelMetadata(model: Model<any>): boolean {

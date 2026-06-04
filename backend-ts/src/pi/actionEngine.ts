@@ -219,7 +219,20 @@ function actionResult(id: string, action: Pick<PiAction, "action_type" | "issue_
 }
 
 function actionResultFromRecord(action: PiAction) {
-  return { ...actionResult(action.id, action), decision: action.gate_decision };
+  return {
+    ...actionResult(action.id, action),
+    decision: action.gate_decision,
+    ...completedResult(action)
+  };
+}
+
+function completedResult(action: PiAction): { result?: unknown } {
+  if (action.status !== "completed") return {};
+  try {
+    return { result: JSON.parse(action.result_json || "null") as unknown };
+  } catch {
+    return {};
+  }
 }
 
 function gateStatus(decision: PiActionDecision): string {

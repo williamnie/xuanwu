@@ -21,6 +21,8 @@ import { piConversationPromptImages } from "./piConversationImages.ts";
 import { piConversationDetail } from "./piConversationTranscript.ts";
 import {
   createOrRestorePiRuntime,
+  PI_RUNNER_CHAT_ACTIONS,
+  PI_RUNNER_CHAT_MUTATION_ACTIONS,
   createPiRuntimeSession,
   type PiRuntimeResult,
   type PiRuntimeSession
@@ -230,15 +232,29 @@ async function openConversationRuntime(context: PiConversationContext, conversat
   const agent = requireConversationAgent(context.database, conversation);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: project ? {
-      allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,
-      mode: "attended"
-    } : undefined,
+    authorization: project ? runnerChatAuthorization(project) : undefined,
     bus: context.bus,
     conversationID: conversation.id,
     project,
     sessionFile: conversation.session_file
   });
+}
+
+function runnerChatAuthorization(project: Project) {
+  return {
+    allowedActions: [...PI_RUNNER_CHAT_ACTIONS],
+    allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,
+    authorizedActions: runnerChatAuthorizedActions(project.id),
+    mode: "delegated" as const,
+    scope: { project_id: project.id }
+  };
+}
+
+function runnerChatAuthorizedActions(projectID: string) {
+  return [
+    ...PI_RUNNER_CHAT_ACTIONS.map((action_type) => ({ action_type })),
+    ...PI_RUNNER_CHAT_MUTATION_ACTIONS.map((action_type) => ({ action_type, project_id: projectID }))
+  ];
 }
 
 function optionalConversationProject(db: RunnerDatabase, id: string): Project | undefined {

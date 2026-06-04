@@ -19,6 +19,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_comment",
   "issue_update_refinement",
   "issue_enqueue_proposal",
+  "issue_schedule_enqueue",
   "project_status",
   "project_list",
   "session_list",
@@ -130,8 +131,17 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       Type.Object({ body: requiredText, issue_id: positiveID }, objectOptions), actions.commentIssue),
     issueRefinementTool(actions),
     actionTool("issue_enqueue_proposal", "Issue Enqueue Proposal",
-      "Create a high-risk pending proposal to enqueue an issue; does not move it directly.",
-      Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal)
+      "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
+      Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
+    actionTool("issue_schedule_enqueue", "Issue Schedule Enqueue",
+      "Create a real one-time cron to enqueue exactly one issue at next_run_at (RFC3339). Use this when the user chooses a specific later time in chat.",
+      Type.Object({
+        issue_id: positiveID,
+        name: optionalString,
+        next_run_at: requiredText,
+        rationale: optionalString,
+        timezone: optionalString
+      }, objectOptions), actions.scheduleIssueEnqueue)
   ];
 }
 

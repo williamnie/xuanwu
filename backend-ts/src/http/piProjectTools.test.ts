@@ -42,6 +42,10 @@ describe("PI project tools", () => {
         fauxAssistantMessage([
           fauxToolCall("project_status", {}, { id: "status" }),
           fauxToolCall("issue_enqueue_proposal", { issue_id: 1, rationale: "ready" }, { id: "enqueue" }),
+          fauxToolCall("issue_schedule_enqueue", {
+            issue_id: 1,
+            next_run_at: "2999-01-01T00:00:00.000Z"
+          }, { id: "schedule-enqueue" }),
           fauxToolCall("read", { path: "README.md", limit: 5 }, { id: "read" }),
           fauxToolCall("write", { path: "blocked.txt", content: "must-not-write" }, { id: "write" }),
           fauxToolCall("edit", {
@@ -57,7 +61,7 @@ describe("PI project tools", () => {
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "agent_profile_recommend", "executor_issue_create_proposal", "executor_profile_assign_proposal",
         "find", "grep", "issue_comment", "issue_create_proposal", "issue_enqueue_proposal",
-        "issue_list", "issue_read", "issue_state_diagnose", "issue_state_repair_proposal",
+        "issue_list", "issue_read", "issue_schedule_enqueue", "issue_state_diagnose", "issue_state_repair_proposal",
         "issue_update_refinement", "ls", "mcp_capability_read", "mcp_registry_list",
         "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
         "memory_search", "memory_write_candidate", "needs_user_escalation",
@@ -71,7 +75,12 @@ describe("PI project tools", () => {
       expect(probes.get("project_status")?.text).toContain('"todo": 1');
       expect(probes.get("issue_enqueue_proposal")?.isError).toBe(false);
       expect(probes.get("issue_enqueue_proposal")?.text).toContain('"requires_confirmation": true');
-      expect(listPiActions(db, { status: "pending" }).map((action) => action.action_type)).toEqual(["issue.enqueue"]);
+      expect(probes.get("issue_schedule_enqueue")?.isError).toBe(false);
+      expect(probes.get("issue_schedule_enqueue")?.text).toContain('"requires_confirmation": true');
+      expect(listPiActions(db, { status: "pending" }).map((action) => action.action_type).sort()).toEqual([
+        "issue.enqueue",
+        "issue.schedule_enqueue"
+      ].sort());
       expect(probes.get("read")?.isError).toBe(false);
       const readAction = listPiActions(db).find((action) => action.action_type === "sdk.read");
       expect(readAction).toMatchObject({

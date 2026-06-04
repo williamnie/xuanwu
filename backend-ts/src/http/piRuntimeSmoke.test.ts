@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { listIssues } from "../db/repositories/issues.ts";
 import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
@@ -57,7 +59,7 @@ describe("Bun PI runtime v1 smoke", () => {
     }
   });
 
-  test("runs conversation to action/memory/SSE without promoting memory candidates", async () => {
+  test("runner chat executes issue create and scheduled enqueue through chat tools", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-smoke-faux-api", provider: "pi-smoke-faux" });
     const bus = new EventBus();
@@ -65,10 +67,15 @@ describe("Bun PI runtime v1 smoke", () => {
     try {
       faux.setResponses([
         fauxAssistantMessage([
+          fauxToolCall("project_list", {}, { id: "project-list" }),
           fauxToolCall("issue_create_proposal", {
             description: "Follow-up body",
             title: "Follow-up issue"
           }, { id: "issue-proposal" }),
+          fauxToolCall("issue_schedule_enqueue", {
+            issue_id: 1,
+            next_run_at: "2999-01-01T00:00:00.000Z"
+          }, { id: "schedule-enqueue" }),
           fauxToolCall("memory_write_candidate", {
             kind: "preference",
             content: "Prefer PI memory candidates before long-term memory"
@@ -97,8 +104,16 @@ describe("Bun PI runtime v1 smoke", () => {
         status: "completed",
         text: "smoke done"
       });
-      expect(listPiActions(database, { status: "pending" }).map((action) => action.action_type))
-        .toEqual(["issue.create"]);
+      expect(listIssues(database, { projectId: "demo" })).toMatchObject([
+        { description: "Follow-up body", status: "triage", title: "Follow-up issue" }
+      ]);
+      expect(listCronTasks(database)).toMatchObject([
+        { action: "enqueue_issues", mode: "once", next_run_at: "2999-01-01T00:00:00.000Z", status: "active" }
+      ]);
+      expect(JSON.parse(listCronTasks(database)[0]?.action_payload_json ?? "{}")).toEqual({ issue_ids: [1] });
+      expect(listPiActions(database, { status: "pending" })).toEqual([]);
+      expect(listPiActions(database, { status: "completed" }).map((action) => action.action_type).sort())
+        .toEqual(["issue.create", "issue.schedule_enqueue", "memory.write_candidate", "project.list"].sort());
       const candidates = listPiMemoryItems(database, { disabled: 1 });
       expect(candidates).toHaveLength(1);
       expect(candidates[0]).toMatchObject({
@@ -108,7 +123,7 @@ describe("Bun PI runtime v1 smoke", () => {
       });
       expect(listPiMemoryItems(database, { disabled: 0 })).toEqual([]);
       expect(getPiMemoryItem(database, candidates[0]?.id ?? "")?.disabled).toBe(1);
-      expect(await collectEventTypes(events, 40)).toContain("pi.memory_candidate");
+      expect(await collectEventTypes(events, 80)).toContain("pi.memory_candidate");
       expect(faux.state.callCount).toBe(2);
     } finally {
       events.close();

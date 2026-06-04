@@ -14,6 +14,7 @@ import { scanProjectFindings } from "../pi/projectFindings.ts";
 import { buildPiReport } from "../pi/reports.ts";
 import { scheduleRunMode } from "../schedule/cronSchedule.ts";
 import type { PiAutoManageProjectCycle } from "./piAutoManageScheduler.ts";
+import { selectScheduleEnqueueIssues } from "./scheduleIssueSelection.ts";
 
 export type ScheduleActionResult = { detail: string; projectIDs?: string[]; skipped?: boolean };
 export type ScheduleActionInput = {
@@ -134,11 +135,7 @@ function scheduleGatePolicy(task: CronTask, now: Date): PiGatePolicy {
 }
 
 function enqueueDueIssues(db: RunnerDatabase, task: CronTask): ScheduleActionResult {
-  const issues = db.sqlite.query<{ id: number; project_id: string }, string[]>(`
-    select id, project_id from issues
-    where status='triage' ${task.project_id === "" ? "" : "and project_id=?"}
-    order by priority desc, created_at asc, id asc
-  `).all(...(task.project_id === "" ? [] : [task.project_id]));
+  const issues = selectScheduleEnqueueIssues(db, task);
   const projectIDs = new Set<string>();
   for (const issue of issues) {
     enqueueIssue(db, issue.id);

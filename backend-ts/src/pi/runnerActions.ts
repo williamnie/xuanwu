@@ -16,6 +16,7 @@ import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import { serializeRefinement, type RefinementField } from "./runnerActionRefinement.ts";
 import { observeSessionProgress } from "./sessionObserver.ts";
 import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStateDiagnosisInput, type IssueStateRepairProposalInput } from "./runnerIssueStateActions.ts";
+import { createIssueScheduleEnqueueAction, type IssueScheduleEnqueueInput } from "./runnerIssueScheduleActions.ts";
 import { createPiAgentOrchestrationActions, type PiAgentOrchestrationActionLayer } from "./agentOrchestrationActions.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & {
@@ -30,6 +31,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   recommendSkills(input: SkillRecommendInput): unknown;
   auditSkillIntents(input: SkillIntentAuditInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
+  scheduleIssueEnqueue(input: IssueScheduleEnqueueInput): unknown;
   listIssues(input: IssueListInput): unknown;
   listProjects(input: ProjectListInput): unknown;
   listSessions(input: SessionListInput): unknown;
@@ -118,6 +120,7 @@ export function createPiRunnerActions(
       };
       return createPendingPiAction(db, context, proposal, () => enqueueIssue(db, input.issue_id));
     },
+    scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
     listIssues: (input) => safeListIssues(db, context, input),
     listSkills: () => safeListSkills(db, context),
     listProjects: () => executeSafePiAction(db, context, {
@@ -179,7 +182,7 @@ function projectStatusSummary(project: Project) {
     id: project.id,
     name: project.name,
     provider: project.provider,
-    status: project.hold_reason ? `hold:${project.hold_reason}` : "active"
+    status: project.hold?.reason ? `hold:${project.hold.reason}` : "active"
   };
 }
 

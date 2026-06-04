@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import type { AgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
@@ -20,6 +21,7 @@ describe("PI runner action tools", () => {
     const verifier = toolByName(tools, "verification_workflow_request");
     const issueRead = toolByName(tools, "issue_read");
     const diagnose = toolByName(tools, "issue_state_diagnose");
+    const schedule = toolByName(tools, "issue_schedule_enqueue");
     const steer = toolByName(tools, "session_steer_proposal");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
@@ -30,6 +32,10 @@ describe("PI runner action tools", () => {
       instructions: "verify"
     });
     expect(validateArgs(diagnose, { project_id: "demo" })).toEqual({ project_id: "demo" });
+    expect(validateArgs(schedule, { issue_id: 1, next_run_at: "2999-01-01T00:00:00.000Z" })).toEqual({
+      issue_id: 1,
+      next_run_at: "2999-01-01T00:00:00.000Z"
+    });
     expect(validateArgs(steer, { session_key: "codex:thread-1", prompt: "adjust" })).toEqual({
       session_key: "codex:thread-1",
       prompt: "adjust"
@@ -42,6 +48,10 @@ describe("PI runner action tools", () => {
     await verifier.execute("tool-verifier", { target_issue_id: 1, instructions: "verify" }, undefined, undefined, {} as never);
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
+    await schedule.execute("tool-schedule", {
+      issue_id: 3,
+      next_run_at: "2999-01-01T00:00:00.000Z"
+    }, undefined, undefined, {} as never);
     await steer.execute("tool-2", { session_key: "codex:thread-1", prompt: "adjust" }, undefined, undefined, {} as never);
 
     expect(calls).toEqual([
@@ -49,6 +59,7 @@ describe("PI runner action tools", () => {
       ["createVerificationWorkflow", { target_issue_id: 1, instructions: "verify" }],
       ["readIssue", { id: 7 }],
       ["diagnoseIssueState", { project_id: "demo" }],
+      ["scheduleIssueEnqueue", { issue_id: 3, next_run_at: "2999-01-01T00:00:00.000Z" }],
       ["createSessionSteerProposal", { session_key: "codex:thread-1", prompt: "adjust" }]
     ]);
   });
@@ -231,6 +242,78 @@ describe("PI runner action tools", () => {
     }
   });
 
+  test("delegated runner chat can schedule one issue enqueue through a real once cron", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Schedule me" });
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.schedule_enqueue", issue_id: issueID, project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        conversationID: "conv-chat",
+        project: fixture.project
+      });
+
+      const result = actions.scheduleIssueEnqueue({
+        issue_id: issueID,
+        next_run_at: "2999-01-01T00:00:00.000Z",
+        rationale: "user picked later"
+      }) as { action_id: string; decision: string; status: string };
+      const cron = listCronTasks(fixture.db)[0];
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+        action_type: "issue.schedule_enqueue",
+        conversation_id: "conv-chat",
+        gate_decision: "execute",
+        issue_id: issueID,
+        status: "completed"
+      });
+      expect(cron).toMatchObject({
+        action: "enqueue_issues",
+        mode: "once",
+        next_run_at: "2999-01-01T00:00:00.000Z",
+        project_id: fixture.project.id,
+        status: "active"
+      });
+      expect(JSON.parse(cron?.action_payload_json ?? "{}")).toEqual({ issue_ids: [issueID] });
+      expect(getIssue(fixture.db, issueID)?.status).toBe("triage");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("delegated runner chat issue creation returns the created issue id", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.create", project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        conversationID: "conv-chat",
+        project: fixture.project
+      });
+
+      const result = actions.createIssueProposal({
+        description: "Create and then ask when to run",
+        title: "Chat-created issue"
+      }) as { result?: { id?: number }; status: string };
+
+      expect(result).toMatchObject({
+        decision: "execute",
+        result: { id: 1, status: "triage", title: "Chat-created issue" },
+        status: "completed"
+      });
+      expect(getIssue(fixture.db, 1)).toMatchObject({ title: "Chat-created issue" });
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("orchestrates role workflows through gated PI actions and issue linkage", async () => {
     const fixture = await openFixture();
     try {
@@ -330,6 +413,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     readMcpResource: record("readMcpResource"),
     readSessionSummary: record("readSessionSummary"),
     readSkill: record("readSkill"),
+    scheduleIssueEnqueue: record("scheduleIssueEnqueue"),
     recommendExecutorProfile: record("recommendExecutorProfile"),
     recommendMcpRequirements: record("recommendMcpRequirements"),
     recommendSkills: record("recommendSkills"),
