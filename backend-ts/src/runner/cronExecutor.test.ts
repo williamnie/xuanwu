@@ -170,6 +170,9 @@ describe("Cron due executor", () => {
       expect(cronRow(db).last_result).toContain("completed=1");
       expect(cronRow(db).last_result).toContain("failed=1");
       expect(cronRow(db).last_result).toContain("needs_user=1");
+      expect(db.sqlite.query<{ source: string }, []>(
+        "select source from pi_reports order by id desc limit 1"
+      ).get()).toEqual({ source: "cron_schedule" });
     } finally {
       db.close();
     }

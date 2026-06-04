@@ -16,14 +16,24 @@ export function registerPiReportRoutes(router: Router, context: PiReportsContext
 function listReports(context: PiReportsContext, request: Request): unknown {
   const params = new URL(request.url).searchParams;
   return listPiReportRecords(context.database, {
+    delegationId: cleanString(params.get("delegation_id")),
+    heartbeatId: cleanString(params.get("heartbeat_id")),
     projectId: cleanString(params.get("project_id")),
+    source: cleanString(params.get("source")),
+    status: cleanString(params.get("status")),
     type: cleanString(params.get("type"))
   }).map((record) => ({
+    delegation_id: record.delegation_id,
     generated_at: record.generated_at,
+    heartbeat_id: record.heartbeat_id,
     id: record.id,
+    issue_ids: parseJsonArray(record.issue_ids_json),
     project_id: record.project_id,
+    source: record.source,
+    status: record.status,
     summary: parseJsonObject(record.summary_json),
-    type: record.type
+    type: record.type,
+    window: { since: record.since_at, until: record.until_at }
   }));
 }
 
@@ -39,8 +49,11 @@ async function generateReport(context: PiReportsContext, request: Request): Prom
     bus: context.bus,
     codexSessionsDir: context.codexSessionsDir,
     database: context.database,
+    delegationID: cleanString(body.delegation_id),
+    heartbeatID: cleanString(body.heartbeat_id),
     projectID: cleanString(body.project_id),
     since: cleanString(body.since),
+    source: cleanString(body.source),
     type: cleanString(body.type) || "manual",
     until: cleanString(body.until)
   });
@@ -73,5 +86,14 @@ function parseJsonObject(value: string): Record<string, unknown> {
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   } catch {
     return {};
+  }
+}
+
+function parseJsonArray(value: string): unknown[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }

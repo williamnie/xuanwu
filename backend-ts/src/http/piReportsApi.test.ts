@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -17,12 +16,10 @@ afterEach(async () => {
 });
 
 describe("PI reports API", () => {
-  test("generates a manual report with evidence links, escalation, verification gap, usage, and SSE notification", async () => {
+  test("generates a manual report with evidence links, escalation, verification gap, and usage", async () => {
     const root = await tempDir("codex-runner-pi-reports-api-");
     const database = await openDatabase({ stateDir: join(root, "state") });
     const sessionsDir = join(root, "sessions");
-    const bus = new EventBus();
-    const events = bus.subscribe();
     try {
       insertProject(database, "demo");
       const done = insertIssue(database, "demo", {
@@ -43,7 +40,7 @@ describe("PI reports API", () => {
       insertAudit(database, "demo", failed, "act-1");
       await writeUsage(sessionsDir, "thread-done", "/tmp/demo", 15);
 
-      const router = createDefaultRouter({ bus, codexSessionsDir: sessionsDir, database });
+      const router = createDefaultRouter({ codexSessionsDir: sessionsDir, database });
       const response = await request(router, "/api/pi/reports/generate", {
         project_id: "demo",
         since: "2026-06-03T00:00:00Z",
@@ -51,10 +48,15 @@ describe("PI reports API", () => {
         until: "2026-06-04T00:00:00Z"
       });
       const body = await response.json() as Record<string, any>;
-      const event = await nextEvent(events);
 
       expect(response.status).toBe(201);
-      expect(body).toMatchObject({ project_id: "demo", type: "night_run" });
+      expect(body).toMatchObject({
+        project_id: "demo",
+        source: "manual",
+        status: "generated",
+        type: "night_run",
+        window: { since: "2026-06-03T00:00:00Z", until: "2026-06-04T00:00:00Z" }
+      });
       expect(body.completed_issues).toEqual([expect.objectContaining({
         evidence_links: expect.objectContaining({
           issue: `/api/issues/${done}`,
@@ -78,18 +80,22 @@ describe("PI reports API", () => {
       expect(body.usage_cost).toMatchObject({ status: "available", total_tokens: 15 });
       expect(body.provider_health).toMatchObject({ warnings: [] });
       expect(body.notification.channels).toMatchObject({ mobile: false, sse: true, webhook: false });
-      expect(event).toMatchObject({ projectId: "demo", type: "pi.report.generated" });
 
       const list = await router.handle(new Request(`${BASE_URL}/api/pi/reports?project_id=demo`));
       const reports = await list.json() as Array<Record<string, unknown>>;
       expect(list.status).toBe(200);
-      expect(reports[0]).toMatchObject({ id: body.report_id, project_id: "demo", type: "night_run" });
+      expect(reports[0]).toMatchObject({
+        id: body.report_id,
+        project_id: "demo",
+        source: "manual",
+        status: "generated",
+        type: "night_run"
+      });
 
       const detail = await router.handle(new Request(`${BASE_URL}/api/pi/reports/${body.report_id}`));
       expect(detail.status).toBe(200);
       expect(await detail.json()).toMatchObject({ report_id: body.report_id, project_id: "demo" });
     } finally {
-      events.close();
       database.close();
     }
   });
@@ -107,13 +113,6 @@ async function request(router: ReturnType<typeof createDefaultRouter>, path: str
     headers: { "content-type": "application/json" },
     method: "POST"
   }));
-}
-
-async function nextEvent(events: ReturnType<EventBus["subscribe"]>) {
-  return Promise.race([
-    events.next(),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("timed out waiting for PI report event")), 200))
-  ]);
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

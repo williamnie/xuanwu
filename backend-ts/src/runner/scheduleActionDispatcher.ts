@@ -183,6 +183,7 @@ async function generateReport(input: ScheduleActionInput, task: CronTask, now: D
     now,
     projectID: task.project_id,
     since: cleanString(payload.since),
+    source: "cron_schedule",
     type: cleanString(payload.type) || "daily_project_digest",
     until: cleanString(payload.until)
   });

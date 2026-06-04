@@ -92,6 +92,15 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
       expect(columnNames(connection, "cron_tasks")).toContain("claim_token");
       expect(columnNames(connection, "cron_tasks")).toContain("claim_started_at");
+      expect(columnNames(connection, "pi_reports")).toEqual(expect.arrayContaining([
+        "delegation_id",
+        "heartbeat_id",
+        "issue_ids_json",
+        "since_at",
+        "source",
+        "status",
+        "until_at"
+      ]));
       expect(connection.sqlite.query("select id from schema_migrations").all()).toEqual([
         { id: "001_base_schema" },
         { id: "002_agent_sessions_runtime" },
@@ -117,6 +126,7 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_heartbeat_events")).toContain("idx_pi_heartbeat_events_run");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_window");
+      expect(indexNames(connection, "pi_reports")).toContain("idx_pi_reports_delegation");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -134,6 +144,11 @@ describe("Bun SQLite database connection", () => {
         allowed_mcp_capabilities_json: "'[]'",
         allowed_skill_intents_json: "'[]'",
         verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
+      });
+      expect(columnDefaults(connection, "pi_reports")).toMatchObject({
+        issue_ids_json: "'[]'",
+        source: "'manual'",
+        status: "'generated'"
       });
     } finally {
       connection.close();
