@@ -61,7 +61,7 @@ function createAgentWorkflowAction(db: RunnerDatabase, context: OrchestrationCon
   return createPendingPiAction(
     db,
     context,
-    { ...proposal, actionType: "agent.workflow_request" },
+    { ...proposal, actionType: "agent.workflow_request", goalID: proposal.goalID },
     () => createIssue(db, proposal.payload)
   );
 }

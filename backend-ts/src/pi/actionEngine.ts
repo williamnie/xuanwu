@@ -21,6 +21,8 @@ import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
 export type PiActionRequest = {
   actionType: string;
   conversationID?: string;
+  goalID?: string;
+  goal_id?: string;
   issueID?: number;
   payload: Record<string, unknown>;
   projectID?: string;
@@ -187,6 +189,7 @@ function actionEnvelope(
   return normalizePiActionEnvelope({
     action_type: input.actionType,
     delegation_id: cleanString(context.delegationID),
+    goal_id: cleanString(input.goalID ?? input.goal_id),
     heartbeat_id: cleanString(context.heartbeatID),
     issue_id: input.issueID ?? 0,
     payload: input.payload,

@@ -20,6 +20,8 @@ export function workflowIssuePayload(
   return {
     agent_profile_id: recommendation.profile_id,
     description: workflowDescription(role, target, input, recommendation),
+    goal_id: cleanString(input.goal_id),
+    parent_issue_id: target?.id ?? 0,
     project_id: project.id,
     recommended_skill_intents: recommended,
     required_skill_intents: required,
@@ -50,6 +52,7 @@ function workflowSnapshot(
 ): Record<string, unknown> {
   return {
     agent_role: role,
+    goal_id: cleanString(input.goal_id),
     parent_issue_id: target?.id ?? 0,
     recommended_profile_id: recommendation.profile_id,
     recommended_provider: recommendation.provider,
@@ -88,7 +91,8 @@ function workflowTitle(role: AgentRole, target: Issue | null, input: AgentWorkfl
 
 function sourceExcerpt(role: AgentRole, target: Issue | null, input: AgentWorkflowInput): string {
   const parent = target ? `parent_issue_id=${target.id}` : "parent_issue_id=0";
-  return [`agent_role=${role}`, parent, cleanString(input.instructions)].filter(Boolean).join("; ");
+  const goal = cleanString(input.goal_id) ? `goal_id=${cleanString(input.goal_id)}` : "";
+  return [`agent_role=${role}`, parent, goal, cleanString(input.instructions)].filter(Boolean).join("; ");
 }
 
 function roleResponsibility(role: AgentRole): string {

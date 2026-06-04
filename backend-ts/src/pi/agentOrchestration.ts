@@ -16,6 +16,7 @@ export type AgentRecommendationInput = {
   role?: string;
 };
 export type AgentWorkflowInput = AgentRecommendationInput & {
+  goal_id?: string;
   instructions?: string;
   rationale?: string;
   recommended_skill_intents?: string[];
@@ -34,6 +35,7 @@ export type ExecutorAssignmentInput = AgentRecommendationInput & {
 export type NeedsUserEscalationInput = { issue_id: number; reason: string; requested_action?: string };
 export type AgentOrchestrationProposal = {
   actionType: string;
+  goalID?: string;
   issueID?: number;
   payload: Record<string, unknown>;
   projectID?: string;
@@ -96,6 +98,7 @@ export function createAgentWorkflowProposal(
   const recommendation = recommendExecutorProfile(db, project, { ...input, issue_id: target?.id, role });
   return {
     actionType: "issue.create",
+    goalID: cleanString(input.goal_id),
     issueID: target?.id,
     payload: workflowIssuePayload(project, target, role, recommendation, input),
     projectID: project.id,

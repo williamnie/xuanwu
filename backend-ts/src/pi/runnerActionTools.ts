@@ -91,6 +91,7 @@ function workflowTool(
 function workflowParams() {
   return Type.Object({
     agent_profile_id: optionalString,
+    goal_id: optionalString,
     instructions: optionalString,
     project_id: optionalString,
     rationale: optionalString,
