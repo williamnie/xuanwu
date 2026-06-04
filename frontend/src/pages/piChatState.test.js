@@ -4,18 +4,21 @@ import test from 'node:test';
 
 const source = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
 
-test('Runner chat loader keeps a stable callback without project selection dependencies', () => {
+test('Runner chat loader keeps a stable callback and loads projects for @ mentions', () => {
   assert.match(source, /function usePiChatLoader\(setters\)/);
   assert.doesNotMatch(source, /useCallback\([\s\S]*\], \[[^\]]*state[^\]]*\]\)/);
   assert.doesNotMatch(source, /selectedProjectId/);
   assert.doesNotMatch(source, /setSelectedProjectId/);
+  assert.match(source, /api\.getProjects\(\)/);
+  assert.match(source, /setProjects\(projectList \|\| \[\]\)/);
 });
 
-test('Runner chat sends session-style message settings with prompts', () => {
-  assert.match(source, /defaultMessageSettings/);
-  assert.match(source, /runnerMessageSettings\(state\.messageSettings\)/);
-  assert.match(source, /approval_policy:\s*settings\.approvalPolicy/);
-  assert.match(source, /reasoning_effort:\s*settings\.reasoningEffort/);
+test('Runner chat sends PI prompt with project context instead of session runtime overrides', () => {
+  assert.doesNotMatch(source, /defaultMessageSettings/);
+  assert.doesNotMatch(source, /runnerMessageSettings/);
+  assert.doesNotMatch(source, /approval_policy:\s*settings\.approvalPolicy/);
+  assert.match(source, /promptWithProjectContext\(text, targetProject \|\| state\.selectedProject\)/);
+  assert.match(source, /project_id:\s*currentProjectId\(state, options\.project\)/);
 });
 
 
@@ -37,4 +40,15 @@ test('Runner chat tracks selected conversation and updates title from message re
   assert.match(source, /createConversation\('New conversation'/);
   assert.match(source, /applyConversationTitle\(state, conversationId, result\?\.title\)/);
   assert.doesNotMatch(source, /new Date\(\)\.toLocaleString/);
+});
+
+test('Runner chat can infer project from natural @project mention text', async () => {
+  const module = await import('./piChatProjectContext.js');
+  const projects = [
+    { id: 'codex-issue-runner', name: 'codex-issue-runner' },
+    { id: 'movo-web', name: 'movo-web' },
+  ];
+  assert.equal(module.projectFromPrompt('@codex-issue-runner 创建 issue', projects)?.id, 'codex-issue-runner');
+  assert.equal(module.projectFromPrompt('@project:movo-web 做 smoke', projects)?.id, 'movo-web');
+  assert.match(module.promptWithProjectContext('创建 issue', projects[0]), /目标项目：@project:codex-issue-runner/);
 });

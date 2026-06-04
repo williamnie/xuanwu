@@ -1,6 +1,9 @@
 import { Bot, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import SessionComposer from './sessions/SessionComposer';
+import PiChatComposerMeta from './PiChatComposerMeta';
+import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
+import { projectFromPrompt } from './piChatProjectContext';
 import PiActionAuditPanel from './PiActionAuditPanel';
 import { shortId, usePiChatState } from './piChatState';
 import './PiChat.css';
@@ -140,14 +143,16 @@ function ChatThread({ navigateTo, state }) {
   );
 }
 
+const PI_CHAT_COMPOSER_SETTINGS = { model: '', reasoningEffort: '', approvalPolicy: 'never', sandbox: 'workspace-write' };
+
 function ChatComposer({ state }) {
   return (
     <div className="pi-chat-composer">
       <SessionComposer
         value={state.prompt}
         onChange={state.setPrompt}
-        settings={state.messageSettings}
-        onSettingChange={state.updateMessageSetting}
+        settings={PI_CHAT_COMPOSER_SETTINGS}
+        onSettingChange={() => {}}
         models={[]}
         modelsLoading={false}
         modelsError=""
@@ -155,8 +160,13 @@ function ChatComposer({ state }) {
         running={false}
         interruptState={null}
         selectedId={state.selectedConversationId || 'runner-draft'}
-        placeholder="问 Runner：现在整体最该推进什么？帮我调度项目、sessions 或 issues..."
+        placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Runner Chat 输入体验..."
         onSubmit={state.handleSend}
+        suggestions={buildPiChatProjectSuggestions(state.projects)}
+        referenceDetails={buildPiChatReferenceDetails(state.references, state.projects)}
+        onAttachReference={state.attachReference}
+        onRemoveReference={state.removeReference}
+        runtimeControls={<PiChatComposerMeta agent={state.selectedAgent} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
         onStop={() => {}}
       />
     </div>
@@ -190,7 +200,7 @@ function EmptyChat({ hasAgents, navigateTo }) {
     <div className="pi-chat-empty">
       <Bot size={34} />
       <strong>{hasAgents ? '开始一次 Runner 对话' : '先配置 Runner Agent'}</strong>
-      <span>{hasAgents ? '发送第一条消息后会自动创建会话。' : 'Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
+      <span>{hasAgents ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
       {!hasAgents && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Runner 设置</button>}
     </div>
   );

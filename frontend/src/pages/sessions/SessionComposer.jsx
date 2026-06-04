@@ -49,11 +49,23 @@ export default function SessionComposer({
   onSelectCommand = null,
   onExecuteCommand = null,
   onCancelCommand = null,
+  runtimeControls = null,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
   const effectiveModel = selectedModel || defaultModel;
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
+  const composerRuntimeControls = runtimeControls ?? (
+    <RuntimeControls
+      settings={settings}
+      onSettingChange={onSettingChange}
+      models={models}
+      modelsLoading={modelsLoading}
+      modelsError={modelsError}
+      effortOptions={effortOptions}
+      effectiveModel={effectiveModel}
+    />
+  );
   const hasQueuedMessages = queuedMessages.length > 0;
   const interrupting = isInterruptPending(interruptState, selectedId);
   const hasCommand = Boolean(commandState);
@@ -88,17 +100,7 @@ export default function SessionComposer({
         placeholder={placeholder}
         minHeight={84}
         variant="composer"
-        footerControls={(
-          <RuntimeControls
-            settings={settings}
-            onSettingChange={onSettingChange}
-            models={models}
-            modelsLoading={modelsLoading}
-            modelsError={modelsError}
-            effortOptions={effortOptions}
-            effectiveModel={effectiveModel}
-          />
-        )}
+        footerControls={composerRuntimeControls}
         onSubmitKey={canSubmitMessage ? submitFromEditor : null}
         suggestions={suggestions}
         referenceDetails={referenceDetails}

@@ -39,3 +39,12 @@ test('Runner page reuses the SessionComposer instead of a plain textarea', () =>
   assert.doesNotMatch(pageSource, /<textarea/);
   assert.doesNotMatch(pageSource, /<Send/);
 });
+
+test('Runner composer supports @project activation and PI model context', () => {
+  assert.match(pageSource, /buildPiChatProjectSuggestions\(state\.projects\)/);
+  assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
+  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta agent=\{state\.selectedAgent\} project=\{state\.selectedProject \|\| projectFromPrompt\(state\.prompt, state\.projects\)\} \/>\}/);
+  assert.match(pageSource, /@项目后直接说需求/);
+  assert.doesNotMatch(pageSource, /state\.messageSettings/);
+  assert.doesNotMatch(pageSource, /state\.updateMessageSetting/);
+});

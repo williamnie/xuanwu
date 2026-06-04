@@ -173,3 +173,55 @@
     padding-top: 8px;
   }
 }
+
+.pi-chat-runtime-controls {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pi-chat-runtime-pill {
+  align-items: center;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 999px;
+  color: #1f2937;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 760;
+  gap: 5px;
+  line-height: 1;
+  max-width: 260px;
+  min-height: 28px;
+  overflow: hidden;
+  padding: 0 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-chat-runtime-pill:first-child {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
+.pi-chat-runtime-pill.muted {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: #64748b;
+}
+
+[data-theme="dark"] .pi-chat-runtime-pill {
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #dbeafe;
+}
+
+[data-theme="dark"] .pi-chat-runtime-pill:first-child {
+  background: rgba(96, 165, 250, 0.14);
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .pi-chat-runtime-pill.muted {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}

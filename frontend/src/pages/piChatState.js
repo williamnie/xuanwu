@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
-import { defaultMessageSettings } from './sessions/sessionOptions';
+import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
 
 const DEFAULT_TRANSCRIPT = [];
-const DEFAULT_RUNNER_SETTINGS = {
-  approvalPolicy: 'never',
-  model: '',
-  reasoningEffort: '',
-  sandbox: 'workspace-write'
-};
 
 export function usePiChatState() {
   const state = usePiChatFields();
@@ -18,6 +12,7 @@ export function usePiChatState() {
     setConversations: state.setConversations,
     setError: state.setError,
     setLoading: state.setLoading,
+    setProjects: state.setProjects,
     setSelectedAgentId: state.setSelectedAgentId
   });
   const createConversation = useCreatePiConversation(state);
@@ -44,18 +39,24 @@ function usePiChatFields() {
   const [selectedConversationId, setSelectedConversationId] = useState('');
   const [transcript, setTranscript] = useState(DEFAULT_TRANSCRIPT);
   const [prompt, setPrompt] = useState('');
+  const [projects, setProjects] = useState([]);
+  const [references, setReferences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [messageSettings, setMessageSettings] = useState(() => defaultMessageSettings(DEFAULT_RUNNER_SETTINGS));
   const selectedAgent = useMemo(() => agents.find((agent) => agent.id === selectedAgentId), [agents, selectedAgentId]);
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
     [conversations, selectedConversationId]
   );
+  const selectedProject = useMemo(
+    () => selectedConversationProject(selectedConversation, references, projects),
+    [projects, references, selectedConversation]
+  );
   const selectConversation = useCallback(async (id) => {
     setSelectedConversationId(id);
     setTranscript([]);
+    setReferences([]);
     if (!id) return;
     setLoading(true);
     try {
@@ -68,13 +69,16 @@ function usePiChatFields() {
       setLoading(false);
     }
   }, []);
-  const updateMessageSetting = useCallback((key, value) => {
-    setMessageSettings((current) => ({ ...current, [key]: value }));
+  const attachReference = useCallback((reference) => {
+    setReferences((current) => addPiChatReference(current, reference));
   }, []);
-  return { agents, error, filteredConversations: conversations, loading, messageSettings, prompt, selectConversation,
-    selectedAgent, selectedAgentId, selectedConversation, selectedConversationId, sending,
-    setAgents, setConversations, setError, setLoading, setPrompt, setSelectedAgentId,
-    setSelectedConversationId, setSending, setTranscript, transcript, updateMessageSetting };
+  const removeReference = useCallback((key) => {
+    setReferences((current) => current.filter((item) => referenceKey(item) !== key));
+  }, []);
+  return { agents, attachReference, error, filteredConversations: conversations, loading, projects, prompt, references, removeReference, selectConversation,
+    selectedAgent, selectedAgentId, selectedConversation, selectedConversationId, selectedProject, sending,
+    setAgents, setConversations, setError, setLoading, setProjects, setPrompt, setReferences, setSelectedAgentId,
+    setSelectedConversationId, setSending, setTranscript, transcript };
 }
 
 function conversationTranscript(detail) {
@@ -101,14 +105,16 @@ function usePiChatLoader(setters) {
     setConversations,
     setError,
     setLoading,
+    setProjects,
     setSelectedAgentId
   } = setters;
   return useCallback(() => {
     setLoading(true);
-    return Promise.all([api.getPiAgents(), api.getPiConversations()])
-      .then(([agentList, conversationList]) => {
+    return Promise.all([api.getPiAgents(), api.getPiConversations(), api.getProjects()])
+      .then(([agentList, conversationList, projectList]) => {
         setAgents(agentList || []);
         setConversations(conversationList || []);
+        setProjects(projectList || []);
         setError('');
         setSelectedAgentId((current) => current || firstEnabledAgent(agentList || [])?.id || '');
       })
@@ -119,6 +125,7 @@ function usePiChatLoader(setters) {
     setConversations,
     setError,
     setLoading,
+    setProjects,
     setSelectedAgentId
   ]);
 }
@@ -130,11 +137,13 @@ function useCreatePiConversation(state) {
     try {
       const conversation = await api.createPiConversation({
         pi_agent_id: state.selectedAgentId,
+        project_id: currentProjectId(state, options.project),
         title
       });
       state.setConversations((items) => [conversation, ...items]);
       state.setSelectedConversationId(conversation.id);
       state.setTranscript([]);
+      state.setReferences([]);
       if (options.notify) message.success('Runner 会话已创建');
       return conversation.id;
     } catch (err) {
@@ -151,18 +160,22 @@ function useSendPiMessage(state, createConversation, loadPiState) {
     event.preventDefault();
     const text = state.prompt.trim();
     if (!text || state.sending) return;
-    const conversationId = state.selectedConversationId || await createConversation('New conversation');
+    const targetProject = state.selectedProject || projectFromPrompt(text, state.projects);
+    const shouldCreateProjectConversation = targetProject?.id && state.selectedConversation?.project_id !== targetProject.id;
+    const conversationId = shouldCreateProjectConversation
+      ? await createConversation('New conversation', { project: targetProject })
+      : state.selectedConversationId || await createConversation('New conversation', { project: targetProject });
     if (!conversationId) return;
-    await sendPromptToPi(state, conversationId, text, loadPiState);
+    await sendPromptToPi(state, conversationId, text, loadPiState, targetProject);
   }, [createConversation, loadPiState, state]);
 }
 
-async function sendPromptToPi(state, conversationId, text, loadPiState) {
+async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject = null) {
   state.setTranscript((items) => [...items, transcriptMessage('user', text)]);
   state.setPrompt('');
   state.setSending(true);
   try {
-    const result = await api.sendPiConversationMessage(conversationId, { prompt: text, settings: runnerMessageSettings(state.messageSettings) });
+    const result = await api.sendPiConversationMessage(conversationId, { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) });
     state.setTranscript((items) => [...items, transcriptMessage('assistant', runnerReplyText(result), result)]);
     applyConversationTitle(state, conversationId, result?.title);
     await loadPiState();
@@ -190,12 +203,40 @@ function runnerReplyText(result) {
   return 'Runner 未返回文本';
 }
 
-function runnerMessageSettings(settings) {
+
+function currentProjectId(state, project = null) {
+  return project?.id || state.selectedProject?.id || '';
+}
+
+function selectedConversationProject(conversation, references, projects) {
+  const referencedProject = references
+    .map((reference) => reference.type === 'project' ? reference.id : '')
+    .find(Boolean);
+  const projectId = referencedProject || conversation?.project_id || '';
+  return projects.find((project) => project.id === projectId) || null;
+}
+
+function addPiChatReference(current, reference) {
+  const normalized = normalizeReference(reference);
+  if (!normalized) return Array.isArray(current) ? current : [];
+  const refs = Array.isArray(current) ? current : [];
+  const withoutSameTypeProject = normalized.type === 'project'
+    ? refs.filter((item) => item.type !== 'project')
+    : refs;
+  if (withoutSameTypeProject.some((item) => referenceKey(item) === referenceKey(normalized))) return withoutSameTypeProject;
+  return [...withoutSameTypeProject, normalized];
+}
+
+function normalizeReference(reference) {
+  const type = String(reference?.type || '').trim().toLowerCase();
+  if (type !== 'project') return null;
+  const id = cleanProjectText(reference.id);
+  if (!id) return null;
   return {
-    approval_policy: settings.approvalPolicy,
-    model: settings.model,
-    reasoning_effort: settings.reasoningEffort,
-    sandbox: settings.sandbox
+    type,
+    id,
+    label: cleanProjectText(reference.label) || id,
+    metadata: reference.metadata && typeof reference.metadata === 'object' ? { ...reference.metadata } : {},
   };
 }
 
