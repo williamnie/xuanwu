@@ -16,6 +16,8 @@ import { readCodexUsage } from "../usage/codex.ts";
 import type { UsageIssueRef, UsageProjectRef } from "../usage/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { diagnoseIssueState, type IssueStateDiagnostic } from "./issueStateManager.ts";
+import { buildNightRunSummary } from "./nightRunSummary.ts";
+import { issueReportSummary } from "./reportIssueSummary.ts";
 
 export type PiReportInput = {
   bus?: Pick<EventBus, "publish">; codexSessionsDir?: string; database: RunnerDatabase;
@@ -75,28 +77,35 @@ function assembleReport(db: RunnerDatabase, input: {
   const completed = input.issues.filter((issue) => issue.status === "done" && !gapIDs.has(issue.id));
   const failed = input.issues.filter((issue) => issue.status === "failed");
   const escalations = blockedEscalations(input.diagnostics);
+  const issueSummaries = input.issues.map(issueReportSummary);
+  const completedSummaries = completed.map(issueReportSummary);
+  const failedSummaries = failed.map(issueReportSummary);
   const issueIDs = input.issues.map((issue) => issue.id);
   const heartbeatIDs = input.evidence.heartbeat_runs.map((run) => run.id);
+  const nightSummary = nightRunSummary(input, issueSummaries, completedSummaries, failedSummaries, heartbeatIDs);
   return {
     blocked_escalations: escalations,
-    completed_issues: completed.map(issueSummary),
+    completed_issues: completedSummaries,
     delegation_id: input.scope.delegationID,
     evidence: input.evidence,
-    failed_retry_summary: { count: failed.length, failed_issues: failed.map(issueSummary) },
+    failed_retry_summary: { count: failed.length, failed_issues: failedSummaries },
     generated_at: input.now.toISOString(),
     heartbeat_ids: heartbeatIDs,
+    issue_categories: nightSummary.issue_categories,
     issue_ids: issueIDs,
     notification: notificationPlan(db, input.project?.id ?? ""),
     project_id: input.project?.id ?? "",
     project_name: safeText(input.project?.name ?? "All projects"),
     provider_health: providerHealth(input.project),
     summary: {
+      blocked: nightSummary.issue_categories.blocked.length,
       completed: completed.length,
       failed: failed.length,
-      needs_user: escalations.length,
+      needs_user: nightSummary.issue_categories.needs_user.length,
       total: input.issues.length,
       verification_gaps: gaps.length
     },
+    summary_text_zh: nightSummary.summary_text_zh,
     source: input.scope.source,
     status: "generated",
     type: input.type,
@@ -104,6 +113,26 @@ function assembleReport(db: RunnerDatabase, input: {
     verification_gaps: gaps,
     window: input.window
   };
+}
+
+function nightRunSummary(
+  input: Parameters<typeof assembleReport>[1],
+  issueSummaries: Array<Record<string, unknown>>,
+  completedSummaries: Array<Record<string, unknown>>,
+  failedSummaries: Array<Record<string, unknown>>,
+  heartbeatIDs: string[]
+): ReturnType<typeof buildNightRunSummary> {
+  return buildNightRunSummary({
+    allIssues: issueSummaries,
+    completedIssues: completedSummaries,
+    delegationID: input.scope.delegationID,
+    diagnostics: input.diagnostics,
+    failedIssues: failedSummaries,
+    heartbeatIDs,
+    projectLabel: input.project?.name ?? "All projects",
+    source: input.scope.source,
+    window: input.window
+  });
 }
 
 type ReportScope = {
@@ -121,27 +150,6 @@ function reportIssues(
   if (scope.delegationID === "" && scope.heartbeatID === "") return issues;
   const issueIDs = new Set(auditEvents.map((event) => event.issue_id).filter((id) => id > 0));
   return issues.filter((issue) => issueIDs.has(issue.id));
-}
-
-function issueSummary(issue: Issue): Record<string, unknown> {
-  const sessionID = issue.codex_thread_id || issue.latest_run?.provider_session_id || issue.latest_run?.codex_thread_id || "";
-  return {
-    evidence_links: evidenceLinks(issue, sessionID),
-    error: safeText(issue.error),
-    id: issue.id,
-    status: issue.status,
-    title: safeText(issue.title),
-    updated_at: issue.updated_at
-  };
-}
-
-function evidenceLinks(issue: Issue, sessionID: string): Record<string, string> {
-  return {
-    audit: `/api/pi/audit-events?project_id=${encodeURIComponent(issue.project_id)}&issue_id=${issue.id}`,
-    issue: `/api/issues/${issue.id}`,
-    runs: `/api/issues/${issue.id}/runs`,
-    ...(sessionID ? { session: `/api/sessions/codex:${encodeURIComponent(sessionID)}` } : {})
-  };
 }
 
 function verificationGaps(diagnostics: IssueStateDiagnostic[]): Array<Record<string, unknown>> {

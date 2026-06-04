@@ -29,7 +29,7 @@ describe("PI reports API", () => {
         title: "Completed issue"
       });
       const failed = insertIssue(database, "demo", {
-        error: "approval denied; waiting for user input",
+        error: "approval denied; API_KEY=secret-value; /Users/xiaobei/private.txt; waiting for user input",
         status: "failed",
         title: "Needs user"
       });
@@ -67,8 +67,14 @@ describe("PI reports API", () => {
       })]);
       expect(body.failed_retry_summary.failed_issues).toEqual([expect.objectContaining({
         evidence_links: expect.objectContaining({ audit: "/api/pi/audit-events?project_id=demo&issue_id=" + failed }),
+        error: expect.stringContaining("[redacted]"),
         id: failed
       })]);
+      expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("secret-value");
+      expect(body.failed_retry_summary.failed_issues[0].error).not.toContain("/Users/xiaobei");
+      expect(body.issue_categories.needs_user).toEqual([expect.objectContaining({ id: failed })]);
+      expect(body.summary_text_zh).toContain("夜间执行总结");
+      expect(body.summary_text_zh).toContain("需用户 1");
       expect(body.blocked_escalations).toEqual([expect.objectContaining({
         issue_id: failed,
         notification_event: "pi.needs_user"
