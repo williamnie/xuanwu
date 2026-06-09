@@ -168,10 +168,6 @@
   .pi-chat-shell {
     grid-template-columns: 1fr;
   }
-
-  .pi-chat-page {
-    padding-top: 8px;
-  }
 }
 
 .pi-chat-runtime-controls {
