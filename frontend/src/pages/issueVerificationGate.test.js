@@ -7,11 +7,11 @@ const detailPage = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), '
 const apiClient = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 
-test('issues board exposes pending verification as its own column', () => {
-  assert.match(issuesPage, /pendingVerificationIssues\s*=\s*projectIssues\.filter\(i => i\.status === 'pending_verification'\)/);
-  assert.match(issuesPage, /id:\s*'pending_verification'/);
-  assert.match(issuesPage, /title:\s*'Pending Verification'/);
-  assert.match(css, /\.status-badge\.pending_verification/);
+test('issues board does not expose pending verification as its own column', () => {
+  assert.doesNotMatch(issuesPage, /pendingVerificationIssues/);
+  assert.doesNotMatch(issuesPage, /id:\s*'pending_verification'/);
+  assert.doesNotMatch(issuesPage, /title:\s*'Pending Verification'/);
+  assert.doesNotMatch(css, /\.status-badge\.pending_verification/);
 });
 
 test('issue detail provides pending verification review actions', () => {
