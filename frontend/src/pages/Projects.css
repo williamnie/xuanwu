@@ -1,0 +1,14 @@
+/* Project config modal can grow tall after Agent Profile fields; keep actions reachable. */
+.project-config-modal {
+  max-width: 760px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@supports (height: 100dvh) {
+  .project-config-modal {
+    max-height: min(90vh, calc(100dvh - 48px));
+  }
+}

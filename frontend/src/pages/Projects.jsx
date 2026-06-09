@@ -1,4 +1,5 @@
 import { useImmer } from 'use-immer';
+import './Projects.css';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import {
@@ -561,7 +562,7 @@ export default function Projects() {
       {/* 新增/编辑项目模态窗 */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="glass-card modal-content" style={{ padding: '32px' }}>
+          <div className="glass-card modal-content project-config-modal" style={{ padding: '32px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>
                 {modalMode === 'create' ? '新增监控项目' : '编辑项目配置'}
