@@ -980,7 +980,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   <span className="pinned-title" title={s.name || s.preview}>{s.name || s.preview || '未命名 Codex 会话'}</span>
                   <div className="pinned-actions">
                     <span className="session-provider-pill">{providerLabel(s.provider)}</span>
-                    <SessionOriginBadge origin={s.origin} />
                     <button 
                       className="pinned-action-btn" 
                       onClick={(e) => togglePinSession(s.id, e)} 
@@ -996,7 +995,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
         )}
 
         {/* 项目会话列表 */}
-        <SessionOriginLegend />
         <div className="sidebar-section-title">项目</div>
         <SessionListFilterTabs value={sessionListFilter} onChange={setSessionListFilter} />
         <div className="sidebar-scroll-area">
@@ -1363,31 +1361,6 @@ function tokenSummary(usage) {
     reasoning: formatTokenNumber(total.reasoning_output_tokens),
     capturedAt: usage.captured_at || '',
   };
-}
-
-function SessionOriginBadge({ origin }) {
-  const meta = sessionOriginMeta(origin);
-  return <span className={`session-origin-dot ${meta.className}`} title={meta.title} />;
-}
-
-function sessionOriginMeta(origin) {
-  if (origin === 'runner') {
-    return { className: 'runner', label: 'Runner', title: 'Runner：由 codex-issue-runner 创建或执行' };
-  }
-  return { className: 'codex-app', label: 'Codex App', title: 'Codex App：来自 Codex App / CLI 会话' };
-}
-
-function SessionOriginLegend() {
-  return (
-    <div className="session-origin-legend" aria-label="Session 来源说明">
-      <span className="session-origin-legend-item">
-        <span className="session-origin-dot codex-app" /> Codex App
-      </span>
-      <span className="session-origin-legend-item">
-        <span className="session-origin-dot runner" /> Runner
-      </span>
-    </div>
-  );
 }
 
 function SessionListFilterTabs({ value, onChange }) {

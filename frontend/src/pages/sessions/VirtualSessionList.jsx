@@ -30,13 +30,6 @@ function formatRelativeTime(seconds) {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date(seconds * 1000));
 }
 
-function sessionOriginMeta(origin) {
-  if (origin === 'runner') {
-    return { className: 'runner', title: 'Runner：由 codex-issue-runner 创建或执行' };
-  }
-  return { className: 'codex-app', title: 'Codex App：来自 Codex App / CLI 会话' };
-}
-
 function providerLabel(provider) {
   switch (String(provider || 'codex').toLowerCase()) {
     case 'codex':
@@ -55,7 +48,6 @@ function providerLabel(provider) {
 const SessionItem = memo(function SessionItem({ session, active, onSelect }) {
   const title = session.name || session.preview || 'Untitled session';
   const relativeTime = formatRelativeTime(session.updatedAt || session.createdAt);
-  const origin = sessionOriginMeta(session.origin);
   const provider = providerLabel(session.provider);
 
   return (
@@ -66,7 +58,6 @@ const SessionItem = memo(function SessionItem({ session, active, onSelect }) {
       <span className="session-item-title" title={title}>{title}</span>
       <div className="session-item-right">
         <span className="session-provider-pill">{provider}</span>
-        <span className={`session-origin-dot ${origin.className}`} title={origin.title} />
         {session.isRunning ? (
           <span className="session-item-loading">
             <Loader2 size={12} />

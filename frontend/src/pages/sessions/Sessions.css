@@ -245,58 +245,6 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.session-origin-dot {
-  display: inline-flex;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  flex: 0 0 auto;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
-}
-
-.session-origin-dot.runner {
-  background: #f59e0b;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
-}
-
-.session-origin-dot.codex-app {
-  background: #94a3b8;
-  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.16);
-}
-
-[data-theme="dark"] .session-origin-dot.runner {
-  background: #fbbf24;
-  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
-}
-
-[data-theme="dark"] .session-origin-dot.codex-app {
-  background: #94a3b8;
-  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.18);
-}
-
-.session-origin-legend {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 20px;
-  padding: 2px 10px 6px 28px;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  font-weight: 600;
-}
-
-.session-origin-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.session-origin-legend .session-origin-dot {
-  width: 6px;
-  height: 6px;
-}
-
 .session-runtime-header {
   display: flex;
   align-items: center;
