@@ -29,7 +29,7 @@ function projectReferenceDetail(reference, projectMap) {
     ...reference,
     key: referenceKey(reference),
     status: ready ? 'ready' : 'error',
-    message: ready ? '本次 PI 对话会使用该 project 作为工作上下文。' : 'Project 不存在或未加载。',
+    message: ready ? '' : 'Project 不存在或未加载。',
     summary: ready ? `${project.name || project.id} · ${project.cwd || 'cwd 未知'}` : '缺少 project context',
   };
 }

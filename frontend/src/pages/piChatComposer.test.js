@@ -20,5 +20,6 @@ test('PI chat project reference details mark selected project ready', () => {
   );
   assert.equal(details[0].key, 'project:codex-issue-runner');
   assert.equal(details[0].status, 'ready');
+  assert.equal(details[0].message, '');
   assert.match(details[0].summary, /Runner/);
 });
