@@ -34,13 +34,15 @@ describe("Bun Sessions API compatibility", () => {
       const created = await router.handle(jsonRequest("/api/sessions", {
         project_id: "demo",
         prompt: "hello session",
-        reasoning_effort: "high"
+        reasoning_effort: "high",
+        service_tier: "priority"
       }));
       const list = await router.handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
       const detail = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new`));
       const message = await router.handle(jsonRequest("/api/sessions/codex:thread-new/messages", {
         prompt: "follow up",
-        model: "codex-default"
+        model: "codex-default",
+        service_tier: "priority"
       }));
       const interrupt = await router.handle(new Request(`${BASE_URL}/api/sessions/codex:thread-new/interrupt`, { method: "POST" }));
 
@@ -63,10 +65,10 @@ describe("Bun Sessions API compatibility", () => {
       expect(await interrupt.json()).toEqual({ interrupted: true });
       expect(provider.interrupts).toEqual([{ sessionId: "thread-new", turnId: "turn-follow-up" }]);
       expect(provider.calls).toEqual([
-        ["createSession", { cwd: "/tmp/demo", prompt: "hello session", reasoningEffort: "high" }],
+        ["createSession", { cwd: "/tmp/demo", prompt: "hello session", reasoningEffort: "high", serviceTier: "priority" }],
         ["listSessions", { limit: 20 }],
         ["readSession", { sessionId: "thread-new" }],
-        ["sendSessionMessage", { sessionId: "thread-new", prompt: "follow up" }]
+        ["sendSessionMessage", { sessionId: "thread-new", prompt: "follow up", serviceTier: "priority" }]
       ]);
     } finally {
       database.close();
@@ -187,7 +189,8 @@ class SessionsProvider implements ExecutorProvider {
     this.calls.push(["createSession", compact({
       cwd: input.cwd,
       prompt: input.prompt,
-      reasoningEffort: input.reasoningEffort
+      reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier
     })]);
     return {
       id: "codex:thread-new",
@@ -204,7 +207,8 @@ class SessionsProvider implements ExecutorProvider {
       sessionId: input.sessionId,
       prompt: input.prompt,
       mode: input.mode,
-      turnId: input.turnId
+      turnId: input.turnId,
+      serviceTier: input.serviceTier
     })]);
     return {
       provider: "codex" as const,

@@ -7,6 +7,9 @@ export const REASONING_EFFORT_OPTIONS = [
   { value: 'xhigh', label: '超高', shortLabel: '超高' },
 ];
 
+export const SERVICE_TIER_STANDARD = '';
+export const SERVICE_TIER_FAST = 'priority';
+
 export const APPROVAL_OPTIONS = [
   { value: 'never', label: '不询问授权', shortLabel: '不询问' },
   { value: 'danger-only', label: '敏感操作确认', shortLabel: '敏感确认' },
@@ -72,6 +75,7 @@ export function defaultSessionSettings(project) {
     provider: providerValue(project),
     model: modelValueFromProject(project),
     reasoningEffort: '',
+    serviceTier: SERVICE_TIER_STANDARD,
     approvalPolicy: project?.approval_policy || 'never',
     sandbox: project?.sandbox || 'workspace-write',
   };
@@ -88,4 +92,23 @@ export function modelLabel(model) {
 export function supportedEffortValues(model) {
   const efforts = model?.supportedReasoningEfforts || [];
   return efforts.map((item) => item.reasoningEffort).filter(Boolean);
+}
+
+export function serviceTierOptions(model, selectedValue = SERVICE_TIER_STANDARD) {
+  const tiers = Array.isArray(model?.serviceTiers) ? model.serviceTiers : [];
+  const options = [{ value: SERVICE_TIER_STANDARD, label: '标准', shortLabel: '标准' }];
+  for (const tier of tiers) {
+    const value = tier?.id || '';
+    if (!value) continue;
+    options.push({
+      value,
+      label: tier.name || value,
+      shortLabel: tier.name === 'Fast' ? '快速' : tier.name || value,
+      description: tier.description || '',
+    });
+  }
+  if (selectedValue && !options.some((option) => option.value === selectedValue)) {
+    options.push({ value: selectedValue, label: selectedValue, shortLabel: selectedValue });
+  }
+  return options;
 }

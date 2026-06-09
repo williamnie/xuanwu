@@ -77,6 +77,7 @@ function copyMessageSettings(settings = {}) {
   return {
     model: settings.model || '',
     reasoningEffort: settings.reasoningEffort || '',
+    serviceTier: settings.serviceTier || '',
     approvalPolicy: settings.approvalPolicy || '',
     sandbox: settings.sandbox || '',
   };

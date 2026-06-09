@@ -8,6 +8,7 @@ export type ThreadStartInput = {
   developerInstructions?: string;
   model?: string;
   reasoningEffort?: string;
+  serviceTier?: string;
   sandbox?: string;
   threadSource?: string;
 };
@@ -29,6 +30,7 @@ export type TurnStartOptions = {
   approvalPolicy?: string;
   model?: string;
   reasoningEffort?: string;
+  serviceTier?: string;
   sandbox?: string;
 };
 
@@ -114,6 +116,7 @@ export function threadStartParams(input: ThreadStartInput): Record<string, unkno
   };
   const source = threadSource(input.threadSource);
   if (source) params.threadSource = source;
+  if (input.serviceTier?.trim()) params.serviceTier = input.serviceTier.trim();
   if (input.reasoningEffort?.trim()) params.config = { model_reasoning_effort: input.reasoningEffort.trim() };
   return params;
 }
@@ -133,6 +136,7 @@ export function turnStartParams(threadID: string, input: CodexUserInput[], optio
   const params: Record<string, unknown> = { threadId: threadID.trim(), input };
   if (options.model?.trim() && options.model.trim() !== "codex-default") params.model = options.model.trim();
   if (options.reasoningEffort?.trim()) params.effort = options.reasoningEffort.trim();
+  if (options.serviceTier?.trim()) params.serviceTier = options.serviceTier.trim();
   if (options.approvalPolicy?.trim()) params.approvalPolicy = approvalPolicy(options.approvalPolicy);
   if (options.sandbox?.trim()) params.sandboxPolicy = turnSandboxPolicy(options.sandbox);
   return params;

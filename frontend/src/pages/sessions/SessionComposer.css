@@ -84,6 +84,10 @@
   color: #6b7280;
 }
 
+.session-composer-select.speed .session-composer-select-value {
+  color: #6b7280;
+}
+
 .session-composer-circle {
   width: 32px;
   height: 32px;
@@ -317,6 +321,10 @@
 }
 
 [data-theme="dark"] .session-composer-select.effort .session-composer-select-value {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .session-composer-select.speed .session-composer-select-value {
   color: #cbd5e1;
 }
 

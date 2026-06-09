@@ -37,7 +37,10 @@ describe("Codex adapter RPC methods", () => {
           id: "gpt-5.5",
           name: "GPT-5.5",
           default: true,
-          reasoningEfforts: [{ value: "high", label: "High" }]
+          reasoningEfforts: [{ value: "high", label: "High" }],
+          additionalSpeedTiers: ["fast"],
+          serviceTiers: [{ id: "priority", name: "Fast", description: "1.5x speed" }],
+          defaultServiceTier: "priority"
         }],
         nextCursor: "next"
       }
@@ -54,7 +57,10 @@ describe("Codex adapter RPC methods", () => {
         isDefault: true,
         hidden: false,
         defaultReasoningEffort: "high",
-        supportedReasoningEfforts: [{ reasoningEffort: "high", description: "High" }]
+        supportedReasoningEfforts: [{ reasoningEffort: "high", description: "High" }],
+        additionalSpeedTiers: ["fast"],
+        serviceTiers: [{ id: "priority", name: "Fast", description: "1.5x speed" }],
+        defaultServiceTier: "priority"
       }],
       nextCursor: "next"
     });
@@ -68,6 +74,7 @@ describe("Codex adapter RPC methods", () => {
       cwd: "/tmp/demo",
       model: "codex-default",
       reasoningEffort: "xhigh",
+      serviceTier: "priority",
       approvalPolicy: "danger-only",
       sandbox: "workspace-write",
       developerInstructions: "keep changes small",
@@ -81,6 +88,7 @@ describe("Codex adapter RPC methods", () => {
         model: null,
         approvalPolicy: "on-request",
         sandbox: "workspace-write",
+        serviceTier: "priority",
         developerInstructions: "keep changes small",
         ephemeral: false,
         threadSource: "subagent",
@@ -173,6 +181,7 @@ describe("Codex adapter RPC methods", () => {
     }], {
       model: "codex-default",
       reasoningEffort: "xhigh",
+      serviceTier: "priority",
       approvalPolicy: "danger-only",
       sandbox: "read-only"
     });
@@ -183,6 +192,7 @@ describe("Codex adapter RPC methods", () => {
         threadId: "thread-1",
         input: [{ type: "text", text: "issue prompt", text_elements: [] }],
         effort: "xhigh",
+        serviceTier: "priority",
         approvalPolicy: "on-request",
         sandboxPolicy: { type: "readOnly" }
       }

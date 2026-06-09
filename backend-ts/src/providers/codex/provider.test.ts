@@ -64,6 +64,7 @@ describe("Codex executor provider", () => {
       prompt: "issue body",
       model: "codex-default",
       reasoningEffort: "high",
+      serviceTier: "priority",
       approvalPolicy: "never",
       sandbox: "workspace-write",
       onEvent: (event) => events.push(event)
@@ -87,6 +88,7 @@ describe("Codex executor provider", () => {
           cwd: "/tmp/demo",
           model: "codex-default",
           reasoningEffort: "high",
+          serviceTier: "priority",
           approvalPolicy: "never",
           sandbox: "workspace-write",
           developerInstructions: "Keep changes scoped to the runner issue and explicitly update the issue status when done.",
@@ -102,6 +104,7 @@ describe("Codex executor provider", () => {
           options: {
             model: "codex-default",
             reasoningEffort: "high",
+            serviceTier: "priority",
             approvalPolicy: "never",
             sandbox: "workspace-write"
           }
@@ -194,9 +197,10 @@ describe("Codex executor provider", () => {
     const created = await provider.createSession({
       cwd: "/tmp/demo",
       prompt: "hello",
-      reasoningEffort: "high"
+      reasoningEffort: "high",
+      serviceTier: "priority"
     });
-    const message = await provider.sendSessionMessage({ sessionId: "thread-1", prompt: "follow" });
+    const message = await provider.sendSessionMessage({ sessionId: "thread-1", prompt: "follow", serviceTier: "priority" });
     const steer = await provider.sendSessionMessage({
       sessionId: "thread-1",
       prompt: "adjust",
@@ -221,6 +225,7 @@ describe("Codex executor provider", () => {
         params: {
           cwd: "/tmp/demo",
           reasoningEffort: "high",
+          serviceTier: "priority",
           developerInstructions: "manual instructions",
           threadSource: "user"
         }
@@ -230,7 +235,7 @@ describe("Codex executor provider", () => {
         params: {
           threadID: "thread-1",
           input: [{ type: "text", text: "hello", text_elements: [] }],
-          options: { reasoningEffort: "high" }
+          options: { reasoningEffort: "high", serviceTier: "priority" }
         }
       },
       { method: "initialize" },
@@ -239,7 +244,7 @@ describe("Codex executor provider", () => {
         params: {
           threadID: "thread-1",
           input: [{ type: "text", text: "follow", text_elements: [] }],
-          options: {}
+          options: { serviceTier: "priority" }
         }
       },
       { method: "initialize" },

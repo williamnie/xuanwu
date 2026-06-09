@@ -31,3 +31,11 @@ test('running queue hint uses concise status text', () => {
   assert.match(source, /发送会排队为下一条/);
   assert.doesNotMatch(source, /不会引导当前响应/);
 });
+
+
+test('session composer exposes a speed control backed by service tier', () => {
+  assert.match(source, /SERVICE_TIER_STANDARD/);
+  assert.match(source, /className="speed"/);
+  assert.match(source, /onSettingChange\('serviceTier', value\)/);
+  assert.match(source, /serviceTierOptions\(effectiveModel, settings\.serviceTier\)/);
+});

@@ -38,3 +38,10 @@ function newChatShortcutBlock(source) {
   assert.notEqual(end, -1, 'new chat label should exist');
   return source.slice(start, end);
 }
+
+
+test('new and existing session payloads include service tier', () => {
+  assert.match(sessionsSource, /service_tier:\s*settings\.serviceTier/);
+  assert.match(sessionsSource, /service_tier:\s*sessionSettings\.serviceTier/);
+  assert.match(sessionsSource, /onServiceTierChange=\{\(value\) => handleSettingChange\('serviceTier', value\)\}/);
+});

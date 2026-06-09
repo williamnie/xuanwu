@@ -52,7 +52,9 @@ export type CodexInitializeResult = {
 export type ModelListInput = { includeHidden?: boolean };
 export type ModelListResult = { data: Model[]; nextCursor?: string };
 export type Model = {
+  additionalSpeedTiers: string[];
   defaultReasoningEffort: string;
+  defaultServiceTier: string;
   description: string;
   displayName: string;
   hidden: boolean;
@@ -60,9 +62,11 @@ export type Model = {
   inputModalities?: string[];
   isDefault: boolean;
   model: string;
+  serviceTiers: ModelServiceTier[];
   supportedReasoningEfforts: ReasoningEffortOption[];
 };
 export type ReasoningEffortOption = { description: string; reasoningEffort: string };
+export type ModelServiceTier = { description: string; id: string; name: string };
 export type ApprovalDecision = { decision: string; scope?: string };
 
 export class CodexAdapter {
@@ -176,10 +180,27 @@ function normalizeModel(value: unknown): Model {
     hidden: boolField(raw, "hidden"),
     defaultReasoningEffort: stringField(raw, "defaultReasoningEffort") || efforts[0]?.reasoningEffort || "",
     supportedReasoningEfforts: efforts,
+    additionalSpeedTiers: stringArrayField(raw, "additionalSpeedTiers", "additional_speed_tiers") ?? [],
+    serviceTiers: serviceTiers(raw),
+    defaultServiceTier: stringField(raw, "defaultServiceTier") || stringField(raw, "default_service_tier"),
     inputModalities: stringArrayField(raw, "inputModalities", "input_modalities")
   };
 }
 
+function serviceTiers(raw: Record<string, unknown>): ModelServiceTier[] {
+  return arrayField(raw, ["serviceTiers", "service_tiers"])
+    .map(normalizeServiceTier)
+    .filter((item) => item.id !== "");
+}
+
+function normalizeServiceTier(value: unknown): ModelServiceTier {
+  const raw = recordValue(value);
+  return {
+    id: stringField(raw, "id"),
+    name: stringField(raw, "name"),
+    description: stringField(raw, "description")
+  };
+}
 
 function reasoningEfforts(raw: Record<string, unknown>): ReasoningEffortOption[] {
   return arrayField(raw, ["supportedReasoningEfforts", "reasoningEfforts"])

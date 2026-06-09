@@ -36,6 +36,7 @@ export type ProviderRunInput = {
   prompt: string;
   model?: string;
   reasoningEffort?: string;
+  serviceTier?: string;
   approvalPolicy?: string;
   sandbox?: string;
   onEvent?: (event: ProviderEvent) => void;
@@ -63,6 +64,7 @@ export type SessionCreateInput = {
   projectId?: string;
   prompt?: string;
   reasoningEffort?: string;
+  serviceTier?: string;
   sandbox?: string;
 };
 export type SessionCreateResult = {

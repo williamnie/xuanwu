@@ -1,8 +1,10 @@
-import { ArrowUp, Brain, ChevronDown, Cpu, Loader2, ShieldAlert, Square } from 'lucide-react';
+import { ArrowUp, Brain, ChevronDown, Cpu, Gauge, Loader2, ShieldAlert, Square } from 'lucide-react';
 import PromptEditor from '../../components/editor/PromptEditor';
 import {
   REASONING_EFFORT_OPTIONS,
+  SERVICE_TIER_STANDARD,
   modelLabel,
+  serviceTierOptions,
   supportedEffortValues,
 } from './sessionOptions';
 import SessionCommandPanel from './SessionCommandPanel';
@@ -55,6 +57,7 @@ export default function SessionComposer({
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
   const effectiveModel = selectedModel || defaultModel;
   const effortOptions = visibleEffortOptions(effectiveModel, settings.reasoningEffort);
+  const tierOptions = serviceTierOptions(effectiveModel, settings.serviceTier);
   const composerRuntimeControls = runtimeControls ?? (
     <RuntimeControls
       settings={settings}
@@ -63,6 +66,7 @@ export default function SessionComposer({
       modelsLoading={modelsLoading}
       modelsError={modelsError}
       effortOptions={effortOptions}
+      tierOptions={tierOptions}
       effectiveModel={effectiveModel}
     />
   );
@@ -175,7 +179,7 @@ function queueMessagePreview(item) {
   return refs.length ? `已附加 ${refs.length} 个 references` : '';
 }
 
-function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, effectiveModel }) {
+function RuntimeControls({ settings, onSettingChange, models, modelsLoading, modelsError, effortOptions, tierOptions, effectiveModel }) {
   return (
     <>
       <PermissionSelect settings={settings} onSettingChange={onSettingChange} />
@@ -203,6 +207,18 @@ function RuntimeControls({ settings, onSettingChange, models, modelsLoading, mod
       >
         {effortOptions.map((option) => (
           <option key={effortOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
+        ))}
+      </CompactSelect>
+      <CompactSelect
+        className="speed"
+        icon={<Gauge size={14} />}
+        value={settings.serviceTier || SERVICE_TIER_STANDARD}
+        displayLabel={serviceTierDisplayLabel(tierOptions, settings.serviceTier)}
+        onChange={(value) => onSettingChange('serviceTier', value)}
+        title="速度"
+      >
+        {tierOptions.map((option) => (
+          <option key={serviceTierOptionKey(option)} value={option.value}>{option.shortLabel || option.label}</option>
         ))}
       </CompactSelect>
     </>
@@ -341,6 +357,15 @@ function effortOptionKey(option) {
 function effortDisplayLabel(options, value) {
   const option = options.find((item) => item.value === value);
   return option?.shortLabel || option?.label || '默认';
+}
+
+function serviceTierOptionKey(option) {
+  return `${option.value || 'standard'}:${option.label || ''}`;
+}
+
+function serviceTierDisplayLabel(options, value) {
+  const option = options.find((item) => item.value === (value || SERVICE_TIER_STANDARD));
+  return option?.shortLabel || option?.label || '标准';
 }
 
 function compactModelName(value) {

@@ -51,3 +51,16 @@ test('normalize pauses in-flight messages after refresh to avoid duplicate sends
   assert.equal(queue[0].status, 'failed');
   assert.match(queue[0].error, /避免重复发送/);
 });
+
+
+test('queued session messages preserve service tier setting', () => {
+  const message = createQueuedSessionMessage({
+    id: 'fast',
+    sessionId: 'codex:t1',
+    prompt: 'fast please',
+    settings: { serviceTier: 'priority' },
+  });
+
+  assert.equal(message.settings.serviceTier, 'priority');
+  assert.equal(normalizeQueuedSessionMessages([message])[0].settings.serviceTier, 'priority');
+});

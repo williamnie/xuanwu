@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ChevronDown, ChevronRight, ExternalLink, FileCode, Info, Loader2, Plus, Settings,
   Pin, Search, MessageSquarePlus,
-  SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder
+  SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder, Gauge
 } from 'lucide-react';
 import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
@@ -40,6 +40,7 @@ import {
   modelLabel,
   providerSupports,
   providerLabel as projectProviderLabel,
+  serviceTierOptions,
 } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
 import { SESSION_LIST_FILTER_ALL, SESSION_LIST_FILTER_RECENT, SESSION_LIST_FILTER_RUNNING } from './sessions/sessionListFilters';
@@ -147,6 +148,19 @@ function compactModelName(value) {
     .trim();
 }
 
+function effectiveModelForSettings(settings, models) {
+  return models.find((model) => model.id === settings.model || model.model === settings.model)
+    || models.find((model) => model.isDefault)
+    || models[0]
+    || null;
+}
+
+function serviceTierLabel(settings, models) {
+  const options = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
+  const option = options.find((item) => item.value === (settings.serviceTier || ''));
+  return option?.shortLabel || option?.label || '标准';
+}
+
 function NewSessionPermissionControl({ settings, onSettingChange }) {
   return (
     <div className="composer-embedded-select danger">
@@ -170,7 +184,8 @@ function NewSessionPermissionControl({ settings, onSettingChange }) {
   );
 }
 
-function NewSessionComposerActions({ settings, models, sending, canSubmit, onModelChange, onSubmit }) {
+function NewSessionComposerActions({ settings, models, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
+  const tierOptions = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
   return (
     <>
       <div className="composer-embedded-select">
@@ -182,6 +197,15 @@ function NewSessionComposerActions({ settings, models, sending, canSubmit, onMod
             <option key={model.id || model.model} value={model.id || model.model}>
               {compactModelName(modelLabel(model))}
             </option>
+          ))}
+        </select>
+      </div>
+      <div className="composer-embedded-select">
+        <Gauge size={13} />
+        <span>{serviceTierLabel(settings, models)}</span>
+        <select value={settings.serviceTier || ''} onChange={(e) => onServiceTierChange(e.target.value)}>
+          {tierOptions.map((tier) => (
+            <option key={tier.value || 'standard'} value={tier.value}>{tier.shortLabel || tier.label}</option>
           ))}
         </select>
       </div>
@@ -688,6 +712,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     await api.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
       model: settings.model,
       reasoning_effort: settings.reasoningEffort,
+      service_tier: settings.serviceTier,
       approval_policy: settings.approvalPolicy,
       sandbox: settings.sandbox,
     }, references));
@@ -700,6 +725,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     await api.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
       model: settings.model,
       reasoning_effort: settings.reasoningEffort,
+      service_tier: settings.serviceTier,
       approval_policy: settings.approvalPolicy,
       sandbox: settings.sandbox,
     }, references));
@@ -896,6 +922,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
         cwd,
         model: sessionSettings.model,
         reasoning_effort: sessionSettings.reasoningEffort,
+        service_tier: sessionSettings.serviceTier,
         approval_policy: sessionSettings.approvalPolicy,
         sandbox: sessionSettings.sandbox,
       }, promptReferences));
@@ -1160,6 +1187,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                       sending={sending}
                       canSubmit={!promptCommand && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
                       onModelChange={(value) => handleSettingChange('model', value)}
+                      onServiceTierChange={(value) => handleSettingChange('serviceTier', value)}
                       onSubmit={handleCreateNewSession}
                     />
                   )}

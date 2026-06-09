@@ -95,6 +95,7 @@ function sessionCreateInput(context: SessionApiContext, body: Record<string, unk
     cwd: firstNonEmpty(stringBody(body, "cwd"), project?.cwd ?? ""),
     model: firstNonEmpty(stringBody(body, "model"), project?.model ?? ""),
     reasoningEffort: stringBody(body, "reasoning_effort"),
+    serviceTier: stringBody(body, "service_tier"),
     approvalPolicy: firstNonEmpty(stringBody(body, "approval_policy"), project?.approval_policy ?? ""),
     sandbox: firstNonEmpty(stringBody(body, "sandbox"), project?.sandbox ?? ""),
     prompt: stringBody(body, "prompt")
@@ -110,6 +111,7 @@ function sessionMessageInput(context: SessionApiContext, sessionId: string, body
     mode,
     model: stringBody(body, "model"),
     reasoningEffort: stringBody(body, "reasoning_effort"),
+    serviceTier: stringBody(body, "service_tier"),
     approvalPolicy: stringBody(body, "approval_policy"),
     sandbox: stringBody(body, "sandbox")
   };

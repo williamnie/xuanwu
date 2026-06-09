@@ -49,6 +49,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       cwd: input.cwd,
       model: input.model,
       reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier,
       approvalPolicy: input.approvalPolicy,
       sandbox: input.sandbox,
       developerInstructions: this.developerInstructions,
@@ -58,6 +59,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
     const turn = await this.adapter.startTurn(thread.provider_session_id, [textInput(input.prompt)], {
       model: input.model,
       reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier,
       approvalPolicy: input.approvalPolicy,
       sandbox: input.sandbox
     });
@@ -105,6 +107,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
     const turn = await this.adapter.startTurn(threadID, [textInput(input.prompt)], {
       model: input.model,
       reasoningEffort: input.reasoningEffort,
+      serviceTier: input.serviceTier,
       approvalPolicy: input.approvalPolicy,
       sandbox: input.sandbox
     });
@@ -159,16 +162,18 @@ function threadOptions(input: SessionCreateInput, developerInstructions: string)
     cwd: input.cwd,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
+    serviceTier: input.serviceTier,
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox,
     developerInstructions
   };
 }
 
-function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "reasoningEffort" | "sandbox">) {
+function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "reasoningEffort" | "serviceTier" | "sandbox">) {
   return {
     model: input.model,
     reasoningEffort: input.reasoningEffort,
+    serviceTier: input.serviceTier,
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox
   };
