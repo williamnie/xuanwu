@@ -88,13 +88,14 @@ function legacyAgentEventType(method) {
 function issueLogAgentPayload(payload) {
   const rawMethod = payload.raw_method || payload.codexMethod || '';
   const text = payload.text || '';
-  let type = payload.type || payload.agent_event_type || legacyAgentEventType(rawMethod);
+  let type = payload.agent_event_type || legacyAgentEventType(rawMethod);
   if (!type && rawMethod === 'item/started' && (payload.command || text.startsWith('$ '))) {
     type = 'agent.command.started';
   }
   if (!type && rawMethod === 'item/completed' && text.startsWith('--- ')) {
     type = 'agent.file.patch';
   }
+  if (!type) type = payload.type || '';
   return {
     type,
     rawMethod,
