@@ -46,10 +46,6 @@
   color: #dc2626;
 }
 
-.prompt-reference-chip.active {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
-}
-
 .prompt-reference-type {
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -83,93 +79,6 @@
   opacity: 1;
 }
 
-.prompt-context-inspector {
-  align-items: center;
-  border: 1px solid rgba(37, 99, 235, 0.14);
-  border-radius: 999px;
-  display: flex;
-  flex: 1 1 auto;
-  gap: 8px;
-  min-height: 30px;
-  min-width: 0;
-  overflow: hidden;
-  padding: 5px 10px;
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.9), rgba(248, 250, 252, 0.82));
-  color: #334155;
-  font-size: 0.74rem;
-  line-height: 1.25;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
-}
-
-.prompt-context-inspector.warning {
-  border-color: rgba(245, 158, 11, 0.2);
-  background: linear-gradient(180deg, rgba(255, 251, 235, 0.9), rgba(255, 247, 237, 0.82));
-}
-
-.prompt-context-inspector.error {
-  border-color: rgba(239, 68, 68, 0.2);
-  background: linear-gradient(180deg, rgba(254, 242, 242, 0.92), rgba(255, 247, 247, 0.84));
-}
-
-.prompt-context-inspector-title {
-  color: #2563eb;
-  flex: 0 0 auto;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.prompt-context-inspector.warning .prompt-context-inspector-title {
-  color: #b45309;
-}
-
-.prompt-context-inspector.error .prompt-context-inspector-title {
-  color: #dc2626;
-}
-
-.prompt-context-inspector strong {
-  color: #0f172a;
-  flex: 0 1 auto;
-  font-weight: 780;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.prompt-context-inspector-summary {
-  color: #475569;
-  flex: 1 1 auto;
-  min-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.prompt-context-inspector em {
-  color: #b45309;
-  flex: 0 1 auto;
-  font-style: normal;
-  font-weight: 720;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.prompt-context-inspector.error em {
-  color: #dc2626;
-}
-
-.prompt-context-inspector-status {
-  color: #64748b;
-  flex: 0 0 auto;
-  font-size: 0.68rem;
-  font-weight: 740;
-  text-transform: uppercase;
-}
-
 [data-theme="dark"] .prompt-reference-chip {
   border-color: rgba(96, 165, 250, 0.28);
   background: rgba(30, 64, 175, 0.24);
@@ -188,40 +97,9 @@
   color: #fecaca;
 }
 
-[data-theme="dark"] .prompt-context-inspector {
-  border-color: rgba(96, 165, 250, 0.22);
-  background: linear-gradient(180deg, rgba(30, 64, 175, 0.22), rgba(15, 23, 42, 0.74));
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .prompt-context-inspector strong {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .prompt-context-inspector-summary,
-[data-theme="dark"] .prompt-context-inspector-status {
-  color: #cbd5e1;
-}
-
 @media (max-width: 760px) {
   .prompt-reference-area {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .prompt-context-inspector {
-    align-items: flex-start;
-    border-radius: 16px;
-    flex-wrap: wrap;
-    gap: 4px 8px;
-  }
-
-  .prompt-context-inspector-summary,
-  .prompt-context-inspector em {
-    flex-basis: 100%;
-  }
-
-  .prompt-context-inspector-status {
-    margin-left: auto;
   }
 }

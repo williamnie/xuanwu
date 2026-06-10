@@ -12,18 +12,18 @@ function ruleFor(css, selector) {
   return match[1];
 }
 
-test('composer reference context renders above the editor as a compact strip', () => {
+test('composer reference chips render above the editor without a context inspector strip', () => {
   const stackRule = ruleFor(referencesCss, '.prompt-editor-composer-stack');
   const areaRule = ruleFor(referencesCss, '.prompt-reference-area');
-  const inspectorRule = ruleFor(referencesCss, '.prompt-context-inspector');
-  const summaryRule = ruleFor(referencesCss, '.prompt-context-inspector-summary');
+  const chipRule = ruleFor(referencesCss, '.prompt-reference-chip');
+  const labelRule = ruleFor(referencesCss, '.prompt-reference-label');
 
   assert.match(promptEditorJsx, /<div className="prompt-editor-composer-stack">[\s\S]*<PromptEditorReferences[\s\S]*\{editorShell\}/);
   assert.match(stackRule, /display:\s*grid/);
   assert.match(areaRule, /display:\s*flex/);
-  assert.match(inspectorRule, /border-radius:\s*999px/);
-  assert.match(inspectorRule, /min-height:\s*30px/);
-  assert.match(inspectorRule, /overflow:\s*hidden/);
-  assert.match(summaryRule, /text-overflow:\s*ellipsis/);
+  assert.match(chipRule, /border-radius:\s*999px/);
+  assert.match(labelRule, /text-overflow:\s*ellipsis/);
+  assert.doesNotMatch(referencesCss, /prompt-context-inspector/);
+  assert.doesNotMatch(promptEditorJsx, /prompt-context-inspector/);
   assert.doesNotMatch(promptEditorJsx, /prompt-context-inspector-head/);
 });
