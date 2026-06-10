@@ -61,7 +61,13 @@ export function buildIssueSupervisorRecoveryContext(
   const projectSupervisorEvents = listIssueSupervisorEvents(db, { projectId: issue.project_id });
   const history = recoveryHistory(supervisorEvents, policy.supervisor_max_recoveries_per_issue, now);
   return {
-    candidates: candidates({ providerError, session, history, now }),
+    candidates: candidates({
+      history,
+      now,
+      providerError,
+      session,
+      staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS
+    }),
     issue: issueContext(issue),
     latest_run: latestRun ? runContext(latestRun) : null,
     policy: policyContext({ policy, history, projectEvents: projectSupervisorEvents, now }),

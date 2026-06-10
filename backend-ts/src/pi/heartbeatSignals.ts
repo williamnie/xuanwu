@@ -3,6 +3,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import { getProjectPiSettings, readProjectPiPolicy } from "../db/repositories/pi.ts";
 import { redactAuditJsonText } from "../db/repositories/pi/auditRedaction.ts";
 import { collectPiMemoryContextItems } from "./memoryContext.ts";
+import { collectIssueSupervisorSignals } from "./issueSupervisorSignalCollector.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
 import type {
   HeartbeatAgentSessionSignal,
@@ -35,6 +36,7 @@ export function collectProjectHeartbeatSignals(
     project: snapshot,
     project_settings: projectSettings(db, projectID),
     provider_health: providerHealth(db, projectID),
+    supervisor: collectIssueSupervisorSignals(db, projectID, now, { issueIDs: scope.issueIDs }),
     usage_cost: usageCost()
   };
 }
@@ -135,10 +137,16 @@ function projectPiPolicy(db: RunnerDatabase, projectID: string) {
     allowed_actions: safeJson(policy.allowed_actions_json) as string[],
     allowed_mcp_capabilities: safeJson(policy.allowed_mcp_capabilities_json) as string[],
     allowed_skill_intents: safeJson(policy.allowed_skill_intents_json) as string[],
+    allowed_supervisor_actions: safeJson(policy.allowed_supervisor_actions_json) as string[],
     concurrency_policy: safeJson(policy.concurrency_policy_json) as Record<string, unknown>,
     default_mode: policy.default_mode,
     quiet_hours: safeJson(policy.quiet_hours_json) as Record<string, unknown>,
     retry_policy: safeJson(policy.retry_policy_json) as Record<string, unknown>,
+    supervisor_cooldown_seconds: policy.supervisor_cooldown_seconds,
+    supervisor_max_recoveries_per_issue: policy.supervisor_max_recoveries_per_issue,
+    supervisor_max_recoveries_per_project_per_hour: policy.supervisor_max_recoveries_per_project_per_hour,
+    supervisor_mode: policy.supervisor_mode,
+    supervisor_rate_limit_wait_policy: policy.supervisor_rate_limit_wait_policy,
     timezone: policy.timezone,
     verification_policy: safeJson(policy.verification_policy_json) as Record<string, unknown>,
     working_hours: safeJson(policy.working_hours_json) as Record<string, unknown>

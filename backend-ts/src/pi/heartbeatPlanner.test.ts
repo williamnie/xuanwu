@@ -137,6 +137,33 @@ describe("PI heartbeat planner", () => {
     expect(planHeartbeatActions(signals, { now: NOW, projectID: "demo" })).toEqual([]);
   });
 
+  test("plans supervisor decision proposal for ready supervisor candidate", () => {
+    const signals = baseSignals({
+      supervisor: {
+        ...baseSignals().supervisor,
+        candidates: [{
+          diagnosis_code: "executor_stream_disconnected",
+          evidence_refs: ["provider_error"],
+          issue_id: 9,
+          project_id: "demo",
+          ready: true,
+          reason: "stream disconnected",
+          wait_until: ""
+        }]
+      }
+    });
+
+    expect(planHeartbeatActions(signals, { now: NOW, projectID: "demo" })).toContainEqual(expect.objectContaining({
+      action_type: "issue.supervisor_decision",
+      issue_id: 9,
+      payload: expect.objectContaining({
+        issue_id: 9,
+        suggested_operation: "run_pi_supervisor_decision"
+      }),
+      project_id: "demo"
+    }));
+  });
+
   test("plans kick/enqueue candidate for todo with only ended historical run and session", () => {
     const signals = baseSignals({
       agent_sessions: {
@@ -244,6 +271,12 @@ function baseSignals(overrides: Partial<HeartbeatSignals> = {}): HeartbeatSignal
       }
     },
     provider_health: { provider: "codex", status: "configured" },
+    supervisor: {
+      candidates: [],
+      provider_retry_windows: [],
+      recovery_budget: [],
+      stale_session_diagnostics: []
+    },
     usage_cost: { status: "not_configured", total_tokens: 0 },
     ...overrides
   };

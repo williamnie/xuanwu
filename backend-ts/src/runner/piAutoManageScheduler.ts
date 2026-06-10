@@ -2,7 +2,9 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
+import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
 
 export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: string };
@@ -11,6 +13,7 @@ export type PiAutoManageCycleResult = { projects: number; skipped: number; start
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   cron: { executed: number; failed: number; scanned: number; skipped: number };
   delegations: { scanned: number; skipped: number; started: number };
+  supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
 };
 
 export type PiAutoManageCycleInput = {
@@ -18,7 +21,9 @@ export type PiAutoManageCycleInput = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runProjectCycle: PiAutoManageProjectCycle;
+  runSupervisor?: boolean;
 };
 
 export type PiAutoManageSchedulerClock<Timer = unknown> = {
@@ -30,6 +35,7 @@ export type PiAutoManageSchedulerInput<Timer = unknown> = PiAutoManageCycleInput
   clock?: PiAutoManageSchedulerClock<Timer>;
   intervalMs?: number;
   onError?: (error: unknown) => void;
+  supervisorIntervalMs?: number;
 };
 
 export type PiAutoManageScheduler = {
@@ -40,6 +46,7 @@ export type PiAutoManageScheduler = {
 type EnabledProjectRow = { max_actions_per_cycle: number; project_id: string };
 
 const DEFAULT_INTERVAL_MS = 30_000;
+const DEFAULT_SUPERVISOR_INTERVAL_MS = 60_000;
 const activeProjectCycles = new Set<string>();
 
 export function createPiAutoManageScheduler<Timer = unknown>(
@@ -47,6 +54,8 @@ export function createPiAutoManageScheduler<Timer = unknown>(
 ): PiAutoManageScheduler {
   const clock = input.clock ?? defaultClock<Timer>();
   const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
+  const supervisorIntervalMs = input.supervisorIntervalMs ?? DEFAULT_SUPERVISOR_INTERVAL_MS;
+  let lastSupervisorScanAt = 0;
   let timer: Timer | undefined;
   let stopped = true;
 
@@ -54,7 +63,10 @@ export function createPiAutoManageScheduler<Timer = unknown>(
     timer = clock.setTimeout(tick, intervalMs);
   };
   const tick = () => {
-    void runScheduleLayerCycle(input).catch((error) => {
+    const now = Date.now();
+    const runSupervisor = shouldRunSupervisor(now, lastSupervisorScanAt, supervisorIntervalMs);
+    if (runSupervisor) lastSupervisorScanAt = now;
+    void runScheduleLayerCycle({ ...input, runSupervisor }).catch((error) => {
       input.onError?.(error);
     }).finally(() => {
       if (!stopped) schedule();
@@ -94,6 +106,9 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 }
 
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
+  const supervisor = input.runSupervisor === false
+    ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
+    : await runPiIssueSupervisorSchedulerOnce({ database: input.database, providers: input.providers });
   const cron = await runDueCronTasks({
     bus: input.bus,
     codexSessionsDir: input.codexSessionsDir,
@@ -103,7 +118,16 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const projects = await runPiAutoManageCycle(input);
-  return { ...projects, cron, delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started } };
+  return {
+    ...projects,
+    cron,
+    delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
+    supervisor
+  };
+}
+
+function shouldRunSupervisor(now: number, lastAt: number, intervalMs: number): boolean {
+  return lastAt === 0 || now - lastAt >= intervalMs;
 }
 
 export function isProjectHeartbeatPaused(db: RunnerDatabase, projectID: string): boolean {

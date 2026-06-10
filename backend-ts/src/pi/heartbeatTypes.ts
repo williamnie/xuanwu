@@ -33,10 +33,16 @@ export type HeartbeatAgentSessionSignal = {
 };
 export type HeartbeatProjectSettingsSignal = {
   pi_policy?: {
+    allowed_supervisor_actions?: string[];
     concurrency_policy: Record<string, unknown>;
     default_mode: string;
     quiet_hours: Record<string, unknown>;
     retry_policy: Record<string, unknown>;
+    supervisor_cooldown_seconds?: number;
+    supervisor_max_recoveries_per_issue?: number;
+    supervisor_max_recoveries_per_project_per_hour?: number;
+    supervisor_mode?: string;
+    supervisor_rate_limit_wait_policy?: string;
     timezone: string;
     verification_policy: Record<string, unknown>;
     working_hours: Record<string, unknown>;
@@ -64,6 +70,51 @@ export type HeartbeatProjectSettingsSignal = {
     sandbox: string;
   };
 };
+export type HeartbeatSupervisorCandidateSignal = {
+  budget_remaining: number;
+  diagnosis_code: string;
+  evidence_refs: string[];
+  issue_id: number;
+  project_id: string;
+  provider_error_category: string;
+  provider_session_id: string;
+  ready: boolean;
+  reason: string;
+  run_id: string;
+  stale_gap_seconds: number;
+  wait_until: string;
+};
+export type HeartbeatSupervisorRetryWindowSignal = {
+  diagnosis_code: string;
+  issue_id: number;
+  project_id: string;
+  provider_error_category: string;
+  reason: string;
+  retry_after_at: string;
+};
+export type HeartbeatSupervisorBudgetSignal = {
+  attempts_24h: number;
+  budget_remaining: number;
+  issue_id: number;
+  project_budget_remaining: number;
+  project_id: string;
+};
+export type HeartbeatStaleSessionDiagnostic = {
+  issue_id: number;
+  project_id: string;
+  provider_session_id: string;
+  run_id: string;
+  run_state: string;
+  stale_gap_seconds: number;
+  status: string;
+  updated_at: string;
+};
+export type HeartbeatSupervisorSignals = {
+  candidates: HeartbeatSupervisorCandidateSignal[];
+  provider_retry_windows: HeartbeatSupervisorRetryWindowSignal[];
+  recovery_budget: HeartbeatSupervisorBudgetSignal[];
+  stale_session_diagnostics: HeartbeatStaleSessionDiagnostic[];
+};
 export type HeartbeatSignals = {
   agent_sessions: {
     recent: HeartbeatAgentSessionSignal[];
@@ -85,6 +136,7 @@ export type HeartbeatSignals = {
   project?: ProjectStatusSnapshot;
   project_settings: HeartbeatProjectSettingsSignal;
   provider_health: { provider: string; status: string };
+  supervisor: HeartbeatSupervisorSignals;
   usage_cost: { status: string; total_tokens: number };
 };
 export type HeartbeatPolicy = {

@@ -114,6 +114,7 @@ async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof 
   try {
     const signals = await collectSignals(input, ctx.projectID);
     recordHeartbeatEvent(input.database, ctx, "collect_signals", signals);
+    recordSupervisorSignals(input.database, ctx, signals);
     const policy = evaluatePolicies(input.database, input, ctx);
     recordHeartbeatEvent(input.database, ctx, "evaluate_policies", policy);
     const plan = planHeartbeatActions(signals, { now: ctx.now, projectID: ctx.projectID });
@@ -139,6 +140,21 @@ async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof 
     updateDelegationTick(input.database, input.delegation, ctx.nowText, result.next_tick_at);
     return result;
   }
+}
+
+
+function recordSupervisorSignals(
+  db: RunnerDatabase,
+  ctx: ReturnType<typeof heartbeatContext>,
+  signals: HeartbeatSignals
+): void {
+  const supervisor = signals.supervisor;
+  if (!supervisor || supervisor.candidates.length === 0) return;
+  recordHeartbeatEvent(db, ctx, "supervisor_signal", {
+    candidates: supervisor.candidates,
+    provider_retry_windows: supervisor.provider_retry_windows,
+    recovery_budget: supervisor.recovery_budget
+  });
 }
 
 async function collectSignals(input: HeartbeatInput, projectID: string): Promise<HeartbeatSignals> {
@@ -279,6 +295,7 @@ function emptySignals(): HeartbeatSignals {
       }
     },
     provider_health: { provider: "", status: "unknown" },
+    supervisor: { candidates: [], provider_retry_windows: [], recovery_budget: [], stale_session_diagnostics: [] },
     usage_cost: { status: "not_configured", total_tokens: 0 }
   };
 }

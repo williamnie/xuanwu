@@ -138,18 +138,35 @@ describe("PI heartbeat orchestrator", () => {
     }
   });
 
-  test("respects global executor serialization by only proposing while executor work is active", async () => {
+  test("respects executor serialization while still proposing supervisor decisions for stale active work", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
       const runningIssue = insertIssue(db, "project-a", "in_progress", "");
       insertOpenRun(db, runningIssue);
+      insertAgentSession(db, "project-a", runningIssue, "2026-06-02T09:50:00Z", "running");
+      insertIssueEvent(db, runningIssue, {
+        provider: "codex",
+        raw_payload: "Reconnecting... 1/5",
+        type: "error"
+      }, "2026-06-02T09:50:10Z");
       const failedIssue = insertIssue(db, "project-a", "failed", "timeout while reading stream");
 
       const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
       expect(result.policy.executor_busy).toBe(true);
       expect(result.executed_actions).toEqual([]);
+      expect(result.signals.supervisor.candidates).toContainEqual(expect.objectContaining({
+        diagnosis_code: "executor_stream_disconnected",
+        issue_id: runningIssue,
+        ready: true
+      }));
+      expect(result.action_candidates).toContainEqual(expect.objectContaining({
+        action_type: "issue.supervisor_decision",
+        issue_id: runningIssue
+      }));
+      expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type))
+        .toContain("supervisor_signal");
       expect(statusOfIssue(db, failedIssue)).toBe("failed");
       expect(openRunCount(db)).toBe(1);
     } finally {
@@ -211,9 +228,9 @@ function insertIssue(db: RunnerDatabase, projectID: string, status: string, erro
 
 function insertOpenRun(db: RunnerDatabase, issueID: number): void {
   db.sqlite.run(
-    `insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [`issue-${issueID}-attempt-1`, issueID, 1, "in_progress", "2026-06-02T09:10:00Z", ""]
+    `insert into issue_runs (id, issue_id, attempt, status, provider, provider_session_id, started_at, ended_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [`issue-${issueID}-attempt-1`, issueID, 1, "in_progress", "codex", "thread-a", "2026-06-02T09:10:00Z", ""]
   );
 }
 
@@ -234,19 +251,24 @@ function insertClosedRun(db: RunnerDatabase, issueID: number): void {
   );
 }
 
-function insertIssueEvent(db: RunnerDatabase, issueID: number): void {
+function insertIssueEvent(
+  db: RunnerDatabase,
+  issueID: number,
+  payload: unknown = { error: "unexpected eof" },
+  createdAt = "2026-06-02T09:21:00Z"
+): void {
   db.sqlite.run(
     `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-    [issueID, "issue.error", JSON.stringify({ error: "unexpected eof" }), "2026-06-02T09:21:00Z"]
+    [issueID, "issue.error", JSON.stringify(payload), createdAt]
   );
 }
 
-function insertAgentSession(db: RunnerDatabase, projectID: string, issueID: number): void {
+function insertAgentSession(db: RunnerDatabase, projectID: string, issueID: number, updatedAt = "2026-06-02T09:30:00Z", status = "done"): void {
   db.sqlite.run(
     `insert into agent_sessions
       (session_key, provider, provider_session_id, project_id, issue_id, title, status, raw_ref, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["codex:thread-a", "codex", "thread-a", projectID, issueID, "Session", "done", "{}", "2026-06-02T09:00:00Z", "2026-06-02T09:30:00Z"]
+    ["codex:thread-a", "codex", "thread-a", projectID, issueID, "Session", status, "{}", "2026-06-02T09:00:00Z", updatedAt]
   );
 }
 

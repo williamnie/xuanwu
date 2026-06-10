@@ -21,6 +21,23 @@ class FakePiCycleRunner {
   }
 }
 
+
+class SlowSupervisorDatabase {
+  readonly path: string; readonly readonly: boolean; readonly sqlite; supervisorQueries = 0;
+  constructor(readonly inner: RunnerDatabase) {
+    this.path = inner.path; this.readonly = inner.readonly;
+    this.sqlite = {
+      query: (sql: string) => {
+        if (sql.includes("auto_retry_next_at")) this.supervisorQueries += 1;
+        return inner.sqlite.query(sql);
+      },
+      run: inner.sqlite.run.bind(inner.sqlite)
+    };
+  }
+  close(): void { this.inner.close(); }
+  transaction(inside: Parameters<RunnerDatabase["transaction"]>[0]) { return this.inner.transaction(inside); }
+}
+
 class FakeClock {
   readonly timers: Array<{ callback: () => void; canceled: boolean; delayMs: number }> = [];
 
@@ -81,6 +98,33 @@ describe("PI auto-manage scheduler", () => {
       await waitUntil(() => clock.timers.length === 1);
       scheduler.stop();
       expect(clock.timers[0]?.canceled).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("throttles supervisor scans separately from the faster schedule tick", async () => {
+    const db = await openFixtureDatabase();
+    const wrapped = new SlowSupervisorDatabase(db);
+    const runner = new FakePiCycleRunner();
+    const clock = new FakeClock();
+    const errors: unknown[] = [];
+    try {
+      const scheduler = createPiAutoManageScheduler({
+        clock, database: wrapped as unknown as RunnerDatabase, intervalMs: 1000,
+        onError: (error) => errors.push(error), runProjectCycle: runner.run.bind(runner),
+        supervisorIntervalMs: 60_000
+      });
+
+      scheduler.start();
+      await clock.runNext();
+      await waitUntil(() => wrapped.supervisorQueries === 1 && clock.timers.length === 1);
+      await clock.runNext();
+      await waitUntil(() => clock.timers.length === 1);
+
+      expect(wrapped.supervisorQueries).toBe(1);
+      expect(errors).toEqual([]);
+      scheduler.stop();
     } finally {
       db.close();
     }
@@ -150,7 +194,7 @@ describe("PI auto-manage scheduler", () => {
       const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
       expect(result.delegations).toMatchObject({ scanned: 1, started: 1, skipped: 0 });
-      expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0 });
+      expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
       expect(runner.calls).toEqual([{ maxActions: 5, projectId: "enabled" }]);
     } finally {
       db.close();
@@ -168,6 +212,7 @@ describe("PI auto-manage scheduler", () => {
       const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
       expect(result.delegations).toEqual({ scanned: 0, skipped: 0, started: 0 });
+      expect(result.supervisor).toMatchObject({ decisions: 0, failed: 0 });
       expect(heartbeatRunCount(db)).toBe(0);
     } finally {
       db.close();

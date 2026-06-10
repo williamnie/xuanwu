@@ -29,6 +29,7 @@ type CandidateInput = {
   now: Date;
   providerError: ProviderErrorSignal | null;
   session: AgentSession | null;
+  staleAfterSeconds?: number;
 };
 
 type PolicyContextInput = {
@@ -62,7 +63,7 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   }
   const diagnosis = providerError?.diagnosis_code;
   if (diagnosis) out.push(providerErrorCandidate(providerError, diagnosis));
-  if (!diagnosis && staleSession(session, now)) {
+  if (!diagnosis && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session has no recent updates" });
   }
   return out;
@@ -70,10 +71,51 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
 
 export function latestProviderError(events: IssueEvent[], now: Date): ProviderErrorSignal | null {
   for (const event of [...events].reverse()) {
-    const signal = parseIssueEventProviderError(parsePayload(event.payload), { now });
+    const payload = parsePayload(event.payload);
+    const signal = adjustRetryWindow(parseIssueEventProviderError(payload, { now: eventDate(event, now) }), now);
     if (signal.category !== "unknown") return signal;
+    const scheduled = retryAfterScheduledSignal(event, payload, now);
+    if (scheduled) return scheduled;
   }
   return null;
+}
+
+function retryAfterScheduledSignal(event: IssueEvent, payload: unknown, now: Date): ProviderErrorSignal | null {
+  if (event.type !== "issue.retry_after_scheduled") return null;
+  const record = objectValue(payload);
+  const retryAfterAt = clean(record.retry_after_at);
+  if (retryAfterAt === "" || !Number.isFinite(Date.parse(retryAfterAt))) return null;
+  return {
+    category: "rate_limit",
+    diagnosis_code: retryDiagnosis(retryAfterAt, now),
+    raw_summary: truncate(redactAuditText(clean(record.reason) || "issue retry-after scheduled")),
+    retry_after_at: retryAfterAt,
+    retry_after_seconds: secondsUntil(retryAfterAt, now)
+  };
+}
+
+function adjustRetryWindow(signal: ProviderErrorSignal, now: Date): ProviderErrorSignal {
+  const retryAfterAt = clean(signal.retry_after_at);
+  if (signal.category !== "rate_limit" || retryAfterAt === "") return signal;
+  return {
+    ...signal,
+    diagnosis_code: retryDiagnosis(retryAfterAt, now),
+    retry_after_seconds: secondsUntil(retryAfterAt, now)
+  };
+}
+
+function retryDiagnosis(retryAfterAt: string, now: Date): ProviderErrorSignal["diagnosis_code"] {
+  return Date.parse(retryAfterAt) > now.getTime() ? "provider_retry_after_waiting" : "provider_retry_after_ready";
+}
+
+function secondsUntil(value: string, now: Date): number {
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? Math.max(0, Math.ceil((ms - now.getTime()) / 1_000)) : 0;
+}
+
+function eventDate(event: IssueEvent, fallback: Date): Date {
+  const ms = Date.parse(event.created_at);
+  return Number.isFinite(ms) ? new Date(ms) : fallback;
 }
 
 export function recoveryHistory(
@@ -223,8 +265,8 @@ function supervisorSessionStatus(input: {
   return activeStatus(session.status) ? "active" : "unknown";
 }
 
-function staleSession(session: AgentSession | null, now: Date): boolean {
-  return session ? ageSeconds(session.updated_at, now) >= DEFAULT_STALE_SECONDS : false;
+function staleSession(session: AgentSession | null, now: Date, staleAfterSeconds: number): boolean {
+  return session ? ageSeconds(session.updated_at, now) >= staleAfterSeconds : false;
 }
 
 function activeStatus(value: string): boolean {

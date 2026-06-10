@@ -4,7 +4,7 @@ import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 
 export type PiHeartbeatTimelineFilter = { issueId?: number; limit?: number; projectId?: string };
 export type PiHeartbeatTimelineStage = "signal" | "decision" | "action" | "result";
-export type PiHeartbeatTimelineSource = "action" | "heartbeat";
+export type PiHeartbeatTimelineSource = "action" | "heartbeat" | "supervisor";
 export type PiHeartbeatTimelineItem = {
   id: string; row_id: number; source: PiHeartbeatTimelineSource; stage: PiHeartbeatTimelineStage;
   event_type: string; created_at: string; project_id: string; issue_id: number;
@@ -25,7 +25,8 @@ export function listPiHeartbeatTimeline(
   const limit = normalizeLimit(filter.limit);
   return [
     ...listHeartbeatTimelineRows(db, filter, limit),
-    ...listActionTimelineRows(db, filter, limit)
+    ...listActionTimelineRows(db, filter, limit),
+    ...listSupervisorTimelineRows(db, filter, limit)
   ].sort(compareTimelineItems).slice(0, limit);
 }
 
@@ -58,6 +59,20 @@ function listActionTimelineRows(
   `).all(...where.args, limit).map(mapActionTimelineItem);
 }
 
+function listSupervisorTimelineRows(
+  db: RunnerDatabase,
+  filter: PiHeartbeatTimelineFilter,
+  limit: number
+): PiHeartbeatTimelineItem[] {
+  const where = supervisorWhere(filter);
+  return db.sqlite.query<TimelineRow, SqlValue[]>(`
+    select id, issue_id, project_id, event_type, decision, confidence, action_id,
+      action_type, payload_json, created_at
+    from issue_supervisor_events${where.sql}
+    order by created_at desc, id desc limit ?
+  `).all(...where.args, limit).map(mapSupervisorTimelineItem);
+}
+
 function heartbeatWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; sql: string } {
   const args: SqlValue[] = [];
   const conditions: string[] = [];
@@ -73,6 +88,22 @@ function heartbeatWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; 
       union select heartbeat_id from pi_actions where issue_id=? and heartbeat_id<>''
     )`);
     args.push(issueId, issueId);
+  }
+  return whereClause(conditions, args);
+}
+
+function supervisorWhere(filter: PiHeartbeatTimelineFilter): { args: SqlValue[]; sql: string } {
+  const args: SqlValue[] = [];
+  const conditions: string[] = [];
+  const projectId = clean(filter.projectId);
+  const issueId = integerInput(filter.issueId);
+  if (projectId !== "") {
+    conditions.push("project_id=?");
+    args.push(projectId);
+  }
+  if (issueId > 0) {
+    conditions.push("issue_id=?");
+    args.push(issueId);
   }
   return whereClause(conditions, args);
 }
@@ -144,6 +175,30 @@ function mapActionTimelineItem(row: TimelineRow): PiHeartbeatTimelineItem {
   };
 }
 
+function mapSupervisorTimelineItem(row: TimelineRow): PiHeartbeatTimelineItem {
+  const eventType = optionalString(row.event_type);
+  const payloadJson = redactAuditJsonText(optionalString(row.payload_json) || "{}");
+  return {
+    action_id: optionalString(row.action_id),
+    actor: "supervisor",
+    created_at: optionalString(row.created_at),
+    decision: optionalString(row.decision),
+    delegation_id: "",
+    error: "",
+    event_type: `supervisor_${eventType}`,
+    heartbeat_id: "",
+    id: `supervisor:${integerValue(row.id, "issue_supervisor_events.id")}`,
+    issue_id: integerValue(row.issue_id, "issue_supervisor_events.issue_id"),
+    message: supervisorMessage(row, payloadJson),
+    payload_json: payloadJson,
+    project_id: optionalString(row.project_id),
+    result_json: "{}",
+    row_id: integerValue(row.id, "issue_supervisor_events.id"),
+    source: "supervisor",
+    stage: supervisorStage(eventType)
+  };
+}
+
 function heartbeatMessage(row: TimelineRow, payloadJson: string, error: string): string {
   const message = redactAuditText(optionalString(row.message));
   if (message !== "") return message;
@@ -162,6 +217,24 @@ function actionMessage(row: TimelineRow, payloadJson: string, resultJson: string
   if (typeof result.action_type === "string") return `${result.action_type} ${result.status ?? ""}`.trim();
   const payload = jsonObject(payloadJson);
   return typeof payload.action_type === "string" ? payload.action_type : "";
+}
+
+function supervisorMessage(row: TimelineRow, payloadJson: string): string {
+  const decision = optionalString(row.decision);
+  const actionType = optionalString(row.action_type);
+  if (decision !== "") return decision;
+  if (actionType !== "") return actionType;
+  const payload = jsonObject(payloadJson);
+  if (typeof payload.error === "string") return redactAuditText(payload.error);
+  const candidate = jsonObject(JSON.stringify(payload.candidate ?? {}));
+  return typeof candidate.diagnosis_code === "string" ? candidate.diagnosis_code : "";
+}
+
+function supervisorStage(eventType: string): PiHeartbeatTimelineStage {
+  if (eventType === "signal") return "signal";
+  if (eventType.includes("decision")) return "decision";
+  if (eventType === "action") return "action";
+  return "result";
 }
 
 function heartbeatStage(eventType: string): PiHeartbeatTimelineStage {

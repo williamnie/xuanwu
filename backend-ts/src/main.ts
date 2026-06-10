@@ -70,6 +70,7 @@ async function startAutoRunLoops(
     codexSessionsDir,
     config,
     database,
+    providers,
     onError: (error) => {
       console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
     },

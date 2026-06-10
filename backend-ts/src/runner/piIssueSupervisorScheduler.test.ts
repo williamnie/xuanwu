@@ -1,0 +1,297 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { listIssueSupervisorEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { listPiHeartbeatTimeline } from "../db/repositories/pi/heartbeatTimeline.ts";
+import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
+import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
+
+const NOW = new Date("2026-06-10T08:00:00Z");
+const tempRoots: string[] = [];
+
+afterEach(async () => {
+  while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
+});
+
+describe("PI issue supervisor scheduler", () => {
+  test("runs PI decision after a stream disconnect becomes stale and records supervisor timeline", async () => {
+    const db = await fixtureDb();
+    const provider = new SupervisorProvider();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-stream-project-"));
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["session.resume_followup"],
+        project_id: "demo",
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, {
+        issueID: 501,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:50:00Z",
+        threadID: "thread-501",
+        turnID: "turn-old"
+      });
+      insertIssueEvent(db, 501, {
+        provider: "codex",
+        raw_payload: "Reconnecting... 1/5",
+        type: "error"
+      }, "2026-06-10T07:50:05Z");
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        providers: { codex: provider },
+        runDecision: async () => ({
+          decision: resumeDecision(),
+          raw_text: JSON.stringify(resumeDecision()),
+          valid: true
+        }),
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, scanned: 1, signaled: 1 });
+      expect(provider.calls).toEqual([{ prompt: "Inspect current state and continue safely.", sessionId: "thread-501" }]);
+      expect(listIssueSupervisorEvents(db, { issueId: 501 }).map((event) => event.event_type))
+        .toEqual(["signal", "decision", "action", "result"]);
+      expect(listPiActions(db, { issueId: 501 })).toContainEqual(expect.objectContaining({
+        action_type: "session.resume_followup",
+        gate_decision: "execute",
+        status: "completed"
+      }));
+      expect(listIssueEvents(db, 501).map((event) => event.type)).toContain("issue.supervisor_resume_followup");
+      expect(listPiHeartbeatTimeline(db, { issueId: 501 }).map((item) => item.event_type))
+        .toEqual(expect.arrayContaining(["supervisor_signal", "supervisor_decision", "supervisor_action", "supervisor_result"]));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("due scheduled retry-after wakes PI decision even when an earlier wait action exists", async () => {
+    const db = await fixtureDb();
+    const calls: number[] = [];
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-due-retry-project-"));
+      insertRunningIssue(db, {
+        issueID: 505,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:55:00Z",
+        threadID: "thread-505",
+        turnID: "turn-505"
+      });
+      db.sqlite.run("update issues set auto_retry_next_at=?, auto_retry_reason=? where id=?",
+        ["2026-06-10T08:10:00Z", "provider_retry_after_waiting", 505]);
+      insertIssueEvent(db, 505, {
+        action_id: "wait-action",
+        reason: "provider_retry_after_waiting",
+        retry_after_at: "2026-06-10T08:10:00Z"
+      }, "2026-06-10T08:00:01Z", "issue.retry_after_scheduled");
+      insertSupervisorActionEvents(db, 505, "2026-06-10T08:00:02Z");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: new Date("2026-06-10T08:10:00Z"),
+        runDecision: async () => {
+          calls.push(1);
+          return { decision: waitDecision(), raw_text: JSON.stringify(waitDecision()), valid: true };
+        },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(calls).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("waits for provider retry-after before running PI decision", async () => {
+    const db = await fixtureDb();
+    const calls: number[] = [];
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-retry-project-"));
+      insertRunningIssue(db, {
+        issueID: 502,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:55:00Z",
+        threadID: "thread-502",
+        turnID: "turn-502"
+      });
+      insertIssueEvent(db, 502, {
+        provider: "codex",
+        raw_payload: { error: "HTTP 429 too many requests", retry_after: 600, status_code: 429 },
+        type: "error"
+      }, "2026-06-10T08:00:00Z");
+
+      const waiting = await runPiIssueSupervisorSchedulerOnce({
+        database: db, now: new Date("2026-06-10T08:05:00Z"), staleAfterSeconds: 300,
+        runDecision: async () => {
+          calls.push(1);
+          return { decision: waitDecision(), raw_text: JSON.stringify(waitDecision()), valid: true };
+        }
+      });
+      const due = await runPiIssueSupervisorSchedulerOnce({
+        database: db, now: new Date("2026-06-10T08:10:00Z"), staleAfterSeconds: 300,
+        runDecision: async () => {
+          calls.push(1);
+          return { decision: waitDecision(), raw_text: JSON.stringify(waitDecision()), valid: true };
+        }
+      });
+
+      expect(waiting).toMatchObject({ decisions: 0, signaled: 1 });
+      expect(due).toMatchObject({ decisions: 1, signaled: 1 });
+      expect(calls).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not mark a normally active executor session as stale", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-active-project-"));
+      insertRunningIssue(db, {
+        issueID: 503,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:59:30Z",
+        threadID: "thread-503",
+        turnID: "turn-503"
+      });
+
+      const result = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+
+      expect(result).toMatchObject({ decisions: 0, scanned: 1, signaled: 0 });
+      expect(listIssueSupervisorEvents(db, { issueId: 503 })).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("dedupes concurrent scheduler decisions for the same issue", async () => {
+    const db = await fixtureDb();
+    let release!: () => void; const started: number[] = [];
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-lock-project-"));
+      insertRunningIssue(db, {
+        issueID: 504,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-504",
+        turnID: "turn-504"
+      });
+      insertIssueEvent(db, 504, { raw_payload: "stream disconnected before completion", type: "error" }, "2026-06-10T07:45:05Z");
+      const runDecision = async () => {
+        started.push(1);
+        await new Promise<void>((resolve) => { release = resolve; });
+        return { decision: waitDecision(), raw_text: JSON.stringify(waitDecision()), valid: true };
+      };
+
+      const first = runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, runDecision, staleAfterSeconds: 300 });
+      await waitUntil(() => started.length === 1);
+      const second = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, runDecision, staleAfterSeconds: 300 });
+      release();
+
+      expect(await first).toMatchObject({ decisions: 1 });
+      expect(second.skipped).toBe(1);
+      expect(started).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+async function fixtureDb(): Promise<RunnerDatabase> {
+  const root = await tempRoot("supervisor-scheduler-db-");
+  return openDatabase({ stateDir: join(root, "state") });
+}
+
+async function tempRoot(prefix: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), prefix));
+  tempRoots.push(root);
+  return root;
+}
+
+function insertProject(db: RunnerDatabase, projectID: string, cwd: string): void {
+  mkdirSync(cwd, { recursive: true });
+  db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
+    values (?, ?, ?, 'codex', 1, 1, ?, ?)`, [projectID, projectID, cwd, "2026-06-10T07:00:00Z", "2026-06-10T07:00:00Z"]);
+}
+
+function insertRunningIssue(db: RunnerDatabase, input: {
+  issueID: number; projectID: string; sessionUpdatedAt: string; threadID: string; turnID: string;
+}): void {
+  db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
+    values (?, ?, 'Supervisor issue', 'in_progress', 1, ?, ?)`,
+  [input.issueID, input.projectID, "2026-06-10T07:00:00Z", input.sessionUpdatedAt]);
+  db.sqlite.run(`insert into issue_runs
+    (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
+    values (?, ?, 1, 'in_progress', 'codex', ?, ?, '2026-06-10T07:00:00Z', '')`,
+  [`issue-${input.issueID}-attempt-1`, input.issueID, input.threadID, input.turnID]);
+  db.sqlite.run(`insert into agent_sessions
+    (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+    values (?, 'codex', ?, ?, ?, 'running', ?, '2026-06-10T07:00:00Z', ?)`,
+  [`codex:${input.threadID}`, input.threadID, input.projectID, input.issueID,
+    JSON.stringify({ provider_turn_id: input.turnID }), input.sessionUpdatedAt]);
+}
+
+function insertIssueEvent(db: RunnerDatabase, issueID: number, payload: unknown, createdAt: string, type = "issue.log"): void {
+  db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+    [issueID, type, JSON.stringify(payload), createdAt]);
+}
+
+function insertSupervisorActionEvents(db: RunnerDatabase, issueID: number, createdAt: string): void {
+  for (const eventType of ["decision", "action", "result"]) {
+    db.sqlite.run(`insert into issue_supervisor_events
+      (issue_id, project_id, event_type, action_id, action_type, created_at)
+      values (?, 'demo', ?, 'wait-action', 'issue.retry_after', ?)`,
+    [issueID, eventType, createdAt]);
+  }
+}
+
+function resumeDecision() {
+  return {
+    confidence: "high", decision: "resume_session", evidence_refs: ["provider_error"],
+    expected_outcome: "session emits new progress", fallback_if_no_progress: "needs_user",
+    rationale: "stream disconnected after stale threshold", recovery_message: "Inspect current state and continue safely.",
+    risk_level: "medium"
+  } as const;
+}
+
+function waitDecision() {
+  return {
+    confidence: "medium", decision: "wait", evidence_refs: ["provider_error"],
+    expected_outcome: "provider retry window is respected", fallback_if_no_progress: "needs_user",
+    rationale: "wait for provider retry window", recovery_message: "", risk_level: "low",
+    wait_until: "2026-06-10T08:10:00Z"
+  } as const;
+}
+
+class SupervisorProvider implements ExecutorProvider {
+  readonly calls: Record<string, unknown>[] = [];
+  readonly capabilities = ["resume_session"] as const;
+  readonly id = "codex" as const;
+
+  async run(_input: ProviderRunInput): Promise<never> {
+    throw new Error("not implemented");
+  }
+
+  async sendSessionMessage(input: SessionMessageInput) {
+    this.calls.push({ prompt: input.prompt, sessionId: input.sessionId });
+    return {
+      provider: "codex" as const,
+      provider_session_id: input.sessionId,
+      sessionId: input.sessionId,
+      turn_id: "turn-followup"
+    };
+  }
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("condition was not met");
+}

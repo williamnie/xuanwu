@@ -22,7 +22,8 @@ export function planHeartbeatActions(
   return uniqueCandidates([
     ...findingCandidates(signals, context),
     ...todoWithoutSessionCandidates(signals, context),
-    ...pendingVerificationTimeoutCandidates(signals, context)
+    ...pendingVerificationTimeoutCandidates(signals, context),
+    ...supervisorDecisionCandidates(signals, context)
   ]);
 }
 
@@ -63,6 +64,24 @@ function todoWithoutSessionCandidates(signals: HeartbeatSignals, context: Planne
       payload: { issue_id: issue.id, suggested_operation: todoSuggestedOperation(signals) },
       projectID: context.projectID,
       rationale: `Enqueue or kick todo issue #${issue.id} because heartbeat signals show no active linked runtime.`
+    }));
+}
+
+function supervisorDecisionCandidates(signals: HeartbeatSignals, context: PlannerContext): HeartbeatActionCandidate[] {
+  return (signals.supervisor?.candidates ?? [])
+    .filter((item) => item.ready && item.issue_id > 0)
+    .map((item) => candidate({
+      actionType: "issue.supervisor_decision",
+      issueID: item.issue_id,
+      payload: {
+        diagnosis_code: item.diagnosis_code,
+        issue_id: item.issue_id,
+        reason: item.reason,
+        suggested_operation: "run_pi_supervisor_decision",
+        wait_until: item.wait_until
+      },
+      projectID: item.project_id || context.projectID,
+      rationale: `Ask PI supervisor to decide recovery for issue #${item.issue_id}: ${item.diagnosis_code}`
     }));
 }
 

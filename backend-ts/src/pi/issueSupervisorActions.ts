@@ -16,6 +16,7 @@ export type IssueSupervisorActionInput = {
   decision: PiSupervisorDecisionJson;
   now?: Date;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  recordDecision?: boolean;
 };
 
 export type IssueSupervisorActionSummary = {
@@ -33,7 +34,7 @@ export type IssueSupervisorActionResult = {
 export async function applyIssueSupervisorDecisionActions(
   input: IssueSupervisorActionInput
 ): Promise<IssueSupervisorActionResult> {
-  recordDecisionEvent(input);
+  if (input.recordDecision !== false) recordDecisionEvent(input);
   const requests = actionRequests(input);
   const actions: IssueSupervisorActionSummary[] = [];
   const executed: string[] = [];
