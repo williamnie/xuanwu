@@ -45,6 +45,7 @@ export type ProviderErrorSignal = {
   limit_id?: string;
   limit_name?: string;
   model?: string;
+  observed_at?: string;
   provider?: string;
   rate_limit_reset_at?: string;
   raw_summary: string;

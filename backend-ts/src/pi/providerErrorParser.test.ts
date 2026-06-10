@@ -70,6 +70,24 @@ describe("provider error parser", () => {
     });
   });
 
+  test("classifies 429 without retry-after as rate limited but leaves wait window to policy cooldown", () => {
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "HTTP 429: too many requests"
+    }, { now: NOW })).toMatchObject({
+      category: "rate_limit",
+      diagnosis_code: "provider_rate_limited",
+      raw_summary: "HTTP 429: too many requests",
+      status_code: 429
+    });
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "HTTP 429: too many requests"
+    }, { now: NOW }).retry_after_at).toBeUndefined();
+  });
+
   test("parses provider health rate limit reset snapshot", () => {
     expect(parseProviderHealthSignal({
       provider: "codex",
@@ -118,5 +136,18 @@ describe("provider error parser", () => {
       category: "network",
       diagnosis_code: "provider_transient_network_error"
     });
+  });
+
+  test("classifies test and business failures as human-only instead of transient recovery", () => {
+    for (const error of [
+      "focused tests failed: expected 200 but received 500",
+      "business failure: user input validation failed",
+      "command failed with exit status 1"
+    ]) {
+      expect(parseProviderEventError({ provider: "codex", type: "error", error }, { now: NOW })).toMatchObject({
+        category: "business_failure",
+        diagnosis_code: "requires_human_decision"
+      });
+    }
   });
 });

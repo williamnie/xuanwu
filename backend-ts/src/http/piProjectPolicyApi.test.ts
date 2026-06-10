@@ -27,10 +27,16 @@ describe("PI project policy API", () => {
         allowed_actions: ["issue.enqueue", "issue.state_repair"],
         allowed_mcp_capabilities: ["docs:resource:runbook", "docs:tool:search"],
         allowed_skill_intents: ["codex-issue-runner", "verification-before-completion"],
+        allowed_supervisor_actions: ["session.resume_followup", "issue.retry_after"],
         concurrency_policy: { max_parallel_issues: 1, max_parallel_pi_cycles: 1 },
         default_mode: "delegated",
         quiet_hours: { daily: [{ end: "08:00", start: "22:00" }] },
         retry_policy: { enabled: true, max_attempts: 2, backoff_minutes: [15, 60] },
+        supervisor_cooldown_seconds: 900,
+        supervisor_max_recoveries_per_issue: 3,
+        supervisor_max_recoveries_per_project_per_hour: 12,
+        supervisor_mode: "autonomous",
+        supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai",
         verification_policy: { evidence_required: true, on_timeout: "request_verifier", pending_timeout_minutes: 90 },
         working_hours: { end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] }
@@ -41,6 +47,7 @@ describe("PI project policy API", () => {
       expect(await initial.json()).toMatchObject({
         default_mode: "manual",
         project_id: "demo",
+        supervisor_mode: "propose_only",
         timezone: "UTC"
       });
       expect(patched.status).toBe(200);
@@ -48,11 +55,17 @@ describe("PI project policy API", () => {
       expect(body).toMatchObject({
         default_mode: "delegated",
         project_id: "demo",
+        supervisor_cooldown_seconds: 900,
+        supervisor_max_recoveries_per_issue: 3,
+        supervisor_max_recoveries_per_project_per_hour: 12,
+        supervisor_mode: "autonomous",
+        supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai"
       });
       expect(JSON.parse(String(body.allowed_actions_json))).toEqual(["issue.enqueue", "issue.state_repair"]);
       expect(JSON.parse(String(body.allowed_mcp_capabilities_json))).toEqual(["docs:resource:runbook", "docs:tool:search"]);
       expect(JSON.parse(String(body.allowed_skill_intents_json))).toEqual(["codex-issue-runner", "verification-before-completion"]);
+      expect(JSON.parse(String(body.allowed_supervisor_actions_json))).toEqual(["session.resume_followup", "issue.retry_after"]);
       expect(JSON.parse(String(body.working_hours_json))).toEqual({ end: "18:00", start: "09:00", weekdays: [1, 2, 3, 4, 5] });
       expect(JSON.parse(String(body.quiet_hours_json))).toEqual({ daily: [{ end: "08:00", start: "22:00" }] });
       expect(JSON.parse(String(body.retry_policy_json))).toEqual({ enabled: true, max_attempts: 2, backoff_minutes: [15, 60] });
@@ -110,6 +123,15 @@ describe("PI project policy API", () => {
       const invalidMcp = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
         allowed_mcp_capabilities: ["bad mcp"]
       });
+      const invalidSupervisorMode = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        supervisor_mode: "root"
+      });
+      const invalidSupervisorAction = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        allowed_supervisor_actions: ["bad action"]
+      });
+      const invalidSupervisorWait = await request(router, "/api/projects/demo/pi-policy", "PATCH", {
+        supervisor_rate_limit_wait_policy: "ignore"
+      });
 
       expect(invalidMode.status).toBe(400);
       expect(await invalidMode.json()).toEqual({ message: "default_mode 不合法" });
@@ -123,6 +145,12 @@ describe("PI project policy API", () => {
       expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
       expect(invalidMcp.status).toBe(400);
       expect(await invalidMcp.json()).toEqual({ message: "MCP capability id 不合法: bad mcp" });
+      expect(invalidSupervisorMode.status).toBe(400);
+      expect(await invalidSupervisorMode.json()).toEqual({ message: "supervisor_mode 不合法" });
+      expect(invalidSupervisorAction.status).toBe(400);
+      expect(await invalidSupervisorAction.json()).toEqual({ message: "allowed_supervisor_actions id 不合法: bad action" });
+      expect(invalidSupervisorWait.status).toBe(400);
+      expect(await invalidSupervisorWait.json()).toEqual({ message: "supervisor_rate_limit_wait_policy 不合法" });
     } finally {
       database.close();
     }

@@ -91,6 +91,20 @@ export function authContext(): IssueSupervisorRecoveryContext {
   };
 }
 
+export function businessFailureContext(): IssueSupervisorRecoveryContext {
+  return {
+    ...streamDisconnectContext(),
+    candidates: [{ diagnosis_code: "requires_human_decision", evidence_refs: ["provider_error"], reason: "focused test failed" }],
+    issue: { attempt_count: 1, id: 304, status: "in_progress", title: "Tests failed" },
+    provider_error: {
+      category: "business_failure",
+      diagnosis_code: "requires_human_decision",
+      raw_summary: "focused test failed: expected status 200"
+    },
+    recent_events: [{ at: "2026-06-10T07:59:00Z", id: 4, markers: ["verification"], summary: "focused test failed: expected status 200", type: "issue.log" }]
+  };
+}
+
 export function insertIssueFixture(db: RunnerDatabase, input: { issueID: number; projectID: string; sessionID: string }): void {
   db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
     values (?, ?, 'Stream disconnected', 'in_progress', 1, ?, ?)`,

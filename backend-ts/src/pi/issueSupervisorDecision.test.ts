@@ -4,6 +4,7 @@ import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { runPiSupervisorDecision } from "./issueSupervisorDecision.ts";
 import {
   authContext,
+  businessFailureContext,
   cleanupDecisionFixtures,
   insertIssueFixture,
   openDecisionFixture,
@@ -127,6 +128,38 @@ describe("PI supervisor decision runtime", () => {
       expect(result.valid).toBe(true);
       expect(result.decision.decision).toBe("needs_user");
       expect(result.decision.decision).not.toBe("resume_session");
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
+
+  test("rejects automatic recovery for test/business failure decisions", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-business-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    try {
+      faux.setResponses([fauxAssistantMessage(JSON.stringify({
+        confidence: "high",
+        decision: "resume_session",
+        evidence_refs: ["provider_error"],
+        expected_outcome: "incorrectly retries a real failing test",
+        fallback_if_no_progress: "needs_user",
+        rationale: "mistakenly treats the failing test as transient",
+        recovery_message: "Continue the session.",
+        risk_level: "medium"
+      }))]);
+
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: businessFailureContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.decision.decision).toBe("needs_user");
+      expect(result.error).toContain("human-only provider failure");
     } finally {
       faux.unregister();
       fixture.db.close();

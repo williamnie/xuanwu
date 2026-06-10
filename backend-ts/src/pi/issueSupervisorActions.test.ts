@@ -124,12 +124,67 @@ describe("PI issue supervisor actions", () => {
       db.close();
     }
   });
+
+  test("recovery budget and cooldown survive context rebuild after database reopen", async () => {
+    const { db, root } = await fixtureDbWithRoot();
+    const provider = new SupervisorProvider();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 306, projectID: "demo", sessionID: "thread-306", turnID: "turn-old" });
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["session.resume_followup"],
+        project_id: "demo",
+        supervisor_cooldown_seconds: 600,
+        supervisor_max_recoveries_per_issue: 1,
+        supervisor_mode: "autonomous"
+      });
+      createIssueSupervisorEvent(db, {
+        action_id: "previous",
+        action_type: "session.resume_followup",
+        event_type: "action",
+        issue_id: 306,
+        project_id: "demo"
+      });
+      db.sqlite.run("update issue_supervisor_events set created_at='2026-06-10T07:55:00Z' where action_id='previous'");
+      db.close();
+
+      const reopened = await openDatabase({ stateDir: join(root, "state") });
+      try {
+        const result = await applyIssueSupervisorDecisionActions({
+          context: buildIssueSupervisorRecoveryContext(reopened, 306, { now: NOW }),
+          database: reopened,
+          decision: resumeDecision(),
+          now: NOW,
+          providers: { codex: provider }
+        });
+
+        expect(provider.calls).toEqual([]);
+        expect(result.actions).toContainEqual(expect.objectContaining({
+          action_type: "session.resume_followup",
+          decision: "deny",
+          status: "denied"
+        }));
+        expect(listPiActions(reopened, { issueId: 306 })).toContainEqual(expect.objectContaining({
+          gate_decision: "deny",
+          gate_reason: expect.stringContaining("budget")
+        }));
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      try { db.close(); } catch {}
+    }
+  });
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
+  return (await fixtureDbWithRoot()).db;
+}
+
+async function fixtureDbWithRoot(): Promise<{ db: RunnerDatabase; root: string }> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-supervisor-actions-"));
   tempRoots.push(root);
-  return openDatabase({ stateDir: join(root, "state") });
+  return { db: await openDatabase({ stateDir: join(root, "state") }), root };
 }
 
 function insertProject(db: RunnerDatabase, id: string): void {

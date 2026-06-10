@@ -182,6 +182,7 @@ describe("PI issue supervisor recovery contract", () => {
     const root = await tempPath("codex-runner-supervisor-migrate-");
     const stateDir = join(root, "state");
     await createLegacyDatabase(join(stateDir, "runner.db"));
+    await insertLegacyPolicyRow(join(stateDir, "runner.db"));
 
     const migrated = await openDatabase({ stateDir });
     try {
@@ -206,15 +207,31 @@ describe("PI issue supervisor recovery contract", () => {
       ]));
       expect(migrated.sqlite.query("select id from schema_migrations where id='020_issue_supervisor_recovery'").get())
         .toEqual({ id: "020_issue_supervisor_recovery" });
+      expect(migrated.sqlite.query(`
+        select allowed_supervisor_actions_json, supervisor_mode, supervisor_cooldown_seconds,
+          supervisor_max_recoveries_per_issue, supervisor_max_recoveries_per_project_per_hour,
+          supervisor_rate_limit_wait_policy
+        from project_pi_policies where project_id='legacy-demo'
+      `).get()).toEqual({
+        allowed_supervisor_actions_json: "[]",
+        supervisor_cooldown_seconds: 300,
+        supervisor_max_recoveries_per_issue: 2,
+        supervisor_max_recoveries_per_project_per_hour: 10,
+        supervisor_mode: "propose_only",
+        supervisor_rate_limit_wait_policy: "respect_retry_after"
+      });
     } finally {
       migrated.close();
     }
   });
 
-  test("exports reusable fixtures for stream disconnect, 429 retry-after, and no-progress recovery loops", () => {
+  test("exports reusable fixtures for stream disconnect, 429 variants, human-only failures, and no-progress loops", () => {
     expect(issueSupervisorRecoveryFixtures.map((fixture) => fixture.id)).toEqual([
       "issue-298-stream-disconnect",
       "provider-429-retry-after",
+      "provider-429-no-retry-after",
+      "provider-401-auth",
+      "business-test-failure",
       "consecutive-recovery-no-progress"
     ]);
     for (const fixture of issueSupervisorRecoveryFixtures) {
@@ -232,10 +249,56 @@ describe("PI issue supervisor recovery contract", () => {
       provider_error_category: "rate_limit",
       retry_after_at: "2026-06-10T02:10:00Z"
     });
-    expect(issueSupervisorRecoveryFixtures[2]?.decisions.at(-1)).toMatchObject({
+    expect(issueSupervisorRecoveryFixtures[2]?.events[0]).toMatchObject({
+      diagnosis_code: "provider_rate_limited",
+      provider_error_category: "rate_limit"
+    });
+    expect(issueSupervisorRecoveryFixtures[2]?.events[0]?.retry_after_at).toBeUndefined();
+    expect(issueSupervisorRecoveryFixtures[3]?.decisions.at(-1)).toMatchObject({
       decision: "needs_user",
       fallback_if_no_progress: "blocked"
     });
+    expect(issueSupervisorRecoveryFixtures[4]?.decisions.at(-1)).toMatchObject({
+      decision: "needs_user",
+      rationale: expect.stringContaining("test")
+    });
+    expect(issueSupervisorRecoveryFixtures[5]?.decisions.at(-1)).toMatchObject({
+      decision: "needs_user",
+      fallback_if_no_progress: "blocked"
+    });
+  });
+
+  test("redacts supervisor event payloads before persistence and reads", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const event = createIssueSupervisorEvent(db, {
+        event_type: "signal",
+        issue_id: 298,
+        payload_json: {
+          auth_token: "runner-secret",
+          cwd: "/Users/xiaobei/private/project",
+          nested: { api_key: "sk-live-secret", output_path: "/tmp/raw.log" },
+          text: "Authorization: Bearer live-secret"
+        },
+        project_id: "demo"
+      });
+
+      const raw = db.sqlite.query<{ payload_json: string }, [number]>(
+        "select payload_json from issue_supervisor_events where id=?"
+      ).get(event.id)?.payload_json ?? "";
+      const listed = listIssueSupervisorEvents(db, { issueId: 298 })[0]?.payload_json ?? "";
+      for (const payload of [raw, listed]) {
+        expect(payload).not.toContain("runner-secret");
+        expect(payload).not.toContain("sk-live-secret");
+        expect(payload).not.toContain("live-secret");
+        expect(payload).not.toContain("/Users/xiaobei/private");
+        expect(payload).not.toContain("/tmp/raw.log");
+        expect(payload).toContain("[redacted]");
+        expect(payload).toContain("[redacted-path]");
+      }
+    } finally {
+      db.close();
+    }
   });
 
   test("classifies new supervisor action types with stable gate risk", () => {
@@ -261,6 +324,24 @@ async function createLegacyDatabase(path: string): Promise<void> {
   const db = new Database(path);
   try {
     runMigrations(db, migrations.slice(0, supervisorMigrationIndex()));
+  } finally {
+    db.close();
+  }
+}
+
+async function insertLegacyPolicyRow(path: string): Promise<void> {
+  const db = new Database(path);
+  try {
+    db.run(`insert into project_pi_policies
+      (project_id, default_mode, timezone, working_hours_json, quiet_hours_json,
+        retry_policy_json, concurrency_policy_json, verification_policy_json,
+        allowed_actions_json, allowed_mcp_capabilities_json, allowed_skill_intents_json,
+        created_at, updated_at)
+      values ('legacy-demo', 'manual', 'UTC', '{}', '{}',
+        '{"enabled":false,"max_attempts":0,"backoff_minutes":[]}',
+        '{"max_parallel_issues":1,"max_parallel_pi_cycles":1}',
+        '{"pending_timeout_minutes":1440,"on_timeout":"escalate","evidence_required":true}',
+        '[]', '[]', '[]', '2026-06-10T00:00:00Z', '2026-06-10T00:00:00Z')`);
   } finally {
     db.close();
   }

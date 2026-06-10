@@ -109,6 +109,73 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("uses policy cooldown for 429 without retry-after and never emits immediate resume candidate", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-rate-limit-no-window-"));
+      insertIssue(db, { id: 304, projectID: "runner", title: "Rate limited without window", status: "in_progress", updatedAt: "2026-06-10T07:55:00Z" });
+      insertRun(db, { issueID: 304, id: "issue-304-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-304", turnID: "turn-304" });
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["issue.retry_after", "session.resume_followup"],
+        project_id: "runner",
+        supervisor_cooldown_seconds: 900
+      });
+      insertEvent(db, { issueID: 304, type: "issue.log", payload: {
+        type: "error",
+        provider: "codex",
+        raw_payload: { status_code: 429, error: "too many requests" }
+      }, createdAt: "2026-06-10T08:00:00Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 304, { now: NOW });
+
+      expect(context.provider_error).toMatchObject({
+        category: "rate_limit",
+        diagnosis_code: "provider_rate_limited",
+        status_code: 429
+      });
+      expect(context.provider_error?.retry_after_at).toBeUndefined();
+      expect(context.candidates).toEqual([expect.objectContaining({
+        diagnosis_code: "provider_rate_limited",
+        wait_until: "2026-06-10T08:15:00Z"
+      })]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("classifies 401 and test failures as requires_human_decision without recovery budget spend", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-human-only-"));
+      insertIssue(db, { id: 305, projectID: "runner", title: "Auth failed", status: "in_progress", updatedAt: "2026-06-10T07:55:00Z" });
+      insertRun(db, { issueID: 305, id: "issue-305-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-305", turnID: "turn-305" });
+      insertEvent(db, { issueID: 305, type: "issue.log", payload: {
+        type: "error",
+        provider: "codex",
+        raw_payload: "API returned 401 unauthorized"
+      }, createdAt: "2026-06-10T07:59:00Z" });
+      insertIssue(db, { id: 306, projectID: "runner", title: "Test failed", status: "in_progress", updatedAt: "2026-06-10T07:55:00Z" });
+      insertRun(db, { issueID: 306, id: "issue-306-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-306", turnID: "turn-306" });
+      insertEvent(db, { issueID: 306, type: "issue.log", payload: {
+        type: "error",
+        provider: "codex",
+        raw_payload: "focused test failed: expected status 200"
+      }, createdAt: "2026-06-10T07:59:00Z" });
+
+      const authContext = buildIssueSupervisorRecoveryContext(db, 305, { now: NOW });
+      const testContext = buildIssueSupervisorRecoveryContext(db, 306, { now: NOW });
+
+      expect(authContext.provider_error).toMatchObject({ category: "auth", diagnosis_code: "requires_human_decision" });
+      expect(testContext.provider_error).toMatchObject({ category: "business_failure", diagnosis_code: "requires_human_decision" });
+      expect(authContext.candidates).toEqual([expect.objectContaining({ diagnosis_code: "requires_human_decision" })]);
+      expect(testContext.candidates).toEqual([expect.objectContaining({ diagnosis_code: "requires_human_decision" })]);
+      expect(authContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 2 });
+      expect(testContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 2 });
+    } finally {
+      db.close();
+    }
+  });
+
   test("marks exhausted candidate after two recoveries without meaningful progress", async () => {
     const db = await fixtureDb();
     try {

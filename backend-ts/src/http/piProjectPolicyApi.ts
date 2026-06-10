@@ -8,6 +8,8 @@ import type { Router } from "./router.ts";
 
 type PiProjectPolicyContext = { database: RunnerDatabase };
 const MODES = new Set(["manual", "attended", "delegated", "autonomous"]);
+const SUPERVISOR_MODES = new Set(["off", "propose_only", "assisted", "autonomous"]);
+const SUPERVISOR_WAIT_POLICIES = new Set(["respect_retry_after", "default_cooldown", "ask"]);
 
 export function registerPiProjectPolicyRoutes(router: Router, context: PiProjectPolicyContext): void {
   router.get("/api/projects/:id/pi-policy", (request) => policyResponse(context, request));
@@ -28,11 +30,17 @@ async function patchPolicyResponse(context: PiProjectPolicyContext, request: Req
     allowed_actions_json: body.allowed_actions,
     allowed_mcp_capabilities_json: body.allowed_mcp_capabilities,
     allowed_skill_intents_json: body.allowed_skill_intents,
+    allowed_supervisor_actions_json: body.allowed_supervisor_actions,
     concurrency_policy_json: body.concurrency_policy,
     default_mode: body.default_mode,
     project_id: id,
     quiet_hours_json: body.quiet_hours,
     retry_policy_json: body.retry_policy,
+    supervisor_cooldown_seconds: body.supervisor_cooldown_seconds,
+    supervisor_max_recoveries_per_issue: body.supervisor_max_recoveries_per_issue,
+    supervisor_max_recoveries_per_project_per_hour: body.supervisor_max_recoveries_per_project_per_hour,
+    supervisor_mode: body.supervisor_mode,
+    supervisor_rate_limit_wait_policy: body.supervisor_rate_limit_wait_policy,
     timezone: body.timezone,
     verification_policy_json: body.verification_policy,
     working_hours_json: body.working_hours
@@ -44,10 +52,18 @@ function normalizePolicyBody(body: Record<string, unknown>) {
     allowed_actions: listField(body, ["allowed_actions_json", "allowed_actions", "allowedActions"], "allowed_actions"),
     allowed_mcp_capabilities: mcpField(body),
     allowed_skill_intents: skillField(body),
+    allowed_supervisor_actions: listField(body, [
+      "allowed_supervisor_actions_json", "allowed_supervisor_actions", "allowedSupervisorActions"
+    ], "allowed_supervisor_actions"),
     concurrency_policy: objectField(body, ["concurrency_policy_json", "concurrency_policy"], "concurrency_policy"),
     default_mode: policyMode(body),
     quiet_hours: objectField(body, ["quiet_hours_json", "quiet_hours"], "quiet_hours"),
     retry_policy: objectField(body, ["retry_policy_json", "retry_policy"], "retry_policy"),
+    supervisor_cooldown_seconds: positiveIntegerField(body, "supervisor_cooldown_seconds"),
+    supervisor_max_recoveries_per_issue: positiveIntegerField(body, "supervisor_max_recoveries_per_issue"),
+    supervisor_max_recoveries_per_project_per_hour: positiveIntegerField(body, "supervisor_max_recoveries_per_project_per_hour"),
+    supervisor_mode: supervisorMode(body),
+    supervisor_rate_limit_wait_policy: supervisorWaitPolicy(body),
     timezone: stringField(body, "timezone"),
     verification_policy: objectField(body, ["verification_policy_json", "verification_policy"], "verification_policy"),
     working_hours: objectField(body, ["working_hours_json", "working_hours"], "working_hours")
@@ -168,6 +184,28 @@ function policyMode(body: Record<string, unknown>): string | undefined {
   const mode = stringValue(body.default_mode);
   if (MODES.has(mode)) return mode;
   throw new HttpError(400, "default_mode 不合法");
+}
+
+function supervisorMode(body: Record<string, unknown>): string | undefined {
+  if (!Object.hasOwn(body, "supervisor_mode")) return undefined;
+  const mode = stringValue(body.supervisor_mode);
+  if (SUPERVISOR_MODES.has(mode)) return mode;
+  throw new HttpError(400, "supervisor_mode 不合法");
+}
+
+function supervisorWaitPolicy(body: Record<string, unknown>): string | undefined {
+  if (!Object.hasOwn(body, "supervisor_rate_limit_wait_policy")) return undefined;
+  const mode = stringValue(body.supervisor_rate_limit_wait_policy);
+  if (SUPERVISOR_WAIT_POLICIES.has(mode)) return mode;
+  throw new HttpError(400, "supervisor_rate_limit_wait_policy 不合法");
+}
+
+function positiveIntegerField(body: Record<string, unknown>, key: string): number | undefined {
+  if (!Object.hasOwn(body, key)) return undefined;
+  const value = body[key];
+  const number = typeof value === "number" ? value : Number(stringValue(value));
+  if (Number.isInteger(number) && number > 0) return number;
+  throw new HttpError(400, `${key} 必须是正整数`);
 }
 
 function stringField(body: Record<string, unknown>, key: string): string | undefined {

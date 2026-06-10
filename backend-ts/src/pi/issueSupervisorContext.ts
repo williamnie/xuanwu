@@ -64,6 +64,7 @@ export function buildIssueSupervisorRecoveryContext(
     candidates: candidates({
       history,
       now,
+      policy,
       providerError,
       session,
       staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS

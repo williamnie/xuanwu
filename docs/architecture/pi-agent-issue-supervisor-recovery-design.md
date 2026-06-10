@@ -420,4 +420,90 @@ Night summary/report 增加：
 - live migration / backfill。
 - redaction / sensitive payload review。
 - launchd/live deploy smoke。
+## 12. 上线与运维 Runbook
 
+### 12.1 默认策略
+
+Supervisor recovery 的 live 默认值是保守防护：
+
+- `supervisor_mode='propose_only'`：只采集信号、写入 decision/proposal/audit，不自动恢复 session。
+- `allowed_supervisor_actions_json='[]'`：即使切到 `autonomous`，没有显式 allowlist 也不会执行恢复动作。
+- `supervisor_cooldown_seconds=300`，`supervisor_max_recoveries_per_issue=2`，`supervisor_max_recoveries_per_project_per_hour=10`。
+- `supervisor_rate_limit_wait_policy='respect_retry_after'`：429 带 `Retry-After` / reset 时必须等窗口；429 无窗口时按 policy cooldown 生成等待候选。
+- `session.steer` 仍是 high-risk action；默认不进 supervisor allowlist。
+- 401/auth、permission、quota、业务失败、测试失败只允许 `needs_user` / `blocked`，不得自动恢复。
+
+### 12.2 开启 delegated / autonomous
+
+先读当前策略：
+
+```bash
+export CODEX_RUNNER_ADDR="${CODEX_RUNNER_ADDR:-127.0.0.1:3008}"
+export CODEX_RUNNER_AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-$(cat data/auth_token)}"
+curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-policy"
+```
+
+建议分两步上线：
+
+1. `supervisor_mode='propose_only'` 观察 `/api/pi/heartbeat-timeline` 和 issue detail 的 supervisor panel。
+2. 只对可恢复动作开启 autonomous，例如：
+
+```bash
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-policy" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "supervisor_mode":"autonomous",
+    "allowed_supervisor_actions":["issue.retry_after","session.resume_followup"],
+    "supervisor_cooldown_seconds":900,
+    "supervisor_max_recoveries_per_issue":2,
+    "supervisor_max_recoveries_per_project_per_hour":6,
+    "supervisor_rate_limit_wait_policy":"respect_retry_after"
+  }'
+```
+
+### 12.3 暂停 / 回滚
+
+最小回滚是把 supervisor 切回只提案，并清空可执行 allowlist：
+
+```bash
+curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-policy" \
+  -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"supervisor_mode":"propose_only","allowed_supervisor_actions":[]}'
+```
+
+如需停止整个 PI project loop，使用已有 project PI control API / Command Center pause；不要直接改 SQLite。
+
+### 12.4 排查
+
+- 单 issue 视图：`GET /api/issues/<issue-id>/supervisor`。
+- 全局 timeline：`GET /api/pi/heartbeat-timeline?issue_id=<issue-id>`，关注 `supervisor_signal`、`supervisor_decision`、`supervisor_action`、`supervisor_result`。
+- project policy：`GET /api/projects/<project-id>/pi-policy`，确认 mode、allowlist、cooldown、budget。
+- 固定 chaos fixtures：`backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts` 覆盖 #298 stream disconnect、429 retry-after、429 无 retry-after、401、测试失败、连续恢复无进展。
+- 回归命令：
+
+```bash
+cd backend-ts
+bun test ./src/pi/providerErrorParser.test.ts \
+  ./src/pi/issueSupervisorContext.test.ts \
+  ./src/pi/issueSupervisorDecision.test.ts \
+  ./src/pi/issueSupervisorActions.test.ts \
+  ./src/pi/issue-supervisor-recovery.test.ts \
+  ./src/http/pi-supervisor-api.test.ts \
+  ./src/http/piProjectPolicyApi.test.ts
+```
+
+### 12.5 live deploy smoke
+
+上线后最小验证：
+
+```bash
+./scripts/status-launchd.sh
+./redeploy.sh
+curl -fsS http://127.0.0.1:3008/health
+curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" http://127.0.0.1:3008/api/system/status
+curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" http://127.0.0.1:3008/api/projects
+curl -fsS -H "Authorization: Bearer ${CODEX_RUNNER_AUTH_TOKEN}" http://127.0.0.1:3008/api/pi/heartbeat-timeline
+```

@@ -27,6 +27,7 @@ export type SupervisorCandidate = {
 type CandidateInput = {
   history: Record<string, unknown>;
   now: Date;
+  policy?: { supervisor_cooldown_seconds?: number };
   providerError: ProviderErrorSignal | null;
   session: AgentSession | null;
   staleAfterSeconds?: number;
@@ -62,7 +63,7 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
     return out;
   }
   const diagnosis = providerError?.diagnosis_code;
-  if (diagnosis) out.push(providerErrorCandidate(providerError, diagnosis));
+  if (diagnosis) out.push(providerErrorCandidate(input, providerError, diagnosis));
   if (!diagnosis && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session has no recent updates" });
   }
@@ -88,6 +89,7 @@ function retryAfterScheduledSignal(event: IssueEvent, payload: unknown, now: Dat
   return {
     category: "rate_limit",
     diagnosis_code: retryDiagnosis(retryAfterAt, now),
+    observed_at: event.created_at,
     raw_summary: truncate(redactAuditText(clean(record.reason) || "issue retry-after scheduled")),
     retry_after_at: retryAfterAt,
     retry_after_seconds: secondsUntil(retryAfterAt, now)
@@ -96,10 +98,12 @@ function retryAfterScheduledSignal(event: IssueEvent, payload: unknown, now: Dat
 
 function adjustRetryWindow(signal: ProviderErrorSignal, now: Date): ProviderErrorSignal {
   const retryAfterAt = clean(signal.retry_after_at);
-  if (signal.category !== "rate_limit" || retryAfterAt === "") return signal;
+  const observed = signal.observed_at || now.toISOString();
+  if (signal.category !== "rate_limit" || retryAfterAt === "") return { ...signal, observed_at: observed };
   return {
     ...signal,
     diagnosis_code: retryDiagnosis(retryAfterAt, now),
+    observed_at: observed,
     retry_after_seconds: secondsUntil(retryAfterAt, now)
   };
 }
@@ -217,15 +221,24 @@ export function runContext(run: IssueRun): Record<string, unknown> {
 }
 
 function providerErrorCandidate(
+  input: CandidateInput,
   providerError: ProviderErrorSignal,
   diagnosis: PiSupervisorDiagnosisCode
 ): SupervisorCandidate {
+  const waitUntil = providerError.retry_after_at || cooldownWaitUntil(input, diagnosis);
   return {
     diagnosis_code: diagnosis,
     evidence_refs: ["provider_error"],
     reason: providerError.raw_summary,
-    ...(providerError.retry_after_at ? { wait_until: providerError.retry_after_at } : {})
+    ...(waitUntil ? { wait_until: waitUntil } : {})
   };
+}
+
+function cooldownWaitUntil(input: CandidateInput, diagnosis: PiSupervisorDiagnosisCode): string {
+  if (diagnosis !== "provider_rate_limited") return "";
+  const seconds = input.policy?.supervisor_cooldown_seconds ?? 0;
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  return iso((timeMs(input.providerError?.observed_at) ?? input.now.getTime()) + seconds * 1_000);
 }
 
 function eventMarkers(type: string, payload: unknown, text: string): string[] {
@@ -336,4 +349,13 @@ function hashText(value: string): string {
   let hash = 0;
   for (const char of value) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
   return value === "" ? "" : String(hash >>> 0);
+}
+
+function timeMs(value: string | undefined): number | undefined {
+  const ms = Date.parse(clean(value));
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function iso(value: number): string {
+  return new Date(value).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
