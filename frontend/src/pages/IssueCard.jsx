@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import {
   AlertTriangle,
   Clock,
   ExternalLink,
   Link2,
+  MoreHorizontal,
   RotateCw,
-  Terminal,
   Trash2,
 } from 'lucide-react';
 import {
@@ -30,7 +31,6 @@ export default function IssueCard({
   onDragStart,
   onDragEnd,
   onOpenIssue,
-  onOpenLog,
   onOpenSession,
   onRequestDelete,
   onRetry,
@@ -39,7 +39,6 @@ export default function IssueCard({
 }) {
   const run = latestIssueRun(issue);
   const sessionRef = issueRunSessionRef(issue, run);
-  const hasRuntime = Boolean(sessionRef || issueRunTurnId(issue, run));
   const failureReason = issueFailureReason(issue, run);
   return (
     <div
@@ -60,10 +59,8 @@ export default function IssueCard({
       <IssueRunMetadata issue={issue} run={run} />
       <IssueQuickActions
         issue={issue}
-        hasRuntime={hasRuntime}
         sessionRef={sessionRef}
         retrying={retrying}
-        onOpenLog={onOpenLog}
         onOpenSession={onOpenSession}
         onRequestDelete={onRequestDelete}
         onRetry={onRetry}
@@ -137,11 +134,10 @@ function runTooltipText({ attempt, runStatus, provider, speed, sessionId, turnId
   ].filter(Boolean).join(' · ');
 }
 
-function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRequestDelete, onRetry, onServiceTierChange }) {
+function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onRequestDelete, onRetry, onServiceTierChange }) {
   const showRetry = issue.status === 'failed';
-  const showLog = issue.status === 'in_progress' || hasRuntime;
   const canDelete = issue.status !== 'in_progress';
-  if (!showRetry && !showLog && !sessionRef && !canDelete && !onServiceTierChange) return null;
+  if (!showRetry && !sessionRef && !canDelete && !onServiceTierChange) return null;
   return (
     <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
       {onServiceTierChange && (
@@ -162,20 +158,53 @@ function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog,
           <ExternalLink size={12} /> Session
         </button>
       )}
-      {showLog && (
-        <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenLog(event, issue.id)}>
-          <Terminal size={12} /> Logs
-        </button>
-      )}
       {showRetry && (
         <button type="button" className="kanban-card-action-btn retry" disabled={retrying} onClick={(event) => onRetry(event, issue)}>
           <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
         </button>
       )}
-      {canDelete && (
-        <button type="button" className="kanban-card-action-btn danger" onClick={(event) => onRequestDelete(event, issue)}>
-          <Trash2 size={12} /> Delete
-        </button>
+      <IssueMoreActions issue={issue} canDelete={canDelete} onRequestDelete={onRequestDelete} />
+    </div>
+  );
+}
+
+function IssueMoreActions({ issue, canDelete, onRequestDelete }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  if (!canDelete || !onRequestDelete) return null;
+  const menuId = `issue-${issue.id}-more-menu`;
+  const toggleMenu = (event) => {
+    event.stopPropagation();
+    setMoreOpen(open => !open);
+  };
+  const closeOnEscape = (event) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    setMoreOpen(false);
+  };
+  const requestDelete = (event) => {
+    event.stopPropagation();
+    setMoreOpen(false);
+    onRequestDelete(event, issue);
+  };
+  return (
+    <div className="kanban-card-more" onClick={(event) => event.stopPropagation()} onKeyDown={closeOnEscape}>
+      <button
+        type="button"
+        className="kanban-card-more-trigger"
+        aria-label={`更多操作：Issue #${issue.id}`}
+        aria-haspopup="menu"
+        aria-expanded={moreOpen}
+        aria-controls={menuId}
+        onClick={toggleMenu}
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {moreOpen && (
+        <div id={menuId} className="kanban-card-more-menu" role="menu" aria-label={`Issue #${issue.id} 更多操作`}>
+          <button type="button" className="kanban-card-more-item danger" role="menuitem" onClick={requestDelete}>
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
       )}
     </div>
   );

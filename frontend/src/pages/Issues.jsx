@@ -85,11 +85,6 @@ export default function Issues({
     }
   };
 
-  const handleOpenIssueLog = (event, issueId) => {
-    stopCardAction(event);
-    navigateTo('issues', issueId);
-  };
-
   const handleOpenSession = (event, sessionRef) => {
     stopCardAction(event);
     if (sessionRef) {
@@ -441,7 +436,6 @@ export default function Issues({
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onOpenIssue={(issueId) => navigateTo('issues', issueId)}
-                      onOpenLog={handleOpenIssueLog}
                       onOpenSession={handleOpenSession}
                       onRequestDelete={handleRequestDeleteIssue}
                       onRetry={handleRetryIssue}
