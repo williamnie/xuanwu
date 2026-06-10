@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, Filter, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
 import { shortId } from './piChatState';
-import { eventTypeLabel, runtimeMessageLabel, sourceLabel, stageLabel } from './piCommandCenterTerms';
+import {
+  filterTimelineItems,
+  timelineChips,
+  timelineItemDisplay,
+  viewFilterLabel,
+} from './piHeartbeatTimelineDisplay';
 import './PiHeartbeatTimelinePanel.css';
 
 const TIMELINE_LIMIT = 80;
@@ -14,13 +19,13 @@ export default function PiHeartbeatTimelinePanel() {
       <TimelineHeader timeline={timeline} />
       <TimelineFilters timeline={timeline} />
       {timeline.error && <div className="pi-heartbeat-timeline-error" role="alert">{timeline.error}</div>}
-      <TimelineList items={timeline.items} loading={timeline.loading} />
+      <TimelineList items={timeline.items} loading={timeline.loading} view={timeline.filters.view} />
     </section>
   );
 }
 
 function useHeartbeatTimeline() {
-  const [filters, setFilters] = useState({ issueId: '', projectId: '' });
+  const [filters, setFilters] = useState({ issueId: '', projectId: '', view: 'all' });
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [state, setState] = useState({ error: '', loading: true });
@@ -52,7 +57,7 @@ function TimelineHeader({ timeline }) {
       <div>
         <span>PI 自动化证据</span>
         <h2><Activity size={18} /> 自动检查时间线</h2>
-        <p>按时间串联运行信号、策略决策、执行动作和执行结果，展示 PI 自动检查与审计证据。</p>
+        <p>按时间串联发现信号、策略判断、准备执行和执行结果，默认显示用户可读摘要，技术详情可按需展开。</p>
       </div>
       <button className="pi-heartbeat-timeline-refresh" onClick={timeline.load} disabled={timeline.loading} type="button">
         {timeline.loading ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />}
@@ -85,12 +90,20 @@ function TimelineFilters({ timeline }) {
           onChange={(event) => timeline.updateFilter('issueId', event.target.value)}
         />
       </label>
+      <label>
+        记录类型
+        <select value={timeline.filters.view} onChange={(event) => timeline.updateFilter('view', event.target.value)}>
+          {['all', 'abnormal', 'attention', 'result'].map((view) => (
+            <option key={view} value={view}>{viewFilterLabel(view)}</option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }
 
-function TimelineList({ items, loading }) {
-  const visibleItems = useMemo(() => items.slice(0, TIMELINE_LIMIT), [items]);
+function TimelineList({ items, loading, view }) {
+  const visibleItems = useMemo(() => filterTimelineItems(items, view).slice(0, TIMELINE_LIMIT), [items, view]);
   if (loading && visibleItems.length === 0) {
     return <div className="pi-heartbeat-timeline-empty"><Loader2 size={14} className="spin-animation" /> 正在加载时间线…</div>;
   }
@@ -105,15 +118,16 @@ function TimelineList({ items, loading }) {
 }
 
 function TimelineItem({ item }) {
+  const display = timelineItemDisplay(item);
   return (
     <article className={`pi-heartbeat-timeline-item ${item.stage}`}>
-      <div className="pi-heartbeat-timeline-rail"><span>{stageLabel(item.stage)}</span></div>
+      <div className="pi-heartbeat-timeline-rail"><span>{display.stageLabel}</span></div>
       <div className="pi-heartbeat-timeline-body">
         <div className="pi-heartbeat-timeline-meta">
-          <strong>{eventTitle(item)}</strong>
+          <strong>{display.title}</strong>
           <time>{formatTime(item.created_at)}</time>
         </div>
-        <p>{runtimeMessageLabel(item.message) || fallbackMessage(item)}</p>
+        <p>{display.description}</p>
         <TimelineChips item={item} />
         <TimelineDetails item={item} />
       </div>
@@ -122,15 +136,12 @@ function TimelineItem({ item }) {
 }
 
 function TimelineChips({ item }) {
-  const chips = [
-    item.project_id ? `项目：${item.project_id}` : '',
-    item.issue_id ? `Issue：#${item.issue_id}` : '',
-    item.heartbeat_id ? `自动检查：${shortId(item.heartbeat_id)}` : '',
-    item.action_id ? `动作：${shortId(item.action_id)}` : '',
-    item.delegation_id ? `委托：${shortId(item.delegation_id)}` : '',
-    item.decision ? `决策：${item.decision}` : '',
-  ].filter(Boolean);
-  return <div className="pi-heartbeat-timeline-chips">{chips.map((chip) => <code key={chip}>{chip}</code>)}</div>;
+  const chips = timelineChips(item, shortId);
+  return (
+    <div className="pi-heartbeat-timeline-chips">
+      {chips.map((chip) => <code className={chip.muted ? 'muted' : ''} key={chip.text}>{chip.text}</code>)}
+    </div>
+  );
 }
 
 function TimelineDetails({ item }) {
@@ -138,22 +149,11 @@ function TimelineDetails({ item }) {
   if (!details) return null;
   return (
     <details className="pi-heartbeat-timeline-details">
-      <summary>请求数据 / 执行结果</summary>
+      <summary>查看技术详情</summary>
+      <p>以下是调试用 payload、result 与错误原文，默认折叠以保持事件流可读。</p>
       <pre>{details}</pre>
     </details>
   );
-}
-
-function eventTitle(item) {
-  return `${sourceLabel(item.source)} · ${eventTypeLabel(item.event_type || 'event')}`;
-}
-
-function fallbackMessage(item) {
-  if (item.error) return item.error;
-  if (item.stage === 'signal') return 'PI 已收集运行信号。';
-  if (item.stage === 'decision') return 'PI 已评估执行策略和授权范围。';
-  if (item.stage === 'action') return 'PI 已规划或启动动作。';
-  return 'PI 已记录执行结果。';
 }
 
 function detailText(item) {

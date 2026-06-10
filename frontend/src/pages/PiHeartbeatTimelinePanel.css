@@ -78,7 +78,7 @@
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: auto minmax(180px, 1fr) minmax(120px, 180px);
+  grid-template-columns: auto minmax(180px, 1fr) minmax(120px, 170px) minmax(140px, 180px);
 }
 
 .pi-heartbeat-timeline-filters label {
@@ -233,12 +233,24 @@
   padding: 2px 7px;
 }
 
+.pi-heartbeat-timeline-chips code.muted {
+  background: color-mix(in srgb, var(--text-muted) 7%, transparent);
+  border-color: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  color: var(--text-muted);
+}
+
 .pi-heartbeat-timeline-details summary {
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 900;
-  text-transform: uppercase;
+}
+
+.pi-heartbeat-timeline-details > p {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 6px 0 0;
 }
 
 .pi-heartbeat-timeline-details pre {
