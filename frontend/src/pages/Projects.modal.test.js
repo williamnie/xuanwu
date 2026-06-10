@@ -20,3 +20,19 @@ test('project config modal is viewport bounded and scrollable', () => {
   assert.match(rule, /overflow-y:\s*auto/);
   assert.match(rule, /overscroll-behavior:\s*contain/);
 });
+
+test('project cards keep low-frequency metadata behind compact details', () => {
+  assert.match(source, /className="glass-card project-card"/);
+  assert.match(source, /<details className="project-card-details">/);
+  assert.match(source, /<ProjectMetaRow label="Provider"/);
+  assert.match(source, /<ProjectMetaRow label="Capabilities"/);
+  assert.match(source, /<ProjectMetaRow label="Agent Profile"/);
+  assert.match(source, /<ProjectMetaRow label="默认速度"/);
+
+  const cardRule = ruleFor('.project-card');
+  assert.match(cardRule, /gap:\s*10px/);
+  assert.match(cardRule, /padding:\s*12px/);
+
+  const footerRule = ruleFor('.project-card-footer');
+  assert.match(footerRule, /grid-template-columns:\s*auto minmax\(0, 1fr\)/);
+});

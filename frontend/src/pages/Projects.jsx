@@ -58,6 +58,13 @@ function projectIdFromPath(cwd) {
   return base.replace(/^-+|-+$/g, '') || DEFAULT_PROJECT_NAME;
 }
 
+function compactPath(cwd = '') {
+  const text = String(cwd || '').trim().replace(/[\\/]+$/, '');
+  const parts = text.split(/[\\/]+/).filter(Boolean);
+  if (parts.length <= 3) return text || '—';
+  return `…/${parts.slice(-2).join('/')}`;
+}
+
 function normalizeCodexModel(model) {
   if (!CODEX_MODEL_OPTIONS.some(option => option.value === model)) {
     return DEFAULT_CODEX_MODEL;
@@ -438,7 +445,7 @@ export default function Projects() {
             </button>
           </div>
         ) : (
-          <div className="grid-cols-3">
+          <div className="grid-cols-3 projects-grid">
             {projects.map(proj => {
               const projIssues = issues.filter(i => i.project_id === proj.id);
               const doneCount = projIssues.filter(i => i.status === 'done').length;
@@ -450,67 +457,50 @@ export default function Projects() {
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
 
               return (
-                <div key={proj.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '16px' }}>
+                <div key={proj.id} className="glass-card project-card">
                   
                   {/* 项目基本信息 */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      <div style={{ padding: '8px', borderRadius: '8px', background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="project-card-header">
+                    <div className="project-card-identity">
+                      <div className="project-card-icon">
                         <Folder size={16} />
                       </div>
-                      <div>
-                        <h3 style={{ fontSize: '0.95rem', fontWeight: 650, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '130px' }} title={proj.name}>
+                      <div className="project-card-title">
+                        <h3 title={proj.name}>
                           {proj.name}
                         </h3>
-                        <code style={{ fontSize: '0.68rem', color: 'var(--text-muted)', display: 'block', marginTop: '1px', maxWidth: '130px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={proj.cwd}>
-                          {proj.cwd}
+                        <code title={proj.cwd}>
+                          {compactPath(proj.cwd)}
                         </code>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className={`status-dot ${activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`} style={{ width: '6px', height: '6px' }}></span>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    <div className="project-status-pill">
+                      <span className={`status-dot ${activeCount > 0 ? 'running' : isLoopActive ? 'active' : 'idle'}`}></span>
+                      <span>
                         {isHeld ? 'Hold' : activeCount > 0 ? '运行中' : isLoopActive ? '监听中' : '已暂停'}
                       </span>
                     </div>
                   </div>
 
                   {/* 队列看板 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', background: 'rgba(0,0,0,0.04)', padding: '8px 4px', borderRadius: '8px', textAlign: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Todo</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--primary)' }}>{todoCount}</div>
+                  <div className="project-card-stats">
+                    <div className="project-card-stat">
+                      <span>Todo</span>
+                      <strong className="count-todo">{todoCount}</strong>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>运行中</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--warning)' }}>{activeCount}</div>
+                    <div className="project-card-stat">
+                      <span>运行中</span>
+                      <strong className="count-active">{activeCount}</strong>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>已完成</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--success)' }}>{doneCount}</div>
+                    <div className="project-card-stat">
+                      <span>已完成</span>
+                      <strong className="count-done">{doneCount}</strong>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>失败</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--error)' }}>{failedCount}</div>
+                    <div className="project-card-stat">
+                      <span>失败</span>
+                      <strong className="count-failed">{failedCount}</strong>
                     </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <span>Provider</span>
-                    <strong style={{ color: 'var(--text-primary)' }}>{providerLabel(proj.provider)}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <span>Capabilities</span>
-                    <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{capabilitySummary(proj)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <span>Agent Profile</span>
-                    <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{summarizeAgentProfile(proj.default_agent_profile)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                    <span>默认速度</span>
-                    <strong style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{serviceTierLabel(proj.default_service_tier)}</strong>
                   </div>
 
                   <ProjectHoldNotice
@@ -519,15 +509,25 @@ export default function Projects() {
                     resuming={resumingHoldProjectId === proj.id}
                   />
 
+                  <details className="project-card-details">
+                    <summary>
+                      <span>配置详情</span>
+                      <span>展开查看低频配置</span>
+                    </summary>
+                    <div className="project-card-meta">
+                      <ProjectMetaRow label="Provider" value={providerLabel(proj.provider)} strong />
+                      <ProjectMetaRow label="Capabilities" value={capabilitySummary(proj)} />
+                      <ProjectMetaRow label="Agent Profile" value={summarizeAgentProfile(proj.default_agent_profile)} />
+                      <ProjectMetaRow label="默认速度" value={serviceTierLabel(proj.default_service_tier)} strong />
+                    </div>
+                  </details>
+
                   {/* 开关与控制操作 */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                  <div className="project-card-footer">
                     
                     {/* Auto run 开关 */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 650, display: 'block' }}>自动运行 (Auto Run)</span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>有 todo 自动触发</span>
-                      </div>
+                    <div className="project-card-auto">
+                      <span>自动运行</span>
                       <label className="switch">
                         <input 
                           type="checkbox" 
@@ -539,26 +539,32 @@ export default function Projects() {
                     </div>
 
                     {/* 核心控制动作 */}
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
-                        {isLoopActive ? (
-                          <button className="btn btn-secondary btn-danger" style={{ padding: '6px 10px', fontSize: '0.75rem', flex: 1, height: '30px' }} onClick={() => handleStopLoop(proj.id)}>
-                            <Square size={10} fill="currentColor" /> 暂停监听
-                          </button>
-                        ) : (
-                          <button className="btn btn-secondary btn-success" style={{ padding: '6px 10px', fontSize: '0.75rem', flex: 1, height: '30px' }} onClick={() => handleStartLoop(proj.id)}>
-                            <Play size={10} fill="currentColor" /> 开启监听
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="btn btn-secondary" style={{ padding: '6px', borderRadius: '8px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleOpenEditModal(proj)}>
-                          <Settings size={13} />
+                    <div className="project-card-actions">
+                      {isLoopActive ? (
+                        <button className="btn btn-secondary btn-danger project-card-loop-btn" onClick={() => handleStopLoop(proj.id)}>
+                          <Square size={10} fill="currentColor" /> 暂停监听
                         </button>
-                        <button className="btn btn-secondary btn-danger" style={{ padding: '6px', borderRadius: '8px', background: 'transparent', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => handleDelete(proj.id)}>
-                          <Trash2 size={13} />
+                      ) : (
+                        <button className="btn btn-secondary btn-success project-card-loop-btn" onClick={() => handleStartLoop(proj.id)}>
+                          <Play size={10} fill="currentColor" /> 开启监听
                         </button>
-                      </div>
+                      )}
+                      <button
+                        className="btn btn-secondary project-card-icon-btn"
+                        onClick={() => handleOpenEditModal(proj)}
+                        aria-label={`编辑 ${proj.name} 配置`}
+                        title="设置"
+                      >
+                        <Settings size={13} />
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-danger project-card-icon-btn project-card-delete-btn"
+                        onClick={() => handleDelete(proj.id)}
+                        aria-label={`删除 ${proj.name}`}
+                        title="删除"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
 
                   </div>
@@ -744,6 +750,16 @@ export default function Projects() {
         </div>
       )}
 
+    </div>
+  );
+}
+
+function ProjectMetaRow({ label, value, strong = false }) {
+  const ValueTag = strong ? 'strong' : 'span';
+  return (
+    <div className="project-card-meta-row">
+      <span>{label}</span>
+      <ValueTag title={value}>{value}</ValueTag>
     </div>
   );
 }
