@@ -36,7 +36,7 @@ describe("Bun project PI control regressions", () => {
     }
   });
 
-  test("manager cycle permits memory search but denies memory writes", async () => {
+  test("manager cycle writes memory candidates only as disabled review items", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-memory-api", provider: "pi-control-memory" });
     try {
@@ -62,11 +62,21 @@ describe("Bun project PI control regressions", () => {
         action_type: "memory.search",
         gate_decision: "execute"
       }));
-      expect(listPiActions(database, { status: "denied" })).toContainEqual(expect.objectContaining({
+      expect(listPiActions(database, { status: "completed" })).toContainEqual(expect.objectContaining({
         action_type: "memory.write_candidate",
-        gate_decision: "deny"
+        gate_decision: "execute"
       }));
-      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([]);
+      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([
+        expect.objectContaining({
+          content: "must not write memory",
+          disabled: 1,
+          kind: "preference",
+          scope: "project",
+          scope_id: "demo",
+          source_type: "pi.manager_cycle"
+        })
+      ]);
+      expect(listPiMemoryItems(database, { disabled: 0 })).toEqual([]);
     } finally {
       faux.unregister();
       database.close();

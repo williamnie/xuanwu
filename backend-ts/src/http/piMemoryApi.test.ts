@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -156,6 +157,36 @@ describe("Bun PI memory API", () => {
       });
       expect((await activeAfterApprove.json() as Array<Record<string, unknown>>).map((item) => item.id))
         .toEqual(["candidate-2"]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("covers candidate write, manual promote, and prompt injection as one review chain", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+
+      const created = await request(router, "/api/pi/memory/candidates", "POST", {
+        id: "candidate-chain",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_policy",
+        content: "Runner issues must run focused verification before done",
+        source_type: "pi.conversation",
+        source_id: "conv-chain",
+        confidence: "medium"
+      });
+      const beforePromote = buildPiMemoryPromptContext(database, { projectID: "demo" });
+      const promoted = await request(router, "/api/pi/memory/candidate-chain/promote", "POST", {});
+      const afterPromote = buildPiMemoryPromptContext(database, { projectID: "demo" });
+
+      expect(created.status).toBe(201);
+      expect(await created.json()).toMatchObject({ disabled: 1, source_id: "conv-chain" });
+      expect(beforePromote).not.toContain("Runner issues must run focused verification before done");
+      expect(await promoted.json()).toMatchObject({ disabled: 0 });
+      expect(afterPromote).toContain("Runner issues must run focused verification before done");
+      expect(afterPromote).toContain("pi_memory_items/candidate-chain");
     } finally {
       database.close();
     }

@@ -24,6 +24,7 @@ function managerAuthorizedActions(projectID: string): PiGatePolicy["authorizedAc
     { action_type: "issue.state_diagnose", project_id: projectID }, { action_type: "project.list" },
     { action_type: "project.status", project_id: projectID }, { action_type: "session.list", project_id: projectID },
     { action_type: "session.read_summary", project_id: projectID }, { action_type: "memory.search", project_id: projectID },
+    { action_type: "memory.write_candidate", project_id: projectID },
     { action_type: "skill.list" }, { action_type: "skill.read" }, { action_type: "skill.recommend" },
     { action_type: "skill.intent_audit", project_id: projectID },
     { action_type: "sdk.read", project_id: projectID }, { action_type: "sdk.grep", project_id: projectID },

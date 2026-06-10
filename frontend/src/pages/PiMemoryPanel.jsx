@@ -5,6 +5,9 @@ import { message } from '../store/toastStore';
 
 export default function PiMemoryPanel() {
   const state = usePiMemoryPanel();
+  const activeCount = state.items.filter((item) => Number(item.disabled) === 0).length;
+  const candidateCount = state.items.filter((item) => Number(item.disabled) === 1).length;
+  const recentCandidateSource = state.items.find((item) => Number(item.disabled) === 1);
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
@@ -18,6 +21,11 @@ export default function PiMemoryPanel() {
           {state.loading ? <Loader2 size={15} className="spin-animation" /> : null} 刷新
         </button>
       </div>
+      <MemorySummary
+        activeCount={activeCount}
+        candidateCount={candidateCount}
+        recentCandidateSource={recentCandidateSource}
+      />
       {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
       <MemoryList state={state} />
     </section>
@@ -64,9 +72,41 @@ function usePiMemoryPanel() {
 
 function MemoryList({ state }) {
   if (!state.loading && state.items.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无 PI memory 或候选记忆。</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: 1.55 }}>
+        暂无 PI memory 或候选记忆。Runner Chat / manager cycle / supervisor 会通过
+        <code> memory_write_candidate </code>写入 disabled candidate；failure-pattern generator 会在 heartbeat
+        发现重复失败时写候选。候选必须人工启用后才会注入 prompt。
+      </div>
+    );
   }
   return <div style={{ display: 'grid', gap: '10px' }}>{state.items.map((item) => <MemoryCard key={item.id} item={item} state={state} />)}</div>;
+}
+
+function MemorySummary({ activeCount, candidateCount, recentCandidateSource }) {
+  const source = recentCandidateSource
+    ? `${recentCandidateSource.source_type || 'unknown'}:${recentCandidateSource.source_id || recentCandidateSource.id}`
+    : '暂无';
+  return (
+    <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+      <SummaryPill label="Active memory" value={`${activeCount} 条`} />
+      <SummaryPill label="Candidate memory" value={`${candidateCount} 条待审核`} />
+      <SummaryPill label="最近候选来源" value={source} />
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', gridColumn: '1 / -1', lineHeight: 1.55, margin: 0 }}>
+        写入来源：Runner Chat / manager cycle / supervisor 仅可调用 <code>memory_write_candidate</code> 写 disabled candidate；
+        failure-pattern generator 也只写候选，必须人工启用后才会注入 prompt。
+      </p>
+    </div>
+  );
+}
+
+function SummaryPill({ label, value }) {
+  return (
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '12px', padding: '10px' }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{label}</div>
+      <strong style={{ color: 'var(--text-primary)', fontSize: '0.98rem' }}>{value}</strong>
+    </div>
+  );
 }
 
 function MemoryCard({ item, state }) {

@@ -5,8 +5,10 @@ import {
   listPiActions,
   listPiDelegations,
   listPiHeartbeatRuns,
+  listPiMemoryItems,
   listIssueSupervisorEvents,
   listProjectPiSettings,
+  type PiMemoryItem,
   type PiHeartbeatRun
 } from "../db/repositories/pi.ts";
 import type { Router } from "./router.ts";
@@ -25,6 +27,7 @@ function buildPiCommandCenter(db: RunnerDatabase) {
   const pendingApprovals = listPiActions(db, { status: "pending" });
   const latestRun = listPiHeartbeatRuns(db).at(0) ?? null;
   const supervisorEvents = listIssueSupervisorEvents(db);
+  const memoryItems = listPiMemoryItems(db);
 
   return {
     generated_at: new Date().toISOString(),
@@ -35,8 +38,38 @@ function buildPiCommandCenter(db: RunnerDatabase) {
       pending_approvals: pendingApprovals.length
     },
     heartbeat: heartbeatSummary(latestRun),
+    memory: memorySummary(memoryItems),
     prompt_debug: promptDebug(db, settings),
     supervisor: supervisorSummary(supervisorEvents)
+  };
+}
+
+function memorySummary(items: PiMemoryItem[]) {
+  const active = items.filter((item) => item.disabled === 0);
+  const candidates = items.filter((item) => item.disabled === 1);
+  return {
+    active_count: active.length,
+    candidate_count: candidates.length,
+    recent_candidate_sources: candidates.slice(0, 5).map(memoryCandidateSource),
+    source_policy: {
+      chat: "enabled_candidate_only",
+      manager_cycle: "enabled_candidate_only",
+      supervisor: "enabled_candidate_only",
+      failure_pattern_generator: "enabled_candidate_only",
+      promote: "manual_review_required"
+    }
+  };
+}
+
+function memoryCandidateSource(item: PiMemoryItem) {
+  return {
+    id: item.id,
+    kind: item.kind,
+    scope: item.scope,
+    scope_id: item.scope_id,
+    source_id: item.source_id,
+    source_type: item.source_type,
+    updated_at: item.updated_at
   };
 }
 

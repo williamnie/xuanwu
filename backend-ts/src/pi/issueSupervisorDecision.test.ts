@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
-import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { runPiSupervisorDecision } from "./issueSupervisorDecision.ts";
 import {
   authContext,
@@ -62,6 +62,58 @@ describe("PI supervisor decision runtime", () => {
       ]);
       expect(listPiActionEvents(fixture.db).map((event) => event.event_type)).toContain("gate_decision");
       expect(faux.state.callCount).toBe(2);
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
+
+  test("can write disabled memory candidates when recovery reveals reusable supervisor context", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-memory-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    try {
+      insertIssueFixture(fixture.db, { issueID: 298, projectID: fixture.project.id, sessionID: "thread-298" });
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("memory_write_candidate", {
+            kind: "failure_pattern",
+            content: "Stream disconnect recovery should inspect current issue state before resuming",
+            confidence: "low"
+          }, { id: "memory-candidate" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage(JSON.stringify({
+          confidence: "medium",
+          decision: "resume_session",
+          evidence_refs: ["provider_error", "run:issue-298-attempt-1"],
+          expected_outcome: "the existing Codex session emits new progress after a safe follow-up",
+          fallback_if_no_progress: "needs_user",
+          rationale: "the latest provider event is a stream disconnect while the issue/run remain in_progress",
+          recovery_message: "Re-check issue #298 before resuming unfinished work.",
+          risk_level: "medium"
+        }))
+      ]);
+
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: streamDisconnectContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+
+      expect(result.valid).toBe(true);
+      expect(listPiActions(fixture.db, { status: "completed" }).map((action) => action.action_type))
+        .toContain("memory.write_candidate");
+      expect(listPiMemoryItems(fixture.db, { disabled: 1 })).toEqual([
+        expect.objectContaining({
+          disabled: 1,
+          kind: "failure_pattern",
+          scope: "project",
+          scope_id: "demo",
+          source_type: "pi.supervisor"
+        })
+      ]);
+      expect(listPiMemoryItems(fixture.db, { disabled: 0 })).toEqual([]);
     } finally {
       faux.unregister();
       fixture.db.close();

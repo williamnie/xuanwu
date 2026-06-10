@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiAction, createPiDelegation, createPiHeartbeatRun } from "../db/repositories/pi.ts";
+import { createPiAction, createPiDelegation, createPiHeartbeatRun, createPiMemoryItem } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -25,6 +25,23 @@ describe("PI Command Center API", () => {
       createPiDelegation(database, { project_id: "demo", status: "active", title: "Night window" });
       createPiAction(database, { action_type: "issue.enqueue", id: "act-1", project_id: "demo", status: "pending" });
       createPiHeartbeatRun(database, { id: "hb-1", kind: "project", project_id: "demo", status: "completed" });
+      createPiMemoryItem(database, {
+        content: "Keep patches narrow",
+        id: "active-memory",
+        kind: "project_policy",
+        scope: "project",
+        scope_id: "demo"
+      });
+      createPiMemoryItem(database, {
+        content: "Review repeated stream disconnects",
+        disabled: 1,
+        id: "candidate-memory",
+        kind: "failure_pattern",
+        scope: "project",
+        scope_id: "demo",
+        source_id: "pi-supervisor-298",
+        source_type: "pi.supervisor"
+      });
 
       const response = await createDefaultRouter({ database }).handle(new Request(`${BASE_URL}/api/pi/command-center`));
       const body = await response.json() as Record<string, unknown>;
@@ -46,6 +63,23 @@ describe("PI Command Center API", () => {
           custom_instructions_configured: true,
           custom_instructions_preview: "[hidden: custom instructions are active]",
           injected_after: "core PI role/safety/tool/MCP constraints"
+        }
+      });
+      expect(body.memory).toMatchObject({
+        active_count: 1,
+        candidate_count: 1,
+        recent_candidate_sources: [{
+          id: "candidate-memory",
+          kind: "failure_pattern",
+          source_id: "pi-supervisor-298",
+          source_type: "pi.supervisor"
+        }],
+        source_policy: {
+          chat: "enabled_candidate_only",
+          failure_pattern_generator: "enabled_candidate_only",
+          manager_cycle: "enabled_candidate_only",
+          promote: "manual_review_required",
+          supervisor: "enabled_candidate_only"
         }
       });
       expect(body).not.toHaveProperty("projects");

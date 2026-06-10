@@ -18,6 +18,13 @@ test('PI memory panel exposes review, promotion, edit, disable, and delete contr
   assert.match(panelSource, /piMemoryApi\.disable\(item\.id\)/);
   assert.match(panelSource, /piMemoryApi\.update\(item\.id/);
   assert.match(panelSource, /piMemoryApi\.remove\(item\.id\)/);
+  assert.match(panelSource, /activeCount/);
+  assert.match(panelSource, /candidateCount/);
+  assert.match(panelSource, /recentCandidateSource/);
+  assert.match(panelSource, /Runner Chat \/ manager cycle \/ supervisor/);
+  assert.match(panelSource, /failure-pattern generator/);
+  assert.match(panelSource, /memory_write_candidate/);
+  assert.match(panelSource, /必须人工启用后才会注入 prompt/);
   assert.doesNotMatch(panelSource, /window\.confirm/);
   assert.doesNotMatch(panelSource, /window\.alert/);
 });

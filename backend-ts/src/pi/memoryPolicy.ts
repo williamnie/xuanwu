@@ -1,7 +1,8 @@
 const SENSITIVE_MEMORY_ERROR = "memory content contains sensitive data";
 const SENSITIVE_LINE_MARKERS = [
   "authorization:", "auth_token", "auth-token", "bearer ", "api_key=", "api-key=",
-  "password=", "secret=", "token="
+  "password=", "secret=", "token=", ".ssh/", "id_rsa", "id_ed25519", "credentials.json",
+  "private_key"
 ];
 const SECRET_ASSIGNMENT_PATTERN = /[A-Z0-9_-]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)[A-Z0-9_-]*\s*[:=]\s*[^\s,;]+/i;
 const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]+/i;

@@ -230,6 +230,7 @@ function managerCyclePrompt(
     JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
     "Use role workflow tools for executor, verifier, reviewer, reporter proposals when needed; all role actions must go through action gate and audit.",
     "Create PI action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
+    "When you find durable project/user/process observations, write only disabled review candidates via memory_write_candidate; never promote memory automatically.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."
   ].join("\n");

@@ -83,7 +83,7 @@ function writeMemoryCandidate(
     scope_id: cleanString(input.scope_id) || defaultScopeID(scope, context),
     kind: input.kind,
     content: input.content,
-    source_type: "pi.conversation",
+    source_type: memorySourceType(context.source),
     source_id: cleanString(context.conversationID),
     confidence: cleanString(input.confidence) || "medium",
     disabled: 1
@@ -153,6 +153,13 @@ function defaultScopeID(scope: string, context: MemoryContext): string | undefin
   if (scope === "conversation") return cleanString(context.conversationID) || undefined;
   if (scope === "global") return "runner";
   return cleanString(context.projectID) || "runner";
+}
+
+function memorySourceType(source: unknown): string {
+  const text = cleanString(source);
+  if (text === "pi_manager_cycle") return "pi.manager_cycle";
+  if (text === "pi_supervisor_decision") return "pi.supervisor";
+  return "pi.conversation";
 }
 
 function publishMemoryCandidate(bus: EventBus | undefined, item: PiMemoryItem): void {

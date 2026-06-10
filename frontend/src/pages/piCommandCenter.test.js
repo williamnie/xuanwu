@@ -22,10 +22,10 @@ test('PI Command Center is available as a first-class routed page with Chinese n
 });
 
 test('PI Command Center renders Chinese status cards with loading and error states', () => {
-  for (const label of ['当前模式', '自动检查', '委托窗口', '待我审批', '自动恢复']) {
+  for (const label of ['当前模式', '自动检查', '委托窗口', '待我审批', '自动恢复', 'PI 记忆']) {
     assert.match(pageSource, new RegExp(label));
   }
-  for (const copy of ['PI 托管控制台', '自动执行与审批中心', '待审批', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于']) {
+  for (const copy of ['PI 托管控制台', '自动执行与审批中心', '待审批', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于', '待审核候选', '最近候选来源']) {
     assert.match(pageSource, new RegExp(copy));
   }
   for (const oldCopy of ['PI OpenClaw', 'Generated', 'Pending approvals']) {

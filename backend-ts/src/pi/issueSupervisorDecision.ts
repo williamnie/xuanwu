@@ -30,6 +30,8 @@ const SUPERVISOR_TOOL_NAMES = [
   "issue_state_diagnose",
   "session_read_summary",
   "project_status",
+  "memory_search",
+  "memory_write_candidate",
   "grep",
   "find",
   "ls"
@@ -43,6 +45,7 @@ export async function runPiSupervisorDecision(
     authorization: supervisorAuthorization(input.project.id),
     conversationID: `pi-supervisor-${issueID(input.context)}-${Date.now()}`,
     issueID: issueID(input.context),
+    heartbeatID: `pi-supervisor:${input.project.id}:${issueID(input.context)}`,
     project: input.project,
     source: "pi_supervisor_decision"
   });
@@ -208,6 +211,8 @@ function supervisorAuthorization(projectID: string): PiGatePolicy {
       ? name.replace("issue_", "issue.")
       : name.startsWith("session_")
         ? name.replace("session_", "session.")
+        : name.startsWith("memory_")
+          ? name.replace("memory_", "memory.")
         : name === "project_status"
           ? "project.status"
           : `sdk.${name}`,

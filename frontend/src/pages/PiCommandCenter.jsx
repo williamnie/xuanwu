@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, Bot, CheckCircle2, Command, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Activity, Bot, CheckCircle2, Command, Database, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
 import PiActionAuditPanel from './PiActionAuditPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
@@ -80,6 +80,7 @@ function Header({ pendingCount, state }) {
           <span className={pendingCount > 0 ? 'urgent' : ''}>待审批 {numberText(overview.pending_approvals)} 项</span>
           <span>当前模式：{mode}</span>
           <span>最近自动检查：{heartbeat.detail}</span>
+          <span>{memorySummaryText(state.data?.memory)}</span>
           <span>{promptDebugText(state.data?.prompt_debug)}</span>
         </div>
       </div>
@@ -215,11 +216,12 @@ function buildStatusCards(data) {
     { detail: `${numberText(overview.autonomous_projects)} 个项目已开启自动执行`, icon: ShieldCheck, id: 'delegation', label: '委托窗口', value: `${numberText(overview.active_delegations)} 个生效中` },
     { detail: '需要人工确认的高风险动作', icon: CheckCircle2, id: 'approvals', label: '待我审批', value: `${numberText(overview.pending_approvals)} 项` },
     { detail: supervisorDetail(data?.supervisor), icon: Bot, id: 'supervisor', label: '自动恢复', value: `${numberText(data?.supervisor?.recovery_actions)} 次` },
+    { detail: memoryDetail(data?.memory), icon: Database, id: 'memory', label: 'PI 记忆', value: `待审核候选 ${numberText(data?.memory?.candidate_count)} 条` },
   ];
 }
 
 function isAboveFoldStatusCard(card) {
-  return ['mode', 'heartbeat', 'delegation'].includes(card.id);
+  return ['mode', 'heartbeat', 'delegation', 'memory'].includes(card.id);
 }
 
 function supervisorDetail(supervisor = {}) {
@@ -256,6 +258,16 @@ function promptDebugText(debug) {
   return summary.custom_instructions_configured
     ? `Prompt 摘要：${summary.custom_instructions_chars} chars custom instructions 已生效`
     : 'Prompt 摘要：未配置 custom instructions';
+}
+
+function memorySummaryText(memory = {}) {
+  return `PI 记忆：active ${numberText(memory.active_count)} · candidate ${numberText(memory.candidate_count)}`;
+}
+
+function memoryDetail(memory = {}) {
+  const source = memory.recent_candidate_sources?.[0];
+  if (!source) return `active ${numberText(memory.active_count)} 条 · 待审核候选 ${numberText(memory.candidate_count)} 条 · 最近候选来源：暂无`;
+  return `active ${numberText(memory.active_count)} 条 · 待审核候选 ${numberText(memory.candidate_count)} 条 · 最近候选来源：${source.source_type || 'unknown'}:${source.source_id || source.id}`;
 }
 
 function statusText(status) {
