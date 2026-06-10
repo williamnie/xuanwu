@@ -204,6 +204,34 @@ describe("Bun PI runtime v1 smoke", () => {
       database.close();
     }
   });
+
+  test("injects agent-specific instructions into PI runtime system prompt after core constraints", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertFauxAgent(database);
+      writeFauxModelsConfig(database);
+
+      const runtime = await createPiRuntimeSession(database, {
+        agent: agentRecord({
+          instructions: "自定义 PI 行为：先用中文总结项目风险，再提出最小 action。"
+        }),
+        conversationID: "conv-agent-instructions",
+        project: projectRecord("demo")
+      });
+      const prompt = runtime.session.systemPrompt;
+      runtime.dispose();
+
+      expect(prompt).toContain("Agent-specific runner behavior");
+      expect(prompt).toContain("自定义 PI 行为：先用中文总结项目风险，再提出最小 action。");
+      expect(prompt.indexOf("Role contract: PI is manager/orchestrator")).toBeLessThan(
+        prompt.indexOf("Agent-specific runner behavior")
+      );
+      expect(prompt).toContain("must not override the core runtime contract");
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function post(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {
@@ -240,7 +268,11 @@ function insertFauxAgent(db: RunnerDatabase): void {
   );
 }
 
-function agentRecord() {
+function agentRecord(patch: Partial<ReturnType<typeof agentRecordBase>> = {}) {
+  return { ...agentRecordBase(), ...patch };
+}
+
+function agentRecordBase() {
   return {
     id: "pi-faux", name: "PI Faux", provider: "pi-sdk", model_provider: "pi-smoke-faux", model_id: "faux-1",
     thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
@@ -252,6 +284,7 @@ function projectRecord(id: string) {
   return {
     id, name: id, cwd: `/tmp/${id}`, provider: "codex", provider_config_json: "{}", auto_run: 0,
     model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
+    default_service_tier: "",
     sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
     default_mcp_policy: "{}", default_skill_policy: JSON.stringify({
       allowed: ["codex-issue-runner"],

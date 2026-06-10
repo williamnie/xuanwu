@@ -40,6 +40,14 @@ describe("PI Command Center API", () => {
         latest_run: { id: "hb-1", status: "completed" },
         status: "completed"
       });
+      expect(body.prompt_debug).toMatchObject({
+        agent_id: "agent-1",
+        runtime_prompt_summary: {
+          custom_instructions_configured: true,
+          custom_instructions_preview: "[hidden: custom instructions are active]",
+          injected_after: "core PI role/safety/tool/MCP constraints"
+        }
+      });
       expect(body).not.toHaveProperty("projects");
       expect(body).not.toHaveProperty("reports");
       expect(body).not.toHaveProperty("audit_events");
@@ -67,7 +75,7 @@ function insertPiSettings(db: RunnerDatabase, projectID: string): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, provider, model_provider, model_id, thinking_level, cwd_policy, tools_json, instructions, enabled, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["agent-1", "PI", "pi-sdk", "openai", "gpt-5.4", "high", "project", "[]", "", 1, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
+    ["agent-1", "PI", "pi-sdk", "openai", "gpt-5.4", "high", "project", "[]", "每轮先输出托管策略摘要。", 1, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
   );
   db.sqlite.run(
     `insert into project_pi_settings (project_id, pi_agent_id, auto_manage, auto_triage, auto_enqueue, notify_on_needs_user, max_actions_per_cycle, created_at, updated_at)

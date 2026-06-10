@@ -51,6 +51,7 @@ describe("Bun PI settings API", () => {
       const patched = await request(router, "/api/pi/agents/pi-default", "PATCH", {
         model_provider: "openai",
         model_id: "gpt-5.4",
+        instructions: "CODEX_API_KEY=fixture-secret\n每轮先总结 Runner 风险。",
         enabled: false
       });
       expect(patched.status).toBe(200);
@@ -59,6 +60,18 @@ describe("Bun PI settings API", () => {
         model_provider: "openai",
         model_id: "gpt-5.4",
         enabled: 0
+      });
+
+      const promptSummary = await router.handle(new Request(`${BASE_URL}/api/pi/agents/pi-default/runtime-prompt`));
+      const promptSummaryBody = await promptSummary.json() as Record<string, unknown>;
+      expect(promptSummary.status).toBe(200);
+      expect(JSON.stringify(promptSummaryBody)).not.toContain("fixture-secret");
+      expect(promptSummaryBody).toMatchObject({
+        agent_id: "pi-default",
+        runtime_prompt_summary: {
+          custom_instructions_configured: true,
+          injected_after: "core PI role/safety/tool/MCP constraints"
+        }
       });
 
       const listed = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));

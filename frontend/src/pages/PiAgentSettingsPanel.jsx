@@ -1,4 +1,4 @@
-import { Bot, KeyRound, Loader2, RefreshCw, Save } from 'lucide-react';
+import { Bot, Eye, KeyRound, Loader2, RefreshCw, Save } from 'lucide-react';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 
 export default function PiAgentSettingsPanel() {
@@ -113,7 +113,36 @@ function ProviderCredentialFields({ state }) {
       <Field label="Runner Instructions">
         <textarea className="form-control" rows={3} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
+      <PromptSummaryDebug state={state} />
     </>
+  );
+}
+
+function PromptSummaryDebug({ state }) {
+  const summary = state.promptSummary?.runtime_prompt_summary;
+  return (
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>当前生效 Prompt 摘要</strong>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: '3px 0 0' }}>
+            只显示自定义 instructions 摘要与注入优先级；不回显 API key/token。
+          </p>
+        </div>
+        <button className="btn btn-secondary" onClick={state.loadPromptSummary} disabled={state.promptSummaryLoading} type="button">
+          {state.promptSummaryLoading ? <Loader2 size={14} className="spin-animation" /> : <Eye size={14} />}
+          查看摘要
+        </button>
+      </div>
+      {summary && (
+        <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '8px', display: 'grid', gap: '4px' }}>
+          <span>Custom instructions: {summary.custom_instructions_configured ? `${summary.custom_instructions_chars} chars` : '未配置'}</span>
+          <span>注入位置：{summary.injected_after}</span>
+          <span>优先级：{summary.conflict_policy}</span>
+          {summary.custom_instructions_preview && <code style={{ color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>{summary.custom_instructions_preview}</code>}
+        </div>
+      )}
+    </div>
   );
 }
 

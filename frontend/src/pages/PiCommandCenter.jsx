@@ -80,6 +80,7 @@ function Header({ pendingCount, state }) {
           <span className={pendingCount > 0 ? 'urgent' : ''}>待审批 {numberText(overview.pending_approvals)} 项</span>
           <span>当前模式：{mode}</span>
           <span>最近自动检查：{heartbeat.detail}</span>
+          <span>{promptDebugText(state.data?.prompt_debug)}</span>
         </div>
       </div>
       <div className="pi-command-hero-actions">
@@ -247,6 +248,14 @@ function modeDetail(mode) {
     manual: '不会自动执行，需要人工触发',
   };
   return details[mode] || '等待 PI 策略初始化';
+}
+
+function promptDebugText(debug) {
+  const summary = debug?.runtime_prompt_summary;
+  if (!summary) return 'Prompt 摘要：未配置 Runner Agent';
+  return summary.custom_instructions_configured
+    ? `Prompt 摘要：${summary.custom_instructions_chars} chars custom instructions 已生效`
+    : 'Prompt 摘要：未配置 custom instructions';
 }
 
 function statusText(status) {

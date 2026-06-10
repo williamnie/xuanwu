@@ -7,16 +7,12 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
-import { parseMcpPolicy } from "../mcp/policy.ts";
-import { publicMcpRegistry } from "../mcp/registry.ts";
-import { parseSkillPolicy } from "../skills/intents.ts";
-import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import { PI_SAFE_ACTION_TYPES } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
-import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
+import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -163,7 +159,7 @@ function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
 }
 
 function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: RunnerDatabase) {
-  const systemPrompt = piSystemPrompt(input, db);
+  const systemPrompt = buildPiRuntimeSystemPrompt(input, db);
   return {
     getAgentsFiles: () => ({ agentsFiles: [] }),
     getAppendSystemPrompt: () => [],
@@ -175,31 +171,6 @@ function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: 
     extendResources: () => {},
     reload: async () => {}
   };
-}
-
-function piSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
-  const skillContext = buildSkillPromptContext(db, input);
-  recordSkillPromptContextAudit(db, input, skillContext.audit);
-  return [
-    "You are PI, an independent project manager agent for codex-issue-runner.",
-    "Role contract: PI is manager/orchestrator; executor executes issues; verifier validates evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
-    "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
-    "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
-    "Runner Chat workflow: create requested issues directly, then ask in chat whether to run now or schedule for later. If the user says now, call issue_enqueue_proposal. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
-    `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
-    skillContext.promptSection,
-    "MCP Capability Registry metadata:",
-    JSON.stringify(publicMcpRegistry().slice(0, 24), null, 2),
-    "Project default skill policy:",
-    JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2),
-    "Project default MCP policy:",
-    JSON.stringify(parseMcpPolicy(input.project?.default_mcp_policy), null, 2),
-    buildPiMemoryPromptContext(db, {
-      conversationID: input.conversationID,
-      issueID: input.issueID,
-      projectID: input.project?.id
-    })
-  ].join("\n");
 }
 
 function ensureRuntimeProvider(sdk: SmokeRuntime, agent: PiAgent): RuntimeCleanup {

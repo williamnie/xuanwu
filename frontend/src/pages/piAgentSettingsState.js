@@ -20,24 +20,31 @@ export function usePiAgentSettingsState() {
   const [providers, setProviders] = useState([]);
   const [form, setForm] = useState(DEFAULT_PI_AGENT_FORM);
   const [loading, setLoading] = useState(true);
+  const [promptSummary, setPromptSummary] = useState(null);
+  const [promptSummaryLoading, setPromptSummaryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const selectedProvider = useMemo(
     () => providers.find((provider) => provider.id === form.modelProvider),
     [form.modelProvider, providers]
   );
 
-  const loadSettings = () => loadPiSettings(setAgents, setProviders, setForm, setLoading);
-  const updateField = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const handleSave = () => savePiSettings({ agents, form, setAgents, setForm, setProviders, setSaving });
+  const loadSettings = () => loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary);
+  const loadPromptSummary = () => loadPiPromptSummary(form.agentId, setPromptSummary, setPromptSummaryLoading);
+  const updateField = (key, value) => {
+    if (key === 'agentId' || key === 'instructions') setPromptSummary(null);
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+  const handleSave = () => savePiSettings({ agents, form, setAgents, setForm, setPromptSummary, setProviders, setSaving });
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  return { form, loading, providers, saving, selectedProvider, handleSave, loadSettings, updateField };
+  return { form, loading, promptSummary, promptSummaryLoading, providers, saving, selectedProvider,
+    handleSave, loadPromptSummary, loadSettings, updateField };
 }
 
-function loadPiSettings(setAgents, setProviders, setForm, setLoading) {
+function loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary) {
   setLoading(true);
   Promise.all([api.getPiAgents(), api.getPiProviderSettings()])
     .then(([agentList, providerSettings]) => {
@@ -46,18 +53,33 @@ function loadPiSettings(setAgents, setProviders, setForm, setLoading) {
       setAgents(nextAgents);
       setProviders(nextProviders);
       setForm(formFromState(nextAgents, nextProviders));
+      setPromptSummary(null);
     })
     .catch((err) => message.error(err.message || '读取 Runner 设置失败'))
     .finally(() => setLoading(false));
 }
 
-async function savePiSettings({ agents, form, setAgents, setForm, setProviders, setSaving }) {
+async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLoading) {
+  const id = agentId.trim();
+  if (!id) return message.error('请先保存或选择 Runner Agent');
+  setPromptSummaryLoading(true);
+  try {
+    setPromptSummary(await api.getPiAgentRuntimePrompt(id));
+  } catch (err) {
+    message.error(err.message || '读取生效 prompt 摘要失败');
+  } finally {
+    setPromptSummaryLoading(false);
+  }
+}
+
+async function savePiSettings({ agents, form, setAgents, setForm, setPromptSummary, setProviders, setSaving }) {
   if (!isValidForm(form)) return;
   setSaving(true);
   try {
     await api.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
     await saveAgent(agents, agentPayload(form));
     message.success('Runner Agent 设置已保存');
+    setPromptSummary(null);
     await refreshAfterSave(setAgents, setProviders, setForm);
   } catch (err) {
     message.error(err.message || '保存 Runner 设置失败');

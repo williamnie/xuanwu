@@ -28,6 +28,7 @@ import { registerPiHeartbeatRoutes } from "./piHeartbeatApi.ts";
 import { registerPiHeartbeatTimelineRoutes } from "./piHeartbeatTimelineApi.ts";
 import { registerPiReportRoutes } from "./piReportsApi.ts";
 import { registerPiSkillRoutes } from "./piSkillsApi.ts";
+import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 import type { Router } from "./router.ts";
 
 type PiApiContext = {
@@ -46,6 +47,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.get("/api/pi/agents", () => json(listPiAgents(context.database)));
   router.post("/api/pi/agents", async (request) => piAgentCreateResponse(context, request));
   router.get("/api/pi/agents/:id", (request) => piAgentResponse(context, request));
+  router.get("/api/pi/agents/:id/runtime-prompt", (request) => piAgentPromptResponse(context, request));
   router.patch("/api/pi/agents/:id", (request) => patchPiAgentResponse(context, request));
   router.delete("/api/pi/agents/:id", (request) => deletePiAgentResponse(context, request));
   registerPiActionRoutes(router, context);
@@ -81,6 +83,16 @@ function piAgentResponse(context: PiApiContext, request: Request): Response {
   const agent = getPiAgent(context.database, piAgentID(request));
   if (!agent) throw new HttpError(404, "资源不存在");
   return json(agent);
+}
+
+function piAgentPromptResponse(context: PiApiContext, request: Request): Response {
+  const agent = getPiAgent(context.database, piAgentID(request));
+  if (!agent) throw new HttpError(404, "资源不存在");
+  return json({
+    agent_id: agent.id,
+    agent_name: agent.name,
+    runtime_prompt_summary: piRuntimePromptSummary(agent)
+  });
 }
 
 async function patchPiAgentResponse(context: PiApiContext, request: Request): Promise<Response> {

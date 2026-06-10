@@ -1,5 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
+  getPiAgent,
+  listPiAgents,
   listPiActions,
   listPiDelegations,
   listPiHeartbeatRuns,
@@ -9,6 +11,7 @@ import {
 } from "../db/repositories/pi.ts";
 import type { Router } from "./router.ts";
 import { json } from "./errors.ts";
+import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 
 type PiCommandCenterContext = { database: RunnerDatabase };
 
@@ -32,8 +35,18 @@ function buildPiCommandCenter(db: RunnerDatabase) {
       pending_approvals: pendingApprovals.length
     },
     heartbeat: heartbeatSummary(latestRun),
+    prompt_debug: promptDebug(db, settings),
     supervisor: supervisorSummary(supervisorEvents)
   };
+}
+
+function promptDebug(db: RunnerDatabase, settings: ReturnType<typeof listProjectPiSettings>) {
+  const agentID = settings.find((item) => item.auto_manage === 1)?.pi_agent_id ||
+    settings[0]?.pi_agent_id ||
+    listPiAgents(db).find((agent) => agent.enabled === 1)?.id ||
+    "";
+  const agent = agentID ? getPiAgent(db, agentID) : null;
+  return agent ? { agent_id: agent.id, runtime_prompt_summary: piRuntimePromptSummary(agent) } : null;
 }
 
 function supervisorSummary(events: ReturnType<typeof listIssueSupervisorEvents>) {
