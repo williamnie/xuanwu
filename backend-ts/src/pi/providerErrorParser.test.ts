@@ -1,0 +1,122 @@
+import { describe, expect, test } from "bun:test";
+import {
+  parseIssueEventProviderError,
+  parseProviderErrorSignal,
+  parseProviderEventError,
+  parseProviderHealthSignal
+} from "./providerErrorParser.ts";
+
+const NOW = new Date("2026-06-10T02:00:00Z");
+
+describe("provider error parser", () => {
+  test("classifies issue #298 reconnecting text as stream disconnect", () => {
+    expect(parseIssueEventProviderError({
+      type: "error",
+      provider: "codex",
+      raw_payload: "Reconnecting... 1/5",
+      error: "stream disconnected before completion"
+    }, { now: NOW })).toMatchObject({
+      category: "stream_disconnect",
+      diagnosis_code: "executor_stream_disconnected",
+      provider: "codex"
+    });
+  });
+
+  test("parses 429 retry-after seconds from normalized provider error", () => {
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "HTTP 429: too many requests; try again in 42s"
+    }, { now: NOW })).toMatchObject({
+      category: "rate_limit",
+      diagnosis_code: "provider_retry_after_waiting",
+      retry_after_at: "2026-06-10T02:00:42Z",
+      retry_after_seconds: 42,
+      status_code: 429
+    });
+  });
+
+  test("parses JSON raw payload retry/reset fields and redacts sensitive summary", () => {
+    const signal = parseIssueEventProviderError({
+      raw_payload: JSON.stringify({
+        error: "rate limit for token=abc at /Users/demo/private.txt",
+        model: "gpt-test",
+        retry_after_ms: 42000,
+        service_tier: "priority",
+        status_code: 429
+      })
+    }, { now: NOW });
+
+    expect(signal).toMatchObject({
+      category: "rate_limit",
+      model: "gpt-test",
+      retry_after_at: "2026-06-10T02:00:42Z",
+      service_tier: "priority",
+      status_code: 429
+    });
+    expect(signal.raw_summary).not.toContain("abc");
+    expect(signal.raw_summary).not.toContain("/Users/demo/private.txt");
+  });
+
+  test("parses HTTP Retry-After date header", () => {
+    expect(parseProviderErrorSignal({
+      headers: { "Retry-After": "Wed, 10 Jun 2026 02:10:00 GMT" },
+      rawPayload: "HTTP 429 rate limit"
+    }, { now: NOW })).toMatchObject({
+      category: "rate_limit",
+      retry_after_at: "2026-06-10T02:10:00Z",
+      retry_after_seconds: 600,
+      status_code: 429
+    });
+  });
+
+  test("parses provider health rate limit reset snapshot", () => {
+    expect(parseProviderHealthSignal({
+      provider: "codex",
+      rate_limited: true,
+      rate_limits: {
+        primary: {
+          limit_id: "primary",
+          reset_at: "2026-06-10T02:15:00Z"
+        }
+      }
+    }, { now: NOW })).toMatchObject({
+      category: "rate_limit",
+      limit_id: "primary",
+      provider: "codex",
+      rate_limit_reset_at: "2026-06-10T02:15:00Z",
+      retry_after_at: "2026-06-10T02:15:00Z"
+    });
+  });
+
+  test("classifies auth and permission failures as human-decision signals", () => {
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "API returned 401 unauthorized"
+    }, { now: NOW })).toMatchObject({
+      category: "auth",
+      diagnosis_code: "requires_human_decision",
+      status_code: 401
+    });
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "permission denied"
+    }, { now: NOW })).toMatchObject({
+      category: "permission",
+      diagnosis_code: "requires_human_decision"
+    });
+  });
+
+  test("classifies temporary body decode and network failures", () => {
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "error decoding response body: unexpected EOF"
+    }, { now: NOW })).toMatchObject({
+      category: "network",
+      diagnosis_code: "provider_transient_network_error"
+    });
+  });
+});
