@@ -34,6 +34,7 @@ const ISSUE_FIELDS = [
   'source_excerpt',
   'codex_thread_id',
   'codex_turn_id',
+  'service_tier',
   'attempt_count',
   'comment_count',
   'latest_run',

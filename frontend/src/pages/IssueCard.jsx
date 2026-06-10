@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   RotateCw,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import {
   issueFailureReason,
@@ -19,9 +20,9 @@ import {
   shortId,
 } from '../utils/issueRuns';
 import {
-  serviceTierOptions,
   serviceTierRunLabel,
 } from '../utils/serviceTier';
+import { issueSpeedToggleCopy } from '../utils/issueSpeedToggle';
 
 export default function IssueCard({
   issue,
@@ -141,17 +142,7 @@ function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onReque
   return (
     <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
       {onServiceTierChange && (
-        <label className="kanban-card-action-select" title="保存为该 Issue 的下次运行速度">
-          <span>速度</span>
-          <select
-            value={issue.service_tier || ''}
-            onChange={(event) => onServiceTierChange(event, issue.id, event.target.value)}
-          >
-            {serviceTierOptions(issue.service_tier).map(option => (
-              <option key={option.value || 'standard'} value={option.value}>{option.shortLabel || option.label}</option>
-            ))}
-          </select>
-        </label>
+        <IssueSpeedToggle issue={issue} onServiceTierChange={onServiceTierChange} />
       )}
       {sessionRef && (
         <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenSession(event, sessionRef)}>
@@ -165,6 +156,27 @@ function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onReque
       )}
       <IssueMoreActions issue={issue} canDelete={canDelete} onRequestDelete={onRequestDelete} />
     </div>
+  );
+}
+
+function IssueSpeedToggle({ issue, onServiceTierChange }) {
+  const copy = issueSpeedToggleCopy(issue.service_tier);
+  const className = `kanban-card-speed-toggle ${copy.enabled ? 'on' : 'off'}`;
+  const toggleSpeed = (event) => {
+    event.stopPropagation();
+    onServiceTierChange(event, issue.id, copy.nextServiceTier);
+  };
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-pressed={copy.enabled}
+      aria-label={copy.ariaLabel}
+      title={copy.title}
+      onClick={toggleSpeed}
+    >
+      <Zap size={13} aria-hidden="true" />
+    </button>
   );
 }
 

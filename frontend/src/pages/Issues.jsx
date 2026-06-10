@@ -54,6 +54,7 @@ export default function Issues({
   const [retryingIssueId, setRetryingIssueId] = useState(null);
   const [issueToDelete, setIssueToDelete] = useState(null);
   const [deletingIssueId, setDeletingIssueId] = useState(null);
+  const [pendingServiceTiers, setPendingServiceTiers] = useState({});
 
   const stopCardAction = (event) => {
     event.stopPropagation();
@@ -77,11 +78,14 @@ export default function Issues({
 
   const handleIssueServiceTierChange = async (event, issueId, serviceTier) => {
     stopCardAction(event);
+    setPendingServiceTiers(prev => ({ ...prev, [issueId]: serviceTier }));
     try {
       await api.updateIssue(issueId, serviceTierPayload(serviceTier));
-      refreshData(['issues']);
+      await refreshData(['issues']);
     } catch (err) {
       message.error(`更新执行速度失败: ${err.message || '网络异常'}`);
+    } finally {
+      setPendingServiceTiers(prev => omitKey(prev, issueId));
     }
   };
 
@@ -426,10 +430,11 @@ export default function Issues({
               ) : (
                 col.issues.map(issue => {
                   const proj = projects.find(p => p.id === issue.project_id);
+                  const cardIssue = issueWithPendingServiceTier(issue, pendingServiceTiers);
                   return (
                     <IssueCard
                       key={issue.id}
-                      issue={issue}
+                      issue={cardIssue}
                       project={proj}
                       dragging={draggingIssueId === issue.id}
                       retrying={retryingIssueId === issue.id}
@@ -593,6 +598,17 @@ export default function Issues({
 
     </div>
   );
+}
+
+function issueWithPendingServiceTier(issue, pendingServiceTiers) {
+  if (!Object.hasOwn(pendingServiceTiers, issue.id)) return issue;
+  return { ...issue, service_tier: pendingServiceTiers[issue.id] };
+}
+
+function omitKey(record, key) {
+  const next = { ...record };
+  delete next[key];
+  return next;
 }
 
 function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {

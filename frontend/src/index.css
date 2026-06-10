@@ -1171,26 +1171,54 @@ input:checked + .slider:before {
   cursor: not-allowed;
 }
 
-.kanban-card-action-select {
-  display: inline-flex;
+.kanban-card-speed-toggle {
   align-items: center;
-  gap: 5px;
   border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  color: var(--text-secondary);
   border-radius: 999px;
-  padding: 3px 7px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  outline: none;
+  padding: 0;
+  transition: background-color var(--transition-speed), border-color var(--transition-speed), color var(--transition-speed), box-shadow var(--transition-speed), transform var(--transition-speed);
+  width: 24px;
 }
 
-.kanban-card-action-select select {
-  border: none;
-  background: transparent;
+.kanban-card-speed-toggle.off {
+  background: var(--bg-card);
+  color: color-mix(in srgb, var(--text-muted) 72%, transparent);
+}
+
+.kanban-card-speed-toggle.off svg {
+  fill: none;
+}
+
+.kanban-card-speed-toggle.on {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.42);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+}
+
+.kanban-card-speed-toggle.on svg {
+  fill: currentColor;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.45));
+}
+
+.kanban-card-speed-toggle:hover:not(:disabled),
+.kanban-card-speed-toggle:focus-visible {
+  background: var(--bg-card-hover);
+  border-color: var(--border-color-hover);
   color: var(--text-primary);
-  font: inherit;
-  padding: 0;
-  outline: none;
+  transform: translateY(-1px);
+}
+
+.kanban-card-speed-toggle.on:hover:not(:disabled),
+.kanban-card-speed-toggle.on:focus-visible {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.58);
+  color: #f59e0b;
 }
 
 .kanban-card-more-trigger {
