@@ -16,6 +16,7 @@ import { piDelegationSkillIntentsMigration } from "./015_pi_delegation_skill_int
 import { piDelegationMcpAllowlistMigration } from "./016_pi_delegation_mcp_allowlist.ts";
 import { projectPiPolicyAllowlistsMigration } from "./017_project_pi_policy_allowlists.ts";
 import { notificationsMigration } from "./018_notifications.ts";
+import { issueSupervisorRecoveryMigration } from "./020_issue_supervisor_recovery.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -35,5 +36,6 @@ export const migrations = [
   piDelegationSkillIntentsMigration,
   piDelegationMcpAllowlistMigration,
   projectPiPolicyAllowlistsMigration,
-  notificationsMigration
+  notificationsMigration,
+  issueSupervisorRecoveryMigration
 ];

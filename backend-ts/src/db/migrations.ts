@@ -20,7 +20,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "014_cron_task_claims",
   "015_pi_delegation_skill_intents",
   "017_project_pi_policy_allowlists",
-  "018_notifications"
+  "018_notifications",
+  "020_issue_supervisor_recovery"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

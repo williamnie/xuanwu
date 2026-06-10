@@ -1,5 +1,11 @@
 import type { RunnerDatabase } from "../../database.ts";
 import { normalizeMcpCapabilityList } from "../../../mcp/policy.ts";
+import {
+  PI_SUPERVISOR_MODES,
+  PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES,
+  type PiSupervisorMode,
+  type PiSupervisorRateLimitWaitPolicy
+} from "../../../pi/issueSupervisorRecovery.ts";
 import { normalizeSkillIntentList } from "../../../skills/intents.ts";
 import { cleanString, getByID, now, requiredString } from "./common.ts";
 
@@ -16,7 +22,13 @@ export type ProjectPiPolicy = {
   allowed_actions_json: string;
   allowed_mcp_capabilities_json: string;
   allowed_skill_intents_json: string;
+  allowed_supervisor_actions_json: string;
   default_mode: ProjectPiPolicyMode;
+  supervisor_cooldown_seconds: number;
+  supervisor_max_recoveries_per_issue: number;
+  supervisor_max_recoveries_per_project_per_hour: number;
+  supervisor_mode: PiSupervisorMode;
+  supervisor_rate_limit_wait_policy: PiSupervisorRateLimitWaitPolicy;
   timezone: string;
   working_hours_json: string;
   quiet_hours_json: string;
@@ -32,8 +44,13 @@ export type ProjectPiPolicyInput = Partial<Record<keyof ProjectPiPolicy, unknown
 const TABLE = "project_pi_policies";
 const COLUMNS = `project_id, default_mode, timezone, working_hours_json, quiet_hours_json,
   retry_policy_json, concurrency_policy_json, verification_policy_json, allowed_actions_json,
-  allowed_mcp_capabilities_json, allowed_skill_intents_json, created_at, updated_at`;
+  allowed_mcp_capabilities_json, allowed_skill_intents_json, allowed_supervisor_actions_json,
+  supervisor_mode, supervisor_cooldown_seconds, supervisor_max_recoveries_per_issue,
+  supervisor_max_recoveries_per_project_per_hour, supervisor_rate_limit_wait_policy,
+  created_at, updated_at`;
 const MODES = new Set<ProjectPiPolicyMode>(["manual", "attended", "delegated", "autonomous"]);
+const SUPERVISOR_MODES = new Set<PiSupervisorMode>(PI_SUPERVISOR_MODES);
+const WAIT_POLICIES = new Set<PiSupervisorRateLimitWaitPolicy>(PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES);
 const TIMEOUT_ACTIONS = new Set(["escalate", "request_verifier"]);
 const DEFAULT_RETRY: ProjectPiRetryPolicy = { enabled: false, max_attempts: 0, backoff_minutes: [] };
 const DEFAULT_CONCURRENCY: ProjectPiConcurrencyPolicy = { max_parallel_issues: 1, max_parallel_pi_cycles: 1 };
@@ -54,7 +71,7 @@ export function upsertProjectPiPolicy(db: RunnerDatabase, input: ProjectPiPolicy
   const current = readProjectPiPolicy(db, projectID);
   const record = normalizePolicy({ ...current, ...definedValues(input), project_id: projectID });
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(project_id) do update set default_mode=excluded.default_mode,
       timezone=excluded.timezone, working_hours_json=excluded.working_hours_json,
       quiet_hours_json=excluded.quiet_hours_json, retry_policy_json=excluded.retry_policy_json,
@@ -63,11 +80,20 @@ export function upsertProjectPiPolicy(db: RunnerDatabase, input: ProjectPiPolicy
       allowed_actions_json=excluded.allowed_actions_json,
       allowed_mcp_capabilities_json=excluded.allowed_mcp_capabilities_json,
       allowed_skill_intents_json=excluded.allowed_skill_intents_json,
+      allowed_supervisor_actions_json=excluded.allowed_supervisor_actions_json,
+      supervisor_mode=excluded.supervisor_mode,
+      supervisor_cooldown_seconds=excluded.supervisor_cooldown_seconds,
+      supervisor_max_recoveries_per_issue=excluded.supervisor_max_recoveries_per_issue,
+      supervisor_max_recoveries_per_project_per_hour=excluded.supervisor_max_recoveries_per_project_per_hour,
+      supervisor_rate_limit_wait_policy=excluded.supervisor_rate_limit_wait_policy,
       updated_at=excluded.updated_at`,
     [record.project_id, record.default_mode, record.timezone, record.working_hours_json,
       record.quiet_hours_json, record.retry_policy_json, record.concurrency_policy_json,
       record.verification_policy_json, record.allowed_actions_json, record.allowed_mcp_capabilities_json,
-      record.allowed_skill_intents_json, current.created_at || timestamp, timestamp]);
+      record.allowed_skill_intents_json, record.allowed_supervisor_actions_json,
+      record.supervisor_mode, record.supervisor_cooldown_seconds, record.supervisor_max_recoveries_per_issue,
+      record.supervisor_max_recoveries_per_project_per_hour, record.supervisor_rate_limit_wait_policy,
+      current.created_at || timestamp, timestamp]);
   const saved = getProjectPiPolicy(db, projectID);
   if (!saved) throw new Error("project PI policy missing after write");
   return saved;
@@ -79,7 +105,13 @@ function defaultProjectPiPolicy(projectID: string): ProjectPiPolicy {
     allowed_actions_json: "[]",
     allowed_mcp_capabilities_json: "[]",
     allowed_skill_intents_json: "[]",
+    allowed_supervisor_actions_json: "[]",
     default_mode: "manual",
+    supervisor_cooldown_seconds: 300,
+    supervisor_max_recoveries_per_issue: 2,
+    supervisor_max_recoveries_per_project_per_hour: 10,
+    supervisor_mode: "propose_only",
+    supervisor_rate_limit_wait_policy: "respect_retry_after",
     timezone: "UTC",
     working_hours_json: "{}",
     quiet_hours_json: "{}",
@@ -97,7 +129,13 @@ function normalizePolicy(input: ProjectPiPolicyInput): ProjectPiPolicy {
     allowed_actions_json: actionList(input.allowed_actions_json),
     allowed_mcp_capabilities_json: normalizeMcpCapabilityList(input.allowed_mcp_capabilities_json),
     allowed_skill_intents_json: normalizeSkillIntentList(input.allowed_skill_intents_json),
+    allowed_supervisor_actions_json: actionList(input.allowed_supervisor_actions_json),
     default_mode: mode(input.default_mode),
+    supervisor_cooldown_seconds: positiveInteger(input.supervisor_cooldown_seconds, 300),
+    supervisor_max_recoveries_per_issue: positiveInteger(input.supervisor_max_recoveries_per_issue, 2),
+    supervisor_max_recoveries_per_project_per_hour: positiveInteger(input.supervisor_max_recoveries_per_project_per_hour, 10),
+    supervisor_mode: supervisorMode(input.supervisor_mode),
+    supervisor_rate_limit_wait_policy: waitPolicy(input.supervisor_rate_limit_wait_policy),
     timezone: timezone(input.timezone),
     working_hours_json: jsonObjectText(input.working_hours_json, "{}"),
     quiet_hours_json: jsonObjectText(input.quiet_hours_json, "{}"),
@@ -115,7 +153,13 @@ function mapProjectPiPolicy(row: Record<string, unknown>): ProjectPiPolicy {
     allowed_actions_json: actionList(row.allowed_actions_json),
     allowed_mcp_capabilities_json: normalizeMcpCapabilityList(row.allowed_mcp_capabilities_json),
     allowed_skill_intents_json: normalizeSkillIntentList(row.allowed_skill_intents_json),
+    allowed_supervisor_actions_json: actionList(row.allowed_supervisor_actions_json),
     default_mode: mode(row.default_mode),
+    supervisor_cooldown_seconds: positiveInteger(row.supervisor_cooldown_seconds, 300),
+    supervisor_max_recoveries_per_issue: positiveInteger(row.supervisor_max_recoveries_per_issue, 2),
+    supervisor_max_recoveries_per_project_per_hour: positiveInteger(row.supervisor_max_recoveries_per_project_per_hour, 10),
+    supervisor_mode: supervisorMode(row.supervisor_mode),
+    supervisor_rate_limit_wait_policy: waitPolicy(row.supervisor_rate_limit_wait_policy),
     timezone: timezone(row.timezone),
     working_hours_json: jsonObjectText(row.working_hours_json, "{}"),
     quiet_hours_json: jsonObjectText(row.quiet_hours_json, "{}"),
@@ -207,6 +251,16 @@ function objectValue(value: unknown): Record<string, unknown> {
 function mode(value: unknown): ProjectPiPolicyMode {
   const text = cleanString(value) as ProjectPiPolicyMode;
   return MODES.has(text) ? text : "manual";
+}
+
+function supervisorMode(value: unknown): PiSupervisorMode {
+  const text = cleanString(value) as PiSupervisorMode;
+  return SUPERVISOR_MODES.has(text) ? text : "propose_only";
+}
+
+function waitPolicy(value: unknown): PiSupervisorRateLimitWaitPolicy {
+  const text = cleanString(value) as PiSupervisorRateLimitWaitPolicy;
+  return WAIT_POLICIES.has(text) ? text : "respect_retry_after";
 }
 
 function timezone(value: unknown): string {

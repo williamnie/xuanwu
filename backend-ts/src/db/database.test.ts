@@ -53,8 +53,10 @@ describe("Bun SQLite database connection", () => {
         "cron_tasks",
         "issue_events",
         "issue_runs",
+        "issue_supervisor_events",
         "issue_templates",
         "issues",
+        "notifications",
         "pi_action_events",
         "pi_actions",
         "pi_agents",
@@ -118,7 +120,9 @@ describe("Bun SQLite database connection", () => {
         { id: "014_cron_task_claims" },
         { id: "015_pi_delegation_skill_intents" },
         { id: "016_pi_delegation_mcp_allowlist" },
-        { id: "017_project_pi_policy_allowlists" }
+        { id: "017_project_pi_policy_allowlists" },
+        { id: "018_notifications" },
+        { id: "020_issue_supervisor_recovery" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -127,6 +131,7 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_window");
       expect(indexNames(connection, "pi_reports")).toContain("idx_pi_reports_delegation");
+      expect(indexNames(connection, "issue_supervisor_events")).toContain("idx_issue_supervisor_events_issue");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -143,6 +148,12 @@ describe("Bun SQLite database connection", () => {
         allowed_actions_json: "'[]'",
         allowed_mcp_capabilities_json: "'[]'",
         allowed_skill_intents_json: "'[]'",
+        allowed_supervisor_actions_json: "'[]'",
+        supervisor_cooldown_seconds: "300",
+        supervisor_max_recoveries_per_issue: "2",
+        supervisor_max_recoveries_per_project_per_hour: "10",
+        supervisor_mode: "'propose_only'",
+        supervisor_rate_limit_wait_policy: "'respect_retry_after'",
         verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
       });
       expect(columnDefaults(connection, "pi_reports")).toMatchObject({
@@ -190,7 +201,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 17 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 19 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

@@ -71,7 +71,8 @@ export type PiAuthorizationScope = {
 
 export const PI_SAFE_ACTION_TYPES = [
   "agent.profile_recommend",
-  "issue.comment", "issue.list", "issue.read", "issue.state_diagnose", "project.list", "project.status",
+  "issue.comment", "issue.list", "issue.read", "issue.retry_after", "issue.state_diagnose",
+  "issue.supervisor_decision", "project.list", "project.status",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
@@ -80,7 +81,8 @@ export const PI_SAFE_ACTION_TYPES = [
 const SAFE_ACTIONS = new Set(PI_SAFE_ACTION_TYPES);
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
-  "issue.update_refinement", "issue.state_repair", "needs_user.escalate"
+  "issue.retry", "issue.update_refinement", "issue.state_repair", "needs_user.escalate",
+  "session.resume_followup"
 ]);
 const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);
 
