@@ -509,12 +509,12 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  padding: 14px 16px;
+  padding: 11px 12px;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
 }
 
@@ -524,12 +524,27 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.kanban-card-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
 .kanban-card-title {
   font-size: 0.82rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
-  line-height: 1.45;
+  line-height: 1.35;
+  min-width: 0;
   word-break: break-word;
+}
+
+.kanban-card-status {
+  flex: 0 0 auto;
+  font-size: 0.64rem;
+  padding: 2px 6px;
 }
 
 .kanban-card-footer {
@@ -539,7 +554,8 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
   border-top: 1px solid rgba(0, 0, 0, 0.02);
-  padding-top: 8px;
+  gap: 8px;
+  padding-top: 6px;
 }
 
 [data-theme="dark"] .kanban-card-footer {
@@ -1039,8 +1055,8 @@ input:checked + .slider:before {
   color: var(--error);
   background: var(--error-bg);
   border: 1px solid rgba(239, 68, 68, 0.16);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 7px;
+  padding: 6px 8px;
   font-size: 0.74rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -1051,51 +1067,49 @@ input:checked + .slider:before {
   margin-top: 2px;
 }
 
-.kanban-card-run {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 9px;
-  background: rgba(15, 23, 42, 0.025);
-  min-width: 0;
-}
-
-[data-theme="dark"] .kanban-card-run {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.kanban-card-run-header,
+.kanban-card-runtime-meta,
 .kanban-card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.kanban-card-run-header {
-  justify-content: space-between;
-  color: var(--text-secondary);
-  font-size: 0.74rem;
-  font-weight: 700;
-}
-
-.kanban-card-run-grid {
-  display: grid;
-  grid-template-columns: 1fr;
   gap: 6px;
 }
 
-.kanban-card-run-field {
+.kanban-card-runtime-meta {
+  flex-wrap: wrap;
   min-width: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 0.72rem;
 }
 
-.kanban-card-run-field code {
+.kanban-card-runtime-pill {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.035);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: 0.68rem;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+}
+
+[data-theme="dark"] .kanban-card-runtime-pill {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.055);
+}
+
+.kanban-card-runtime-pill.run-status {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.kanban-card-runtime-pill.run-status.in_progress { color: var(--info); }
+.kanban-card-runtime-pill.run-status.done { color: var(--success); }
+.kanban-card-runtime-pill.run-status.failed { color: var(--error); }
+
+.kanban-card-runtime-pill code {
   min-width: 0;
   color: var(--text-secondary);
   font-family: inherit;
@@ -1104,22 +1118,8 @@ input:checked + .slider:before {
   white-space: nowrap;
 }
 
-.kanban-card-run-field code.mono {
+.kanban-card-runtime-pill code.mono {
   font-family: var(--font-mono);
-}
-
-.kanban-card-run-exit {
-  color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.035);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 0.72rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-[data-theme="dark"] .kanban-card-run-exit {
-  background: rgba(0, 0, 0, 0.18);
 }
 
 .kanban-card-actions {
@@ -1134,8 +1134,8 @@ input:checked + .slider:before {
   background: var(--bg-card);
   color: var(--text-secondary);
   border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 0.72rem;
+  padding: 3px 7px;
+  font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
 }

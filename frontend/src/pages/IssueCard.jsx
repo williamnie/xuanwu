@@ -49,10 +49,15 @@ export default function IssueCard({
       onDragEnd={onDragEnd}
       onClick={() => onOpenIssue(issue.id)}
     >
-      <div className="kanban-card-title">#{issue.id} {issue.title}</div>
+      <div className="kanban-card-heading">
+        <div className="kanban-card-title">#{issue.id} {issue.title}</div>
+        <span className={`status-badge kanban-card-status ${issue.status || 'unknown'}`}>
+          {issue.status || 'unknown'}
+        </span>
+      </div>
 
       {issue.status === 'failed' && failureReason && <IssueFailureSummary reason={failureReason} />}
-      <IssueRunSummary issue={issue} run={run} />
+      <IssueRunMetadata issue={issue} run={run} />
       <IssueQuickActions
         issue={issue}
         hasRuntime={hasRuntime}
@@ -78,35 +83,58 @@ function IssueFailureSummary({ reason }) {
   );
 }
 
-function IssueRunSummary({ issue, run }) {
+function IssueRunMetadata({ issue, run }) {
   if (!run) return null;
   const sessionId = issueRunSessionId(issue, run);
   const turnId = issueRunTurnId(issue, run);
   const exitText = issueRunExitText(run);
+  const attempt = run.attempt || issue.attempt_count || 1;
+  const runStatus = run.status || 'unknown';
+  const provider = providerLabel(run.provider);
+  const speed = serviceTierRunLabel(run);
+  const runtimeTitle = runTooltipText({ attempt, runStatus, provider, speed, sessionId, turnId, exitText });
+  const items = [
+    { label: 'Run', value: `#${attempt} · ${runStatus}`, className: `run-status ${runStatus}` },
+    { label: 'Provider', value: provider },
+    { label: 'Speed', value: speed },
+    { label: 'Session', value: shortId(sessionId), mono: true, hidden: !sessionId },
+    { label: 'Turn', value: shortId(turnId), mono: true, hidden: !turnId },
+  ].filter(item => !item.hidden);
+
   return (
-    <div className="kanban-card-run">
-      <div className="kanban-card-run-header">
-        <span>Run #{run.attempt || issue.attempt_count || 1}</span>
-        <span className={`status-badge ${run.status}`}>{run.status || 'unknown'}</span>
-      </div>
-      <div className="kanban-card-run-grid">
-        <RunMiniField label="Provider" value={providerLabel(run.provider)} />
-        <RunMiniField label="Speed" value={serviceTierRunLabel(run)} />
-        <RunMiniField label="Session" value={shortId(sessionId) || '暂无'} mono />
-        <RunMiniField label="Turn" value={shortId(turnId) || '暂无'} mono />
-      </div>
-      {exitText && <div className="kanban-card-run-exit" title={exitText}>{exitText}</div>}
+    <div className="kanban-card-runtime-meta" aria-label={runtimeTitle} title={runtimeTitle}>
+      {items.map(item => (
+        <RunMetaPill
+          key={item.label}
+          className={item.className}
+          label={item.label}
+          mono={item.mono}
+          value={item.value}
+        />
+      ))}
     </div>
   );
 }
 
-function RunMiniField({ label, value, mono = false }) {
+function RunMetaPill({ className = '', label, value, mono = false }) {
   return (
-    <div className="kanban-card-run-field">
+    <span className={`kanban-card-runtime-pill ${className}`.trim()}>
       <span>{label}</span>
       <code className={mono ? 'mono' : ''}>{value}</code>
-    </div>
+    </span>
   );
+}
+
+function runTooltipText({ attempt, runStatus, provider, speed, sessionId, turnId, exitText }) {
+  return [
+    `Run #${attempt}`,
+    `Status: ${runStatus}`,
+    `Provider: ${provider}`,
+    `Speed: ${speed}`,
+    `Session: ${sessionId || '暂无'}`,
+    `Turn: ${turnId || '暂无'}`,
+    exitText ? `Exit: ${exitText}` : '',
+  ].filter(Boolean).join(' · ');
 }
 
 function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRequestDelete, onRetry, onServiceTierChange }) {
