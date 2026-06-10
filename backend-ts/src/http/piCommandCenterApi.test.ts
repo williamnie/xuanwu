@@ -51,7 +51,34 @@ describe("PI Command Center API", () => {
       expect(body.overview).toMatchObject({
         active_delegations: 1,
         autonomous_projects: 1,
+        issue_auto_run_projects: 1,
         pending_approvals: 1
+      });
+      expect(body.automation).toMatchObject({
+        issue_execution: {
+          enabled_projects: 1,
+          state: "enabled"
+        },
+        supervisor: {
+          enabled: true,
+          not_all_issues: true,
+          scan_scope: "in_progress/open_issue_runs/due_auto_retry"
+        },
+        manager_auto_manage: {
+          enabled_projects: 1,
+          settings_table: "project_pi_settings",
+          state: "enabled",
+          targets: [{
+            auto_manage: 1,
+            project_id: "demo",
+            runnable: true,
+            settings_present: true
+          }]
+        },
+        delegation_heartbeat: {
+          active_delegations: 1,
+          state: "enabled"
+        }
       });
       expect(body.heartbeat).toMatchObject({
         latest_run: { id: "hb-1", status: "completed" },
@@ -116,6 +143,42 @@ describe("PI Command Center API", () => {
             source: "global_fallback",
             status: "fallback",
             status_text: "supervisor agent 未绑定 project settings，已 fallback 到全局 PI agent"
+          }
+        }
+      });
+      expect(body).toMatchObject({
+        mode: "manual",
+        overview: {
+          autonomous_projects: 0
+        },
+        heartbeat: {
+          status: "idle"
+        },
+        automation: {
+          manager_auto_manage: {
+            enabled_projects: 0,
+            missing_settings_projects: 1,
+            reason: expect.stringContaining("project_pi_settings.auto_manage=1"),
+            state: "idle",
+            targets: [{
+              project_id: "demo",
+              reason: "project_pi_settings 未创建",
+              runnable: false,
+              settings_present: false
+            }]
+          },
+          delegation_heartbeat: {
+            active_delegations: 0,
+            reason: "没有 active pi_delegations，delegation heartbeat 不会创建 pi_heartbeat_runs",
+            state: "idle"
+          },
+          cron_heartbeat: {
+            active_tasks: 0,
+            state: "idle"
+          },
+          supervisor: {
+            not_all_issues: true,
+            reason: expect.stringContaining("不是全量 issue 巡查")
           }
         }
       });

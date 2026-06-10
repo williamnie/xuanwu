@@ -7,6 +7,7 @@ const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', impor
 const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const pageUrl = new URL('./PiCommandCenter.jsx', import.meta.url);
 const pageSource = existsSync(pageUrl) ? readFileSync(pageUrl, 'utf8') : '';
+const automationPanelSource = readFileSync(new URL('./PiAutomationStatusPanel.jsx', import.meta.url), 'utf8');
 const stateSource = readFileSync(new URL('./piCommandCenterState.js', import.meta.url), 'utf8');
 const layoutCssSource = readFileSync(new URL('./PiCommandCenter.layout.css', import.meta.url), 'utf8');
 const reportsSource = readFileSync(new URL('./PiReportsPanel.jsx', import.meta.url), 'utf8');
@@ -25,7 +26,7 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   for (const label of ['当前模式', '自动检查', '委托窗口', '待我审批', '自动恢复', 'PI 记忆']) {
     assert.match(pageSource, new RegExp(label));
   }
-  for (const copy of ['PI 托管控制台', '自动执行与审批中心', '待审批', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于', '待审核候选', '最近候选来源']) {
+  for (const copy of ['PI 托管控制台', '自动化状态与审批中心', '待审批', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于', '待审核候选', '最近候选来源']) {
     assert.match(pageSource, new RegExp(copy));
   }
   for (const copy of ['Supervisor Agent：', '已 fallback 到全局 PI agent', '请绑定或启用一个 PI agent']) {
@@ -38,8 +39,10 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   assert.match(pageSource, /import PiDelegationsPanel from '\.\/PiDelegationsPanel'/);
   assert.match(pageSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
   assert.match(pageSource, /import PiHeartbeatTimelinePanel from '\.\/PiHeartbeatTimelinePanel'/);
+  assert.match(pageSource, /import PiAutomationStatusPanel from '\.\/PiAutomationStatusPanel'/);
   assert.match(pageSource, /import PiReportsPanel from '\.\/PiReportsPanel'/);
   assert.match(pageSource, /<PiHeartbeatTimelinePanel \/>/);
+  assert.match(pageSource, /<PiAutomationStatusPanel automation=\{.*automation.*\} onChanged=\{reload\} \/>/s);
   assert.match(pageSource, /<PiReportsPanel \/>/);
   assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} showAuditTimeline=\{false\} variant="command-center" \/>/);
   assert.match(pageSource, /<PiDelegationsPanel onChanged=\{reload\} \/>/);
@@ -50,6 +53,24 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   assert.match(pageSource, /supervisorAgentText\(state\.data\?\.supervisor\?\.agent\)/);
 });
 
+test('PI Command Center separates auto-run, supervisor, manager and heartbeat automation states', () => {
+  for (const copy of [
+    'issue execution auto-run（todo 队列）',
+    'PI supervisor（故障 issue 恢复）',
+    'PI manager auto-manage（项目巡检）',
+    'delegation/cron heartbeat',
+    '不是巡查所有 issue',
+    'heartbeat idle 的常见原因',
+  ]) {
+    assert.match(automationPanelSource, new RegExp(copy));
+  }
+  assert.match(automationPanelSource, /getProjectPiSettings/);
+  assert.match(automationPanelSource, /updateProjectPiSettings/);
+  assert.match(automationPanelSource, /pi_agent_id/);
+  assert.match(automationPanelSource, /max_actions_per_cycle/);
+  assert.doesNotMatch(automationPanelSource, /window\.confirm|window\.alert/);
+});
+
 test('PI Command Center prioritizes pending approvals above secondary modules', () => {
   assert.match(pageSource, /pi-command-above-fold/);
   assert.match(pageSource, /PendingApprovalCallout/);
@@ -57,7 +78,7 @@ test('PI Command Center prioritizes pending approvals above secondary modules', 
   assert.match(pageSource, /DetailModules/);
   assert.match(pageSource, /filter\(isAboveFoldStatusCard\)/);
   assert.match(pageSource, /role="tablist"/);
-  assert.match(pageSource, /renderActiveModule\(activeModule, reload\)/);
+  assert.match(pageSource, /renderActiveModule\(activeModule, reload, automation\)/);
   assert.ok(pageSource.indexOf('<PendingApprovalCallout') < pageSource.indexOf('<DetailModules'));
   assert.match(layoutCssSource, /\.pi-command-above-fold/);
   assert.match(layoutCssSource, /\.pi-command-attention-callout\.needs-action/);

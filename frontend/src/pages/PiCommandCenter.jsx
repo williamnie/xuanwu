@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Activity, Bot, CheckCircle2, Command, Database, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
 import PiActionAuditPanel from './PiActionAuditPanel';
+import PiAutomationStatusPanel from './PiAutomationStatusPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
 import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
 import PiPolicyEditorPanel from './PiPolicyEditorPanel';
@@ -13,6 +14,7 @@ import './PiCommandCenter.layout.css';
 
 const FRAMEWORK_SECTIONS = [];
 const DETAIL_MODULES = [
+  ['automation', '巡检启用状态', '区分自动执行、恢复、项目巡检与 heartbeat'],
   ['timeline', '自动检查时间线', '追踪最近运行证据'],
   ['reports', '恢复报告', '查看自动恢复汇总'],
   ['delegations', '委托窗口', '创建或暂停授权窗口'],
@@ -21,7 +23,7 @@ const DETAIL_MODULES = [
 
 export default function PiCommandCenter() {
   const state = useCommandCenterStatus();
-  const [activeModule, setActiveModule] = useState('timeline');
+  const [activeModule, setActiveModule] = useState('automation');
   const cards = buildStatusCards(state.data).filter(isAboveFoldStatusCard);
   const pendingCount = pendingApprovalCount(state.data);
 
@@ -42,7 +44,7 @@ export default function PiCommandCenter() {
           <PiActionAuditPanel onChanged={state.reload} showAuditTimeline={false} variant="command-center" />
         </section>
       </section>
-      <DetailModules activeModule={activeModule} onSelect={setActiveModule} reload={state.reload} />
+      <DetailModules activeModule={activeModule} automation={state.data?.automation} onSelect={setActiveModule} reload={state.reload} />
       <FrameworkPlaceholders />
     </div>
   );
@@ -71,10 +73,10 @@ function Header({ pendingCount, state }) {
     <section className="pi-command-hero">
       <div>
         <span className="pi-command-kicker">PI 托管控制台</span>
-        <h1>自动执行与审批中心</h1>
+        <h1>自动化状态与审批中心</h1>
         <p>
-          查看 {COMMAND_CENTER_TERMS.heartbeat}、处理高风险动作审批，并管理
-          {COMMAND_CENTER_TERMS.delegation} 与 {COMMAND_CENTER_TERMS.policy}。
+          区分 todo 自动领取、{COMMAND_CENTER_TERMS.supervisor}、项目巡检与
+          {COMMAND_CENTER_TERMS.heartbeat}，并管理 {COMMAND_CENTER_TERMS.delegation} 与 {COMMAND_CENTER_TERMS.policy}。
         </p>
         <div className="pi-command-hero-summary" aria-label="当前需要处理的事项">
           <span className={pendingCount > 0 ? 'urgent' : ''}>待审批 {numberText(overview.pending_approvals)} 项</span>
@@ -131,7 +133,7 @@ function PendingApprovalCallout({ count }) {
   );
 }
 
-function DetailModules({ activeModule, onSelect, reload }) {
+function DetailModules({ activeModule, automation, onSelect, reload }) {
   const current = DETAIL_MODULES.find(([id]) => id === activeModule) || DETAIL_MODULES[0];
   return (
     <section className="pi-command-detail-shell" aria-label="PI 控制台二级模块">
@@ -157,13 +159,14 @@ function DetailModules({ activeModule, onSelect, reload }) {
         </div>
       </div>
       <div className="pi-command-tab-panel" role="tabpanel" aria-label={current[1]}>
-        {renderActiveModule(activeModule, reload)}
+        {renderActiveModule(activeModule, reload, automation)}
       </div>
     </section>
   );
 }
 
-function renderActiveModule(activeModule, reload) {
+function renderActiveModule(activeModule, reload, automation) {
+  if (activeModule === 'automation') return <PiAutomationStatusPanel automation={automation} onChanged={reload} />;
   if (activeModule === 'reports') return <PiReportsPanel />;
   if (activeModule === 'delegations') return <PiDelegationsPanel onChanged={reload} />;
   if (activeModule === 'policy') return <PiPolicyEditorPanel onChanged={reload} />;
@@ -214,7 +217,7 @@ function buildStatusCards(data) {
   return [
     { detail: modeDetail(data?.mode), icon: Command, id: 'mode', label: '当前模式', value: modeText(data?.mode) },
     { detail: heartbeat.detail, icon: Activity, id: 'heartbeat', label: '自动检查', value: heartbeat.value },
-    { detail: `${numberText(overview.autonomous_projects)} 个项目已开启自动执行`, icon: ShieldCheck, id: 'delegation', label: '委托窗口', value: `${numberText(overview.active_delegations)} 个生效中` },
+    { detail: `${numberText(overview.autonomous_projects)} 个项目开启 PI manager auto-manage`, icon: ShieldCheck, id: 'delegation', label: '项目巡检/委托', value: `${numberText(overview.active_delegations)} 个委托生效中` },
     { detail: '需要人工确认的高风险动作', icon: CheckCircle2, id: 'approvals', label: '待我审批', value: `${numberText(overview.pending_approvals)} 项` },
     { detail: supervisorDetail(data?.supervisor), icon: Bot, id: 'supervisor', label: '自动恢复', value: `${numberText(data?.supervisor?.recovery_actions)} 次` },
     { detail: memoryDetail(data?.memory), icon: Database, id: 'memory', label: 'PI 记忆', value: `待审核候选 ${numberText(data?.memory?.candidate_count)} 条` },

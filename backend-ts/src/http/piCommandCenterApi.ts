@@ -1,8 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import {
   getPiAgent,
   listPiAgents,
   listPiActions,
+  listPiConversations,
   listPiDelegations,
   listPiHeartbeatRuns,
   listPiMemoryItems,
@@ -11,6 +13,7 @@ import {
   type PiMemoryItem,
   type PiHeartbeatRun
 } from "../db/repositories/pi.ts";
+import { listProjects, type Project } from "../db/repositories/projects.ts";
 import type { Router } from "./router.ts";
 import { json } from "./errors.ts";
 import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
@@ -22,25 +25,169 @@ export function registerPiCommandCenterRoutes(router: Router, context: PiCommand
 }
 
 function buildPiCommandCenter(db: RunnerDatabase) {
+  const projects = listProjects(db);
   const settings = listProjectPiSettings(db);
   const activeDelegations = listPiDelegations(db, { status: "active" });
   const pendingApprovals = listPiActions(db, { status: "pending" });
   const latestRun = listPiHeartbeatRuns(db).at(0) ?? null;
   const supervisorEvents = listIssueSupervisorEvents(db);
   const memoryItems = listPiMemoryItems(db);
+  const cronTasks = listCronTasks(db);
+  const autoManagedProjects = runnableAutoManagedProjectCount(db, settings);
 
   return {
+    automation: automationSummary(db, { activeDelegations, cronTasks, projects, settings }),
     generated_at: new Date().toISOString(),
-    mode: commandMode(settings, activeDelegations.length),
+    mode: commandMode(autoManagedProjects, activeDelegations.length, settings.length),
     overview: {
       active_delegations: activeDelegations.length,
-      autonomous_projects: settings.filter((item) => item.auto_manage === 1).length,
+      autonomous_projects: autoManagedProjects,
+      issue_auto_run_projects: projects.filter((project) => project.auto_run === 1).length,
       pending_approvals: pendingApprovals.length
     },
     heartbeat: heartbeatSummary(latestRun),
     memory: memorySummary(memoryItems),
     prompt_debug: promptDebug(db, settings),
     supervisor: supervisorSummary(db, supervisorEvents, settings)
+  };
+}
+
+type CommandCenterInputs = {
+  activeDelegations: ReturnType<typeof listPiDelegations>;
+  cronTasks: ReturnType<typeof listCronTasks>;
+  projects: Project[];
+  settings: ReturnType<typeof listProjectPiSettings>;
+};
+
+const SUPERVISOR_SCAN_LIMIT = 50;
+const SUPERVISOR_SCAN_SCOPE = "in_progress/open_issue_runs/due_auto_retry";
+const HEARTBEAT_CRON_ACTIONS = new Set(["run_heartbeat", "run_pi_cycle"]);
+
+function automationSummary(db: RunnerDatabase, input: CommandCenterInputs) {
+  const activeCronTasks = input.cronTasks.filter((task) =>
+    task.status === "active" && HEARTBEAT_CRON_ACTIONS.has(task.action)
+  );
+  const issueAutoRunProjects = input.projects.filter((project) => project.auto_run === 1).length;
+  const autoManagedProjects = runnableAutoManagedProjectCount(db, input.settings);
+  return {
+    cron_heartbeat: cronHeartbeatSummary(activeCronTasks),
+    delegation_heartbeat: delegationHeartbeatSummary(input.activeDelegations.length),
+    issue_execution: issueExecutionSummary(issueAutoRunProjects, input.projects.length),
+    manager_auto_manage: managerAutoManageSummary(db, input, autoManagedProjects),
+    supervisor: supervisorScanSummary()
+  };
+}
+function issueExecutionSummary(enabledProjects: number, totalProjects: number) {
+  return {
+    enabled_projects: enabledProjects,
+    reason: enabledProjects > 0
+      ? "projects.auto_run=1 的项目会自动领取 todo issue；这不是 PI 项目巡检"
+      : "没有 projects.auto_run=1 的项目，todo issue 不会自动领取",
+    state: enabledProjects > 0 ? "enabled" : "idle",
+    total_projects: totalProjects
+  };
+}
+function supervisorScanSummary() {
+  return {
+    enabled: true,
+    limit: SUPERVISOR_SCAN_LIMIT,
+    not_all_issues: true,
+    reason: "Supervisor 只做故障恢复候选扫描，不是全量 issue 巡查",
+    scan_scope: SUPERVISOR_SCAN_SCOPE,
+    state: "enabled"
+  };
+}
+function managerAutoManageSummary(
+  db: RunnerDatabase,
+  input: Pick<CommandCenterInputs, "projects" | "settings">,
+  enabledProjects: number
+) {
+  const settingsMap = settingsByProject(input.settings);
+  return {
+    enabled_projects: enabledProjects,
+    latest_cycle: latestManagerCycle(db),
+    missing_settings_projects: input.projects.filter((project) => !settingsMap.has(project.id)).length,
+    reason: enabledProjects > 0
+      ? "只会巡检 project_pi_settings.auto_manage=1 且 agent enabled 的项目"
+      : "没有 project_pi_settings.auto_manage=1 且 agent enabled 的项目，PI manager cycle 不会运行",
+    settings_table: "project_pi_settings",
+    state: enabledProjects > 0 ? "enabled" : "idle",
+    targets: input.projects.map((project) => managerTarget(db, project, settingsMap.get(project.id))),
+    total_projects: input.projects.length
+  };
+}
+function delegationHeartbeatSummary(activeDelegations: number) {
+  return {
+    active_delegations: activeDelegations,
+    reason: activeDelegations > 0
+      ? "active pi_delegations 会按 next_heartbeat_at 创建 heartbeat run"
+      : "没有 active pi_delegations，delegation heartbeat 不会创建 pi_heartbeat_runs",
+    state: activeDelegations > 0 ? "enabled" : "idle"
+  };
+}
+function cronHeartbeatSummary(activeTasks: ReturnType<typeof listCronTasks>) {
+  return {
+    active_tasks: activeTasks.length,
+    reason: activeTasks.length > 0
+      ? "active cron task 会按 next_run_at 触发 run_heartbeat/run_pi_cycle"
+      : "没有 active run_heartbeat/run_pi_cycle cron task",
+    state: activeTasks.length > 0 ? "enabled" : "idle",
+    tasks: activeTasks.slice(0, 5).map((task) => ({
+      action: task.action,
+      id: task.id,
+      name: task.name,
+      next_run_at: task.next_run_at,
+      project_id: task.project_id
+    }))
+  };
+}
+function settingsByProject(settings: ReturnType<typeof listProjectPiSettings>) {
+  return new Map(settings.map((item) => [item.project_id, item]));
+}
+function runnableAutoManagedProjectCount(db: RunnerDatabase, settings: ReturnType<typeof listProjectPiSettings>) {
+  return settings.filter((item) => item.auto_manage === 1 && getPiAgent(db, item.pi_agent_id)?.enabled === 1).length;
+}
+function managerTarget(
+  db: RunnerDatabase,
+  project: Project,
+  settings: ReturnType<typeof listProjectPiSettings>[number] | undefined
+) {
+  const agent = settings?.pi_agent_id ? getPiAgent(db, settings.pi_agent_id) : null;
+  return {
+    agent_enabled: agent?.enabled === 1,
+    auto_enqueue: settings?.auto_enqueue ?? 0,
+    auto_manage: settings?.auto_manage ?? 0,
+    auto_triage: settings?.auto_triage ?? 0,
+    max_actions_per_cycle: settings?.max_actions_per_cycle ?? 5,
+    pi_agent_id: settings?.pi_agent_id ?? "",
+    project_id: project.id,
+    project_name: project.name,
+    reason: managerTargetReason(settings, agent?.enabled === 1),
+    runnable: Boolean(settings && settings.auto_manage === 1 && agent?.enabled === 1),
+    settings_present: Boolean(settings),
+    updated_at: settings?.updated_at ?? ""
+  };
+}
+function managerTargetReason(
+  settings: ReturnType<typeof listProjectPiSettings>[number] | undefined,
+  agentEnabled: boolean
+): string {
+  if (!settings) return "project_pi_settings 未创建";
+  if (settings.auto_manage !== 1) return "auto_manage 未启用";
+  if (settings.pi_agent_id === "") return "PI agent 未绑定";
+  if (!agentEnabled) return "PI agent 不存在或未启用";
+  return "project PI auto-manage 已启用";
+}
+function latestManagerCycle(db: RunnerDatabase) {
+  const cycle = listPiConversations(db).find((item) => item.title === "PI manager cycle");
+  if (!cycle) return null;
+  return {
+    id: cycle.id,
+    pi_agent_id: cycle.pi_agent_id,
+    pi_session_id: cycle.pi_session_id,
+    project_id: cycle.project_id,
+    status: cycle.status,
+    updated_at: cycle.updated_at
   };
 }
 
@@ -138,9 +285,9 @@ function configuredSupervisorAgentStatus(db: RunnerDatabase, agentID: string) {
   };
 }
 
-function commandMode(settings: Array<{ auto_manage: number }>, activeDelegations: number): string {
-  if (settings.some((item) => item.auto_manage === 1) || activeDelegations > 0) return "delegated";
-  if (settings.length > 0) return "attended";
+function commandMode(autoManagedProjects: number, activeDelegations: number, settingsCount: number): string {
+  if (autoManagedProjects > 0 || activeDelegations > 0) return "delegated";
+  if (settingsCount > 0) return "attended";
   return "manual";
 }
 
