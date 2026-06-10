@@ -11,6 +11,7 @@ import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
+import { dispatchSupervisorPiAction } from "./piSupervisorActionDispatch.ts";
 
 export type PiActionDispatchContext = {
   database: RunnerDatabase;
@@ -42,8 +43,12 @@ export async function dispatchPiAction(
     case "needs_user.escalate":
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), {
         author: "agent",
-        body: cleanString(payload.body)
+        body: cleanString(payload.body) || cleanString(payload.message)
       });
+    case "issue.retry_after":
+    case "issue.supervisor_decision":
+    case "session.resume_followup":
+      return await dispatchSupervisorPiAction(context, action, payload);
     case "session.steer":
       return await steerSession(context, payload);
     default:

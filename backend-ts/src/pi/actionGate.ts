@@ -1,5 +1,6 @@
 import type { PiGateDecisionValue, PiWorkMode } from "./policyTypes.ts";
 import { matchPiAuthorizationPolicyScope } from "./authorizationScope.ts";
+import { recoveryLimitDecision } from "./actionGateRecovery.ts";
 
 export type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
@@ -100,10 +101,7 @@ function baseRisk(actionType: string): PiRiskClassification {
   return risk("high", "high");
 }
 
-export function gatePiActionEnvelope(
-  envelope: PiActionEnvelope,
-  policy: PiGatePolicy = {}
-): PiGateDecision {
+export function gatePiActionEnvelope(envelope: PiActionEnvelope, policy: PiGatePolicy = {}): PiGateDecision {
   return decidePiAuthorization(envelope, policy);
 }
 
@@ -118,6 +116,8 @@ export function decidePiAuthorization(
   if (cleanString(envelope.snoozed_until) !== "") return { decision: "snooze", reason: "action is snoozed" };
   const windowDecision = authorizationWindowDecision(policy);
   if (windowDecision) return windowDecision;
+  const recoveryDecision = recoveryLimitDecision(envelope, policy);
+  if (recoveryDecision) return recoveryDecision;
   if (!allowedActionType(envelope, policy)) return { decision: "deny", reason: "action is not covered by allowed_actions" };
   const scopeDecision = matchPiAuthorizationPolicyScope(envelope, policy);
   if (!scopeDecision.matched) return { decision: "deny", reason: scopeDecision.reason };
@@ -239,7 +239,6 @@ function stringList(value: unknown): string[] {
 function objectPayload(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
-
 function authorizedByEnvelope(envelope: PiActionEnvelope, authorized: PiAuthorizedAction[]): boolean {
   return authorized.some((candidate) => (
     optionalMatch(candidate.action_type, envelope.action_type) &&
@@ -265,7 +264,6 @@ function optionalMatch(expected: string | undefined, actual: string): boolean {
 function optionalNumberMatch(expected: number | undefined, actual: number): boolean {
   return expected === undefined || expected === 0 || expected === actual;
 }
-
 function timeMs(value: unknown): number | undefined {
   if (value instanceof Date) return value.getTime();
   const text = cleanString(value);
@@ -291,7 +289,6 @@ function isRiskLevel(value: unknown): value is PiRiskLevel {
 function cleanID(value: unknown): string {
   return cleanString(value).toLowerCase();
 }
-
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }

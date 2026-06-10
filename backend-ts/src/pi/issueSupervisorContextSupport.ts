@@ -46,7 +46,7 @@ type SessionContextInput = {
 };
 
 const DEFAULT_STALE_SECONDS = 6 * 60 * 60;
-const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "issue.retry"]);
+const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "issue.retry", "issue.retry_after"]);
 
 export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const out: SupervisorCandidate[] = [];

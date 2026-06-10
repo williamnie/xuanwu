@@ -39,6 +39,18 @@ const confidenceEnum = literalUnion(PI_SUPERVISOR_CONFIDENCE_LEVELS);
 const diagnosisEnum = literalUnion(PI_SUPERVISOR_DIAGNOSIS_CODES);
 const fallbackEnum = literalUnion(["needs_user", "retry_issue", "blocked"] as const);
 const riskEnum = literalUnion(PI_SUPERVISOR_RISK_LEVELS);
+const executionPreconditions = {
+  expected_issue_status: optionalText,
+  expected_issue_updated_at: optionalText,
+  expected_provider_session_id: optionalText,
+  expected_provider_turn_id: optionalText,
+  expected_run_ended_at: optionalText,
+  expected_run_id: optionalText,
+  expected_run_status: optionalText,
+  expected_session_status: optionalText,
+  expected_session_turn_id: optionalText,
+  expected_session_updated_at: optionalText
+};
 
 export const PI_SUPERVISOR_DECISION_JSON_SCHEMA = Type.Object({
   confidence: confidenceEnum,
@@ -59,7 +71,8 @@ export const PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS = {
     decision_id: Type.String({ minLength: 1 }),
     diagnosis_code: diagnosisEnum,
     issue_id: positiveInteger,
-    reason: optionalText
+    reason: optionalText,
+    ...executionPreconditions
   }, { additionalProperties: false }),
   "issue.retry_after": Type.Object({
     decision_id: optionalText,
@@ -67,18 +80,21 @@ export const PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS = {
     issue_id: positiveInteger,
     reason: Type.String({ minLength: 1 }),
     retry_after_at: Type.String({ minLength: 1 }),
-    source_event_id: Type.Optional(positiveInteger)
+    source_event_id: Type.Optional(positiveInteger),
+    ...executionPreconditions
   }, { additionalProperties: false }),
   "issue.supervisor_decision": Type.Object({
     decision: PI_SUPERVISOR_DECISION_JSON_SCHEMA,
-    issue_id: positiveInteger
+    issue_id: positiveInteger,
+    ...executionPreconditions
   }, { additionalProperties: false }),
   "needs_user.escalate": Type.Object({
     decision_id: Type.String({ minLength: 1 }),
     diagnosis_code: diagnosisEnum,
     issue_id: positiveInteger,
     message: Type.String({ minLength: 1 }),
-    reason: optionalText
+    reason: optionalText,
+    ...executionPreconditions
   }, { additionalProperties: false }),
   "session.resume_followup": Type.Object({
     decision_id: Type.String({ minLength: 1 }),
@@ -87,7 +103,8 @@ export const PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS = {
     prompt: Type.String({ minLength: 1 }),
     provider: Type.String({ minLength: 1 }),
     provider_session_id: Type.String({ minLength: 1 }),
-    provider_turn_id: optionalText
+    provider_turn_id: optionalText,
+    ...executionPreconditions
   }, { additionalProperties: false }),
   "session.steer": Type.Object({
     decision_id: Type.String({ minLength: 1 }),
@@ -96,7 +113,8 @@ export const PI_SUPERVISOR_ACTION_PAYLOAD_SCHEMAS = {
     prompt: Type.String({ minLength: 1 }),
     provider: Type.String({ minLength: 1 }),
     provider_session_id: Type.String({ minLength: 1 }),
-    provider_turn_id: Type.String({ minLength: 1 })
+    provider_turn_id: Type.String({ minLength: 1 }),
+    ...executionPreconditions
   }, { additionalProperties: false })
 } satisfies Record<string, TSchema>;
 
