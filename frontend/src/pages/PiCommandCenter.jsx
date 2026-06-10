@@ -7,27 +7,42 @@ import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
 import PiPolicyEditorPanel from './PiPolicyEditorPanel';
 import PiReportsPanel from './PiReportsPanel';
 import { COMMAND_CENTER_TERMS, modeLabel, statusLabel } from './piCommandCenterTerms';
+import { approvalCalloutState, pendingApprovalCount } from './piCommandCenterState';
 import './PiCommandCenter.css';
+import './PiCommandCenter.layout.css';
 
 const FRAMEWORK_SECTIONS = [];
+const DETAIL_MODULES = [
+  ['timeline', '自动检查时间线', '追踪最近运行证据'],
+  ['reports', '恢复报告', '查看自动恢复汇总'],
+  ['delegations', '委托窗口', '创建或暂停授权窗口'],
+  ['policy', '执行策略', '调整项目默认规则'],
+];
 
 export default function PiCommandCenter() {
   const state = useCommandCenterStatus();
-  const cards = buildStatusCards(state.data);
+  const [activeModule, setActiveModule] = useState('timeline');
+  const cards = buildStatusCards(state.data).filter(isAboveFoldStatusCard);
+  const pendingCount = pendingApprovalCount(state.data);
 
   return (
     <div className="pi-command-center animate-fade-in">
-      <Header state={state} />
+      <Header pendingCount={pendingCount} state={state} />
       {state.error && <div className="pi-command-error" role="alert">{state.error}</div>}
       {state.loading && !state.data && <LoadingState />}
-      <section className="pi-command-grid" aria-label="PI 控制台状态卡片">
-        {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
+      <section className="pi-command-above-fold" aria-label="PI 控制台首屏重点">
+        <div className="pi-command-status-column">
+          <section className="pi-command-grid" aria-label="PI 控制台状态卡片">
+            {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
+          </section>
+          <QuickActions activeModule={activeModule} onSelect={setActiveModule} />
+        </div>
+        <section className="pi-command-priority-panel" aria-label="待处理事项">
+          <PendingApprovalCallout count={pendingCount} />
+          <PiActionAuditPanel onChanged={state.reload} showAuditTimeline={false} variant="command-center" />
+        </section>
       </section>
-      <PiHeartbeatTimelinePanel />
-      <PiReportsPanel />
-      <PiActionAuditPanel onChanged={state.reload} variant="command-center" />
-      <PiDelegationsPanel onChanged={state.reload} />
-      <PiPolicyEditorPanel onChanged={state.reload} />
+      <DetailModules activeModule={activeModule} onSelect={setActiveModule} reload={state.reload} />
       <FrameworkPlaceholders />
     </div>
   );
@@ -48,7 +63,7 @@ function useCommandCenterStatus() {
   return { ...state, reload: load };
 }
 
-function Header({ state }) {
+function Header({ pendingCount, state }) {
   const overview = state.data?.overview || {};
   const heartbeat = heartbeatStatus(state.data?.heartbeat);
   const mode = modeText(state.data?.mode);
@@ -62,7 +77,7 @@ function Header({ state }) {
           {COMMAND_CENTER_TERMS.delegation} 与 {COMMAND_CENTER_TERMS.policy}。
         </p>
         <div className="pi-command-hero-summary" aria-label="当前需要处理的事项">
-          <span>待审批 {numberText(overview.pending_approvals)} 项</span>
+          <span className={pendingCount > 0 ? 'urgent' : ''}>待审批 {numberText(overview.pending_approvals)} 项</span>
           <span>当前模式：{mode}</span>
           <span>最近自动检查：{heartbeat.detail}</span>
         </div>
@@ -76,6 +91,80 @@ function Header({ state }) {
       </div>
     </section>
   );
+}
+
+function QuickActions({ activeModule, onSelect }) {
+  return (
+    <section className="pi-command-quick-actions" aria-label="主要操作入口">
+      <div>
+        <span className="pi-command-label">主要操作入口</span>
+        <strong>先处理审批，再查看证据或调整授权。</strong>
+      </div>
+      <div className="pi-command-quick-action-row">
+        {DETAIL_MODULES.map(([id, label, description]) => (
+          <button
+            className={activeModule === id ? 'active' : ''}
+            key={id}
+            onClick={() => onSelect(id)}
+            type="button"
+          >
+            <span>{label}</span>
+            <small>{description}</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PendingApprovalCallout({ count }) {
+  const callout = approvalCalloutState(count);
+  return (
+    <div className={`pi-command-attention-callout ${callout.tone}`}>
+      <span>{callout.status}</span>
+      <strong>{callout.title}</strong>
+      <p>{callout.detail}</p>
+    </div>
+  );
+}
+
+function DetailModules({ activeModule, onSelect, reload }) {
+  const current = DETAIL_MODULES.find(([id]) => id === activeModule) || DETAIL_MODULES[0];
+  return (
+    <section className="pi-command-detail-shell" aria-label="PI 控制台二级模块">
+      <div className="pi-command-detail-header">
+        <div>
+          <span className="pi-command-label">二级模块</span>
+          <h2>{current[1]}</h2>
+          <p>{current[2]}。这些信息默认收起，不再抢占首屏处理焦点。</p>
+        </div>
+        <div className="pi-command-tabs" role="tablist" aria-label="切换控制台模块">
+          {DETAIL_MODULES.map(([id, label]) => (
+            <button
+              aria-selected={activeModule === id}
+              className={activeModule === id ? 'active' : ''}
+              key={id}
+              onClick={() => onSelect(id)}
+              role="tab"
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="pi-command-tab-panel" role="tabpanel" aria-label={current[1]}>
+        {renderActiveModule(activeModule, reload)}
+      </div>
+    </section>
+  );
+}
+
+function renderActiveModule(activeModule, reload) {
+  if (activeModule === 'reports') return <PiReportsPanel />;
+  if (activeModule === 'delegations') return <PiDelegationsPanel onChanged={reload} />;
+  if (activeModule === 'policy') return <PiPolicyEditorPanel onChanged={reload} />;
+  return <PiHeartbeatTimelinePanel />;
 }
 
 function LoadingState() {
@@ -126,6 +215,10 @@ function buildStatusCards(data) {
     { detail: '需要人工确认的高风险动作', icon: CheckCircle2, id: 'approvals', label: '待我审批', value: `${numberText(overview.pending_approvals)} 项` },
     { detail: supervisorDetail(data?.supervisor), icon: Bot, id: 'supervisor', label: '自动恢复', value: `${numberText(data?.supervisor?.recovery_actions)} 次` },
   ];
+}
+
+function isAboveFoldStatusCard(card) {
+  return ['mode', 'heartbeat', 'delegation'].includes(card.id);
 }
 
 function supervisorDetail(supervisor = {}) {

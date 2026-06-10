@@ -10,21 +10,21 @@ import './PiActionAuditPanel.css';
 const AUDIT_LIMIT = 36;
 const SNOOZE_MS = 60 * 60 * 1000;
 
-export default function PiActionAuditPanel({ onChanged, variant = 'sidebar' }) {
-  const audit = usePiActionAudit(onChanged);
-  const className = `pi-action-audit-panel ${variant === 'command-center' ? 'command-center' : ''}`.trim();
+export default function PiActionAuditPanel({ onChanged, showAuditTimeline = true, variant = 'sidebar' }) {
+  const audit = usePiActionAudit(onChanged, showAuditTimeline);
+  const className = `pi-action-audit-panel ${variant === 'command-center' ? 'command-center' : ''} ${showAuditTimeline ? '' : 'approval-only'}`.trim();
   return (
     <section className={className} aria-label="PI 待确认动作与审计时间线">
       <PanelHeader audit={audit} variant={variant} />
       {audit.error && <div className="pi-action-audit-error">{audit.error}</div>}
       <PendingApprovals audit={audit} />
-      <AuditTimeline events={audit.events} loading={audit.loading} />
+      {showAuditTimeline && <AuditTimeline events={audit.events} loading={audit.loading} />}
     </section>
   );
 }
 
-function usePiActionAudit(onChanged) {
-  const approvals = useApprovalData();
+function usePiActionAudit(onChanged, includeEvents) {
+  const approvals = useApprovalData(includeEvents);
   const errors = useActionErrors();
   const decisions = useDecisionState(approvals, errors, onChanged);
   return {
@@ -34,7 +34,7 @@ function usePiActionAudit(onChanged) {
   };
 }
 
-function useApprovalData() {
+function useApprovalData(includeEvents) {
   const [events, setEvents] = useState([]);
   const [actions, setActions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -45,7 +45,7 @@ function useApprovalData() {
     try {
       const [pendingActions, auditEvents] = await Promise.all([
         piActionGateApi.pendingActions(),
-        piActionGateApi.auditEvents(),
+        includeEvents ? piActionGateApi.auditEvents() : Promise.resolve([]),
       ]);
       const normalizedActions = Array.isArray(pendingActions) ? pendingActions : [];
       setActions(normalizedActions);
@@ -57,7 +57,7 @@ function useApprovalData() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [includeEvents]);
 
   useEffect(() => {
     load();
@@ -155,6 +155,12 @@ function ApprovalCard({ action, audit }) {
         <span>影响范围</span>
         <div>{scopeItems.map((item) => <code key={item}>{item}</code>)}</div>
       </div>
+      <div className="pi-action-decision-row">
+        <DecisionButton action={action} audit={audit} decision="approve" icon={<CheckCircle2 size={13} />} label="批准" />
+        <DecisionButton action={action} audit={audit} decision="request_changes" icon={<ShieldAlert size={13} />} label="要求修改" />
+        <DecisionButton action={action} audit={audit} decision="snooze" icon={<Clock3 size={13} />} label="暂缓" />
+        <DecisionButton action={action} audit={audit} decision="reject" icon={<XCircle size={13} />} label="拒绝" />
+      </div>
       <label className="pi-action-note-field">
         <span>处理说明</span>
         <textarea
@@ -172,12 +178,6 @@ function ApprovalCard({ action, audit }) {
         />
       </label>
       {audit.actionErrors[action.id] && <div className="pi-action-card-error" role="alert">{audit.actionErrors[action.id]}</div>}
-      <div className="pi-action-decision-row">
-        <DecisionButton action={action} audit={audit} decision="approve" icon={<CheckCircle2 size={13} />} label="批准" />
-        <DecisionButton action={action} audit={audit} decision="request_changes" icon={<ShieldAlert size={13} />} label="要求修改" />
-        <DecisionButton action={action} audit={audit} decision="snooze" icon={<Clock3 size={13} />} label="暂缓" />
-        <DecisionButton action={action} audit={audit} decision="reject" icon={<XCircle size={13} />} label="拒绝" />
-      </div>
     </article>
   );
 }

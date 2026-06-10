@@ -42,3 +42,10 @@ test('PI approvals use Chinese primary decision actions', () => {
     assert.doesNotMatch(panelSource, new RegExp(oldCopy));
   }
 });
+
+test('Command Center can show approvals without duplicating the audit timeline', () => {
+  assert.match(panelSource, /showAuditTimeline = true/);
+  assert.match(panelSource, /showAuditTimeline && <AuditTimeline/);
+  assert.match(panelSource, /includeEvents \? piActionGateApi\.auditEvents\(\) : Promise\.resolve\(\[\]\)/);
+  assert.match(panelSource, /approval-only/);
+});

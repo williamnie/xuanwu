@@ -12,7 +12,7 @@ const cssSource = existsSync(cssUrl) ? readFileSync(cssUrl, 'utf8') : '';
 test('Policy editor is mounted in Command Center and uses policy registry APIs', () => {
   assert.ok(existsSync(panelUrl), 'PiPolicyEditorPanel.jsx should exist');
   assert.match(commandSource, /import PiPolicyEditorPanel from '\.\/PiPolicyEditorPanel'/);
-  assert.match(commandSource, /<PiPolicyEditorPanel onChanged=\{state\.reload\} \/>/);
+  assert.match(commandSource, /<PiPolicyEditorPanel onChanged=\{reload\} \/>/);
   assert.match(panelSource, /api\.getProjectPiPolicy\(nextProjectId\)/);
   assert.match(panelSource, /api\.updateProjectPiPolicy\(form\.projectId, buildPolicyPayload\(form\)\)/);
   assert.match(panelSource, /api\.getPiSkills\(\)/);

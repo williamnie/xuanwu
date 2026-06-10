@@ -7,6 +7,8 @@ const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', impor
 const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const pageUrl = new URL('./PiCommandCenter.jsx', import.meta.url);
 const pageSource = existsSync(pageUrl) ? readFileSync(pageUrl, 'utf8') : '';
+const stateSource = readFileSync(new URL('./piCommandCenterState.js', import.meta.url), 'utf8');
+const layoutCssSource = readFileSync(new URL('./PiCommandCenter.layout.css', import.meta.url), 'utf8');
 const reportsSource = readFileSync(new URL('./PiReportsPanel.jsx', import.meta.url), 'utf8');
 const sessionsClientCss = readFileSync(new URL('./sessions/SessionsClient.css', import.meta.url), 'utf8');
 
@@ -36,11 +38,37 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   assert.match(pageSource, /import PiReportsPanel from '\.\/PiReportsPanel'/);
   assert.match(pageSource, /<PiHeartbeatTimelinePanel \/>/);
   assert.match(pageSource, /<PiReportsPanel \/>/);
-  assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} variant="command-center" \/>/);
-  assert.match(pageSource, /<PiDelegationsPanel onChanged=\{state\.reload\} \/>/);
+  assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} showAuditTimeline=\{false\} variant="command-center" \/>/);
+  assert.match(pageSource, /<PiDelegationsPanel onChanged=\{reload\} \/>/);
   assert.match(pageSource, /pi-command-loading/);
   assert.match(pageSource, /pi-command-error/);
   assert.match(pageSource, /api\.getPiCommandCenter\(\)/);
+});
+
+test('PI Command Center prioritizes pending approvals above secondary modules', () => {
+  assert.match(pageSource, /pi-command-above-fold/);
+  assert.match(pageSource, /PendingApprovalCallout/);
+  assert.match(pageSource, /QuickActions/);
+  assert.match(pageSource, /DetailModules/);
+  assert.match(pageSource, /filter\(isAboveFoldStatusCard\)/);
+  assert.match(pageSource, /role="tablist"/);
+  assert.match(pageSource, /renderActiveModule\(activeModule, reload\)/);
+  assert.ok(pageSource.indexOf('<PendingApprovalCallout') < pageSource.indexOf('<DetailModules'));
+  assert.match(layoutCssSource, /\.pi-command-above-fold/);
+  assert.match(layoutCssSource, /\.pi-command-attention-callout\.needs-action/);
+  assert.match(layoutCssSource, /\.pi-command-attention-callout\.clear/);
+  assert.match(layoutCssSource, /\.pi-command-tabs/);
+});
+
+test('PI Command Center has focused UI states for pending and no approval', () => {
+  for (const copy of ['需要你处理', '当前无阻塞', '项待审批动作优先处理', '暂无待审批动作']) {
+    assert.match(stateSource, new RegExp(copy));
+  }
+  assert.match(pageSource, /pendingApprovalCount\(state\.data\)/);
+  assert.match(pageSource, /approvalCalloutState\(count\)/);
+  assert.match(pageSource, /className=\{pendingCount > 0 \? 'urgent' : ''\}/);
+  assert.match(stateSource, /tone: 'needs-action'/);
+  assert.match(stateSource, /tone: 'clear'/);
 });
 
 test('PI Command Center keeps future framework placeholders read-only', () => {
