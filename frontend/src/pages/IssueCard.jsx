@@ -7,7 +7,6 @@ import {
   Terminal,
   Trash2,
 } from 'lucide-react';
-import { deriveTriageReadiness } from '../utils/issueRefinement';
 import {
   issueFailureReason,
   issueRunExitText,
@@ -18,6 +17,10 @@ import {
   providerLabel,
   shortId,
 } from '../utils/issueRuns';
+import {
+  serviceTierOptions,
+  serviceTierRunLabel,
+} from '../utils/serviceTier';
 
 export default function IssueCard({
   issue,
@@ -31,13 +34,13 @@ export default function IssueCard({
   onOpenSession,
   onRequestDelete,
   onRetry,
+  onServiceTierChange,
   getRelativeTime,
 }) {
   const run = latestIssueRun(issue);
   const sessionRef = issueRunSessionRef(issue, run);
   const hasRuntime = Boolean(sessionRef || issueRunTurnId(issue, run));
   const failureReason = issueFailureReason(issue, run);
-  const triageReadiness = deriveTriageReadiness({ issue });
   return (
     <div
       className={`kanban-card ${dragging ? 'dragging' : ''}`}
@@ -48,8 +51,6 @@ export default function IssueCard({
     >
       <div className="kanban-card-title">#{issue.id} {issue.title}</div>
 
-
-      <TriageReadinessBadge readiness={triageReadiness} />
       {issue.status === 'failed' && failureReason && <IssueFailureSummary reason={failureReason} />}
       <IssueRunSummary issue={issue} run={run} />
       <IssueQuickActions
@@ -61,18 +62,10 @@ export default function IssueCard({
         onOpenSession={onOpenSession}
         onRequestDelete={onRequestDelete}
         onRetry={onRetry}
+        onServiceTierChange={onServiceTierChange}
       />
       <IssueCardFooter issue={issue} project={project} getRelativeTime={getRelativeTime} />
     </div>
-  );
-}
-
-function TriageReadinessBadge({ readiness }) {
-  if (!readiness) return null;
-  return (
-    <span className={`triage-readiness-badge ${readiness.state}`} title={readiness.source}>
-      {readiness.state}
-    </span>
   );
 }
 
@@ -98,6 +91,7 @@ function IssueRunSummary({ issue, run }) {
       </div>
       <div className="kanban-card-run-grid">
         <RunMiniField label="Provider" value={providerLabel(run.provider)} />
+        <RunMiniField label="Speed" value={serviceTierRunLabel(run)} />
         <RunMiniField label="Session" value={shortId(sessionId) || '暂无'} mono />
         <RunMiniField label="Turn" value={shortId(turnId) || '暂无'} mono />
       </div>
@@ -115,13 +109,26 @@ function RunMiniField({ label, value, mono = false }) {
   );
 }
 
-function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRequestDelete, onRetry }) {
+function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog, onOpenSession, onRequestDelete, onRetry, onServiceTierChange }) {
   const showRetry = issue.status === 'failed';
   const showLog = issue.status === 'in_progress' || hasRuntime;
   const canDelete = issue.status !== 'in_progress';
-  if (!showRetry && !showLog && !sessionRef && !canDelete) return null;
+  if (!showRetry && !showLog && !sessionRef && !canDelete && !onServiceTierChange) return null;
   return (
     <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
+      {onServiceTierChange && (
+        <label className="kanban-card-action-select" title="保存为该 Issue 的下次运行速度">
+          <span>速度</span>
+          <select
+            value={issue.service_tier || ''}
+            onChange={(event) => onServiceTierChange(event, issue.id, event.target.value)}
+          >
+            {serviceTierOptions(issue.service_tier).map(option => (
+              <option key={option.value || 'standard'} value={option.value}>{option.shortLabel || option.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
       {sessionRef && (
         <button type="button" className="kanban-card-action-btn" onClick={(event) => onOpenSession(event, sessionRef)}>
           <ExternalLink size={12} /> Session
@@ -133,7 +140,7 @@ function IssueQuickActions({ issue, hasRuntime, sessionRef, retrying, onOpenLog,
         </button>
       )}
       {showRetry && (
-        <button type="button" className="kanban-card-action-btn retry" disabled={retrying} onClick={(event) => onRetry(event, issue.id)}>
+        <button type="button" className="kanban-card-action-btn retry" disabled={retrying} onClick={(event) => onRetry(event, issue)}>
           <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
         </button>
       )}

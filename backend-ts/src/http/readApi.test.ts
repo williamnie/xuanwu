@@ -102,11 +102,12 @@ describe("Bun projects/issues read API", () => {
 
       const patched = await router.handle(new Request(`${BASE_URL}/api/projects/demo`, {
         method: "PATCH",
-        body: JSON.stringify({ default_skill_policy: { recommended: ["verification-before-completion"] }, name: "Renamed", provider: "CODEX" }),
+        body: JSON.stringify({ default_service_tier: "priority", default_skill_policy: { recommended: ["verification-before-completion"] }, name: "Renamed", provider: "CODEX" }),
         headers: { "content-type": "application/json" }
       }));
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({
+        default_service_tier: "priority",
         default_skill_policy: "{\"recommended\":[\"verification-before-completion\"]}",
         id: "demo",
         name: "Renamed",
@@ -509,6 +510,33 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
+  test("issue actions can set service tier overrides used by the next auto-run", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
+      const issueId = insertIssue(database, { projectId: "demo", title: "Queued fast", status: "triage", sourceSessionId: "" });
+      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+
+      const enqueued = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/enqueue`, {
+        method: "POST",
+        body: JSON.stringify({ service_tier: "priority" }),
+        headers: { "content-type": "application/json" }
+      }));
+
+      expect(enqueued.status).toBe(200);
+      expect(await enqueued.json()).toMatchObject({ id: issueId, service_tier: "priority", status: "todo" });
+      await waitFor(() => provider.inputs.length === 1);
+      expect(provider.inputs[0]).toMatchObject({
+        issueId,
+        serviceTier: "priority",
+        serviceTierSource: "issue"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("auto-run patch to todo immediately claims and starts provider session", async () => {
     const database = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
@@ -531,6 +559,38 @@ describe("Bun projects/issues read API", () => {
       ).get(issueId);
       expect(row).toMatchObject({
         status: "in_progress",
+        provider_session_id: `fake-session-${issueId}`,
+        provider_turn_id: `fake-turn-${issueId}`
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("auto-run patch to in_progress queues and starts provider session", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
+      const issueId = insertIssue(database, { projectId: "demo", title: "Start requested", status: "todo", sourceSessionId: "" });
+      const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
+
+      const patched = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "in_progress" }),
+        headers: { "content-type": "application/json" }
+      }));
+
+      expect(patched.status).toBe(200);
+      expect(await patched.json()).toMatchObject({ id: issueId, status: "todo" });
+      await waitFor(() => provider.inputs.length === 1);
+      const row = database.sqlite.query<Record<string, unknown>, [number]>(
+        `select i.status, i.attempt_count, r.provider_session_id, r.provider_turn_id
+         from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
+      ).get(issueId);
+      expect(row).toMatchObject({
+        status: "in_progress",
+        attempt_count: 1,
         provider_session_id: `fake-session-${issueId}`,
         provider_turn_id: `fake-turn-${issueId}`
       });

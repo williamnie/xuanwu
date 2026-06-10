@@ -25,6 +25,13 @@ export function authHeader() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export function ensureAuthCookie() {
+  const token = getAuthToken();
+  if (token) {
+    writeCookieToken(token);
+  }
+}
+
 function readStorageToken() {
   if (typeof localStorage === 'undefined') {
     return '';

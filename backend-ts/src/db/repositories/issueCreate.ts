@@ -16,6 +16,7 @@ type NormalizedIssueWrite = {
   recommended_skill_intents: string;
   required_mcp_capabilities: string;
   required_skill_intents: string;
+  service_tier: string;
   source_excerpt: string;
   source_session_id: string;
   source_turn_id: string;
@@ -52,12 +53,12 @@ export function createIssue(db: RunnerDatabase, input: CreateIssueInput): Issue 
       (project_id, title, description, status, priority, template_id,
        prompt_template, required_skill_intents_json, recommended_skill_intents_json,
        required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id,
-       source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json, created_at, updated_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       service_tier, source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json, created_at, updated_at)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [record.project_id, record.title, record.description, record.status, record.priority,
         record.template_id, record.prompt_template, record.required_skill_intents,
         record.recommended_skill_intents, record.required_mcp_capabilities,
-        record.recommended_mcp_capabilities, record.agent_profile_id, record.source_session_id,
+        record.recommended_mcp_capabilities, record.agent_profile_id, record.service_tier, record.source_session_id,
         record.source_turn_id, record.source_excerpt, record.workflow_snapshot_json, timestamp, timestamp]);
     const id = lastInsertID(db);
     db.sqlite.run(
@@ -102,6 +103,7 @@ function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): No
     recommended_skill_intents: normalizeSkillIntentList(input.recommended_skill_intents),
     required_mcp_capabilities: normalizeMcpCapabilityList(input.required_mcp_capabilities),
     recommended_mcp_capabilities: normalizeMcpCapabilityList(input.recommended_mcp_capabilities),
+    service_tier: cleanString(input.service_tier),
     agent_profile_id: normalizeIdentifier(input.agent_profile_id),
     source_session_id: normalizeSourceSessionID(input.source_session_id),
     source_turn_id: cleanString(input.source_turn_id),

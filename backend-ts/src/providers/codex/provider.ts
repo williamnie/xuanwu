@@ -1,5 +1,5 @@
 import { CodexAdapter } from "./adapter.ts";
-import { textInput } from "./threadLifecycle.ts";
+import { localImageInput, textInput } from "./threadLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type {
   ExecutorProvider,
@@ -13,7 +13,8 @@ import type {
   SessionListInput,
   SessionListResult,
   SessionMessageInput,
-  SessionMessageResult
+  SessionMessageResult,
+  ProviderEvent
 } from "../types.ts";
 import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import { CodexStdioJsonRpcTransport } from "./jsonRpc.ts";
@@ -34,13 +35,29 @@ type CodexIssueAdapter = {
   listModels(): Promise<unknown>;
   resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;
 };
+export type CodexEventHandler = (event: ProviderEvent) => void;
+export type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
+
+class CodexEventHub implements CodexEventSource {
+  readonly handlers = new Set<CodexEventHandler>();
+
+  publish(event: ProviderEvent): void {
+    for (const handler of this.handlers) handler(event);
+  }
+
+  subscribe(handler: CodexEventHandler): () => void {
+    this.handlers.add(handler);
+    return () => this.handlers.delete(handler);
+  }
+}
 
 export class CodexExecutorProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt", "approvals", "model_list"] as const;
   readonly id = PROVIDER_CODEX;
   constructor(
     private readonly adapter: CodexIssueAdapter,
-    private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS
+    private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS,
+    private readonly eventSource?: CodexEventSource
   ) {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
@@ -56,15 +73,21 @@ export class CodexExecutorProvider implements ExecutorProvider {
       threadSource: "subagent"
     });
     await this.nameThread(thread.provider_session_id, input.issueId);
-    const turn = await this.adapter.startTurn(thread.provider_session_id, [textInput(input.prompt)], {
-      model: input.model,
-      reasoningEffort: input.reasoningEffort,
-      serviceTier: input.serviceTier,
-      approvalPolicy: input.approvalPolicy,
-      sandbox: input.sandbox
-    });
-    input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
-    return { runId: runID(turn), session: sessionRef(turn) };
+    const stopForwarding = this.forwardRunEvents(input, thread.provider_session_id);
+    try {
+      const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), {
+        model: input.model,
+        reasoningEffort: input.reasoningEffort,
+        serviceTier: input.serviceTier,
+        approvalPolicy: input.approvalPolicy,
+        sandbox: input.sandbox
+      });
+      input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
+      return { runId: runID(turn), session: sessionRef(turn) };
+    } catch (error) {
+      stopForwarding();
+      throw error;
+    }
   }
 
   async listSessions(input: SessionListInput = {}): Promise<SessionListResult> {
@@ -82,7 +105,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
     const thread = await this.adapter.startThread({ ...threadOptions(input, this.developerInstructions), threadSource: "user" });
     const result = createResult(thread.provider_session_id);
     if (input.prompt?.trim()) {
-      const turn = await this.adapter.startTurn(thread.provider_session_id, [textInput(input.prompt)], turnOptions(input));
+      const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), turnOptions(input));
       result.turn_id = turn.turn_id;
       result.provider_turn_id = turn.turn_id;
     }
@@ -95,24 +118,30 @@ export class CodexExecutorProvider implements ExecutorProvider {
     if (input.mode?.trim() === "steer") {
       const turnID = input.turnId?.trim() ?? "";
       if (turnID === "") throw new Error("当前 session 没有可引导的运行中 turn");
-      return await this.adapter.steerTurn(threadID, turnID, [textInput(input.prompt ?? "")]);
+      return await this.adapter.steerTurn(threadID, turnID, codexUserInputs(input));
     }
-    return await this.adapter.startTurn(threadID, [textInput(input.prompt ?? "")], turnOptions(input));
+    return await this.adapter.startTurn(threadID, codexUserInputs(input), turnOptions(input));
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
     await this.adapter.initialize();
     const session = await this.adapter.resumeThread(input.session.sessionId);
     const threadID = session.provider_session_id || input.session.sessionId;
-    const turn = await this.adapter.startTurn(threadID, [textInput(input.prompt)], {
-      model: input.model,
-      reasoningEffort: input.reasoningEffort,
-      serviceTier: input.serviceTier,
-      approvalPolicy: input.approvalPolicy,
-      sandbox: input.sandbox
-    });
-    input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
-    return { runId: runID(turn), session: sessionRef(turn) };
+    const stopForwarding = this.forwardRunEvents(input, threadID);
+    try {
+      const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), {
+        model: input.model,
+        reasoningEffort: input.reasoningEffort,
+        serviceTier: input.serviceTier,
+        approvalPolicy: input.approvalPolicy,
+        sandbox: input.sandbox
+      });
+      input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
+      return { runId: runID(turn), session: sessionRef(turn) };
+    } catch (error) {
+      stopForwarding();
+      throw error;
+    }
   }
 
   async listModels(): Promise<unknown> {
@@ -137,11 +166,26 @@ export class CodexExecutorProvider implements ExecutorProvider {
     if (threadID === "") return;
     await this.adapter.setThreadName(threadID, `Issue #${issueID}`);
   }
+
+  private forwardRunEvents(input: ProviderRunInput, threadID: string): () => void {
+    if (!this.eventSource) return () => {};
+    let stop = () => {};
+    stop = this.eventSource.subscribe((event) => {
+      if (!sameThreadEvent(event, threadID)) return;
+      input.onEvent?.(event);
+      if (terminalCodexEvent(event)) stop();
+    });
+    return stop;
+  }
 }
 
 export function createCodexExecutorProvider(config: ProviderRuntimeConfig): CodexExecutorProvider {
-  const transport = new CodexStdioJsonRpcTransport(config);
-  return new CodexExecutorProvider(new CodexAdapter(transport));
+  const events = new CodexEventHub();
+  const transport = new CodexStdioJsonRpcTransport(config, {
+    onDiagnostic: (event) => events.publish(event),
+    onEvent: (event) => events.publish(event)
+  });
+  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events);
 }
 
 function sessionRef(turn: TurnStartResult): ProviderRunResult["session"] {
@@ -158,7 +202,7 @@ function createResult(threadID: string): SessionCreateResult {
 }
 
 function threadOptions(input: SessionCreateInput, developerInstructions: string): Parameters<CodexAdapter["startThread"]>[0] {
-  return {
+  return compactOptions({
     cwd: input.cwd,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
@@ -166,15 +210,36 @@ function threadOptions(input: SessionCreateInput, developerInstructions: string)
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox,
     developerInstructions
-  };
+  }) as Parameters<CodexAdapter["startThread"]>[0];
 }
 
 function turnOptions(input: Pick<SessionCreateInput, "approvalPolicy" | "model" | "reasoningEffort" | "serviceTier" | "sandbox">) {
-  return {
+  return compactOptions({
     model: input.model,
     reasoningEffort: input.reasoningEffort,
     serviceTier: input.serviceTier,
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox
-  };
+  });
+}
+
+function codexUserInputs(input: { images?: ProviderRunInput["images"]; prompt?: string }) {
+  const items = [textInput(input.prompt ?? "")];
+  for (const image of input.images ?? []) {
+    const path = image.path.trim();
+    if (path !== "") items.push(localImageInput(path, image.detail));
+  }
+  return items;
+}
+
+function sameThreadEvent(event: ProviderEvent, threadID: string): boolean {
+  return event.provider === PROVIDER_CODEX && event.session?.sessionId === threadID;
+}
+
+function terminalCodexEvent(event: ProviderEvent): boolean {
+  return event.type === "done" || event.type === "error" || event.raw?.method === "turn/completed";
+}
+
+function compactOptions<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "")) as Partial<T>;
 }

@@ -77,11 +77,6 @@ describe("PI runner action tools", () => {
         description: "New scoped issue",
         title: "New issue"
       });
-      const updateRefinement = await runTool(tools, "issue_update_refinement", {
-        issue_id: issueID,
-        acceptance_criteria: "- passes",
-        verification_plan: "bun test"
-      });
       const enqueue = await runTool(tools, "issue_enqueue_proposal", { issue_id: issueID, rationale: "ready" });
       const steer = await runTool(tools, "session_steer_proposal", {
         session_key: "codex:thread-1",
@@ -90,12 +85,6 @@ describe("PI runner action tools", () => {
 
       expect(createIssue.details).toMatchObject({
         action_type: "issue.create",
-        requires_confirmation: true,
-        status: "pending"
-      });
-      expect(updateRefinement.details).toMatchObject({
-        action_type: "issue.update_refinement",
-        issue_id: issueID,
         requires_confirmation: true,
         status: "pending"
       });
@@ -116,7 +105,6 @@ describe("PI runner action tools", () => {
       expect(listPiActions(fixture.db).map((action) => action.action_type).sort()).toEqual([
         "issue.create",
         "issue.enqueue",
-        "issue.update_refinement",
         "session.steer"
       ]);
       const steerAction = listPiActions(fixture.db).find((action) => action.action_type === "session.steer");
@@ -399,7 +387,6 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     diagnoseIssueState: record("diagnoseIssueState"),
     escalateNeedsUser: record("escalateNeedsUser"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
-    createUpdateRefinementProposal: record("createUpdateRefinementProposal"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
     listIssues: record("listIssues"),
     listMcpRegistry: record("listMcpRegistry"),

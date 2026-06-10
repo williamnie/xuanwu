@@ -29,6 +29,7 @@ type NormalizedIssuePatch = {
   recommended_skill_intents: string;
   required_mcp_capabilities: string;
   required_skill_intents: string;
+  service_tier: string;
   source_excerpt: string;
   source_session_id: string;
   source_turn_id: string;
@@ -45,6 +46,7 @@ const PATCH_FIELDS = [
   "recommended_skill_intents",
   "required_mcp_capabilities",
   "recommended_mcp_capabilities",
+  "service_tier",
   "error",
   "source_session_id",
   "source_turn_id",
@@ -70,13 +72,13 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
     db.sqlite.run(`update issues set title=?, description=?, status=?, priority=?,
       required_skill_intents_json=?, recommended_skill_intents_json=?,
       required_mcp_capabilities_json=?, recommended_mcp_capabilities_json=?,
-      agent_profile_id=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
+      agent_profile_id=?, service_tier=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
       codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?, auto_retry_reason=?,
       error=?, updated_at=? where id=?`,
       [record.title, record.description, record.status, record.priority,
         record.required_skill_intents, record.recommended_skill_intents,
         record.required_mcp_capabilities, record.recommended_mcp_capabilities,
-        record.agent_profile_id, record.source_session_id, record.source_turn_id,
+        record.agent_profile_id, record.service_tier, record.source_session_id, record.source_turn_id,
         record.source_excerpt, record.codex_thread_id, record.codex_turn_id,
         record.auto_retry_next_at, record.auto_retry_reason, record.error,
         timestamp, current.id]);
@@ -138,6 +140,7 @@ function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
     recommended_skill_intents: issue.recommended_skill_intents,
     required_mcp_capabilities: issue.required_mcp_capabilities,
     recommended_mcp_capabilities: issue.recommended_mcp_capabilities,
+    service_tier: issue.service_tier,
     error: issue.error,
     source_session_id: issue.source_session_id,
     source_turn_id: issue.source_turn_id,

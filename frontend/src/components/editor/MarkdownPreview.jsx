@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import { resolveMarkdownPreviewUrl } from './markdownPreviewUrls';
 import remarkGfm from 'remark-gfm';
 import { resolveAttachmentSrc } from './attachments';
 import { remarkPlainLocalDocSelfLinks } from './localDocLinks';
@@ -11,6 +12,7 @@ export default function MarkdownPreview({ text = '', className = '' }) {
     <div className={`markdown-preview ${className}`.trim()}>
       <ReactMarkdown
         remarkPlugins={markdownPlugins}
+        urlTransform={resolveMarkdownPreviewUrl}
         components={{
           img: ({ src = '', alt = '' }) => {
             const resolved = resolveAttachmentSrc(src);

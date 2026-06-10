@@ -816,7 +816,7 @@ input:checked + .slider:before {
 
 .triage-readiness-badge.raw { background: rgba(100, 116, 139, 0.08); color: #64748b; border-color: rgba(100, 116, 139, 0.15); }
 .triage-readiness-badge.discussing { background: rgba(59, 130, 246, 0.08); color: #3b82f6; border-color: rgba(59, 130, 246, 0.15); }
-.triage-readiness-badge.refined { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: rgba(245, 158, 11, 0.15); }
+.triage-readiness-badge.warning { background: rgba(245, 158, 11, 0.08); color: #f59e0b; border-color: rgba(245, 158, 11, 0.15); }
 .triage-readiness-badge.ready { background: rgba(16, 185, 129, 0.08); color: #10b981; border-color: rgba(16, 185, 129, 0.15); }
 
 /* Status Dot indicators */
@@ -1056,6 +1056,28 @@ input:checked + .slider:before {
 .kanban-card-action-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.kanban-card-action-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.kanban-card-action-select select {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  padding: 0;
+  outline: none;
 }
 
 .issue-delete-modal {

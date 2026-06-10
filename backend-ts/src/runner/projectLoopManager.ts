@@ -2,9 +2,11 @@ import { runProjectLoopOnce, type ProjectLoopInput } from "./projectLoop.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { hasActiveExecutorWork, hasTodoIssue } from "../db/repositories/issueQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 
 export type ProjectLoopRuntime = {
+  bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   onError?: (error: unknown, projectID: string) => void;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -78,7 +80,7 @@ function shouldContinue(db: RunnerDatabase, projectID: string): boolean {
 }
 
 function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopInput {
-  return { database: runtime.database, projectId: projectID, providers: runtime.providers ?? {} };
+  return { bus: runtime.bus, database: runtime.database, projectId: projectID, providers: runtime.providers ?? {} };
 }
 
 function enqueueProject(projectID: string): void {

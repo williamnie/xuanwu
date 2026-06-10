@@ -64,7 +64,7 @@ async function startAutoRunLoops(
   const projects = database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
-  for (const project of projects) startProjectLoop({ database, providers, onError: logProjectLoopError }, project.id);
+  for (const project of projects) startProjectLoop({ bus, database, providers, onError: logProjectLoopError }, project.id);
   createPiAutoManageScheduler({
     bus,
     codexSessionsDir,

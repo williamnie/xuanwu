@@ -77,12 +77,14 @@ describe("executor provider runtime seam", () => {
       cwd: "/tmp/project",
       prompt: "issue prompt",
       model: "codex-default",
+      serviceTier: "priority",
       approvalPolicy: "never",
+      serviceTier: "priority",
       sandbox: "workspace-write",
       onLog: (event) => events.push(event)
     });
 
-    expect(provider.lastInput).toMatchObject({ issueId: 154, projectId: "codex-issue-runner" });
+    expect(provider.lastInput).toMatchObject({ issueId: 154, projectId: "codex-issue-runner", serviceTier: "priority" });
     expect(result).toEqual({
       runId: "fake-run",
       session: { provider: "fake-execution-only", sessionId: "fake-session", turnId: "fake-turn" }
@@ -139,7 +141,9 @@ describe("executor provider runtime seam", () => {
         issueId,
         projectId: "demo",
         cwd: "/tmp/project",
-        prompt: "issue prompt"
+        prompt: "issue prompt",
+        serviceTier: "priority",
+        serviceTierSource: "issue"
       });
 
       expect(listIssueRuns(db, issueId)).toMatchObject([{
@@ -149,14 +153,14 @@ describe("executor provider runtime seam", () => {
         provider_turn_id: "fake-turn",
         codex_thread_id: "",
         codex_turn_id: "",
-        runtime_metadata_json: "{\"run_id\":\"fake-run\"}"
+        runtime_metadata_json: "{\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       }]);
       expect(getAgentSession(db, "fake-execution-only:fake-session")).toMatchObject({
         provider: "fake-execution-only",
         provider_session_id: "fake-session",
         project_id: "demo",
         issue_id: issueId,
-        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\"}"
+        raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       });
       expect(listIssueEvents(db, issueId)).toMatchObject([{
         issue_id: issueId,

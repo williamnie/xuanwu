@@ -3,18 +3,21 @@ import { getProject } from "../db/repositories/projects.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { failIssueExecution } from "./statusGate.ts";
 import { renderIssuePromptTemplate } from "./issuePromptTemplate.ts";
+import { issuePromptImages } from "./issuePromptImages.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
-import { parseSkillPolicy } from "../skills/intents.ts";
+import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
+  bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   projectId: string;
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -39,20 +42,26 @@ async function runClaimedIssue(
 ): Promise<ProviderRunResult> {
   const selection = resolveExecutorSelection(input.database, project, issue);
   const provider = selectedProvider(project, selection, input.providers);
+  const prompt = buildIssuePrompt(project, issue);
   try {
+    const serviceTier = resolveServiceTier(issue, selection, project);
     return await runIssueWithProvider(provider, {
       agentProfileId: selection.profile_id,
       agentRole: selection.agent_role,
+      bus: input.bus,
       capabilitySummary: provider.capabilities.join(","),
       database: input.database,
       issueId: issue.id,
       projectId: project.id,
       cwd: project.cwd,
-      prompt: buildIssuePrompt(project, issue),
+      images: issuePromptImages(input.database, prompt),
+      prompt,
       model: selection.model || project.model,
       reasoningEffort: selection.reasoning_effort,
       approvalPolicy: selection.approval_policy || project.approval_policy,
       sandbox: selection.sandbox || project.sandbox,
+      serviceTier: serviceTier.value,
+      serviceTierSource: serviceTier.source,
       selectionReason: selection.selection_reason
     });
   } catch (error) {
@@ -60,6 +69,18 @@ async function runClaimedIssue(
     failIssueExecution(input.database, issue.id, error, provider.id);
     return { runId: "failed" };
   }
+}
+
+type ResolvedServiceTier = { source: string; value: string };
+
+function resolveServiceTier(issue: Issue, selection: AgentRecommendation, project: Project): ResolvedServiceTier {
+  const issueTier = cleanString(issue.service_tier);
+  if (issueTier !== "") return { value: issueTier, source: "issue" };
+  const profileTier = cleanString(selection.service_tier);
+  if (selection.profile_id !== "" && profileTier !== "") return { value: profileTier, source: "agent_profile" };
+  const projectTier = cleanString(project.default_service_tier);
+  if (projectTier !== "") return { value: projectTier, source: "project" };
+  return { value: "", source: "standard" };
 }
 
 function selectedProvider(
@@ -112,15 +133,30 @@ function withRunnerContext(project: Project, issue: Issue, prompt: string): stri
 
 function withSkillIntentContext(project: Project, issue: Issue, prompt: string): string {
   if (!hasSkillIntentContext(project, issue)) return prompt.trim();
+  const policy = parseSkillPolicy(project.default_skill_policy);
+  const metadata = matchedSkillMetadata(issue, policy);
   const skillContext = [
     "",
     "## Skill Intent Context",
     `Required skill intents: ${issue.required_skill_intents}`,
     `Recommended skill intents: ${issue.recommended_skill_intents}`,
-    `Project default skill policy: ${JSON.stringify(parseSkillPolicy(project.default_skill_policy))}`,
-    `Available skills metadata: ${JSON.stringify(listSkillRegistry().slice(0, 24).map(skillSummary))}`
-  ].join("\n");
+    `Project default skill policy: ${JSON.stringify(policy)}`,
+    metadata.length > 0 ? `Matched skills metadata: ${JSON.stringify(metadata)}` : ""
+  ].filter((line) => line !== "").join("\n");
   return `${prompt.trim()}${skillContext}`.trim();
+}
+
+function matchedSkillMetadata(issue: Issue, policy: ReturnType<typeof parseSkillPolicy>) {
+  const requested = new Set(mergeSkillIntents(
+    issue.required_skill_intents,
+    issue.recommended_skill_intents,
+    policy.required,
+    policy.recommended
+  ));
+  if (requested.size === 0) return [];
+  return listSkillRegistry()
+    .filter((skill) => requested.has(skill.id) || requested.has(skill.name))
+    .map(skillSummary);
 }
 
 function hasSkillIntentContext(project: Project, issue: Issue): boolean {
@@ -146,4 +182,8 @@ function hasMcpRequirementContext(project: Project, issue: Issue): boolean {
 
 function skillSummary(skill: ReturnType<typeof listSkillRegistry>[number]) {
   return { id: skill.id, name: skill.name, description: skill.description, risk_level: skill.risk_level, allowed_roles: skill.allowed_roles };
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

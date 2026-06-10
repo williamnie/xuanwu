@@ -29,14 +29,22 @@ export type ProviderEvent = {
   raw?: { method?: string; payload?: unknown };
 };
 
+export type ProviderPromptImage = {
+  detail?: "high" | "original";
+  path: string;
+  type: "localImage";
+};
+
 export type ProviderRunInput = {
   issueId: number;
   projectId: string;
   cwd: string;
   prompt: string;
+  images?: ProviderPromptImage[];
   model?: string;
   reasoningEffort?: string;
   serviceTier?: string;
+  serviceTierSource?: string;
   approvalPolicy?: string;
   sandbox?: string;
   onEvent?: (event: ProviderEvent) => void;

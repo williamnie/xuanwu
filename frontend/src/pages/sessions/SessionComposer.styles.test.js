@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const css = readFileSync(new URL('./SessionComposer.css', import.meta.url), 'utf8');
 const source = readFileSync(new URL('./SessionComposer.jsx', import.meta.url), 'utf8');
+const sessionsSource = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -12,24 +13,25 @@ function ruleFor(selector) {
   return match[1];
 }
 
-test('running queue hint is a compact bar directly above composer input', () => {
+test('queued messages stay compact directly above composer input', () => {
   const panelRule = ruleFor('.session-message-queue-panel');
-  const hintRule = ruleFor('.session-message-queue-hint');
-  const textRule = ruleFor('.session-message-queue-hint span');
+  const itemRule = ruleFor('.session-message-queue-item');
+  const textRule = ruleFor('.session-message-queue-text');
 
   assert.match(panelRule, /margin-bottom:\s*6px/);
-  assert.match(hintRule, /width:\s*fit-content/);
-  assert.match(hintRule, /border-radius:\s*999px/);
-  assert.match(hintRule, /padding:\s*4px\s+9px/);
-  assert.match(hintRule, /font-size:\s*0\.73rem/);
+  assert.match(itemRule, /border-radius:\s*12px/);
+  assert.match(itemRule, /padding:\s*7px\s+9px/);
   assert.match(textRule, /text-overflow:\s*ellipsis/);
   assert.match(textRule, /white-space:\s*nowrap/);
 });
 
-test('running queue hint uses concise status text', () => {
-  assert.match(source, /className="session-message-queue-hint" role="status"/);
-  assert.match(source, /发送会排队为下一条/);
-  assert.doesNotMatch(source, /不会引导当前响应/);
+test('running composer defaults to guidance without top queue hint', () => {
+  assert.match(source, /<ComposerModeSwitch value=\{followMode\}/);
+  assert.match(source, /followMode = true/);
+  assert.match(sessionsSource, /\[followRunningTurn,\s*setFollowRunningTurn\]\s*=\s*useState\(true\)/);
+  assert.doesNotMatch(css, /session-message-queue-hint/);
+  assert.doesNotMatch(source, /className="session-message-queue-hint" role="status"/);
+  assert.doesNotMatch(source, /发送会排队为下一条/);
 });
 
 

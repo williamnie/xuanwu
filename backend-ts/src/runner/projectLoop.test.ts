@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -203,6 +203,120 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("resolves issue, profile, and project service tier before provider execution", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id, serviceTier: "project-fast" });
+      const projectIssue = insertIssue(db, {
+        projectId: "demo",
+        priority: 6,
+        title: "project speed"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+      closeClaimedIssue(db, projectIssue);
+
+      insertAgentProfile(db, {
+        id: "executor-fake",
+        model: "profile-model",
+        provider: provider.id,
+        serviceTier: "profile-fast"
+      });
+      const profileIssue = insertIssue(db, {
+        agentProfileId: "executor-fake",
+        projectId: "demo",
+        priority: 4,
+        title: "profile speed"
+      });
+      const issueOverride = insertIssue(db, {
+        projectId: "demo",
+        priority: 5,
+        serviceTier: "priority",
+        title: "issue speed"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+      closeClaimedIssue(db, issueOverride);
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      expect(provider.inputs.map((input) => ({
+        issueId: input.issueId,
+        serviceTier: input.serviceTier,
+        serviceTierSource: input.serviceTierSource
+      }))).toEqual([
+        { issueId: projectIssue, serviceTier: "project-fast", serviceTierSource: "project" },
+        { issueId: issueOverride, serviceTier: "priority", serviceTierSource: "issue" },
+        { issueId: profileIssue, serviceTier: "profile-fast", serviceTierSource: "agent_profile" }
+      ]);
+      expect(latestRunMetadata(db, profileIssue)).toEqual({
+        run_id: `fake-run-${profileIssue}`,
+        service_tier: "profile-fast",
+        service_tier_source: "agent_profile"
+      });
+      expect(latestRunMetadata(db, issueOverride)).toEqual({
+        run_id: `fake-run-${issueOverride}`,
+        service_tier: "priority",
+        service_tier_source: "issue"
+      });
+      expect(latestRunMetadata(db, projectIssue)).toEqual({
+        run_id: `fake-run-${projectIssue}`,
+        service_tier: "project-fast",
+        service_tier_source: "project"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("passes uploaded attachment images to executor provider as local images", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const imagePath = await insertUpload(db, "upload_issue_image");
+      insertIssue(db, {
+        description: `请按截图修复\n\n![shot](attachment://upload_issue_image)\n\n![dup](attachment://upload_issue_image)`,
+        projectId: "demo",
+        title: "image issue"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      expect(provider.inputs[0]?.images).toEqual([{
+        detail: "high",
+        path: imagePath,
+        type: "localImage"
+      }]);
+      expect(provider.inputs[0]?.prompt).toContain("attachment://upload_issue_image");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps skill intent context small and avoids dumping the global skill registry", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      insertIssue(db, {
+        projectId: "demo",
+        recommendedSkillIntents: ["frontend-ui", "css-layout", "react-component-maintenance"],
+        title: "frontend issue"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("## Skill Intent Context");
+      expect(prompt).toContain(`Recommended skill intents: ["frontend-ui","css-layout","react-component-maintenance"]`);
+      expect(prompt).not.toContain("Available skills metadata");
+      expect(prompt).not.toContain("babysit-repo");
+    } finally {
+      db.close();
+    }
+  });
+
   test("marks provider failures failed and closes the open run with redacted error", async () => {
     const db = await openFixtureDatabase();
     const provider = new FailingExecutionProvider();
@@ -231,22 +345,27 @@ describe("Bun project loop claim execution", () => {
   });
 });
 
-type ProjectFixture = { autoRun?: number; id: string; provider: string };
+type ProjectFixture = { autoRun?: number; id: string; provider: string; serviceTier?: string };
 
 type IssueFixture = {
   agentProfileId?: string;
   createdAt?: string;
+  description?: string;
   priority?: number;
   projectId: string;
+  recommendedSkillIntents?: string[];
+  requiredSkillIntents?: string[];
   status?: string;
+  serviceTier?: string;
   title: string;
 };
 
 function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
+    `insert into projects (id, name, cwd, provider, auto_run, default_service_tier, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
     [project.id, project.id, `/tmp/${project.id}`, project.provider, project.autoRun ?? 0,
+      project.serviceTier ?? "",
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
@@ -256,25 +375,51 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const priority = issue.priority ?? 0;
   const createdAt = issue.createdAt ?? "2026-01-01T00:00:00Z";
   db.sqlite.run(
-    `insert into issues (project_id, title, status, priority, agent_profile_id, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [issue.projectId, issue.title, status, priority, issue.agentProfileId ?? "", createdAt, createdAt]
+    `insert into issues (project_id, title, description, status, priority, agent_profile_id, service_tier,
+      required_skill_intents_json, recommended_skill_intents_json, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      issue.projectId, issue.title, issue.description ?? "", status, priority,
+      issue.agentProfileId ?? "", issue.serviceTier ?? "", JSON.stringify(issue.requiredSkillIntents ?? []),
+      JSON.stringify(issue.recommendedSkillIntents ?? []), createdAt, createdAt
+    ]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
 }
 
-function insertAgentProfile(db: RunnerDatabase, input: { id: string; model: string; provider: string }): void {
+async function insertUpload(db: RunnerDatabase, id: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "codex-runner-upload-"));
+  tempRoots.push(root);
+  const path = join(root, `${id}.png`);
+  await mkdir(root, { recursive: true });
+  await writeFile(path, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   db.sqlite.run(
-    `insert into agent_profiles (id, name, provider, model, reasoning_effort,
+    `insert into uploads (id, original_name, mime_type, size_bytes, sha256, storage_path, created_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [id, "shot.png", "image/png", 4, "fixture-sha", path, "2026-01-01T00:00:00Z"]
+  );
+  return path;
+}
+
+function insertAgentProfile(db: RunnerDatabase, input: { id: string; model: string; provider: string; serviceTier?: string }): void {
+  db.sqlite.run(
+    `insert into agent_profiles (id, name, provider, model, reasoning_effort, service_tier,
       approval_policy, sandbox, skill_intents_json, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      input.id, input.id, input.provider, input.model, "high", "on-request",
+      input.id, input.id, input.provider, input.model, "high", input.serviceTier ?? "", "on-request",
       "danger-full-access", "[]", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
     ]
   );
+}
+
+function latestRunMetadata(db: RunnerDatabase, issueId: number): Record<string, unknown> {
+  const row = db.sqlite.query<{ runtime_metadata_json: string }, [number]>(
+    `select runtime_metadata_json from issue_runs where issue_id=? order by attempt desc limit 1`
+  ).get(issueId);
+  return JSON.parse(row?.runtime_metadata_json || "{}") as Record<string, unknown>;
 }
 
 function latestRun(db: RunnerDatabase, issueId: number): Record<string, unknown> | null {
@@ -290,6 +435,14 @@ function insertOpenRun(db: RunnerDatabase, issueID: number): void {
      values (?, ?, ?, ?, ?)`,
     [`issue-${issueID}-attempt-1`, issueID, 1, "in_progress", "2026-01-01T00:00:00Z"]
   );
+}
+
+function closeClaimedIssue(db: RunnerDatabase, issueID: number): void {
+  db.sqlite.run("update issues set status='done' where id=?", [issueID]);
+  db.sqlite.run("update issue_runs set status='done', ended_at=? where issue_id=? and ended_at=''", [
+    "2026-01-01T00:01:00Z",
+    issueID
+  ]);
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {

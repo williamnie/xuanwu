@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { CodexExecutorProvider } from "./provider.ts";
+import { CodexExecutorProvider, type CodexEventHandler } from "./provider.ts";
 import type { CodexInitializeResult, ThreadStartResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
 import type { CodexUserInput, ThreadStartInput, TurnStartOptions } from "./threadLifecycle.ts";
+import type { ProviderEvent } from "../types.ts";
 
 class FakeCodexIssueAdapter {
   readonly calls: Array<{ method: string; params?: unknown }> = [];
@@ -50,6 +51,19 @@ class FakeCodexIssueAdapter {
 
   private threadSummary(threadID: string): ThreadSummary {
     return { id: `codex:${threadID}`, provider: "codex", provider_session_id: threadID, sessionId: threadID, ephemeral: false };
+  }
+}
+
+class FakeCodexEventSource {
+  readonly handlers = new Set<CodexEventHandler>();
+
+  emit(event: ProviderEvent): void {
+    for (const handler of this.handlers) handler(event);
+  }
+
+  subscribe(handler: CodexEventHandler): () => void {
+    this.handlers.add(handler);
+    return () => this.handlers.delete(handler);
   }
 }
 
@@ -111,6 +125,51 @@ describe("Codex executor provider", () => {
         }
       }
     ]);
+  });
+
+  test("forwards live Codex app-server notifications for the issue thread", async () => {
+    const adapter = new FakeCodexIssueAdapter();
+    const source = new FakeCodexEventSource();
+    const events: unknown[] = [];
+
+    await new CodexExecutorProvider(adapter, "instructions", source).run({
+      issueId: 160,
+      projectId: "demo",
+      cwd: "/tmp/demo",
+      prompt: "issue body",
+      onEvent: (event) => {
+        events.push(event);
+        if (event.type === "turn_started") {
+          source.emit({
+            provider: "codex",
+            type: "text",
+            text: "live output",
+            session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" },
+            raw: { method: "item/agentMessage/delta" }
+          });
+          source.emit({
+            provider: "codex",
+            type: "text",
+            text: "other thread",
+            session: { provider: "codex", sessionId: "thread-2", turnId: "turn-x" }
+          });
+          source.emit({
+            provider: "codex",
+            type: "done",
+            status: "completed",
+            session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" },
+            raw: { method: "turn/completed" }
+          });
+        }
+      }
+    });
+
+    expect(events).toMatchObject([
+      { type: "turn_started" },
+      { type: "text", text: "live output" },
+      { type: "done", status: "completed" }
+    ]);
+    expect(source.handlers.size).toBe(0);
   });
 
   test("reads manual Sessions API detail through resume to hydrate transcript", async () => {

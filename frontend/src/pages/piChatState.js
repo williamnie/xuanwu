@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
+import { clearPiLiveAssistant, setPiLiveConversation, usePiConversationEvents } from './piChatLiveBridge';
 import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
 
 const DEFAULT_TRANSCRIPT = [];
 
 export function usePiChatState() {
   const state = usePiChatFields();
+  const liveRefs = usePiConversationEvents(state, state.selectedConversationId);
   const loadPiState = usePiChatLoader({
     setAgents: state.setAgents,
     setConversations: state.setConversations,
@@ -16,7 +18,7 @@ export function usePiChatState() {
     setSelectedAgentId: state.setSelectedAgentId
   });
   const createConversation = useCreatePiConversation(state);
-  const sendMessage = useSendPiMessage(state, createConversation, loadPiState);
+  const sendMessage = useSendPiMessage(state, createConversation, loadPiState, liveRefs);
 
   useEffect(() => {
     loadPiState();
@@ -155,7 +157,7 @@ function useCreatePiConversation(state) {
   }, [state]);
 }
 
-function useSendPiMessage(state, createConversation, loadPiState) {
+function useSendPiMessage(state, createConversation, loadPiState, liveRefs) {
   return useCallback(async (event) => {
     event.preventDefault();
     const text = state.prompt.trim();
@@ -166,24 +168,37 @@ function useSendPiMessage(state, createConversation, loadPiState) {
       ? await createConversation('New conversation', { project: targetProject })
       : state.selectedConversationId || await createConversation('New conversation', { project: targetProject });
     if (!conversationId) return;
-    await sendPromptToPi(state, conversationId, text, loadPiState, targetProject);
-  }, [createConversation, loadPiState, state]);
+    await sendPromptToPi(state, conversationId, text, loadPiState, targetProject, liveRefs);
+  }, [createConversation, liveRefs, loadPiState, state]);
 }
 
-async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject = null) {
+async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject = null, liveRefs = null) {
+  setPiLiveConversation(liveRefs, conversationId);
   state.setTranscript((items) => [...items, transcriptMessage('user', text)]);
   state.setPrompt('');
   state.setSending(true);
   try {
     const result = await api.sendPiConversationMessage(conversationId, { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) });
-    state.setTranscript((items) => [...items, transcriptMessage('assistant', runnerReplyText(result), result)]);
     applyConversationTitle(state, conversationId, result?.title);
     await loadPiState();
+    await hydrateConversationTranscript(state, conversationId, result);
   } catch (err) {
     state.setTranscript((items) => [...items, transcriptMessage('error', err.message || '发送失败')]);
     message.error(err.message || '发送 Runner 消息失败');
   } finally {
+    clearPiLiveAssistant(liveRefs);
     state.setSending(false);
+  }
+}
+
+async function hydrateConversationTranscript(state, conversationId, fallbackResult = null) {
+  try {
+    const detail = await api.getPiConversation(conversationId);
+    state.setTranscript(conversationTranscript(detail));
+    state.setError('');
+  } catch {
+    const text = runnerReplyText(fallbackResult);
+    if (text) state.setTranscript((items) => [...items, transcriptMessage('assistant', text, fallbackResult)]);
   }
 }
 

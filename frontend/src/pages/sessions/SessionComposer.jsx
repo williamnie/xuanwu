@@ -32,7 +32,7 @@ export default function SessionComposer({
   selectedId,
   placeholder = "给当前 Codex session 发送消息...",
   queuedMessages = [],
-  followMode = false,
+  followMode = true,
   onFollowModeChange = null,
   onSubmit,
   onStop,
@@ -141,7 +141,7 @@ function InterruptStatus({ interruptState, selectedId }) {
 }
 
 function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
-  if (!running && queuedMessages.length === 0) return null;
+  if (queuedMessages.length === 0) return null;
   return (
     <div className="session-message-queue-panel">
       {queuedMessages.length > 0 && (
@@ -162,11 +162,6 @@ function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
             </li>
           ))}
         </ol>
-      )}
-      {running && (
-        <div className="session-message-queue-hint" role="status">
-          <span>当前 Codex 正在运行；发送会排队为下一条。</span>
-        </div>
       )}
     </div>
   );

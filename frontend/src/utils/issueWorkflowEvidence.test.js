@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { deriveIssueWorkflowEvidence } from './issueWorkflowEvidence.js';
-import { serializeIssueRefinement } from './issueRefinement.js';
+const readyDescription = `实现一个验收面板
 
-const readyDescription = serializeIssueRefinement('实现一个验收面板', {
-  problem: '证据散落',
-  acceptanceCriteria: '- Detail 显示 workflow evidence',
-  verificationPlan: '- node --test frontend/src/utils/issueWorkflowEvidence.test.js',
-});
+## 验收标准
+- Detail 显示 workflow evidence
+
+## 验证方式
+- node --test frontend/src/utils/issueWorkflowEvidence.test.js`;
 
 test('derives raw triage workflow with missing verification evidence', () => {
   const workflow = deriveIssueWorkflowEvidence({
@@ -21,13 +21,12 @@ test('derives raw triage workflow with missing verification evidence', () => {
   assert.equal(workflow.verificationEvidence.found, false);
   assert.deepEqual(workflow.steps.map(step => [step.id, step.state]), [
     ['intake', 'done'],
-    ['refine', 'missing'],
-    ['ready', 'missing'],
+    ['ready', 'pending'],
     ['implement', 'pending'],
     ['verify', 'missing'],
     ['close', 'pending'],
   ]);
-  assert.match(workflow.nextAction, /补齐 Acceptance criteria/);
+  assert.match(workflow.nextAction, /移动到 Todo/);
 });
 
 test('links ready issue to acceptance and verification plan evidence', () => {
@@ -37,9 +36,8 @@ test('links ready issue to acceptance and verification plan evidence', () => {
     runs: [],
   });
 
-  assert.equal(workflow.steps.find(step => step.id === 'refine').state, 'done');
   assert.equal(workflow.steps.find(step => step.id === 'ready').state, 'done');
-  assert.match(workflow.steps.find(step => step.id === 'ready').evidence, /Acceptance criteria/);
+  assert.match(workflow.steps.find(step => step.id === 'ready').evidence, /todo/);
   assert.match(workflow.nextAction, /等待 runner claim/);
 });
 

@@ -13,6 +13,7 @@ export type NormalizedProjectWrite = {
   auto_run: number;
   cwd: string;
   default_agent_profile_id: string;
+  default_service_tier: string;
   id: string;
   model: string;
   name: string;
@@ -34,6 +35,7 @@ export function normalizeProjectForWrite(input: ProjectWriteInput): NormalizedPr
     approval_policy: cleanString(input.approval_policy) || "never",
     sandbox: cleanString(input.sandbox) || "workspace-write",
     default_agent_profile_id: normalizeIdentifier(input.default_agent_profile_id),
+    default_service_tier: cleanString(input.default_service_tier),
     default_mcp_policy: normalizeMcpPolicy(input.default_mcp_policy),
     default_skill_policy: normalizeSkillPolicy(input.default_skill_policy)
   };
@@ -51,6 +53,7 @@ export function normalizeProjectPatch(current: NormalizedProjectWrite, input: Pr
   if (hasPatchValue(input, "approval_policy")) patch.approval_policy = cleanString(input.approval_policy);
   if (hasPatchValue(input, "sandbox")) patch.sandbox = cleanString(input.sandbox);
   if (hasPatchValue(input, "default_agent_profile_id")) patch.default_agent_profile_id = normalizeIdentifier(input.default_agent_profile_id);
+  if (hasPatchValue(input, "default_service_tier")) patch.default_service_tier = cleanString(input.default_service_tier);
   if (hasPatchValue(input, "default_mcp_policy")) patch.default_mcp_policy = normalizeMcpPolicy(input.default_mcp_policy);
   if (hasPatchValue(input, "default_skill_policy")) patch.default_skill_policy = normalizeSkillPolicy(input.default_skill_policy);
   return patch;

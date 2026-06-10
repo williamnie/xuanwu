@@ -36,17 +36,14 @@ import {
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
-import {
-  REFINEMENT_RECOMMENDATION_FIELDS,
-  REFINEMENT_SPEC_FIELDS,
-  deriveExecutionRecommendation,
-  deriveTriageReadiness,
-  parseIssueRefinement,
-  refinementDraftToIssueRefinement,
-  triageReadinessMoveToTodoNotice,
-} from '../utils/issueRefinement';
 import { deriveIssueWorkflowEvidence } from '../utils/issueWorkflowEvidence';
 import { issueRunSessionRef } from '../utils/issueRuns';
+import {
+  serviceTierLabel,
+  serviceTierOptions,
+  serviceTierPayload,
+  serviceTierRunLabel,
+} from '../utils/serviceTier';
 import {
   issueRunProfileLabel,
   runCapabilitySummary,
@@ -159,6 +156,7 @@ function agentProfileSignature(profile) {
     profile?.reasoning_effort,
     profile?.approval_policy,
     profile?.sandbox,
+    profile?.service_tier,
   ].join('\u001f');
 }
 
@@ -179,6 +177,8 @@ function issueRunSignature(run) {
     run?.agent_profile_id,
     run?.capability_summary,
     run?.selection_reason,
+    run?.service_tier,
+    run?.service_tier_source,
   ].join('\u001f');
 }
 
@@ -214,9 +214,6 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const [refinementDraft, setRefinementDraft] = useState(null);
-  const [refinementDraftError, setRefinementDraftError] = useState('');
-  const [refinementDraftGenerating, setRefinementDraftGenerating] = useState(false);
   const [verifierGenerating, setVerifierGenerating] = useState(false);
   const [verifierError, setVerifierError] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -347,9 +344,6 @@ ${error}` : error;
     setCommentDraft('');
     setCommentError('');
     setCommentSubmitting(false);
-    setRefinementDraft(null);
-    setRefinementDraftError('');
-    setRefinementDraftGenerating(false);
     setVerifierGenerating(false);
     setVerifierError('');
     setDeleteConfirmOpen(false);
@@ -379,12 +373,9 @@ ${error}` : error;
   }, [events]);
 
   const handleMoveToTodo = async () => {
-    const readinessNotice = moveToTodoReadinessNotice(issue, events);
     try {
-      await api.updateIssue(issueId, { status: 'todo' });
-      if (readinessNotice) {
-        message.warning(readinessNotice, 7000);
-      }
+      await api.updateIssue(issueId, { status: 'todo', ...serviceTierPayload(issue.service_tier) });
+      message.success('Issue 已移动到 Todo');
       loadIssueData();
     } catch (err) {
       message.error('移动到 Todo 失败: ' + err.message);
@@ -393,13 +384,25 @@ ${error}` : error;
 
   const handleRetry = async () => {
     try {
-      await api.retryIssue(issueId);
+      await api.retryIssue(issueId, serviceTierPayload(issue.service_tier));
       updateDetailState(draft => {
         draft.events = [];
       }); // 重置本地日志，等待新线程输出
       loadIssueData();
     } catch (err) {
       message.error('重新运行失败: ' + err.message);
+    }
+  };
+
+  const handleServiceTierChange = async (serviceTier) => {
+    try {
+      const updated = await api.updateIssue(issueId, serviceTierPayload(serviceTier));
+      updateDetailState(draft => {
+        draft.issue = updated;
+      });
+      refreshData(['issues']);
+    } catch (err) {
+      message.error('更新执行速度失败: ' + err.message);
     }
   };
 
@@ -479,23 +482,6 @@ ${error}` : error;
     }
   };
 
-  const handleGenerateRefinementDraft = async () => {
-    setRefinementDraftGenerating(true);
-    setRefinementDraftError('');
-    try {
-      const result = await api.generateIssueRefinementDraft(issueId);
-      const nextDraft = refinementDraftToIssueRefinement(result?.draft);
-      setRefinementDraft(nextDraft);
-      setIsEditModalOpen(true);
-    } catch (err) {
-      const errorMessage = err.message || '生成 refinement 草稿失败';
-      setRefinementDraftError(errorMessage);
-      message.error('生成 refinement 草稿失败: ' + errorMessage);
-    } finally {
-      setRefinementDraftGenerating(false);
-    }
-  };
-
   const handleGenerateVerifierReport = async () => {
     setVerifierGenerating(true);
     setVerifierError('');
@@ -518,7 +504,6 @@ ${error}` : error;
   };
 
   const closeEditModal = useCallback(() => {
-    setRefinementDraft(null);
     setIsEditModalOpen(false);
   }, []);
 
@@ -526,8 +511,6 @@ ${error}` : error;
     updateDetailState(draft => {
       draft.issue = updatedIssue;
     });
-    setRefinementDraft(null);
-    setRefinementDraftError('');
     setIsEditModalOpen(false);
     refreshData(['issues']);
   }, [refreshData, updateDetailState]);
@@ -567,12 +550,8 @@ ${error}` : error;
 
   // 日志解析转换
   // 将后端传过来的原始 issue_events 处理成可在终端渲染的行
-  const parsedDescription = parseIssueRefinement(issue.description);
-  const issueBody = parsedDescription.body;
-  const refinement = parsedDescription.refinement;
+  const issueBody = String(issue.description || '').trim();
   const commentEvents = events.filter(event => event.type === 'issue.comment');
-  const triageReadiness = deriveTriageReadiness({ issue, refinement, commentEvents });
-  const executionRecommendation = deriveExecutionRecommendation({ refinement, project, profiles });
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
   const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
@@ -824,18 +803,6 @@ ${error}` : error;
             )}
           </div>
 
-          <IssueRefinement
-            issue={issue}
-            refinement={refinement}
-            recommendation={executionRecommendation}
-            readiness={triageReadiness}
-            onEdit={() => setIsEditModalOpen(true)}
-            onMoveToTodo={handleMoveToTodo}
-            onGenerateDraft={handleGenerateRefinementDraft}
-            draftError={refinementDraftError}
-            draftGenerating={refinementDraftGenerating}
-          />
-
           <IssueDiscussion
             events={commentEvents}
             draft={commentDraft}
@@ -953,6 +920,23 @@ ${error}` : error;
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>仅描述默认 instructions 与 skill/plugin intent，不授予额外工具权限。</span>
               </div>
 
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>下次运行速度:</span>
+                <select
+                  className="form-control"
+                  value={issue.service_tier || ''}
+                  onChange={(event) => handleServiceTierChange(event.target.value)}
+                  disabled={issue.status === 'in_progress'}
+                >
+                  {serviceTierOptions(issue.service_tier).map(option => (
+                    <option key={option.value || 'standard'} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                  当前选择：{serviceTierLabel(issue.service_tier)}；运行中的 issue 会保留本轮快照，仅影响下次执行。
+                </span>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
                 <span style={{ color: 'var(--text-muted)' }}>执行 Session ID:</span>
                 <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1049,7 +1033,6 @@ ${error}` : error;
       {isEditModalOpen && (
         <IssueEditModal
           issue={issue}
-          initialRefinement={refinementDraft}
           onClose={closeEditModal}
           onSaved={handleIssueSaved}
         />
@@ -1057,16 +1040,6 @@ ${error}` : error;
 
     </div>
   );
-}
-
-function moveToTodoReadinessNotice(issue, events) {
-  if (issue?.status !== 'triage') return '';
-  const readiness = deriveTriageReadiness({
-    issue,
-    commentEvents: events.filter(event => event.type === 'issue.comment'),
-  });
-  if (!readiness || readiness.ready) return '';
-  return triageReadinessMoveToTodoNotice(readiness);
 }
 
 function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
@@ -1089,119 +1062,6 @@ function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function IssueRefinement({ issue, refinement, recommendation, readiness, onEdit, onMoveToTodo, onGenerateDraft, draftError, draftGenerating }) {
-  const canEdit = canEditIssue(issue);
-  return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>Refinement</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-            把 triage 输入整理成执行规格；Acceptance criteria 与 Verification plan 是 Ready 条件。
-          </p>
-        </div>
-        {readiness && (
-          <span className={`triage-readiness-badge ${readiness.state}`} title={readiness.source}>
-            {readiness.state}
-          </span>
-        )}
-      </div>
-
-      {readiness && !readiness.ready && (
-        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.82rem' }}>
-          {readiness.source} 仍可手动移入 Todo；系统会用轻量提示提醒缺口，不再打断操作。
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-        {REFINEMENT_SPEC_FIELDS.map(field => (
-          <RefinementItem key={field.id} label={field.label} value={refinement[field.id]} />
-        ))}
-      </div>
-
-      <ExecutionRecommendation
-        recommendation={recommendation}
-        canEdit={canEdit}
-        onEdit={onEdit}
-      />
-
-      {canEdit && (
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={onGenerateDraft} disabled={draftGenerating}>
-            <RotateCw size={14} /> {draftGenerating ? '生成中...' : '生成 Refinement 草稿'}
-          </button>
-          <button className="btn btn-secondary" onClick={onEdit}>
-            <Pencil size={14} /> 编辑 Refinement
-          </button>
-          <button className="btn btn-success" onClick={onMoveToTodo}>
-            <Play size={14} /> Move to Todo
-          </button>
-        </div>
-      )}
-      {draftError && (
-        <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.8rem' }}>
-          {draftError}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ExecutionRecommendation({ recommendation, canEdit, onEdit }) {
-  if (!recommendation) {
-    return (
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-        暂无 profile/provider 推荐；可生成 PI Agent draft 或手工编辑补充。
-      </div>
-    );
-  }
-  return (
-    <section style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(59,130,246,0.06)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <h4 style={{ fontSize: '0.98rem', fontWeight: 700 }}>Execution recommendation</h4>
-        {recommendation.riskLevel && (
-          <span className="triage-readiness-badge refined">Risk: {recommendation.riskLevel}</span>
-        )}
-      </div>
-      {recommendation.warnings?.length > 0 && (
-        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {recommendation.warnings.map(warning => (
-            <span key={warning}><AlertTriangle size={13} /> {warning}</span>
-          ))}
-        </div>
-      )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-        {REFINEMENT_RECOMMENDATION_FIELDS.map(field => (
-          <RefinementItem key={field.id} label={field.label} value={recommendation[field.id]} />
-        ))}
-      </div>
-      <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
-        这里只保存建议，不会自动执行 provider、不改 issue 状态；用户可确认、覆盖或忽略。
-      </p>
-      {canEdit && (
-        <button className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={onEdit}>
-          <Pencil size={14} /> 确认 / 覆盖推荐
-        </button>
-      )}
-    </section>
-  );
-}
-
-function RefinementItem({ label, value }) {
-  return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px', background: 'rgba(0,0,0,0.025)', minWidth: 0 }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '8px' }}>
-        {label}
-      </div>
-      {value ? (
-        <MarkdownPreview text={value} />
-      ) : (
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>未填写</span>
-      )}
     </div>
   );
 }
@@ -1305,6 +1165,7 @@ function IssueRunCard({ issue, project, profiles, run, isLatest, navigateTo, onC
 
       <RunField label="Run ID" value={run.id} mono />
       <RunField label="Provider" value={providerLabel(run.provider)} />
+      <RunField label="Speed" value={serviceTierRunLabel(run)} />
       <RunField label="Agent Profile" value={issueRunProfileLabel(run, project, profiles)} />
       <RunField label="选择原因" value={runSelectionReasonLabel(run.selection_reason)} />
       <RunField label="Capabilities" value={runCapabilitySummary(run)} />
@@ -1343,6 +1204,7 @@ function runCopyText(run, sessionRef, sessionId, turnId) {
     `Attempt: ${run.attempt || '?'}`,
     `Status: ${run.status || 'unknown'}`,
     `Provider: ${providerLabel(run.provider)}`,
+    `Speed: ${serviceTierRunLabel(run)}`,
     `Agent Profile: ${run.agent_profile_id || 'none'}`,
     `Selection: ${run.selection_reason || 'none'}`,
     `Capabilities: ${runCapabilitySummary(run)}`,

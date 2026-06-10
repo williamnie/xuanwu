@@ -1,8 +1,3 @@
-import {
-  parseIssueRefinement,
-  serializeIssueRefinement,
-} from './issueRefinement.js';
-
 const DEFAULT_PRIORITY = 0;
 const TITLE_MAX_CHARS = 50;
 const VALID_PRIORITIES = new Set([0, 1, 2]);
@@ -12,11 +7,9 @@ export function canEditIssue(issue) {
 }
 
 export function issueToEditDraft(issue) {
-  const parsed = parseIssueRefinement(issue?.description);
   return {
     title: issue?.title || '',
-    description: parsed.body,
-    refinement: parsed.refinement,
+    description: issue?.description || '',
     priority: String(normalizePriority(issue?.priority)),
   };
 }
@@ -32,7 +25,7 @@ export function issueDraftToPatch(draft) {
   const description = cleanText(draft.description);
   return {
     title: cleanText(draft.title) || deriveIssueTitle(description),
-    description: serializeIssueRefinement(description, draft.refinement),
+    description,
     priority: normalizePriority(draft.priority),
   };
 }

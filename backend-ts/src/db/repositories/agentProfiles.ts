@@ -13,6 +13,7 @@ export type AgentProfile = {
   provider: string;
   reasoning_effort: string;
   sandbox: string;
+  service_tier: string;
   skill_intents: string;
   updated_at: string;
 };
@@ -21,7 +22,7 @@ type AgentProfileRow = Record<keyof AgentProfile, unknown>;
 type AgentProfileInput = Partial<Record<keyof AgentProfile, unknown>>;
 
 const AGENT_PROFILE_COLUMNS = `id, name, provider, model, reasoning_effort,
-  approval_policy, sandbox, default_instructions, skill_intents_json,
+  approval_policy, sandbox, service_tier, default_instructions, skill_intents_json,
   plugin_intents_json, created_at, updated_at`;
 
 export function listAgentProfiles(db: RunnerDatabase): AgentProfile[] {
@@ -46,10 +47,10 @@ export function createAgentProfile(db: RunnerDatabase, input: AgentProfileInput)
   const timestamp = issueTimestamp();
   db.sqlite.run(`insert into agent_profiles
     (id, name, provider, model, reasoning_effort, approval_policy, sandbox,
-     default_instructions, skill_intents_json, plugin_intents_json, created_at, updated_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     service_tier, default_instructions, skill_intents_json, plugin_intents_json, created_at, updated_at)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [profile.id, profile.name, profile.provider, profile.model, profile.reasoning_effort,
-      profile.approval_policy, profile.sandbox, profile.default_instructions,
+      profile.approval_policy, profile.sandbox, profile.service_tier, profile.default_instructions,
       profile.skill_intents, profile.plugin_intents, timestamp, timestamp]);
   return mustGetAgentProfile(db, profile.id);
 }
@@ -61,10 +62,10 @@ export function updateAgentProfile(db: RunnerDatabase, id: string, input: AgentP
   const next = normalizeAgentProfile({ ...current, ...patchValues(input), id: profileID });
   if (next.name === "") throw new Error("agent profile name 不能为空");
   db.sqlite.run(`update agent_profiles set name=?, provider=?, model=?, reasoning_effort=?,
-    approval_policy=?, sandbox=?, default_instructions=?, skill_intents_json=?,
+    approval_policy=?, sandbox=?, service_tier=?, default_instructions=?, skill_intents_json=?,
     plugin_intents_json=?, updated_at=? where id=?`,
     [next.name, next.provider, next.model, next.reasoning_effort, next.approval_policy,
-      next.sandbox, next.default_instructions, next.skill_intents, next.plugin_intents,
+      next.sandbox, next.service_tier, next.default_instructions, next.skill_intents, next.plugin_intents,
       issueTimestamp(), profileID]);
   return mustGetAgentProfile(db, profileID);
 }
@@ -82,6 +83,7 @@ function normalizeAgentProfile(input: AgentProfileInput): AgentProfile {
     provider: cleanString(input.provider).toLowerCase() || "codex",
     model: normalizeModel(input.model), reasoning_effort: cleanString(input.reasoning_effort),
     approval_policy: cleanString(input.approval_policy), sandbox: cleanString(input.sandbox),
+    service_tier: cleanString(input.service_tier),
     default_instructions: cleanString(input.default_instructions),
     skill_intents: normalizeJSONList(input.skill_intents),
     plugin_intents: normalizeJSONList(input.plugin_intents),
@@ -117,6 +119,7 @@ function mapAgentProfileRow(row: AgentProfileRow): AgentProfile {
     reasoning_effort: optionalString(row.reasoning_effort),
     approval_policy: optionalString(row.approval_policy),
     sandbox: optionalString(row.sandbox),
+    service_tier: optionalString(row.service_tier),
     default_instructions: optionalString(row.default_instructions),
     skill_intents: optionalString(row.skill_intents_json, "[]"),
     plugin_intents: optionalString(row.plugin_intents_json, "[]"),

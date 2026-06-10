@@ -79,12 +79,15 @@ describe("Bun SQLite database connection", () => {
         "uploads"
       ]);
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
+      expect(columnNames(connection, "projects")).toContain("default_service_tier");
       expect(columnNames(connection, "issues")).toContain("workflow_snapshot_json");
+      expect(columnNames(connection, "issues")).toContain("service_tier");
       expect(columnNames(connection, "issues")).toContain("required_skill_intents_json");
       expect(columnNames(connection, "issues")).toContain("required_mcp_capabilities_json");
       expect(columnNames(connection, "projects")).toContain("default_skill_policy_json");
       expect(columnNames(connection, "projects")).toContain("default_mcp_policy_json");
       expect(columnNames(connection, "pi_delegations")).toContain("allowed_skill_intents_json");
+      expect(columnNames(connection, "agent_profiles")).toContain("service_tier");
       expect(columnNames(connection, "pi_delegations")).toContain("allowed_mcp_capabilities_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_actions_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_skill_intents_json");
@@ -122,6 +125,7 @@ describe("Bun SQLite database connection", () => {
         { id: "016_pi_delegation_mcp_allowlist" },
         { id: "017_project_pi_policy_allowlists" },
         { id: "018_notifications" },
+        { id: "019_execution_service_tier" },
         { id: "020_issue_supervisor_recovery" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
@@ -201,7 +205,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 19 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 20 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

@@ -24,8 +24,8 @@ afterEach(async () => {
   }
 });
 
-describe("Bun PI issue proposal refinement/comment flow", () => {
-  test("creates triage proposal and keeps refinement/comment readable in issue detail", async () => {
+describe("Bun PI issue proposal/comment flow", () => {
+  test("creates triage proposal and keeps comment readable in issue detail", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -33,32 +33,21 @@ describe("Bun PI issue proposal refinement/comment flow", () => {
       const issueID = insertIssue(database, project.id);
       const actions = createPiRunnerActions(database, { project });
       const createAction = actions.createIssueProposal({
-        acceptance_criteria: "- 用户可验收",
-        description: "新增 proposal body",
-        title: "PI proposal",
-        verification_plan: "bun test"
-      }) as { action_id: string };
-      const refinementAction = actions.createUpdateRefinementProposal({
-        issue_id: issueID,
-        acceptance_criteria: "- 已细化",
-        problem: "需要补 refinement",
-        verification_plan: "bun test"
+        description: "新增 proposal body\n\n## 验收标准\n- 用户可验收\n\n## 验证方式\n- bun test",
+        title: "PI proposal"
       }) as { action_id: string };
       const comment = actions.commentIssue({ issue_id: issueID, body: "Looks actionable." });
       const router = createDefaultRouter({ database });
 
       const created = await postAction(router, createAction.action_id, "approve");
-      const refined = await postAction(router, refinementAction.action_id, "approve");
       const issues = listIssues(database, { projectId: project.id });
 
       expect(created.status).toBe(200);
-      expect(refined.status).toBe(200);
       expect(await created.json()).toMatchObject({ id: createAction.action_id, status: "completed" });
-      expect(await refined.json()).toMatchObject({ id: refinementAction.action_id, status: "completed" });
       expect(comment).toMatchObject({ type: "issue.comment", issue_id: issueID });
       expect(issues).toHaveLength(2);
       expect(findIssue(issues, "PI proposal")).toMatchObject({ status: "triage" });
-      expect(getIssue(database, issueID)?.description).toContain("### Acceptance criteria\n- 已细化");
+      expect(getIssue(database, issueID)?.description).toBe("");
       expect(getIssue(database, issueID)?.comment_count).toBe(1);
       expect(listEvents(database).map((event) => event.type)).toEqual(["issue.comment", "issue.created"]);
     } finally {

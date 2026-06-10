@@ -57,6 +57,7 @@ async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<boolean
 }
 
 function recoveryInput(project: Project, issue: Issue, session: SessionRef): ProviderRecoveryInput {
+  const serviceTier = recoveryServiceTier(project, issue);
   return {
     issueId: issue.id,
     projectId: project.id,
@@ -64,9 +65,19 @@ function recoveryInput(project: Project, issue: Issue, session: SessionRef): Pro
     prompt: recoveryPrompt(project, issue),
     model: project.model,
     approvalPolicy: project.approval_policy,
+    serviceTier: serviceTier.value,
+    serviceTierSource: serviceTier.source,
     sandbox: project.sandbox,
     session
   };
+}
+
+function recoveryServiceTier(project: Project, issue: Issue): { source: string; value: string } {
+  const issueTier = cleanString(issue.service_tier);
+  if (issueTier !== "") return { source: "issue", value: issueTier };
+  const projectTier = cleanString(project.default_service_tier);
+  if (projectTier !== "") return { source: "project", value: projectTier };
+  return { source: "standard", value: "" };
 }
 
 function recoverableSession(issue: Issue): SessionRef | null {
@@ -110,4 +121,8 @@ function recoveryPayload(session: SessionRef): Record<string, string> {
 
 function recoveryPrompt(project: Project, issue: Issue): string {
   return `服务重启后继续处理 issue #${issue.id}。\n\n项目路径：${project.cwd}\n\n在继续前必须先检查当前工作区、issue 状态和最近日志，避免重复已完成操作。完成后仍然必须执行 codex-issue-runner issue update 回写最终状态。`;
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

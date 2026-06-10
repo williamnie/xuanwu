@@ -82,7 +82,7 @@ export const PI_SAFE_ACTION_TYPES = [
 const SAFE_ACTIONS = new Set(PI_SAFE_ACTION_TYPES);
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
-  "issue.retry", "issue.update_refinement", "issue.state_repair", "needs_user.escalate",
+  "issue.retry", "issue.state_repair", "needs_user.escalate",
   "session.resume_followup"
 ]);
 const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);

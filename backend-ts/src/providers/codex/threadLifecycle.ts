@@ -18,6 +18,7 @@ export type ThreadStartResult = ThreadSummary & {
 };
 
 export type CodexUserInput = {
+  detail?: "high" | "original";
   name?: string;
   path?: string;
   text?: string;
@@ -148,6 +149,10 @@ export function turnInterruptParams(threadID: string, turnID: string): Record<st
 
 export function textInput(text: string): CodexUserInput {
   return { type: "text", text, text_elements: [] };
+}
+
+export function localImageInput(path: string, detail: "high" | "original" = "high"): CodexUserInput {
+  return { type: "localImage", path: path.trim(), detail };
 }
 
 function normalizeThread(value: unknown): ThreadSummary {

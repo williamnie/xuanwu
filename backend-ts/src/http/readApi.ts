@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { deleteIssue, enqueueIssue, retryIssue } from "../db/repositories/issueActions.ts";
+import { deleteIssue, enqueueIssue, retryIssue, type IssueActionOptions } from "../db/repositories/issueActions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
@@ -111,8 +111,9 @@ function projectResponse(context: ReadApiContext, request: Request): Response {
   return json(project);
 }
 
-function actionResponse(context: ReadApiContext, request: Request, action: IssueAction): Response {
-  return writeResponse(() => actionAndKickLoop(context, action, issueID(request)));
+async function actionResponse(context: ReadApiContext, request: Request, action: IssueAction): Promise<Response> {
+  const body = await parseOptionalObjectBody(request);
+  return writeResponse(() => actionAndKickLoop(context, action, issueID(request), actionOptions(body)));
 }
 
 function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, unknown>): Issue {
@@ -122,9 +123,19 @@ function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, un
 }
 
 function updateIssueAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
+  if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
   const issue = updateIssue(context.database, id, body);
   if (terminalForSkillAudit(issue.status)) safeAuditSkillIntents(context.database, issue.id);
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
+  return issue;
+}
+
+function startIssueFromPatch(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
+  const current = getIssue(context.database, id);
+  if (!current) throw new ProjectNotFoundError();
+  if (current.status === "in_progress" && hasOpenIssueRun(context.database, id)) return current;
+  const issue = enqueueIssue(context.database, id, actionOptions(body));
+  kickAutoProject(context, issue.project_id);
   return issue;
 }
 
@@ -134,10 +145,10 @@ function reviewIssueVerificationAndKickLoop(context: ReadApiContext, id: number,
   return issue;
 }
 
-type IssueAction = (db: RunnerDatabase, id: number) => unknown;
+type IssueAction = (db: RunnerDatabase, id: number, options?: IssueActionOptions) => unknown;
 
-function actionAndKickLoop(context: ReadApiContext, action: IssueAction, id: number): unknown {
-  const output = action(context.database, id);
+function actionAndKickLoop(context: ReadApiContext, action: IssueAction, id: number, options: IssueActionOptions): unknown {
+  const output = action(context.database, id, options);
   if (isQueuedIssue(output)) kickAutoProject(context, output.project_id);
   return output;
 }
@@ -145,7 +156,7 @@ function actionAndKickLoop(context: ReadApiContext, action: IssueAction, id: num
 function kickAutoProject(context: ReadApiContext, projectID: string): void {
   const project = getProject(context.database, projectID);
   if ((project?.auto_run ?? 0) !== 1) return;
-  startProjectLoop({ database: context.database, providers: context.providers }, projectID);
+  startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, projectID);
 }
 
 function isQueuedIssue(value: unknown): value is Issue {
@@ -176,8 +187,14 @@ function publicIssues(context: ReadApiContext, issues: Issue[]): PublicIssue[] {
 }
 
 type PublicIssueRun = Omit<IssueRun, "runtime_metadata_json">;
+type PublicIssueRunMetadata = Record<string, unknown>;
+type PublicIssueRunView = PublicIssueRun & {
+  runtime_metadata: PublicIssueRunMetadata;
+  service_tier: string;
+  service_tier_source: string;
+};
 type PublicIssue = Omit<Issue, "latest_run"> & {
-  latest_run?: PublicIssueRun;
+  latest_run?: PublicIssueRunView;
   mcp_requirements: McpRequirementSummary;
 };
 
@@ -187,13 +204,19 @@ function publicIssue(issue: Issue, project: Project | null): PublicIssue {
   return { ...issue, latest_run: publicIssueRun(issue.latest_run), mcp_requirements };
 }
 
-function publicIssueRuns(runs: IssueRun[]): PublicIssueRun[] {
+function publicIssueRuns(runs: IssueRun[]): PublicIssueRunView[] {
   return runs.map(publicIssueRun);
 }
 
-function publicIssueRun(run: IssueRun): PublicIssueRun {
-  const { runtime_metadata_json: _runtimeMetadata, ...publicRun } = run;
-  return publicRun;
+function publicIssueRun(run: IssueRun): PublicIssueRunView {
+  const { runtime_metadata_json, ...publicRun } = run;
+  const metadata = parseRuntimeMetadata(runtime_metadata_json);
+  return {
+    ...publicRun,
+    runtime_metadata: metadata,
+    service_tier: stringFromMetadata(metadata.service_tier),
+    service_tier_source: stringFromMetadata(metadata.service_tier_source)
+  };
 }
 
 function projectsByID(projects: Project[]): Map<string, Project> {
@@ -230,6 +253,17 @@ async function parseObjectBody(request: Request): Promise<Record<string, unknown
   }
 }
 
+async function parseOptionalObjectBody(request: Request): Promise<Record<string, unknown>> {
+  const text = await request.text();
+  if (text.trim() === "") return {};
+  try {
+    const body = JSON.parse(text);
+    return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  } catch {
+    throw new HttpError(400, "请求体不是合法 JSON");
+  }
+}
+
 function projectWriteResponse(write: () => unknown, status = 200): Response {
   return writeResponse(write, status);
 }
@@ -261,6 +295,37 @@ function issueFilter(request: Request): { projectId: string; sourceSessionId: st
     sourceSessionId: cleanParam(params.get("sourceSessionId") || params.get("source_session_id")),
     status: cleanParam(params.get("status"))
   };
+}
+
+function actionOptions(body: Record<string, unknown>): IssueActionOptions {
+  return Object.hasOwn(body, "service_tier")
+    ? { serviceTier: stringBody(body.service_tier), serviceTierProvided: true }
+    : {};
+}
+
+function isStartIssuePatch(body: Record<string, unknown>): boolean {
+  return typeof body.status === "string" && body.status.trim() === "in_progress";
+}
+
+function hasOpenIssueRun(db: RunnerDatabase, issueID: number): boolean {
+  return listIssueRuns(db, issueID).some((run) => run.ended_at === "");
+}
+
+function parseRuntimeMetadata(value: string): PublicIssueRunMetadata {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as PublicIssueRunMetadata : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringFromMetadata(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stringBody(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function issueID(request: Request): number {

@@ -138,9 +138,9 @@ describe("PI action engine risk classifier", () => {
     });
   });
 
-  test("MCP gate checks nested issue refinement requirement patches", () => {
+  test("MCP gate checks nested issue assignment requirement patches", () => {
     const envelope = {
-      action_type: "issue.update_refinement",
+      action_type: "agent.executor_assign",
       issue_id: 7,
       payload: {
         issue_id: 7,
@@ -154,13 +154,13 @@ describe("PI action engine risk classifier", () => {
 
     expect(gatePiActionEnvelope(envelope, {
       allowed_mcp_capabilities: ["docs:resource:runbook"],
-      authorizedActions: [{ action_type: "issue.update_refinement", issue_id: 7, project_id: "demo" }],
+      authorizedActions: [{ action_type: "agent.executor_assign", issue_id: 7, project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }
     })).toMatchObject({ decision: "execute" });
     expect(gatePiActionEnvelope(envelope, {
       allowed_mcp_capabilities: ["docs:resource:other"],
-      authorizedActions: [{ action_type: "issue.update_refinement", issue_id: 7, project_id: "demo" }],
+      authorizedActions: [{ action_type: "agent.executor_assign", issue_id: 7, project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }
     })).toMatchObject({

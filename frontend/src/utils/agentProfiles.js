@@ -10,6 +10,7 @@ export function emptyAgentProfileForm() {
     reasoning_effort: '',
     approval_policy: '',
     sandbox: '',
+    service_tier: '',
     default_instructions: '',
     skill_intents: '[]',
     plugin_intents: '[]',
@@ -69,6 +70,7 @@ export function summarizeAgentProfile(profile) {
   const parts = [profile.name || profile.id, profile.provider || DEFAULT_PROVIDER];
   if (profile.model) parts.push(profile.model);
   if (profile.reasoning_effort) parts.push(`effort:${profile.reasoning_effort}`);
+  if (profile.service_tier) parts.push(`speed:${profile.service_tier}`);
   return parts.join(' · ');
 }
 

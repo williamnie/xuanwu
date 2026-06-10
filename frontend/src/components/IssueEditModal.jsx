@@ -8,11 +8,6 @@ import {
   issueToEditDraft,
   validateIssueDraft,
 } from '../utils/issueEdit';
-import {
-  REFINEMENT_RECOMMENDATION_FIELDS,
-  REFINEMENT_SPEC_FIELDS,
-  issueRefinementReadiness,
-} from '../utils/issueRefinement';
 
 const PRIORITY_OPTIONS = [
   { value: '0', label: '普通优先级' },
@@ -20,26 +15,19 @@ const PRIORITY_OPTIONS = [
   { value: '2', label: '紧急插队 (High)' },
 ];
 
-export default function IssueEditModal({ issue, initialRefinement, onClose, onSaved }) {
-  const [draft, setDraft] = useState(() => issueToEditDraftWithRefinement(issue, initialRefinement));
+export default function IssueEditModal({ issue, onClose, onSaved }) {
+  const [draft, setDraft] = useState(() => issueToEditDraft(issue));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setDraft(issueToEditDraftWithRefinement(issue, initialRefinement));
+    setDraft(issueToEditDraft(issue));
     setError('');
     setSaving(false);
-  }, [issue, initialRefinement]);
+  }, [issue]);
 
   const setField = (field, value) => {
     setDraft(current => ({ ...current, [field]: value }));
-  };
-
-  const setRefinementField = (field, value) => {
-    setDraft(current => ({
-      ...current,
-      refinement: { ...current.refinement, [field]: value },
-    }));
   };
 
   const submitEdit = async (event) => {
@@ -70,19 +58,12 @@ export default function IssueEditModal({ issue, initialRefinement, onClose, onSa
           {error && <EditError message={error} />}
           <TitleField value={draft.title} onChange={(value) => setField('title', value)} />
           <DescriptionField value={draft.description} onChange={(value) => setField('description', value)} />
-          <RefinementFields draft={draft.refinement} onChange={setRefinementField} />
           <PriorityField value={draft.priority} onChange={(value) => setField('priority', value)} />
           <ModalActions saving={saving} onClose={onClose} />
         </form>
       </div>
     </div>
   );
-}
-
-function issueToEditDraftWithRefinement(issue, refinement) {
-  const draft = issueToEditDraft(issue);
-  if (!refinement) return draft;
-  return { ...draft, refinement: { ...draft.refinement, ...refinement } };
 }
 
 function editValidationError(issue, draft) {
@@ -136,66 +117,6 @@ function DescriptionField({ value, onChange }) {
       />
     </div>
   );
-}
-
-function RefinementFields({ draft, onChange }) {
-  const readiness = issueRefinementReadiness(draft);
-  return (
-    <section style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div>
-        <label style={{ display: 'block', marginBottom: '4px' }}>Refinement</label>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
-          保存后会写入 Issue 描述的 Markdown 区块，后续执行 prompt 会带上这些规格。
-        </p>
-      </div>
-      {!readiness.ready && (
-        <div style={{ color: 'var(--warning)', background: 'rgba(245,158,11,0.1)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem' }}>
-          Ready 条件：至少补齐 {readiness.missing.join('、')}。
-        </div>
-      )}
-      <RefinementFieldGroup fields={REFINEMENT_SPEC_FIELDS} draft={draft} onChange={onChange} />
-      <div>
-        <label style={{ display: 'block', marginBottom: '4px' }}>Execution recommendation</label>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0 }}>
-          只保存 PI Agent 推荐，不会自动选择 provider/profile 或改变 issue 状态。
-        </p>
-      </div>
-      <RefinementFieldGroup fields={REFINEMENT_RECOMMENDATION_FIELDS} draft={draft} onChange={onChange} />
-    </section>
-  );
-}
-
-function RefinementFieldGroup({ fields, draft, onChange }) {
-  return fields.map(field => (
-    <div className="form-group" key={field.id}>
-      <label>{field.label}</label>
-      <textarea
-        className="form-control"
-        value={draft?.[field.id] || ''}
-        rows={field.id === 'context' || field.id === 'recommendationReasoning' ? 3 : 2}
-        onChange={(event) => onChange(field.id, event.target.value)}
-        placeholder={refinementPlaceholder(field.id)}
-        style={{ resize: 'vertical' }}
-      />
-    </div>
-  ));
-}
-
-function refinementPlaceholder(field) {
-  const placeholders = {
-    problem: '要解决的问题是什么？当前行为 vs 期望行为是什么？',
-    context: '相关路径、入口、API、日志或运行态证据，一行一个。',
-    acceptanceCriteria: '可验收的结果，一行一条。',
-    verificationPlan: '最小验证命令或手工验证步骤，一行一条。',
-    nonGoals: '明确不做的范围，避免执行时扩大。',
-    risks: '风险、待澄清问题或阻塞条件。',
-    recommendedProfile: '例如 codex-dev / readonly-verifier；不存在则标注为建议。',
-    recommendedProvider: '例如 codex；未接入 provider 只能作为建议，不可假装可用。',
-    riskLevel: 'Low / Medium / High。',
-    recommendationReasoning: '为什么这个 profile/provider 适合该任务。',
-    needsHumanConfirmation: 'Yes / No；默认推荐 Yes。',
-  };
-  return placeholders[field] || '';
 }
 
 function PriorityField({ value, onChange }) {

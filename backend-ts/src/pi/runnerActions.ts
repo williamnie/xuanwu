@@ -6,14 +6,12 @@ import { getSkillMetadata, readSkillRegistry, recommendSkillIntents } from "../s
 import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
-import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { getAgentSession, listAgentSessions } from "../db/repositories/agentSessions.ts";
 import { createPiMcpActions, type PiMcpActionLayer } from "./mcpActionTools.ts";
 import type { EventBus } from "../events/bus.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
 import { createProjectStatusSnapshot } from "./projectSnapshot.ts";
-import { serializeRefinement, type RefinementField } from "./runnerActionRefinement.ts";
 import { observeSessionProgress } from "./sessionObserver.ts";
 import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStateDiagnosisInput, type IssueStateRepairProposalInput } from "./runnerIssueStateActions.ts";
 import { createIssueScheduleEnqueueAction, type IssueScheduleEnqueueInput } from "./runnerIssueScheduleActions.ts";
@@ -25,7 +23,6 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
   diagnoseIssueState(input: IssueStateDiagnosisInput): unknown;
   createSessionSteerProposal(input: SessionSteerProposalInput): unknown;
-  createUpdateRefinementProposal(input: IssueUpdateRefinementInput): unknown;
   listSkills(input: SkillListInput): unknown;
   readSkill(input: SkillReadInput): unknown;
   recommendSkills(input: SkillRecommendInput): unknown;
@@ -46,21 +43,11 @@ type IssueListInput = { project_id?: string; status?: string };
 type IssueReadInput = { id: number };
 type IssueCommentInput = { body: string; issue_id: number };
 type IssueProposalInput = { issue_id: number; rationale?: string };
-type IssueUpdateRefinementInput = Partial<Record<RefinementField, string>> & {
-  issue_id: number;
-  rationale?: string;
-  recommended_skill_intents?: string[];
-  required_skill_intents?: string[];
-  recommended_mcp_capabilities?: string[];
-  required_mcp_capabilities?: string[];
-};
 type IssueCreateProposalInput = {
-  acceptance_criteria?: string;
   description: string;
   project_id?: string;
   rationale?: string;
   title?: string;
-  verification_plan?: string;
   recommended_skill_intents?: string[];
   required_skill_intents?: string[];
   recommended_mcp_capabilities?: string[];
@@ -105,10 +92,6 @@ export function createPiRunnerActions(
     createIssueStateRepairProposal: (input) => createIssueStateRepairProposal(db, context, input),
     diagnoseIssueState: (input) => safeIssueStateDiagnosis(db, context, input),
     createSessionSteerProposal: (input) => createPendingPiAction(db, context, sessionSteerProposal(db, input)),
-    createUpdateRefinementProposal: (input) => {
-      const proposal = refinementProposal(db, input);
-      return createPendingPiAction(db, context, proposal, () => updateIssue(db, input.issue_id, objectPayload(proposal.payload.patch)));
-    },
     auditSkillIntents: (input) => safeSkillIntentAudit(db, context, input),
     enqueueIssueProposal: (input) => {
       const proposal = {
@@ -217,7 +200,7 @@ function issueCreateProposal(
     payload: {
       project_id: projectID,
       title: input.title ?? "",
-      description: issueDescription(input),
+      description: input.description,
       required_skill_intents: parseSkillIntentList(input.required_skill_intents),
       recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
       required_mcp_capabilities: input.required_mcp_capabilities ?? [],
@@ -242,26 +225,6 @@ function sessionSteerProposal(db: RunnerDatabase, input: SessionSteerProposalInp
       session_key: session.session_key
     },
     projectID: session.project_id,
-    rationale: input.rationale
-  };
-}
-
-function refinementProposal(db: RunnerDatabase, input: IssueUpdateRefinementInput): ProposalInput {
-  const issue = mustGetIssue(db, input.issue_id);
-  return {
-    actionType: "issue.update_refinement",
-    issueID: issue.id,
-    payload: {
-      issue_id: issue.id,
-      patch: cleanObjectPayload({
-        description: serializeRefinement(issue.description, input),
-        required_skill_intents: parseSkillIntentList(input.required_skill_intents),
-        recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
-        required_mcp_capabilities: input.required_mcp_capabilities ?? [],
-        recommended_mcp_capabilities: input.recommended_mcp_capabilities ?? []
-      })
-    },
-    projectID: issue.project_id,
     rationale: input.rationale
   };
 }
@@ -352,18 +315,6 @@ function readSessionSummary(db: RunnerDatabase, sessionKey: string) {
     title: session.title,
     updated_at: session.updated_at
   };
-}
-
-function issueDescription(input: IssueCreateProposalInput): string {
-  const refinement = serializeRefinement(input.description, {
-    acceptance_criteria: input.acceptance_criteria,
-    verification_plan: input.verification_plan
-  });
-  return refinement || input.description;
-}
-
-function objectPayload(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function cleanObject(input: Record<string, string>): Record<string, string> {

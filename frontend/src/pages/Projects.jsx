@@ -29,6 +29,10 @@ import {
   normalizeAgentProfileForm,
   summarizeAgentProfile,
 } from '../utils/agentProfiles';
+import {
+  serviceTierLabel,
+  serviceTierOptions,
+} from '../utils/serviceTier';
 
 const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
@@ -79,6 +83,7 @@ export default function Projects() {
     formModel: DEFAULT_CODEX_MODEL,
     formApproval: 'never',
     formSandbox: 'workspace-write',
+    formServiceTier: '',
     formAgentProfileId: '',
     formError: '',
     resumingHoldProjectId: '',
@@ -101,6 +106,7 @@ export default function Projects() {
     formModel,
     formApproval,
     formSandbox,
+    formServiceTier,
     formAgentProfileId,
     formError,
     resumingHoldProjectId,
@@ -182,6 +188,7 @@ export default function Projects() {
       draft.formModel = DEFAULT_CODEX_MODEL;
       draft.formApproval = 'never';
       draft.formSandbox = 'workspace-write';
+      draft.formServiceTier = '';
       draft.formAgentProfileId = '';
       draft.formError = '';
       draft.isModalOpen = true;
@@ -200,6 +207,7 @@ export default function Projects() {
       draft.formModel = normalizeCodexModel(proj.model || DEFAULT_CODEX_MODEL);
       draft.formApproval = proj.approval_policy || 'never';
       draft.formSandbox = proj.sandbox || 'workspace-write';
+      draft.formServiceTier = proj.default_service_tier || '';
       draft.formAgentProfileId = proj.default_agent_profile_id || '';
       draft.formError = '';
       draft.isModalOpen = true;
@@ -226,6 +234,7 @@ export default function Projects() {
       model: normalizeCodexModel(formModel),
       approval_policy: formApproval,
       sandbox: formSandbox,
+      default_service_tier: formServiceTier,
       default_agent_profile_id: formAgentProfileId,
     };
 
@@ -499,6 +508,10 @@ export default function Projects() {
                     <span>Agent Profile</span>
                     <span style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{summarizeAgentProfile(proj.default_agent_profile)}</span>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                    <span>默认速度</span>
+                    <strong style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{serviceTierLabel(proj.default_service_tier)}</strong>
+                  </div>
 
                   <ProjectHoldNotice
                     hold={proj.hold}
@@ -632,6 +645,21 @@ export default function Projects() {
                 </div>
 
                 <div className="form-group">
+                  <label>默认执行速度</label>
+                  <select
+                    className="form-control"
+                    value={formServiceTier}
+                    onChange={(e) => setFormField('formServiceTier', e.target.value)}
+                  >
+                    {serviceTierOptions(formServiceTier).map(option => (
+                      <option key={option.value || 'standard'} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                <div className="form-group">
                   <label>审批策略 (Approval)</label>
                   <select 
                     className="form-control" 
@@ -643,19 +671,19 @@ export default function Projects() {
                     <option value="danger-only">敏感操作时审核</option>
                   </select>
                 </div>
-              </div>
 
-              <div className="form-group">
-                <label>沙箱策略 (Sandbox)</label>
-                <select 
-                  className="form-control" 
-                  value={formSandbox}
-                  onChange={(e) => setFormField('formSandbox', e.target.value)}
-                >
-                  <option value="workspace-write">仅允许修改当前项目目录 (推荐)</option>
-                  <option value="danger-full-access">全系统读写访问 (危险)</option>
-                  <option value="read-only">严格只读</option>
-                </select>
+                <div className="form-group">
+                  <label>沙箱策略 (Sandbox)</label>
+                  <select 
+                    className="form-control" 
+                    value={formSandbox}
+                    onChange={(e) => setFormField('formSandbox', e.target.value)}
+                  >
+                    <option value="workspace-write">仅允许修改当前项目目录 (推荐)</option>
+                    <option value="danger-full-access">全系统读写访问 (危险)</option>
+                    <option value="read-only">严格只读</option>
+                  </select>
+                </div>
               </div>
 
               <div className="form-group">
@@ -750,6 +778,11 @@ function AgentProfileManager({ profiles, loading, form, error, onFieldChange, on
             <option value="medium">medium</option>
             <option value="high">high</option>
             <option value="xhigh">xhigh</option>
+          </select>
+          <select className="form-control" value={form.service_tier} onChange={(e) => onFieldChange('service_tier', e.target.value)}>
+            {serviceTierOptions(form.service_tier).map(option => (
+              <option key={option.value || 'standard'} value={option.value}>速度：{option.label}</option>
+            ))}
           </select>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>

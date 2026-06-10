@@ -25,10 +25,14 @@ test('issue detail provides pending verification review actions', () => {
   assert.match(detailPage, /issue\.verification_report/);
 });
 
-test('triage to todo uses non-blocking readiness notice instead of native confirm', () => {
-  assert.match(issuesPage, /moveToTodoReadinessNotice/);
-  assert.match(detailPage, /moveToTodoReadinessNotice/);
+test('triage to todo avoids native confirm gates', () => {
   assert.doesNotMatch(issuesPage, /window\.confirm/);
-  assert.doesNotMatch(detailPage, /triageReadinessMoveToTodoMessage/);
+  assert.doesNotMatch(detailPage, /window\.confirm/);
   assert.doesNotMatch(detailPage, /confirmTriageReady/);
+});
+
+test('dragging to in progress starts runner execution instead of raw status patch', () => {
+  assert.match(issuesPage, /moveIssueAfterDrop/);
+  assert.match(issuesPage, /await moveIssueAfterDrop\(issueId,\s*targetStatus\)/);
+  assert.match(issuesPage, /targetStatus === 'in_progress'[\s\S]*api\.enqueueIssue\(issueId\)/);
 });

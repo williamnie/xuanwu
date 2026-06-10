@@ -2,11 +2,13 @@ import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { recordIssueLogEvent } from "../db/repositories/issueEvents.ts";
 import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
   agentRole?: string;
+  bus?: Pick<EventBus, "publish">;
   capabilitySummary?: string;
   database?: RunnerDatabase;
   onLog?: ProviderRunInput["onEvent"];
@@ -66,9 +68,12 @@ function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInp
     issueId: input.issueId,
     projectId: input.projectId,
     cwd: input.cwd,
+    images: input.images,
     prompt: input.prompt,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
+    serviceTier: input.serviceTier,
+    serviceTierSource: input.serviceTierSource,
     approvalPolicy: input.approvalPolicy,
     sandbox: input.sandbox,
     onEvent
@@ -79,20 +84,71 @@ function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string
   if (!input.database || !result.session) return;
   persistRuntime({
     db: input.database, input, provider, session: result.session,
-    status: "completed", metadata: { run_id: result.runId },
+    status: "completed", metadata: runtimeMetadata(input, { run_id: result.runId }),
     issueRunId: activeRunID || openIssueRunID(input.database, input.issueId)
   });
 }
 
 function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEvent, activeRunID: string): void {
   if (!input.database) return;
-  recordIssueLogEvent(input.database, input.issueId, event);
+  const persisted = recordIssueLogEvent(input.database, input.issueId, event);
+  publishIssueLog(input, event, persisted);
   if (!event.session) return;
   persistRuntime({
     db: input.database, input, provider: event.session.provider, session: event.session,
-    status: event.status || "running", metadata: { source: "provider_event" },
+    status: event.status || "running", metadata: runtimeMetadata(input, { source: "provider_event" }),
     issueRunId: activeRunID
   });
+}
+
+function publishIssueLog(
+  input: RunnerIssueExecutionInput,
+  event: ProviderEvent,
+  persisted: { created_at: string; id: number; payload: string; type: string }
+): void {
+  input.bus?.publish(compactAppEvent({
+    id: persisted.id,
+    type: persisted.type,
+    issueId: input.issueId,
+    projectId: input.projectId,
+    provider: event.provider,
+    threadId: event.session?.sessionId,
+    turnId: event.session?.turnId,
+    agent_event_type: event.type,
+    raw_method: event.raw?.method,
+    raw_payload: rawPayloadText(event.raw?.payload),
+    command: event.command,
+    path: event.path,
+    status: event.status,
+    text: event.text,
+    error: event.error,
+    payload: persisted.payload,
+    created_at: persisted.created_at
+  }));
+}
+
+function compactAppEvent(event: AppEvent): AppEvent {
+  return Object.fromEntries(
+    Object.entries(event).filter(([, value]) => value !== undefined && value !== "")
+  ) as AppEvent;
+}
+
+function rawPayloadText(value: unknown): string | undefined {
+  if (value === undefined || value === "") return undefined;
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function runtimeMetadata(
+  input: RunnerIssueExecutionInput,
+  metadata: Record<string, string>
+): Record<string, string> {
+  const serviceTier = cleanString(input.serviceTier);
+  if (serviceTier === "") return metadata;
+  return {
+    ...metadata,
+    service_tier: serviceTier,
+    service_tier_source: cleanString(input.serviceTierSource) || "unknown"
+  };
 }
 
 type PersistRuntimeInput = {
@@ -133,4 +189,8 @@ function openIssueRunID(db: RunnerDatabase | undefined, issueID: number): string
   return db.sqlite.query<{ id: string }, [number]>(
     "select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1"
   ).get(issueID)?.id ?? "";
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

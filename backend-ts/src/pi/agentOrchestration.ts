@@ -58,6 +58,7 @@ export type AgentRecommendation = {
   required_skill_intents: string[];
   selection_reason: string;
   sandbox: string;
+  service_tier: string;
 };
 
 export function recommendExecutorProfile(
@@ -90,7 +91,7 @@ export function createExecutorAssignmentProposal(
   const recommendation = recommendExecutorProfile(db, contextProject, input);
   if (recommendation.profile_id === "") throw new Error("no executor profile recommendation available");
   return {
-    actionType: "issue.update_refinement",
+    actionType: "agent.executor_assign",
     issueID: issue.id,
     payload: { issue_id: issue.id, patch: assignmentPatch(issue, input, recommendation) },
     projectID: issue.project_id,
@@ -163,7 +164,8 @@ function recommendationFor(
     reasoning_effort: profile?.reasoning_effort ?? "",
     required_skill_intents: skills.required,
     selection_reason: selection.selection_reason,
-    sandbox: profile?.sandbox || project.sandbox
+    sandbox: profile?.sandbox || project.sandbox,
+    service_tier: profile?.service_tier || project.default_service_tier
   };
 }
 

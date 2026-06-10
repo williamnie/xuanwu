@@ -37,22 +37,20 @@ Code Agent Providers
 
 ## 2. 当前状态判断
 
-当前 PI 不是独立 agent，而是 Codex refinement subagent：
+当前 PI 已收敛为 issue-first orchestration：
 
 ```text
-POST /api/issues/:id/refinement-draft
-  → runner.GenerateIssueRefinementDraft
-  → Codex StartThread(ThreadSource=subagent, Sandbox=read-only)
-  → Codex StartTurn
-  → 返回 refinement JSON
+用户/PI chat
+  → 创建或更新 issue description/comment
+  → 需要执行时 move/enqueue
+  → executor/verifier/reviewer/report workflows
 ```
 
 当前限制：
 
-- 只支持 `triage` issue。
-- 只支持 project provider 为 `codex`。
-- 会在 Codex 中创建 session/thread。
-- 不保存独立 PI session。
+- issue 规格直接写入 `description` / comments，不再维护独立结构化规格区块。
+- PI 仍默认只读项目代码，写操作通过 issue/action proposal 闭环。
+- provider/session 由 executor workflow 和 agent profile 选择链管理。
 - 不具备长期记忆。
 - 不具备 project manager loop。
 - 不自动管理 issue 状态。
@@ -99,7 +97,7 @@ PI 应接管 issue 生命周期：
 ```text
 intake
   → clarify
-  → refine
+  → shape description
   → plan
   → create/update issues
   → prioritize
@@ -114,7 +112,7 @@ intake
 PI 可执行的 issue actions：
 
 - 创建 issue。
-- 编辑 issue title/description/refinement。
+- 编辑 issue title/description。
 - 写 comment。
 - 调整 priority。
 - 设置 executor profile/provider。
@@ -577,7 +575,7 @@ PI action 必须分风险等级。
 - summarize_project_status
 - summarize_issue
 - create_issue_comment
-- update_refinement_draft
+- update_issue_description
 - propose_executor
 - create_pi_memory_from_confirmed_summary
 
@@ -675,7 +673,7 @@ PI 接管动作：
 
 - 记录 intake source 为 Codex session。
 - 读取 source session 摘要。
-- 补 refinement。
+- 补充 issue description/comment。
 - 判断是否需要用户确认。
 - 指派 executor。
 
@@ -837,7 +835,7 @@ pi.batch_summary
 
 - 可以创建 PI Agent 配置。
 - project 可以绑定 PI Agent。
-- PI refinement 不再硬编码 project provider=codex，而是读取 PI Agent provider。
+- PI issue/chat workflow 读取 PI Agent provider，不依赖旧草稿生成接口。
 - PI 会话以 PI conversation 记录落库。
 - UI 能看到 PI Agent 配置和 PI 对话。
 - PI 仍然只读，不改项目代码。
@@ -846,7 +844,7 @@ pi.batch_summary
 
 - 用户能和 PI 聊需求。
 - PI 能自动创建 triage issue proposal。
-- PI 能写 issue comment/refinement。
+- PI 能写 issue comment，并通过 issue proposal 创建结构化 description。
 - PI 能提出 move-to-todo/enqueue action。
 - 需要确认的 action 不会自动执行。
 - 所有 PI actions 可审计。
@@ -875,7 +873,7 @@ pi.batch_summary
 2. 新增 project PI settings。
 3. 新增 PI Agent API。
 4. Projects UI 增加 PI 配置。
-5. 把现有 refinement-draft 改成使用 PI Agent 配置。
+5. 移除旧草稿生成路径，PI 直接服务 issue description/comment workflow。
 6. 保持只读、人工保存。
 
 ### Milestone B：PI Conversation 和 Action Proposal
@@ -883,7 +881,7 @@ pi.batch_summary
 1. 新增 PI conversations/turns。
 2. 新增 PI Chat UI。
 3. 新增 PI action proposal model。
-4. 实现 comment/refinement/create issue proposals。
+4. 实现 comment/create issue proposals。
 5. 实现 approve/reject/execute action。
 6. 所有 actions 写 issue/project events。
 
@@ -953,15 +951,15 @@ PI conversation / PI action / PI memory / PI settings
 建议第一批 issue 只做 Milestone A，并明确不做自动管理：
 
 ```text
-目标：PI Agent 成为项目一等配置，并接管现有 refinement-draft 的身份和配置。
+目标：PI Agent 成为项目一等配置，并接管 issue description/comment workflow。
 ```
 
 第一批拆成 5 个 triage issue：
 
 1. `PI Agent data model and API v1`
 2. `Project PI settings and UI binding`
-3. `PI conversation store v1 for refinement turns`
-4. `Refinement draft uses PI Agent config instead of hard-coded Codex subagent`
+3. `PI conversation store v1 for issue planning turns`
+4. `Remove legacy draft path and use issue description workflow`
 5. `PI architecture guardrails: read-only policy, action risk taxonomy, audit events`
 
 完成后系统仍然不会自动管理项目，但 PI 已经从“Codex 临时 subagent”升级为“项目绑定的独立主 agent 配置”。后续 Milestone B/C 再让它开始真正管理 issue 和 project。

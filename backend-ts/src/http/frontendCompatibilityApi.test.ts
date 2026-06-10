@@ -172,11 +172,9 @@ describe("Bun frontend API compatibility", () => {
       const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
       await requestJSON(router, "/api/projects", "POST", { id: "demo", cwd }, 201);
       const issue = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Review one", status: "triage" }, 201);
-      const issueTwo = await requestJSON(router, "/api/issues", "POST", { project_id: "demo", title: "Draft two", status: "triage" }, 201);
       const commandIssue = await requestJSON(router, "/api/commands", "POST", { command: { name: "issue", args: { project_id: "demo" } }, prompt: "Command issue" });
       const commandRun = await requestJSON(router, "/api/commands", "POST", { command: { name: "run", args: { issue_id: commandIssue.issue.id, confirmed: true } } });
       const commandStatus = await requestJSON(router, "/api/commands", "POST", { command: { name: "status", args: { issue_id: commandIssue.issue.id } } });
-      const draft = await requestJSON(router, `/api/issues/${issueTwo.id}/refinement-draft`, "POST", {}, 201);
       await requestJSON(router, `/api/issues/${issue.id}`, "PATCH", { status: "pending_verification", error: "build passed; smoke missing" });
       const verifier = await requestJSON(router, `/api/issues/${issue.id}/verifier-report`, "POST", {}, 201);
       const models = await requestJSON(router, "/api/codex/models", "GET");
@@ -188,7 +186,6 @@ describe("Bun frontend API compatibility", () => {
       expect(commandIssue).toMatchObject({ summary: expect.stringContaining("created triage issue"), issue: { title: "Command issue" } });
       expect(commandRun).toMatchObject({ summary: expect.stringContaining("enqueued issue"), issue: { status: "todo" } });
       expect(commandStatus).toMatchObject({ summary: expect.stringContaining("issue #"), issue: { id: commandIssue.issue.id } });
-      expect(draft).toMatchObject({ draft: { acceptanceCriteria: expect.any(String), verificationPlan: expect.any(String) } });
       expect(verifier).toMatchObject({ report: { recommendation: expect.any(String) }, event: { type: "issue.verification_report" } });
       expect(models).toMatchObject({ data: expect.any(Array) });
       expect(usage).toMatchObject({ events_scanned: expect.any(Number), summary: expect.any(Object) });

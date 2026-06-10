@@ -1,9 +1,4 @@
 import {
-  deriveTriageReadiness,
-  issueRefinementReadiness,
-  parseIssueRefinement,
-} from './issueRefinement.js';
-import {
   issueRunExitText,
   issueRunMetadata,
   issueRunSessionId,
@@ -24,14 +19,7 @@ export function deriveIssueWorkflowEvidence({ issue = {}, events = [], runs = []
   if (snapshotWorkflow) {
     return snapshotWorkflow;
   }
-  const parsed = parseIssueRefinement(issue.description);
-  const refinement = parsed.refinement;
-  const readiness = issueRefinementReadiness(refinement);
-  const triageReadiness = deriveTriageReadiness({
-    issue,
-    refinement,
-    commentEvents: events.filter(event => event.type === 'issue.comment'),
-  });
+  const body = String(issue.description || '');
   const latestRunInfo = normalizeLatestRun(issue, runs);
   const explicitFinalStatus = terminalStatus(latestFinalStatus(events) || issue.status);
   const verificationEvidence = findVerificationEvidence({ issue, events, latestRun: latestRunInfo });
@@ -41,11 +29,10 @@ export function deriveIssueWorkflowEvidence({ issue = {}, events = [], runs = []
     latestRun: latestRunInfo,
     explicitFinalStatus,
     verificationEvidence,
-    nextAction: workflowNextAction(issue, readiness, latestRunInfo, explicitFinalStatus, verificationEvidence),
+    nextAction: workflowNextAction(issue, latestRunInfo, explicitFinalStatus, verificationEvidence),
     steps: [
-      intakeStep(issue, parsed.body, events),
-      refineStep(refinement, readiness),
-      readyStep(issue, readiness, triageReadiness),
+      intakeStep(issue, body, events),
+      readyStep(issue),
       implementStep(issue, latestRunInfo),
       verifyStep(issue, latestRunInfo, explicitFinalStatus, verificationEvidence),
       closeStep(explicitFinalStatus, verificationEvidence),
@@ -59,24 +46,12 @@ function intakeStep(issue, body, events) {
   return workflowStep('intake', 'Intake', created || body ? 'done' : 'missing', summary, nextHint(created, 'issue.created 未记录'));
 }
 
-function refineStep(refinement, readiness) {
-  if (readiness.ready) {
-    return workflowStep('refine', 'Refine', 'done', 'Refinement block 已包含验收与验证字段。');
-  }
-  if (hasAnyRefinement(refinement)) {
-    return workflowStep('refine', 'Refine', 'warning', `Refinement 未完整，缺少：${readiness.missing.join('、')}。`);
-  }
-  return workflowStep('refine', 'Refine', 'missing', '未找到 refinement block 或有效字段。');
-}
 
-function readyStep(issue, readiness, triageReadiness) {
-  if (readiness.ready) {
-    return workflowStep('ready', 'Ready', 'done', 'Acceptance criteria 与 Verification plan 可用于验收。');
+function readyStep(issue) {
+  if (issue.status === 'triage') {
+    return workflowStep('ready', 'Ready', 'pending', 'Issue 仍在 triage；移动到 Todo 后 runner 才会执行。');
   }
-  if (issue.status !== 'triage') {
-    return workflowStep('ready', 'Ready', 'warning', `Issue 已进入 ${issue.status}，但仍缺：${readiness.missing.join('、')}。`);
-  }
-  return workflowStep('ready', 'Ready', 'missing', triageReadiness?.source || 'Triage readiness 未满足。');
+  return workflowStep('ready', 'Ready', 'done', `Issue 已进入 ${issue.status}。`);
 }
 
 function implementStep(issue, latestRunInfo) {
@@ -218,8 +193,8 @@ function latestFinalStatus(events) {
   return '';
 }
 
-function workflowNextAction(issue, readiness, latestRunInfo, explicitFinalStatus, verificationEvidence) {
-  if (!readiness.ready) return `补齐 ${readiness.missing.join('、')} 后再执行。`;
+function workflowNextAction(issue, latestRunInfo, explicitFinalStatus, verificationEvidence) {
+  if (issue.status === 'triage') return '移动到 Todo 后 runner 才会执行。';
   if (!latestRunInfo && issue.status === 'todo') return '等待 runner claim，或检查项目 loop 是否已启动。';
   if (issue.status === 'in_progress') return '等待 latest run 结束，并确认 agent 显式回写最终状态。';
   if (explicitFinalStatus === 'done' && !verificationEvidence.found) return '补充测试/验证摘要，避免只凭 done 状态验收。';
@@ -245,10 +220,6 @@ function parseEventPayload(event) {
   } catch {
     return { text: event.payload };
   }
-}
-
-function hasAnyRefinement(refinement) {
-  return Object.values(refinement || {}).some(value => String(value || '').trim());
 }
 
 function nextHint(value, fallback) {

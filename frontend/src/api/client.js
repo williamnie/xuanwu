@@ -4,7 +4,7 @@
  * 这里不做本地假数据或 localStorage 降级：前端展示的数据必须来自当前 Runner 后端。
  * 后端未连接时，请求会直接抛错，由页面显示 DISCONNECTED / 错误态。
  */
-import { authHeader, clearAuthToken } from './authToken';
+import { authHeader, clearAuthToken, ensureAuthCookie } from './authToken';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 const EVENT_SOURCE_CLOSED = 2;
@@ -87,6 +87,7 @@ function ensureSharedEventSource() {
     return sharedEventSource;
   }
 
+  ensureAuthCookie();
   sharedEventSource = new EventSource(`${API_BASE}/api/events`);
   sharedEventSource.onopen = () => {
     for (const subscriber of eventSubscribers) {
@@ -259,12 +260,14 @@ export const api = {
     body: JSON.stringify(updates),
   }),
 
-  enqueueIssue: (id) => request(`/api/issues/${id}/enqueue`, {
+  enqueueIssue: (id, payload = {}) => request(`/api/issues/${id}/enqueue`, {
     method: 'POST',
+    body: JSON.stringify(payload),
   }),
 
-  retryIssue: (id) => request(`/api/issues/${id}/retry`, {
+  retryIssue: (id, payload = {}) => request(`/api/issues/${id}/retry`, {
     method: 'POST',
+    body: JSON.stringify(payload),
   }),
 
   cancelIssue: (id) => request(`/api/issues/${id}/cancel`, {
@@ -287,11 +290,6 @@ export const api = {
   createIssueComment: (id, comment) => request(`/api/issues/${id}/comments`, {
     method: 'POST',
     body: JSON.stringify(comment),
-  }),
-
-  generateIssueRefinementDraft: (id) => request(`/api/issues/${id}/refinement-draft`, {
-    method: 'POST',
-    body: JSON.stringify({}),
   }),
 
   generateIssueVerifierReport: (id) => request(`/api/issues/${id}/verifier-report`, {

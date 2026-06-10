@@ -84,7 +84,6 @@ function registerUploadRoutes(router: Router, context: FrontendCompatContext): v
 }
 
 function registerAdvisoryIssueRoutes(router: Router, context: FrontendCompatContext): void {
-  router.post("/api/issues/:id/refinement-draft", (request) => writeResponse(() => refinementDraft(context.database, issueID(request)), 201));
   router.post("/api/issues/:id/verifier-report", (request) => writeResponse(() => verifierReport(context.database, issueID(request)), 201));
 }
 
@@ -104,7 +103,7 @@ function hasIssueExecutionProvider(context: FrontendCompatContext, projectID: st
 }
 
 function startProjectLoop(context: FrontendCompatContext, projectID: string): void {
-  startManagedProjectLoop({ database: context.database, providers: context.providers, onError: logProjectLoopError }, projectID);
+  startManagedProjectLoop({ bus: context.bus, database: context.database, providers: context.providers, onError: logProjectLoopError }, projectID);
 }
 
 function projectLoopStatus(db: RunnerDatabase, projectID: string): string {
@@ -156,13 +155,6 @@ function createIssueForCommand(db: RunnerDatabase, body: Record<string, unknown>
   if (projectID === "") throw new Error("/issue 需要选择 project");
   if (prompt === "") throw new Error("/issue 需要 prompt 或 description");
   return createIssue(db, { project_id: projectID, title: cleanString(command.args?.title), description: prompt, status: "triage", source_session_id: cleanString(body.session_id) });
-}
-
-function refinementDraft(db: RunnerDatabase, id: number): Record<string, unknown> {
-  const issue = getIssue(db, id);
-  if (!issue) throw new ProjectNotFoundError();
-  if (issue.status !== "triage") throw new Error("只有 Triage 状态的 Issue 可以生成 refinement 草稿");
-  return { draft: { problem: issue.title, context: issue.project_id, acceptanceCriteria: "- 明确验收标准", verificationPlan: "- 运行最小必要验证", nonGoals: "", risks: "", recommendedProfile: issue.agent_profile_id, recommendedProvider: "codex", riskLevel: "Medium", recommendationReasoning: "Bun fallback draft", needsHumanConfirmation: "Yes" }, thread_id: "", turn_id: "" };
 }
 
 function verifierReport(db: RunnerDatabase, id: number): Record<string, unknown> {

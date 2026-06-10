@@ -17,7 +17,6 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_state_diagnose",
   "issue_state_repair_proposal",
   "issue_comment",
-  "issue_update_refinement",
   "issue_enqueue_proposal",
   "issue_schedule_enqueue",
   "project_status",
@@ -114,12 +113,10 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     actionTool("issue_create_proposal", "Issue Create Proposal",
       "Create a high-risk pending proposal for a new issue; does not create the issue directly.",
       Type.Object({
-        acceptance_criteria: optionalString,
         description: requiredText,
         project_id: optionalString,
         rationale: optionalString,
         title: optionalString,
-        verification_plan: optionalString,
         required_skill_intents: skillIntentList,
         recommended_skill_intents: skillIntentList,
         required_mcp_capabilities: mcpCapabilityList,
@@ -129,7 +126,6 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     issueStateRepairTool(actions),
     actionTool("issue_comment", "Issue Comment", "Add a low-risk agent comment to an issue.",
       Type.Object({ body: requiredText, issue_id: positiveID }, objectOptions), actions.commentIssue),
-    issueRefinementTool(actions),
     actionTool("issue_enqueue_proposal", "Issue Enqueue Proposal",
       "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
@@ -166,30 +162,6 @@ function issueStateRepairTool(actions: PiRunnerActionLayer): ToolDefinition {
       operation: optionalString,
       rationale: optionalString
     }, objectOptions), actions.createIssueStateRepairProposal);
-}
-
-function issueRefinementTool(actions: PiRunnerActionLayer): ToolDefinition {
-  return actionTool("issue_update_refinement", "Issue Refinement Proposal",
-    "Create a high-risk pending proposal to update an issue refinement block.",
-    Type.Object({
-      acceptance_criteria: optionalString,
-      context: optionalString,
-      issue_id: positiveID,
-      needs_human_confirmation: optionalString,
-      non_goals: optionalString,
-      problem: optionalString,
-      rationale: optionalString,
-      recommendation_reasoning: optionalString,
-      recommended_profile: optionalString,
-      recommended_provider: optionalString,
-      risk_level: optionalString,
-      risks: optionalString,
-      verification_plan: optionalString,
-      required_skill_intents: skillIntentList,
-      recommended_skill_intents: skillIntentList,
-      required_mcp_capabilities: mcpCapabilityList,
-      recommended_mcp_capabilities: mcpCapabilityList
-    }, objectOptions), actions.createUpdateRefinementProposal);
 }
 
 function projectActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {

@@ -6,14 +6,16 @@ import { getProject, ProjectNotFoundError } from "./projects.ts";
 const STATUS_TODO = "todo";
 const STATUS_CANCELLED = "cancelled";
 
-export function enqueueIssue(db: RunnerDatabase, id: number): Issue {
+export type IssueActionOptions = { serviceTier?: string; serviceTierProvided?: boolean };
+
+export function enqueueIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
   const issue = mustGetRunnableIssue(db, id);
-  return queueIssue(db, issue);
+  return queueIssue(db, issue, options);
 }
 
-export function retryIssue(db: RunnerDatabase, id: number): Issue {
+export function retryIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
   const issue = mustGetRunnableIssue(db, id);
-  return queueIssue(db, issue);
+  return queueIssue(db, issue, options);
 }
 
 export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_cancel"): Issue {
@@ -45,14 +47,17 @@ function hasOpenIssueRun(db: RunnerDatabase, issueID: number): boolean {
   return (row?.count ?? 0) > 0;
 }
 
-function queueIssue(db: RunnerDatabase, issue: Issue): Issue {
+function queueIssue(db: RunnerDatabase, issue: Issue, options: IssueActionOptions): Issue {
   const timestamp = issueTimestamp();
+  const serviceTier = cleanString(options.serviceTier);
+  const hasServiceTier = options.serviceTierProvided === true;
   const write = db.transaction((record: Issue) => {
     db.sqlite.run(`update issues set status=?, error='', codex_turn_id='',
+      service_tier=case when ?=1 then ? else service_tier end,
       auto_retry_next_at='', auto_retry_reason='', updated_at=? where id=?`,
-      [STATUS_TODO, timestamp, record.id]);
+      [STATUS_TODO, hasServiceTier ? 1 : 0, serviceTier, timestamp, record.id]);
     closeOpenIssueRun(db, queuedIssue(record), STATUS_TODO, "status_changed", timestamp);
-    recordStatusEvent(db, record.id, { status: STATUS_TODO }, timestamp);
+    recordStatusEvent(db, record.id, statusEventPayload(STATUS_TODO, hasServiceTier, serviceTier), timestamp);
   });
   write(issue);
   return mustGetIssue(db, issue.id);
@@ -88,6 +93,14 @@ function recordStatusEvent(
     `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
     [issueID, "issue.status_changed", JSON.stringify(payload), timestamp]
   );
+}
+
+function statusEventPayload(status: string, hasServiceTier: boolean, serviceTier: string): Record<string, string> {
+  return hasServiceTier ? { status, service_tier: serviceTier } : { status };
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function mustGetRunnableIssue(db: RunnerDatabase, id: number): Issue {
