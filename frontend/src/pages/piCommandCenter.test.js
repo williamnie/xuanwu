@@ -28,6 +28,9 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   for (const copy of ['PI 托管控制台', '自动执行与审批中心', '待审批', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于', '待审核候选', '最近候选来源']) {
     assert.match(pageSource, new RegExp(copy));
   }
+  for (const copy of ['Supervisor Agent：', '已 fallback 到全局 PI agent', '请绑定或启用一个 PI agent']) {
+    assert.match(pageSource, new RegExp(copy));
+  }
   for (const oldCopy of ['PI OpenClaw', 'Generated', 'Pending approvals']) {
     assert.doesNotMatch(pageSource, new RegExp(oldCopy));
   }
@@ -44,6 +47,7 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   assert.match(pageSource, /pi-command-error/);
   assert.match(pageSource, /api\.getPiCommandCenter\(\)/);
   assert.match(pageSource, /promptDebugText\(state\.data\?\.prompt_debug\)/);
+  assert.match(pageSource, /supervisorAgentText\(state\.data\?\.supervisor\?\.agent\)/);
 });
 
 test('PI Command Center prioritizes pending approvals above secondary modules', () => {

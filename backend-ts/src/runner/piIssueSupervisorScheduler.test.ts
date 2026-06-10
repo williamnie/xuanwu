@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -200,6 +201,59 @@ describe("PI issue supervisor scheduler", () => {
       db.close();
     }
   });
+
+  test("falls back to an enabled global PI agent when project settings are absent", async () => {
+    const db = await fixtureDb();
+    const faux = registerFauxProvider({ api: "pi-supervisor-global-api", provider: "pi-supervisor-global" });
+    try {
+      faux.setResponses([fauxAssistantMessage(JSON.stringify(noopDecision()))]);
+      insertProject(db, "demo", await tempRoot("supervisor-global-agent-project-"));
+      insertGlobalPiAgent(db, "pi-supervisor-global");
+      writeFauxModelsConfig(db, "pi-supervisor-global");
+      insertRunningIssue(db, {
+        issueID: 506,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-506",
+        turnID: "turn-506"
+      });
+
+      const result = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(faux.state.callCount).toBe(1);
+      expect(listIssueSupervisorEvents(db, { issueId: 506 }).map((event) => event.event_type))
+        .toEqual(["signal", "decision", "action"]);
+    } finally {
+      faux.unregister();
+      db.close();
+    }
+  });
+
+  test("dedupes missing supervisor agent failures during cooldown", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-missing-agent-project-"));
+      insertRunningIssue(db, {
+        issueID: 507,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-507",
+        turnID: "turn-507"
+      });
+
+      const first = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+      const second = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+      const events = listIssueSupervisorEvents(db, { issueId: 507 });
+
+      expect(first).toMatchObject({ failed: 1, signaled: 1 });
+      expect(second).toMatchObject({ failed: 0, skipped: 1 });
+      expect(events.map((event) => event.event_type)).toEqual(["signal", "decision_failed"]);
+      expect(events[1]?.payload_json).toContain("enable a global PI agent");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {
@@ -266,6 +320,30 @@ function waitDecision() {
     rationale: "wait for provider retry window", recovery_message: "", risk_level: "low",
     wait_until: "2026-06-10T08:10:00Z"
   } as const;
+}
+
+function noopDecision() {
+  return {
+    confidence: "medium", decision: "noop", evidence_refs: ["session"],
+    expected_outcome: "supervisor records the fallback agent decision without recovery action",
+    fallback_if_no_progress: "needs_user", rationale: "global fallback agent is runnable",
+    recovery_message: "", risk_level: "low"
+  } as const;
+}
+
+function insertGlobalPiAgent(db: RunnerDatabase, provider: string): void {
+  db.sqlite.run(`insert into pi_agents
+    (id, name, provider, model_provider, model_id, thinking_level, cwd_policy, tools_json, instructions, enabled, created_at, updated_at)
+    values (?, ?, 'pi-sdk', ?, 'faux-1', 'off', 'project', '[]', '', 1, ?, ?)`,
+  ["pi-supervisor-global", "PI Supervisor Global", provider, "2026-06-10T07:00:00Z", "2026-06-10T07:00:00Z"]);
+}
+
+function writeFauxModelsConfig(db: RunnerDatabase, provider: string): void {
+  const agentDir = join(db.path, "..", "pi-runtime", "agent");
+  mkdirSync(agentDir, { recursive: true });
+  writeFileSync(join(agentDir, "models.json"), JSON.stringify({
+    providers: { [provider]: { api: `${provider}-api`, apiKey: "test", baseUrl: "http://localhost:0", models: [{ id: "faux-1" }] } }
+  }));
 }
 
 class SupervisorProvider implements ExecutorProvider {

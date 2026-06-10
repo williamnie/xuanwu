@@ -82,9 +82,43 @@ describe("PI Command Center API", () => {
           supervisor: "enabled_candidate_only"
         }
       });
+      expect(body.supervisor).toMatchObject({
+        agent: {
+          agent_id: "agent-1",
+          source: "project_settings",
+          status: "bound",
+          status_text: "supervisor agent 已绑定 project settings"
+        }
+      });
       expect(body).not.toHaveProperty("projects");
       expect(body).not.toHaveProperty("reports");
       expect(body).not.toHaveProperty("audit_events");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports supervisor global agent fallback when project PI settings are absent", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertAgent(database, "runner-default", "石头");
+
+      const response = await createDefaultRouter({ database }).handle(new Request(`${BASE_URL}/api/pi/command-center`));
+      const body = await response.json() as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        supervisor: {
+          agent: {
+            agent_id: "runner-default",
+            agent_name: "石头",
+            source: "global_fallback",
+            status: "fallback",
+            status_text: "supervisor agent 未绑定 project settings，已 fallback 到全局 PI agent"
+          }
+        }
+      });
     } finally {
       database.close();
     }
@@ -106,14 +140,18 @@ function insertProject(db: RunnerDatabase, id: string): void {
 }
 
 function insertPiSettings(db: RunnerDatabase, projectID: string): void {
-  db.sqlite.run(
-    `insert into pi_agents (id, name, provider, model_provider, model_id, thinking_level, cwd_policy, tools_json, instructions, enabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["agent-1", "PI", "pi-sdk", "openai", "gpt-5.4", "high", "project", "[]", "每轮先输出托管策略摘要。", 1, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
-  );
+  insertAgent(db, "agent-1", "PI");
   db.sqlite.run(
     `insert into project_pi_settings (project_id, pi_agent_id, auto_manage, auto_triage, auto_enqueue, notify_on_needs_user, max_actions_per_cycle, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [projectID, "agent-1", 1, 0, 0, 1, 5, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
+  );
+}
+
+function insertAgent(db: RunnerDatabase, id: string, name: string): void {
+  db.sqlite.run(
+    `insert into pi_agents (id, name, provider, model_provider, model_id, thinking_level, cwd_policy, tools_json, instructions, enabled, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, name, "pi-sdk", "openai", "gpt-5.4", "high", "project", "[]", "每轮先输出托管策略摘要。", 1, "2026-06-03T09:00:00Z", "2026-06-03T09:00:00Z"]
   );
 }

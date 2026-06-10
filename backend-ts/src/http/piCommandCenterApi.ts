@@ -40,7 +40,7 @@ function buildPiCommandCenter(db: RunnerDatabase) {
     heartbeat: heartbeatSummary(latestRun),
     memory: memorySummary(memoryItems),
     prompt_debug: promptDebug(db, settings),
-    supervisor: supervisorSummary(supervisorEvents)
+    supervisor: supervisorSummary(db, supervisorEvents, settings)
   };
 }
 
@@ -82,12 +82,59 @@ function promptDebug(db: RunnerDatabase, settings: ReturnType<typeof listProject
   return agent ? { agent_id: agent.id, runtime_prompt_summary: piRuntimePromptSummary(agent) } : null;
 }
 
-function supervisorSummary(events: ReturnType<typeof listIssueSupervisorEvents>) {
+function supervisorSummary(
+  db: RunnerDatabase,
+  events: ReturnType<typeof listIssueSupervisorEvents>,
+  settings: ReturnType<typeof listProjectPiSettings>
+) {
   return {
+    agent: supervisorAgentStatus(db, settings),
     latest_event: events.at(-1) ?? null,
     needs_user_escalations: events.filter((event) => event.action_type === "needs_user.escalate" || event.decision === "needs_user").length,
     rate_limit_waits: events.filter((event) => event.action_type === "issue.retry_after" || event.retry_after_at !== "").length,
     recovery_actions: events.filter((event) => event.event_type === "action").length
+  };
+}
+
+function supervisorAgentStatus(db: RunnerDatabase, settings: ReturnType<typeof listProjectPiSettings>) {
+  const configured = settings.find((item) => item.auto_manage === 1) ?? settings[0];
+  if (configured) return configuredSupervisorAgentStatus(db, configured.pi_agent_id);
+  const fallback = listPiAgents(db).find((agent) => agent.enabled === 1);
+  if (fallback) {
+    return {
+      agent_id: fallback.id,
+      agent_name: fallback.name,
+      source: "global_fallback",
+      status: "fallback",
+      status_text: "supervisor agent 未绑定 project settings，已 fallback 到全局 PI agent"
+    };
+  }
+  return {
+    agent_id: "",
+    agent_name: "",
+    source: "missing",
+    status: "needs_configuration",
+    status_text: "supervisor agent 未绑定且没有 enabled 全局 PI agent，请绑定或启用一个 PI agent"
+  };
+}
+
+function configuredSupervisorAgentStatus(db: RunnerDatabase, agentID: string) {
+  const agent = getPiAgent(db, agentID);
+  if (agent?.enabled === 1) {
+    return {
+      agent_id: agent.id,
+      agent_name: agent.name,
+      source: "project_settings",
+      status: "bound",
+      status_text: "supervisor agent 已绑定 project settings"
+    };
+  }
+  return {
+    agent_id: agentID,
+    agent_name: agent?.name ?? "",
+    source: "project_settings",
+    status: "needs_configuration",
+    status_text: "supervisor agent 未可执行，请重新绑定 enabled PI agent"
   };
 }
 

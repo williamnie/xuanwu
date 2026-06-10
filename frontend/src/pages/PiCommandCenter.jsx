@@ -82,6 +82,7 @@ function Header({ pendingCount, state }) {
           <span>最近自动检查：{heartbeat.detail}</span>
           <span>{memorySummaryText(state.data?.memory)}</span>
           <span>{promptDebugText(state.data?.prompt_debug)}</span>
+          <span>{supervisorAgentText(state.data?.supervisor?.agent)}</span>
         </div>
       </div>
       <div className="pi-command-hero-actions">
@@ -225,7 +226,14 @@ function isAboveFoldStatusCard(card) {
 }
 
 function supervisorDetail(supervisor = {}) {
-  return `${COMMAND_CENTER_TERMS.supervisor}：${numberText(supervisor.rate_limit_waits)} 次限流等待 · ${numberText(supervisor.needs_user_escalations)} 次需人工处理`;
+  return `${COMMAND_CENTER_TERMS.supervisor}：${numberText(supervisor.rate_limit_waits)} 次限流等待 · ${numberText(supervisor.needs_user_escalations)} 次需人工处理 · ${supervisorAgentText(supervisor.agent)}`;
+}
+
+function supervisorAgentText(agent = {}) {
+  if (agent.status === 'fallback') return `Supervisor Agent：已 fallback 到全局 PI agent ${agent.agent_name || agent.agent_id || ''}`.trim();
+  if (agent.status === 'needs_configuration') return 'Supervisor Agent：请绑定或启用一个 PI agent';
+  if (agent.status === 'bound') return `Supervisor Agent：已绑定 ${agent.agent_name || agent.agent_id || ''}`.trim();
+  return 'Supervisor Agent：等待配置状态';
 }
 
 function heartbeatStatus(heartbeat) {

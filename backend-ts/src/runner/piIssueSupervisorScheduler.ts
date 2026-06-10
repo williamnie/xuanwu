@@ -1,6 +1,13 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
-import { createIssueSupervisorEvent, getPiAgent, getProjectPiSettings, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
+import {
+  createIssueSupervisorEvent,
+  getPiAgent,
+  getProjectPiSettings,
+  listIssueSupervisorEvents,
+  listPiAgents,
+  type PiAgent
+} from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { applyIssueSupervisorDecisionActions } from "../pi/issueSupervisorActions.ts";
@@ -30,9 +37,11 @@ export type PiIssueSupervisorSchedulerResult = {
 };
 
 type SupervisorTarget = { context: IssueSupervisorRecoveryContext; issueID: number; projectID: string };
+type SupervisorAgentSelection = { agent: PiAgent | null; agentID: string; error: string; source: string };
 
 const activeSupervisorIssues = new Set<string>();
 const DEFAULT_LIMIT = 50;
+const DEFAULT_FAILURE_COOLDOWN_SECONDS = 300;
 
 export async function runPiIssueSupervisorSchedulerOnce(
   input: PiIssueSupervisorSchedulerInput
@@ -54,7 +63,7 @@ export async function runPiIssueSupervisorSchedulerOnce(
     }
     activeSupervisorIssues.add(key);
     try {
-      if (recentDecisionExists(input.database, target)) {
+      if (recentDecisionExists(input, target, now)) {
         result.skipped += 1;
         continue;
       }
@@ -121,10 +130,33 @@ async function runDecision(
 ): Promise<PiSupervisorDecisionRuntimeResult> {
   if (input.runDecision) return input.runDecision(context);
   const project = requireProject(input.database, clean(context.project.id));
-  const agentID = getProjectPiSettings(input.database, project.id)?.pi_agent_id ?? "";
-  const agent = agentID === "" ? null : getPiAgent(input.database, agentID);
-  if (!agent || agent.enabled !== 1) throw new Error("PI supervisor agent is not runnable");
-  return runPiSupervisorDecision({ agent, context, database: input.database, now, project });
+  const selection = selectSupervisorAgent(input.database, project.id);
+  if (!selection.agent) throw new Error(selection.error);
+  return runPiSupervisorDecision({ agent: selection.agent, context, database: input.database, now, project });
+}
+
+function selectSupervisorAgent(db: RunnerDatabase, projectID: string): SupervisorAgentSelection {
+  const settingsAgentID = clean(getProjectPiSettings(db, projectID)?.pi_agent_id);
+  if (settingsAgentID !== "") return selectProjectSettingsAgent(db, settingsAgentID);
+  const globalAgent = listPiAgents(db).find((agent) => agent.enabled === 1) ?? null;
+  if (globalAgent) return { agent: globalAgent, agentID: globalAgent.id, error: "", source: "global_fallback" };
+  return {
+    agent: null,
+    agentID: "",
+    error: "PI supervisor agent is not runnable: enable a global PI agent or bind project PI settings",
+    source: "missing"
+  };
+}
+
+function selectProjectSettingsAgent(db: RunnerDatabase, agentID: string): SupervisorAgentSelection {
+  const agent = getPiAgent(db, agentID);
+  if (agent?.enabled === 1) return { agent, agentID, error: "", source: "project_settings" };
+  return {
+    agent: null,
+    agentID,
+    error: "PI supervisor agent is not runnable: project PI settings agent is missing or disabled",
+    source: "project_settings"
+  };
 }
 
 function recordSignal(db: RunnerDatabase, target: SupervisorTarget): void {
@@ -146,14 +178,33 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget): void {
 
 function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown): void {
   createIssueSupervisorEvent(db, {
+    diagnosis_code: primaryDiagnosis(target.context),
     event_type: "decision_failed",
     issue_id: target.issueID,
-    payload_json: { error: safeError(error) },
-    project_id: target.projectID
+    payload_json: {
+      cooldown_seconds: failureCooldownSeconds(target.context),
+      error: safeError(error),
+      supervisor_agent: supervisorAgentStatus(selectSupervisorAgent(db, target.projectID))
+    },
+    project_id: target.projectID,
+    provider: clean(target.context.session.provider) || clean(target.context.provider_error?.provider),
+    provider_error_category: clean(target.context.provider_error?.category),
+    provider_session_id: clean(target.context.session.provider_session_id),
+    provider_turn_id: clean(target.context.session.provider_turn_id),
+    run_id: clean(target.context.latest_run?.id)
   });
 }
 
-function recentDecisionExists(db: RunnerDatabase, target: SupervisorTarget): boolean {
+function recentDecisionExists(
+  input: PiIssueSupervisorSchedulerInput,
+  target: SupervisorTarget,
+  now: Date
+): boolean {
+  if (recentCompletedDecisionExists(input.database, target)) return true;
+  return recentUnrunnableAgentFailureExists(input, target, now);
+}
+
+function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTarget): boolean {
   const diagnosis = primaryDiagnosis(target.context);
   const retryAfter = readyRetryAfterTime(target.context);
   const threshold = retryAfter || latestEvidenceTime(target.context);
@@ -162,6 +213,21 @@ function recentDecisionExists(db: RunnerDatabase, target: SupervisorTarget): boo
     if (diagnosis !== "" && event.diagnosis_code !== diagnosis) return false;
     return threshold === 0 || Date.parse(event.created_at) >= threshold;
   });
+}
+
+function recentUnrunnableAgentFailureExists(
+  input: PiIssueSupervisorSchedulerInput,
+  target: SupervisorTarget,
+  now: Date
+): boolean {
+  if (input.runDecision) return false;
+  if (selectSupervisorAgent(input.database, target.projectID).agent) return false;
+  const cutoff = now.getTime() - failureCooldownSeconds(target.context) * 1_000;
+  return listIssueSupervisorEvents(input.database, { issueId: target.issueID }).some((event) => (
+    event.event_type === "decision_failed" &&
+    failedBecauseSupervisorAgent(event.payload_json) &&
+    Date.parse(event.created_at) >= cutoff
+  ));
 }
 
 function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
@@ -199,4 +265,26 @@ function clean(value: unknown): string {
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function failureCooldownSeconds(context: IssueSupervisorRecoveryContext): number {
+  const value = Number(context.policy.cooldown_seconds);
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : DEFAULT_FAILURE_COOLDOWN_SECONDS;
+}
+
+function failedBecauseSupervisorAgent(payloadJson: string): boolean {
+  try {
+    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+    return clean(payload.error).includes("PI supervisor agent is not runnable");
+  } catch {
+    return false;
+  }
+}
+
+function supervisorAgentStatus(selection: SupervisorAgentSelection): Record<string, unknown> {
+  return {
+    agent_id: selection.agentID || selection.agent?.id || "",
+    runnable: selection.agent !== null,
+    source: selection.source
+  };
 }
