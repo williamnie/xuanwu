@@ -3,6 +3,7 @@ import {
   listPiActions,
   listPiDelegations,
   listPiHeartbeatRuns,
+  listIssueSupervisorEvents,
   listProjectPiSettings,
   type PiHeartbeatRun
 } from "../db/repositories/pi.ts";
@@ -20,6 +21,7 @@ function buildPiCommandCenter(db: RunnerDatabase) {
   const activeDelegations = listPiDelegations(db, { status: "active" });
   const pendingApprovals = listPiActions(db, { status: "pending" });
   const latestRun = listPiHeartbeatRuns(db).at(0) ?? null;
+  const supervisorEvents = listIssueSupervisorEvents(db);
 
   return {
     generated_at: new Date().toISOString(),
@@ -29,7 +31,17 @@ function buildPiCommandCenter(db: RunnerDatabase) {
       autonomous_projects: settings.filter((item) => item.auto_manage === 1).length,
       pending_approvals: pendingApprovals.length
     },
-    heartbeat: heartbeatSummary(latestRun)
+    heartbeat: heartbeatSummary(latestRun),
+    supervisor: supervisorSummary(supervisorEvents)
+  };
+}
+
+function supervisorSummary(events: ReturnType<typeof listIssueSupervisorEvents>) {
+  return {
+    latest_event: events.at(-1) ?? null,
+    needs_user_escalations: events.filter((event) => event.action_type === "needs_user.escalate" || event.decision === "needs_user").length,
+    rate_limit_waits: events.filter((event) => event.action_type === "issue.retry_after" || event.retry_after_at !== "").length,
+    recovery_actions: events.filter((event) => event.event_type === "action").length
   };
 }
 

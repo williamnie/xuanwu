@@ -34,3 +34,20 @@ test('issue workflow evidence panel keeps compact long evidence inside sidebar',
   assert.match(ruleFor('.issue-workflow-step-evidence'), /overflow-wrap:\s*anywhere/);
   assert.match(ruleFor('.issue-workflow-summary-field strong,\n.issue-workflow-latest-run strong,\n.issue-workflow-latest-run code,\n.issue-workflow-latest-run p'), /overflow-wrap:\s*anywhere/);
 });
+
+test('issue detail exposes PI supervisor panel without native browser dialogs', () => {
+  const source = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
+  const panelSource = readFileSync(new URL('./IssueSupervisorPanel.jsx', import.meta.url), 'utf8');
+  assert.match(source, /api\.getIssueSupervisor\(issueId\)/);
+  assert.match(source, /import IssueSupervisorPanel from '\.\/IssueSupervisorPanel'/);
+  assert.match(source, /<IssueSupervisorPanel supervisor=\{supervisor\} \/>/);
+  assert.match(panelSource, /PI Supervisor/);
+  assert.match(panelSource, /retry-after wait/);
+  assert.match(panelSource, /Recovery history/);
+  assert.doesNotMatch(`${source}\n${panelSource}`, /window\.alert|window\.confirm/);
+
+  for (const selector of ['.issue-supervisor-panel', '.issue-supervisor-history']) {
+    assert.match(ruleFor(selector), /min-width:\s*0/);
+  }
+  assert.match(ruleFor('.issue-supervisor-header p,\n.issue-supervisor-empty,\n.issue-supervisor-field p,\n.issue-supervisor-retry p,\n.issue-supervisor-history p'), /overflow-wrap:\s*anywhere/);
+});

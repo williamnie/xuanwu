@@ -55,6 +55,7 @@ import {
   issueMcpRequirementSummary,
   mcpRequirementStatus,
 } from '../utils/mcpRequirements';
+import IssueSupervisorPanel from './IssueSupervisorPanel';
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -147,6 +148,10 @@ function sameAgentProfiles(current = [], next = []) {
   return current.every((profile, index) => agentProfileSignature(profile) === agentProfileSignature(next[index]));
 }
 
+function sameSupervisorView(current, next) {
+  return JSON.stringify(current || null) === JSON.stringify(next || null);
+}
+
 function agentProfileSignature(profile) {
   return [
     profile?.id,
@@ -224,10 +229,11 @@ export default function IssueDetail({ issueId, navigateTo }) {
     events: [],
     runs: [],
     profiles: [],
+    supervisor: null,
     loading: true,
     error: null,
   });
-  const { issue, project, events, runs, profiles, loading, error } = detailState;
+  const { issue, project, events, runs, profiles, supervisor, loading, error } = detailState;
 
   // 只滚动终端自己的滚动容器，避免把整个详情页抢到最底部。
   const terminalRef = useRef(null);
@@ -242,6 +248,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
       let eventList = [];
       let runList = [];
       let profileList;
+      let supervisorData = null;
 
       if (issueData) {
         const [
@@ -249,6 +256,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
           nextEvents,
           nextRuns,
           nextProfiles,
+          nextSupervisor,
         ] = await Promise.all([
           readOptional(() => api.getProject(issueData.project_id), '获取关联项目失败:'),
           readOptional(() => api.getIssueEvents(issueId), '获取日志事件失败:', []),
@@ -256,11 +264,13 @@ export default function IssueDetail({ issueId, navigateTo }) {
           includeProfiles
             ? readOptional(() => api.getAgentProfiles(), '获取 Agent Profiles 失败:', [])
             : Promise.resolve(undefined),
+          readOptional(() => api.getIssueSupervisor(issueId), '获取 supervisor 状态失败:', null),
         ]);
         projData = nextProject;
         eventList = nextEvents || [];
         runList = nextRuns || [];
         profileList = Array.isArray(nextProfiles) ? nextProfiles : undefined;
+        supervisorData = nextSupervisor;
       }
 
       updateDetailState(draft => {
@@ -278,6 +288,9 @@ export default function IssueDetail({ issueId, navigateTo }) {
         }
         if (Array.isArray(profileList) && !sameAgentProfiles(draft.profiles, profileList)) {
           draft.profiles = profileList;
+        }
+        if (!sameSupervisorView(draft.supervisor, supervisorData)) {
+          draft.supervisor = supervisorData;
         }
         if (draft.error !== null) {
           draft.error = null;
@@ -855,6 +868,8 @@ ${error}` : error;
           />
 
           <IssueMcpRequirementsPanel summary={mcpSummary} />
+
+          <IssueSupervisorPanel supervisor={supervisor} />
 
           {canGenerateVerifierReport(issue) && (
             <VerifierReportPanel

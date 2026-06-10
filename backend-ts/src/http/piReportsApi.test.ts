@@ -39,6 +39,19 @@ describe("PI reports API", () => {
       insertSession(database, done, "thread-done");
       insertHeartbeat(database, "demo", "hb-1");
       insertAudit(database, "demo", failed, "act-1");
+      insertSupervisorEvent(database, done, "action", {
+        actionType: "session.resume_followup",
+        decision: "resume_session"
+      });
+      insertSupervisorEvent(database, failed, "action", {
+        actionType: "issue.retry_after",
+        decision: "wait",
+        retryAfterAt: "2026-06-03T11:00:00Z"
+      });
+      insertSupervisorEvent(database, failed, "decision", {
+        diagnosisCode: "session_recovery_exhausted",
+        decision: "needs_user"
+      });
       await writeUsage(sessionsDir, "thread-done", "/tmp/demo", 15);
 
       const router = createDefaultRouter({ codexSessionsDir: sessionsDir, database });
@@ -92,6 +105,18 @@ describe("PI reports API", () => {
       });
       expect(body.provider_health).toMatchObject({ warnings: [] });
       expect(body.notification.channels).toMatchObject({ mobile: false, sse: true, webhook: false });
+      expect(body.supervisor_summary).toMatchObject({
+        exhausted_recoveries: 1,
+        needs_user_escalations: 1,
+        rate_limit_waits: 1,
+        recovered_issues: 1,
+        recovery_actions: 1
+      });
+      expect(body.summary).toMatchObject({
+        supervisor_needs_user_escalations: 1,
+        supervisor_rate_limit_waits: 1,
+        supervisor_recovered_issues: 1
+      });
 
       const list = await router.handle(new Request(`${BASE_URL}/api/pi/reports?project_id=demo`));
       const reports = await list.json() as Array<Record<string, unknown>>;
@@ -100,6 +125,11 @@ describe("PI reports API", () => {
         id: body.report_id,
         project_id: "demo",
         source: "manual",
+        supervisor_summary: {
+          needs_user_escalations: 1,
+          rate_limit_waits: 1,
+          recovered_issues: 1
+        },
         status: "generated",
         type: "night_run"
       });
@@ -222,6 +252,18 @@ function insertAudit(db: RunnerDatabase, projectID: string, issueID: number, act
     `insert into pi_action_events (action_id, project_id, issue_id, event_type, actor, reason, created_at)
      values (?, ?, ?, ?, ?, ?, ?)`,
     [actionID, projectID, issueID, "approval_decision", "user", "blocked", "2026-06-03T10:10:00Z"]
+  );
+}
+
+function insertSupervisorEvent(db: RunnerDatabase, issueID: number, eventType: string, input: {
+  actionType?: string; decision?: string; diagnosisCode?: string; retryAfterAt?: string;
+}): void {
+  db.sqlite.run(
+    `insert into issue_supervisor_events
+      (issue_id, project_id, event_type, diagnosis_code, decision, action_type, retry_after_at, payload_json, created_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [issueID, "demo", eventType, input.diagnosisCode ?? "", input.decision ?? "",
+      input.actionType ?? "", input.retryAfterAt ?? "", "{}", "2026-06-03T10:12:00Z"]
   );
 }
 

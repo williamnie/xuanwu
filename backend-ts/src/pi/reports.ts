@@ -17,6 +17,7 @@ import { diagnoseIssueState, type IssueStateDiagnostic } from "./issueStateManag
 import { buildNightRunSummary } from "./nightRunSummary.ts";
 import { reportWarnings, summarizeProviderHealth } from "./reportHealth.ts";
 import { issueReportSummary } from "./reportIssueSummary.ts";
+import { listReportSupervisorEvents, supervisorReportSummary } from "./reportSupervisorSummary.ts";
 import { buildUsageCostSummary } from "./reportUsage.ts";
 
 export type PiReportInput = {
@@ -79,6 +80,7 @@ function assembleReport(db: RunnerDatabase, input: {
   const failed = input.issues.filter((issue) => issue.status === "failed");
   const escalations = blockedEscalations(input.diagnostics);
   const providerHealth = summarizeProviderHealth(input.project, input.scope.providerStatuses);
+  const supervisor = supervisorReportSummary(input.evidence.supervisor_events);
   const warnings = reportWarnings(providerHealth, input.usage);
   const usageWarnings = warnings.filter((item) => item.source === "usage_cost").length;
   const issueSummaries = input.issues.map(issueReportSummary);
@@ -106,6 +108,11 @@ function assembleReport(db: RunnerDatabase, input: {
       completed: completed.length,
       failed: failed.length,
       needs_user: nightSummary.issue_categories.needs_user.length,
+      supervisor_exhausted_recoveries: supervisor.exhausted_recoveries,
+      supervisor_needs_user_escalations: supervisor.needs_user_escalations,
+      supervisor_rate_limit_waits: supervisor.rate_limit_waits,
+      supervisor_recovered_issues: supervisor.recovered_issues,
+      supervisor_recovery_actions: supervisor.recovery_actions,
       total: input.issues.length,
       usage_warnings: usageWarnings,
       verification_gaps: gaps.length,
@@ -114,6 +121,7 @@ function assembleReport(db: RunnerDatabase, input: {
     summary_text_zh: nightSummary.summary_text_zh,
     source: input.scope.source,
     status: "generated",
+    supervisor_summary: supervisor,
     type: input.type,
     usage_cost: input.usage,
     verification_gaps: gaps,
@@ -188,23 +196,30 @@ function relatedEvidence(
   projectID: string,
   window: { since: string; until: string },
   scope: ReportScope
-): { audit_events: PiActionEvent[]; delegations: ReturnType<typeof listPiDelegations>; heartbeat_runs: PiHeartbeatRun[] } {
+): {
+  audit_events: PiActionEvent[];
+  delegations: ReturnType<typeof listPiDelegations>;
+  heartbeat_runs: PiHeartbeatRun[];
+  supervisor_events: IssueSupervisorEvent[];
+} {
   const actionFilter = scope.delegationID ? { delegationId: scope.delegationID, projectId: projectID } : { projectId: projectID };
   const heartbeatFilter = scope.delegationID ? { delegationId: scope.delegationID, projectId: projectID } : { projectId: projectID };
   const delegationFilter = scope.delegationID ? {} : { projectId: projectID };
   const delegations = scope.delegationID ? [getPiDelegation(db, scope.delegationID)].filter(Boolean) : listPiDelegations(db, delegationFilter);
+  const auditEvents = listPiActionEvents(db, actionFilter)
+    .filter((event) => inWindow(event.created_at, window) && heartbeatMatches(event, scope))
+    .slice(-20);
   const heartbeatRuns = listPiHeartbeatRuns(db, heartbeatFilter).filter((run) => {
     const matchesID = scope.heartbeatID === "" || run.id === scope.heartbeatID;
     return matchesID && inWindow(run.started_at, window);
   });
   return {
-    audit_events: listPiActionEvents(db, actionFilter)
-      .filter((event) => inWindow(event.created_at, window) && heartbeatMatches(event, scope))
-      .slice(-20),
+    audit_events: auditEvents,
     delegations: delegations.filter((item): item is NonNullable<typeof item> => Boolean(item))
       .filter((item) => scope.delegationID !== "" || inWindow(item.updated_at, window))
       .slice(0, 20),
-    heartbeat_runs: heartbeatRuns.slice(0, 20)
+    heartbeat_runs: heartbeatRuns.slice(0, 20),
+    supervisor_events: listReportSupervisorEvents(db, { auditEvents, projectID, scope, window })
   };
 }
 

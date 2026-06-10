@@ -7,6 +7,7 @@ const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', impor
 const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const pageUrl = new URL('./PiCommandCenter.jsx', import.meta.url);
 const pageSource = existsSync(pageUrl) ? readFileSync(pageUrl, 'utf8') : '';
+const reportsSource = readFileSync(new URL('./PiReportsPanel.jsx', import.meta.url), 'utf8');
 const sessionsClientCss = readFileSync(new URL('./sessions/SessionsClient.css', import.meta.url), 'utf8');
 
 test('PI Command Center is available as a first-class routed page', () => {
@@ -18,13 +19,15 @@ test('PI Command Center is available as a first-class routed page', () => {
 });
 
 test('PI Command Center renders P11 status cards with loading and error states', () => {
-  for (const label of ['Mode', 'Heartbeat', 'Delegation', 'Pending approvals']) {
+  for (const label of ['Mode', 'Heartbeat', 'Delegation', 'Pending approvals', 'Supervisor']) {
     assert.match(pageSource, new RegExp(label));
   }
   assert.match(pageSource, /import PiDelegationsPanel from '\.\/PiDelegationsPanel'/);
   assert.match(pageSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
   assert.match(pageSource, /import PiHeartbeatTimelinePanel from '\.\/PiHeartbeatTimelinePanel'/);
+  assert.match(pageSource, /import PiReportsPanel from '\.\/PiReportsPanel'/);
   assert.match(pageSource, /<PiHeartbeatTimelinePanel \/>/);
+  assert.match(pageSource, /<PiReportsPanel \/>/);
   assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} variant="command-center" \/>/);
   assert.match(pageSource, /<PiDelegationsPanel onChanged=\{state\.reload\} \/>/);
   assert.match(pageSource, /pi-command-loading/);
@@ -37,6 +40,16 @@ test('PI Command Center keeps non-P11.02 framework placeholders read-only', () =
   assert.doesNotMatch(pageSource, /pauseProjectPiAutonomousMode|resumeProjectPiAutonomousMode/);
   assert.match(clientSource, /getPiCommandCenter: \(\) => request\('\/api\/pi\/command-center'\)/);
   assert.doesNotMatch(pageSource, /window\.confirm|window\.alert/);
+});
+
+test('PI Command Center reports panel summarizes supervisor recovery outcomes', () => {
+  assert.match(clientSource, /getPiReports:/);
+  assert.match(clientSource, /\/api\/pi\/reports/);
+  assert.match(reportsSource, /Recovered/);
+  assert.match(reportsSource, /429 waits/);
+  assert.match(reportsSource, /Exhausted/);
+  assert.match(reportsSource, /Needs user/);
+  assert.doesNotMatch(reportsSource, /window\.confirm|window\.alert/);
 });
 
 test('PI Command Center keeps main content scrollable instead of inheriting sessions overflow lock', () => {

@@ -105,6 +105,19 @@ describe("PI report generator", () => {
       );
       const blocked = insertIssue(db, "demo", "failed", "Blocked", "unit tests failed");
       insertRun(db, done, "run-done", "done", "thread-done");
+      insertSupervisorEvent(db, done, "action", {
+        actionType: "session.resume_followup",
+        decision: "resume_session"
+      });
+      insertSupervisorEvent(db, needsUser, "action", {
+        actionType: "issue.retry_after",
+        decision: "wait",
+        retryAfterAt: "2026-06-03T22:00:00Z"
+      });
+      insertSupervisorEvent(db, needsUser, "decision", {
+        diagnosisCode: "session_recovery_exhausted",
+        decision: "needs_user"
+      });
       createPiDelegation(db, { id: "delegation-a", project_id: "demo", title: "Night window" });
       createPiHeartbeatRun(db, {
         delegation_id: "delegation-a",
@@ -130,6 +143,13 @@ describe("PI report generator", () => {
       const failedNeedsUser = categories.failed.find((issue) => issue.id === needsUser);
 
       expect(report.summary).toMatchObject({ blocked: 1, completed: 1, failed: 2, needs_user: 1, total: 3 });
+      expect(report.supervisor_summary).toMatchObject({
+        exhausted_recoveries: 1,
+        needs_user_escalations: 1,
+        rate_limit_waits: 1,
+        recovered_issues: 1,
+        recovery_actions: 1
+      });
       expect(categories.completed).toEqual([expect.objectContaining({
         evidence_links: expect.objectContaining({
           audit: `/api/pi/audit-events?project_id=demo&issue_id=${done}`,
@@ -195,5 +215,17 @@ function insertRun(db: RunnerDatabase, issueID: number, id: string, status: stri
       (id, issue_id, attempt, status, provider, provider_session_id, codex_thread_id, started_at, ended_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, issueID, 1, status, "codex", sessionID, sessionID, "2026-06-03T21:05:00Z", "2026-06-03T21:08:00Z"]
+  );
+}
+
+function insertSupervisorEvent(db: RunnerDatabase, issueID: number, eventType: string, input: {
+  actionType?: string; decision?: string; diagnosisCode?: string; retryAfterAt?: string;
+}): void {
+  db.sqlite.run(
+    `insert into issue_supervisor_events
+      (issue_id, project_id, event_type, diagnosis_code, decision, action_type, retry_after_at, payload_json, created_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [issueID, "demo", eventType, input.diagnosisCode ?? "", input.decision ?? "",
+      input.actionType ?? "", input.retryAfterAt ?? "", "{}", "2026-06-03T21:09:00Z"]
   );
 }

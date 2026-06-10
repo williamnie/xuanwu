@@ -146,6 +146,26 @@
   color: var(--success);
 }
 
+.pi-heartbeat-timeline-item.supervisor_signal .pi-heartbeat-timeline-rail span {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--primary);
+}
+
+.pi-heartbeat-timeline-item.supervisor_decision .pi-heartbeat-timeline-rail span {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.pi-heartbeat-timeline-item.supervisor_action .pi-heartbeat-timeline-rail span {
+  background: color-mix(in srgb, var(--info) 18%, transparent);
+  color: var(--info);
+}
+
+.pi-heartbeat-timeline-item.supervisor_result .pi-heartbeat-timeline-rail span {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
 .pi-heartbeat-timeline-body {
   display: flex;
   flex-direction: column;

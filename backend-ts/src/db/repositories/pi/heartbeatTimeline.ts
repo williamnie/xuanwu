@@ -3,7 +3,9 @@ import { integerInput, integerValue, optionalString } from "./common.ts";
 import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 
 export type PiHeartbeatTimelineFilter = { issueId?: number; limit?: number; projectId?: string };
-export type PiHeartbeatTimelineStage = "signal" | "decision" | "action" | "result";
+export type PiHeartbeatTimelineStage =
+  "action" | "decision" | "result" | "signal" |
+  "supervisor_action" | "supervisor_decision" | "supervisor_result" | "supervisor_signal";
 export type PiHeartbeatTimelineSource = "action" | "heartbeat" | "supervisor";
 export type PiHeartbeatTimelineItem = {
   id: string; row_id: number; source: PiHeartbeatTimelineSource; stage: PiHeartbeatTimelineStage;
@@ -231,10 +233,10 @@ function supervisorMessage(row: TimelineRow, payloadJson: string): string {
 }
 
 function supervisorStage(eventType: string): PiHeartbeatTimelineStage {
-  if (eventType === "signal") return "signal";
-  if (eventType.includes("decision")) return "decision";
-  if (eventType === "action") return "action";
-  return "result";
+  if (eventType === "signal") return "supervisor_signal";
+  if (eventType.includes("decision")) return "supervisor_decision";
+  if (eventType === "action") return "supervisor_action";
+  return "supervisor_result";
 }
 
 function heartbeatStage(eventType: string): PiHeartbeatTimelineStage {

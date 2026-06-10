@@ -12,6 +12,8 @@ test('PI Command Center renders the heartbeat timeline module', () => {
   assert.match(commandCenterSource, /<PiHeartbeatTimelinePanel \/>/);
   assert.match(panelSource, /Heartbeat Timeline/);
   assert.match(panelSource, /signal \/ decision \/ action \/ result/);
+  assert.match(panelSource, /supervisor_signal/);
+  assert.match(panelSource, /supervisor_decision/);
 });
 
 test('heartbeat timeline supports project and issue filters through the API client', () => {

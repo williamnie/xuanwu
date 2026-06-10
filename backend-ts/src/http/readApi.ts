@@ -26,6 +26,7 @@ import { registerSessionRoutes } from "./sessionApi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiRoutes } from "./piApi.ts";
+import { registerPiSupervisorRoutes } from "./piSupervisorApi.ts";
 import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { registerUsageRoutes } from "./usageApi.ts";
 import type { Router } from "./router.ts";
@@ -45,6 +46,7 @@ export function registerReadApiRoutes(router: Router, context: ReadApiContext): 
   registerProjectRoutes(router, context);
   registerIssueCollectionRoutes(router, context);
   registerIssueItemRoutes(router, context);
+  registerPiSupervisorRoutes(router, context);
   registerPiRoutes(router, context);
   registerSessionRoutes(router, context);
   registerFrontendCompatRoutes(router, context);

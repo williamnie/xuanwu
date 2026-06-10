@@ -5,7 +5,16 @@ import { shortId } from './piChatState';
 import './PiHeartbeatTimelinePanel.css';
 
 const TIMELINE_LIMIT = 80;
-const STAGE_LABELS = { action: 'action', decision: 'decision', result: 'result', signal: 'signal' };
+const STAGE_LABELS = {
+  action: 'action',
+  decision: 'decision',
+  result: 'result',
+  signal: 'signal',
+  supervisor_action: 'supervisor action',
+  supervisor_decision: 'supervisor decision',
+  supervisor_result: 'supervisor result',
+  supervisor_signal: 'supervisor signal',
+};
 
 export default function PiHeartbeatTimelinePanel() {
   const timeline = useHeartbeatTimeline();
@@ -145,7 +154,7 @@ function TimelineDetails({ item }) {
 }
 
 function eventTitle(item) {
-  const source = item.source === 'heartbeat' ? 'heartbeat' : 'audit';
+  const source = item.source === 'heartbeat' ? 'heartbeat' : item.source === 'supervisor' ? 'supervisor' : 'audit';
   return `${source} · ${String(item.event_type || 'event').replaceAll('_', ' ')}`;
 }
 

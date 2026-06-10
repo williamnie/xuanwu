@@ -29,19 +29,24 @@ function listReports(context: PiReportsContext, request: Request): unknown {
     source: cleanString(params.get("source")),
     status: cleanString(params.get("status")),
     type: cleanString(params.get("type"))
-  }).map((record) => ({
-    delegation_id: record.delegation_id,
-    generated_at: record.generated_at,
-    heartbeat_id: record.heartbeat_id,
-    id: record.id,
-    issue_ids: parseJsonArray(record.issue_ids_json),
-    project_id: record.project_id,
-    source: record.source,
-    status: record.status,
-    summary: parseJsonObject(record.summary_json),
-    type: record.type,
-    window: { since: record.since_at, until: record.until_at }
-  }));
+  }).map((record) => {
+    const body = parseJsonObject(record.body_json);
+    return {
+      delegation_id: record.delegation_id,
+      generated_at: record.generated_at,
+      heartbeat_id: record.heartbeat_id,
+      id: record.id,
+      issue_ids: parseJsonArray(record.issue_ids_json),
+      notification: parseRecord(body.notification),
+      project_id: record.project_id,
+      source: record.source,
+      status: record.status,
+      summary: parseJsonObject(record.summary_json),
+      supervisor_summary: parseRecord(body.supervisor_summary),
+      type: record.type,
+      window: { since: record.since_at, until: record.until_at }
+    };
+  });
 }
 
 function reportDetail(context: PiReportsContext, request: Request): unknown {
@@ -108,4 +113,8 @@ function parseJsonArray(value: string): unknown[] {
   } catch {
     return [];
   }
+}
+
+function parseRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

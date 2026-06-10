@@ -858,6 +858,110 @@ input:checked + .slider:before {
   user-select: text;
 }
 
+.issue-supervisor-panel {
+  border-left: 4px solid var(--primary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.issue-supervisor-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.issue-supervisor-header h3 {
+  align-items: center;
+  display: flex;
+  font-size: 1.05rem;
+  font-weight: 700;
+  gap: 8px;
+  margin: 0;
+}
+
+.issue-supervisor-header p,
+.issue-supervisor-empty,
+.issue-supervisor-field p,
+.issue-supervisor-retry p,
+.issue-supervisor-history p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-supervisor-field,
+.issue-supervisor-retry,
+.issue-supervisor-history article {
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.issue-supervisor-field span,
+.issue-supervisor-history > span {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.issue-supervisor-field .mono,
+.issue-supervisor-retry code {
+  font-family: var(--font-mono);
+  user-select: text;
+}
+
+.issue-supervisor-retry {
+  background: var(--warning-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.issue-supervisor-retry strong {
+  color: var(--warning);
+  font-size: 0.82rem;
+}
+
+.issue-supervisor-retry code {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.issue-supervisor-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.issue-supervisor-history article {
+  display: grid;
+  gap: 5px;
+}
+
+.issue-supervisor-history strong {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.issue-supervisor-history time {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
 /* Terminal Styles */
 .terminal-view {
   background: var(--bg-terminal);

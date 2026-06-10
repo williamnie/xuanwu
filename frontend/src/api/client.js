@@ -287,6 +287,8 @@ export const api = {
 
   getIssueRuns: (id) => request(`/api/issues/${id}/runs`),
 
+  getIssueSupervisor: (id) => request(`/api/issues/${id}/supervisor`),
+
   createIssueComment: (id, comment) => request(`/api/issues/${id}/comments`, {
     method: 'POST',
     body: JSON.stringify(comment),
@@ -361,6 +363,14 @@ export const api = {
     if (limit) params.append('limit', String(limit));
     const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/pi/heartbeat-timeline${query}`);
+  },
+
+  getPiReports: ({ projectId = '', limit = 6 } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append('project_id', projectId);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/reports${query}`);
   },
 
   getProjectPiSettings: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`),

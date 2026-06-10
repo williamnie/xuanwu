@@ -32,6 +32,10 @@ describe("PI heartbeat timeline API", () => {
         eventType: "gate_decision", heartbeatID: "hb-demo", issueID, projectID: "demo",
         reason: "Authorization: Bearer bearer-secret at /tmp/secret.log"
       });
+      insertSupervisorEvent(database, {
+        eventType: "decision", issueID, projectID: "demo",
+        payload: { recovery_message: "resume after checking state" }
+      });
 
       const response = await createDefaultRouter({ database }).handle(
         new Request(`${BASE_URL}/api/pi/heartbeat-timeline?project_id=demo&issue_id=${issueID}`)
@@ -40,9 +44,9 @@ describe("PI heartbeat timeline API", () => {
       const text = JSON.stringify(body);
 
       expect(response.status).toBe(200);
-      expect(body.map((item) => item.source)).toEqual(["action", "heartbeat"]);
-      expect(body.map((item) => item.stage)).toEqual(["decision", "signal"]);
-      expect(body.map((item) => item.heartbeat_id)).toEqual(["hb-demo", "hb-demo"]);
+      expect(body.map((item) => item.source)).toEqual(["supervisor", "action", "heartbeat"]);
+      expect(body.map((item) => item.stage)).toEqual(["supervisor_decision", "decision", "signal"]);
+      expect(body.map((item) => item.heartbeat_id)).toEqual(["", "hb-demo", "hb-demo"]);
       expect(text).toContain("[redacted]");
       expect(text).toContain("[redacted-path]");
       expect(text).not.toContain("payload-secret");
@@ -103,5 +107,17 @@ function insertActionEvent(db: RunnerDatabase, input: {
       "action-demo", input.projectID, input.issueID, input.eventType, input.reason ?? "",
       input.heartbeatID, "2026-06-04T09:00:02Z"
     ]
+  );
+}
+
+function insertSupervisorEvent(db: RunnerDatabase, input: {
+  eventType: string; issueID: number; payload?: unknown; projectID: string;
+}): void {
+  db.sqlite.run(
+    `insert into issue_supervisor_events
+      (issue_id, project_id, event_type, decision, payload_json, created_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [input.issueID, input.projectID, input.eventType, "resume_session",
+      JSON.stringify(input.payload ?? {}), "2026-06-04T09:00:03Z"]
   );
 }

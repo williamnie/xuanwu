@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, CheckCircle2, Command, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Activity, Bot, CheckCircle2, Command, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
 import PiActionAuditPanel from './PiActionAuditPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
 import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
 import PiPolicyEditorPanel from './PiPolicyEditorPanel';
+import PiReportsPanel from './PiReportsPanel';
 import './PiCommandCenter.css';
 
 const FRAMEWORK_SECTIONS = [];
@@ -22,6 +23,7 @@ export default function PiCommandCenter() {
         {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
       </section>
       <PiHeartbeatTimelinePanel />
+      <PiReportsPanel />
       <PiActionAuditPanel onChanged={state.reload} variant="command-center" />
       <PiDelegationsPanel onChanged={state.reload} />
       <PiPolicyEditorPanel onChanged={state.reload} />
@@ -110,7 +112,12 @@ function buildStatusCards(data) {
     { detail: heartbeat.detail, icon: Activity, id: 'heartbeat', label: 'Heartbeat', value: heartbeat.value },
     { detail: `${numberText(overview.autonomous_projects)} autonomous projects`, icon: ShieldCheck, id: 'delegation', label: 'Delegation', value: `${numberText(overview.active_delegations)} active` },
     { detail: '需要人工确认的 PI action', icon: CheckCircle2, id: 'approvals', label: 'Pending approvals', value: numberText(overview.pending_approvals) },
+    { detail: supervisorDetail(data?.supervisor), icon: Bot, id: 'supervisor', label: 'Supervisor', value: `${numberText(data?.supervisor?.recovery_actions)} recoveries` },
   ];
+}
+
+function supervisorDetail(supervisor = {}) {
+  return `${numberText(supervisor.rate_limit_waits)} waits · ${numberText(supervisor.needs_user_escalations)} escalations`;
 }
 
 function heartbeatStatus(heartbeat) {
