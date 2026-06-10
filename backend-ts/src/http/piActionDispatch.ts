@@ -45,6 +45,7 @@ export async function dispatchPiAction(
         author: "agent",
         body: cleanString(payload.body) || cleanString(payload.message)
       });
+    case "issue.retry":
     case "issue.retry_after":
     case "issue.supervisor_decision":
     case "session.resume_followup":

@@ -10,6 +10,7 @@ export default function PiAutomationStatusPanel({ automation = {}, onChanged }) 
     <section className="pi-automation-panel" aria-label="PI 定时巡检启用状态">
       <AutomationHeader loading={state.loading} onRefresh={state.load} />
       <AutomationLanes automation={automation} />
+      <SupervisorPolicyTargets supervisor={automation.supervisor} />
       <ManagerTargets automation={automation} />
       <ManagerSettingsForm state={state} />
     </section>
@@ -66,6 +67,34 @@ function AutomationLanes({ automation }) {
         </article>
       ))}
     </div>
+  );
+}
+
+function SupervisorPolicyTargets({ supervisor = {} }) {
+  const targets = Array.isArray(supervisor.targets) ? supervisor.targets : [];
+  return (
+    <div className="pi-supervisor-policy-targets" aria-label="Supervisor 自动恢复策略">
+      <div>
+        <strong>Supervisor mode 实际状态</strong>
+        <p>{supervisor.reason || '默认只分析并提出建议，等待人工审批'}；allowed actions：{actionList(supervisor.allowed_actions)}</p>
+        <p>语义：off=关闭；propose_only=只建议；assisted=需审批；autonomous=allowlist 内可自动恢复。</p>
+      </div>
+      <div className="pi-supervisor-policy-list">
+        {targets.length === 0 ? <p className="pi-automation-empty">暂无项目策略。</p> : targets.map(target => <SupervisorTargetRow key={target.project_id} target={target} />)}
+      </div>
+    </div>
+  );
+}
+
+function SupervisorTargetRow({ target }) {
+  return (
+    <article className={target.recovery_state === 'auto_recoverable' ? 'ready' : ''}>
+      <div>
+        <strong>{target.project_name || target.project_id}</strong>
+        <p>{target.state_text}</p>
+      </div>
+      <code>{supervisorModeLabel(target.supervisor_mode)} · allowed={actionList(target.allowed_actions)}</code>
+    </article>
   );
 }
 
@@ -129,10 +158,16 @@ function ManagerSettingsForm({ state }) {
 function automationLanes(automation = {}) {
   return [
     lane('issue execution auto-run（todo 队列）', automation.issue_execution?.state, `${count(automation.issue_execution?.enabled_projects)} 个项目 auto_run=1；只负责领取 todo issue。`),
-    lane('PI supervisor（故障 issue 恢复）', automation.supervisor?.state, `${automation.supervisor?.reason || '只扫描故障恢复候选'}；scan=${automation.supervisor?.scan_scope || 'in_progress/open_issue_runs/due_auto_retry'}，不是巡查所有 issue。`),
+    lane('PI supervisor（故障 issue 恢复）', automation.supervisor?.state, supervisorLaneDetail(automation.supervisor)),
     lane('PI manager auto-manage（项目巡检）', automation.manager_auto_manage?.state, automation.manager_auto_manage?.reason || '未启用项目巡检。'),
     lane('delegation/cron heartbeat', heartbeatState(automation), heartbeatDetail(automation)),
   ];
+}
+
+function supervisorLaneDetail(supervisor = {}) {
+  const auto = count(supervisor.automatic_projects);
+  const approval = count(supervisor.needs_approval_projects);
+  return `${supervisor.reason || '只扫描故障恢复候选'}；可自动恢复 ${auto} 个，需审批 ${approval} 个；scan=${supervisor.scan_scope || 'in_progress/open_issue_runs/due_auto_retry'}。`;
 }
 
 function lane(title, state, detail) {
@@ -208,4 +243,19 @@ function blankForm(projectId = '') {
 
 function count(value) {
   return Number(value || 0);
+}
+
+function actionList(value) {
+  const list = Array.isArray(value) ? value.filter(Boolean) : [];
+  return list.length > 0 ? list.join(', ') : '空（不会自动续聊）';
+}
+
+function supervisorModeLabel(mode) {
+  const labels = {
+    assisted: '需审批',
+    autonomous: '可自动恢复',
+    off: '关闭',
+    propose_only: '只建议',
+  };
+  return labels[mode] || mode || '未配置';
 }

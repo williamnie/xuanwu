@@ -18,7 +18,10 @@ import {
 import { supervisorCandidateReady } from "../pi/issueSupervisorSignalCollector.ts";
 import { runPiSupervisorDecision, type PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
 import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
-
+import {
+  refreshSupervisorProgressResult,
+  supervisorResultOutcome
+} from "./issueSupervisorProgressTracker.ts";
 export type PiIssueSupervisorSchedulerInput = {
   database: RunnerDatabase;
   limit?: number;
@@ -27,7 +30,6 @@ export type PiIssueSupervisorSchedulerInput = {
   runDecision?: (context: IssueSupervisorRecoveryContext) => Promise<PiSupervisorDecisionRuntimeResult>;
   staleAfterSeconds?: number;
 };
-
 export type PiIssueSupervisorSchedulerResult = {
   decisions: number;
   failed: number;
@@ -35,14 +37,11 @@ export type PiIssueSupervisorSchedulerResult = {
   signaled: number;
   skipped: number;
 };
-
 type SupervisorTarget = { context: IssueSupervisorRecoveryContext; issueID: number; projectID: string };
 type SupervisorAgentSelection = { agent: PiAgent | null; agentID: string; error: string; source: string };
-
 const activeSupervisorIssues = new Set<string>();
 const DEFAULT_LIMIT = 50;
 const DEFAULT_FAILURE_COOLDOWN_SECONDS = 300;
-
 export async function runPiIssueSupervisorSchedulerOnce(
   input: PiIssueSupervisorSchedulerInput
 ): Promise<PiIssueSupervisorSchedulerResult> {
@@ -87,7 +86,6 @@ export async function runPiIssueSupervisorSchedulerOnce(
   }
   return result;
 }
-
 function collectTargets(
   db: RunnerDatabase,
   now: Date,
@@ -99,7 +97,20 @@ function collectTargets(
   for (const issueID of issueIDs) {
     const issue = getIssue(db, issueID);
     if (!issue) continue;
-    const context = buildIssueSupervisorRecoveryContext(db, issueID, {
+    let context = buildIssueSupervisorRecoveryContext(db, issueID, {
+      now,
+      staleAfterSeconds: options.staleAfterSeconds
+    });
+    if (clean(context.policy.mode) === "off") continue;
+    const progress = refreshSupervisorProgressResult({
+      context,
+      database: db,
+      issueID,
+      now,
+      projectID: issue.project_id,
+      staleAfterSeconds: options.staleAfterSeconds
+    });
+    if (progress) context = buildIssueSupervisorRecoveryContext(db, issueID, {
       now,
       staleAfterSeconds: options.staleAfterSeconds
     });
@@ -112,7 +123,6 @@ function collectTargets(
   }
   return { ready, scanned: issueIDs.length, signaled };
 }
-
 function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
   const nowText = iso(now);
   return db.sqlite.query<{ id: number }, [string]>(`
@@ -122,7 +132,6 @@ function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
     order by i.updated_at asc, i.id asc limit ${boundedLimit(limit)}
   `).all(nowText).map((row) => row.id);
 }
-
 async function runDecision(
   input: PiIssueSupervisorSchedulerInput,
   context: IssueSupervisorRecoveryContext,
@@ -134,7 +143,6 @@ async function runDecision(
   if (!selection.agent) throw new Error(selection.error);
   return runPiSupervisorDecision({ agent: selection.agent, context, database: input.database, now, project });
 }
-
 function selectSupervisorAgent(db: RunnerDatabase, projectID: string): SupervisorAgentSelection {
   const settingsAgentID = clean(getProjectPiSettings(db, projectID)?.pi_agent_id);
   if (settingsAgentID !== "") return selectProjectSettingsAgent(db, settingsAgentID);
@@ -147,7 +155,6 @@ function selectSupervisorAgent(db: RunnerDatabase, projectID: string): Superviso
     source: "missing"
   };
 }
-
 function selectProjectSettingsAgent(db: RunnerDatabase, agentID: string): SupervisorAgentSelection {
   const agent = getPiAgent(db, agentID);
   if (agent?.enabled === 1) return { agent, agentID, error: "", source: "project_settings" };
@@ -158,7 +165,6 @@ function selectProjectSettingsAgent(db: RunnerDatabase, agentID: string): Superv
     source: "project_settings"
   };
 }
-
 function recordSignal(db: RunnerDatabase, target: SupervisorTarget): void {
   const candidate = target.context.candidates[0];
   createIssueSupervisorEvent(db, {
@@ -175,7 +181,6 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget): void {
     run_id: clean(target.context.latest_run?.id)
   });
 }
-
 function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown): void {
   createIssueSupervisorEvent(db, {
     diagnosis_code: primaryDiagnosis(target.context),
@@ -194,7 +199,6 @@ function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unkn
     run_id: clean(target.context.latest_run?.id)
   });
 }
-
 function recentDecisionExists(
   input: PiIssueSupervisorSchedulerInput,
   target: SupervisorTarget,
@@ -203,18 +207,22 @@ function recentDecisionExists(
   if (recentCompletedDecisionExists(input.database, target)) return true;
   return recentUnrunnableAgentFailureExists(input, target, now);
 }
-
 function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTarget): boolean {
+  const events = listIssueSupervisorEvents(db, { issueId: target.issueID });
+  if (latestSupervisorResult(events) === "no_progress") return false;
   const diagnosis = primaryDiagnosis(target.context);
   const retryAfter = readyRetryAfterTime(target.context);
   const threshold = retryAfter || latestEvidenceTime(target.context);
-  return listIssueSupervisorEvents(db, { issueId: target.issueID }).some((event) => {
+  return events.some((event) => {
     if (!["decision", "action", "result"].includes(event.event_type)) return false;
     if (diagnosis !== "" && event.diagnosis_code !== diagnosis) return false;
     return threshold === 0 || Date.parse(event.created_at) >= threshold;
   });
 }
-
+function latestSupervisorResult(events: ReturnType<typeof listIssueSupervisorEvents>): string {
+  const result = [...events].reverse().find((event) => event.event_type === "result");
+  return result ? supervisorResultOutcome(result) : "";
+}
 function recentUnrunnableAgentFailureExists(
   input: PiIssueSupervisorSchedulerInput,
   target: SupervisorTarget,
@@ -229,13 +237,11 @@ function recentUnrunnableAgentFailureExists(
     Date.parse(event.created_at) >= cutoff
   ));
 }
-
 function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
   return clean(context.candidates.find((candidate) => candidate.exhausted)?.diagnosis_code) ||
     clean(context.candidates.find((candidate) => candidate.diagnosis_code === "provider_retry_after_ready")?.diagnosis_code) ||
     clean(context.candidates[0]?.diagnosis_code);
 }
-
 function readyRetryAfterTime(context: IssueSupervisorRecoveryContext): number {
   for (const candidate of context.candidates) {
     if (candidate.diagnosis_code !== "provider_retry_after_ready") continue;
@@ -244,34 +250,27 @@ function readyRetryAfterTime(context: IssueSupervisorRecoveryContext): number {
   }
   return 0;
 }
-
 function latestEvidenceTime(context: IssueSupervisorRecoveryContext): number {
   return Math.max(0, ...context.recent_events.map((event) => Date.parse(event.at)).filter(Number.isFinite));
 }
-
 function requireProject(db: RunnerDatabase, projectID: string): Project {
   const project = getProject(db, projectID);
   if (!project) throw new Error("project not found");
   return project;
 }
-
 function boundedLimit(value: number): number {
   return Math.min(Math.max(Number.isFinite(value) ? Math.round(value) : DEFAULT_LIMIT, 1), DEFAULT_LIMIT);
 }
-
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
-
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
 function failureCooldownSeconds(context: IssueSupervisorRecoveryContext): number {
   const value = Number(context.policy.cooldown_seconds);
   return Number.isFinite(value) && value > 0 ? Math.round(value) : DEFAULT_FAILURE_COOLDOWN_SECONDS;
 }
-
 function failedBecauseSupervisorAgent(payloadJson: string): boolean {
   try {
     const payload = JSON.parse(payloadJson) as Record<string, unknown>;
@@ -280,7 +279,6 @@ function failedBecauseSupervisorAgent(payloadJson: string): boolean {
     return false;
   }
 }
-
 function supervisorAgentStatus(selection: SupervisorAgentSelection): Record<string, unknown> {
   return {
     agent_id: selection.agentID || selection.agent?.id || "",

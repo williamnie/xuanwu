@@ -6,7 +6,7 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
-import { createPiAction } from "../db/repositories/pi.ts";
+import { createPiAction, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
 
@@ -85,6 +85,44 @@ describe("PI action dispatcher supervisor actions", () => {
         status: "in_progress"
       });
       expect(listIssueEvents(db, 306).map((event) => event.type)).toContain("issue.retry_after_scheduled");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("issue.retry queues a stale issue and records supervisor result", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 309, projectID: "demo", sessionID: "thread-309", turnID: "turn-old" });
+      const action = createPiAction(db, {
+        action_type: "issue.retry",
+        id: "retry-action",
+        issue_id: 309,
+        payload_json: JSON.stringify({
+          diagnosis_code: "provider_transient_network_error",
+          expected_issue_updated_at: "2026-06-10T07:00:00Z",
+          expected_run_id: "issue-309-attempt-1",
+          issue_id: 309,
+          reason: "transient provider disconnect"
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await dispatchPiAction({ database: db }, action);
+
+      expect(getIssue(db, 309)).toMatchObject({ status: "todo", auto_retry_next_at: "" });
+      expect(listIssueRuns(db, 309).at(-1)).toMatchObject({ ended_at: expect.stringMatching(/Z$/), status: "todo" });
+      expect(listIssueEvents(db, 309).map((event) => event.type)).toEqual(expect.arrayContaining([
+        "issue.status_changed",
+        "issue.supervisor_retry"
+      ]));
+      expect(listIssueSupervisorEvents(db, { issueId: 309 })).toContainEqual(expect.objectContaining({
+        action_id: "retry-action",
+        action_type: "issue.retry",
+        event_type: "result"
+      }));
     } finally {
       db.close();
     }

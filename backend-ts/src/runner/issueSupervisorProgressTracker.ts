@@ -1,0 +1,98 @@
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import {
+  createIssueSupervisorEvent,
+  listIssueSupervisorEvents,
+  type IssueSupervisorEvent
+} from "../db/repositories/pi.ts";
+import type { RunnerDatabase } from "../db/database.ts";
+import type { IssueSupervisorRecoveryContext } from "../pi/issueSupervisorContext.ts";
+import { detectMeaningfulProgress } from "../pi/meaningfulProgress.ts";
+
+const DEFAULT_STALE_SECONDS = 5 * 60;
+const FINAL_OUTCOMES = new Set(["failed", "no_progress", "progress", "queued", "recorded", "scheduled"]);
+const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "issue.retry"]);
+
+export type SupervisorProgressRefreshOutcome = "no_progress" | "progress";
+
+export function refreshSupervisorProgressResult(input: {
+  context: IssueSupervisorRecoveryContext;
+  database: RunnerDatabase;
+  issueID: number;
+  now: Date;
+  projectID: string;
+  staleAfterSeconds?: number;
+}): SupervisorProgressRefreshOutcome | null {
+  const events = listIssueSupervisorEvents(input.database, { issueId: input.issueID });
+  const action = latestRecoveryAction(events);
+  if (!action || hasFinalResult(events, action)) return null;
+  if (!staleEnough(action.created_at, input.now, input.staleAfterSeconds)) return null;
+  const progressEvents = issueEventsAfter(input.database, input.issueID, action.created_at);
+  const progress = detectMeaningfulProgress({ events: progressEvents });
+  const outcome = progress.has_progress ? "progress" : "no_progress";
+  createIssueSupervisorEvent(input.database, {
+    action_id: action.action_id,
+    action_type: action.action_type,
+    decision: action.decision,
+    diagnosis_code: action.diagnosis_code || primaryDiagnosis(input.context),
+    event_type: "result",
+    issue_id: input.issueID,
+    payload_json: {
+      ignored_reasons: progress.ignored_reasons,
+      observed_issue_events: progressEvents.length,
+      outcome,
+      reasons: progress.reasons,
+      since_action_at: action.created_at
+    },
+    project_id: input.projectID,
+    provider: action.provider || clean(input.context.session.provider),
+    provider_session_id: action.provider_session_id || clean(input.context.session.provider_session_id),
+    provider_turn_id: action.provider_turn_id || clean(input.context.session.provider_turn_id),
+    run_id: action.run_id || clean(input.context.latest_run?.id)
+  });
+  return outcome;
+}
+
+export function supervisorResultOutcome(event: IssueSupervisorEvent): string {
+  try {
+    const payload = JSON.parse(event.payload_json || "{}") as Record<string, unknown>;
+    return clean(payload.outcome) || clean(payload.status);
+  } catch {
+    return "";
+  }
+}
+
+function latestRecoveryAction(events: IssueSupervisorEvent[]): IssueSupervisorEvent | undefined {
+  return [...events].reverse().find((event) =>
+    event.event_type === "action" && RECOVERY_ACTIONS.has(event.action_type) && event.action_id !== ""
+  );
+}
+
+function hasFinalResult(events: IssueSupervisorEvent[], action: IssueSupervisorEvent): boolean {
+  return events.some((event) =>
+    event.event_type === "result" &&
+    event.action_id === action.action_id &&
+    FINAL_OUTCOMES.has(supervisorResultOutcome(event))
+  );
+}
+
+function issueEventsAfter(db: RunnerDatabase, issueID: number, createdAt: string) {
+  const baseline = Date.parse(createdAt);
+  return listIssueEvents(db, issueID)
+    .filter((event) => Date.parse(event.created_at) > baseline)
+    .map((event) => ({ payload: event.payload, type: event.type }));
+}
+
+function staleEnough(createdAt: string, now: Date, staleAfterSeconds: number | undefined): boolean {
+  const started = Date.parse(createdAt);
+  if (!Number.isFinite(started)) return false;
+  const seconds = staleAfterSeconds && staleAfterSeconds > 0 ? staleAfterSeconds : DEFAULT_STALE_SECONDS;
+  return now.getTime() - started >= seconds * 1_000;
+}
+
+function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
+  return clean(context.candidates[0]?.diagnosis_code) || clean(context.provider_error?.diagnosis_code);
+}
+
+function clean(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}

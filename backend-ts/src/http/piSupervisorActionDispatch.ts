@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { retryIssue } from "../db/repositories/issueActions.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
@@ -23,6 +24,7 @@ export async function dispatchSupervisorPiAction(
   payload: Record<string, unknown>
 ): Promise<unknown> {
   if (action.action_type === "session.resume_followup") return resumeSessionFollowup(context, action, payload);
+  if (action.action_type === "issue.retry") return retryIssueNow(context, action, payload);
   if (action.action_type === "issue.retry_after") return scheduleRetryAfter(context, action, payload);
   if (action.action_type === "issue.supervisor_decision") return recordSupervisorDecision(context, action, payload);
   throw new Error(`unsupported supervisor PI action type: ${action.action_type}`);
@@ -53,6 +55,26 @@ async function resumeSessionFollowup(
   });
   recordSupervisorResult(context.database, action, payload, { outcome: "started", provider_turn_id: result.turn_id });
   return result;
+}
+
+function retryIssueNow(
+  context: SupervisorDispatchContext,
+  action: PiAction,
+  payload: Record<string, unknown>
+): unknown {
+  const issueID = positivePayloadID(payload, "issue_id");
+  assertFreshSupervisorState(context.database, issueID, sessionProviderID(payload), "", payload, [
+    "expected_issue_updated_at", "expected_run_id"
+  ]);
+  const reason = cleanString(payload.reason) || cleanString(payload.diagnosis_code) || "supervisor retry";
+  const issue = retryIssue(context.database, issueID);
+  recordIssueEvent(context.database, issueID, "issue.supervisor_retry", {
+    action_id: action.id,
+    decision_id: cleanString(payload.decision_id),
+    reason
+  });
+  recordSupervisorResult(context.database, action, payload, { outcome: "queued", reason, status: issue.status });
+  return issue;
 }
 
 function scheduleRetryAfter(

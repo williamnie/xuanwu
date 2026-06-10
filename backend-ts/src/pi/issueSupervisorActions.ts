@@ -7,6 +7,7 @@ import type { PiGatePolicy } from "./actionGate.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 import {
   PI_SUPERVISOR_DECISION_ACTION_TYPES,
+  PI_SUPERVISOR_DECISIONS,
   type PiSupervisorDecisionJson
 } from "./issueSupervisorRecovery.ts";
 
@@ -62,7 +63,12 @@ function actionRequests(input: IssueSupervisorActionInput): PiActionRequest[] {
 }
 
 function actionTypes(decision: PiSupervisorDecisionJson): string[] {
-  return PI_SUPERVISOR_DECISION_ACTION_TYPES[decision.decision] ?? ["issue.supervisor_decision"];
+  const key = clean(decision.decision);
+  return isSupervisorDecision(key) ? PI_SUPERVISOR_DECISION_ACTION_TYPES[key] : ["issue.supervisor_decision"];
+}
+
+function isSupervisorDecision(value: string): value is keyof typeof PI_SUPERVISOR_DECISION_ACTION_TYPES {
+  return (PI_SUPERVISOR_DECISIONS as readonly string[]).includes(value);
 }
 
 function actionPayload(input: IssueSupervisorActionInput, actionType: string): Record<string, unknown> {
@@ -123,6 +129,7 @@ async function executeIfApproved(
   } catch (error) {
     const failed = updatePiAction(input.database, action.id, { result_json: JSON.stringify({ error: safeError(error) }), status: "failed" });
     recordPiActionAuditEvent(input.database, failed, "execution_error", { actor: "executor", error: safeError(error) });
+    recordResultEvent(input, failed, { error: safeError(error), outcome: "failed" });
     return actionSummary(failed);
   }
 }
@@ -170,6 +177,23 @@ function recordActionEvent(input: IssueSupervisorActionInput, action: IssueSuper
     issue_id: issueID(input.context),
     payload_json: action,
     project_id: projectID(input.context)
+  });
+}
+
+function recordResultEvent(input: IssueSupervisorActionInput, action: PiAction, result: Record<string, unknown>): void {
+  createIssueSupervisorEvent(input.database, {
+    action_id: action.id,
+    action_type: action.action_type,
+    decision: input.decision.decision,
+    diagnosis_code: primaryDiagnosis(input.context),
+    event_type: "result",
+    issue_id: action.issue_id,
+    payload_json: result,
+    project_id: action.project_id,
+    provider: clean(input.context.session.provider) || clean(input.context.provider_error?.provider),
+    provider_session_id: clean(input.context.session.provider_session_id),
+    provider_turn_id: clean(input.context.session.provider_turn_id),
+    run_id: clean(input.context.latest_run?.id)
   });
 }
 

@@ -57,6 +57,10 @@ test('PI Command Center separates auto-run, supervisor, manager and heartbeat au
   for (const copy of [
     'issue execution auto-run（todo 队列）',
     'PI supervisor（故障 issue 恢复）',
+    'Supervisor mode 实际状态',
+    'allowed actions',
+    '只建议',
+    '空（不会自动续聊）',
     'PI manager auto-manage（项目巡检）',
     'delegation/cron heartbeat',
     '不是巡查所有 issue',
@@ -68,6 +72,8 @@ test('PI Command Center separates auto-run, supervisor, manager and heartbeat au
   assert.match(automationPanelSource, /updateProjectPiSettings/);
   assert.match(automationPanelSource, /pi_agent_id/);
   assert.match(automationPanelSource, /max_actions_per_cycle/);
+  assert.match(automationPanelSource, /SupervisorPolicyTargets/);
+  assert.match(automationPanelSource, /supervisorLaneDetail/);
   assert.doesNotMatch(automationPanelSource, /window\.confirm|window\.alert/);
 });
 

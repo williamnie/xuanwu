@@ -17,6 +17,7 @@ import { listProjects, type Project } from "../db/repositories/projects.ts";
 import type { Router } from "./router.ts";
 import { json } from "./errors.ts";
 import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
+import { supervisorPolicySummary, supervisorScanSummary } from "./piCommandCenterSupervisorPolicy.ts";
 
 type PiCommandCenterContext = { database: RunnerDatabase };
 
@@ -48,7 +49,7 @@ function buildPiCommandCenter(db: RunnerDatabase) {
     heartbeat: heartbeatSummary(latestRun),
     memory: memorySummary(memoryItems),
     prompt_debug: promptDebug(db, settings),
-    supervisor: supervisorSummary(db, supervisorEvents, settings)
+    supervisor: supervisorSummary(db, supervisorEvents, projects, settings)
   };
 }
 
@@ -59,8 +60,6 @@ type CommandCenterInputs = {
   settings: ReturnType<typeof listProjectPiSettings>;
 };
 
-const SUPERVISOR_SCAN_LIMIT = 50;
-const SUPERVISOR_SCAN_SCOPE = "in_progress/open_issue_runs/due_auto_retry";
 const HEARTBEAT_CRON_ACTIONS = new Set(["run_heartbeat", "run_pi_cycle"]);
 
 function automationSummary(db: RunnerDatabase, input: CommandCenterInputs) {
@@ -74,7 +73,7 @@ function automationSummary(db: RunnerDatabase, input: CommandCenterInputs) {
     delegation_heartbeat: delegationHeartbeatSummary(input.activeDelegations.length),
     issue_execution: issueExecutionSummary(issueAutoRunProjects, input.projects.length),
     manager_auto_manage: managerAutoManageSummary(db, input, autoManagedProjects),
-    supervisor: supervisorScanSummary()
+    supervisor: supervisorScanSummary(db, input.projects, input.settings)
   };
 }
 function issueExecutionSummary(enabledProjects: number, totalProjects: number) {
@@ -85,16 +84,6 @@ function issueExecutionSummary(enabledProjects: number, totalProjects: number) {
       : "没有 projects.auto_run=1 的项目，todo issue 不会自动领取",
     state: enabledProjects > 0 ? "enabled" : "idle",
     total_projects: totalProjects
-  };
-}
-function supervisorScanSummary() {
-  return {
-    enabled: true,
-    limit: SUPERVISOR_SCAN_LIMIT,
-    not_all_issues: true,
-    reason: "Supervisor 只做故障恢复候选扫描，不是全量 issue 巡查",
-    scan_scope: SUPERVISOR_SCAN_SCOPE,
-    state: "enabled"
   };
 }
 function managerAutoManageSummary(
@@ -232,12 +221,14 @@ function promptDebug(db: RunnerDatabase, settings: ReturnType<typeof listProject
 function supervisorSummary(
   db: RunnerDatabase,
   events: ReturnType<typeof listIssueSupervisorEvents>,
+  projects: Project[],
   settings: ReturnType<typeof listProjectPiSettings>
 ) {
   return {
     agent: supervisorAgentStatus(db, settings),
     latest_event: events.at(-1) ?? null,
     needs_user_escalations: events.filter((event) => event.action_type === "needs_user.escalate" || event.decision === "needs_user").length,
+    policy: supervisorPolicySummary(db, projects, settings),
     rate_limit_waits: events.filter((event) => event.action_type === "issue.retry_after" || event.retry_after_at !== "").length,
     recovery_actions: events.filter((event) => event.event_type === "action").length
   };

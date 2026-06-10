@@ -3,7 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiAction, createPiDelegation, createPiHeartbeatRun, createPiMemoryItem } from "../db/repositories/pi.ts";
+import {
+  createPiAction,
+  createPiDelegation,
+  createPiHeartbeatRun,
+  createPiMemoryItem,
+  upsertProjectPiPolicy
+} from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -18,11 +24,16 @@ afterEach(async () => {
 
 describe("PI Command Center API", () => {
   test("aggregates only P11.01 mode, delegation, approval, and heartbeat card signals", async () => {
-    const database = await openFixtureDatabase();
-    try {
-      insertProject(database, "demo");
-      insertPiSettings(database, "demo");
-      createPiDelegation(database, { project_id: "demo", status: "active", title: "Night window" });
+      const database = await openFixtureDatabase();
+      try {
+        insertProject(database, "demo");
+        insertPiSettings(database, "demo");
+        upsertProjectPiPolicy(database, {
+          allowed_supervisor_actions_json: ["session.resume_followup"],
+          project_id: "demo",
+          supervisor_mode: "autonomous"
+        });
+        createPiDelegation(database, { project_id: "demo", status: "active", title: "Night window" });
       createPiAction(database, { action_type: "issue.enqueue", id: "act-1", project_id: "demo", status: "pending" });
       createPiHeartbeatRun(database, { id: "hb-1", kind: "project", project_id: "demo", status: "completed" });
       createPiMemoryItem(database, {
@@ -60,9 +71,17 @@ describe("PI Command Center API", () => {
           state: "enabled"
         },
         supervisor: {
+          allowed_actions: ["session.resume_followup"],
+          automatic_projects: 1,
           enabled: true,
           not_all_issues: true,
-          scan_scope: "in_progress/open_issue_runs/due_auto_retry"
+          scan_scope: "in_progress/open_issue_runs/due_auto_retry",
+          targets: [expect.objectContaining({
+            allowed_actions: ["session.resume_followup"],
+            project_id: "demo",
+            recovery_state: "auto_recoverable",
+            supervisor_mode: "autonomous"
+          })]
         },
         manager_auto_manage: {
           enabled_projects: 1,
@@ -115,6 +134,13 @@ describe("PI Command Center API", () => {
           source: "project_settings",
           status: "bound",
           status_text: "supervisor agent 已绑定 project settings"
+        },
+        policy: {
+          automatic_projects: 1,
+          targets: [expect.objectContaining({
+            recovery_state: "auto_recoverable",
+            state_text: "可自动恢复 allowlist 中的动作"
+          })]
         }
       });
       expect(body).not.toHaveProperty("projects");
@@ -178,8 +204,23 @@ describe("PI Command Center API", () => {
           },
           supervisor: {
             not_all_issues: true,
-            reason: expect.stringContaining("不是全量 issue 巡查")
+            reason: expect.stringContaining("当前不会自动续聊"),
+            targets: [expect.objectContaining({
+              allowed_actions: [],
+              recovery_state: "proposal_only",
+              state_text: "只分析并提出建议，等待人工审批",
+              supervisor_mode: "propose_only"
+            })]
           }
+        }
+      });
+      expect(body.supervisor).toMatchObject({
+        policy: {
+          automatic_projects: 0,
+          needs_approval_projects: 0,
+          targets: [expect.objectContaining({
+            recovery_state: "proposal_only"
+          })]
         }
       });
     } finally {
