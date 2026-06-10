@@ -6,6 +6,7 @@ import PiDelegationsPanel from './PiDelegationsPanel';
 import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
 import PiPolicyEditorPanel from './PiPolicyEditorPanel';
 import PiReportsPanel from './PiReportsPanel';
+import { COMMAND_CENTER_TERMS, modeLabel, statusLabel } from './piCommandCenterTerms';
 import './PiCommandCenter.css';
 
 const FRAMEWORK_SECTIONS = [];
@@ -56,7 +57,10 @@ function Header({ state }) {
       <div>
         <span className="pi-command-kicker">PI 托管控制台</span>
         <h1>自动执行与审批中心</h1>
-        <p>查看自动执行状态、处理高风险动作审批，并管理委托窗口与执行策略。</p>
+        <p>
+          查看 {COMMAND_CENTER_TERMS.heartbeat}、处理高风险动作审批，并管理
+          {COMMAND_CENTER_TERMS.delegation} 与 {COMMAND_CENTER_TERMS.policy}。
+        </p>
         <div className="pi-command-hero-summary" aria-label="当前需要处理的事项">
           <span>待审批 {numberText(overview.pending_approvals)} 项</span>
           <span>当前模式：{mode}</span>
@@ -125,7 +129,7 @@ function buildStatusCards(data) {
 }
 
 function supervisorDetail(supervisor = {}) {
-  return `${numberText(supervisor.rate_limit_waits)} 次限流等待 · ${numberText(supervisor.needs_user_escalations)} 次需人工处理`;
+  return `${COMMAND_CENTER_TERMS.supervisor}：${numberText(supervisor.rate_limit_waits)} 次限流等待 · ${numberText(supervisor.needs_user_escalations)} 次需人工处理`;
 }
 
 function heartbeatStatus(heartbeat) {
@@ -140,8 +144,7 @@ function generatedAt(data) {
 }
 
 function modeText(mode) {
-  const labels = { attended: '辅助模式', delegated: '托管模式', manual: '手动模式' };
-  return labels[mode] || '未配置';
+  return modeLabel(mode);
 }
 
 function modeDetail(mode) {
@@ -154,8 +157,7 @@ function modeDetail(mode) {
 }
 
 function statusText(status) {
-  const labels = { cancelled: '已取消', completed: '正常', failed: '检查失败', idle: '空闲', skipped: '已跳过', success: '正常', running: '检查中' };
-  return labels[status] || status || '未知';
+  return statusLabel(status);
 }
 
 function formatTime(value) {

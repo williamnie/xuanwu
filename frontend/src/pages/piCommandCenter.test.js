@@ -53,10 +53,12 @@ test('PI Command Center keeps future framework placeholders read-only', () => {
 test('PI Command Center reports panel summarizes supervisor recovery outcomes', () => {
   assert.match(clientSource, /getPiReports:/);
   assert.match(clientSource, /\/api\/pi\/reports/);
-  assert.match(reportsSource, /Recovered/);
-  assert.match(reportsSource, /429 waits/);
-  assert.match(reportsSource, /Exhausted/);
-  assert.match(reportsSource, /Needs user/);
+  assert.match(reportsSource, /自动恢复报告/);
+  assert.match(reportsSource, /已恢复/);
+  assert.match(reportsSource, /限流等待/);
+  assert.match(reportsSource, /恢复耗尽/);
+  assert.match(reportsSource, /需人工处理/);
+  assert.doesNotMatch(reportsSource, />\s*Refresh\s*</);
   assert.doesNotMatch(reportsSource, /window\.confirm|window\.alert/);
 });
 

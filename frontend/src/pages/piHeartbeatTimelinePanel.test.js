@@ -10,10 +10,10 @@ const commandCenterSource = readFileSync(new URL('./PiCommandCenter.jsx', import
 test('PI Command Center renders the heartbeat timeline module', () => {
   assert.match(commandCenterSource, /import PiHeartbeatTimelinePanel from '\.\/PiHeartbeatTimelinePanel'/);
   assert.match(commandCenterSource, /<PiHeartbeatTimelinePanel \/>/);
-  assert.match(panelSource, /Heartbeat Timeline/);
-  assert.match(panelSource, /signal \/ decision \/ action \/ result/);
-  assert.match(panelSource, /supervisor_signal/);
-  assert.match(panelSource, /supervisor_decision/);
+  assert.match(panelSource, /自动检查时间线/);
+  assert.match(panelSource, /运行信号、策略决策、执行动作和执行结果/);
+  assert.match(panelSource, /请求数据 \/ 执行结果/);
+  assert.doesNotMatch(panelSource, /Heartbeat Timeline|signal \/ decision \/ action \/ result|payload \/ result/);
 });
 
 test('heartbeat timeline supports project and issue filters through the API client', () => {
@@ -24,6 +24,8 @@ test('heartbeat timeline supports project and issue filters through the API clie
   assert.match(panelSource, /timeline\.filters\.projectId/);
   assert.match(panelSource, /timeline\.filters\.issueId/);
   assert.match(panelSource, /type="number"/);
+  assert.match(panelSource, /全部项目/);
+  assert.match(panelSource, /Issue 编号/);
 });
 
 test('heartbeat timeline keeps long payloads inside the layout', () => {

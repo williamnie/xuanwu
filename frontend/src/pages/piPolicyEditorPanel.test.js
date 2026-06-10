@@ -23,8 +23,8 @@ test('Policy editor is mounted in Command Center and uses policy registry APIs',
 
 test('Policy form captures policy, working hours, actions, skill and MCP allowlists', () => {
   for (const label of [
-    'Default mode', 'Timezone', 'Weekdays', 'Working start', 'Working end',
-    'Allowed actions', 'Allowed skills', 'Allowed MCP capabilities'
+    '默认执行模式', '时区', '工作日', '工作开始时间', '工作结束时间',
+    '允许动作', '允许技能', '允许的 MCP 工具能力'
   ]) {
     assert.match(panelSource, new RegExp(label));
   }
@@ -32,6 +32,16 @@ test('Policy form captures policy, working hours, actions, skill and MCP allowli
   assert.match(panelSource, /allowed_actions: parseCSV\(form\.allowedActions\)/);
   assert.match(panelSource, /allowed_skill_intents: parseCSV\(form\.allowedSkills\)/);
   assert.match(panelSource, /allowed_mcp_capabilities: parseCSV\(form\.allowedMcp\)/);
+});
+
+test('Policy editor uses Chinese primary copy for buttons, notices, and validation', () => {
+  for (const copy of ['执行策略', '刷新', '重置', '保存策略', '执行策略已保存', '尚未保存执行策略']) {
+    assert.match(panelSource, new RegExp(copy));
+  }
+  for (const oldCopy of ['Save policy', 'Policy saved', 'Last saved', 'Policy not persisted yet']) {
+    assert.doesNotMatch(panelSource, new RegExp(oldCopy));
+  }
+  assert.doesNotMatch(panelSource, />\\s*Refresh\\s*</);
 });
 
 test('Policy editor has inline errors, reset, and no native blocking prompts', () => {

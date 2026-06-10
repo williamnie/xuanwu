@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, RefreshCw, RotateCcw, Save, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
+import { COMMAND_CENTER_TERMS, modeLabel } from './piCommandCenterTerms';
 import './PiPolicyEditorPanel.css';
 
 const DEFAULT_ACTIONS = ['issue.enqueue', 'issue.state_repair', 'needs_user.escalate', 'session.read_summary'];
 const WEEKDAYS = [
   ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun'],
 ];
+const DEFAULT_MODES = ['manual', 'attended', 'delegated', 'autonomous'];
 
 export default function PiPolicyEditorPanel({ onChanged }) {
   const state = usePolicyEditorState(onChanged);
   return (
-    <section className="pi-command-module pi-policy-panel" aria-label="Project policy editor">
+    <section className="pi-command-module pi-policy-panel" aria-label="项目执行策略编辑器">
       <PolicyHeader loading={state.loading} onRefresh={state.load} />
       {state.error && <InlineError>{state.error}</InlineError>}
       {state.notice && <div className="pi-policy-success">{state.notice}</div>}
@@ -44,7 +46,7 @@ function usePolicyEditorState(onChanged) {
         registries: registriesFromApi(skills, mcp),
       }));
     } catch (err) {
-      setState(prev => ({ ...prev, error: err.message || '读取 policy 失败', loading: false }));
+      setState(prev => ({ ...prev, error: err.message || '读取执行策略失败', loading: false }));
     }
   }, [projectId]);
   useEffect(() => { load(); }, [load]);
@@ -62,11 +64,14 @@ function PolicyHeader({ loading, onRefresh }) {
   return (
     <div className="pi-policy-header">
       <div>
-        <h2><ShieldCheck size={18} /> Policy</h2>
-        <p>编辑项目默认 mode、working hours、allowed actions、skill/MCP allowlist；保存后写入项目 policy API。</p>
+        <h2><ShieldCheck size={18} /> 执行策略</h2>
+        <p>
+          编辑项目默认执行模式、工作时间、允许动作、技能与 {COMMAND_CENTER_TERMS.mcp} 允许列表；
+          保存后写入项目 {COMMAND_CENTER_TERMS.policy}。
+        </p>
       </div>
       <button className="pi-command-refresh" disabled={loading} onClick={onRefresh} type="button">
-        {loading ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />} Refresh
+        {loading ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />} 刷新
       </button>
     </div>
   );
@@ -79,24 +84,26 @@ function PolicyForm({ state }) {
       {state.formError && <InlineError>{state.formError}</InlineError>}
       <div className="pi-policy-grid">
         <ProjectSelect projects={state.projects} value={state.form.projectId} onChange={state.updateField} />
-        <Field label="Default mode"><select className="form-control" value={state.form.defaultMode} onChange={e => state.updateField('defaultMode', e.target.value)}>
-          {['manual', 'attended', 'delegated', 'autonomous'].map(mode => <option key={mode} value={mode}>{mode}</option>)}
+        <Field label="默认执行模式"><select className="form-control" value={state.form.defaultMode} onChange={e => state.updateField('defaultMode', e.target.value)}>
+          {DEFAULT_MODES.map(mode => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
         </select></Field>
-        <Field label="Timezone"><input className="form-control" value={state.form.timezone} onChange={e => state.updateField('timezone', e.target.value)} /></Field>
-        <Field label="Weekdays"><input className="form-control" placeholder="1,2,3,4,5" value={state.form.weekdays} onChange={e => state.updateField('weekdays', e.target.value)} /></Field>
-        <Field label="Working start"><input className="form-control" type="time" value={state.form.workingStart} onChange={e => state.updateField('workingStart', e.target.value)} /></Field>
-        <Field label="Working end"><input className="form-control" type="time" value={state.form.workingEnd} onChange={e => state.updateField('workingEnd', e.target.value)} /></Field>
-        <AllowlistField formKey="allowedActions" label="Allowed actions" suggestions={suggestions.actions} state={state} />
-        <AllowlistField formKey="allowedSkills" label="Allowed skills" suggestions={suggestions.skills} state={state} />
-        <AllowlistField formKey="allowedMcp" label="Allowed MCP capabilities" suggestions={suggestions.mcp} state={state} />
+        <Field label="时区"><input className="form-control" value={state.form.timezone} onChange={e => state.updateField('timezone', e.target.value)} /></Field>
+        <Field label="工作日"><input className="form-control" placeholder="1,2,3,4,5" value={state.form.weekdays} onChange={e => state.updateField('weekdays', e.target.value)} /></Field>
+        <Field label="工作开始时间"><input className="form-control" type="time" value={state.form.workingStart} onChange={e => state.updateField('workingStart', e.target.value)} /></Field>
+        <Field label="工作结束时间"><input className="form-control" type="time" value={state.form.workingEnd} onChange={e => state.updateField('workingEnd', e.target.value)} /></Field>
+        <AllowlistField formKey="allowedActions" label="允许动作" suggestions={suggestions.actions} state={state} />
+        <AllowlistField formKey="allowedSkills" label="允许技能" suggestions={suggestions.skills} state={state} />
+        <AllowlistField formKey="allowedMcp" label="允许的 MCP 工具能力" suggestions={suggestions.mcp} state={state} />
       </div>
-      <p className="pi-policy-help">列表支持逗号或换行分隔；非法 action / skill / MCP capability 会显示 inline error，不会保存。</p>
+      <p className="pi-policy-help">
+        允许列表支持逗号或换行分隔；非法动作、技能或 MCP 工具能力会以内联错误提示，不会保存。
+      </p>
       <div className="pi-policy-actions">
-        <span className="pi-policy-muted">{state.policy?.updated_at ? `Last saved ${formatTime(state.policy.updated_at)}` : 'Policy not persisted yet'}</span>
+        <span className="pi-policy-muted">{state.policy?.updated_at ? `上次保存：${formatTime(state.policy.updated_at)}` : '尚未保存执行策略'}</span>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary" disabled={state.saving} onClick={state.resetToLoadedPolicy} type="button"><RotateCcw size={14} /> Reset</button>
+          <button className="btn btn-secondary" disabled={state.saving} onClick={state.resetToLoadedPolicy} type="button"><RotateCcw size={14} /> 重置</button>
           <button className="btn btn-primary" disabled={state.saving || !state.form.projectId} type="submit">
-            {state.saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} Save policy
+            {state.saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存策略
           </button>
         </div>
       </div>
@@ -105,7 +112,7 @@ function PolicyForm({ state }) {
 }
 
 function ProjectSelect({ onChange, projects, value }) {
-  return <Field label="Project"><select className="form-control" required value={value} onChange={e => onChange('projectId', e.target.value)}>
+  return <Field label="项目"><select className="form-control" required value={value} onChange={e => onChange('projectId', e.target.value)}>
     <option value="">选择项目</option>
     {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
   </select></Field>;
@@ -144,17 +151,17 @@ async function savePolicy(event, form, setState, load, onChanged) {
     await api.updateProjectPiPolicy(form.projectId, buildPolicyPayload(form));
     await load();
     onChanged?.();
-    setState(prev => ({ ...prev, notice: 'Policy saved', saving: false }));
+    setState(prev => ({ ...prev, notice: '执行策略已保存', saving: false }));
   } catch (err) {
-    setState(prev => ({ ...prev, formError: err.message || '保存 policy 失败', saving: false }));
+    setState(prev => ({ ...prev, formError: err.message || '保存执行策略失败', saving: false }));
   }
 }
 
 function validatePolicyForm(form) {
   if (!form.projectId.trim()) return '请选择项目';
-  if (!form.timezone.trim()) return 'Timezone 不能为空';
-  if (parseWeekdays(form.weekdays).length === 0) return 'Weekdays 至少选择一天';
-  if (form.workingStart && form.workingEnd && form.workingStart >= form.workingEnd) return 'Working end 必须晚于 Working start';
+  if (!form.timezone.trim()) return '时区不能为空';
+  if (parseWeekdays(form.weekdays).length === 0) return '工作日至少选择一天';
+  if (form.workingStart && form.workingEnd && form.workingStart >= form.workingEnd) return '工作结束时间必须晚于工作开始时间';
   return '';
 }
 

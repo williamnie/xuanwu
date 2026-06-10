@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { piActionGateApi } from '../api/piActionGateClient';
 import { message } from '../store/toastStore';
 import { shortId } from './piChatState';
+import { actorLabel, decisionLabel, eventTypeLabel, riskLabel, runtimeMessageLabel } from './piCommandCenterTerms';
 import './PiActionAuditPanel.css';
 
 const AUDIT_LIMIT = 36;
@@ -13,7 +14,7 @@ export default function PiActionAuditPanel({ onChanged, variant = 'sidebar' }) {
   const audit = usePiActionAudit(onChanged);
   const className = `pi-action-audit-panel ${variant === 'command-center' ? 'command-center' : ''}`.trim();
   return (
-    <section className={className} aria-label="PI pending approvals and audit timeline">
+    <section className={className} aria-label="PI 待确认动作与审计时间线">
       <PanelHeader audit={audit} variant={variant} />
       {audit.error && <div className="pi-action-audit-error">{audit.error}</div>}
       <PendingApprovals audit={audit} />
@@ -52,7 +53,7 @@ function useApprovalData() {
       setEvents(Array.isArray(auditEvents) ? auditEvents.slice(-AUDIT_LIMIT).reverse() : []);
       setError('');
     } catch (err) {
-      setError(err.message || '读取 PI audit timeline 失败');
+      setError(err.message || '读取 PI 审计时间线失败');
     } finally {
       setLoading(false);
     }
@@ -91,11 +92,11 @@ function useDecisionState(approvals, errors, onChanged) {
     try {
       await runDecision(id, decision, drafts[id] || '', approvals.snoozeTimes[id] || '');
       setDrafts((current) => ({ ...current, [id]: '' }));
-      message.success('PI action decision 已记录');
+      message.success('PI 动作处理结果已记录');
       await approvals.load();
       onChanged?.();
     } catch (err) {
-      const errorText = err.message || '提交 PI action decision 失败';
+      const errorText = err.message || '提交 PI 动作处理结果失败';
       errors.setActionError(id, errorText);
       message.error(errorText);
     } finally {
@@ -113,11 +114,11 @@ function PanelHeader({ audit, variant }) {
   return (
     <div className="pi-action-audit-header">
       <div>
-        <span>{isCommandCenter ? 'Approvals' : 'Action Gate'}</span>
-        <strong>{audit.actions.length} pending</strong>
-        {isCommandCenter && <p>Review rationale, risk and scope before approving PI actions.</p>}
+        <span>{isCommandCenter ? '待确认动作' : '动作准入'}</span>
+        <strong>{audit.actions.length} 项待处理</strong>
+        {isCommandCenter && <p>批准 PI 动作前，请先确认原因、风险和影响范围。</p>}
       </div>
-      <button className="pi-action-audit-refresh" onClick={audit.load} disabled={audit.loading} title="刷新 PI action gate">
+      <button className="pi-action-audit-refresh" onClick={audit.load} disabled={audit.loading} title="刷新 PI 动作准入">
         {audit.loading ? <Loader2 size={13} className="spin-animation" /> : <GitBranch size={13} />}
       </button>
     </div>
@@ -143,27 +144,27 @@ function ApprovalCard({ action, audit }) {
   return (
     <article className="pi-action-approval-card">
       <div className="pi-action-card-topline">
-        <span className={`pi-action-risk ${action.risk_level || 'low'}`}>{action.risk_level || 'low'}</span>
+        <span className={`pi-action-risk ${action.risk_level || 'low'}`}>{riskLabel(action.risk_level || 'low')}</span>
         <code>{action.action_type}</code>
       </div>
       <div className="pi-action-rationale">
-        <span>Rationale</span>
+        <span>执行原因</span>
         <p>{action.rationale || action.gate_reason || 'PI 提议执行该动作，等待用户审批。'}</p>
       </div>
       <div className="pi-action-scope">
-        <span>Scope</span>
+        <span>影响范围</span>
         <div>{scopeItems.map((item) => <code key={item}>{item}</code>)}</div>
       </div>
       <label className="pi-action-note-field">
-        <span>Decision note</span>
+        <span>处理说明</span>
         <textarea
           value={draft}
           onChange={(event) => audit.updateDraft(action.id, event.target.value)}
-          placeholder="reject / request changes / snooze 的说明，例如补充验证方式或缩小范围..."
+          placeholder="填写拒绝、要求修改或暂缓的说明，例如补充验证方式或缩小范围..."
         />
       </label>
       <label className="pi-action-snooze-field">
-        <span>Snooze until</span>
+        <span>暂缓到</span>
         <input
           type="datetime-local"
           value={audit.snoozeTimes[action.id] || ''}
@@ -172,10 +173,10 @@ function ApprovalCard({ action, audit }) {
       </label>
       {audit.actionErrors[action.id] && <div className="pi-action-card-error" role="alert">{audit.actionErrors[action.id]}</div>}
       <div className="pi-action-decision-row">
-        <DecisionButton action={action} audit={audit} decision="approve" icon={<CheckCircle2 size={13} />} label="Approve" />
-        <DecisionButton action={action} audit={audit} decision="request_changes" icon={<ShieldAlert size={13} />} label="Changes" />
-        <DecisionButton action={action} audit={audit} decision="snooze" icon={<Clock3 size={13} />} label="Snooze" />
-        <DecisionButton action={action} audit={audit} decision="reject" icon={<XCircle size={13} />} label="Reject" />
+        <DecisionButton action={action} audit={audit} decision="approve" icon={<CheckCircle2 size={13} />} label="批准" />
+        <DecisionButton action={action} audit={audit} decision="request_changes" icon={<ShieldAlert size={13} />} label="要求修改" />
+        <DecisionButton action={action} audit={audit} decision="snooze" icon={<Clock3 size={13} />} label="暂缓" />
+        <DecisionButton action={action} audit={audit} decision="reject" icon={<XCircle size={13} />} label="拒绝" />
       </div>
     </article>
   );
@@ -195,8 +196,8 @@ function AuditTimeline({ events, loading }) {
   const visibleEvents = useMemo(() => events.slice(0, AUDIT_LIMIT), [events]);
   return (
     <div className="pi-action-timeline">
-      <div className="pi-action-timeline-title">Audit timeline {loading && <Loader2 size={12} className="spin-animation" />}</div>
-      {visibleEvents.length === 0 ? <div className="pi-action-audit-empty">暂无 audit record。</div> : visibleEvents.map((event) => (
+      <div className="pi-action-timeline-title">审计时间线 {loading && <Loader2 size={12} className="spin-animation" />}</div>
+      {visibleEvents.length === 0 ? <div className="pi-action-audit-empty">暂无审计记录。</div> : visibleEvents.map((event) => (
         <TimelineEvent key={`${event.id}-${event.event_type}`} event={event} />
       ))}
     </div>
@@ -212,8 +213,8 @@ function TimelineEvent({ event }) {
           <strong>{eventLabel(event)}</strong>
           <span>{shortId(event.action_id)}</span>
         </div>
-        <p>{event.reason || event.error || summarizeJson(event.result_json) || summarizeJson(event.payload_json)}</p>
-        <small>{event.actor || 'system'} · {formatTime(event.created_at)}</small>
+        <p>{runtimeMessageLabel(event.reason) || event.error || summarizeJson(event.result_json) || summarizeJson(event.payload_json)}</p>
+        <small>{actorLabel(event.actor)} · {formatTime(event.created_at)}</small>
       </div>
     </article>
   );
@@ -227,14 +228,14 @@ async function runDecision(id, decision, draft, snoozeTime) {
 }
 
 function eventLabel(event) {
-  const decision = event.decision ? ` · ${event.decision}` : '';
-  return `${String(event.event_type || 'audit').replaceAll('_', ' ')}${decision}`;
+  const decision = event.decision ? ` · ${decisionLabel(event.decision)}` : '';
+  return `${eventTypeLabel(event.event_type || 'audit')}${decision}`;
 }
 
 function summarizeJson(text) {
   try {
     const value = JSON.parse(text || '{}');
-    if (value.action_type) return `${value.action_type} ${value.status || ''}`.trim();
+    if (value.action_type) return `${value.action_type} ${value.status ? ` · ${value.status}` : ''}`.trim();
     if (value.error) return value.error;
     return '';
   } catch {
@@ -257,18 +258,18 @@ function mergeSnoozeTimes(current, actions) {
 function actionScopeItems(action) {
   const payload = parseJsonObject(action.payload_json);
   const items = [
-    action.project_id ? `project:${action.project_id}` : '',
-    action.issue_id ? `issue:#${action.issue_id}` : '',
-    payload.issue_id ? `payload issue:#${payload.issue_id}` : '',
-    payload.target_issue_id ? `target:#${payload.target_issue_id}` : '',
-    payload.session_key ? `session:${payload.session_key}` : '',
-    payload.goal_id ? `goal:${payload.goal_id}` : '',
-    action.delegation_id ? `delegation:${shortId(action.delegation_id)}` : '',
-    action.heartbeat_id ? `heartbeat:${shortId(action.heartbeat_id)}` : '',
-    action.conversation_id ? `conversation:${shortId(action.conversation_id)}` : '',
-    action.source ? `source:${action.source}` : '',
+    action.project_id ? `项目：${action.project_id}` : '',
+    action.issue_id ? `Issue：#${action.issue_id}` : '',
+    payload.issue_id ? `请求 issue：#${payload.issue_id}` : '',
+    payload.target_issue_id ? `目标：#${payload.target_issue_id}` : '',
+    payload.session_key ? `会话：${payload.session_key}` : '',
+    payload.goal_id ? `目标任务：${payload.goal_id}` : '',
+    action.delegation_id ? `委托：${shortId(action.delegation_id)}` : '',
+    action.heartbeat_id ? `自动检查：${shortId(action.heartbeat_id)}` : '',
+    action.conversation_id ? `对话：${shortId(action.conversation_id)}` : '',
+    action.source ? `来源：${action.source}` : '',
   ].filter(Boolean);
-  return items.length > 0 ? items : ['global'];
+  return items.length > 0 ? items : ['全局范围'];
 }
 
 function parseJsonObject(text) {

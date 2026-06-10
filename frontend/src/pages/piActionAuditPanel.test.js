@@ -11,7 +11,7 @@ test('PI chat keeps action approvals out of the runner chat sidebar', () => {
   assert.doesNotMatch(chatSource, /<PiActionAuditPanel \/>/);
   assert.match(panelSource, /piActionGateApi\.pendingActions\(\)/);
   assert.match(panelSource, /piActionGateApi\.auditEvents\(\)/);
-  assert.match(panelSource, /Audit timeline/);
+  assert.match(panelSource, /审计时间线/);
 });
 
 test('PI action gate client supports approval decisions without native confirm', () => {
@@ -23,7 +23,7 @@ test('PI action gate client supports approval decisions without native confirm',
 });
 
 test('PI approvals show rationale, risk, scope, snooze time, and inline action errors', () => {
-  for (const label of ['Rationale', 'Scope', 'Snooze until', 'Decision note']) {
+  for (const label of ['执行原因', '影响范围', '暂缓到', '处理说明']) {
     assert.match(panelSource, new RegExp(label));
   }
   assert.match(panelSource, /action\.risk_level/);
@@ -32,4 +32,13 @@ test('PI approvals show rationale, risk, scope, snooze time, and inline action e
   assert.match(panelSource, /isoFromLocalInput\(snoozeTime\)/);
   assert.match(panelSource, /setActionErrors/);
   assert.match(panelSource, /role="alert"/);
+});
+
+test('PI approvals use Chinese primary decision actions', () => {
+  for (const copy of ['待确认动作', '项待处理', '批准', '要求修改', '暂缓', '拒绝']) {
+    assert.match(panelSource, new RegExp(copy));
+  }
+  for (const oldCopy of ["'Approvals'", "'Action Gate'", 'label="Approve"', 'label="Changes"', 'label="Snooze"', 'label="Reject"']) {
+    assert.doesNotMatch(panelSource, new RegExp(oldCopy));
+  }
 });

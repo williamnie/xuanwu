@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Pause, Play, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
+import { COMMAND_CENTER_TERMS, statusLabel } from './piCommandCenterTerms';
 
 const DEFAULT_ALLOWED_ACTIONS = 'issue.enqueue, issue.state_repair, session.read_summary';
-const DEFAULT_WINDOW_HOURS = 8;
-const HOUR_MS = 60 * 60 * 1000;
+const DEFAULT_WINDOW_HOURS = 8; const HOUR_MS = 60 * 60 * 1000;
 
 function initialForm(projectId = '') {
   return {
@@ -21,7 +21,7 @@ function initialForm(projectId = '') {
 export default function PiDelegationsPanel({ onChanged }) {
   const state = usePiDelegationsState(onChanged);
   return (
-    <section className="pi-command-module pi-delegations-panel" aria-label="Delegations">
+    <section className="pi-command-module pi-delegations-panel" aria-label="委托窗口">
       <PanelHeader loading={state.loading} onRefresh={state.load} />
       {state.error && <InlineError>{state.error}</InlineError>}
       <DelegationForm
@@ -63,7 +63,7 @@ function useDelegationData() {
       setProjects(Array.isArray(nextProjects) ? nextProjects : []);
       setDelegations(Array.isArray(nextDelegations) ? nextDelegations : []);
     } catch (err) {
-      setError(err.message || '读取 Delegations 失败');
+      setError(err.message || '读取委托窗口失败');
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ function useDelegationForm(load, projects, onChanged) {
       onChanged?.();
       setForm(initialForm(form.projectId));
     } catch (err) {
-      setFormError(err.message || '创建 delegation 失败');
+      setFormError(err.message || '创建委托窗口失败');
     } finally {
       setSubmitting(false);
     }
@@ -108,7 +108,7 @@ function useDelegationStatusMutation(load, setError, onChanged) {
       await load();
       onChanged?.();
     } catch (err) {
-      setError(err.message || '更新 delegation 状态失败');
+      setError(err.message || '更新委托窗口状态失败');
     } finally {
       setMutatingId('');
     }
@@ -120,12 +120,12 @@ function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="pi-delegations-header">
       <div>
-        <h2><ShieldCheck size={18} /> Delegations</h2>
-        <p>创建限定 issue、时间窗口与 action allowlist 的 delegated window，并可暂停/恢复。</p>
+        <h2><ShieldCheck size={18} /> 委托窗口</h2>
+        <p>创建限定 issue、时间范围和允许动作的 {COMMAND_CENTER_TERMS.delegation}，让 PI 在边界内自动推进，并可随时暂停或恢复。</p>
       </div>
       <button className="pi-command-refresh" disabled={loading} onClick={onRefresh} type="button">
         {loading ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />}
-        Refresh
+        刷新
       </button>
     </div>
   );
@@ -135,26 +135,26 @@ function DelegationForm({ error, form, onSubmit, projects, submitting, updateFie
   return (
     <form className="pi-delegations-form" onSubmit={onSubmit}>
       {error && <InlineError>{error}</InlineError>}
-      <label>Project<select className="form-control" required value={form.projectId} onChange={event => updateField('projectId', event.target.value)}>
+      <label>项目<select className="form-control" required value={form.projectId} onChange={event => updateField('projectId', event.target.value)}>
         <option value="">选择项目</option>
         {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
       </select></label>
-      <label>Issue IDs<input className="form-control" placeholder="#265, #266" value={form.issueIds} onChange={event => updateField('issueIds', event.target.value)} /></label>
-      <label>Starts<input className="form-control" type="datetime-local" value={form.startsAt} onChange={event => updateField('startsAt', event.target.value)} /></label>
-      <label>Expires<input className="form-control" required type="datetime-local" value={form.expiresAt} onChange={event => updateField('expiresAt', event.target.value)} /></label>
-      <label className="pi-delegations-wide">Allowed actions<input className="form-control" value={form.allowedActions} onChange={event => updateField('allowedActions', event.target.value)} /></label>
-      <label>Forbidden actions<input className="form-control" value={form.forbiddenActions} onChange={event => updateField('forbiddenActions', event.target.value)} /></label>
-      <label>Title<input className="form-control" placeholder="Night delegated window" value={form.title} onChange={event => updateField('title', event.target.value)} /></label>
+      <label>Issue 编号<input className="form-control" placeholder="#265, #266" value={form.issueIds} onChange={event => updateField('issueIds', event.target.value)} /></label>
+      <label>开始时间<input className="form-control" type="datetime-local" value={form.startsAt} onChange={event => updateField('startsAt', event.target.value)} /></label>
+      <label>结束时间<input className="form-control" required type="datetime-local" value={form.expiresAt} onChange={event => updateField('expiresAt', event.target.value)} /></label>
+      <label className="pi-delegations-wide">允许动作（allowed actions）<input className="form-control" value={form.allowedActions} onChange={event => updateField('allowedActions', event.target.value)} /></label>
+      <label>禁止动作<input className="form-control" value={form.forbiddenActions} onChange={event => updateField('forbiddenActions', event.target.value)} /></label>
+      <label>标题<input className="form-control" placeholder="夜间委托窗口" value={form.title} onChange={event => updateField('title', event.target.value)} /></label>
       <button className="btn btn-primary" disabled={submitting} type="submit">
-        {submitting ? 'Creating…' : 'Create delegated window'}
+        {submitting ? '创建中…' : '创建委托窗口'}
       </button>
     </form>
   );
 }
 
 function DelegationList({ delegations, loading, mutatingId, onToggle, projectLabelMap }) {
-  if (loading && delegations.length === 0) return <div className="pi-delegations-empty"><Loader2 size={14} className="spin-animation" /> Loading delegations…</div>;
-  if (delegations.length === 0) return <div className="pi-delegations-empty">暂无 delegation window。</div>;
+  if (loading && delegations.length === 0) return <div className="pi-delegations-empty"><Loader2 size={14} className="spin-animation" /> 正在加载委托窗口…</div>;
+  if (delegations.length === 0) return <div className="pi-delegations-empty">暂无委托窗口。</div>;
   return (
     <div className="pi-delegations-list">
       {delegations.map(delegation => (
@@ -181,17 +181,17 @@ function DelegationRow({ delegation, mutating, onToggle, projectName }) {
       <div className="pi-delegations-row-main">
         <div className="pi-delegations-row-title">
           <strong>{delegation.title || delegation.id}</strong>
-          <span className={`status-badge ${statusClass(delegation.status)}`}>{delegation.status}</span>
+          <span className={`status-badge ${statusClass(delegation.status)}`}>{statusLabel(delegation.status)}</span>
         </div>
         <p>{projectName} · {windowLabel(delegation)}</p>
-        <ChipLine label="Issues" values={issueIds.map(String)} empty="project scope" />
-        <ChipLine label="Allowed" values={allowedActions} empty="none" />
-        <ChipLine label="Forbidden" values={forbiddenActions} empty="none" />
+        <ChipLine label="Issues" values={issueIds.map(String)} empty="整个项目范围" />
+        <ChipLine label="允许动作" values={allowedActions} empty="未配置" />
+        <ChipLine label="禁止动作" values={forbiddenActions} empty="未配置" />
       </div>
       {canToggle && (
         <button className="btn btn-secondary" disabled={mutating} onClick={() => onToggle(delegation)} type="button">
           {mutating ? <Loader2 size={14} className="spin-animation" /> : delegation.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
-          {delegation.status === 'active' ? 'Pause' : 'Resume'}
+          {delegation.status === 'active' ? '暂停' : '恢复'}
         </button>
       )}
     </article>
@@ -216,10 +216,10 @@ function buildCreatePayload(form) {
   if (!projectId) throw new Error('请选择项目');
   const issueIds = parseIssueIds(form.issueIds);
   const allowedActions = parseActions(form.allowedActions);
-  if (allowedActions.length === 0) throw new Error('至少填写一个 allowed action');
-  const startsAt = isoFromLocal(form.startsAt, 'starts_at');
-  const expiresAt = isoFromLocal(form.expiresAt, 'expires_at');
-  if (startsAt && expiresAt && startsAt >= expiresAt) throw new Error('expires_at 必须晚于 starts_at');
+  if (allowedActions.length === 0) throw new Error('至少填写一个允许动作');
+  const startsAt = isoFromLocal(form.startsAt, '开始时间');
+  const expiresAt = isoFromLocal(form.expiresAt, '结束时间');
+  if (startsAt && expiresAt && startsAt >= expiresAt) throw new Error('结束时间必须晚于开始时间');
   const scope = issueIds.length > 0 ? { issue_ids: issueIds, project_id: projectId } : { project_id: projectId };
   const forbiddenActions = parseActions(form.forbiddenActions);
   return {
@@ -252,7 +252,7 @@ function parseActions(value) {
 function isoFromLocal(value, label) {
   if (!value) return '';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error(`${label} 不是合法时间`);
+  if (Number.isNaN(date.getTime())) throw new Error(`${label}不是合法时间`);
   return date.toISOString();
 }
 
@@ -262,7 +262,7 @@ function localInputFromDate(date) {
 }
 
 function defaultTitle(issueIds) {
-  return issueIds.length > 0 ? `Delegated issues ${issueIds.map(id => `#${id}`).join(', ')}` : 'Project delegated window';
+  return issueIds.length > 0 ? `委托 Issues ${issueIds.map(id => `#${id}`).join(', ')}` : '项目委托窗口';
 }
 
 function parseJsonArray(value) {
@@ -290,7 +290,7 @@ function statusClass(status) {
 }
 
 function windowLabel(delegation) {
-  return `${formatTime(delegation.starts_at) || 'now'} → ${formatTime(delegation.expires_at) || 'open-ended'}`;
+  return `${formatTime(delegation.starts_at) || '立即开始'} → ${formatTime(delegation.expires_at) || '长期有效'}`;
 }
 
 function formatTime(value) {

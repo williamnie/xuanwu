@@ -2,24 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, Filter, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
 import { shortId } from './piChatState';
+import { eventTypeLabel, runtimeMessageLabel, sourceLabel, stageLabel } from './piCommandCenterTerms';
 import './PiHeartbeatTimelinePanel.css';
 
 const TIMELINE_LIMIT = 80;
-const STAGE_LABELS = {
-  action: 'action',
-  decision: 'decision',
-  result: 'result',
-  signal: 'signal',
-  supervisor_action: 'supervisor action',
-  supervisor_decision: 'supervisor decision',
-  supervisor_result: 'supervisor result',
-  supervisor_signal: 'supervisor signal',
-};
 
 export default function PiHeartbeatTimelinePanel() {
   const timeline = useHeartbeatTimeline();
   return (
-    <section className="pi-heartbeat-timeline-panel" aria-label="Heartbeat Timeline">
+    <section className="pi-heartbeat-timeline-panel" aria-label="自动检查时间线">
       <TimelineHeader timeline={timeline} />
       <TimelineFilters timeline={timeline} />
       {timeline.error && <div className="pi-heartbeat-timeline-error" role="alert">{timeline.error}</div>}
@@ -45,7 +36,7 @@ function useHeartbeatTimeline() {
       setItems(Array.isArray(nextItems) ? nextItems : []);
       setState({ error: '', loading: false });
     } catch (err) {
-      setState({ error: err.message || '读取 heartbeat timeline 失败', loading: false });
+      setState({ error: err.message || '读取自动检查时间线失败', loading: false });
     }
   }, [issueId, projectId]);
   useEffect(() => { load(); }, [load]);
@@ -59,13 +50,13 @@ function TimelineHeader({ timeline }) {
   return (
     <div className="pi-heartbeat-timeline-header">
       <div>
-        <span>PI OpenClaw P11.04</span>
-        <h2><Activity size={18} /> Heartbeat Timeline</h2>
-        <p>按时间串联 signal / decision / action / result，展示 PI heartbeat 与 audit 证据。</p>
+        <span>PI 自动化证据</span>
+        <h2><Activity size={18} /> 自动检查时间线</h2>
+        <p>按时间串联运行信号、策略决策、执行动作和执行结果，展示 PI 自动检查与审计证据。</p>
       </div>
       <button className="pi-heartbeat-timeline-refresh" onClick={timeline.load} disabled={timeline.loading} type="button">
         {timeline.loading ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />}
-        Refresh
+        刷新
       </button>
     </div>
   );
@@ -73,22 +64,22 @@ function TimelineHeader({ timeline }) {
 
 function TimelineFilters({ timeline }) {
   return (
-    <div className="pi-heartbeat-timeline-filters" aria-label="Heartbeat timeline filters">
+    <div className="pi-heartbeat-timeline-filters" aria-label="自动检查时间线筛选">
       <Filter size={14} />
       <label>
-        Project
+        项目
         <select value={timeline.filters.projectId} onChange={(event) => timeline.updateFilter('projectId', event.target.value)}>
-          <option value="">All projects</option>
+          <option value="">全部项目</option>
           {timeline.projects.map((project) => (
             <option key={project.id} value={project.id}>{project.name || project.id}</option>
           ))}
         </select>
       </label>
       <label>
-        Issue
+        Issue 编号
         <input
           min="1"
-          placeholder="issue id"
+          placeholder="例如 310"
           type="number"
           value={timeline.filters.issueId}
           onChange={(event) => timeline.updateFilter('issueId', event.target.value)}
@@ -101,10 +92,10 @@ function TimelineFilters({ timeline }) {
 function TimelineList({ items, loading }) {
   const visibleItems = useMemo(() => items.slice(0, TIMELINE_LIMIT), [items]);
   if (loading && visibleItems.length === 0) {
-    return <div className="pi-heartbeat-timeline-empty"><Loader2 size={14} className="spin-animation" /> 正在加载 timeline…</div>;
+    return <div className="pi-heartbeat-timeline-empty"><Loader2 size={14} className="spin-animation" /> 正在加载时间线…</div>;
   }
   if (visibleItems.length === 0) {
-    return <div className="pi-heartbeat-timeline-empty">暂无 heartbeat/audit 记录；可选择项目或 issue 过滤。</div>;
+    return <div className="pi-heartbeat-timeline-empty">暂无自动检查或审计记录；可选择项目或 issue 编号过滤。</div>;
   }
   return (
     <div className="pi-heartbeat-timeline-list">
@@ -116,13 +107,13 @@ function TimelineList({ items, loading }) {
 function TimelineItem({ item }) {
   return (
     <article className={`pi-heartbeat-timeline-item ${item.stage}`}>
-      <div className="pi-heartbeat-timeline-rail"><span>{STAGE_LABELS[item.stage] || 'result'}</span></div>
+      <div className="pi-heartbeat-timeline-rail"><span>{stageLabel(item.stage)}</span></div>
       <div className="pi-heartbeat-timeline-body">
         <div className="pi-heartbeat-timeline-meta">
           <strong>{eventTitle(item)}</strong>
           <time>{formatTime(item.created_at)}</time>
         </div>
-        <p>{item.message || fallbackMessage(item)}</p>
+        <p>{runtimeMessageLabel(item.message) || fallbackMessage(item)}</p>
         <TimelineChips item={item} />
         <TimelineDetails item={item} />
       </div>
@@ -132,12 +123,12 @@ function TimelineItem({ item }) {
 
 function TimelineChips({ item }) {
   const chips = [
-    item.project_id ? `project:${item.project_id}` : '',
-    item.issue_id ? `issue:#${item.issue_id}` : '',
-    item.heartbeat_id ? `heartbeat:${shortId(item.heartbeat_id)}` : '',
-    item.action_id ? `action:${shortId(item.action_id)}` : '',
-    item.delegation_id ? `delegation:${shortId(item.delegation_id)}` : '',
-    item.decision ? `decision:${item.decision}` : '',
+    item.project_id ? `项目：${item.project_id}` : '',
+    item.issue_id ? `Issue：#${item.issue_id}` : '',
+    item.heartbeat_id ? `自动检查：${shortId(item.heartbeat_id)}` : '',
+    item.action_id ? `动作：${shortId(item.action_id)}` : '',
+    item.delegation_id ? `委托：${shortId(item.delegation_id)}` : '',
+    item.decision ? `决策：${item.decision}` : '',
   ].filter(Boolean);
   return <div className="pi-heartbeat-timeline-chips">{chips.map((chip) => <code key={chip}>{chip}</code>)}</div>;
 }
@@ -147,30 +138,29 @@ function TimelineDetails({ item }) {
   if (!details) return null;
   return (
     <details className="pi-heartbeat-timeline-details">
-      <summary>payload / result</summary>
+      <summary>请求数据 / 执行结果</summary>
       <pre>{details}</pre>
     </details>
   );
 }
 
 function eventTitle(item) {
-  const source = item.source === 'heartbeat' ? 'heartbeat' : item.source === 'supervisor' ? 'supervisor' : 'audit';
-  return `${source} · ${String(item.event_type || 'event').replaceAll('_', ' ')}`;
+  return `${sourceLabel(item.source)} · ${eventTypeLabel(item.event_type || 'event')}`;
 }
 
 function fallbackMessage(item) {
   if (item.error) return item.error;
-  if (item.stage === 'signal') return 'PI collected runtime signals.';
-  if (item.stage === 'decision') return 'PI evaluated policy and authorization.';
-  if (item.stage === 'action') return 'PI planned or started an action.';
-  return 'PI recorded the result.';
+  if (item.stage === 'signal') return 'PI 已收集运行信号。';
+  if (item.stage === 'decision') return 'PI 已评估执行策略和授权范围。';
+  if (item.stage === 'action') return 'PI 已规划或启动动作。';
+  return 'PI 已记录执行结果。';
 }
 
 function detailText(item) {
   const sections = [
-    jsonSection('payload', item.payload_json),
-    jsonSection('result', item.result_json),
-    item.error ? `error\\n${item.error}` : '',
+    jsonSection('请求数据', item.payload_json),
+    jsonSection('执行结果', item.result_json),
+    item.error ? `错误\\n${item.error}` : '',
   ].filter(Boolean);
   return sections.join('\\n\\n');
 }
