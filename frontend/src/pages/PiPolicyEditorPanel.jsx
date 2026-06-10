@@ -82,7 +82,7 @@ function PolicyForm({ state }) {
   return (
     <form className="pi-policy-form" onSubmit={state.savePolicy}>
       {state.formError && <InlineError>{state.formError}</InlineError>}
-      <div className="pi-policy-grid">
+      <div className="pi-policy-grid pi-policy-primary-fields">
         <ProjectSelect projects={state.projects} value={state.form.projectId} onChange={state.updateField} />
         <Field label="默认执行模式"><select className="form-control" value={state.form.defaultMode} onChange={e => state.updateField('defaultMode', e.target.value)}>
           {DEFAULT_MODES.map(mode => <option key={mode} value={mode}>{modeLabel(mode)}</option>)}
@@ -91,16 +91,24 @@ function PolicyForm({ state }) {
         <Field label="工作日"><input className="form-control" placeholder="1,2,3,4,5" value={state.form.weekdays} onChange={e => state.updateField('weekdays', e.target.value)} /></Field>
         <Field label="工作开始时间"><input className="form-control" type="time" value={state.form.workingStart} onChange={e => state.updateField('workingStart', e.target.value)} /></Field>
         <Field label="工作结束时间"><input className="form-control" type="time" value={state.form.workingEnd} onChange={e => state.updateField('workingEnd', e.target.value)} /></Field>
-        <AllowlistField formKey="allowedActions" label="允许动作" suggestions={suggestions.actions} state={state} />
-        <AllowlistField formKey="allowedSkills" label="允许技能" suggestions={suggestions.skills} state={state} />
-        <AllowlistField formKey="allowedMcp" label="允许的 MCP 工具能力" suggestions={suggestions.mcp} state={state} />
       </div>
+      <details className="pi-policy-advanced">
+        <summary>
+          <span>允许列表与工具边界</span>
+          <small>这些高级项会影响 PI 能调用的动作、技能和 MCP 工具能力。</small>
+        </summary>
+        <div className="pi-policy-grid pi-policy-allowlists">
+          <AllowlistField formKey="allowedActions" label="允许动作" suggestions={suggestions.actions} state={state} />
+          <AllowlistField formKey="allowedSkills" label="允许技能" suggestions={suggestions.skills} state={state} />
+          <AllowlistField formKey="allowedMcp" label="允许的 MCP 工具能力" suggestions={suggestions.mcp} state={state} />
+        </div>
+      </details>
       <p className="pi-policy-help">
         允许列表支持逗号或换行分隔；非法动作、技能或 MCP 工具能力会以内联错误提示，不会保存。
       </p>
       <div className="pi-policy-actions">
         <span className="pi-policy-muted">{state.policy?.updated_at ? `上次保存：${formatTime(state.policy.updated_at)}` : '尚未保存执行策略'}</span>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="pi-policy-action-buttons">
           <button className="btn btn-secondary" disabled={state.saving} onClick={state.resetToLoadedPolicy} type="button"><RotateCcw size={14} /> 重置</button>
           <button className="btn btn-primary" disabled={state.saving || !state.form.projectId} type="submit">
             {state.saving ? <Loader2 size={14} className="spin-animation" /> : <Save size={14} />} 保存策略

@@ -17,7 +17,6 @@ function initialForm(projectId = '') {
     title: '',
   };
 }
-
 export default function PiDelegationsPanel({ onChanged }) {
   const state = usePiDelegationsState(onChanged);
   return (
@@ -42,14 +41,12 @@ export default function PiDelegationsPanel({ onChanged }) {
     </section>
   );
 }
-
 function usePiDelegationsState(onChanged) {
   const data = useDelegationData();
   const formState = useDelegationForm(data.load, data.projects, onChanged);
   const statusState = useDelegationStatusMutation(data.load, data.setError, onChanged);
   return { ...data, ...formState, ...statusState };
 }
-
 function useDelegationData() {
   const [delegations, setDelegations] = useState([]);
   const [error, setError] = useState('');
@@ -72,7 +69,6 @@ function useDelegationData() {
   const projectLabelMap = useMemo(() => new Map(projects.map(project => [project.id, project.name || project.id])), [projects]);
   return { delegations, error, load, loading, projectLabelMap, projects, setError };
 }
-
 function useDelegationForm(load, projects, onChanged) {
   const [form, setForm] = useState(() => initialForm());
   const [formError, setFormError] = useState('');
@@ -96,7 +92,6 @@ function useDelegationForm(load, projects, onChanged) {
   };
   return { form, formError, handleSubmit, submitting, updateField };
 }
-
 function useDelegationStatusMutation(load, setError, onChanged) {
   const [mutatingId, setMutatingId] = useState('');
   const handleToggle = async (delegation) => {
@@ -115,7 +110,6 @@ function useDelegationStatusMutation(load, setError, onChanged) {
   };
   return { handleToggle, mutatingId };
 }
-
 function PanelHeader({ loading, onRefresh }) {
   return (
     <div className="pi-delegations-header">
@@ -130,28 +124,36 @@ function PanelHeader({ loading, onRefresh }) {
     </div>
   );
 }
-
 function DelegationForm({ error, form, onSubmit, projects, submitting, updateField }) {
   return (
     <form className="pi-delegations-form" onSubmit={onSubmit}>
       {error && <InlineError>{error}</InlineError>}
-      <label>项目<select className="form-control" required value={form.projectId} onChange={event => updateField('projectId', event.target.value)}>
-        <option value="">选择项目</option>
-        {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
-      </select></label>
-      <label>Issue 编号<input className="form-control" placeholder="#265, #266" value={form.issueIds} onChange={event => updateField('issueIds', event.target.value)} /></label>
-      <label>开始时间<input className="form-control" type="datetime-local" value={form.startsAt} onChange={event => updateField('startsAt', event.target.value)} /></label>
-      <label>结束时间<input className="form-control" required type="datetime-local" value={form.expiresAt} onChange={event => updateField('expiresAt', event.target.value)} /></label>
-      <label className="pi-delegations-wide">允许动作（allowed actions）<input className="form-control" value={form.allowedActions} onChange={event => updateField('allowedActions', event.target.value)} /></label>
-      <label>禁止动作<input className="form-control" value={form.forbiddenActions} onChange={event => updateField('forbiddenActions', event.target.value)} /></label>
-      <label>标题<input className="form-control" placeholder="夜间委托窗口" value={form.title} onChange={event => updateField('title', event.target.value)} /></label>
+      <div className="pi-delegations-primary-fields">
+        <label>项目<select className="form-control" required value={form.projectId} onChange={event => updateField('projectId', event.target.value)}>
+          <option value="">选择项目</option>
+          {projects.map(project => <option key={project.id} value={project.id}>{project.name || project.id}</option>)}
+        </select></label>
+        <label>Issue 编号<input className="form-control" placeholder="#265, #266" value={form.issueIds} onChange={event => updateField('issueIds', event.target.value)} /></label>
+        <label>开始时间<input className="form-control" type="datetime-local" value={form.startsAt} onChange={event => updateField('startsAt', event.target.value)} /></label>
+        <label>结束时间<input className="form-control" required type="datetime-local" value={form.expiresAt} onChange={event => updateField('expiresAt', event.target.value)} /></label>
+        <label>标题<input className="form-control" placeholder="夜间委托窗口" value={form.title} onChange={event => updateField('title', event.target.value)} /></label>
+      </div>
+      <details className="pi-delegations-advanced">
+        <summary>
+          <span>高级边界</span>
+          <small>Allowed actions 与禁止动作已预填，必要时再展开修改。</small>
+        </summary>
+        <div className="pi-delegations-advanced-fields">
+          <label className="pi-delegations-wide">允许动作（allowed actions）<input className="form-control" value={form.allowedActions} onChange={event => updateField('allowedActions', event.target.value)} /></label>
+          <label>禁止动作<input className="form-control" value={form.forbiddenActions} onChange={event => updateField('forbiddenActions', event.target.value)} /></label>
+        </div>
+      </details>
       <button className="btn btn-primary" disabled={submitting} type="submit">
         {submitting ? '创建中…' : '创建委托窗口'}
       </button>
     </form>
   );
 }
-
 function DelegationList({ delegations, loading, mutatingId, onToggle, projectLabelMap }) {
   if (loading && delegations.length === 0) return <div className="pi-delegations-empty"><Loader2 size={14} className="spin-animation" /> 正在加载委托窗口…</div>;
   if (delegations.length === 0) return <div className="pi-delegations-empty">暂无委托窗口。</div>;
@@ -169,7 +171,6 @@ function DelegationList({ delegations, loading, mutatingId, onToggle, projectLab
     </div>
   );
 }
-
 function DelegationRow({ delegation, mutating, onToggle, projectName }) {
   const scope = parseJsonObject(delegation.scope_json);
   const issueIds = Array.isArray(scope.issue_ids) ? scope.issue_ids : [];
@@ -197,7 +198,6 @@ function DelegationRow({ delegation, mutating, onToggle, projectName }) {
     </article>
   );
 }
-
 function ChipLine({ empty, label, values }) {
   const items = values.filter(Boolean);
   return (
@@ -206,11 +206,9 @@ function ChipLine({ empty, label, values }) {
     </div>
   );
 }
-
 function InlineError({ children }) {
   return <div className="pi-delegations-error" role="alert">{children}</div>;
 }
-
 function buildCreatePayload(form) {
   const projectId = form.projectId.trim();
   if (!projectId) throw new Error('请选择项目');
@@ -234,7 +232,6 @@ function buildCreatePayload(form) {
     title: form.title.trim() || defaultTitle(issueIds),
   };
 }
-
 function setDefaultProject(projects, setForm) {
   const firstProject = Array.isArray(projects) ? projects[0]?.id || '' : '';
   if (!firstProject) return;
