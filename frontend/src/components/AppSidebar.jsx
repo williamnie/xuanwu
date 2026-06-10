@@ -86,7 +86,7 @@ export default function AppSidebar({
 
         <button className={`nav-item ${currentPage === 'pi-command-center' ? 'active' : ''}`} onClick={() => navigateTo('pi-command-center')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Command size={16} /> Command Center
+            <Command size={16} /> PI 控制台
           </span>
         </button>
 

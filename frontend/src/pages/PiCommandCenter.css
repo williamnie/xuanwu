@@ -23,10 +23,10 @@
   border: 1px solid var(--border-color);
   border-radius: 24px;
   box-shadow: var(--shadow-lg);
-  display: grid;
+  display: flex;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  overflow: hidden;
+  justify-content: space-between;
+  overflow: visible;
   padding: 22px;
 }
 
@@ -53,6 +53,23 @@
   color: var(--text-muted);
   font-size: 0.84rem;
   line-height: 1.55;
+}
+
+.pi-command-hero-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pi-command-hero-summary span {
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, var(--border-color));
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 10px;
 }
 
 .pi-command-hero-actions {
@@ -238,7 +255,7 @@
 
 @media (max-width: 760px) {
   .pi-command-hero {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .pi-command-hero-actions {
