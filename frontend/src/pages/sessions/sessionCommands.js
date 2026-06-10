@@ -54,7 +54,7 @@ export function validateSessionCommand(commandState, context = {}) {
   if (name === 'run' && !commandIssueId(commandState, context)) {
     return '/run 需要选择 issue 或输入 #id';
   }
-  if (name === 'issue' && !context.projectId && !projectIDFromReferences(context.references)) {
+  if (name === 'issue' && !context.projectId) {
     return '/issue 需要选择 project';
   }
   if (name === 'issue' && !String(context.prompt || '').trim()) {
@@ -83,7 +83,7 @@ function buildRunnerCommand(commandState, context, confirmed) {
 }
 
 function applyIssueArgs(args, context) {
-  const projectId = context.projectId || projectIDFromReferences(context.references);
+  const projectId = context.projectId;
   if (projectId) args.project_id = projectId;
   if (context.sessionId) args.source_session_id = context.sessionId;
   if (context.prompt) args.prompt = String(context.prompt).trim();
@@ -97,10 +97,6 @@ function commandIssueId(commandState, { prompt = '', references = [], linkedIssu
   return cleanID(issueIDFromText(prompt));
 }
 
-function projectIDFromReferences(references = []) {
-  const ref = references.find((item) => item?.type === 'project' && item?.id);
-  return ref?.id || '';
-}
 
 function issueIDFromText(prompt) {
   const match = String(prompt || '').match(/(?:#|@issue\s+)(\d+)/i);

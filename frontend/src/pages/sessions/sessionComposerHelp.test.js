@@ -10,6 +10,6 @@ test('composer help explains structured references and workflow commands', () =>
   assert.match(text, /attach context|附加上下文/);
   assert.match(text, /\//);
   assert.match(text, /workflow|工作流/);
-  assert.match(text, /@project/);
-  assert.match(text, /不切换执行项目/);
+  assert.doesNotMatch(text, /@project/);
+  assert.match(text, /project 由页面项目选择器决定/);
 });

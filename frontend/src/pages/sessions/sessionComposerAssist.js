@@ -1,7 +1,6 @@
-const MAX_PROJECT_REFERENCES = 8;
 const MAX_ISSUE_REFERENCES = 12;
 
-export function buildSessionComposerSuggestions({ projects = [], issues = [], currentProject = null, linkedIssues = [], capabilities = {}, pathReferences = {} } = {}) {
+export function buildSessionComposerSuggestions({ issues = [], currentProject = null, linkedIssues = [], capabilities = {}, pathReferences = {} } = {}) {
   return [
     buildStatusCommand(linkedIssues),
     buildIssueCommand(currentProject),
@@ -11,14 +10,13 @@ export function buildSessionComposerSuggestions({ projects = [], issues = [], cu
     ...pathReferenceSuggestions(pathReferences.files, 'file'),
     ...pathReferenceSuggestions(pathReferences.folders, 'folder'),
     ...issueReferenceSuggestions(issues),
-    ...projectReferenceSuggestions(projects),
     ...capabilityReferenceSuggestions(capabilities.skills, 'skill'),
     ...capabilityReferenceSuggestions(capabilities.plugins, 'plugin'),
   ];
 }
 
 export function issueCommandPrompt(project = null) {
-  const projectLine = project ? `项目：${projectReferenceText(project)}\n\n` : '';
+  const projectLine = project ? `项目：${projectLabel(project)}\n\n` : '';
   return `${projectLine}请把下面内容整理为一个 codex-issue-runner issue：\n\n## 背景/问题\n\n## 目标\n\n## 范围\n\n## 验收\n\n## 验证方式\n`;
 }
 
@@ -28,10 +26,10 @@ export function statusCommandPrompt(linkedIssues = []) {
   return `${targetLine}请查询当前 linked issue / runner 状态，并总结：\n- 当前状态\n- 最近日志或错误\n- 下一步建议\n`;
 }
 
-export function projectReferenceText(project) {
+function projectLabel(project) {
   const id = cleanInline(project?.id);
   const name = cleanInline(project?.name) || id || '未命名项目';
-  return id ? `@project:${id} ${name}` : `@project ${name}`;
+  return id && id !== name ? `${name} (${id})` : name;
 }
 
 export function issueReferenceText(issue) {
@@ -86,23 +84,6 @@ function issueCommandArgs(currentProject) {
 function issueArgFromLinked(linkedIssues = []) {
   const id = cleanInline(linkedIssues.find((issue) => issue?.id)?.id);
   return id ? { issue_id: Number(id) } : {};
-}
-
-function projectReferenceSuggestions(projects) {
-  return projects.slice(0, MAX_PROJECT_REFERENCES).map((project) => ({
-    id: `project-${project.id}`,
-    trigger: '@',
-    label: `@project ${cleanInline(project.name) || project.id}`,
-    description: cleanInline(project.cwd) || '已注册 project',
-    insertText: projectReferenceText(project),
-    reference: {
-      type: 'project',
-      id: cleanInline(project.id),
-      label: cleanInline(project.name) || cleanInline(project.id),
-      metadata: { cwd: cleanInline(project.cwd) },
-    },
-    searchText: `project ${project.id || ''} ${project.name || ''} ${project.cwd || ''}`,
-  }));
 }
 
 function issueReferenceSuggestions(issues) {

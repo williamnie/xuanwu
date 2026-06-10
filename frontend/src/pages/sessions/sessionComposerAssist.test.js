@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildSessionComposerSuggestions,
+  issueCommandPrompt,
   issueReferenceText,
-  projectReferenceText,
 } from './sessionComposerAssist.js';
 
-test('builds slash commands and readable project/issue references', () => {
+test('builds slash commands and omits project @ suggestions on session pages', () => {
   const suggestions = buildSessionComposerSuggestions({
     currentProject: { id: 'runner', name: 'Codex Runner' },
     projects: [{ id: 'runner', name: 'Codex Runner', cwd: '/repo' }],
@@ -14,13 +14,14 @@ test('builds slash commands and readable project/issue references', () => {
   });
 
   assert.deepEqual(suggestions.filter((item) => item.trigger === '/').map((item) => item.label), ['/status', '/issue', '/run']);
-  assert.ok(suggestions.some((item) => item.insertText === '@project:runner Codex Runner'));
+  assert.ok(suggestions.every((item) => !String(item.label || '').includes('@project')));
+  assert.ok(suggestions.every((item) => item.reference?.type !== 'project'));
   const issueSuggestion = suggestions.find((item) => item.insertText === '#69 增强 Session 输入');
   assert.ok(issueSuggestion);
   assert.match(issueSuggestion.searchText, /issue 69 #69/);
 });
 
-test('prioritizes issues before projects for empty @ suggestions', () => {
+test('keeps empty @ suggestions scoped to usable session references', () => {
   const projects = Array.from({ length: 9 }, (_, index) => ({
     id: `project-${index + 1}`,
     name: `Project ${index + 1}`,
@@ -33,8 +34,8 @@ test('prioritizes issues before projects for empty @ suggestions', () => {
 
   const mentionLabels = suggestions.filter((item) => item.trigger === '@').map((item) => item.label);
 
-  assert.equal(mentionLabels[0], '#92 真实上下文引用');
-  assert.match(mentionLabels[1], /@project Project 1/);
+  assert.deepEqual(mentionLabels, ['#92 真实上下文引用']);
+  assert.ok(mentionLabels.every((label) => !label.includes('@project')));
 });
 
 test('builds skill and plugin context references and request hints', () => {
@@ -98,7 +99,8 @@ test('slash suggestions expose structured command payloads', () => {
   assert.deepEqual(run.command, { name: 'run', args: { issue_id: 69 }, requires_confirmation: true });
 });
 
-test('reference text normalizes whitespace', () => {
-  assert.equal(projectReferenceText({ id: 'demo', name: 'Demo\nProject' }), '@project:demo Demo Project');
+test('reference text normalizes whitespace without creating @project text', () => {
+  assert.equal(issueCommandPrompt({ id: 'demo', name: 'Demo\nProject' }).startsWith('项目：Demo Project (demo)'), true);
+  assert.doesNotMatch(issueCommandPrompt({ id: 'demo', name: 'Demo Project' }), /@project/);
   assert.equal(issueReferenceText({ id: 7, title: 'Fix\tbug' }), '#7 Fix bug');
 });

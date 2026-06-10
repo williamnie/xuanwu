@@ -19,20 +19,21 @@ test('adds and removes structured references without reading prompt text', () =>
   assert.deepEqual(removeSessionReference(refs, 'issue:95'), []);
 });
 
-test('payload uses structured references as source of truth', () => {
+test('payload uses supported structured references as source of truth', () => {
   const payload = sessionPayloadWithReferences('hello #95', { model: 'gpt-5.5' }, [
+    { type: 'file', path: 'frontend/src/pages/Sessions.jsx', label: 'Sessions.jsx' },
     { type: 'project', id: 'runner', label: 'Runner' },
   ]);
 
   assert.deepEqual(payload, {
     prompt: 'hello #95',
     model: 'gpt-5.5',
-    references: [{ type: 'project', id: 'runner', label: 'Runner', source: 'composer', required: true }],
+    references: [{ type: 'file', path: 'frontend/src/pages/Sessions.jsx', label: 'Sessions.jsx', source: 'composer', required: true }],
   });
   assert.deepEqual(sessionPayloadWithReferences('plain #95', {}), { prompt: 'plain #95' });
 });
 
-test('reference details expose ready warning and error states for inspector', () => {
+test('reference details expose ready warning and error states for supported refs only', () => {
   const details = buildReferenceDetails([
     { type: 'issue', id: '95' },
     { type: 'project', id: 'other' },
@@ -44,12 +45,11 @@ test('reference details expose ready warning and error states for inspector', ()
     projects: [{ id: 'other', name: 'Other project', cwd: '/repo/other' }],
   });
 
+  assert.equal(details.length, 3);
   assert.equal(details[0].status, 'ready');
   assert.match(details[0].summary, /todo/);
-  assert.equal(details[1].status, 'warning');
-  assert.match(details[1].message, /不切换执行项目/);
-  assert.equal(details[2].status, 'error');
-  assert.equal(details[3].status, 'warning');
+  assert.equal(details[1].status, 'error');
+  assert.equal(details[2].status, 'warning');
 
   const validation = referenceValidation(details);
   assert.equal(validation.hasErrors, true);

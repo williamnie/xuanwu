@@ -1,4 +1,4 @@
-const SUPPORTED_REFERENCE_TYPES = new Set(['file', 'folder', 'issue', 'project', 'skill', 'plugin']);
+const SUPPORTED_REFERENCE_TYPES = new Set(['file', 'folder', 'issue', 'skill', 'plugin']);
 const LARGE_FILE_BYTES = 256 * 1024;
 const LARGE_FOLDER_FILES = 500;
 
@@ -87,7 +87,6 @@ function compactReference(reference) {
 
 function referenceDetail(reference, context) {
   if (reference.type === 'issue') return issueDetail(reference, context.issues, context.currentProjectId);
-  if (reference.type === 'project') return projectDetail(reference, context.projects, context.currentProjectId);
   if (reference.type === 'file') return pathDetail(reference, false);
   if (reference.type === 'folder') return pathDetail(reference, true);
   return registryDetail(reference);
@@ -103,14 +102,6 @@ function issueDetail(reference, issues = [], currentProjectId = '') {
   const crossProject = currentProjectId && issue.project_id && issue.project_id !== currentProjectId;
   return withStatus(reference, crossProject ? 'warning' : 'ready', crossProject ? '跨 project issue，仅附加上下文，不切换执行项目。' : '',
     `#${issue.id} · ${issue.status || 'unknown'} · ${issue.title || reference.label || 'Untitled issue'}`);
-}
-
-function projectDetail(reference, projects = [], currentProjectId = '') {
-  const project = projects.find((item) => item.id === reference.id);
-  if (!reference.id || !project) return withStatus(reference, 'error', 'Project 不存在或未加载。', '缺少 project context');
-  const crossProject = currentProjectId && project.id !== currentProjectId;
-  return withStatus(reference, crossProject ? 'warning' : 'ready', crossProject ? '引用项目上下文，不切换执行项目。' : '',
-    `${project.name || project.id} · ${project.cwd || 'cwd 未知'}`);
 }
 
 function pathDetail(reference, isFolder) {
