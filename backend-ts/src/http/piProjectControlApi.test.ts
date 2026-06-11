@@ -168,7 +168,17 @@ describe("Bun project PI control API", () => {
       expect(audit.map((event) => event.event_type)).toEqual(["candidate", "gate_decision"]);
       expect(audit[1]).toMatchObject({ decision: "deny" });
       expect(listEvents(database)).toEqual([]);
-      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([]);
+      expect(listPiMemoryItems(database, { disabled: 1 })).toEqual([
+        expect.objectContaining({
+          content: "must not write memory",
+          disabled: 1,
+          kind: "preference",
+          scope: "project",
+          scope_id: "demo",
+          source_type: "pi.manager_cycle"
+        })
+      ]);
+      expect(listPiMemoryItems(database, { disabled: 0 })).toEqual([]);
     } finally {
       faux.unregister();
       database.close();

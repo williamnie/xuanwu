@@ -60,6 +60,7 @@ describe("issue read repository", () => {
         required_mcp_capabilities: "[]",
         recommended_mcp_capabilities: "[]",
         agent_profile_id: "",
+        service_tier: "",
         source_session_id: "thread-1",
         source_turn_id: "",
         source_excerpt: "",

@@ -58,6 +58,7 @@ describe("PI heartbeat memory signals", () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
+      insertIssue(db, 259, "demo");
       insertDelegation(db, "delegation-a", "demo", [259]);
       insertScopedMemory(db, "project-policy", "project", "demo", "Project scoped policy");
       insertScopedMemory(db, "issue-memory", "issue", "259", "Issue scoped acceptance");
@@ -112,5 +113,13 @@ function insertScopedMemory(db: RunnerDatabase, id: string, scope: string, scope
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, scope, scopeID, "project_policy", content, "issue", "259", "high", 0,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertIssue(db: RunnerDatabase, id: number, projectID: string): void {
+  db.sqlite.run(
+    `insert into issues (id, project_id, title, status, priority, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [id, projectID, `Issue ${id}`, "todo", 3, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }

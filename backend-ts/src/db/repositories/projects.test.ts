@@ -61,6 +61,7 @@ describe("project read repository", () => {
         sandbox: "workspace-write",
         default_agent_profile_id: "",
         default_mcp_policy: "{}",
+        default_service_tier: "",
         default_skill_policy: "{}",
         loop_status: "stopped",
         sort_order: 1,
