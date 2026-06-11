@@ -26,7 +26,7 @@ export type IssueStateDiagnostic = {
 };
 export type IssueStateBatchTarget = { deadline_at?: string; issue_ids: number[]; label: string; status?: string };
 export type IssueStateManagerOptions = {
-  batchTarget?: IssueStateBatchTarget; batchTargets?: IssueStateBatchTarget[]; issueIDs?: number[];
+  batchTarget?: IssueStateBatchTarget; batchTargets?: IssueStateBatchTarget[]; includeDoneIssues?: boolean; issueIDs?: number[];
   maxRetries?: number; now?: Date; pendingVerificationTimeoutMs?: number; projectID?: string; retryCooldownMs?: number; staleAfterMs?: number;
 };
 export type IssueStateManagerResult = { batch_targets: IssueStateBatchProgress[]; diagnostics: IssueStateDiagnostic[]; generated_at: string };
@@ -41,9 +41,10 @@ const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*
 export function diagnoseIssueState(db: RunnerDatabase, options: IssueStateManagerOptions = {}): IssueStateManagerResult {
   const now = options.now ?? new Date();
   const issues = candidateIssues(db, options);
+  const diagnosticIssues = options.includeDoneIssues ? issues : issues.filter((issue) => issue.status !== "done");
   return {
     batch_targets: batchProgress(issues, normalizedBatchTargets(options)),
-    diagnostics: issues.flatMap((issue) => diagnoseOne(db, issue, options, now)),
+    diagnostics: diagnosticIssues.flatMap((issue) => diagnoseOne(db, issue, options, now)),
     generated_at: iso(now)
   };
 }
@@ -53,7 +54,7 @@ export function recommendedRepairPayload(
   issueID: number,
   options: IssueStateManagerOptions & { diagnosisCode?: string; operation?: string } = {}
 ): Record<string, unknown> {
-  const diagnostics = diagnoseIssueState(db, { ...options, issueIDs: [issueID] }).diagnostics;
+  const diagnostics = diagnoseIssueState(db, { ...options, includeDoneIssues: true, issueIDs: [issueID] }).diagnostics;
   const diagnostic = diagnostics.find((item) => !options.diagnosisCode || item.code === options.diagnosisCode) ?? diagnostics[0];
   if (!diagnostic) throw new Error("issue has no state manager repair recommendation");
   const action = diagnostic.recommended_actions.find((item) => !options.operation || item.operation === options.operation) ?? diagnostic.recommended_actions[0];

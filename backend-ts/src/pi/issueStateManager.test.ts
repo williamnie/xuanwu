@@ -84,11 +84,30 @@ describe("Issue State Manager diagnosis", () => {
         severity: "needs_user",
         recommended_actions: [expect.objectContaining({ operation: "comment" })]
       });
-      expect(byIssue.get(done)).toMatchObject({
-        code: "done_missing_verification_evidence",
-        recommended_actions: [expect.objectContaining({ operation: "patch_status", patch: { status: "pending_verification" } })]
-      });
+      expect(byIssue.has(done)).toBe(false);
       expect(JSON.stringify(result.diagnostics)).toContain("thread-ended");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("can explicitly audit done issues for missing verification evidence", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, { status: "done", title: "Done without proof", updatedAt: "2026-01-01T00:00:00Z" });
+
+      const result = diagnoseIssueState(fixture.db, {
+        includeDoneIssues: true,
+        issueIDs: [issueID],
+        now: new Date("2026-01-02T03:00:00Z"),
+        projectID: fixture.project.id
+      });
+
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({
+        code: "done_missing_verification_evidence",
+        issue_id: issueID,
+        recommended_actions: [expect.objectContaining({ operation: "patch_status", patch: { status: "pending_verification" } })]
+      }));
     } finally {
       await fixture.close();
     }

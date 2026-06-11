@@ -60,7 +60,24 @@ describe("Issue State Manager regressions", () => {
     }
   });
 
-  test("does not treat generic build or lint words as verification evidence", async () => {
+  test("does not audit done issues by default", async () => {
+    const db = await openFixture();
+    try {
+      const issueID = insertIssue(db, {
+        status: "done",
+        title: "Done without proof",
+        updatedAt: "2026-01-01T00:00:00Z"
+      });
+
+      const result = diagnoseIssueState(db, { now: new Date("2026-01-01T01:00:00Z"), projectID: "demo" });
+
+      expect(result.diagnostics.map((item) => item.issue_id)).not.toContain(issueID);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not treat generic build or lint words as verification evidence during explicit done audit", async () => {
     const db = await openFixture();
     try {
       const issueID = insertIssue(db, {
@@ -70,7 +87,12 @@ describe("Issue State Manager regressions", () => {
       });
       insertEvent(db, issueID, "issue.comment", { note: "build artifact uploaded" });
 
-      const result = diagnoseIssueState(db, { now: new Date("2026-01-01T01:00:00Z"), projectID: "demo" });
+      const result = diagnoseIssueState(db, {
+        includeDoneIssues: true,
+        issueIDs: [issueID],
+        now: new Date("2026-01-01T01:00:00Z"),
+        projectID: "demo"
+      });
 
       expect(result.diagnostics).toContainEqual(expect.objectContaining({
         code: "done_missing_verification_evidence",

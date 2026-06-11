@@ -71,14 +71,19 @@ describe("PI reports API", () => {
         type: "night_run",
         window: { since: "2026-06-03T00:00:00Z", until: "2026-06-04T00:00:00Z" }
       });
-      expect(body.completed_issues).toEqual([expect.objectContaining({
-        evidence_links: expect.objectContaining({
-          issue: `/api/issues/${done}`,
-          runs: `/api/issues/${done}/runs`,
-          session: "/api/sessions/codex:thread-done"
+      expect(body.completed_issues).toEqual([
+        expect.objectContaining({
+          evidence_links: expect.objectContaining({
+            issue: `/api/issues/${done}`,
+            runs: `/api/issues/${done}/runs`,
+            session: "/api/sessions/codex:thread-done"
+          }),
+          id: done
         }),
-        id: done
-      })]);
+        expect.objectContaining({
+          id: weakDone
+        })
+      ]);
       expect(body.failed_retry_summary.failed_issues).toEqual([expect.objectContaining({
         evidence_links: expect.objectContaining({ audit: "/api/pi/audit-events?project_id=demo&issue_id=" + failed }),
         error: expect.stringContaining("[redacted]"),
@@ -93,10 +98,7 @@ describe("PI reports API", () => {
         issue_id: failed,
         notification_event: "pi.needs_user"
       })]);
-      expect(body.verification_gaps).toEqual([expect.objectContaining({
-        code: "done_missing_verification_evidence",
-        issue_id: weakDone
-      })]);
+      expect(body.verification_gaps).toEqual([]);
       expect(body.usage_cost).toMatchObject({
         events_scanned: 1,
         status: "available",

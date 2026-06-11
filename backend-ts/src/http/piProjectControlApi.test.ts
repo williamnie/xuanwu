@@ -77,8 +77,7 @@ describe("Bun project PI control API", () => {
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ batch_targets: [expect.objectContaining({ done: 1, label: "tonight", off_track_issue_ids: [pending] })] });
-      expect(body.diagnostics).toContainEqual(expect.objectContaining({ code: "done_missing_verification_evidence", issue_id: weakDone,
-        recommended_actions: [expect.objectContaining({ action_type: "issue.state_repair" })] }));
+      expect(JSON.stringify(body.diagnostics)).not.toContain(`"issue_id":${weakDone}`);
     } finally {
       database.close();
     }
