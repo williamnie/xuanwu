@@ -12,6 +12,41 @@ require_cmd() {
   fi
 }
 
+is_darwin() {
+  [ "$(uname -s)" = "Darwin" ]
+}
+
+resolve_codesign_identity() {
+  local configured="${CODEX_RUNNER_CODESIGN_IDENTITY:-auto}"
+  if [ "$configured" = "none" ] || [ "$configured" = "skip" ] || [ "$configured" = "0" ]; then
+    return 0
+  fi
+  if [ "$configured" != "auto" ] && [ -n "$configured" ]; then
+    printf '%s' "$configured"
+    return 0
+  fi
+  is_darwin || return 0
+  command -v security >/dev/null 2>&1 || return 0
+  security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' \
+    | head -n 1
+}
+
+sign_binary_if_possible() {
+  local identity identifier
+  identity="$(resolve_codesign_identity)"
+  if [ -z "$identity" ]; then
+    echo "[bun-build] codesign: skipped (set CODEX_RUNNER_CODESIGN_IDENTITY to sign this binary)"
+    return
+  fi
+  identifier="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-com.xiaobei.codex-issue-runner}"
+  echo "[bun-build] codesign identity: $identity"
+  echo "[bun-build] codesign identifier: $identifier"
+  codesign --force --sign "$identity" --identifier "$identifier" --timestamp=none "$OUTFILE"
+  codesign -dv --verbose=2 "$OUTFILE" 2>&1 \
+    | awk '/^(Identifier|TeamIdentifier|Authority|Signature)=/ { print "[bun-build] " $0 }'
+}
+
 resolve_version() {
   if [ -n "${CODEX_RUNNER_VERSION:-}" ]; then
     printf '%s' "$CODEX_RUNNER_VERSION"
@@ -66,6 +101,7 @@ echo "[bun-build] outfile: $OUTFILE"
     bun build ./src/main.ts --compile '--env=CODEX_RUNNER_BUILD_*' --outfile "$OUTFILE"
 )
 
+sign_binary_if_possible
 printf '%s\n' "$BUILD_STAMP" > "$OUTFILE.build.stamp"
 echo "[bun-build] binary: $OUTFILE"
 echo "[bun-build] stamp: $OUTFILE.build.stamp"
