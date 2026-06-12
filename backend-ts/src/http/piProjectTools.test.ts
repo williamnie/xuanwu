@@ -41,6 +41,9 @@ describe("PI project tools", () => {
       faux.setResponses([
         fauxAssistantMessage([
           fauxToolCall("project_status", {}, { id: "status" }),
+          fauxToolCall("repo_tree", { path: ".", max_depth: 1 }, { id: "repo-tree" }),
+          fauxToolCall("repo_search", { query: "Demo", path: "README.md", max_results: 3 }, { id: "repo-search" }),
+          fauxToolCall("repo_read_excerpt", { path: "README.md", start_line: 1, max_lines: 2 }, { id: "repo-read" }),
           fauxToolCall("issue_enqueue_proposal", { issue_id: 1, rationale: "ready" }, { id: "enqueue" }),
           fauxToolCall("issue_schedule_enqueue", {
             issue_id: 1,
@@ -65,7 +68,8 @@ describe("PI project tools", () => {
 "ls", "mcp_capability_read", "mcp_registry_list",
         "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
         "memory_search", "memory_write_candidate", "needs_user_escalation",
-        "project_list", "project_status", "read", "report_workflow_request", "review_workflow_request", "session_list",
+        "project_list", "project_status", "read", "repo_read_excerpt", "repo_search", "repo_tree",
+        "report_workflow_request", "review_workflow_request", "session_list",
         "session_read_summary", "session_steer_proposal", "skill_intent_audit",
         "skill_list", "skill_read", "skill_recommend", "verification_workflow_request"
       ]);
@@ -73,6 +77,12 @@ describe("PI project tools", () => {
       expect(probes.get("project_status")?.isError).toBe(false);
       expect(probes.get("project_status")?.text).toContain('"total_issues": 2');
       expect(probes.get("project_status")?.text).toContain('"todo": 1');
+      expect(probes.get("repo_tree")?.isError).toBe(false);
+      expect(probes.get("repo_tree")?.text).toContain('"path": "README.md"');
+      expect(probes.get("repo_search")?.isError).toBe(false);
+      expect(probes.get("repo_search")?.text).toContain('"path": "README.md"');
+      expect(probes.get("repo_read_excerpt")?.isError).toBe(false);
+      expect(probes.get("repo_read_excerpt")?.text).toContain('"source": "repo_read_excerpt"');
       expect(probes.get("issue_enqueue_proposal")?.isError).toBe(false);
       expect(probes.get("issue_enqueue_proposal")?.text).toContain('"requires_confirmation": true');
       expect(probes.get("issue_schedule_enqueue")?.isError).toBe(false);
@@ -81,6 +91,9 @@ describe("PI project tools", () => {
         "issue.enqueue",
         "issue.schedule_enqueue"
       ].sort());
+      expect(listPiActions(db, { status: "completed" }).map((action) => action.action_type)).toEqual(
+        expect.arrayContaining(["repo.tree", "repo.search", "repo.read_excerpt"])
+      );
       expect(probes.get("read")?.isError).toBe(false);
       const readAction = listPiActions(db).find((action) => action.action_type === "sdk.read");
       expect(readAction).toMatchObject({

@@ -39,7 +39,7 @@ export type PiActionContext = {
   source?: string;
 };
 
-type SafeActionInput = PiActionRequest & { execute: () => unknown };
+type SafeActionInput = PiActionRequest & { execute: () => unknown; resultForAudit?: (result: unknown) => unknown };
 type AuditInput = {
   actor?: string;
   decision?: string;
@@ -52,7 +52,7 @@ type AuditInput = {
 export function executeSafePiAction(db: RunnerDatabase, context: PiActionContext, input: SafeActionInput) {
   const gated = createGatedPiAction(db, context, input);
   if (gated.decision.decision !== "execute") return actionResultFromRecord(gated.action);
-  return executePiActionWithAudit(db, context, gated.action, input.execute);
+  return executePiActionWithAudit(db, context, gated.action, input.execute, input.resultForAudit);
 }
 
 export function createPendingPiAction(
@@ -140,15 +140,17 @@ function executePiActionWithAudit(
   db: RunnerDatabase,
   context: PiActionContext,
   action: PiAction,
-  execute: () => unknown
+  execute: () => unknown,
+  resultForAudit: (result: unknown) => unknown = identity
 ) {
   const executing = updatePiAction(db, action.id, { status: "executing" });
   recordPiActionAuditEvent(db, executing, "execution_started", { actor: "gate", decision: "execute" });
   publishPiActionEvent(context.bus, "pi.action_executing", executing);
   try {
     const result = execute();
-    const completed = updatePiAction(db, action.id, { result_json: JSON.stringify(result ?? null), status: "completed" });
-    recordPiActionAuditEvent(db, completed, "execution_result", { actor: "executor", result });
+    const auditResult = resultForAudit(result);
+    const completed = updatePiAction(db, action.id, { result_json: JSON.stringify(auditResult ?? null), status: "completed" });
+    recordPiActionAuditEvent(db, completed, "execution_result", { actor: "executor", result: auditResult });
     publishPiActionEvent(context.bus, "pi.action_completed", completed);
     return result;
   } catch (error) {
@@ -271,6 +273,10 @@ function piActionEvent(type: string, action: PiAction): AppEvent {
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : "action failed";
+}
+
+function identity(value: unknown): unknown {
+  return value;
 }
 
 function cleanString(value: unknown): string {

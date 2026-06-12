@@ -19,6 +19,9 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_comment",
   "issue_enqueue_proposal",
   "issue_schedule_enqueue",
+  "repo_search",
+  "repo_read_excerpt",
+  "repo_tree",
   "project_status",
   "project_list",
   "session_list",
@@ -38,6 +41,7 @@ const objectOptions = { additionalProperties: false };
 const optionalString = Type.Optional(Type.String());
 const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 const positiveID = Type.Integer({ minimum: 1 });
+const positiveNumber = Type.Integer({ minimum: 1 });
 const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 
@@ -45,10 +49,38 @@ export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDef
   return [
     ...agentOrchestrationTools(actions),
     ...issueActionTools(actions),
+    ...repoActionTools(actions),
     ...projectActionTools(actions),
     ...sessionActionTools(actions),
     ...skillActionTools(actions),
     ...createPiMcpActionTools(actions)
+  ];
+}
+
+function repoActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
+  return [
+    actionTool("repo_search", "Repo Search",
+      "Search text in the current project repository using a bounded read-only scanner.",
+      Type.Object({
+        max_results: Type.Optional(positiveNumber),
+        path: optionalString,
+        query: requiredText
+      }, objectOptions), actions.searchRepo),
+    actionTool("repo_read_excerpt", "Repo Read Excerpt",
+      "Read a bounded excerpt from one file in the current project repository.",
+      Type.Object({
+        max_bytes: Type.Optional(positiveNumber),
+        max_lines: Type.Optional(positiveNumber),
+        path: requiredText,
+        start_line: Type.Optional(positiveNumber)
+      }, objectOptions), actions.readRepoExcerpt),
+    actionTool("repo_tree", "Repo Tree",
+      "List a bounded directory tree for the current project repository.",
+      Type.Object({
+        max_depth: Type.Optional(Type.Integer({ minimum: 0 })),
+        max_entries: Type.Optional(positiveNumber),
+        path: optionalString
+      }, objectOptions), actions.readRepoTree)
   ];
 }
 

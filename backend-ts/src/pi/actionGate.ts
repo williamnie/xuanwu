@@ -74,6 +74,7 @@ export const PI_SAFE_ACTION_TYPES = [
   "agent.profile_recommend",
   "issue.comment", "issue.list", "issue.read", "issue.retry_after", "issue.state_diagnose",
   "issue.supervisor_decision", "project.list", "project.status",
+  "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",

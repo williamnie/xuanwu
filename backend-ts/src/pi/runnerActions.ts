@@ -16,8 +16,9 @@ import { observeSessionProgress } from "./sessionObserver.ts";
 import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStateDiagnosisInput, type IssueStateRepairProposalInput } from "./runnerIssueStateActions.ts";
 import { createIssueScheduleEnqueueAction, type IssueScheduleEnqueueInput } from "./runnerIssueScheduleActions.ts";
 import { createPiAgentOrchestrationActions, type PiAgentOrchestrationActionLayer } from "./agentOrchestrationActions.ts";
+import { createPiRepoReadActions, type PiRepoReadActionLayer } from "./repoReadActionTools.ts";
 
-export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & {
+export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
   createIssueProposal(input: IssueCreateProposalInput): unknown;
   createIssueStateRepairProposal(input: IssueStateRepairProposalInput): unknown;
@@ -78,6 +79,7 @@ export function createPiRunnerActions(
   return {
     ...createPiAgentOrchestrationActions(db, context),
     ...createPiMcpActions(db, { ...context, projectID: context.project?.id }),
+    ...createPiRepoReadActions(db, context),
     commentIssue: (input) => executeSafePiAction(db, context, {
       actionType: "issue.comment",
       issueID: input.issue_id,
