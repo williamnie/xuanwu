@@ -17,6 +17,10 @@ import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStat
 import { createIssueScheduleEnqueueAction, type IssueScheduleEnqueueInput } from "./runnerIssueScheduleActions.ts";
 import { createPiAgentOrchestrationActions, type PiAgentOrchestrationActionLayer } from "./agentOrchestrationActions.ts";
 import { createPiRepoReadActions, type PiRepoReadActionLayer } from "./repoReadActionTools.ts";
+import {
+  renderIssueCreateProposalDescription,
+  type IssueProposalContextFields
+} from "./issueProposalContext.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -44,7 +48,7 @@ type IssueListInput = { project_id?: string; status?: string };
 type IssueReadInput = { id: number };
 type IssueCommentInput = { body: string; issue_id: number };
 type IssueProposalInput = { issue_id: number; rationale?: string };
-type IssueCreateProposalInput = {
+type IssueCreateProposalInput = IssueProposalContextFields & {
   description: string;
   project_id?: string;
   rationale?: string;
@@ -197,12 +201,13 @@ function issueCreateProposal(
   context: PiRunnerActionContext
 ): ProposalInput {
   const projectID = scopedProjectID(input.project_id, context);
+  const description = renderIssueCreateProposalDescription(input, { project: context.project, projectID });
   return {
     actionType: "issue.create",
     payload: {
       project_id: projectID,
       title: input.title ?? "",
-      description: input.description,
+      description,
       required_skill_intents: parseSkillIntentList(input.required_skill_intents),
       recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
       required_mcp_capabilities: input.required_mcp_capabilities ?? [],

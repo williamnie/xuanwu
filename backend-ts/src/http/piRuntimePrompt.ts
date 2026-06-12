@@ -17,6 +17,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
     "Runner Chat workflow: create requested issues directly, then ask in chat whether to run now or schedule for later. If the user says now, call issue_enqueue_proposal. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
+    repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
     skillContext.promptSection,
     "MCP Capability Registry metadata:",
@@ -31,6 +32,19 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
       projectID: input.project?.id
     })
   ].join("\n");
+}
+
+function repoAwareIssueProposalWorkflow(): string {
+  return [
+    "Repo-aware issue proposal workflow:",
+    "When the user asks for implementation or a fix, identify the project and use only read-only repo/context tools when useful:",
+    "project_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
+    "Then call issue_create_proposal with a repo_context_pack-compatible context_pack/evidence/open_questions payload.",
+    "The created triage issue must include sections: 需求理解, 相关证据, 建议改动, 验收标准, 验证建议, 未确认问题.",
+    "PI must not edit code or run destructive commands; the pack is non-binding and executor must re-read and verify.",
+    "If information is insufficient, 最多追问一个关键问题 (ask at most one key question); do not block simple requests waiting for a perfect plan.",
+    "After creating the proposal/triage issue, ask whether to run now, schedule later, or wait."
+  ].join(" ");
 }
 
 export function piRuntimePromptSummary(agent: Pick<PiAgent, "instructions">) {

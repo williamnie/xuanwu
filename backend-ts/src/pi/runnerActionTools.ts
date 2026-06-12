@@ -44,6 +44,8 @@ const positiveID = Type.Integer({ minimum: 1 });
 const positiveNumber = Type.Integer({ minimum: 1 });
 const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
+const textList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
+const looseList = Type.Optional(Type.Array(Type.Any()));
 
 export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
@@ -149,6 +151,13 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         project_id: optionalString,
         rationale: optionalString,
         title: optionalString,
+        context_pack: Type.Optional(Type.Any()),
+        evidence: looseList,
+        relevant_files: looseList,
+        proposed_changes: textList,
+        acceptance_criteria: textList,
+        validation: textList,
+        open_questions: textList,
         required_skill_intents: skillIntentList,
         recommended_skill_intents: skillIntentList,
         required_mcp_capabilities: mcpCapabilityList,

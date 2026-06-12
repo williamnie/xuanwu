@@ -166,6 +166,49 @@ describe("Bun PI actions API", () => {
     }
   });
 
+  test("approve creates issue proposal with rendered repo context pack body", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = mustGetProject(database, "demo");
+      const action = createPiRunnerActions(database, { project })
+        .createIssueProposal({
+          context_pack: {
+            acceptance_criteria: ["User can collapse panel"],
+            evidence: [{
+              excerpt: "SECRET=super-secret\nexport function Panel() {}",
+              path: "src/Panel.tsx",
+              source_kind: "code",
+              summary: "Panel component"
+            }],
+            intent: "Implement accordion panel",
+            project: { id: "demo" },
+            proposed_changes: ["Add accessible toggle"],
+            validation: ["bun test src/Panel.test.tsx"]
+          },
+          description: "Need implementation\nTOKEN=must-not-leak",
+          open_questions: ["默认展开吗？"],
+          title: "Repo context issue"
+        }) as { action_id: string };
+      const router = createDefaultRouter({ database });
+
+      const response = await postAction(router, action.action_id, "approve");
+      const created = listIssues(database, { projectId: "demo" }).find((issue) => issue.title === "Repo context issue");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(created).toMatchObject({ status: "triage", title: "Repo context issue" });
+      expect(created?.description).toContain("## 需求理解");
+      expect(created?.description).toContain("## 相关证据");
+      expect(created?.description).toContain("src/Panel.tsx");
+      expect(created?.description).toContain("bun test src/Panel.test.tsx");
+      expect(created?.description).not.toContain("super-secret");
+      expect(created?.description).not.toContain("must-not-leak");
+    } finally {
+      database.close();
+    }
+  });
+
   test("execute steers approved session actions through provider once", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionSteerProvider();

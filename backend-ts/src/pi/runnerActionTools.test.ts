@@ -27,6 +27,7 @@ describe("PI runner action tools", () => {
     const repoSearch = toolByName(tools, "repo_search");
     const repoRead = toolByName(tools, "repo_read_excerpt");
     const repoTree = toolByName(tools, "repo_tree");
+    const issueCreate = toolByName(tools, "issue_create_proposal");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
@@ -50,6 +51,25 @@ describe("PI runner action tools", () => {
       max_lines: 4
     });
     expect(validateArgs(repoTree, { path: "src", max_depth: 2 })).toEqual({ path: "src", max_depth: 2 });
+    expect(validateArgs(issueCreate, {
+      context_pack: {
+        evidence: [{ path: "src/App.tsx", source_kind: "code", summary: "owner" }],
+        intent: "Add panel",
+        project: { id: "demo" }
+      },
+      description: "Need repo context",
+      evidence: [{ source_kind: "message", summary: "IM request" }],
+      open_questions: ["默认展开吗？"],
+      title: "Repo-aware issue"
+    })).toMatchObject({
+      context_pack: {
+        evidence: [{ path: "src/App.tsx", source_kind: "code", summary: "owner" }],
+        intent: "Add panel",
+        project: { id: "demo" }
+      },
+      evidence: [{ source_kind: "message", summary: "IM request" }],
+      open_questions: ["默认展开吗？"]
+    });
     expect(validateArgs(steer, { session_key: "codex:thread-1", prompt: "adjust" })).toEqual({
       session_key: "codex:thread-1",
       prompt: "adjust"
@@ -392,6 +412,58 @@ describe("PI runner action tools", () => {
         status: "completed"
       });
       expect(getIssue(fixture.db, 1)).toMatchObject({ title: "Chat-created issue" });
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("renders repo context pack into issue create proposals and sanitizes payload", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.create", project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        conversationID: "conv-chat",
+        project: fixture.project
+      });
+
+      const result = actions.createIssueProposal({
+        context_pack: {
+          intent: "实现折叠面板",
+          project: { id: "demo" },
+          evidence: [{
+            source_kind: "code",
+            path: "README.md",
+            summary: "existing docs mention panel",
+            excerpt: "TOKEN=super-secret\npanel docs"
+          }],
+          relevant_files: [{ path: "README.md", reason: "docs", symbols: ["Panel"] }],
+          proposed_changes: ["Add toggle state"],
+          acceptance_criteria: ["Panel can collapse"],
+          validation: ["bun test src/panel.test.ts"],
+          open_questions: ["默认展开吗？"]
+        },
+        description: "用户要求实现折叠面板\nAPI_KEY=must-not-leak",
+        evidence: [{ source_kind: "message", summary: "Feishu request" }],
+        title: "Repo-aware issue"
+      }) as { result?: { id?: number }; status: string };
+      const action = listPiActions(fixture.db).find((item) => item.action_type === "issue.create");
+      const payload = JSON.parse(action?.payload_json ?? "{}");
+      const issue = getIssue(fixture.db, result.result?.id ?? 0);
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(payload.context_pack).toBeUndefined();
+      expect(payload.evidence).toBeUndefined();
+      expect(payload.description).toContain("## 需求理解");
+      expect(payload.description).toContain("## 相关证据");
+      expect(payload.description).toContain("README.md");
+      expect(payload.description).toContain("Feishu request");
+      expect(payload.description).not.toContain("super-secret");
+      expect(payload.description).not.toContain("must-not-leak");
+      expect(issue?.description).toBe(payload.description);
     } finally {
       await fixture.close();
     }

@@ -4,6 +4,7 @@ import {
   createRepoContextPack,
   renderRepoContextPack
 } from "./repoContextPack.ts";
+import { renderRepoContextPackIssueMarkdown } from "./issueProposalContext.ts";
 
 describe("PI repo context pack contract", () => {
   test("normalizes required fields and defaults optional arrays", () => {
@@ -115,5 +116,45 @@ describe("PI repo context pack contract", () => {
     expect(markdown).toContain("src/components/Accordion.tsx");
     expect(markdown).toContain("bun test src/components/Accordion.test.tsx");
     expect(markdown).toContain("executor 需要复核运行态和代码");
+  });
+
+  test("renders repo context pack into issue proposal sections", () => {
+    const pack = createRepoContextPack({
+      intent: "帮我实现这个折叠面板功能",
+      project: { cwd: "/repo/movo-web", id: "movo-web", name: "MOVO Web" },
+      evidence: [{
+        source_kind: "code",
+        path: "src/components/Accordion.tsx",
+        reason: "existing component likely owns the UI",
+        excerpt: "API_KEY=super-secret\nexport function Accordion() {}",
+        confidence: "medium"
+      }],
+      relevant_files: [{
+        path: "src/components/Accordion.tsx",
+        reason: "primary component",
+        symbols: ["Accordion"]
+      }],
+      proposed_changes: ["Add collapsed state and accessible toggle affordance."],
+      acceptance_criteria: ["Panel expands and collapses from the IM-described entry point."],
+      validation: ["bun test src/components/Accordion.test.tsx"],
+      open_questions: ["确认折叠默认态是否展开。"],
+      source: { kind: "im", channel: "feishu", message_id: "msg-42" }
+    }, { now: new Date("2026-06-12T00:00:00.000Z") });
+
+    const markdown = renderRepoContextPackIssueMarkdown(pack, {
+      description: "实现折叠面板\nTOKEN=must-not-leak"
+    });
+
+    expect(markdown).toContain("## 需求理解");
+    expect(markdown).toContain("## 相关证据");
+    expect(markdown).toContain("## 建议改动");
+    expect(markdown).toContain("## 验收标准");
+    expect(markdown).toContain("## 验证建议");
+    expect(markdown).toContain("## 未确认问题");
+    expect(markdown).toContain(REPO_CONTEXT_PACK_NOTICE);
+    expect(markdown).toContain("src/components/Accordion.tsx");
+    expect(markdown).toContain("bun test src/components/Accordion.test.tsx");
+    expect(markdown).not.toContain("super-secret");
+    expect(markdown).not.toContain("must-not-leak");
   });
 });

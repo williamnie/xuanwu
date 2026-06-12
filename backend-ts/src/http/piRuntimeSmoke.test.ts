@@ -186,6 +186,11 @@ describe("Bun PI runtime v1 smoke", () => {
       runtime.dispose();
 
       expect(prompt).toContain("Relevant Skill Metadata:");
+      expect(prompt).toContain("Repo-aware issue proposal workflow:");
+      expect(prompt).toContain("repo_search");
+      expect(prompt).toContain("repo_context_pack");
+      expect(prompt).toContain("issue_create_proposal");
+      expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain('"id": "codex-issue-runner"');
       expect(prompt).not.toContain('"id": "verification-before-completion"');
       expect(prompt).toContain("Issue-specific PI context");
