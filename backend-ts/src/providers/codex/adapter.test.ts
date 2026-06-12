@@ -258,6 +258,23 @@ describe("Codex adapter RPC methods", () => {
     });
   });
 
+  test("resolves pending transport approval callbacks without a separate RPC request", async () => {
+    const rpc = new FakeRpc({});
+    rpc.resolveApprovalRequest = async (requestID, decision) => {
+      rpc.approvalResolutions.push({ requestID, decision });
+    };
+
+    await expect(new CodexAdapter(rpc).resolveApproval("approval-1", {
+      decision: "approve", scope: "turn"
+    })).resolves.toEqual({ ok: true });
+
+    expect(rpc.calls).toEqual([]);
+    expect(rpc.approvalResolutions).toEqual([{
+      requestID: "approval-1",
+      decision: { decision: "approve", scope: "turn" }
+    }]);
+  });
+
   test("wraps thread lifecycle failures in diagnostic typed errors with redaction", async () => {
     const secret = "fixture-secret-token";
     const rpc = new FakeRpc({ "thread/resume": new Error(`codex rpc -32603: TOKEN=${secret}`) });
@@ -288,6 +305,8 @@ describe("Codex adapter RPC methods", () => {
 
 class FakeRpc {
   readonly calls: Array<{ method: string; params: JsonRpcParams }> = [];
+  readonly approvalResolutions: Array<{ requestID: string; decision: unknown }> = [];
+  resolveApprovalRequest?: (requestID: string, decision: unknown) => Promise<void>;
 
   constructor(private readonly responses: Record<string, unknown>) {}
 

@@ -3,11 +3,16 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { createDefaultRouter } from "./server.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
+const EMPTY_ROLLOUT_ERROR = [
+  "codex thread/resume failed: codex rpc -32603: failed to read thread:",
+  "thread-store internal error: failed to read thread /tmp/rollout.jsonl:",
+  "rollout at /tmp/rollout.jsonl is empty"
+].join(" ");
 const tempRoots: string[] = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -103,6 +108,69 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("keeps a newly created Codex session selectable while rollout file is still empty", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    provider.readSessionError = new Error(EMPTY_ROLLOUT_ERROR);
+    try {
+      upsertAgentSession(database, {
+        provider: "codex",
+        provider_session_id: "thread-empty",
+        raw_ref: { provider_turn_id: "turn-pending" },
+        status: "running"
+      });
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-empty`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: "codex:thread-empty",
+        provider: "codex",
+        provider_session_id: "thread-empty",
+        sessionId: "thread-empty",
+        turns: [],
+        isRunning: true
+      });
+      expect(provider.calls).toEqual([
+        ["readSession", { sessionId: "thread-empty" }]
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("persists a created Codex session even before a provider turn id exists", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    provider.createResult = {
+      id: "codex:thread-created",
+      provider: "codex",
+      provider_session_id: "thread-created",
+      thread_id: "thread-created"
+    };
+    try {
+      insertProject(database, { id: "demo", cwd: "/tmp/demo" });
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(jsonRequest("/api/sessions", {
+        project_id: "demo",
+        prompt: "needs approval before first turn"
+      }));
+
+      expect(response.status).toBe(201);
+      expect(getAgentSession(database, "codex:thread-created")).toMatchObject({
+        provider_session_id: "thread-created",
+        project_id: "demo",
+        status: "running"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("filters indexed sessions by role without breaking PI session reads", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
@@ -166,6 +234,8 @@ class SessionsProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "sessions", "resume_session", "interrupt"] as const;
   readonly calls: Array<[string, Record<string, unknown>]> = [];
   readonly interrupts: Array<{ sessionId: string; turnId: string }> = [];
+  createResult: SessionCreateFixture | null = null;
+  readSessionError: Error | null = null;
 
   async run(_input: ProviderRunInput) {
     throw new Error("not implemented");
@@ -182,6 +252,7 @@ class SessionsProvider implements ExecutorProvider {
 
   async readSession(sessionId: string) {
     this.calls.push(["readSession", { sessionId }]);
+    if (this.readSessionError) throw this.readSessionError;
     return sessionSummary(sessionId);
   }
 
@@ -192,6 +263,7 @@ class SessionsProvider implements ExecutorProvider {
       reasoningEffort: input.reasoningEffort,
       serviceTier: input.serviceTier
     })]);
+    if (this.createResult) return this.createResult;
     return {
       id: "codex:thread-new",
       provider: "codex" as const,
@@ -218,6 +290,15 @@ class SessionsProvider implements ExecutorProvider {
     };
   }
 }
+
+type SessionCreateFixture = {
+  id: string;
+  provider: "codex";
+  provider_session_id: string;
+  provider_turn_id?: string;
+  thread_id: string;
+  turn_id?: string;
+};
 
 function insertProject(db: RunnerDatabase, project: { cwd: string; id: string }): void {
   db.sqlite.run(

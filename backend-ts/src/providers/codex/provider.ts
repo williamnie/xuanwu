@@ -1,6 +1,7 @@
 import { CodexAdapter } from "./adapter.ts";
 import { localImageInput, textInput } from "./threadLifecycle.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
+import type { AppEvent } from "../../events/bus.ts";
 import type {
   ExecutorProvider,
   ApprovalDecision,
@@ -37,6 +38,7 @@ type CodexIssueAdapter = {
 };
 export type CodexEventHandler = (event: ProviderEvent) => void;
 export type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
+export type CodexAppEventSink = (event: AppEvent) => void;
 
 class CodexEventHub implements CodexEventSource {
   readonly handlers = new Set<CodexEventHandler>();
@@ -179,13 +181,45 @@ export class CodexExecutorProvider implements ExecutorProvider {
   }
 }
 
-export function createCodexExecutorProvider(config: ProviderRuntimeConfig): CodexExecutorProvider {
+export function createCodexExecutorProvider(
+  config: ProviderRuntimeConfig,
+  appEventSink?: CodexAppEventSink
+): CodexExecutorProvider {
   const events = new CodexEventHub();
+  const publish = (event: ProviderEvent) => {
+    events.publish(event);
+    if (isApprovalProviderEvent(event)) appEventSink?.(codexProviderAppEvent(event));
+  };
   const transport = new CodexStdioJsonRpcTransport(config, {
-    onDiagnostic: (event) => events.publish(event),
-    onEvent: (event) => events.publish(event)
+    onDiagnostic: publish,
+    onEvent: publish
   });
   return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events);
+}
+
+export function codexProviderAppEvent(event: ProviderEvent): AppEvent {
+  const rawPayload = payloadText(event.raw?.payload);
+  return compactAppEvent({
+    type: "codex.event",
+    provider: event.provider,
+    threadId: event.session?.sessionId,
+    turnId: event.session?.turnId,
+    agent_event_type: event.type,
+    method: event.raw?.method,
+    raw_method: event.raw?.method,
+    raw_payload: rawPayload,
+    payload: rawPayload ?? payloadText(event.payload),
+    command: event.command,
+    path: event.path,
+    status: event.status,
+    text: event.text,
+    error: event.error
+  });
+}
+
+
+function isApprovalProviderEvent(event: ProviderEvent): boolean {
+  return event.raw?.method === "approval/requested" || event.raw?.method === "approval/resolved";
 }
 
 function sessionRef(turn: TurnStartResult): ProviderRunResult["session"] {
@@ -242,4 +276,16 @@ function terminalCodexEvent(event: ProviderEvent): boolean {
 
 function compactOptions<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "")) as Partial<T>;
+}
+
+function compactAppEvent(value: AppEvent): AppEvent {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined && item !== "")
+  ) as AppEvent;
+}
+
+function payloadText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value === undefined) return undefined;
+  return JSON.stringify(value);
 }

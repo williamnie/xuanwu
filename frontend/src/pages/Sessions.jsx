@@ -165,7 +165,7 @@ function NewSessionPermissionControl({ settings, onSettingChange }) {
   return (
     <div className="composer-embedded-select danger">
       <ShieldAlert size={13} />
-      <span>{settings.approvalPolicy === 'never' ? '完全访问权限' : '工作区写入'}</span>
+      <span>{permissionPresetLabel(settings)}</span>
       <select
         value={`${settings.sandbox}|${settings.approvalPolicy}`}
         onChange={(e) => {
@@ -182,6 +182,17 @@ function NewSessionPermissionControl({ settings, onSettingChange }) {
       </select>
     </div>
   );
+}
+
+function permissionPresetLabel(settings) {
+  switch (`${settings.sandbox}|${settings.approvalPolicy}`) {
+    case 'danger-full-access|never': return '完全访问权限';
+    case 'workspace-write|never': return '工作区写入';
+    case 'workspace-write|danger-only': return '按需授权';
+    case 'workspace-write|always': return '每次授权';
+    case 'read-only|always': return '只读模式';
+    default: return '自定义权限';
+  }
 }
 
 function NewSessionComposerActions({ settings, models, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
@@ -301,7 +312,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
   }, [selectedSessionId]);
 
-  const currentApprovals = useMemo(() => approvalsForSession(approvalQueue, selectedId), [approvalQueue, selectedId]);
+  const currentApprovals = useMemo(() => visibleApprovalsForSession(approvalQueue, selectedId), [approvalQueue, selectedId]);
   const approvalRequest = currentApprovals[0]?.request || null;
   const currentQueuedMessages = useMemo(
     () => messageQueue.filter((item) => item.sessionId === selectedId),
@@ -1234,12 +1245,29 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   );
 }
 
+
+function visibleApprovalsForSession(queue, selectedId) {
+  const selected = approvalsForSession(queue, selectedId);
+  if (selected.length > 0 || selectedId) return selected;
+  return queue;
+}
+
 function parseApprovalPayload(payload) {
+  const request = approvalPayloadObject(payload);
+  return {
+    id: request.id || request.params?.approvalId || request.params?.itemId || request.params?.callId || '',
+    method: request.method || 'approval/requested',
+    params: request.params || {},
+  };
+}
+
+function approvalPayloadObject(payload) {
+  if (payload && typeof payload === 'object') return payload;
   try {
-    const request = JSON.parse(payload || '{}');
-    return { id: request.id || '', method: request.method || 'approval/requested', params: request.params || {} };
+    const parsed = JSON.parse(payload || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
-    return { id: '', method: 'approval/requested', params: {} };
+    return {};
   }
 }
 

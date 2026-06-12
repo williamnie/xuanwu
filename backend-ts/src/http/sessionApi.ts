@@ -43,18 +43,30 @@ async function listSessions(context: SessionApiContext, request: Request) {
 }
 
 async function createSession(context: SessionApiContext, body: Record<string, unknown>) {
-  const result = await codexProvider(context).createSession?.(sessionCreateInput(context, body));
+  const input = sessionCreateInput(context, body);
+  const result = await codexProvider(context).createSession?.(input);
   if (!result) throw new Error('provider "codex" 不支持 capability "sessions"');
-  persistSessionTurn(context, result.provider_session_id, result.provider_turn_id ?? "");
+  persistSession(context, input, result.provider_session_id, result.provider_turn_id ?? "");
   return result;
 }
 
 async function readSession(context: SessionApiContext, rawSessionID: string) {
   const indexed = indexedSessionDetail(context.database, rawSessionID);
   if (indexed) return indexed;
-  const result = await codexProvider(context).readSession?.(parseSessionID(rawSessionID));
+  const sessionId = parseSessionID(rawSessionID);
+  const result = await readProviderSession(context, sessionId);
   if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
   return result;
+}
+
+async function readProviderSession(context: SessionApiContext, sessionId: string): Promise<Record<string, unknown> | undefined> {
+  try {
+    return await codexProvider(context).readSession?.(sessionId);
+  } catch (error) {
+    const fallback = pendingCodexSessionFallback(context.database, sessionId, error);
+    if (fallback) return fallback;
+    throw error;
+  }
 }
 
 async function sessionMessage(context: SessionApiContext, rawSessionID: string, body: Record<string, unknown>) {
@@ -176,6 +188,18 @@ function projectForSession(context: SessionApiContext, projectId: string): Proje
   return project;
 }
 
+function persistSession(context: SessionApiContext, input: SessionCreateInput, sessionId: string, turnId: string): void {
+  if (sessionId === "") return;
+  upsertAgentSession(context.database, {
+    provider: "codex",
+    provider_session_id: sessionId,
+    project_id: input.projectId ?? "",
+    preview: sessionPreview(input.prompt ?? ""),
+    raw_ref: turnId ? { provider_turn_id: turnId } : {},
+    status: input.prompt?.trim() ? "running" : "idle"
+  });
+}
+
 function persistSessionTurn(context: SessionApiContext, sessionId: string, turnId: string): void {
   if (sessionId === "" || turnId === "") return;
   upsertAgentSession(context.database, {
@@ -213,4 +237,31 @@ function firstNonEmpty(...values: string[]): string {
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
+}
+
+function pendingCodexSessionFallback(db: RunnerDatabase, sessionId: string, error: unknown): Record<string, unknown> | null {
+  if (!isEmptyRolloutError(error)) return null;
+  const session = getAgentSession(db, `codex:${sessionId}`);
+  if (!session) return null;
+  return {
+    id: session.session_key,
+    sessionId: session.provider_session_id,
+    provider: "codex",
+    provider_session_id: session.provider_session_id,
+    ephemeral: false,
+    preview: session.preview,
+    status: session.status || "running",
+    turns: [],
+    isRunning: ["running", "active", "busy", "inprogress"].includes(session.status.toLowerCase())
+  };
+}
+
+function isEmptyRolloutError(error: unknown): boolean {
+  return (error instanceof Error ? error.message : String(error)).includes("rollout at") &&
+    (error instanceof Error ? error.message : String(error)).includes(" is empty");
+}
+
+function sessionPreview(prompt: string): string {
+  const text = prompt.trim().replace(/\s+/g, " ");
+  return text.length <= 120 ? text : `${text.slice(0, 119)}…`;
 }

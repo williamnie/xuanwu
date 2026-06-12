@@ -1,6 +1,7 @@
 import { redactSensitiveText } from "../../util/redact.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
-import type { ProviderEvent } from "../types.ts";
+import type { ApprovalDecision, ProviderEvent } from "../types.ts";
+import { CodexApprovalBroker } from "./approvalBroker.ts";
 import { normalizeCodexEvent } from "./events.ts";
 
 export type JsonRpcParams = Record<string, unknown> | unknown[] | null;
@@ -47,10 +48,13 @@ export class CodexStdioJsonRpcTransport {
   private nextId = 0;
   private process?: CodexJsonRpcProcess;
   private readonly pending = new Map<number, PendingRequest>();
+  private readonly approvals: CodexApprovalBroker;
   private readonly stderrBuffer: string[] = [];
   private stopped = false;
 
-  constructor(private readonly config: ProviderRuntimeConfig, private readonly options: CodexTransportOptions = {}) {}
+  constructor(private readonly config: ProviderRuntimeConfig, private readonly options: CodexTransportOptions = {}) {
+    this.approvals = new CodexApprovalBroker({ onEvent: (event) => this.options.onEvent?.(event) });
+  }
 
   async start(): Promise<void> {
     if (this.process) return;
@@ -93,6 +97,10 @@ export class CodexStdioJsonRpcTransport {
     return [...this.stderrBuffer];
   }
 
+  async resolveApprovalRequest(requestId: string, decision: ApprovalDecision): Promise<void> {
+    await this.approvals.resolveApproval(requestId, decision);
+  }
+
   private processFactory(): CodexJsonRpcProcessFactory {
     return this.options.processFactory ?? spawnCodexProcess;
   }
@@ -127,7 +135,7 @@ export class CodexStdioJsonRpcTransport {
       this.emitDiagnostic("protocol/error", redactSensitiveText(line), asError(error).message);
       return;
     }
-    if (typeof message.id === "number" && typeof message.method === "string") {
+    if (isRequestId(message.id) && typeof message.method === "string") {
       void this.deliverServerRequest(message.id, message.method, message.params);
       return;
     }
@@ -135,16 +143,17 @@ export class CodexStdioJsonRpcTransport {
     if (typeof message.method === "string" && message.id === undefined) this.deliverEvent(message.method, message.params);
   }
 
-  private async deliverServerRequest(id: number, method: string, params: unknown): Promise<void> {
+  private async deliverServerRequest(id: string | number, method: string, params: unknown): Promise<void> {
     try {
-      const result = await this.serverRequestResult(method, params);
+      const result = await this.serverRequestResult(method, params, id);
       this.write({ id, result });
     } catch (error) {
       this.write({ id, error: { code: -32603, message: asError(error).message } });
     }
   }
 
-  private async serverRequestResult(method: string, params: unknown): Promise<unknown> {
+  private async serverRequestResult(method: string, params: unknown, id: string | number = 0): Promise<unknown> {
+    if (this.approvals.canHandle(method)) return await this.approvals.request(id, method, params);
     if (this.options.onServerRequest) return await this.options.onServerRequest(method, params);
     if (method === "item/tool/requestUserInput") return { answers: {} };
     if (method === "mcpServer/elicitation/request") return { action: "cancel", content: null, _meta: null };
@@ -187,6 +196,7 @@ export class CodexStdioJsonRpcTransport {
   private failPending(error: Error): void {
     const pending = [...this.pending.values()];
     this.pending.clear();
+    this.approvals.rejectAll(error);
     for (const request of pending) request.reject(error);
   }
 
@@ -208,6 +218,10 @@ export async function runCodexTransportInitializeSmoke(
   } finally {
     await transport.stop();
   }
+}
+
+function isRequestId(value: unknown): value is string | number {
+  return typeof value === "number" || typeof value === "string";
 }
 
 function spawnCodexProcess({ command, cwd, env }: {

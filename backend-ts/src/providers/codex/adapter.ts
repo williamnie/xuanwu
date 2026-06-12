@@ -41,6 +41,7 @@ const PROVIDER_CODEX = "codex";
 
 export type CodexRpcClient = {
   request(method: string, params?: JsonRpcParams): Promise<unknown>;
+  resolveApprovalRequest?(requestID: string, decision: ApprovalDecision): Promise<unknown>;
 };
 
 export type CodexInitializeResult = {
@@ -130,7 +131,12 @@ export class CodexAdapter {
   }
 
   async resolveApproval(requestID: string, decision: ApprovalDecision): Promise<{ ok: true }> {
-    await this.lifecycleRequest("approval/resolve", { requestId: requestID.trim(), decision: decision.decision, scope: decision.scope ?? "" });
+    const cleanID = requestID.trim();
+    if (this.rpc.resolveApprovalRequest) {
+      await this.rpc.resolveApprovalRequest(cleanID, decision);
+      return { ok: true };
+    }
+    await this.lifecycleRequest("approval/resolve", { requestId: cleanID, decision: decision.decision, scope: decision.scope ?? "" });
     return { ok: true };
   }
 

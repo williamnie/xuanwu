@@ -26,8 +26,8 @@ if (!serve) {
 
 const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
-const providers = executorProviders(config);
 const bus = new EventBus();
+const providers = executorProviders(config, bus);
 const server = await startServer(config, { bus, database, providers });
 void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config);
 
@@ -42,11 +42,11 @@ console.log(JSON.stringify({
   }
 }, null, 2));
 
-function executorProviders(config: ReturnType<typeof loadConfig>) {
+function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus) {
   const providers: Partial<Record<"codex" | "claude", ReturnType<typeof createCodexExecutorProvider> | ReturnType<typeof createClaudeExecutorProvider>>> = {};
   const codexConfig = config.providers.codex;
   const claudeConfig = config.providers.claude;
-  if (codexConfig) providers.codex = createCodexExecutorProvider(codexConfig);
+  if (codexConfig) providers.codex = createCodexExecutorProvider(codexConfig, (event) => bus?.publish(event));
   if (claudeConfig) providers.claude = createClaudeExecutorProvider(claudeConfig);
   return providers;
 }

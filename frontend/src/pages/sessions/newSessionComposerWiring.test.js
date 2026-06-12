@@ -45,3 +45,24 @@ test('new and existing session payloads include service tier', () => {
   assert.match(sessionsSource, /service_tier:\s*sessionSettings\.serviceTier/);
   assert.match(sessionsSource, /onServiceTierChange=\{\(value\) => handleSettingChange\('serviceTier', value\)\}/);
 });
+
+test('new session permission control labels every authorization preset explicitly', () => {
+  assert.match(sessionsSource, /function permissionPresetLabel/);
+  assert.match(sessionsSource, /permissionPresetLabel\(settings\)/);
+  assert.match(sessionsSource, /case 'workspace-write\\|always':\s*return '每次授权'/);
+  assert.doesNotMatch(sessionsSource, /settings\.approvalPolicy === 'never' \? '完全访问权限' : '工作区写入'/);
+});
+
+
+test('approval event parsing accepts object payloads and fallback approval ids', () => {
+  assert.match(sessionsSource, /function approvalPayloadObject/);
+  assert.match(sessionsSource, /payload && typeof payload === 'object'/);
+  assert.match(sessionsSource, /request\.params\?\.approvalId \|\| request\.params\?\.itemId \|\| request\.params\?\.callId/);
+});
+
+
+test('approval dialog can surface pending create-session approvals before a session is selected', () => {
+  assert.match(sessionsSource, /visibleApprovalsForSession\(approvalQueue, selectedId\)/);
+  assert.match(sessionsSource, /function visibleApprovalsForSession/);
+  assert.match(sessionsSource, /if \(selected\.length > 0 \|\| selectedId\) return selected/);
+});
