@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
 import { upsertExternalEvent } from "../db/repositories/externalEvents.ts";
+import { listProjects } from "../db/repositories/projects.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "../integrations/feishu.ts";
 import {
   feishuConnectorStatus,
@@ -13,6 +14,7 @@ import {
 } from "../integrations/feishu.ts";
 import type { EventBus } from "../events/bus.ts";
 import { cleanString, recordValue } from "../integrations/feishuShared.ts";
+import { decidePiAttention, type PiAttentionDecision } from "../pi/attentionRouter.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -60,9 +62,9 @@ function acceptMessageEvent(
 ): Response {
   try {
     const event = normalizeFeishuMessageEvent(body, { rawEventRef: rawRef });
-    const projectId = projectIDForFeishuMessage(context.config, event);
-    const summary = normalizedSummary(event, projectId);
-    const inboxEvent = saveInboxEvent(context, event, projectId);
+    const attention = attentionDecision(context, event);
+    const summary = normalizedSummary(event, attention.project_id, attention);
+    const inboxEvent = saveInboxEvent(context, event, attention);
     publishAudit(context, {
       connector: "feishu",
       dedupe_key: event.dedupe_key,
@@ -133,8 +135,13 @@ function validToken(body: Record<string, unknown>, expected: string): boolean {
   return cleanString(body.token || header.token) === cleanString(expected);
 }
 
-function normalizedSummary(event: FeishuNormalizedMessageEvent, projectId: string): Record<string, unknown> {
+function normalizedSummary(
+  event: FeishuNormalizedMessageEvent,
+  projectId: string,
+  attention: PiAttentionDecision
+): Record<string, unknown> {
   return {
+    attention_decision: attention,
     attachment_count: event.attachments.length,
     chat_id: event.chat_id,
     message_id: event.message_id,
@@ -147,10 +154,41 @@ function normalizedSummary(event: FeishuNormalizedMessageEvent, projectId: strin
 function saveInboxEvent(
   context: FeishuEventRoutesContext,
   event: FeishuNormalizedMessageEvent,
-  projectId: string
+  attention: PiAttentionDecision
 ) {
   if (!context.database) return null;
-  return upsertExternalEvent(context.database, feishuExternalEventInput(event, { projectId }));
+  const input = feishuExternalEventInput(event, { projectId: attention.project_id });
+  return upsertExternalEvent(context.database, {
+    ...input,
+    status: inboxStatus(input.status, attention),
+    summary: { ...input.summary, attention_decision: attention }
+  });
+}
+
+function attentionDecision(context: FeishuEventRoutesContext, event: FeishuNormalizedMessageEvent): PiAttentionDecision {
+  const fallbackProject = projectIDForFeishuMessage(context.config, event);
+  const decision = decidePiAttention({
+    message: {
+      attachments: event.attachments,
+      chat_id: event.chat_id,
+      mentions: event.mentions,
+      message_id: event.message_id,
+      sender_id: event.sender.id,
+      sender_open_id: event.sender.open_id,
+      text: event.text
+    },
+    policy: context.config,
+    projects: context.database ? listProjects(context.database).map((item) => ({ id: item.id, name: item.name })) : []
+  });
+  return decision.project_id === "" && fallbackProject !== "" ? { ...decision, project_id: fallbackProject } : decision;
+}
+
+function inboxStatus(current: unknown, attention: PiAttentionDecision): string {
+  if (attention.decision === "ignore") return "ignored";
+  if (attention.decision === "ask_clarification") return "needs_project";
+  if (attention.decision === "blocked_by_policy") return "blocked_by_policy";
+  if (attention.decision === "inbox_only") return "inbox_only";
+  return cleanString(current) || "mapped";
 }
 
 function publishAudit(context: FeishuEventRoutesContext, payload: AuditPayload): void {

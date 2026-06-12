@@ -38,6 +38,11 @@ describe("Feishu external event inbox", () => {
       });
       expect(events[0].raw_payload_ref).toMatch(/^sha256:/);
       expect(events[0].summary).toMatchObject({
+        attention_decision: {
+          decision: "propose_issue",
+          project_id: "demo",
+          reason: "task_signal_with_project"
+        },
         chat_id: "oc_group",
         message_id: "om_message_1",
         project_id: "demo",
@@ -57,7 +62,41 @@ describe("Feishu external event inbox", () => {
 
       expect(response.status).toBe(202);
       expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({ project_id: "", status: "unassigned" });
+      expect(events[0]).toMatchObject({
+        project_id: "",
+        status: "needs_project",
+        summary: {
+          attention_decision: {
+            decision: "ask_clarification",
+            needs_project: true,
+            reason: "needs_project"
+          }
+        }
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("does not create proposal decisions for ordinary chat noise", async () => {
+    const { database, handle } = await fixtureHandler("chat:oc_group=demo");
+    try {
+      const response = await postFeishu(handle, messageEvent({ text: "今晚吃啥？", mentions: [] }));
+      const events = await getExternalEvents(handle, "source=feishu");
+
+      expect(response.status).toBe(202);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        project_id: "demo",
+        status: "ignored",
+        summary: {
+          attention_decision: {
+            decision: "ignore",
+            reason: "no_attention_signal",
+            should_create_issue_proposal: false
+          }
+        }
+      });
     } finally {
       database.close();
     }
@@ -120,15 +159,19 @@ async function postFeishu(handle: (request: Request) => Promise<Response>, body:
   }));
 }
 
-function messageEvent(): Record<string, unknown> {
+function messageEvent(input: {
+  mentions?: Array<Record<string, unknown>>;
+  text?: string;
+} = {}): Record<string, unknown> {
   return {
     header: { event_id: "event-v2-1", event_type: "im.message.receive_v1", token: "verify-token" },
     event: {
       message: {
         chat_id: "oc_group",
         chat_type: "group",
-        content: JSON.stringify({ text: "@PI implement it" }),
+        content: JSON.stringify({ text: input.text ?? "@PI implement it" }),
         create_time: "1781244167890",
+        mentions: input.mentions ?? [{ id: "ou_bot", name: "PI", tenant_key: "tenant_a" }],
         message_id: "om_message_1"
       },
       sender: {
