@@ -43,7 +43,10 @@ describe("Feishu events endpoint", () => {
   });
 
   test("normalizes valid message events and publishes redacted audit summary", async () => {
-    const { bus, database, handle } = await fixtureHandler({ encryptKey: ENCRYPT_KEY });
+    const { bus, database, handle } = await fixtureHandler({
+      encryptKey: ENCRYPT_KEY,
+      projectMappings: "chat:oc_group=demo"
+    });
     const subscription = bus.subscribe();
     const body = messageEvent({ token: "verify-token" });
     const rawBody = JSON.stringify(body);
@@ -62,6 +65,7 @@ describe("Feishu events endpoint", () => {
           attachment_count: 0,
           chat_id: "oc_group",
           message_id: "om_message_1",
+          project_id: "demo",
           sender_type: "user",
           text_length: 16
         },
@@ -188,7 +192,7 @@ describe("Feishu events endpoint", () => {
   });
 });
 
-async function fixtureHandler(options: { encryptKey?: string; runnerAuthToken?: string }) {
+async function fixtureHandler(options: { encryptKey?: string; projectMappings?: string; runnerAuthToken?: string }) {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-http-"));
   tempRoots.push(root);
   const bus = new EventBus();
@@ -198,6 +202,7 @@ async function fixtureHandler(options: { encryptKey?: string; runnerAuthToken?: 
     feishuAppId: "cli_app_id",
     feishuAppSecret: "app-secret-value",
     feishuEncryptKey: options.encryptKey ?? "",
+    feishuProjectMappings: options.projectMappings ?? "",
     feishuVerificationToken: "verify-token"
   });
   const router = createDefaultRouter({ bus, config, database });

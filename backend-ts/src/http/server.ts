@@ -7,6 +7,7 @@ import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { json } from "./errors.ts";
+import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
@@ -30,15 +31,22 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
   registerEventRoutes(router, { bus });
-  registerFeishuEventRoutes(router, { bus, config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig() });
-  if (runtime.database) registerReadApiRoutes(router, {
+  registerFeishuEventRoutes(router, {
     bus,
-    codexSessionsDir: runtime.codexSessionsDir,
-    config: runtime.config,
-    database: runtime.database,
-    interruptTimeoutMs: runtime.interruptTimeoutMs,
-    providers: runtime.providers
+    config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig(),
+    database: runtime.database
   });
+  if (runtime.database) {
+    registerExternalEventRoutes(router, { database: runtime.database });
+    registerReadApiRoutes(router, {
+      bus,
+      codexSessionsDir: runtime.codexSessionsDir,
+      config: runtime.config,
+      database: runtime.database,
+      interruptTimeoutMs: runtime.interruptTimeoutMs,
+      providers: runtime.providers
+    });
+  }
   return router;
 }
 

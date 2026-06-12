@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
+import type { RunnerDatabase } from "../db/database.ts";
+import { upsertExternalEvent } from "../db/repositories/externalEvents.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "../integrations/feishu.ts";
 import {
   feishuConnectorStatus,
+  feishuExternalEventInput,
   normalizeFeishuMessageEvent,
   parseFeishuCallbackPayload,
   projectIDForFeishuMessage,
@@ -16,6 +19,7 @@ import type { Router } from "./router.ts";
 export type FeishuEventRoutesContext = {
   bus?: EventBus;
   config: FeishuConnectorConfig;
+  database?: RunnerDatabase;
 };
 
 type AuditPayload = {
@@ -56,7 +60,9 @@ function acceptMessageEvent(
 ): Response {
   try {
     const event = normalizeFeishuMessageEvent(body, { rawEventRef: rawRef });
-    const summary = normalizedSummary(event, projectIDForFeishuMessage(context.config, event));
+    const projectId = projectIDForFeishuMessage(context.config, event);
+    const summary = normalizedSummary(event, projectId);
+    const inboxEvent = saveInboxEvent(context, event, projectId);
     publishAudit(context, {
       connector: "feishu",
       dedupe_key: event.dedupe_key,
@@ -66,7 +72,12 @@ function acceptMessageEvent(
       raw_payload_ref: rawRef,
       reason: "message_normalized"
     });
-    return json({ dedupe_key: event.dedupe_key, ok: true, normalized_summary: summary }, { status: 202 });
+    return json({
+      dedupe_key: event.dedupe_key,
+      event_id: inboxEvent?.id ?? 0,
+      ok: true,
+      normalized_summary: summary
+    }, { status: 202 });
   } catch {
     return reject(context, "unsupported_or_invalid_event", rawRef, 400, encrypted);
   }
@@ -131,6 +142,15 @@ function normalizedSummary(event: FeishuNormalizedMessageEvent, projectId: strin
     sender_type: event.sender.type,
     text_length: event.text.length
   };
+}
+
+function saveInboxEvent(
+  context: FeishuEventRoutesContext,
+  event: FeishuNormalizedMessageEvent,
+  projectId: string
+) {
+  if (!context.database) return null;
+  return upsertExternalEvent(context.database, feishuExternalEventInput(event, { projectId }));
 }
 
 function publishAudit(context: FeishuEventRoutesContext, payload: AuditPayload): void {

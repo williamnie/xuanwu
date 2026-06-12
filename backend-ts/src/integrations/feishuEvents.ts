@@ -45,16 +45,47 @@ export function feishuExternalEventInput(
   event: FeishuNormalizedMessageEvent,
   options: { projectId?: string } = {}
 ): ExternalEventInput {
+  const projectId = cleanString(options.projectId);
   return {
     actor: feishuActor(event.sender),
     content: event.text || attachmentSummary(event.attachments),
     dedupe_key: event.dedupe_key,
     external_id: event.message_id,
-    project_hint: cleanString(options.projectId),
+    normalized_message: normalizedMessage(event),
+    project_hint: projectId,
+    project_id: projectId,
     raw_payload_ref: event.raw_event_ref,
     received_at: event.timestamp,
     source: "feishu",
+    status: projectId === "" ? "unassigned" : "mapped",
+    summary: feishuSummary(event, projectId),
     trust_level: "untrusted"
+  };
+}
+
+function normalizedMessage(event: FeishuNormalizedMessageEvent): Record<string, unknown> {
+  return {
+    attachments: event.attachments,
+    chat_id: event.chat_id,
+    chat_type: event.chat_type,
+    mentions: event.mentions,
+    message_id: event.message_id,
+    root_id: event.root_id,
+    sender: event.sender,
+    text: event.text,
+    thread_id: event.thread_id,
+    timestamp: event.timestamp
+  };
+}
+
+function feishuSummary(event: FeishuNormalizedMessageEvent, projectId: string): Record<string, unknown> {
+  return {
+    attachment_count: event.attachments.length,
+    chat_id: event.chat_id,
+    message_id: event.message_id,
+    project_id: projectId,
+    sender_type: event.sender.type,
+    text_length: event.text.length
   };
 }
 

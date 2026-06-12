@@ -176,8 +176,12 @@ describe("Bun SQLite database connection", () => {
       expect(columnDefaults(connection, "external_events")).toMatchObject({
         actor: "''",
         external_id: "''",
+        normalized_message_json: "'{}'",
+        project_id: "''",
         project_hint: "''",
         raw_payload_ref: "''",
+        status: "'inbox'",
+        summary_json: "'{}'",
         trust_level: "'untrusted'"
       });
       expect(columnDefaults(connection, "external_links")).toMatchObject({
