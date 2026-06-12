@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import { basename, delimiter, isAbsolute, join, relative } from "node:path";
 import { bunBuildInfo } from "../buildInfo.ts";
 import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
+import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
 import { runningProjectLoopCount } from "../runner/projectLoopManager.ts";
@@ -27,6 +28,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     security: { warnings: securityWarnings(context.config.addr, context.authEnabled) },
     codex: codexStatus(context.config),
     providers,
+    connectors: connectorStatus(context.config),
     runner: runnerStatus(context.database)
   };
 }
@@ -43,6 +45,7 @@ export function buildRuntimeDoctor(context: SystemStatusContext): Record<string,
     runner: status.runner,
     projects: [],
     providers: status.providers.map(doctorProvider),
+    connectors: status.connectors,
     recent_errors: { count: 0, sources: [] }
   };
 }
@@ -149,6 +152,10 @@ export function providerStatus(config: RunnerConfig): Array<{
     settingsMode: "env_or_provider_login"
   }));
   return out;
+}
+
+function connectorStatus(config: RunnerConfig): Array<Record<string, unknown>> {
+  return [feishuConnectorStatus(config.integrations.feishu)];
 }
 
 function providerEntry(input: {
@@ -302,6 +309,7 @@ type RuntimeStatus = {
   auth: { enabled: boolean };
   config: { addr: string; db_path: string };
   db: CheckStatus;
+  connectors: Array<Record<string, unknown>>;
   providers: ProviderStatus[];
   runner: Record<string, number>;
   security: Record<string, unknown>;

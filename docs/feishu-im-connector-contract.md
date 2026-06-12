@@ -1,0 +1,50 @@
+# PI 飞书 IM connector v0 契约
+
+本契约只定义 PI 首个真实 IM 通道的配置、事件归一化与安全边界；事件回调 HTTP 接收、解密、签名校验、写入 inbox/external_events 的完整实现留给后续 issue。
+
+## 配置来源
+
+仅从环境变量或本地未提交配置读取，不写入仓库：
+
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+- `FEISHU_VERIFICATION_TOKEN`
+- `FEISHU_ENCRYPT_KEY`（可选，启用飞书事件加密时需要）
+- `FEISHU_ALLOWED_CHAT_IDS` / `FEISHU_ALLOWED_USER_IDS`：逗号或分号分隔 allowlist。
+- `FEISHU_PROJECT_MAPPINGS`：例如 `chat:oc_x=codex-issue-runner,user:ou_x=ops-runner`。
+
+未配置 required secrets 时服务仍应启动，connector 状态为 `disabled`；部分配置缺失时为 `misconfigured`；完整配置后才为 `configured`。状态输出只能暴露 configured/count/missing 信息，不输出 token/secret 原文。
+
+## 归一化消息模型
+
+飞书 message event 归一化为：
+
+- `message_id`
+- `chat_id`
+- `chat_type`
+- `sender`：`type/id/open_id/tenant_key`
+- `mentions[]`：`id/name/tenant_key`
+- `text`
+- `attachments[]`：仅 metadata，图片不下载
+- `thread_id` / `root_id`
+- `timestamp`
+- `raw_event_ref`
+- `source_id` / `dedupe_key`
+
+Dedupe/source 约定：`feishu:message:<message_id>`。写入 `external_events` 时 `source=feishu`、`external_id=<message_id>`、`dedupe_key=<source_id>`、`trust_level=untrusted`。
+
+## v0 支持范围
+
+- 接收文本消息和 mention。
+- 图片附件只记录 metadata，不下载、不解析内容。
+- 不自动回复；任何 IM 外部写回默认为 draft/proposal，自动发送必须经过 policy/action gate。
+- PI 可以只读 repo/issue/session/project/memory 上下文并生成 context pack / issue proposal；真正代码修改仍由 runner/executor 完成。
+
+## 飞书 Open Platform callback 门禁
+
+后续接入事件回调时必须处理：
+
+- URL verification challenge。
+- 事件签名/verification token 校验。
+- 可选事件加密解密（依赖 `FEISHU_ENCRYPT_KEY`）。
+- 日志、审计、测试 fixture 必须脱敏。

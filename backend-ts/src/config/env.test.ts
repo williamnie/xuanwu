@@ -14,6 +14,17 @@ describe("Bun backend config", () => {
       providers: {
         codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
         claude: { command: "claude", cwd: "", env: {}, model: "", timeoutMs: 1_800_000 }
+      },
+      integrations: {
+        feishu: {
+          allowedChatIds: [],
+          allowedUserIds: [],
+          appId: "",
+          appSecret: "",
+          encryptKey: "",
+          projectMappings: [],
+          verificationToken: ""
+        }
       }
     });
   });
@@ -58,7 +69,14 @@ describe("Bun backend config", () => {
       [ENV_KEYS.claudeCwd]: "/tmp/claude-project",
       [ENV_KEYS.claudeEnv]: "ANTHROPIC_API_KEY=anthropic-secret,SAFE_CLAUDE=ok",
       [ENV_KEYS.claudeModel]: "claude-sonnet-4-5",
-      [ENV_KEYS.claudeTimeoutMs]: "2345"
+      [ENV_KEYS.claudeTimeoutMs]: "2345",
+      [ENV_KEYS.feishuAllowedChatIds]: "oc_a,oc_b",
+      [ENV_KEYS.feishuAllowedUserIds]: "ou_1",
+      [ENV_KEYS.feishuAppId]: "cli_app_id",
+      [ENV_KEYS.feishuAppSecret]: "app-secret-value",
+      [ENV_KEYS.feishuEncryptKey]: "encrypt-secret-value",
+      [ENV_KEYS.feishuProjectMappings]: "chat:oc_a=codex-runner",
+      [ENV_KEYS.feishuVerificationToken]: "verify-secret-value"
     });
 
     expect(config).toEqual({
@@ -82,6 +100,17 @@ describe("Bun backend config", () => {
           env: { ANTHROPIC_API_KEY: "anthropic-secret", SAFE_CLAUDE: "ok" },
           model: "claude-sonnet-4-5",
           timeoutMs: 2345
+        }
+      },
+      integrations: {
+        feishu: {
+          allowedChatIds: ["oc_a", "oc_b"],
+          allowedUserIds: ["ou_1"],
+          appId: "cli_app_id",
+          appSecret: "app-secret-value",
+          encryptKey: "encrypt-secret-value",
+          projectMappings: [{ chatId: "oc_a", projectId: "codex-runner" }],
+          verificationToken: "verify-secret-value"
         }
       }
     });
@@ -130,6 +159,17 @@ describe("Bun backend config", () => {
           env: { ANTHROPIC_API_KEY: "cli-secret" },
           model: "claude-opus",
           timeoutMs: 6789
+        }
+      },
+      integrations: {
+        feishu: {
+          allowedChatIds: [],
+          allowedUserIds: [],
+          appId: "",
+          appSecret: "",
+          encryptKey: "",
+          projectMappings: [],
+          verificationToken: ""
         }
       }
     });

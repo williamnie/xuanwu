@@ -104,6 +104,26 @@ describe("Bun system status endpoints", () => {
         timeout_ms: 1_800_000
       });
       expect(body.providers.some((provider) => provider.id === "pi")).toBe(false);
+      expect(body.connectors).toEqual([{
+        id: "feishu",
+        label: "Feishu IM",
+        enabled: false,
+        status: "disabled",
+        settings_mode: "env_or_local_uncommitted_config",
+        supported_events: ["message.text", "message.mention"],
+        attachment_policy: "metadata_only",
+        auto_reply: false,
+        secrets: {
+          app_id: { configured: false },
+          app_secret: { configured: false },
+          verification_token: { configured: false },
+          encrypt_key: { configured: false, optional: true }
+        },
+        allowed_chat_count: 0,
+        allowed_user_count: 0,
+        project_mapping_count: 0,
+        missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"]
+      }]);
       expect(body.runner.running_loops).toBe(0);
       expect(body.runner.auto_run_projects).toBe(0);
       expect(body.runner.in_progress_issues).toBe(0);
@@ -214,6 +234,48 @@ describe("Bun system status endpoints", () => {
     }
   });
 
+  test("reports configured Feishu connector without leaking secrets", async () => {
+    const secret = "fixture-status-secret";
+    const { config, database } = await openFixtureRuntime({
+      feishuAppId: "cli_app_id",
+      feishuAppSecret: "app-secret-value",
+      feishuEncryptKey: "encrypt-secret-value",
+      feishuVerificationToken: "verify-secret-value",
+      secret
+    });
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, { authToken: secret, config, database });
+
+      const handle = createRequestHandler(router, secret);
+      const response = await handle(new Request(`${BASE_URL}/api/system/status`, {
+        headers: { authorization: `Bearer ${secret}` }
+      }));
+      const text = await response.text();
+      const body = JSON.parse(text) as SystemStatusBody;
+
+      expect(response.status).toBe(200);
+      expect(body.connectors[0]).toMatchObject({
+        id: "feishu",
+        enabled: true,
+        status: "configured",
+        missing_required: [],
+        secrets: {
+          app_id: { configured: true },
+          app_secret: { configured: true },
+          verification_token: { configured: true },
+          encrypt_key: { configured: true, optional: true }
+        }
+      });
+      expect(text).not.toContain(secret);
+      expect(text).not.toContain("app-secret-value");
+      expect(text).not.toContain("encrypt-secret-value");
+      expect(text).not.toContain("verify-secret-value");
+    } finally {
+      database.close();
+    }
+  });
+
   test("does not leak token or raw paths in status JSON", async () => {
     const secret = "fixture-status-secret";
     const { config, database } = await openFixtureRuntime({
@@ -252,6 +314,10 @@ async function openFixtureRuntime(options: {
   claudeModel?: string;
   codexCommand?: string;
   codexEnv?: string;
+  feishuAppId?: string;
+  feishuAppSecret?: string;
+  feishuEncryptKey?: string;
+  feishuVerificationToken?: string;
   secret?: string;
 } = {}): Promise<{
   config: ReturnType<typeof buildConfig>;
@@ -266,6 +332,10 @@ async function openFixtureRuntime(options: {
     claudeModel: options.claudeModel,
     codexCommand: options.codexCommand,
     codexEnv: options.codexEnv,
+    feishuAppId: options.feishuAppId,
+    feishuAppSecret: options.feishuAppSecret,
+    feishuEncryptKey: options.feishuEncryptKey,
+    feishuVerificationToken: options.feishuVerificationToken,
     stateDir
   });
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
@@ -296,6 +366,7 @@ type SystemStatusBody = {
   config: { addr: string; auth_enabled: boolean; db_path: string };
   db: { ok: boolean };
   codex: Record<string, unknown>;
+  connectors: Array<{ id: string } & Record<string, unknown>>;
   providers: Array<{ id: string } & Record<string, unknown>>;
   runner: Record<string, number>;
   service: {

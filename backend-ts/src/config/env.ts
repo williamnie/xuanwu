@@ -1,4 +1,6 @@
 import { DEFAULT_ADDR, buildRunnerPaths } from "./paths.ts";
+import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
+import type { FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 
 export const ENV_KEYS = {
@@ -17,11 +19,18 @@ export const ENV_KEYS = {
   claudeCwd: "CODEX_RUNNER_CLAUDE_CWD",
   claudeEnv: "CODEX_RUNNER_CLAUDE_ENV",
   claudeModel: "CODEX_RUNNER_CLAUDE_MODEL",
-  claudeTimeoutMs: "CODEX_RUNNER_CLAUDE_TIMEOUT_MS"
+  claudeTimeoutMs: "CODEX_RUNNER_CLAUDE_TIMEOUT_MS",
+  feishuAllowedChatIds: "FEISHU_ALLOWED_CHAT_IDS",
+  feishuAllowedUserIds: "FEISHU_ALLOWED_USER_IDS",
+  feishuAppId: "FEISHU_APP_ID",
+  feishuAppSecret: "FEISHU_APP_SECRET",
+  feishuEncryptKey: "FEISHU_ENCRYPT_KEY",
+  feishuProjectMappings: "FEISHU_PROJECT_MAPPINGS",
+  feishuVerificationToken: "FEISHU_VERIFICATION_TOKEN"
 } as const;
 
 type Env = Record<string, string | undefined>;
-type ConfigOverrides = Partial<RunnerConfig> & ProviderRuntimeOverrides;
+type ConfigOverrides = Partial<RunnerConfig> & ProviderRuntimeOverrides & FeishuConnectorOverrides;
 type ConfigKey = keyof typeof ENV_KEYS;
 
 export type ProviderRuntimeConfig = {
@@ -41,6 +50,7 @@ export type RunnerConfig = {
   codexSessionsDir: string;
   webDir: string;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
+  integrations: { feishu: FeishuConnectorConfig };
 };
 
 const FLAG_KEYS: Record<string, ConfigKey> = {
@@ -79,6 +89,9 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
     providers: {
       codex: buildCodexRuntimeConfig(overrides),
       claude: buildClaudeRuntimeConfig(overrides)
+    },
+    integrations: {
+      feishu: buildFeishuConnectorConfig(overrides.integrations?.feishu ?? overrides)
     }
   };
 }
@@ -100,7 +113,14 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     claudeCwd: cleanValue(env[ENV_KEYS.claudeCwd]),
     claudeEnv: cleanValue(env[ENV_KEYS.claudeEnv]),
     claudeModel: cleanValue(env[ENV_KEYS.claudeModel]),
-    claudeTimeoutMs: cleanValue(env[ENV_KEYS.claudeTimeoutMs])
+    claudeTimeoutMs: cleanValue(env[ENV_KEYS.claudeTimeoutMs]),
+    feishuAllowedChatIds: cleanValue(env[ENV_KEYS.feishuAllowedChatIds]),
+    feishuAllowedUserIds: cleanValue(env[ENV_KEYS.feishuAllowedUserIds]),
+    feishuAppId: cleanValue(env[ENV_KEYS.feishuAppId]),
+    feishuAppSecret: cleanValue(env[ENV_KEYS.feishuAppSecret]),
+    feishuEncryptKey: cleanValue(env[ENV_KEYS.feishuEncryptKey]),
+    feishuProjectMappings: cleanValue(env[ENV_KEYS.feishuProjectMappings]),
+    feishuVerificationToken: cleanValue(env[ENV_KEYS.feishuVerificationToken])
   };
 }
 
