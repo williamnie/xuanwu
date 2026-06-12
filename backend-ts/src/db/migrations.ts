@@ -22,7 +22,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "017_project_pi_policy_allowlists",
   "018_notifications",
   "019_execution_service_tier",
-  "020_issue_supervisor_recovery"
+  "020_issue_supervisor_recovery",
+  "021_external_events"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

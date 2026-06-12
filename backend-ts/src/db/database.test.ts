@@ -51,6 +51,7 @@ describe("Bun SQLite database connection", () => {
         "app_preferences",
         "cron_task_schedules",
         "cron_tasks",
+        "external_events",
         "issue_events",
         "issue_runs",
         "issue_supervisor_events",
@@ -126,7 +127,8 @@ describe("Bun SQLite database connection", () => {
         { id: "017_project_pi_policy_allowlists" },
         { id: "018_notifications" },
         { id: "019_execution_service_tier" },
-        { id: "020_issue_supervisor_recovery" }
+        { id: "020_issue_supervisor_recovery" },
+        { id: "021_external_events" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -136,6 +138,8 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_window");
       expect(indexNames(connection, "pi_reports")).toContain("idx_pi_reports_delegation");
       expect(indexNames(connection, "issue_supervisor_events")).toContain("idx_issue_supervisor_events_issue");
+      expect(indexNames(connection, "external_events")).toContain("idx_external_events_source_dedupe");
+      expect(indexNames(connection, "external_events")).toContain("idx_external_events_received");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -164,6 +168,13 @@ describe("Bun SQLite database connection", () => {
         issue_ids_json: "'[]'",
         source: "'manual'",
         status: "'generated'"
+      });
+      expect(columnDefaults(connection, "external_events")).toMatchObject({
+        actor: "''",
+        external_id: "''",
+        project_hint: "''",
+        raw_payload_ref: "''",
+        trust_level: "'untrusted'"
       });
     } finally {
       connection.close();
@@ -205,7 +216,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 20 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 21 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

@@ -18,6 +18,7 @@ import { projectPiPolicyAllowlistsMigration } from "./017_project_pi_policy_allo
 import { notificationsMigration } from "./018_notifications.ts";
 import { executionServiceTierMigration } from "./019_execution_service_tier.ts";
 import { issueSupervisorRecoveryMigration } from "./020_issue_supervisor_recovery.ts";
+import { externalEventsMigration } from "./021_external_events.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -39,5 +40,6 @@ export const migrations = [
   projectPiPolicyAllowlistsMigration,
   notificationsMigration,
   executionServiceTierMigration,
-  issueSupervisorRecoveryMigration
+  issueSupervisorRecoveryMigration,
+  externalEventsMigration
 ];
