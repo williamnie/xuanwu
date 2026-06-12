@@ -52,6 +52,7 @@ describe("Bun SQLite database connection", () => {
         "cron_task_schedules",
         "cron_tasks",
         "external_events",
+        "external_links",
         "issue_events",
         "issue_runs",
         "issue_supervisor_events",
@@ -128,7 +129,8 @@ describe("Bun SQLite database connection", () => {
         { id: "018_notifications" },
         { id: "019_execution_service_tier" },
         { id: "020_issue_supervisor_recovery" },
-        { id: "021_external_events" }
+        { id: "021_external_events" },
+        { id: "022_external_links" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -140,6 +142,8 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "issue_supervisor_events")).toContain("idx_issue_supervisor_events_issue");
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_source_dedupe");
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_received");
+      expect(indexNames(connection, "external_links")).toContain("idx_external_links_external");
+      expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -175,6 +179,16 @@ describe("Bun SQLite database connection", () => {
         project_hint: "''",
         raw_payload_ref: "''",
         trust_level: "'untrusted'"
+      });
+      expect(columnDefaults(connection, "external_links")).toMatchObject({
+        conversation_id: "''",
+        external_event_id: "0",
+        external_id: "''",
+        external_type: "''",
+        issue_id: "0",
+        loop_run_id: "''",
+        project_id: "''",
+        relationship: "'related'"
       });
     } finally {
       connection.close();
@@ -216,7 +230,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 21 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 22 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

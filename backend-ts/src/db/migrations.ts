@@ -23,7 +23,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "018_notifications",
   "019_execution_service_tier",
   "020_issue_supervisor_recovery",
-  "021_external_events"
+  "021_external_events",
+  "022_external_links"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `
