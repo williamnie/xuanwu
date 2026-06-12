@@ -21,6 +21,7 @@ import { issueSupervisorRecoveryMigration } from "./020_issue_supervisor_recover
 import { externalEventsMigration } from "./021_external_events.ts";
 import { externalLinksMigration } from "./022_external_links.ts";
 import { imReplyOutboxMigration } from "./023_im_reply_outbox.ts";
+import { imReplyOutboxDispatchMigration } from "./024_im_reply_outbox_dispatch.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -45,5 +46,6 @@ export const migrations = [
   issueSupervisorRecoveryMigration,
   externalEventsMigration,
   externalLinksMigration,
-  imReplyOutboxMigration
+  imReplyOutboxMigration,
+  imReplyOutboxDispatchMigration
 ];

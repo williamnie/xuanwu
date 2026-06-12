@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
+import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
 
@@ -65,7 +66,7 @@ describe("IM reply drafts and sync outbox", () => {
           issue_id: firstDraft.issue_id,
           reply_draft_id: firstDraft.id,
           source: "feishu",
-          status: "queued"
+          status: "pending"
         }
       });
       expect(outbox).toHaveLength(1);
@@ -87,7 +88,40 @@ describe("IM reply drafts and sync outbox", () => {
       database.close();
     }
   });
+
+  test("dispatches approved Feishu outbox through API with injected client", async () => {
+    const sender = new FakeFeishuSender();
+    const { database, handle, root } = await fixtureHandler("chat:oc_group=demo", sender);
+    await insertProject(database, root, "demo");
+    try {
+      const draft = await createDraftFromMessage(handle);
+      await approveReplyDraft(handle, Number(draft.id));
+
+      const response = await handle(new Request(`${BASE_URL}/api/sync-outbox/dispatch`, {
+        body: JSON.stringify({ limit: 5 }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      }));
+      const outbox = await getSyncOutbox(handle, "source=feishu");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ processed: 1, sent: 1 });
+      expect(sender.calls).toEqual([{ receiveId: "oc_group", receiveIdType: "chat_id", text: String(draft.content) }]);
+      expect(outbox[0]).toMatchObject({ feishu_message_id: "om_api_sent_1", status: "sent" });
+    } finally {
+      database.close();
+    }
+  });
 });
+
+class FakeFeishuSender implements FeishuMessageSender {
+  calls: Array<{ receiveId: string; receiveIdType: string; text: string }> = [];
+
+  async sendTextMessage(input: { receiveId: string; receiveIdType: string; text: string }): Promise<{ messageId: string }> {
+    this.calls.push(input);
+    return { messageId: "om_api_sent_1" };
+  }
+}
 
 async function createDraftFromMessage(
   handle: (request: Request) => Promise<Response>,
@@ -100,7 +134,7 @@ async function createDraftFromMessage(
   return drafts.find((item) => item.target_message_id === (input.messageId ?? "om_message_1")) ?? {};
 }
 
-async function fixtureHandler(projectMappings = ""): Promise<{
+async function fixtureHandler(projectMappings = "", feishuSender?: FeishuMessageSender): Promise<{
   database: RunnerDatabase;
   handle: (request: Request) => Promise<Response>;
   root: string;
@@ -114,7 +148,7 @@ async function fixtureHandler(projectMappings = ""): Promise<{
     feishuProjectMappings: projectMappings,
     feishuVerificationToken: "verify-token"
   });
-  const router = createDefaultRouter({ config, database });
+  const router = createDefaultRouter({ config, database, feishuSender });
   return { database, handle: createRequestHandler(router, config.authToken), root };
 }
 

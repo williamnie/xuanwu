@@ -10,6 +10,7 @@ import { json } from "./errors.ts";
 import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
+import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
@@ -24,6 +25,7 @@ type DefaultRouterOptions = {
   config?: RunnerConfig;
   database?: RunnerDatabase;
   interruptTimeoutMs?: number;
+  feishuSender?: FeishuMessageSender;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
@@ -39,7 +41,11 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   });
   if (runtime.database) {
     registerExternalEventRoutes(router, { database: runtime.database });
-    registerImReplyOutboxRoutes(router, { database: runtime.database });
+    registerImReplyOutboxRoutes(router, {
+      config: runtime.config?.integrations.feishu,
+      database: runtime.database,
+      feishuSender: runtime.feishuSender
+    });
     registerReadApiRoutes(router, {
       bus,
       codexSessionsDir: runtime.codexSessionsDir,

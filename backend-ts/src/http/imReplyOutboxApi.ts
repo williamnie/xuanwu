@@ -6,10 +6,17 @@ import {
   rejectImReplyDraft
 } from "../db/repositories/imReplyOutbox.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
+import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
+import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-type ImReplyOutboxContext = { database: RunnerDatabase };
+type ImReplyOutboxContext = {
+  config?: FeishuConnectorConfig;
+  database: RunnerDatabase;
+  feishuSender?: FeishuMessageSender;
+};
 
 export function registerImReplyOutboxRoutes(router: Router, context: ImReplyOutboxContext): void {
   router.get("/api/im-reply-drafts", (request) => json(listImReplyDrafts(context.database, queryFilter(request))));
@@ -17,6 +24,7 @@ export function registerImReplyOutboxRoutes(router: Router, context: ImReplyOutb
   router.post("/api/im-reply-drafts/:id/approve", (request) => approveResponse(context, request));
   router.post("/api/im-reply-drafts/:id/reject", async (request) => rejectResponse(context, request));
   router.get("/api/sync-outbox", (request) => json(listSyncOutbox(context.database, queryFilter(request))));
+  router.post("/api/sync-outbox/dispatch", (request) => dispatchResponse(context, request));
 }
 
 function draftResponse(context: ImReplyOutboxContext, request: Request): Response {
@@ -38,6 +46,21 @@ async function rejectResponse(context: ImReplyOutboxContext, request: Request): 
   try {
     return json(rejectImReplyDraft(context.database, draftID(request), {
       reason: cleanString(body.reason || body.rejection_reason)
+    }));
+  } catch (error) {
+    throw outboxHttpError(error);
+  }
+}
+
+async function dispatchResponse(context: ImReplyOutboxContext, request: Request): Promise<Response> {
+  if (!context.config) throw new HttpError(503, "feishu connector is not configured");
+  const body = await optionalObjectBody(request);
+  try {
+    return json(await dispatchFeishuOutbox({
+      config: context.config,
+      database: context.database,
+      limit: positiveNumber(body.limit),
+      sender: context.feishuSender ?? createFeishuMessageClient({ config: context.config })
     }));
   } catch (error) {
     throw outboxHttpError(error);
@@ -77,4 +100,8 @@ function outboxHttpError(error: unknown): HttpError {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }

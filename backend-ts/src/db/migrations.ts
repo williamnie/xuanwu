@@ -25,7 +25,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "020_issue_supervisor_recovery",
   "021_external_events",
   "022_external_links",
-  "023_im_reply_outbox"
+  "023_im_reply_outbox",
+  "024_im_reply_outbox_dispatch"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

@@ -133,7 +133,8 @@ describe("Bun SQLite database connection", () => {
         { id: "020_issue_supervisor_recovery" },
         { id: "021_external_events" },
         { id: "022_external_links" },
-        { id: "023_im_reply_outbox" }
+        { id: "023_im_reply_outbox" },
+        { id: "024_im_reply_outbox_dispatch" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -197,6 +198,15 @@ describe("Bun SQLite database connection", () => {
         project_id: "''",
         relationship: "'related'"
       });
+      expect(columnDefaults(connection, "sync_outbox")).toMatchObject({
+        attempt_count: "0",
+        cooldown_until: "''",
+        feishu_message_id: "''",
+        last_error: "''",
+        max_attempts: "3",
+        retry_after_seconds: "0",
+        sent_at: "''"
+      });
     } finally {
       connection.close();
     }
@@ -237,7 +247,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 23 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 24 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

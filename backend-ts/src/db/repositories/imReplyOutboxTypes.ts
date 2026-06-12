@@ -17,7 +17,14 @@ export type ImReplyDraftRecord = {
 };
 
 export type SyncOutboxRecord = Omit<ImReplyDraftRecord, "rejection_reason"> & {
+  attempt_count: number;
+  cooldown_until: string;
+  feishu_message_id: string;
+  last_error: string;
+  max_attempts: number;
   reply_draft_id: number;
+  retry_after_seconds: number;
+  sent_at: string;
 };
 
 export type ImReplyDraftInput = Partial<Omit<ImReplyDraftRecord, "created_at" | "id" | "updated_at">>;

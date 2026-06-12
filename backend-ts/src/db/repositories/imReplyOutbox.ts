@@ -21,13 +21,13 @@ import type {
 export type { ImReplyDraftFilter, ImReplyDraftInput, ImReplyDraftRecord, SyncOutboxRecord };
 
 type ReplyPatch = Partial<Omit<ImReplyDraftRecord, "created_at" | "id" | "updated_at">>;
-
 const DRAFT_COLUMNS = `id, source, external_event_id, issue_id, target_chat_id,
   target_thread_id, target_message_id, content, status, risk, created_by,
   approval_action_id, rejection_reason, created_at, updated_at`;
 const OUTBOX_COLUMNS = `id, source, reply_draft_id, external_event_id, issue_id,
   target_chat_id, target_thread_id, target_message_id, content, status, risk,
-  created_by, approval_action_id, created_at, updated_at`;
+  created_by, approval_action_id, attempt_count, cooldown_until, feishu_message_id,
+  last_error, max_attempts, retry_after_seconds, sent_at, created_at, updated_at`;
 const PATCH_COLUMNS = [
   "source", "external_event_id", "issue_id", "target_chat_id", "target_thread_id",
   "target_message_id", "content", "status", "risk", "created_by", "approval_action_id",
@@ -94,11 +94,19 @@ export function listSyncOutbox(db: RunnerDatabase, filter: ImReplyDraftFilter = 
   ).all(...query.args).map(mapOutbox);
 }
 
+export function getSyncOutbox(db: RunnerDatabase, id: number): SyncOutboxRecord | null {
+  if (!positiveID(id)) return null;
+  const row = db.sqlite.query<Record<string, unknown>, [number]>(
+    `select ${OUTBOX_COLUMNS} from sync_outbox where id=?`
+  ).get(id);
+  return row ? mapOutbox(row) : null;
+}
+
 function createSyncOutbox(db: RunnerDatabase, draft: ImReplyDraftRecord, timestamp: Date): SyncOutboxRecord {
   db.sqlite.run(`insert or ignore into sync_outbox (${outboxInsertColumns()}) values (${placeholders(14)})`, [
     draft.source, draft.id, draft.external_event_id, draft.issue_id,
     draft.target_chat_id, draft.target_thread_id, draft.target_message_id,
-    draft.content, "queued", draft.risk, draft.created_by,
+    draft.content, "pending", draft.risk, draft.created_by,
     draft.approval_action_id, timestamp.toISOString(), timestamp.toISOString()
   ]);
   return mustGetSyncOutboxByDraft(db, draft.id);
@@ -178,7 +186,15 @@ function mapOutbox(row: Record<string, unknown>): SyncOutboxRecord {
     target_thread_id: optionalString(row.target_thread_id), target_message_id: optionalString(row.target_message_id),
     content: requiredString(row.content, "sync_outbox.content"), status: requiredString(row.status, "sync_outbox.status"),
     risk: requiredString(row.risk, "sync_outbox.risk"), created_by: requiredString(row.created_by, "sync_outbox.created_by"),
-    approval_action_id: optionalString(row.approval_action_id), created_at: requiredString(row.created_at, "sync_outbox.created_at"),
+    approval_action_id: optionalString(row.approval_action_id),
+    attempt_count: integerRow(row.attempt_count, "sync_outbox.attempt_count"),
+    cooldown_until: optionalString(row.cooldown_until),
+    feishu_message_id: optionalString(row.feishu_message_id),
+    last_error: optionalString(row.last_error),
+    max_attempts: integerRow(row.max_attempts, "sync_outbox.max_attempts"),
+    retry_after_seconds: integerRow(row.retry_after_seconds, "sync_outbox.retry_after_seconds"),
+    sent_at: optionalString(row.sent_at),
+    created_at: requiredString(row.created_at, "sync_outbox.created_at"),
     updated_at: requiredString(row.updated_at, "sync_outbox.updated_at")
   };
 }
