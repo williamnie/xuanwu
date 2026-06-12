@@ -9,6 +9,7 @@ import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { json } from "./errors.ts";
 import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
+import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
@@ -38,6 +39,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   });
   if (runtime.database) {
     registerExternalEventRoutes(router, { database: runtime.database });
+    registerImReplyOutboxRoutes(router, { database: runtime.database });
     registerReadApiRoutes(router, {
       bus,
       codexSessionsDir: runtime.codexSessionsDir,

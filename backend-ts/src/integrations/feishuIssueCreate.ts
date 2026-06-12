@@ -1,5 +1,6 @@
 import { createExternalLink, listExternalLinksByExternal, type ExternalLinkRecord } from "../db/repositories/externalLinks.ts";
 import { getExternalEvent, type ExternalEventRecord } from "../db/repositories/externalEvents.ts";
+import { createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { ISSUE_TITLE_MAX_RUNES, createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project, ProjectNotFoundError } from "../db/repositories/projects.ts";
@@ -35,6 +36,7 @@ export function createFeishuIssueFromExternalEvent(
     const project = mustTargetProject(db, event, input);
     const issue = createIssue(db, issueInput(event, project, input));
     const link = createExternalLink(db, linkInput(event, issue.id, project.id));
+    createImReplyDraft(db, replyDraftInput(event, issue.id));
     return { created: true, external_link: link, issue, issue_id: issue.id };
   });
   return write.immediate();
@@ -124,6 +126,21 @@ function linkInput(event: ExternalEventRecord, issueID: number, projectID: strin
     issue_id: issueID,
     project_id: projectID,
     relationship: "created_issue"
+  };
+}
+
+function replyDraftInput(event: ExternalEventRecord, issueID: number) {
+  return {
+    content: `已记录为 runner issue #${issueID}，等待确认是否开始执行。`,
+    created_by: "pi",
+    external_event_id: event.id,
+    issue_id: issueID,
+    risk: "low",
+    source: event.source,
+    status: "pending",
+    target_chat_id: chatID(event),
+    target_message_id: messageID(event),
+    target_thread_id: threadID(event)
   };
 }
 

@@ -53,6 +53,7 @@ describe("Bun SQLite database connection", () => {
         "cron_tasks",
         "external_events",
         "external_links",
+        "im_reply_drafts",
         "issue_events",
         "issue_runs",
         "issue_supervisor_events",
@@ -78,6 +79,7 @@ describe("Bun SQLite database connection", () => {
         "session_command_events",
         "session_turn_references",
         "sqlite_sequence",
+        "sync_outbox",
         "uploads"
       ]);
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
@@ -130,7 +132,8 @@ describe("Bun SQLite database connection", () => {
         { id: "019_execution_service_tier" },
         { id: "020_issue_supervisor_recovery" },
         { id: "021_external_events" },
-        { id: "022_external_links" }
+        { id: "022_external_links" },
+        { id: "023_im_reply_outbox" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -234,7 +237,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 22 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 23 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

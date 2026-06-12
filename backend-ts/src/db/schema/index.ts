@@ -20,6 +20,7 @@ import { executionServiceTierMigration } from "./019_execution_service_tier.ts";
 import { issueSupervisorRecoveryMigration } from "./020_issue_supervisor_recovery.ts";
 import { externalEventsMigration } from "./021_external_events.ts";
 import { externalLinksMigration } from "./022_external_links.ts";
+import { imReplyOutboxMigration } from "./023_im_reply_outbox.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -43,5 +44,6 @@ export const migrations = [
   executionServiceTierMigration,
   issueSupervisorRecoveryMigration,
   externalEventsMigration,
-  externalLinksMigration
+  externalLinksMigration,
+  imReplyOutboxMigration
 ];
