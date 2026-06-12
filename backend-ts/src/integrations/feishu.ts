@@ -12,3 +12,13 @@ export {
 } from "./feishuTypes.ts";
 export { buildFeishuConnectorConfig, feishuConnectorStatus, redactFeishuConnectorConfig } from "./feishuConfig.ts";
 export { feishuExternalEventInput, normalizeFeishuMessageEvent, projectIDForFeishuMessage } from "./feishuEvents.ts";
+export {
+  FeishuCallbackPayloadError,
+  calculateFeishuCallbackSignature,
+  decryptFeishuCallbackPayload,
+  parseFeishuCallbackPayload,
+  verifyFeishuCallbackSignature,
+  type FeishuCallbackParseResult,
+  type FeishuSignatureFailureReason,
+  type FeishuSignatureVerification
+} from "./feishuCallback.ts";

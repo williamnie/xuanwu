@@ -17,7 +17,7 @@ export async function loadAuthToken(config: AuthConfig): Promise<string> {
 
 export function requireBearerAuth(request: Request, authToken: string): Response | undefined {
   const configured = clean(authToken);
-  if (configured === "" || !isApiRequest(request)) return undefined;
+  if (configured === "" || !isApiRequest(request) || isPublicIntegrationCallback(request)) return undefined;
   if (constantTimeEqual(requestToken(request), configured)) return undefined;
   return jsonError(401, "unauthorized");
 }
@@ -33,6 +33,11 @@ async function readAuthTokenFile(path: string): Promise<string> {
 
 function isApiRequest(request: Request): boolean {
   return new URL(request.url).pathname.startsWith("/api/");
+}
+
+function isPublicIntegrationCallback(request: Request): boolean {
+  const pathname = new URL(request.url).pathname;
+  return request.method === "POST" && pathname === "/api/integrations/feishu/events";
 }
 
 function requestToken(request: Request): string {

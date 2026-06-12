@@ -172,7 +172,7 @@ describe("Feishu IM connector contract", () => {
       auto_reply: false,
       callback_requirements: {
         challenge: "required",
-        encryption: "optional_followup",
+        encryption: "supported_optional",
         signature: "required"
       },
       supported_events: ["message.text", "message.mention"],

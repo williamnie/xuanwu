@@ -5,7 +5,9 @@ import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts
 import { loadAuthToken, requireBearerAuth } from "./auth.ts";
 import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
+import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { json } from "./errors.ts";
+import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
@@ -28,6 +30,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
   registerEventRoutes(router, { bus });
+  registerFeishuEventRoutes(router, { bus, config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig() });
   if (runtime.database) registerReadApiRoutes(router, {
     bus,
     codexSessionsDir: runtime.codexSessionsDir,
