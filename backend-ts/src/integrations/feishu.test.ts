@@ -37,7 +37,7 @@ describe("Feishu IM connector contract", () => {
       label: "Feishu IM",
       enabled: false,
       status: "disabled",
-      settings_mode: "env_or_local_uncommitted_config",
+      settings_mode: "settings_page_or_local_config",
       supported_events: ["message.text", "message.mention"],
       attachment_policy: "metadata_only",
       auto_reply: false,

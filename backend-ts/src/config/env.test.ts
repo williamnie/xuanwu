@@ -1,5 +1,23 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { ENV_KEYS, buildConfig, loadConfig } from "./env.ts";
+
+const tempRoots: string[] = [];
+
+afterEach(async () => {
+  while (tempRoots.length > 0) {
+    const path = tempRoots.pop();
+    if (path) await rm(path, { recursive: true, force: true });
+  }
+});
+
+async function tempStateDir(): Promise<string> {
+  const path = await mkdtemp(join(tmpdir(), "codex-runner-config-"));
+  tempRoots.push(path);
+  return path;
+}
 
 describe("Bun backend config", () => {
   test("uses Bun live defaults", () => {
@@ -49,6 +67,40 @@ describe("Bun backend config", () => {
       authToken: "",
       authTokenFile: "/tmp/codex-bun/auth_token",
       webDir: ""
+    });
+  });
+
+  test("loads Feishu connector from local settings file before falling back to env", async () => {
+    const stateDir = await tempStateDir();
+    await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
+      integrations: {
+        feishu: {
+          allowedChatIds: ["oc_local"],
+          allowedUserIds: ["ou_local"],
+          appId: "cli_local",
+          appSecret: "local-secret",
+          encryptKey: "local-encrypt",
+          projectMappings: "chat:oc_local=local-project",
+          verificationToken: "local-token"
+        }
+      }
+    }), "utf8");
+
+    const config = loadConfig([], {
+      [ENV_KEYS.stateDir]: stateDir,
+      [ENV_KEYS.feishuAppId]: "cli_env",
+      [ENV_KEYS.feishuAppSecret]: "env-secret",
+      [ENV_KEYS.feishuVerificationToken]: "env-token"
+    });
+
+    expect(config.integrations.feishu).toMatchObject({
+      allowedChatIds: ["oc_local"],
+      allowedUserIds: ["ou_local"],
+      appId: "cli_local",
+      appSecret: "local-secret",
+      encryptKey: "local-encrypt",
+      projectMappings: [{ chatId: "oc_local", projectId: "local-project" }],
+      verificationToken: "local-token"
     });
   });
 

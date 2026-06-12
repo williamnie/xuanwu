@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { calculateFeishuCallbackSignature } from "../backend-ts/src/integrations/feishuCallback.ts";
-import { buildFeishuConnectorConfig, feishuConnectorStatus } from "../backend-ts/src/integrations/feishu.ts";
+import { loadConfig } from "../backend-ts/src/config/env.ts";
+import { feishuConnectorStatus } from "../backend-ts/src/integrations/feishu.ts";
 import { redactSensitiveText } from "../backend-ts/src/util/redact.ts";
 
 const DEFAULT_ADDR = "127.0.0.1:3008";
@@ -9,7 +10,7 @@ const PATH = "/api/integrations/feishu/events";
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const mode = String(args.mode || "check");
-  const config = buildFeishuConnectorConfig(process.env);
+  const config = loadConfig([], process.env).integrations.feishu;
   if (mode === "check") return printConfigStatus(config);
   if (mode === "challenge") return await postChallenge(args, config);
   if (mode === "message") return await postMessage(args, config);

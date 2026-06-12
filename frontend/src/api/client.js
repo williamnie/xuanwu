@@ -224,6 +224,13 @@ export const api = {
     body: JSON.stringify(settings),
   }),
 
+  getFeishuSettings: () => request('/api/integrations/feishu/settings'),
+
+  updateFeishuSettings: (settings) => request('/api/integrations/feishu/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  }),
+
   getCronTasks: () => request('/api/cron-tasks'),
 
   createCronTask: (task) => request('/api/cron-tasks', {

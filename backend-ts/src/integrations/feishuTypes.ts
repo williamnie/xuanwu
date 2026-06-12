@@ -43,7 +43,7 @@ export type FeishuEnvInput = {
   FEISHU_VERIFICATION_TOKEN?: string;
 };
 
-export type FeishuConfigInput = Partial<FeishuConnectorConfig> & FeishuConnectorOverrides & FeishuEnvInput;
+export type FeishuConfigInput = Omit<Partial<FeishuConnectorConfig>, "projectMappings"> & { projectMappings?: string | FeishuProjectMapping[] } & FeishuConnectorOverrides & FeishuEnvInput;
 
 export type FeishuAttachment = { file_key: string; mime_type: string; name: string; size: number; type: string };
 export type FeishuMention = { id: string; name: string; tenant_key: string };

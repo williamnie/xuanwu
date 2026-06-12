@@ -41,7 +41,7 @@ export function feishuConnectorStatus(config: FeishuConnectorConfig): Record<str
     label: "Feishu IM",
     enabled: missing.length === 0,
     status: connectorState(config, missing),
-    settings_mode: "env_or_local_uncommitted_config",
+    settings_mode: "settings_page_or_local_config",
     supported_events: [...FEISHU_CONNECTOR_V0.supported_events],
     attachment_policy: FEISHU_CONNECTOR_V0.attachment_policy,
     auto_reply: FEISHU_CONNECTOR_V0.auto_reply,

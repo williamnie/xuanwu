@@ -1,6 +1,7 @@
 import { DEFAULT_ADDR, buildRunnerPaths } from "./paths.ts";
+import { readLocalSettingsSync } from "./localSettings.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
-import type { FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
+import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 
 export const ENV_KEYS = {
@@ -30,7 +31,7 @@ export const ENV_KEYS = {
 } as const;
 
 type Env = Record<string, string | undefined>;
-type ConfigOverrides = Partial<RunnerConfig> & ProviderRuntimeOverrides & FeishuConnectorOverrides;
+type ConfigOverrides = Omit<Partial<RunnerConfig>, "integrations"> & ProviderRuntimeOverrides & FeishuConnectorOverrides & { integrations?: { feishu?: FeishuConfigInput } };
 type ConfigKey = keyof typeof ENV_KEYS;
 
 export type ProviderRuntimeConfig = {
@@ -75,7 +76,12 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
 export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): RunnerConfig {
   const envOverrides = readEnvOverrides(env);
   const cliOverrides = parseCliOverrides(stripCommand(argv));
-  return buildConfig({ ...envOverrides, ...cliOverrides });
+  const baseOverrides = { ...envOverrides, ...cliOverrides };
+  const localOverrides = readLocalSettingsSync(buildRunnerPaths(baseOverrides).stateDir);
+  return buildConfig({
+    ...baseOverrides,
+    integrations: { feishu: localOverrides.integrations?.feishu ?? {} }
+  });
 }
 
 export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
@@ -91,8 +97,21 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
       claude: buildClaudeRuntimeConfig(overrides)
     },
     integrations: {
-      feishu: buildFeishuConnectorConfig(overrides.integrations?.feishu ?? overrides)
+      feishu: buildFeishuConnectorConfig(effectiveFeishuInput(overrides))
     }
+  };
+}
+
+function effectiveFeishuInput(overrides: ConfigOverrides): FeishuConfigInput {
+  const local = overrides.integrations?.feishu ?? {};
+  return {
+    feishuAllowedChatIds: local.feishuAllowedChatIds ?? local.allowedChatIds ?? overrides.feishuAllowedChatIds,
+    feishuAllowedUserIds: local.feishuAllowedUserIds ?? local.allowedUserIds ?? overrides.feishuAllowedUserIds,
+    feishuAppId: local.feishuAppId ?? local.appId ?? overrides.feishuAppId,
+    feishuAppSecret: local.feishuAppSecret ?? local.appSecret ?? overrides.feishuAppSecret,
+    feishuEncryptKey: local.feishuEncryptKey ?? local.encryptKey ?? overrides.feishuEncryptKey,
+    feishuProjectMappings: local.feishuProjectMappings ?? local.projectMappings ?? overrides.feishuProjectMappings,
+    feishuVerificationToken: local.feishuVerificationToken ?? local.verificationToken ?? overrides.feishuVerificationToken
   };
 }
 
