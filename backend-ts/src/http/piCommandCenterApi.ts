@@ -1,4 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import type { RunnerConfig } from "../config/env.ts";
+import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import {
   getPiAgent,
@@ -19,13 +21,14 @@ import { json } from "./errors.ts";
 import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
 import { supervisorPolicySummary, supervisorScanSummary } from "./piCommandCenterSupervisorPolicy.ts";
 
-type PiCommandCenterContext = { database: RunnerDatabase };
+type PiCommandCenterContext = { config?: RunnerConfig; database: RunnerDatabase };
 
 export function registerPiCommandCenterRoutes(router: Router, context: PiCommandCenterContext): void {
-  router.get("/api/pi/command-center", () => json(buildPiCommandCenter(context.database)));
+  router.get("/api/pi/command-center", () => json(buildPiCommandCenter(context)));
 }
 
-function buildPiCommandCenter(db: RunnerDatabase) {
+function buildPiCommandCenter(context: PiCommandCenterContext) {
+  const db = context.database;
   const projects = listProjects(db);
   const settings = listProjectPiSettings(db);
   const activeDelegations = listPiDelegations(db, { status: "active" });
@@ -40,6 +43,7 @@ function buildPiCommandCenter(db: RunnerDatabase) {
     automation: automationSummary(db, { activeDelegations, cronTasks, projects, settings }),
     generated_at: new Date().toISOString(),
     mode: commandMode(autoManagedProjects, activeDelegations.length, settings.length),
+    integrations: integrationSummary(context),
     overview: {
       active_delegations: activeDelegations.length,
       autonomous_projects: autoManagedProjects,
@@ -178,6 +182,19 @@ function latestManagerCycle(db: RunnerDatabase) {
     status: cycle.status,
     updated_at: cycle.updated_at
   };
+}
+
+function integrationSummary(context: PiCommandCenterContext) {
+  const feishu = feishuConnectorStatus(context.config?.integrations.feishu ?? {
+    allowedChatIds: [],
+    allowedUserIds: [],
+    appId: "",
+    appSecret: "",
+    encryptKey: "",
+    projectMappings: [],
+    verificationToken: ""
+  });
+  return { feishu: feishu.summary };
 }
 
 function memorySummary(items: PiMemoryItem[]) {

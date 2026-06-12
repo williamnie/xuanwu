@@ -47,6 +47,7 @@ export type SystemLogsDTO = {
 
 export type SystemStatusDTO = {
   auth?: { enabled?: boolean };
+  connectors?: Array<{ id?: string; status?: string }>;
   codex?: { capability_summary?: string; command_ok?: boolean };
   config?: { auth_enabled?: boolean };
   db?: { ok?: boolean };

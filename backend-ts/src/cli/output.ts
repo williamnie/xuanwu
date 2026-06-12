@@ -25,8 +25,19 @@ export function formatSystemStatus(status: SystemStatusDTO, asJSON: boolean): st
   const loops = status.runner?.running_loops ?? 0;
   const inProgress = status.runner?.in_progress_issues ?? 0;
   const codexCaps = status.codex?.capability_summary?.trim();
-  const suffix = codexCaps ? ` codex_caps=${codexCaps}` : "";
-  return `API alive=${alive} db=${dbOK} codex_cmd=${codexOK} auth=${auth} loops=${loops} in_progress=${inProgress}${suffix}\n`;
+  const connectorText = connectorSummary(status.connectors);
+  const suffix = [
+    codexCaps ? `codex_caps=${codexCaps}` : "",
+    connectorText ? `connectors=${connectorText}` : ""
+  ].filter(Boolean).join(" ");
+  return `API alive=${alive} db=${dbOK} codex_cmd=${codexOK} auth=${auth} loops=${loops} in_progress=${inProgress}${suffix ? ` ${suffix}` : ""}\n`;
+}
+
+function connectorSummary(connectors: SystemStatusDTO["connectors"]): string {
+  if (!Array.isArray(connectors) || connectors.length === 0) return "";
+  return connectors
+    .map((item) => `${item.id || "unknown"}:${item.status || "unknown"}`)
+    .join(",");
 }
 
 export function formatSystemLogs(summary: SystemLogsDTO, asJSON: boolean): string {

@@ -49,7 +49,20 @@ export function feishuConnectorStatus(config: FeishuConnectorConfig): Record<str
     allowed_chat_count: config.allowedChatIds.length,
     allowed_user_count: config.allowedUserIds.length,
     project_mapping_count: config.projectMappings.length,
-    missing_required: missing
+    missing_required: missing,
+    summary: connectorSummary(config, missing)
+  };
+}
+
+function connectorSummary(config: FeishuConnectorConfig, missing: string[]): Record<string, unknown> {
+  const status = connectorState(config, missing);
+  return {
+    callback_path: "/api/integrations/feishu/events",
+    configured: status === "configured",
+    error: status === "misconfigured" ? `missing ${missing.join(",")}` : "",
+    receive_enabled: status === "configured",
+    reply_mode: FEISHU_CONNECTOR_V0.auto_reply ? "auto" : "draft",
+    state: status === "misconfigured" ? "error" : status
   };
 }
 

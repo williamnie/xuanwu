@@ -48,3 +48,9 @@ Dedupe/source 约定：`feishu:message:<message_id>`。写入 `external_events` 
 - 事件签名/verification token 校验。
 - 可选事件加密解密（依赖 `FEISHU_ENCRYPT_KEY`）。
 - 日志、审计、测试 fixture 必须脱敏。
+
+## 本地 smoke 与接入文档
+
+完整本地/半真实 smoke、飞书应用配置、ngrok/内网穿透、权限、禁用自动回复与排障路径见：
+
+- [飞书 IM connector 本地接入与 smoke](./feishu-im-local-smoke.md)

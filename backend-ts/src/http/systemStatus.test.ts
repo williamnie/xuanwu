@@ -122,11 +122,47 @@ describe("Bun system status endpoints", () => {
         allowed_chat_count: 0,
         allowed_user_count: 0,
         project_mapping_count: 0,
-        missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"]
+        missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"],
+        summary: {
+          callback_path: "/api/integrations/feishu/events",
+          configured: false,
+          error: "",
+          receive_enabled: false,
+          reply_mode: "draft",
+          state: "disabled"
+        }
       }]);
       expect(body.runner.running_loops).toBe(0);
       expect(body.runner.auto_run_projects).toBe(0);
       expect(body.runner.in_progress_issues).toBe(0);
+    } finally {
+      database.close();
+    }
+  });
+
+
+  test("reports partially configured Feishu connector as error summary", async () => {
+    const { config, database } = await openFixtureRuntime({ feishuAppId: "cli_app_id" });
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, { authToken: "", config, database });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const body = await response.json() as SystemStatusBody;
+
+      expect(response.status).toBe(200);
+      expect(body.connectors[0]).toMatchObject({
+        enabled: false,
+        id: "feishu",
+        status: "misconfigured",
+        summary: {
+          configured: false,
+          error: "missing FEISHU_APP_SECRET,FEISHU_VERIFICATION_TOKEN",
+          receive_enabled: false,
+          reply_mode: "draft",
+          state: "error"
+        }
+      });
     } finally {
       database.close();
     }
@@ -265,6 +301,14 @@ describe("Bun system status endpoints", () => {
           app_secret: { configured: true },
           verification_token: { configured: true },
           encrypt_key: { configured: true, optional: true }
+        },
+        summary: {
+          callback_path: "/api/integrations/feishu/events",
+          configured: true,
+          error: "",
+          receive_enabled: true,
+          reply_mode: "draft",
+          state: "configured"
         }
       });
       expect(text).not.toContain(secret);

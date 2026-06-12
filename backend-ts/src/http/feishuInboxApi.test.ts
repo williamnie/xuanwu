@@ -17,6 +17,64 @@ afterEach(async () => {
 });
 
 describe("Feishu external event inbox", () => {
+  test("runs local Feishu smoke from challenge to reply draft and outbox without leaking secrets", async () => {
+    const { database, handle, root } = await fixtureHandler("chat:oc_group=demo");
+    await insertProject(database, root, "demo");
+    try {
+      const challenge = await postFeishu(handle, { challenge: "challenge-code", token: "verify-token", type: "url_verification" });
+      expect(await challenge.json()).toEqual({ challenge: "challenge-code" });
+
+      const inbox = await postFeishu(handle, messageEvent({ text: "@PI 帮我实现这个折叠面板功能", threadId: "omt_thread_1" }));
+      const inboxBody = await inbox.json() as Record<string, unknown>;
+      const eventID = Number(inboxBody.event_id);
+      expect(inbox.status).toBe(202);
+      expect(inboxBody).toMatchObject({ ok: true, normalized_summary: { project_id: "demo" } });
+
+      const inboxEvent = await getExternalEvent(handle, eventID);
+      expect(inboxEvent).toMatchObject({ project_id: "demo", source: "feishu", status: "mapped" });
+      expect(inboxEvent.summary).toMatchObject({
+        attention_decision: { decision: "propose_issue", should_create_issue_proposal: true }
+      });
+
+      const proposal = await createIssueFromExternalEvent(handle, eventID);
+      const proposalBody = await proposal.json() as Record<string, unknown>;
+      expect(proposal.status).toBe(201);
+      expect(proposalBody).toMatchObject({ created: true });
+
+      const issue = await getIssue(handle, Number(proposalBody.issue_id));
+      expect(issue).toMatchObject({ project_id: "demo", status: "triage" });
+      expect(String(issue.description)).toContain("PI repo_context_pack");
+
+      const drafts = await getReplyDrafts(handle, "source=feishu");
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0]).toMatchObject({
+        issue_id: issue.id,
+        source: "feishu",
+        status: "pending",
+        target_chat_id: "oc_group",
+        target_thread_id: "omt_thread_1"
+      });
+
+      const approved = await approveReplyDraft(handle, Number(drafts[0].id));
+      expect(approved.status).toBe(200);
+      const outbox = await getSyncOutbox(handle, "source=feishu");
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        issue_id: issue.id,
+        reply_draft_id: drafts[0].id,
+        source: "feishu",
+        status: "pending"
+      });
+
+      const smokeText = JSON.stringify({ inboxBody, inboxEvent, issue, drafts, outbox });
+      expect(smokeText).not.toContain("verify-token");
+      expect(smokeText).not.toContain("app-secret-value");
+      expect(smokeText).not.toContain(root);
+    } finally {
+      database.close();
+    }
+  });
+
   test("persists normalized message events into the external event inbox", async () => {
     const { database, handle } = await fixtureHandler("chat:oc_group=demo");
     try {
@@ -216,6 +274,22 @@ async function getExternalEvent(handle: (request: Request) => Promise<Response>,
   const response = await handle(new Request(`${BASE_URL}/api/external-events/${id}`));
   expect(response.status).toBe(200);
   return await response.json() as Record<string, unknown>;
+}
+
+async function getReplyDrafts(handle: (request: Request) => Promise<Response>, query = ""): Promise<Array<Record<string, unknown>>> {
+  const response = await handle(new Request(`${BASE_URL}/api/im-reply-drafts${query === "" ? "" : `?${query}`}`));
+  expect(response.status).toBe(200);
+  return await response.json() as Array<Record<string, unknown>>;
+}
+
+async function getSyncOutbox(handle: (request: Request) => Promise<Response>, query = ""): Promise<Array<Record<string, unknown>>> {
+  const response = await handle(new Request(`${BASE_URL}/api/sync-outbox${query === "" ? "" : `?${query}`}`));
+  expect(response.status).toBe(200);
+  return await response.json() as Array<Record<string, unknown>>;
+}
+
+async function approveReplyDraft(handle: (request: Request) => Promise<Response>, id: number): Promise<Response> {
+  return handle(new Request(`${BASE_URL}/api/im-reply-drafts/${id}/approve`, { method: "POST" }));
 }
 
 async function getIssue(handle: (request: Request) => Promise<Response>, id: number): Promise<Record<string, unknown>> {

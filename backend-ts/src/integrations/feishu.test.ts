@@ -26,7 +26,11 @@ describe("Feishu IM connector contract", () => {
     expect(feishuConnectorStatus(buildFeishuConnectorConfig({ FEISHU_APP_ID: "cli_app_id" }))).toMatchObject({
       enabled: false,
       missing_required: ["FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"],
-      status: "misconfigured"
+      status: "misconfigured",
+      summary: {
+        error: "missing FEISHU_APP_SECRET,FEISHU_VERIFICATION_TOKEN",
+        state: "error"
+      }
     });
     expect(status).toEqual({
       id: "feishu",
@@ -46,7 +50,15 @@ describe("Feishu IM connector contract", () => {
       allowed_chat_count: 0,
       allowed_user_count: 0,
       project_mapping_count: 0,
-      missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"]
+      missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"],
+      summary: {
+        callback_path: "/api/integrations/feishu/events",
+        configured: false,
+        error: "",
+        receive_enabled: false,
+        reply_mode: "draft",
+        state: "disabled"
+      }
     });
   });
 

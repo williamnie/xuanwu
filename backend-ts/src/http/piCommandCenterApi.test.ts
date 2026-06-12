@@ -103,6 +103,14 @@ describe("PI Command Center API", () => {
         latest_run: { id: "hb-1", status: "completed" },
         status: "completed"
       });
+      expect(body.integrations).toMatchObject({
+        feishu: {
+          configured: false,
+          receive_enabled: false,
+          reply_mode: "draft",
+          state: "disabled"
+        }
+      });
       expect(body.prompt_debug).toMatchObject({
         agent_id: "agent-1",
         runtime_prompt_summary: {

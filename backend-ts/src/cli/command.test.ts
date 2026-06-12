@@ -28,7 +28,7 @@ describe("Bun CLI dispatcher", () => {
     const { code, stdout, stderr } = await run(["system", "status"], { fetcher });
 
     expect(code).toBe(0);
-    expect(stdout).toBe("API alive=true db=true codex_cmd=true auth=true loops=2 in_progress=1\n");
+    expect(stdout).toBe("API alive=true db=true codex_cmd=true auth=true loops=2 in_progress=1 connectors=feishu:disabled\n");
     expect(stderr).toBe("");
   });
 
@@ -40,7 +40,7 @@ describe("Bun CLI dispatcher", () => {
     const { stdout } = await run(["system", "status"], { fetcher });
 
     expect(stdout).toBe(
-      "API alive=true db=true codex_cmd=true auth=true loops=2 in_progress=1 codex_caps=issue_execution,sessions,model_list\n"
+      "API alive=true db=true codex_cmd=true auth=true loops=2 in_progress=1 codex_caps=issue_execution,sessions,model_list connectors=feishu:disabled\n"
     );
   });
 
@@ -196,6 +196,7 @@ function systemStatusBody(): Record<string, unknown> {
     auth: { enabled: true },
     codex: { command_ok: true },
     config: { auth_enabled: true },
+    connectors: [{ id: "feishu", status: "disabled" }],
     db: { ok: true },
     runner: { in_progress_issues: 1, running_loops: 2 },
     service: { alive: true }

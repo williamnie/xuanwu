@@ -91,7 +91,7 @@ function issueDescription(event: ExternalEventRecord, project: Project, input: F
       summary: safeText(event.content)
     }],
     intent: safeText(event.content),
-    project: { cwd: project.cwd, id: project.id, name: project.name },
+    project: { cwd: "", id: project.id, name: project.name },
     proposed_changes: ["executor 复核仓库代码与运行态后，按原始消息需求做最小直接修改。"],
     source: { channel: "feishu", kind: "im", message_id: messageID(event) },
     validation: textList(input.validation, defaultValidation())
