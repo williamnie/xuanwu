@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
@@ -119,11 +119,78 @@ describe("Feishu external event inbox", () => {
       database.close();
     }
   });
+
+  test("creates a triage runner issue from a Feishu inbox event and records an external link", async () => {
+    const { database, handle, root } = await fixtureHandler("chat:oc_group=demo");
+    await insertProject(database, root, "demo");
+    try {
+      const inbox = await postFeishu(handle, messageEvent({
+        attachments: [{ file_key: "file-key-1", file_name: "spec.png", file_size: 1234, mime_type: "image/png", type: "image" }],
+        text: "@PI 帮我实现这个折叠面板功能",
+        threadId: "omt_thread_1"
+      }));
+      const inboxBody = await inbox.json() as Record<string, unknown>;
+
+      const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+      const body = await response.json() as Record<string, unknown>;
+      const issue = await getIssue(handle, Number(body.issue_id));
+      const link = database.sqlite.query<Record<string, unknown>, []>(
+        "select source, external_id, external_type, issue_id, conversation_id, relationship from external_links"
+      ).get();
+
+      expect(response.status).toBe(201);
+      expect(body).toMatchObject({ created: true, issue_id: issue.id });
+      expect(issue).toMatchObject({ project_id: "demo", status: "triage" });
+      expect(String(issue.description)).toContain("## 外部来源");
+      expect(String(issue.description)).toContain("Source: feishu");
+      expect(String(issue.description)).toContain("Message ID: om_message_1");
+      expect(String(issue.description)).toContain("Chat: oc_group");
+      expect(String(issue.description)).toContain("Thread: omt_thread_1");
+      expect(String(issue.description)).toContain("spec.png");
+      expect(String(issue.description)).toContain("## 需求理解");
+      expect(String(issue.description)).toContain("PI repo_context_pack");
+      expect(String(issue.description)).toContain("## 验收标准");
+      expect(String(issue.description)).toContain("## 验证建议");
+      expect(link).toMatchObject({
+        conversation_id: "omt_thread_1",
+        external_id: "om_message_1",
+        external_type: "feishu_message",
+        issue_id: issue.id,
+        relationship: "created_issue",
+        source: "feishu"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("repeated create issue action returns the already linked issue", async () => {
+    const { database, handle, root } = await fixtureHandler("chat:oc_group=demo");
+    await insertProject(database, root, "demo");
+    try {
+      const inbox = await postFeishu(handle, messageEvent());
+      const inboxBody = await inbox.json() as Record<string, unknown>;
+
+      const first = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+      const duplicate = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+      const firstBody = await first.json() as Record<string, unknown>;
+      const duplicateBody = await duplicate.json() as Record<string, unknown>;
+
+      expect(first.status).toBe(201);
+      expect(duplicate.status).toBe(200);
+      expect(duplicateBody).toMatchObject({ created: false, issue_id: firstBody.issue_id });
+      expect(database.sqlite.query("select count(*) as count from issues").get()).toEqual({ count: 1 });
+      expect(database.sqlite.query("select count(*) as count from external_links").get()).toEqual({ count: 1 });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 async function fixtureHandler(projectMappings = ""): Promise<{
   database: RunnerDatabase;
   handle: (request: Request) => Promise<Response>;
+  root: string;
 }> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-inbox-"));
   tempRoots.push(root);
@@ -135,7 +202,7 @@ async function fixtureHandler(projectMappings = ""): Promise<{
     feishuVerificationToken: "verify-token"
   });
   const router = createDefaultRouter({ config, database });
-  return { database, handle: createRequestHandler(router, config.authToken) };
+  return { database, handle: createRequestHandler(router, config.authToken), root };
 }
 
 async function getExternalEvents(handle: (request: Request) => Promise<Response>, query = ""): Promise<Array<Record<string, unknown>>> {
@@ -151,6 +218,12 @@ async function getExternalEvent(handle: (request: Request) => Promise<Response>,
   return await response.json() as Record<string, unknown>;
 }
 
+async function getIssue(handle: (request: Request) => Promise<Response>, id: number): Promise<Record<string, unknown>> {
+  const response = await handle(new Request(`${BASE_URL}/api/issues/${id}`));
+  expect(response.status).toBe(200);
+  return await response.json() as Record<string, unknown>;
+}
+
 async function postFeishu(handle: (request: Request) => Promise<Response>, body: unknown): Promise<Response> {
   return handle(new Request(`${BASE_URL}/api/integrations/feishu/events`, {
     body: JSON.stringify(body),
@@ -159,20 +232,44 @@ async function postFeishu(handle: (request: Request) => Promise<Response>, body:
   }));
 }
 
+async function createIssueFromExternalEvent(handle: (request: Request) => Promise<Response>, id: number): Promise<Response> {
+  return handle(new Request(`${BASE_URL}/api/external-events/${id}/create-issue`, {
+    body: JSON.stringify({}),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  }));
+}
+
+async function insertProject(database: RunnerDatabase, root: string, id: string): Promise<void> {
+  const cwd = join(root, id);
+  await mkdir(cwd, { recursive: true });
+  database.sqlite.run("insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)", [
+    id,
+    id,
+    cwd,
+    "2026-06-12T08:00:00Z",
+    "2026-06-12T08:00:00Z"
+  ]);
+}
+
 function messageEvent(input: {
+  attachments?: Array<Record<string, unknown>>;
   mentions?: Array<Record<string, unknown>>;
   text?: string;
+  threadId?: string;
 } = {}): Record<string, unknown> {
   return {
     header: { event_id: "event-v2-1", event_type: "im.message.receive_v1", token: "verify-token" },
     event: {
       message: {
+        attachments: input.attachments ?? [],
         chat_id: "oc_group",
         chat_type: "group",
         content: JSON.stringify({ text: input.text ?? "@PI implement it" }),
         create_time: "1781244167890",
         mentions: input.mentions ?? [{ id: "ou_bot", name: "PI", tenant_key: "tenant_a" }],
-        message_id: "om_message_1"
+        message_id: "om_message_1",
+        parent_id: input.threadId ?? ""
       },
       sender: {
         sender_id: { open_id: "ou_open_1", user_id: "ou_user_1" },
