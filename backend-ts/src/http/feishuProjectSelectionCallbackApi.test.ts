@@ -60,11 +60,15 @@ describe("Feishu project selection callback endpoint", () => {
         turn_id: "turn-approval"
       });
 
-      const first = await postFeishu(handle, approvalCallback("approval-card-1", "approve_session", "session"));
+      const approveAction = approvalCallback("approval-card-1", "approve_session", "session");
+      const first = await postFeishu(handle, approveAction);
+      const replay = await postFeishu(handle, approveAction);
       const second = await postFeishu(handle, approvalCallback("approval-card-1", "deny", "turn"));
 
       expect(first.status).toBe(202);
       expect(await first.json()).toMatchObject({ ok: true, status: "approved" });
+      expect(replay.status).toBe(202);
+      expect(await replay.json()).toMatchObject({ ok: true, status: "approved" });
       expect(second.status).toBe(202);
       expect(await second.json()).toMatchObject({ ok: true, status: "approved" });
       expect(resolutions).toEqual([{ decision: "approve_session", id: "approval-card-1", scope: "session" }]);
@@ -77,11 +81,84 @@ describe("Feishu project selection callback endpoint", () => {
       database.close();
     }
   });
+
+  test("rejects approval card callbacks from unauthorized Feishu chats", async () => {
+    const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    const { database, handle } = await fixtureHandler(
+      bridgeFixture([]),
+      approvalProvider(resolutions),
+      { allowedChatIds: "oc_allowed" }
+    );
+    try {
+      upsertPiApprovalRequest(database, {
+        approval_id: "approval-card-denied-chat",
+        approval_source: "codex_provider_event",
+        issue_id: 392,
+        project_id: "demo",
+        provider: "codex",
+        provider_approval_id: "approval-card-denied-chat",
+        request_summary: "command=git status",
+        request_type: "command",
+        status: "delivered",
+        thread_id: "thread-approval",
+        turn_id: "turn-approval"
+      });
+
+      const response = await postFeishu(
+        handle,
+        approvalCallback("approval-card-denied-chat", "approve", "turn", { chatId: "oc_denied" })
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ message: "feishu approval callback is not allowed" });
+      expect(resolutions).toEqual([]);
+      expect(getPiApprovalRequest(database, "approval-card-denied-chat")).toMatchObject({
+        resolved_decision: "",
+        status: "delivered"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("records rejected PI approval card callbacks", async () => {
+    const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    const { database, handle } = await fixtureHandler(bridgeFixture([]), approvalProvider(resolutions));
+    try {
+      upsertPiApprovalRequest(database, {
+        approval_id: "approval-card-reject",
+        approval_source: "codex_provider_event",
+        issue_id: 392,
+        project_id: "demo",
+        provider: "codex",
+        provider_approval_id: "approval-card-reject",
+        request_summary: "command=rm -rf tmp",
+        request_type: "command",
+        status: "delivered",
+        thread_id: "thread-approval",
+        turn_id: "turn-approval"
+      });
+
+      const response = await postFeishu(handle, approvalCallback("approval-card-reject", "deny", "turn"));
+
+      expect(response.status).toBe(202);
+      expect(await response.json()).toMatchObject({ ok: true, status: "rejected" });
+      expect(resolutions).toEqual([{ decision: "deny", id: "approval-card-reject", scope: "turn" }]);
+      expect(getPiApprovalRequest(database, "approval-card-reject")).toMatchObject({
+        resolved_decision: "deny",
+        resolved_scope: "turn",
+        status: "rejected"
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 async function fixtureHandler(
   agentBridge: ReturnType<typeof createFeishuAgentBridge>,
-  provider?: ExecutorProvider
+  provider?: ExecutorProvider,
+  options: { allowedChatIds?: string; allowedUserIds?: string } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-card-callback-"));
   tempRoots.push(root);
@@ -89,6 +166,8 @@ async function fixtureHandler(
   const config = buildConfig({
     feishuAppId: "cli_app_id",
     feishuAppSecret: "app-secret-value",
+    feishuAllowedChatIds: options.allowedChatIds,
+    feishuAllowedUserIds: options.allowedUserIds,
     feishuVerificationToken: "verify-token"
   });
   const router = createDefaultRouter({
@@ -161,7 +240,12 @@ function projectSelectionCallback(): Record<string, unknown> {
   };
 }
 
-function approvalCallback(approvalID: string, decision: string, scope: string): Record<string, unknown> {
+function approvalCallback(
+  approvalID: string,
+  decision: string,
+  scope: string,
+  options: { chatId?: string; userId?: string; userOpenId?: string } = {}
+): Record<string, unknown> {
   return {
     header: {
       event_id: `event-${approvalID}-${decision}`,
@@ -175,6 +259,16 @@ function approvalCallback(approvalID: string, decision: string, scope: string): 
           approval_id: approvalID,
           decision,
           scope
+        }
+      },
+      context: {
+        open_chat_id: options.chatId ?? "oc_group",
+        open_message_id: `om_${approvalID}`
+      },
+      operator: {
+        operator_id: {
+          open_id: options.userOpenId ?? "ou_open_1",
+          user_id: options.userId ?? "ou_user_1"
         }
       }
     },

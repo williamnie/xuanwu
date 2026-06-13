@@ -20,13 +20,15 @@ export type ParsedApproval = {
   turnID: string;
 };
 
+const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
+
 export async function resolvePiApprovalRequestFromFeishu(
   db: RunnerDatabase,
   input: FeishuApprovalResolveInput
 ): Promise<{ ok: true; status: string }> {
   const request = getPiApprovalRequest(db, input.requestID);
   if (!request) throw new Error("pi approval request not found");
-  if (["approved", "rejected", "cancelled"].includes(request.status)) return { ok: true, status: request.status };
+  if (["approved", "rejected", "cancelled", "expired"].includes(request.status)) return { ok: true, status: request.status };
   const decision = normalizeApprovalDecision(input.decision);
   const scope = cleanScope(input.scope || request.resolved_scope);
   if (decision !== "defer") {
@@ -127,5 +129,5 @@ function parseObject(value: unknown): Record<string, unknown> {
 }
 
 function safeText(value: unknown): string {
-  return typeof value === "string" ? redactSensitiveText(value).trim() : "";
+  return typeof value === "string" ? redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]").trim() : "";
 }

@@ -7,9 +7,11 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
+import { upsertPiApprovalRequest } from "../db/repositories/pi.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
+import { buildFeishuConnectorConfig } from "./feishu.ts";
 import {
   attachFeishuNotificationObservers,
   getPiApprovalRequest,
@@ -52,6 +54,28 @@ describe("Feishu approval notification queue", () => {
     }
   });
 
+  test("keeps approval pending without an outbox notification when Feishu is not configured", async () => {
+    const db = await fixtureDatabase();
+    const bus = new EventBus();
+    const detach = attachFeishuNotificationObservers({ bus, database: db });
+    try {
+      const issueID = linkedFeishuIssue(db);
+      upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-disabled" });
+
+      bus.publish(approvalEvent("approval-disabled-1", "thread-disabled", "bun test"));
+
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+      expect(getPiApprovalRequest(db, "approval-disabled-1")).toMatchObject({
+        approval_id: "approval-disabled-1",
+        delivery_state: "pending",
+        status: "pending"
+      });
+    } finally {
+      detach();
+      db.close();
+    }
+  });
+
   test("records lifecycle, dispatches one IM notification, and resolves Codex from approval id", async () => {
     const db = await fixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
@@ -59,23 +83,31 @@ describe("Feishu approval notification queue", () => {
       const issueID = linkedFeishuIssue(db);
       upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-record" });
 
-      const first = queueFeishuApprovalNotification(db, approvalEvent("approval-record-1", "thread-record", "git status", "turn-record"));
+      const first = queueFeishuApprovalNotification(
+        db,
+        approvalEvent("approval-record-1", "thread-record", "cat CODEX_API_KEY=fixture-secret /Users/example/private.txt", "turn-record")
+      );
       const second = queueFeishuApprovalNotification(db, approvalEvent("approval-record-1", "thread-record", "git status"));
       const resolved = await resolvePiApprovalRequestFromFeishu(db, {
         decision: "approve_session",
-        provider: { resolveApproval: async (id, decision) => resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }) },
+        provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
         requestID: "approval-record-1",
         scope: "session"
       });
       const duplicate = await resolvePiApprovalRequestFromFeishu(db, {
         decision: "deny",
-        provider: { resolveApproval: async (id, decision) => resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }) },
-        requestID: "approval-record-1"
+        provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
+        requestID: "approval-record-1",
+        scope: "turn"
       });
+      const outbox = listSyncOutbox(db, { source: "feishu" });
       const requests = listPiApprovalRequests(db);
 
       expect(first).toMatchObject({ queued: true, reason: "queued" });
       expect(second).toMatchObject({ queued: false, reason: "duplicate" });
+      expect(outbox[0]?.content).toContain("[redacted-path]");
+      expect(outbox[0]?.content).not.toContain("fixture-secret");
+      expect(outbox[0]?.content).not.toContain("/Users/example");
       expect(requests).toHaveLength(1);
       expect(requests[0]).toMatchObject({
         approval_id: "approval-record-1",
@@ -99,10 +131,53 @@ describe("Feishu approval notification queue", () => {
     }
   });
 
+  test("returns expired approval callback status without resolving the provider", async () => {
+    const db = await fixtureDatabase();
+    const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    try {
+      upsertPiApprovalRequest(db, {
+        approval_id: "approval-expired-1",
+        approval_source: "codex_provider_event",
+        issue_id: 392,
+        project_id: "demo",
+        provider: "codex",
+        provider_approval_id: "approval-expired-1",
+        request_summary: "command=bun test",
+        request_type: "command",
+        status: "expired",
+        thread_id: "thread-expired"
+      });
+
+      const result = await resolvePiApprovalRequestFromFeishu(db, {
+        decision: "approve",
+        provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
+        requestID: "approval-expired-1",
+        scope: "turn"
+      });
+
+      expect(result).toEqual({ ok: true, status: "expired" });
+      expect(resolutions).toEqual([]);
+      expect(getPiApprovalRequest(db, "approval-expired-1")).toMatchObject({
+        resolved_decision: "",
+        status: "expired"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("observer queues approval notification and records resolved provider event", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
-    const detach = attachFeishuNotificationObservers({ bus, database: db });
+    const detach = attachFeishuNotificationObservers({
+      bus,
+      config: buildFeishuConnectorConfig({ appId: "cli_app_id", appSecret: "app-secret-value" }),
+      database: db,
+      sender: {
+        sendTextMessage: async () => ({ messageId: "om_sent_text" }),
+        sendInteractiveCard: async () => ({ messageId: "om_sent_card" })
+      }
+    });
     try {
       const issueID = linkedFeishuIssue(db);
       upsertAgentSession(db, { issue_id: issueID, project_id: "demo", provider: "codex", provider_session_id: "thread-observed" });

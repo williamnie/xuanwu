@@ -11,6 +11,7 @@ import {
 } from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
+import { feishuConnectorStatus } from "./feishu.ts";
 import { createFeishuMessageClient } from "./feishuClient.ts";
 import {
   approvalRecordInput,
@@ -47,7 +48,10 @@ export function attachFeishuNotificationObservers(input: {
         dispatchIfQueued(input, result);
       }
       if (event.type === "codex.event" && event.method === "approval/requested") {
-        const result = queueFeishuApprovalNotification(input.database, event);
+        const result = queueFeishuApprovalNotification(input.database, event, {
+          config: input.config,
+          requireConfigured: true
+        });
         dispatchIfQueued(input, result);
       }
       if (event.type === "codex.event" && event.method === "approval/resolved") {
@@ -87,14 +91,21 @@ export function queueFeishuIssueStatusNotification(db: RunnerDatabase, issueID: 
   return { queued: true, reason: "queued" };
 }
 
-export function queueFeishuApprovalNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+export function queueFeishuApprovalNotification(
+  db: RunnerDatabase,
+  event: AppEvent,
+  options: { config?: FeishuConnectorConfig; requireConfigured?: boolean } = {}
+): QueueResult {
   if (event.method !== "approval/requested") return { queued: false, reason: "not_approval_request" };
   const parsed = parseCodexApprovalPayload(event);
-  const approvalID = parsed.id || event.threadId || event.turnId;
+  const approvalID = parsed.id || safeText(event.threadId) || safeText(event.turnId);
   if (approvalID === "") return { queued: false, reason: "missing_approval_id" };
   const issue = issueForApproval(db, event);
   if (!issue) return { queued: false, reason: "missing_issue" };
   upsertPiApprovalRequest(db, approvalRecordInput(event, issue, parsed, approvalID));
+  if (options.requireConfigured && !feishuConfigured(options.config)) {
+    return { queued: false, reason: "feishu_not_configured" };
+  }
   const target = feishuTargetForIssue(db, issue.id);
   if (!target) return { queued: false, reason: "missing_feishu_link" };
   if (alreadyQueued(db, APPROVAL_NOTIFY_TYPE, approvalID)) return { queued: false, reason: "duplicate" };
@@ -106,6 +117,10 @@ export function queueFeishuApprovalNotification(db: RunnerDatabase, event: AppEv
   });
   markPiApprovalDelivered(db, approvalID, { channel: "feishu" });
   return { queued: true, reason: "queued" };
+}
+
+function feishuConfigured(config: FeishuConnectorConfig | undefined): boolean {
+  return config !== undefined && feishuConnectorStatus(config).enabled === true;
 }
 
 function createNotificationDraft(

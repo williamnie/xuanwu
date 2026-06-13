@@ -55,6 +55,9 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
   const approvalAction = normalizeFeishuApprovalAction(parsed.body);
   if (approvalAction) {
     if (!context.database) return json({ ok: false, reason: "database_unavailable" }, { status: 503 });
+    if (!approvalActionAllowed(context.config, approvalAction)) {
+      return reject(context, "approval_callback_forbidden", rawRef, 403, parsed.encrypted, "feishu approval callback is not allowed");
+    }
     try {
       const result = await resolvePiApprovalRequestFromFeishu(context.database, {
         ...approvalAction,
@@ -141,6 +144,22 @@ function isChallenge(body: Record<string, unknown>): boolean {
 function validToken(body: Record<string, unknown>, expected: string): boolean {
   const header = recordValue(body.header);
   return cleanString(body.token || header.token) === cleanString(expected);
+}
+
+function approvalActionAllowed(
+  config: FeishuConnectorConfig,
+  action: { chatID?: string; userID?: string; userOpenID?: string }
+): boolean {
+  const chatAllowed = targetAllowed(config.allowedChatIds, cleanString(action.chatID));
+  const userAllowed = targetAllowed(config.allowedUserIds, cleanString(action.userID)) ||
+    targetAllowed(config.allowedUserIds, cleanString(action.userOpenID));
+  if (!chatAllowed) return false;
+  if (!userAllowed) return false;
+  return true;
+}
+
+function targetAllowed(allowlist: string[], value: string): boolean {
+  return allowlist.length === 0 || (value !== "" && allowlist.includes(value));
 }
 
 function publishAudit(context: FeishuEventRoutesContext, payload: AuditPayload): void {
