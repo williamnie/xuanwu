@@ -9,12 +9,21 @@ import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agen
 import { createIssueEnqueueCron } from "../pi/runnerIssueScheduleActions.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
-import { startProjectLoop as defaultStartProjectLoop, type ProjectLoopRuntime } from "../runner/projectLoopManager.ts";
+import {
+  startProjectLoop as defaultStartProjectLoop,
+  type ProjectLoopRuntime,
+  type ProjectLoopStartOptions
+} from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
 import { dispatchSupervisorPiAction } from "./piSupervisorActionDispatch.ts";
+import { isRunnerChatSource } from "../pi/runnerChatAuthorization.ts";
 
-export type ProjectLoopStarter = (runtime: ProjectLoopRuntime, projectID: string) => void;
+export type ProjectLoopStarter = (
+  runtime: ProjectLoopRuntime,
+  projectID: string,
+  options?: ProjectLoopStartOptions
+) => void;
 
 export type PiActionDispatchContext = {
   bus?: Pick<EventBus, "publish">;
@@ -32,7 +41,7 @@ export async function dispatchPiAction(
     case "issue.create":
       return createIssue(context.database, payload);
     case "issue.enqueue":
-      return enqueueIssueAndStartAutoRun(context, positivePayloadID(payload, "issue_id"));
+      return enqueueIssueAndStartAutoRun(context, action, positivePayloadID(payload, "issue_id"));
     case "issue.schedule_enqueue":
       return createIssueEnqueueCron(context.database, payload);
     case "issue.comment":
@@ -70,9 +79,9 @@ function createWorkflowIssue(
   return issue;
 }
 
-function enqueueIssueAndStartAutoRun(context: PiActionDispatchContext, issueID: number): unknown {
+function enqueueIssueAndStartAutoRun(context: PiActionDispatchContext, action: PiAction, issueID: number): unknown {
   const issue = enqueueIssue(context.database, issueID);
-  startAutoRunProjectLoop(context, issue.project_id);
+  startEnqueuedProjectLoop(context, action, issue.project_id);
   return issue;
 }
 
@@ -134,12 +143,38 @@ function workflowSnapshot(payload: Record<string, unknown>): Record<string, unkn
 }
 
 function startAutoRunProjectLoop(context: PiActionDispatchContext, projectID: string): void {
+  startProjectLoopWhenAllowed(context, projectID);
+}
+
+function startEnqueuedProjectLoop(
+  context: PiActionDispatchContext,
+  action: PiAction,
+  projectID: string
+): void {
+  const options = runnerChatAction(action) ? { forceOnce: true } : undefined;
+  startProjectLoopWhenAllowed(context, projectID, options);
+}
+
+function startProjectLoopWhenAllowed(
+  context: PiActionDispatchContext,
+  projectID: string,
+  options?: ProjectLoopStartOptions
+): void {
   const project = getProject(context.database, projectID);
   const providerID = project?.provider ?? "";
-  if (!project || project.auto_run !== 1 || !isExecutorProviderId(providerID)) return;
+  if (!project || !isExecutorProviderId(providerID)) return;
   if (!context.providers?.[providerID]?.capabilities.includes("issue_execution")) return;
+  if (!shouldStartProjectLoop(project, options)) return;
   const starter = context.startProjectLoop ?? defaultStartProjectLoop;
-  starter({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
+  starter({ bus: context.bus, database: context.database, providers: context.providers }, project.id, options);
+}
+
+function shouldStartProjectLoop(project: Project, options?: ProjectLoopStartOptions): boolean {
+  return options?.forceOnce === true || project.auto_run === 1;
+}
+
+function runnerChatAction(action: PiAction): boolean {
+  return isRunnerChatSource(action.source) || action.conversation_id.startsWith("feishu-");
 }
 
 function parsePayload(action: PiAction): Record<string, unknown> {

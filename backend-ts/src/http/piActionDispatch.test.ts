@@ -56,6 +56,38 @@ describe("PI action dispatcher supervisor actions", () => {
       db.close();
     }
   });
+
+  test("issue.enqueue can force kick the project loop for Runner Chat dispatch", async () => {
+    const db = await fixtureDb();
+    const provider = new SupervisorProvider();
+    const kickedProjects: string[] = [];
+    try {
+      insertProject(db, "manual-demo", { autoRun: 0, provider: provider.id });
+      insertIssue(db, { issueID: 386, projectID: "manual-demo", status: "triage" });
+      const action = createPiAction(db, {
+        action_type: "issue.enqueue",
+        id: "enqueue-runner-chat-action",
+        issue_id: 386,
+        payload_json: JSON.stringify({ issue_id: 386 }),
+        project_id: "manual-demo",
+        source: "runner_chat",
+        status: "approved"
+      });
+
+      await dispatchPiAction({
+        database: db,
+        providers: { codex: provider },
+        startProjectLoop: (_runtime, projectID) => kickedProjects.push(projectID)
+      }, action);
+
+      expect(getIssue(db, 386)).toMatchObject({ status: "todo" });
+      expect(kickedProjects).toEqual(["manual-demo"]);
+      expect(provider.inputs).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("session.resume_followup sends a new session message and updates turn refs", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();

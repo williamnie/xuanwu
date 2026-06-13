@@ -113,6 +113,34 @@ describe("PI runner action gate", () => {
     }
   });
 
+  test("Runner Chat source scopes enqueue from explicit issue id without a conversation project", async () => {
+    const fixture = await openFixture();
+    const kicked: string[] = [];
+    try {
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Start by id" });
+      const actions = createPiRunnerActions(fixture.db, {
+        onIssueEnqueued: (projectID: string) => kicked.push(projectID),
+        source: "feishu_runner_chat"
+      });
+
+      const result = actions.enqueueIssueProposal({ issue_id: issueID, rationale: "开始明确 issue" }) as {
+        action_id: string; decision: string; status: string;
+      };
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+        action_type: "issue.enqueue",
+        gate_decision: "execute",
+        project_id: fixture.project.id,
+        status: "completed"
+      });
+      expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
+      expect(kicked).toEqual([fixture.project.id]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("delegated authorization does not auto-execute covered high-risk proposals", async () => {
     const fixture = await openFixture();
     try {

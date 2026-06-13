@@ -26,6 +26,7 @@ import {
   renderIssueCreateProposalDescription,
   type IssueProposalContextFields
 } from "./issueProposalContext.ts";
+import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -105,7 +106,8 @@ export function createPiRunnerActions(
     }),
     createIssueProposal: (input) => {
       const proposal = issueCreateProposal(input, context);
-      return createPendingPiAction(db, context, proposal, () => createIssue(db, proposal.payload));
+      const actionContext = actionContextForProposal(context, proposal);
+      return createPendingPiAction(db, actionContext, proposal, () => createIssue(db, proposal.payload));
     },
     createIssueStateRepairProposal: (input) => createIssueStateRepairProposal(db, context, input),
     diagnoseIssueState: (input) => safeIssueStateDiagnosis(db, context, input),
@@ -119,7 +121,8 @@ export function createPiRunnerActions(
         projectID: issueProjectID(db, input.issue_id, context),
         rationale: input.rationale
       };
-      return createPendingPiAction(db, context, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
+      const actionContext = actionContextForProposal(context, proposal);
+      return createPendingPiAction(db, actionContext, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
     },
     scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
     issueExecutionStatus: (input) => safeIssueExecutionStatus(db, context, input),
@@ -138,6 +141,16 @@ export function createPiRunnerActions(
     readIssue: (input) => safeReadIssue(db, context, input),
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
+}
+
+function actionContextForProposal(
+  context: PiRunnerActionContext,
+  proposal: ProposalInput
+): PiRunnerActionContext {
+  return scopedRunnerChatActionContext(context, proposal.actionType, {
+    issueID: proposal.issueID,
+    projectID: proposal.projectID ?? ""
+  });
 }
 
 function enqueueIssueAndNotify(db: RunnerDatabase, context: PiRunnerActionContext, issueID: number) {

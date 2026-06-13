@@ -6,8 +6,10 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssues } from "../db/repositories/issues.ts";
+import { listPiActions } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
+import { runPiConversationPrompt } from "./piConversationApi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -172,6 +174,56 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
+  test("Feishu issue-id prompt rebinds a global conversation and executes enqueue", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-issue-run-api", provider: "pi-feishu-issue-run" });
+    const provider = new FakeExecutorProvider();
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_enqueue_proposal", {
+            issue_id: 386,
+            rationale: "Feishu asked to start this explicit issue"
+          }, { id: "issue-enqueue-386" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("已开始 #386。")
+      ]);
+      insertProject(database, "demo");
+      insertIssue(database, { id: 386, projectID: "demo", title: "Explicit Feishu issue" });
+      insertFauxAgent(database, "pi-feishu-issue-run");
+      writeFauxModelsConfig(database, "pi-feishu-issue-run");
+      await request(createDefaultRouter({ database }), "/api/pi/conversations", {
+        id: "feishu-global-before-issue", pi_agent_id: "pi-faux", title: "Feishu"
+      });
+
+      const result = await runPiConversationPrompt({ database, providers: { codex: provider } }, {
+        conversationId: "feishu-global-before-issue",
+        projectId: "demo",
+        prompt: "开始 #386",
+        title: "Feishu"
+      });
+      await until(() => provider.calls.length > 0);
+
+      const actions = listPiActions(database);
+      expect(result).toMatchObject({ conversation_id: "feishu-global-before-issue", text: "已开始 #386。" });
+      expect(actions.filter((action) => action.status === "pending")).toEqual([]);
+      expect(actions).toMatchObject([{
+        action_type: "issue.enqueue",
+        gate_decision: "execute",
+        issue_id: 386,
+        project_id: "demo",
+        status: "completed"
+      }]);
+      expect(listIssues(database, { projectId: "demo" })).toMatchObject([
+        { id: 386, project_id: "demo", status: "in_progress" }
+      ]);
+      expect(provider.calls).toMatchObject([{ issueId: 386, projectId: "demo" }]);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
   test("reads persisted PI conversation transcript for history switching", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -328,6 +380,18 @@ function insertProject(db: RunnerDatabase, id: string, options: { autoRun?: numb
      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}',
       options.autoRun ?? 0, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertIssue(
+  db: RunnerDatabase,
+  input: { id: number; projectID: string; status?: string; title?: string }
+): void {
+  db.sqlite.run(
+    `insert into issues (id, project_id, title, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [input.id, input.projectID, input.title ?? "Issue", input.status ?? "triage",
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

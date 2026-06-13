@@ -168,12 +168,17 @@ export async function runPiConversationPrompt(
   input: PiConversationPromptInput
 ) {
   const id = cleanString(input.conversationId) || crypto.randomUUID();
-  if (!getPiConversation(context.database, id)) {
+  const projectID = cleanString(input.projectId);
+  const existing = getPiConversation(context.database, id);
+  if (!existing) {
     await createConversationWithRuntime(context, {
       id,
-      project_id: cleanString(input.projectId),
+      project_id: projectID,
       title: cleanString(input.title) || "Feishu"
     });
+  } else if (projectID !== "" && existing.project_id !== projectID) {
+    optionalConversationProject(context.database, projectID);
+    updatePiConversation(context.database, existing.id, { project_id: projectID });
   }
   return sendPiConversationMessage(context, id, { prompt: input.prompt });
 }
@@ -268,7 +273,8 @@ async function openConversationRuntime(context: PiConversationContext, conversat
       providers: context.providers
     }, projectID, { forceOnce: true }),
     project,
-    sessionFile: conversation.session_file
+    sessionFile: conversation.session_file,
+    source: runnerChatSource(conversation)
   });
 }
 
@@ -287,6 +293,10 @@ function runnerChatAuthorizedActions(projectID: string) {
     ...PI_RUNNER_CHAT_ACTIONS.map((action_type) => ({ action_type })),
     ...PI_RUNNER_CHAT_MUTATION_ACTIONS.map((action_type) => ({ action_type, project_id: projectID }))
   ];
+}
+
+function runnerChatSource(conversation: PiConversation): string | undefined {
+  return conversation.id.startsWith("feishu-") ? "feishu_runner_chat" : undefined;
 }
 
 function optionalConversationProject(db: RunnerDatabase, id: string): Project | undefined {

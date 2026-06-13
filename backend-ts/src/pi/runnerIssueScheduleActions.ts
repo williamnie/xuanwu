@@ -4,6 +4,7 @@ import type { CronTask } from "../db/repositories/cronTasks.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
+import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 
 export type IssueScheduleEnqueueInput = {
   issue_id: number;
@@ -22,7 +23,11 @@ export function createIssueScheduleEnqueueAction(
 ): unknown {
   const issue = mustGetIssue(db, input.issue_id);
   const payload = schedulePayload(issue, input);
-  return createPendingPiAction(db, context, {
+  const actionContext = scopedRunnerChatActionContext(context, "issue.schedule_enqueue", {
+    issueID: issue.id,
+    projectID: issue.project_id
+  });
+  return createPendingPiAction(db, actionContext, {
     actionType: "issue.schedule_enqueue",
     issueID: issue.id,
     payload,
