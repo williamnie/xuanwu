@@ -91,7 +91,8 @@ describe("Feishu events endpoint", () => {
           text: event.text
         });
         return { reason: "agent_reply_sent", replied: true };
-      }
+      },
+      handleProjectSelectionAction: async () => ({ reason: "unused", replied: false })
     };
     const { database, handle } = await fixtureHandler({
       agentBridge: bridge,
@@ -267,11 +268,7 @@ function signedHeaders(rawBody: string): Headers {
 
 function messageEvent(input: { token: string }): Record<string, unknown> {
   return {
-    header: {
-      event_id: "event-v2-1",
-      event_type: "im.message.receive_v1",
-      token: input.token
-    },
+    header: { event_id: "event-v2-1", event_type: "im.message.receive_v1", token: input.token },
     event: {
       message: {
         chat_id: "oc_group",
@@ -280,22 +277,14 @@ function messageEvent(input: { token: string }): Record<string, unknown> {
         create_time: "1781244167890",
         message_id: "om_message_1"
       },
-      sender: {
-        sender_id: { open_id: "ou_open_1", user_id: "ou_user_1" },
-        sender_type: "user",
-        tenant_key: "tenant_a"
-      }
+      sender: { sender_id: { open_id: "ou_open_1", user_id: "ou_user_1" }, sender_type: "user", tenant_key: "tenant_a" }
     },
     schema: "2.0"
   };
 }
 
 function encryptedChallengePayload(): string {
-  return encryptFeishuPayload(JSON.stringify({
-    challenge: "encrypted-challenge",
-    token: "verify-token",
-    type: "url_verification"
-  }));
+  return encryptFeishuPayload(JSON.stringify({ challenge: "encrypted-challenge", token: "verify-token", type: "url_verification" }));
 }
 
 function encryptedMessagePayload(): string {

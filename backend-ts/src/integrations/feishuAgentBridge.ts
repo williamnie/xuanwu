@@ -14,6 +14,11 @@ import {
   type FeishuConversationClock,
   type FeishuConversationRoute
 } from "./feishuConversationRouting.ts";
+import {
+  handleFeishuProjectSelectionAction,
+  maybeSendFeishuProjectSelection,
+  type FeishuProjectSelectionAction
+} from "./feishuProjectSelectionBridge.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
@@ -45,7 +50,9 @@ const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交�
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   return {
-    handle: (input: FeishuBridgeHandleInput) => handleFeishuAgentMessage(options, input)
+    handle: (input: FeishuBridgeHandleInput) => handleFeishuAgentMessage(options, input),
+    handleProjectSelectionAction: (action: FeishuProjectSelectionAction) =>
+      handleFeishuProjectSelectionAction(options, action)
   };
 }
 
@@ -68,6 +75,21 @@ async function handleFeishuAgentMessage(
     projectId: projectSwitch.projectId,
     text: projectSwitch.text
   }, projectSwitch.reason);
+  const selection = await maybeSendFeishuProjectSelection(
+    options,
+    input,
+    route,
+    projectContext,
+    attentionDecision(input.ingest)
+  );
+  if (selection) {
+    recordReplyLink(options.database, input, {
+      conversationId: route.conversationId,
+      projectId: "",
+      text: "project selection requested"
+    }, { messageId: selection.messageId });
+    return { reason: selection.reason, replied: selection.replied };
+  }
   const direct = directReply(input, options, projectContext);
   if (direct) return sendReply(options, input, direct.text, {
     conversationId: route.conversationId,

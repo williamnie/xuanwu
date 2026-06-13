@@ -10,6 +10,7 @@ import type { EventBus } from "../events/bus.ts";
 import { cleanString, recordValue } from "../integrations/feishuShared.ts";
 import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "../integrations/feishuIngest.ts";
 import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
+import { normalizeFeishuProjectSelectionAction } from "../integrations/feishuProjectSelection.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -46,6 +47,11 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
   if (signature) return reject(context, signature.reason, rawRef, 401, parsed.encrypted);
   if (!validToken(parsed.body, context.config.verificationToken)) {
     return reject(context, "invalid_verification_token", rawRef, 401, parsed.encrypted);
+  }
+  const action = normalizeFeishuProjectSelectionAction(parsed.body);
+  if (action) {
+    void context.agentBridge?.handleProjectSelectionAction(action).catch(() => undefined);
+    return json({ ok: true }, { status: 202 });
   }
   return acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);
 }

@@ -27,7 +27,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "022_external_links",
   "023_im_reply_outbox",
   "024_im_reply_outbox_dispatch",
-  "025_feishu_conversation_state"
+  "025_feishu_conversation_state",
+  "026_feishu_project_selection"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

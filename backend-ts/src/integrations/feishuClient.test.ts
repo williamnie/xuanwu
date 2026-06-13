@@ -30,6 +30,35 @@ describe("Feishu message client", () => {
     expect(JSON.parse(calls[1].body)).toMatchObject({ receive_id: "oc_group", msg_type: "text" });
   });
 
+  test("sends interactive card payloads with Feishu interactive message type", async () => {
+    const calls: Array<{ body: string; url: string }> = [];
+    const client = createFeishuMessageClient({
+      config: config(),
+      fetch: async (input, init) => {
+        calls.push({ body: String(init?.body ?? ""), url: String(input) });
+        if (String(input).includes("tenant_access_token")) {
+          return jsonResponse({ code: 0, expire: 7200, tenant_access_token: "tenant-token-1" });
+        }
+        return jsonResponse({ code: 0, data: { message_id: "om_card_1" } });
+      }
+    });
+
+    const result = await client.sendInteractiveCard?.({
+      card: { header: { title: { content: "请选择 Runner 项目", tag: "plain_text" } } },
+      receiveId: "oc_group",
+      receiveIdType: "chat_id"
+    });
+
+    expect(result).toEqual({ messageId: "om_card_1" });
+    expect(JSON.parse(calls[1].body)).toMatchObject({
+      msg_type: "interactive",
+      receive_id: "oc_group"
+    });
+    expect(JSON.parse(JSON.parse(calls[1].body).content)).toMatchObject({
+      header: { title: { content: "请选择 Runner 项目" } }
+    });
+  });
+
   test("classifies permission failures without leaking app secret", async () => {
     const client = createFeishuMessageClient({
       config: config(),

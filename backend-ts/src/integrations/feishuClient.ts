@@ -3,8 +3,12 @@ import { redactSensitiveText } from "../util/redact.ts";
 
 export type FeishuReceiveIdType = "chat_id" | "email" | "open_id" | "union_id" | "user_id";
 export type FeishuTextMessageInput = { receiveId: string; receiveIdType: FeishuReceiveIdType | string; text: string };
+export type FeishuInteractiveCardInput = { card: Record<string, unknown>; receiveId: string; receiveIdType: FeishuReceiveIdType | string };
 export type FeishuTextMessageResult = { messageId: string };
-export type FeishuMessageClient = { sendTextMessage(input: FeishuTextMessageInput): Promise<FeishuTextMessageResult> };
+export type FeishuMessageClient = {
+  sendInteractiveCard?(input: FeishuInteractiveCardInput): Promise<FeishuTextMessageResult>;
+  sendTextMessage(input: FeishuTextMessageInput): Promise<FeishuTextMessageResult>;
+};
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 type ClientOptions = { baseUrl?: string; config: FeishuConnectorConfig; fetch?: FetchLike; now?: () => Date };
@@ -46,13 +50,25 @@ class DefaultFeishuMessageClient implements FeishuMessageClient {
   }
 
   async sendTextMessage(input: FeishuTextMessageInput): Promise<FeishuTextMessageResult> {
+    const text = requireText(input.text, "text");
+    return this.sendMessage(input, "text", JSON.stringify({ text }));
+  }
+
+  async sendInteractiveCard(input: FeishuInteractiveCardInput): Promise<FeishuTextMessageResult> {
+    return this.sendMessage(input, "interactive", JSON.stringify(input.card));
+  }
+
+  private async sendMessage(
+    input: { receiveId: string; receiveIdType: FeishuReceiveIdType | string },
+    messageType: string,
+    content: string
+  ): Promise<FeishuTextMessageResult> {
     const receiveId = requireText(input.receiveId, "receiveId");
     const receiveIdType = requireText(input.receiveIdType, "receiveIdType");
-    const text = requireText(input.text, "text");
     const token = await this.tenantAccessToken();
     const response = await this.postJson(`/open-apis/im/v1/messages?receive_id_type=${encodeURIComponent(receiveIdType)}`, {
-      content: JSON.stringify({ text }),
-      msg_type: "text",
+      content,
+      msg_type: messageType,
       receive_id: receiveId
     }, { Authorization: `Bearer ${token}` });
     const messageId = cleanString(objectBody(response.body).message_id ?? objectBody(response.body.data).message_id);
