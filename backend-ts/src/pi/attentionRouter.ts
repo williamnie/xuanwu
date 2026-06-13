@@ -59,6 +59,14 @@ const REQUEST_KEYWORDS = [
   { signal: "log_keyword", value: "log" }
 ] as const;
 const BOT_MENTION_PATTERN = /(?:^|@|\s)(?:pi|bot|机器人)(?:\b|\s|$)/i;
+const NON_TASK_QUESTIONS = [
+  /能\s*帮\s*我\s*做\s*什么/,
+  /可以\s*帮\s*我\s*做\s*什么/,
+  /能\s*做\s*什么/,
+  /可以\s*做\s*什么/,
+  /你\s*是谁/,
+  /怎么\s*用/
+] as const;
 
 export function decidePiAttention(input: PiAttentionInput): PiAttentionDecision {
   const message = normalizeMessage(input.message);
@@ -131,6 +139,7 @@ function attentionSignals(message: Required<PiAttentionMessage>, policy: PiAtten
 function taskSignals(message: Required<PiAttentionMessage>): SignalMatch {
   const matches: SignalMatch = { evidence: [], signals: [] };
   const text = lower(message.text);
+  if (isConversationalQuestion(text)) return matches;
   for (const keyword of REQUEST_KEYWORDS) {
     if (text.includes(lower(keyword.value))) {
       addSignal(matches, keyword.signal, "keyword", keyword.signal, keyword.value);
@@ -140,6 +149,10 @@ function taskSignals(message: Required<PiAttentionMessage>): SignalMatch {
     addSignal(matches, "attachment_signal", "keyword", "attachment_metadata", String(message.attachments.length));
   }
   return matches;
+}
+
+function isConversationalQuestion(text: string): boolean {
+  return NON_TASK_QUESTIONS.some((pattern) => pattern.test(text));
 }
 
 function resolveProject(

@@ -16,6 +16,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
+    "Feishu/IM normal chat: reply naturally, briefly, and in the same language as the user. Do not ask for a project mapping or create an issue for greetings, capability questions, how-to-use questions, or other non-task chat. Use the issue workflow only when the user gives a concrete task, asks to run/schedule/inspect a project, or names an issue/project.",
     "Runner Chat workflow: create requested issues directly. Feishu/IM task messages should create the issue and call issue_enqueue_proposal by default so the executor session starts. Only wait when the user explicitly says not to run, to just record it, or to schedule later. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
     repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,

@@ -8,4 +8,12 @@ describe("server entrypoint wiring", () => {
 
     expect(source).toContain("runPiConversationPrompt({ bus, database, providers }");
   });
+  test("uses a stable Feishu chat/thread conversation id instead of per-message ids", () => {
+    const source = readFileSync(join(import.meta.dir, "main.ts"), "utf8");
+
+    expect(source).toContain("conversationId: feishuConversationID(event)");
+    expect(source).not.toContain("conversationId: feishuConversationID(event.message_id)");
+    expect(source).toContain("event.thread_id || event.root_id || event.chat_id || event.message_id");
+  });
+
 });

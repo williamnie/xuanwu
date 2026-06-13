@@ -29,6 +29,26 @@ describe("PI runtime prompt", () => {
     }
   });
 
+  test("tells PI to answer Feishu chat naturally without forcing issue workflow", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      const prompt = buildPiRuntimeSystemPrompt({
+        agent: agentRecord(),
+        conversationID: "feishu-oc_group",
+        project: undefined
+      }, db);
+
+      expect(prompt).toContain("Feishu/IM normal chat");
+      expect(prompt).toContain("reply naturally");
+      expect(prompt).toContain("Do not ask for a project mapping");
+      expect(prompt).toContain("same language as the user");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("tells PI to start IM-created issues by default unless the user asks to wait", async () => {
     const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
     const db = await openDatabase({ stateDir: join(root, "state") });

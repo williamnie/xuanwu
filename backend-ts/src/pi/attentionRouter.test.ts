@@ -98,6 +98,24 @@ describe("PI attention router v0", () => {
     expect(decision.signals).toContain("allowed_user");
   });
 
+  test("keeps trusted capability questions as conversational chat instead of requiring a project", () => {
+    const decision = decidePiAttention({
+      message: { ...MESSAGE, mentions: [], text: "你能帮我做什么" },
+      policy: { allowedChatIds: ["oc_group"], allowedUserIds: ["ou_open_1"] },
+      projects: [{ id: "demo", name: "Demo" }]
+    });
+
+    expect(decision).toMatchObject({
+      decision: "inbox_only",
+      needs_project: false,
+      project_id: "",
+      reason: "trusted_source_without_task_signal",
+      should_create_issue_proposal: false
+    });
+    expect(decision.signals).toEqual(expect.arrayContaining(["allowed_chat", "allowed_user"]));
+    expect(decision.signals).not.toContain("request_keyword");
+  });
+
   test("asks clarification and marks needs_project when the project cannot be resolved", () => {
     const decision = decidePiAttention({
       message: { ...MESSAGE, text: "@PI 帮我修复这个 bug" },

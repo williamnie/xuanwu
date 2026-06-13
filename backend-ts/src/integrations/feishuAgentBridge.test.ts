@@ -92,6 +92,43 @@ describe("Feishu agent bridge", () => {
     database.close();
   });
 
+  test("routes trusted capability questions to PI conversation even when no project is mapped", async () => {
+    const database = await openFixtureDatabase();
+    const sent: FeishuTextMessageInput[] = [];
+    const calls: Array<{ prompt: string; projectId: string }> = [];
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("你能帮我做什么", "om_agent_capability_question");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async ({ prompt, projectId }) => {
+        calls.push({ prompt, projectId });
+        return { text: "我可以直接聊天，也可以帮你把明确任务建成 issue 并跟进执行。" };
+      },
+      sender: { sendTextMessage: async (input) => {
+        sent.push(input);
+        return { messageId: "om_reply_capability_question" };
+      } }
+    });
+
+    const result = await bridge.handle({ event, ingest });
+
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(calls).toEqual([{ prompt: "你能帮我做什么", projectId: "" }]);
+    expect(sent).toEqual([{
+      receiveId: "oc_group",
+      receiveIdType: "chat_id",
+      text: "我可以直接聊天，也可以帮你把明确任务建成 issue 并跟进执行。"
+    }]);
+    database.close();
+  });
+
   test("asks for project mapping instead of starting Runner agent for task messages without a project", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
