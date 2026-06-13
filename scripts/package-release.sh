@@ -50,6 +50,28 @@ run_step() {
   fi
 }
 
+copy_if_exists() {
+  local source="$1" target="$2"
+  [ -e "$source" ] || return 0
+  rm -rf "$target"
+  cp -R "$source" "$target"
+}
+
+stage_pi_package_assets() {
+  local pkg_dir="$1" source="$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent"
+  [ -f "$source/package.json" ] || fail "missing PI package assets: $source/package.json"
+  mkdir -p "$pkg_dir/pi-coding-agent"
+  cp "$source/package.json" "$pkg_dir/pi-coding-agent/package.json"
+  copy_if_exists "$source/README.md" "$pkg_dir/pi-coding-agent/README.md"
+  copy_if_exists "$source/CHANGELOG.md" "$pkg_dir/pi-coding-agent/CHANGELOG.md"
+  copy_if_exists "$source/docs" "$pkg_dir/pi-coding-agent/docs"
+  copy_if_exists "$source/examples" "$pkg_dir/pi-coding-agent/examples"
+  copy_if_exists "$source/dist/modes/interactive/theme" "$pkg_dir/pi-coding-agent/theme"
+  copy_if_exists "$source/dist/modes/interactive/assets" "$pkg_dir/pi-coding-agent/assets"
+  copy_if_exists "$source/dist/core/export-html" "$pkg_dir/pi-coding-agent/export-html"
+  copy_if_exists "$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm" "$pkg_dir/photon_rs_bg.wasm"
+}
+
 install_deps() {
   if [ ! -d "$ROOT_DIR/backend-ts/node_modules" ]; then
     run_step "backend bun install" bun install --cwd "$ROOT_DIR/backend-ts"
@@ -99,6 +121,7 @@ package_target() {
   cp -R "$ROOT_DIR/frontend/dist" "$pkg_dir/web"
   cp "$ROOT_DIR/README.md" "$pkg_dir/README.md"
   cp "$ROOT_DIR/scripts/install-release.sh" "$pkg_dir/install-release.sh"
+  stage_pi_package_assets "$pkg_dir"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
 }
 

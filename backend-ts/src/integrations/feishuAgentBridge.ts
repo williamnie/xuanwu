@@ -25,9 +25,12 @@ type FeishuAgentBridgeOptions = {
   runConversation?: FeishuConversationRunner;
   sender?: FeishuMessageClient;
 };
+type DirectReply = { reason: string; text: string };
 
 const REPLY_LINK_TYPE = "feishu_agent_reply";
 const REPLY_RELATIONSHIP = "agent_reply";
+const CHAT_ACK_TEXT = "我在，已经收到。需要我处理具体任务时，直接说明要做什么；如果要绑定默认项目，可以在飞书设置里配置 Project Mappings。";
+const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请在设置页添加 Project Mappings，或在消息里带上项目名后再发。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   return {
@@ -42,16 +45,31 @@ async function handleFeishuAgentMessage(
   const policy = replyPolicy(input);
   if (policy) return { reason: policy, replied: false };
   if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
+  const direct = directReply(input);
+  if (direct) return sendReply(options, input, direct.text, {
+    conversationId: fallbackConversationID(input.event),
+    text: direct.text
+  }, direct.reason);
   const runner = await runnerReply(options, input);
   const text = cleanString(runner.text);
   if (text === "") return { reason: "empty_agent_reply", replied: false };
+  return sendReply(options, input, text, runner, "agent_reply_sent");
+}
+
+async function sendReply(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput,
+  text: string,
+  runner: FeishuRunnerResult,
+  reason: string
+): Promise<FeishuBridgeHandleResult> {
   const sent = await messageSender(options).sendTextMessage({
     receiveId: input.event.chat_id,
     receiveIdType: "chat_id",
     text
   });
   recordReplyLink(options.database, input, runner, sent);
-  return { reason: "agent_reply_sent", replied: true };
+  return { reason, replied: true };
 }
 
 async function runnerReply(
@@ -83,6 +101,15 @@ function replyPolicy(input: FeishuBridgeHandleInput): string {
   if (decision === "ignore") return "ignored_by_attention";
   if (decision === "blocked_by_policy") return "blocked_by_policy";
   return "";
+}
+
+function directReply(input: FeishuBridgeHandleInput): DirectReply | null {
+  const decision = attentionDecision(input.ingest);
+  if (decision === "inbox_only") return { reason: "chat_ack_sent", text: CHAT_ACK_TEXT };
+  if (decision === "ask_clarification") {
+    return { reason: "project_clarification_sent", text: PROJECT_CLARIFICATION_TEXT };
+  }
+  return null;
 }
 
 function attentionDecision(input: FeishuIngestResult): string {
@@ -133,7 +160,8 @@ function fallbackConversationID(event: FeishuNormalizedMessageEvent): string {
 }
 
 function safeError(error: unknown): string {
-  return redactSensitiveText(error instanceof Error ? error.message : String(error));
+  return redactSensitiveText(error instanceof Error ? error.message : String(error))
+    .replace(/(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g, "[redacted-path]");
 }
 
 function cleanString(value: unknown): string {

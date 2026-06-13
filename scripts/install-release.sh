@@ -116,6 +116,13 @@ download_binary() {
     mkdir -p "$STATE_DIR"
     cp -R "$tmp/web" "$STATE_DIR/web"
   fi
+  if [ -d "$tmp/pi-coding-agent" ]; then
+    rm -rf "$STATE_DIR/pi-coding-agent"
+    cp -R "$tmp/pi-coding-agent" "$STATE_DIR/pi-coding-agent"
+  fi
+  if [ -f "$tmp/photon_rs_bg.wasm" ]; then
+    cp "$tmp/photon_rs_bg.wasm" "$INSTALL_DIR/photon_rs_bg.wasm"
+  fi
   rm -rf "$tmp"
   log "installed binary: $BIN_PATH"
 }
@@ -162,6 +169,8 @@ $(auth_token_file_macos_args)
     <string>$(xml_escape "$HOME")</string>
     <key>PATH</key>
     <string>$(xml_escape "$PATH_VALUE")</string>
+    <key>PI_PACKAGE_DIR</key>
+    <string>$(xml_escape "$STATE_DIR/pi-coding-agent")</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
@@ -233,6 +242,7 @@ Type=simple
 WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
+Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
 ExecStart=$BIN_PATH serve --addr $ADDR --state-dir $STATE_DIR --db $DB_PATH --web-dir $STATE_DIR/web --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2

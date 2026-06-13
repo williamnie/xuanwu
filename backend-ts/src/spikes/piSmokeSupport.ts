@@ -1,7 +1,7 @@
 import { type AgentSession, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 export const READ_ONLY_TOOLS = ["read", "grep", "find", "ls"] as const;
 const DISABLED_WRITE_TOOLS = ["edit", "write", "bash"] as const;
@@ -9,6 +9,7 @@ const RESPONSE_PREVIEW_SUFFIX = "...";
 const TOOL_RESULT_PREVIEW_MAX = 100;
 const SMOKE_RESPONSE = "pi-smoke-response-ok";
 const PI_PACKAGE_DIR_ENV = "PI_PACKAGE_DIR";
+const PI_PACKAGE_ASSET_DIR = "pi-coding-agent";
 const PI_PACKAGE_RELATIVE_DIR = join("backend-ts", "node_modules", "@earendil-works", "pi-coding-agent");
 
 type SmokeRuntimeConfig = {
@@ -267,18 +268,28 @@ function isCompiledBunExecutable(): boolean {
 function ensurePiPackageDir(repoRoot: string): void {
   if (process.env[PI_PACKAGE_DIR_ENV]) return;
 
+  const packageDir = resolvePiPackageAssetDir(repoRoot);
+  if (packageDir !== "") process.env[PI_PACKAGE_DIR_ENV] = packageDir;
+}
+
+export function resolvePiPackageAssetDir(
+  repoRoot: string,
+  options: { cwd?: string; execPath?: string } = {}
+): string {
+  const execDir = dirname(options.execPath ?? process.execPath);
   const candidates = [
+    join(execDir, PI_PACKAGE_ASSET_DIR),
+    join(dirname(execDir), PI_PACKAGE_ASSET_DIR),
     join(repoRoot, PI_PACKAGE_RELATIVE_DIR),
-    join(process.cwd(), "node_modules", "@earendil-works", "pi-coding-agent")
+    join(options.cwd ?? process.cwd(), "node_modules", "@earendil-works", "pi-coding-agent")
   ];
-  for (const candidate of candidates) {
-    if (existsSync(join(candidate, "package.json"))) {
-      process.env[PI_PACKAGE_DIR_ENV] = candidate;
-      return;
-    }
-  }
+  return candidates.find(hasPackageRoot) ?? "";
 }
 
 function hasPiPackage(path: string): boolean {
   return path.trim() !== "" && existsSync(join(path, PI_PACKAGE_RELATIVE_DIR, "package.json"));
+}
+
+function hasPackageRoot(path: string): boolean {
+  return path.trim() !== "" && existsSync(join(path, "package.json"));
 }

@@ -13,6 +13,9 @@ SOURCE_WEB_DIR="${CODEX_RUNNER_SOURCE_WEB_DIR:-$ROOT_DIR/frontend/dist}"
 WEB_DIR="${CODEX_RUNNER_WEB_DIR:-$STATE_DIR/web}"
 BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/codex-issue-runner}"
+PI_PACKAGE_ASSET_SOURCE="${CODEX_RUNNER_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
+PI_PACKAGE_ASSET_DIR="${CODEX_RUNNER_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
+PHOTON_WASM_SOURCE="${CODEX_RUNNER_PHOTON_WASM_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
@@ -60,6 +63,31 @@ stage_web_dir() {
   cp -R "$SOURCE_WEB_DIR" "$WEB_DIR"
 }
 
+copy_if_exists() {
+  local source="$1" target="$2"
+  [ -e "$source" ] || return 0
+  rm -rf "$target"
+  cp -R "$source" "$target"
+}
+
+stage_pi_package_assets() {
+  [ -f "$PI_PACKAGE_ASSET_SOURCE/package.json" ] || {
+    echo "[launchd] missing PI package assets: $PI_PACKAGE_ASSET_SOURCE/package.json" >&2
+    exit 1
+  }
+  rm -rf "$PI_PACKAGE_ASSET_DIR"
+  mkdir -p "$PI_PACKAGE_ASSET_DIR"
+  cp "$PI_PACKAGE_ASSET_SOURCE/package.json" "$PI_PACKAGE_ASSET_DIR/package.json"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/README.md" "$PI_PACKAGE_ASSET_DIR/README.md"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/CHANGELOG.md" "$PI_PACKAGE_ASSET_DIR/CHANGELOG.md"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/docs" "$PI_PACKAGE_ASSET_DIR/docs"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/examples" "$PI_PACKAGE_ASSET_DIR/examples"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/dist/modes/interactive/theme" "$PI_PACKAGE_ASSET_DIR/theme"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/dist/modes/interactive/assets" "$PI_PACKAGE_ASSET_DIR/assets"
+  copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/dist/core/export-html" "$PI_PACKAGE_ASSET_DIR/export-html"
+  copy_if_exists "$PHOTON_WASM_SOURCE" "$(dirname "$LAUNCHD_BINARY_PATH")/photon_rs_bg.wasm"
+}
+
 wait_for_health() {
   local url="$1"
   for _ in {1..120}; do
@@ -79,6 +107,7 @@ CODEX_RUNNER_CODESIGN_IDENTIFIER="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-$LABEL}" \
   "$ROOT_DIR/backend-ts/scripts/build-binary.sh"
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
 stage_launchd_binary
+stage_pi_package_assets
 stage_web_dir
 write_custom_auth_token_file
 
@@ -114,6 +143,8 @@ cat > "$PLIST" <<PLIST
     <string>$(xml_escape "$HOME")</string>
     <key>PATH</key>
     <string>$(xml_escape "$PATH_VALUE")</string>
+    <key>PI_PACKAGE_DIR</key>
+    <string>$(xml_escape "$PI_PACKAGE_ASSET_DIR")</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
