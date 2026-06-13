@@ -9,15 +9,18 @@ import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agen
 import { createIssueEnqueueCron } from "../pi/runnerIssueScheduleActions.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
-import { startProjectLoop } from "../runner/projectLoopManager.ts";
+import { startProjectLoop as defaultStartProjectLoop, type ProjectLoopRuntime } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
 import { dispatchSupervisorPiAction } from "./piSupervisorActionDispatch.ts";
+
+export type ProjectLoopStarter = (runtime: ProjectLoopRuntime, projectID: string) => void;
 
 export type PiActionDispatchContext = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  startProjectLoop?: ProjectLoopStarter;
 };
 
 export async function dispatchPiAction(
@@ -135,7 +138,8 @@ function startAutoRunProjectLoop(context: PiActionDispatchContext, projectID: st
   const providerID = project?.provider ?? "";
   if (!project || project.auto_run !== 1 || !isExecutorProviderId(providerID)) return;
   if (!context.providers?.[providerID]?.capabilities.includes("issue_execution")) return;
-  startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
+  const starter = context.startProjectLoop ?? defaultStartProjectLoop;
+  starter({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
 }
 
 function parsePayload(action: PiAction): Record<string, unknown> {

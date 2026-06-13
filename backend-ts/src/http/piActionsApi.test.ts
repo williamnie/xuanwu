@@ -9,6 +9,8 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiRunnerActions } from "../pi/runnerActions.ts";
+import { registerPiActionRoutes } from "./piActionsApi.ts";
+import { createRouter, type Router } from "./router.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -87,6 +89,54 @@ describe("Bun PI actions API", () => {
       expect((await events.next())?.type).toBe("pi.action_executing");
       expect((await events.next())?.type).toBe("pi.action_completed");
       events.close();
+    } finally {
+      database.close();
+    }
+  });
+
+  test("approve issue.enqueue action kicks auto-run project loop through HTTP API", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new KickObserverProvider();
+    try {
+      insertProject(database, "auto-demo", { autoRun: 1 });
+      const project = mustGetProject(database, "auto-demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "ready" }) as { action_id: string };
+      const kickedProjects: string[] = [];
+      const router = createPiActionsRouter(database, provider, kickedProjects);
+
+      const response = await postAction(router, action.action_id, "approve");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });
+      expect(kickedProjects).toEqual(["auto-demo"]);
+      expect(provider.inputs).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("approve issue.enqueue action does not kick manual project loop", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new KickObserverProvider();
+    try {
+      insertProject(database, "manual-demo", { autoRun: 0 });
+      const project = mustGetProject(database, "manual-demo");
+      const issueID = insertIssue(database, project.id);
+      const action = createPiRunnerActions(database, { project })
+        .enqueueIssueProposal({ issue_id: issueID, rationale: "ready" }) as { action_id: string };
+      const kickedProjects: string[] = [];
+      const router = createPiActionsRouter(database, provider, kickedProjects);
+
+      const response = await postAction(router, action.action_id, "approve");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });
+      expect(kickedProjects).toEqual([]);
+      expect(provider.inputs).toEqual([]);
     } finally {
       database.close();
     }
@@ -293,7 +343,7 @@ describe("Bun PI actions API", () => {
 });
 
 function postAction(
-  router: ReturnType<typeof createDefaultRouter>,
+  router: Router,
   id: string,
   action: "approve" | "execute" | "reject"
 ): Promise<Response> {
@@ -304,6 +354,20 @@ function postAction(
   }));
 }
 
+function createPiActionsRouter(
+  database: RunnerDatabase,
+  provider: ExecutorProvider,
+  kickedProjects: string[]
+): Router {
+  const router = createRouter();
+  registerPiActionRoutes(router, {
+    database,
+    providers: { codex: provider },
+    startProjectLoop: (_runtime, projectID) => kickedProjects.push(projectID)
+  });
+  return router;
+}
+
 function insertAgentProfile(db: RunnerDatabase, id: string): void {
   db.sqlite.run(
     `insert into agent_profiles (id, name, provider, model, created_at, updated_at)
@@ -312,11 +376,11 @@ function insertAgentProfile(db: RunnerDatabase, id: string): void {
   );
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
+function insertProject(db: RunnerDatabase, id: string, options: { autoRun?: number } = {}): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', 1,
+    `insert into projects (id, name, cwd, provider, provider_config_json, auto_run, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', options.autoRun ?? 0, 1,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
@@ -385,5 +449,16 @@ class SessionSteerProvider implements ExecutorProvider {
       sessionId: input.sessionId,
       turn_id: "turn-steered"
     };
+  }
+}
+
+class KickObserverProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution"] as const;
+  readonly id = "codex" as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput) {
+    this.inputs.push(input);
+    return { runId: `unexpected-${input.issueId}` };
   }
 }

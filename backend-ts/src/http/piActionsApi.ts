@@ -13,12 +13,14 @@ import type { EventBus } from "../events/bus.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { ProjectLoopStarter } from "./piActionDispatch.ts";
 import type { Router } from "./router.ts";
 
 type PiActionsContext = {
   bus?: EventBus;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  startProjectLoop?: ProjectLoopStarter;
 };
 
 export function registerPiActionRoutes(router: Router, context: PiActionsContext): void {
@@ -97,9 +99,7 @@ async function executeAction(context: PiActionsContext, id: string): Promise<PiA
     throw new HttpError(400, "PI action must be approved before execute");
   }
   assertExecutableGate(action);
-  const executing = action.status === "executing"
-    ? action
-    : writeExecutingAction(context, action);
+  const executing = writeExecutingAction(context, action);
   try {
     return completeAction(context, executing, await dispatchPiAction(context, executing));
   } catch (error) {
