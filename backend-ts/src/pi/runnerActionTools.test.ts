@@ -437,6 +437,56 @@ describe("PI runner action tools", () => {
     }
   });
 
+  test("read-only action gate does not create pending approvals under narrow mutation policy", async () => {
+    const fixture = await openFixture();
+    try {
+      mkdirSync(fixture.project.cwd, { recursive: true });
+      writeFileSync(join(fixture.project.cwd, "README.md"), "# Demo\nneedle\n");
+      const issueID = insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "todo",
+        title: "Read-only issue"
+      });
+      insertAgentSession(fixture.db, { projectID: fixture.project.id, sessionKey: "codex:thread-readonly" });
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          allowed_actions: ["issue.enqueue"],
+          authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        project: fixture.project
+      });
+
+      actions.projectStatus({});
+      actions.readRepoTree({ path: ".", max_depth: 1 });
+      actions.searchRepo({ query: "needle", max_results: 3 });
+      actions.readRepoExcerpt({ path: "README.md", max_lines: 2 });
+      actions.readIssue({ id: issueID });
+      actions.issueExecutionStatus({ id: issueID });
+      actions.listSessions({});
+      actions.readSessionSummary({ session_key: "codex:thread-readonly" });
+      actions.listSkills({});
+      actions.listMcpRegistry({});
+
+      const actionsAfterReads = listPiActions(fixture.db);
+      expect(actionsAfterReads.map((action) => action.status)).not.toContain("pending");
+      expect(actionsAfterReads.map((action) => action.gate_decision)).toEqual(
+        actionsAfterReads.map(() => "execute")
+      );
+      expect(listPiActionEvents(fixture.db).map((event) => event.event_type)).not.toContain("pending_approval");
+
+      const sideEffect = actions.commentIssue({ issue_id: issueID, body: "requires explicit mutation coverage" }) as {
+        decision: string;
+        status: string;
+      };
+      expect(sideEffect).toMatchObject({ decision: "deny", status: "denied" });
+      expect(getIssue(fixture.db, issueID)?.comment_count).toBe(0);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("keeps confirm-required actions pending and records rationale/result", async () => {
     const fixture = await openFixture();
     try {

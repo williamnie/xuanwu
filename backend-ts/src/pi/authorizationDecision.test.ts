@@ -21,7 +21,7 @@ describe("PI authorization decision", () => {
     });
   }
 
-  test("manual mode asks instead of auto-executing safe actions", () => {
+  test("manual mode asks instead of auto-executing non-read-only safe actions", () => {
     expect(decidePiAuthorization(BASE, { mode: "manual" })).toMatchObject({
       decision: "ask"
     });
@@ -36,7 +36,7 @@ describe("PI authorization decision", () => {
     })).toMatchObject({ decision: "ask" });
   });
 
-  test("delegated mode executes only actions covered by allowed_actions", () => {
+  test("delegated mode executes only mutations covered by allowed_actions", () => {
     expect(decidePiAuthorization(BASE, {
       allowed_actions: ["issue.comment"],
       mode: "delegated",
@@ -56,7 +56,7 @@ describe("PI authorization decision", () => {
     expect(decidePiAuthorization({ ...BASE, action_type: "sdk.read" }, {
       mode: "delegated",
       scope: { project_id: "demo" }
-    })).toMatchObject({ decision: "deny" });
+    })).toMatchObject({ decision: "execute" });
   });
 
   test("delegated mode denies skill intents outside snake_case authorization allowlist", () => {

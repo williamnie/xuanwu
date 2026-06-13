@@ -81,6 +81,17 @@ export const PI_SAFE_ACTION_TYPES = [
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read"
 ];
+export const PI_READ_ONLY_ACTION_TYPES = [
+  "agent.profile_recommend",
+  "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose", "issue.status_summary",
+  "project.list", "project.status",
+  "repo.read_excerpt", "repo.search", "repo.tree",
+  "session.list", "session.read_summary",
+  "memory.search",
+  "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
+  "skill.list", "skill.read", "skill.recommend",
+  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read"
+];
 const SAFE_ACTIONS = new Set(PI_SAFE_ACTION_TYPES);
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
@@ -88,17 +99,7 @@ const CONFIRM_ACTIONS = new Set([
   "session.resume_followup"
 ]);
 const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);
-const TRUSTED_READONLY_ACTIONS = new Set([
-  "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose",
-  "issue.status_summary", "project.list", "project.status",
-  "repo.read_excerpt", "repo.search", "repo.tree",
-  "session.list", "session.read_summary",
-  "memory.search", "memory.write_candidate",
-  "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
-  "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
-  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend",
-  "mcp.resource.list", "mcp.resource.read"
-]);
+const READ_ONLY_ACTIONS = new Set(PI_READ_ONLY_ACTION_TYPES);
 
 export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {
   const base = baseRisk(actionType);
@@ -131,13 +132,13 @@ export function decidePiAuthorization(
   if (windowDecision) return windowDecision;
   const recoveryDecision = recoveryLimitDecision(envelope, policy);
   if (recoveryDecision) return recoveryDecision;
-  if (!allowedActionType(envelope, policy)) return { decision: "deny", reason: "action is not covered by allowed_actions" };
+  if (!allowedActionType(envelope, policy, riskGate)) return { decision: "deny", reason: "action is not covered by allowed_actions" };
   const scopeDecision = matchPiAuthorizationPolicyScope(envelope, policy);
   if (!scopeDecision.matched) return { decision: "deny", reason: scopeDecision.reason };
   if (!authorizedMcpCapabilities(envelope, policy)) {
     return { decision: "deny", reason: "MCP capability is not covered by authorization allowlist" };
   }
-  if (TRUSTED_READONLY_ACTIONS.has(envelope.action_type)) {
+  if (trustedReadOnlyAction(envelope, riskGate)) {
     return { decision: "execute", reason: withScopeReason("trusted read-only action is allowed by gate", scopeDecision.reason) };
   }
   const mode = policy.mode ?? "attended";
@@ -195,10 +196,11 @@ function mcpCapabilitiesFromPayload(payload: Record<string, unknown>): string[] 
 
 function mcpCapabilityAllowlist(policy: PiGatePolicy): string[] | undefined {
   if (policy.allowedMcpCapabilities === undefined && policy.allowed_mcp_capabilities === undefined) return undefined;
-  return [
+  const allowed = [
     ...stringList(policy.allowedMcpCapabilities),
     ...stringList(policy.allowed_mcp_capabilities)
   ];
+  return allowed.length > 0 ? allowed : undefined;
 }
 
 function actionRiskGate(envelope: PiActionEnvelope): PiRiskGate | "forbidden" {
@@ -213,13 +215,20 @@ function forbiddenByPolicy(envelope: PiActionEnvelope, policy: PiGatePolicy): bo
   return forbidden.length > 0 && forbidden.includes(envelope.action_type);
 }
 
-function allowedActionType(envelope: PiActionEnvelope, policy: PiGatePolicy): boolean {
+function allowedActionType(envelope: PiActionEnvelope, policy: PiGatePolicy, riskGate: PiRiskGate): boolean {
   const allowed = actionList(policy.allowed_actions ?? policy.allowedActions);
-  return allowed.length === 0 || allowed.includes(envelope.action_type);
+  return allowed.length === 0 || allowed.includes(envelope.action_type) || trustedReadOnlyAction(envelope, riskGate);
 }
 
 function actionList(value: unknown): string[] {
   return stringList(value);
+}
+
+function trustedReadOnlyAction(envelope: PiActionEnvelope, riskGate: PiRiskGate): boolean {
+  return READ_ONLY_ACTIONS.has(envelope.action_type) &&
+    riskGate === "safe" &&
+    envelope.requires_confirmation === false &&
+    envelope.risk_level === "low";
 }
 
 function authorizationWindowDecision(policy: PiGatePolicy): PiGateDecision | undefined {

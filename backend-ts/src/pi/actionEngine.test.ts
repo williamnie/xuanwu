@@ -71,15 +71,32 @@ describe("PI action engine risk classifier", () => {
 
   test("manual mode still executes trusted read-only actions without approval", () => {
     for (const actionType of [
+      "agent.profile_recommend",
+      "issue.execution_status",
+      "issue.list",
+      "issue.read",
+      "issue.state_diagnose",
+      "issue.status_summary",
+      "project.list",
+      "project.status",
       "repo.search",
       "repo.read_excerpt",
       "repo.tree",
-      "mcp.registry.list",
-      "mcp.resource.read",
-      "skill.read",
-      "skill.intent_audit",
+      "session.list",
+      "session.read_summary",
       "memory.search",
-      "memory.write_candidate"
+      "sdk.read",
+      "sdk.grep",
+      "sdk.find",
+      "sdk.ls",
+      "mcp.registry.list",
+      "mcp.capability.read",
+      "mcp.requirement.recommend",
+      "mcp.resource.list",
+      "mcp.resource.read",
+      "skill.list",
+      "skill.read",
+      "skill.recommend"
     ]) {
       expect(gatePiActionEnvelope({
         action_type: actionType,
@@ -91,6 +108,44 @@ describe("PI action engine risk classifier", () => {
       }, { mode: "manual" })).toMatchObject({
         decision: "execute"
       });
+    }
+  });
+
+  test("delegated allowlists do not create approval noise for ordinary read-only context collection", () => {
+    const policy = {
+      allowed_actions: ["issue.enqueue"],
+      authorizedActions: [{ action_type: "issue.enqueue", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    } as const;
+
+    for (const actionType of [
+      "repo.search",
+      "repo.read_excerpt",
+      "project.status",
+      "session.read_summary",
+      "skill.list",
+      "mcp.registry.list"
+    ]) {
+      expect(gatePiActionEnvelope({
+        action_type: actionType,
+        payload: { query: "status" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_readonly_tool"
+      }, policy)).toMatchObject({ decision: "execute" });
+    }
+
+    for (const actionType of ["memory.write_candidate", "skill.intent_audit"]) {
+      expect(gatePiActionEnvelope({
+        action_type: actionType,
+        payload: { query: "status" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_tool"
+      }, policy)).toMatchObject({ decision: "deny" });
     }
   });
 

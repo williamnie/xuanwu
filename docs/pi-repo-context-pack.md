@@ -28,6 +28,12 @@
 - `session_read_summary`：读取 runner 观察到的 session 进度摘要；不 steer session。
 - `issue_create_proposal`：创建 `issue.create` proposal，默认写入 triage issue；是否真实创建受 action gate/policy 控制。context pack 应放进 `description` 或后续 refinement/comment 中。
 
+## PI 审批边界
+
+Action gate 默认不要求用户确认普通只读上下文收集。`repo_search` / `repo_read_excerpt` / `repo_tree`、`project_status`、`session_read_summary`、skills metadata，以及已安装 MCP registry / capability / read-only resource metadata 默认直接执行并写审计，不生成 pending approval。
+
+需要确认或按 policy 拦截的是有真实副作用或高风险的动作：写文件、执行命令、创建/修改/入队 issue、发送 IM、外部写回、修改配置、steer/resume executor session、非只读 MCP tool call，或显式提升为 `requires_confirmation` / `risk_level` 非 low 的动作。项目/授权策略仍可通过 forbidden/allowlist/MCP capability allowlist 覆盖默认行为。
+
 ## 渲染格式
 
 `renderRepoContextPack(pack)` 输出 Markdown，可直接附在 issue body/refinement/comment：
