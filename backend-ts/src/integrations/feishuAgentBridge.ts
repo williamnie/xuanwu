@@ -7,10 +7,16 @@ import {
   type FeishuMessageClient,
   type FeishuTextMessageResult
 } from "./feishuClient.ts";
+import {
+  parseFeishuNewConversationCommand,
+  routeFeishuConversation,
+  type FeishuConversationClock
+} from "./feishuConversationRouting.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 export type FeishuRunnerInput = {
+  conversationId: string;
   event: FeishuNormalizedMessageEvent;
   prompt: string;
   projectId: string;
@@ -20,6 +26,7 @@ export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ing
 export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 
 type FeishuAgentBridgeOptions = {
+  clock?: FeishuConversationClock;
   config: () => FeishuConnectorConfig;
   database: RunnerDatabase;
   runConversation?: FeishuConversationRunner;
@@ -30,6 +37,7 @@ type DirectReply = { reason: string; text: string };
 const REPLY_LINK_TYPE = "feishu_agent_reply";
 const REPLY_RELATIONSHIP = "agent_reply";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
+const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
 const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请在设置页添加 Project Mappings，或在消息里带上项目名后再发。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
@@ -78,10 +86,20 @@ async function runnerReply(
 ): Promise<FeishuRunnerResult> {
   try {
     if (!options.runConversation) return { text: "" };
+    const prompt = input.event.text || "[Feishu attachment message]";
+    const route = routeFeishuConversation(options.database, {
+      clock: options.clock,
+      event: input.event,
+      prompt
+    });
+    if (route.isNewCommand && route.prompt === "") {
+      return { conversationId: route.conversationId, projectId: attentionProjectId(input.ingest), text: NEW_CONVERSATION_ACK_TEXT };
+    }
     return await options.runConversation({
+      conversationId: route.conversationId,
       event: input.event,
       projectId: attentionProjectId(input.ingest),
-      prompt: input.event.text || "[Feishu attachment message]"
+      prompt: route.prompt || prompt
     });
   } catch (error) {
     return {
@@ -108,10 +126,15 @@ function directReply(input: FeishuBridgeHandleInput, options: FeishuAgentBridgeO
   if (decision === "inbox_only" && !options.runConversation) {
     return { reason: "chat_ack_sent", text: CHAT_ACK_TEXT };
   }
-  if (decision === "ask_clarification") {
+  if (decision === "ask_clarification" && !isNewPromptWithContent(input.event.text)) {
     return { reason: "project_clarification_sent", text: PROJECT_CLARIFICATION_TEXT };
   }
   return null;
+}
+
+function isNewPromptWithContent(prompt: string): boolean {
+  const command = parseFeishuNewConversationCommand(prompt);
+  return command.isNewCommand && command.prompt !== "";
 }
 
 function attentionDecision(input: FeishuIngestResult): string {

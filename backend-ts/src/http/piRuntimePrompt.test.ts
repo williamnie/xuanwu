@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
+import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 
 describe("PI runtime prompt", () => {
@@ -62,6 +63,47 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("Feishu/IM task messages");
       expect(prompt).toContain("call issue_enqueue_proposal by default");
       expect(prompt).toContain("Only wait");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps confirmed memory injection for new Feishu conversation ids without old conversation memory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      createPiMemoryItem(db, {
+        content: "Project-level Feishu preference",
+        id: "feishu-project-memory",
+        kind: "preference",
+        scope: "project",
+        scope_id: "demo"
+      });
+      createPiMemoryItem(db, {
+        content: "Global PI behavior",
+        id: "feishu-global-memory",
+        kind: "policy",
+        scope: "global"
+      });
+      createPiMemoryItem(db, {
+        content: "Old chat conversation memory",
+        id: "feishu-old-conversation-memory",
+        kind: "conversation_note",
+        scope: "conversation",
+        scope_id: "feishu-chat-oc_group-20260613"
+      });
+
+      const prompt = buildPiRuntimeSystemPrompt({
+        agent: agentRecord(),
+        conversationID: "feishu-chat-oc_group-20260613-n1",
+        project: projectRecord(join(root, "project"))
+      }, db);
+
+      expect(prompt).toContain("Confirmed PI memory:");
+      expect(prompt).toContain("Project-level Feishu preference");
+      expect(prompt).toContain("Global PI behavior");
+      expect(prompt).not.toContain("Old chat conversation memory");
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
