@@ -53,6 +53,7 @@ describe("Bun SQLite database connection", () => {
         "cron_tasks",
         "external_events",
         "external_links",
+        "feishu_conversation_state",
         "im_reply_drafts",
         "issue_events",
         "issue_runs",
@@ -134,7 +135,8 @@ describe("Bun SQLite database connection", () => {
         { id: "021_external_events" },
         { id: "022_external_links" },
         { id: "023_im_reply_outbox" },
-        { id: "024_im_reply_outbox_dispatch" }
+        { id: "024_im_reply_outbox_dispatch" },
+        { id: "025_feishu_conversation_state" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -148,6 +150,8 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_received");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_external");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
+      expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
+      expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -207,6 +211,11 @@ describe("Bun SQLite database connection", () => {
         retry_after_seconds: "0",
         sent_at: "''"
       });
+      expect(columnDefaults(connection, "feishu_conversation_state")).toMatchObject({
+        active_project_id: "''",
+        active_project_source: "''",
+        epoch: "0"
+      });
     } finally {
       connection.close();
     }
@@ -247,7 +256,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 24 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 25 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
