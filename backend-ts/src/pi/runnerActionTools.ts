@@ -48,6 +48,7 @@ const skillIntentList = Type.Optional(Type.Array(Type.String({ minLength: 1, pat
 const mcpCapabilityList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const textList = Type.Optional(Type.Array(Type.String({ minLength: 1, pattern: "\\S" })));
 const looseList = Type.Optional(Type.Array(Type.Any()));
+const TOOL_RESULT_MAX_CHARS = 8192;
 
 export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
@@ -270,7 +271,13 @@ function actionTool<TParams extends TSchema>(
 
 function toolResult(details: unknown): AgentToolResult<unknown> {
   return {
-    content: [{ type: "text", text: JSON.stringify(details, null, 2) ?? "null" }],
+    content: [{ type: "text", text: boundedToolResultText(details) }],
     details
   };
+}
+
+function boundedToolResultText(details: unknown): string {
+  const text = JSON.stringify(details, null, 2) ?? "null";
+  if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
+  return `${text.slice(0, TOOL_RESULT_MAX_CHARS)}\n\n[tool result truncated: ${text.length - TOOL_RESULT_MAX_CHARS} chars omitted; full result preserved in tool details.]`;
 }

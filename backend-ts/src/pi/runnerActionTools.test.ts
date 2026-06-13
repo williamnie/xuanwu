@@ -168,6 +168,20 @@ describe("PI runner action tools", () => {
     }
   });
 
+  test("caps model-visible tool result content while preserving full details", async () => {
+    const tools = createPiRunnerActionTools({
+      ...fakeActions([]),
+      listIssues: () => ({ items: [{ description: "x".repeat(20_000), id: 1, title: "Huge" }] })
+    });
+
+    const result = await runTool(tools, "issue_list", {});
+    const text = collectToolText(result.content);
+
+    expect(text.length).toBeLessThan(10_000);
+    expect(text).toContain("[tool result truncated");
+    expect(JSON.stringify(result.details)).toContain("x".repeat(20_000));
+  });
+
   test("global Runner project_status summarizes all projects without project_id", async () => {
     const fixture = await openFixture();
     try {
@@ -746,6 +760,13 @@ function toolByName(tools: ReturnType<typeof createPiRunnerActionTools>, name: s
 }
 function validateArgs(tool: ReturnType<typeof toolByName>, args: Record<string, unknown>) {
   return validateToolArguments(tool as never, { name: tool.name, arguments: args } as never);
+}
+function collectToolText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content.map((block) => {
+    if (typeof block === "object" && block && "text" in block && typeof block.text === "string") return block.text;
+    return "";
+  }).join("\n");
 }
 async function runTool(
   tools: ReturnType<typeof createPiRunnerActionTools>,
