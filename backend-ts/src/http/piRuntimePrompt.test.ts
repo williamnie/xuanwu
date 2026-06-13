@@ -62,6 +62,8 @@ describe("PI runtime prompt", () => {
 
       expect(prompt).toContain("Feishu/IM task messages");
       expect(prompt).toContain("call issue_enqueue_proposal by default");
+      expect(prompt).toContain("issue_enqueue_next_triage");
+      expect(prompt).toContain("继续做下一个");
       expect(prompt).toContain("Only wait");
     } finally {
       db.close();

@@ -28,6 +28,7 @@ describe("PI runner action tools", () => {
     const repoRead = toolByName(tools, "repo_read_excerpt");
     const repoTree = toolByName(tools, "repo_tree");
     const issueCreate = toolByName(tools, "issue_create_proposal");
+    const nextTriage = toolByName(tools, "issue_enqueue_next_triage");
     const issueList = toolByName(tools, "issue_list");
     const issueStatus = toolByName(tools, "issue_status_summary");
     const issueExecution = toolByName(tools, "issue_execution_status");
@@ -37,6 +38,7 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(nextTriage, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
     expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
       target_issue_id: 1,
@@ -90,6 +92,7 @@ describe("PI runner action tools", () => {
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
     await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
     await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
+    await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repoSearch.execute("tool-repo-search", { query: "Accordion", max_results: 3 }, undefined, undefined, {} as never);
     await repoRead.execute("tool-repo-read", { path: "src/App.tsx" }, undefined, undefined, {} as never);
@@ -107,6 +110,7 @@ describe("PI runner action tools", () => {
       ["readIssue", { id: 7 }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
+      ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
       ["readRepoExcerpt", { path: "src/App.tsx" }],
@@ -536,6 +540,112 @@ describe("PI runner action tools", () => {
     }
   });
 
+  test("delegated runner chat enqueues exactly one next triage issue for the current project", async () => {
+    const fixture = await openFixture();
+    const kickedProjects: string[] = [];
+    try {
+      fixture.db.sqlite.run(
+        `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?)`,
+        ["other", "Other", `${fixture.project.cwd}-other`, 2, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+      const otherProjectIssue = insertIssue(fixture.db, {
+        createdAt: "2026-01-01T00:00:00Z",
+        priority: 99,
+        projectID: "other",
+        status: "triage",
+        title: "Other project should not run"
+      });
+      insertIssue(fixture.db, {
+        createdAt: "2026-01-03T00:00:00Z",
+        priority: 10,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "High but later"
+      });
+      const selected = insertIssue(fixture.db, {
+        createdAt: "2026-01-02T00:00:00Z",
+        priority: 10,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Selected next"
+      });
+      const tiedLaterID = insertIssue(fixture.db, {
+        createdAt: "2026-01-02T00:00:00Z",
+        priority: 10,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Same rank later id"
+      });
+      insertIssue(fixture.db, {
+        createdAt: "2026-01-01T00:00:00Z",
+        priority: 1,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Low priority first created"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        onIssueEnqueued: (projectID) => kickedProjects.push(projectID),
+        project: fixture.project,
+        source: "runner_chat"
+      });
+
+      const result = actions.enqueueNextTriageIssue({ rationale: "继续做下一个" }) as {
+        decision: string;
+        issue_id: number;
+        result?: { id?: number; status?: string; title?: string };
+        status: string;
+      };
+
+      expect(result).toMatchObject({
+        decision: "execute",
+        issue_id: selected,
+        result: { id: selected, status: "todo", title: "Selected next" },
+        status: "completed"
+      });
+      expect(getIssue(fixture.db, selected)).toMatchObject({ status: "todo" });
+      expect(getIssue(fixture.db, tiedLaterID)).toMatchObject({ status: "triage" });
+      expect(getIssue(fixture.db, otherProjectIssue)).toMatchObject({ status: "triage" });
+      expect(listIssues(fixture.db, { projectId: fixture.project.id, status: "todo" })).toHaveLength(1);
+      expect(listIssues(fixture.db, { projectId: fixture.project.id, status: "triage" })).toHaveLength(3);
+      expect(listIssues(fixture.db, { projectId: "other", status: "todo" })).toHaveLength(0);
+      expect(kickedProjects).toEqual([fixture.project.id]);
+      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "issue.enqueue",
+        issue_id: selected,
+        payload_json: JSON.stringify({ issue_id: selected })
+      }));
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("next triage enqueue reports no candidate without mutating issues", async () => {
+    const fixture = await openFixture();
+    try {
+      insertIssue(fixture.db, { projectID: fixture.project.id, status: "done", title: "Already done" });
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+
+      const result = actions.enqueueNextTriageIssue({}) as {
+        message: string;
+        project_id: string;
+        source: string;
+        status: string;
+      };
+
+      expect(result).toEqual({
+        message: "没有可继续的 triage issue",
+        project_id: fixture.project.id,
+        source: "issue_enqueue_next_triage",
+        status: "no_candidate"
+      });
+      expect(listIssues(fixture.db, { projectId: fixture.project.id, status: "todo" })).toHaveLength(0);
+      expect(listPiActions(fixture.db)).toHaveLength(0);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("renders repo context pack into issue create proposals and sanitizes payload", async () => {
     const fixture = await openFixture();
     try {
@@ -673,6 +783,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     diagnoseIssueState: record("diagnoseIssueState"),
     escalateNeedsUser: record("escalateNeedsUser"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
+    enqueueNextTriageIssue: record("enqueueNextTriageIssue"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
     listIssues: record("listIssues"),
     listMcpRegistry: record("listMcpRegistry"),
@@ -727,14 +838,15 @@ async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDataba
 }
 function insertIssue(
   db: RunnerDatabase,
-  input: { description?: string; projectID: string; status: string; title: string }
+  input: { createdAt?: string; description?: string; priority?: number; projectID: string; status: string; title: string }
 ): number {
+  const createdAt = input.createdAt ?? "2026-01-01T00:00:00Z";
   db.sqlite.run(
-    `insert into issues (project_id, title, description, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
+    `insert into issues (project_id, title, description, status, priority, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
     [
       input.projectID, input.title, input.description ?? "", input.status,
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+      input.priority ?? 0, createdAt, createdAt
     ]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();

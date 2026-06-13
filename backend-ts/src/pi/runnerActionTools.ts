@@ -20,6 +20,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_state_repair_proposal",
   "issue_comment",
   "issue_enqueue_proposal",
+  "issue_enqueue_next_triage",
   "issue_schedule_enqueue",
   "repo_search",
   "repo_read_excerpt",
@@ -180,6 +181,9 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     actionTool("issue_enqueue_proposal", "Issue Enqueue Proposal",
       "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
+    actionTool("issue_enqueue_next_triage", "Issue Enqueue Next Triage",
+      "Select and enqueue exactly one next triage issue in the current project when the user asks to continue the next/current-group task.",
+      Type.Object({ project_id: optionalString, rationale: optionalString }, objectOptions), actions.enqueueNextTriageIssue),
     actionTool("issue_schedule_enqueue", "Issue Schedule Enqueue",
       "Create a real one-time cron to enqueue exactly one issue at next_run_at (RFC3339). Use this when the user chooses a specific later time in chat.",
       Type.Object({
