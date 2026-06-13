@@ -8,6 +8,7 @@ import {
   createPiDelegation,
   createPiHeartbeatRun,
   createPiMemoryItem,
+  upsertPiApprovalRequest,
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
@@ -35,6 +36,16 @@ describe("PI Command Center API", () => {
         });
         createPiDelegation(database, { project_id: "demo", status: "active", title: "Night window" });
       createPiAction(database, { action_type: "issue.enqueue", id: "act-1", project_id: "demo", status: "pending" });
+      upsertPiApprovalRequest(database, {
+        approval_id: "approval-cc-1",
+        approval_source: "codex_provider_event",
+        issue_id: 392,
+        project_id: "demo",
+        provider: "codex",
+        request_summary: "command=git status",
+        request_type: "command",
+        status: "delivered"
+      });
       createPiHeartbeatRun(database, { id: "hb-1", kind: "project", project_id: "demo", status: "completed" });
       createPiMemoryItem(database, {
         content: "Keep patches narrow",
@@ -63,7 +74,7 @@ describe("PI Command Center API", () => {
         active_delegations: 1,
         autonomous_projects: 1,
         issue_auto_run_projects: 1,
-        pending_approvals: 1
+        pending_approvals: 2
       });
       expect(body.automation).toMatchObject({
         issue_execution: {
@@ -212,12 +223,12 @@ describe("PI Command Center API", () => {
           },
           supervisor: {
             not_all_issues: true,
-            reason: expect.stringContaining("当前不会自动续聊"),
+            reason: expect.stringContaining("watchdog"),
             targets: [expect.objectContaining({
               allowed_actions: [],
-              recovery_state: "proposal_only",
-              state_text: "只分析并提出建议，等待人工审批",
-              supervisor_mode: "propose_only"
+              recovery_state: "watchdog",
+              state_text: expect.stringContaining("watchdog"),
+              supervisor_mode: "watchdog"
             })]
           }
         }
@@ -227,7 +238,7 @@ describe("PI Command Center API", () => {
           automatic_projects: 0,
           needs_approval_projects: 0,
           targets: [expect.objectContaining({
-            recovery_state: "proposal_only"
+            recovery_state: "watchdog"
           })]
         }
       });

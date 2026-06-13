@@ -107,6 +107,31 @@ describe("provider error parser", () => {
     });
   });
 
+  test("ignores ordinary completed issue log output even when it contains provider-looking words", () => {
+    expect(parseIssueEventProviderError({
+      command: "bun test",
+      raw_payload: "source says unauthorized, approval denied, validation failed, rate limit",
+      status: "completed",
+      text: "completed command output: permission denied is just fixture text",
+      type: "tool"
+    }, { now: NOW })).toMatchObject({
+      category: "unknown"
+    });
+  });
+
+  test("keeps structured terminal provider failures eligible for incidents", () => {
+    expect(parseIssueEventProviderError({
+      error: "API returned 401 unauthorized",
+      raw_method: "turn/completed",
+      status: "failed",
+      type: "done"
+    }, { now: NOW })).toMatchObject({
+      category: "auth",
+      diagnosis_code: "requires_human_decision",
+      status_code: 401
+    });
+  });
+
   test("classifies auth and permission failures as human-decision signals", () => {
     expect(parseProviderEventError({
       provider: "codex",

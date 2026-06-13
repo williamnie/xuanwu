@@ -4,6 +4,7 @@ import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import {
   getPiAgent,
+  listPiApprovalRequests,
   listPiAgents,
   listPiActions,
   listPiConversations,
@@ -33,6 +34,8 @@ function buildPiCommandCenter(context: PiCommandCenterContext) {
   const settings = listProjectPiSettings(db);
   const activeDelegations = listPiDelegations(db, { status: "active" });
   const pendingApprovals = listPiActions(db, { status: "pending" });
+  const pendingApprovalRequests = listPiApprovalRequests(db)
+    .filter((request) => request.status === "pending" || request.status === "delivered");
   const latestRun = listPiHeartbeatRuns(db).at(0) ?? null;
   const supervisorEvents = listIssueSupervisorEvents(db);
   const memoryItems = listPiMemoryItems(db);
@@ -48,7 +51,7 @@ function buildPiCommandCenter(context: PiCommandCenterContext) {
       active_delegations: activeDelegations.length,
       autonomous_projects: autoManagedProjects,
       issue_auto_run_projects: projects.filter((project) => project.auto_run === 1).length,
-      pending_approvals: pendingApprovals.length
+      pending_approvals: pendingApprovals.length + pendingApprovalRequests.length
     },
     heartbeat: heartbeatSummary(latestRun),
     memory: memorySummary(memoryItems),

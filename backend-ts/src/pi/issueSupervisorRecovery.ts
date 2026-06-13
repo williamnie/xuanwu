@@ -24,7 +24,7 @@ export const PI_SUPERVISOR_DECISIONS = [
 export const PI_SUPERVISOR_CONFIDENCE_LEVELS = ["low", "medium", "high"] as const;
 export const PI_SUPERVISOR_RISK_LEVELS = ["low", "medium", "high"] as const;
 export const PI_SUPERVISOR_RATE_LIMIT_WAIT_POLICIES = ["respect_retry_after", "default_cooldown", "ask"] as const;
-export const PI_SUPERVISOR_MODES = ["off", "propose_only", "assisted", "autonomous"] as const;
+export const PI_SUPERVISOR_MODES = ["off", "watchdog", "propose_only", "assisted", "autonomous"] as const;
 
 export type PiSupervisorDiagnosisCode = typeof PI_SUPERVISOR_DIAGNOSIS_CODES[number];
 export type PiSupervisorDecision = typeof PI_SUPERVISOR_DECISIONS[number];

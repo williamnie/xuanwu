@@ -69,6 +69,31 @@ describe("PI action engine risk classifier", () => {
     });
   });
 
+  test("manual mode still executes trusted read-only actions without approval", () => {
+    for (const actionType of [
+      "repo.search",
+      "repo.read_excerpt",
+      "repo.tree",
+      "mcp.registry.list",
+      "mcp.resource.read",
+      "skill.read",
+      "skill.intent_audit",
+      "memory.search",
+      "memory.write_candidate"
+    ]) {
+      expect(gatePiActionEnvelope({
+        action_type: actionType,
+        payload: { query: "status" },
+        project_id: "demo",
+        requires_confirmation: false,
+        risk_level: "low",
+        source: "pi_readonly_tool"
+      }, { mode: "manual" })).toMatchObject({
+        decision: "execute"
+      });
+    }
+  });
+
   test("MCP actions require capability allowlist when policy provides one", () => {
     const envelope = {
       action_type: "mcp.resource.read",

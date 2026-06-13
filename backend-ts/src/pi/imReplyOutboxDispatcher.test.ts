@@ -6,6 +6,7 @@ import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FeishuClientError } from "../integrations/feishuClient.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { approveImReplyDraft, createImReplyDraft, getSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
+import { upsertPiApprovalRequest } from "../db/repositories/pi.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "./imReplyOutboxDispatcher.ts";
 
 const tempRoots: string[] = [];
@@ -43,6 +44,33 @@ describe("IM reply outbox dispatcher", () => {
         last_error: "",
         status: "sent"
       });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("sends approval outbox as an interactive card with idempotent approval actions", async () => {
+    const database = await fixtureDatabase();
+    const sender = new FakeFeishuSender([{ messageId: "om_card_1" }]);
+    try {
+      createApprovalRequest(database, "approval-card-1");
+      const outbox = createApprovedOutbox(database, {
+        approvalActionID: "approval-card-1",
+        content: "Pi：issue #1 需要 Codex 授权才能继续。"
+      });
+
+      const result = await dispatchFeishuOutbox({ database, sender, config: config("oc_group"), now: NOW });
+      const stored = getSyncOutbox(database, outbox.id);
+      const cardText = JSON.stringify(sender.cardCalls[0]?.card ?? {});
+
+      expect(result).toMatchObject({ failed: 0, retry: 0, sent: 1 });
+      expect(sender.calls).toEqual([]);
+      expect(sender.cardCalls).toHaveLength(1);
+      expect(sender.cardCalls[0]).toMatchObject({ receiveId: "oc_group", receiveIdType: "chat_id" });
+      expect(cardText).toContain("approval-card-1");
+      expect(cardText).toContain("批准一次");
+      expect(cardText).toContain("本 session 批准");
+      expect(stored).toMatchObject({ feishu_message_id: "om_card_1", status: "sent" });
     } finally {
       database.close();
     }
@@ -152,13 +180,27 @@ describe("IM reply outbox dispatcher", () => {
 
 class FakeFeishuSender implements FeishuMessageSender {
   calls: Array<{ receiveId: string; receiveIdType: string; text: string }> = [];
+  cardCalls: Array<{ card: Record<string, unknown>; receiveId: string; receiveIdType: string }> = [];
   constructor(
     private readonly outcomes: Array<{ messageId: string } | Error>,
     private readonly onSend: () => void = () => {}
   ) {}
 
+  async sendInteractiveCard(input: {
+    card: Record<string, unknown>;
+    receiveId: string;
+    receiveIdType: string;
+  }): Promise<{ messageId: string }> {
+    this.cardCalls.push(input);
+    return this.nextOutcome();
+  }
+
   async sendTextMessage(input: { receiveId: string; receiveIdType: string; text: string }): Promise<{ messageId: string }> {
     this.calls.push(input);
+    return this.nextOutcome();
+  }
+
+  private nextOutcome(): { messageId: string } {
     this.onSend();
     const next = this.outcomes.shift();
     if (next instanceof Error) throw next;
@@ -175,10 +217,11 @@ async function fixtureDatabase(): Promise<RunnerDatabase> {
 
 function createApprovedOutbox(
   database: RunnerDatabase,
-  options: { maxAttempts?: number } = {}
+  options: { approvalActionID?: string; content?: string; maxAttempts?: number } = {}
 ) {
   const draft = createImReplyDraft(database, {
-    content: "已创建 issue",
+    approval_action_id: options.approvalActionID,
+    content: options.content ?? "已创建 issue",
     source: "feishu",
     status: "pending",
     target_chat_id: "oc_group",
@@ -189,6 +232,21 @@ function createApprovedOutbox(
     database.sqlite.run("update sync_outbox set max_attempts=? where id=?", [options.maxAttempts, outbox.id]);
   }
   return getSyncOutbox(database, outbox.id)!;
+}
+
+function createApprovalRequest(database: RunnerDatabase, approvalID: string): void {
+  upsertPiApprovalRequest(database, {
+    approval_id: approvalID,
+    approval_source: "codex_provider_event",
+    issue_id: 1,
+    project_id: "demo",
+    provider: "codex",
+    provider_approval_id: approvalID,
+    request_summary: "command=git status",
+    request_type: "command",
+    status: "delivered",
+    thread_id: "thread-approval"
+  });
 }
 
 function config(allowedChatIds: string) {

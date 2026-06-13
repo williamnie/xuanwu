@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositories/pi.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
+import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -39,9 +41,48 @@ describe("Feishu project selection callback endpoint", () => {
       database.close();
     }
   });
+
+  test("resolves PI approval card callbacks through Codex provider once", async () => {
+    const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    const { database, handle } = await fixtureHandler(bridgeFixture([]), approvalProvider(resolutions));
+    try {
+      upsertPiApprovalRequest(database, {
+        approval_id: "approval-card-1",
+        approval_source: "codex_provider_event",
+        issue_id: 392,
+        project_id: "demo",
+        provider: "codex",
+        provider_approval_id: "approval-card-1",
+        request_summary: "command=git status",
+        request_type: "command",
+        status: "delivered",
+        thread_id: "thread-approval",
+        turn_id: "turn-approval"
+      });
+
+      const first = await postFeishu(handle, approvalCallback("approval-card-1", "approve_session", "session"));
+      const second = await postFeishu(handle, approvalCallback("approval-card-1", "deny", "turn"));
+
+      expect(first.status).toBe(202);
+      expect(await first.json()).toMatchObject({ ok: true, status: "approved" });
+      expect(second.status).toBe(202);
+      expect(await second.json()).toMatchObject({ ok: true, status: "approved" });
+      expect(resolutions).toEqual([{ decision: "approve_session", id: "approval-card-1", scope: "session" }]);
+      expect(getPiApprovalRequest(database, "approval-card-1")).toMatchObject({
+        resolved_decision: "approve_session",
+        resolved_scope: "session",
+        status: "approved"
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
-async function fixtureHandler(agentBridge: ReturnType<typeof createFeishuAgentBridge>) {
+async function fixtureHandler(
+  agentBridge: ReturnType<typeof createFeishuAgentBridge>,
+  provider?: ExecutorProvider
+) {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-card-callback-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
@@ -50,8 +91,26 @@ async function fixtureHandler(agentBridge: ReturnType<typeof createFeishuAgentBr
     feishuAppSecret: "app-secret-value",
     feishuVerificationToken: "verify-token"
   });
-  const router = createDefaultRouter({ config, database, feishuAgentBridge: agentBridge });
+  const router = createDefaultRouter({
+    config,
+    database,
+    feishuAgentBridge: agentBridge,
+    providers: provider ? { codex: provider } : undefined
+  });
   return { database, handle: createRequestHandler(router, "") };
+}
+
+function approvalProvider(resolutions: Array<{ decision: string; id: string; scope: string }>): ExecutorProvider {
+  return {
+    capabilities: ["approvals"],
+    id: "codex",
+    async run(_input: ProviderRunInput): Promise<never> {
+      throw new Error("not implemented");
+    },
+    async resolveApproval(id, decision) {
+      resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" });
+    }
+  };
 }
 
 function bridgeFixture(actions: unknown[]): ReturnType<typeof createFeishuAgentBridge> {
@@ -95,6 +154,27 @@ function projectSelectionCallback(): Record<string, unknown> {
         operator_id: {
           open_id: "ou_open_1",
           user_id: "ou_user_1"
+        }
+      }
+    },
+    schema: "2.0"
+  };
+}
+
+function approvalCallback(approvalID: string, decision: string, scope: string): Record<string, unknown> {
+  return {
+    header: {
+      event_id: `event-${approvalID}-${decision}`,
+      event_type: "card.action.trigger",
+      token: "verify-token"
+    },
+    event: {
+      action: {
+        value: {
+          action: "pi_approval_resolve",
+          approval_id: approvalID,
+          decision,
+          scope
         }
       }
     },

@@ -79,7 +79,7 @@ function supervisorProjectAgentStatus(db: RunnerDatabase, settings: ProjectPiSet
 function supervisorScanReason(automaticProjects: number, approvalProjects: number): string {
   if (automaticProjects > 0) return "已有项目允许 supervisor 自动恢复 allowlist 动作；仍只扫描故障恢复候选";
   if (approvalProjects > 0) return "Supervisor 可分析故障并生成待审批动作；当前不会自动续聊";
-  return "Supervisor 只做故障恢复候选扫描；当前不会自动续聊，没有项目允许自动恢复";
+  return "Supervisor 仅做 watchdog 信号记录；当前不会自动续聊，没有项目允许自动恢复";
 }
 
 function supervisorRecoveryState(mode: string, actions: string[], runnable: boolean): string {
@@ -87,6 +87,7 @@ function supervisorRecoveryState(mode: string, actions: string[], runnable: bool
   if (!runnable) return "needs_configuration";
   if (mode === "autonomous" && actions.length > 0) return "auto_recoverable";
   if (mode === "assisted") return "needs_approval";
+  if (mode === "watchdog") return "watchdog";
   return "proposal_only";
 }
 
@@ -96,6 +97,7 @@ function supervisorStateText(mode: string, actions: string[], runnable: boolean)
   if (mode === "autonomous" && actions.length > 0) return "可自动恢复 allowlist 中的动作";
   if (mode === "autonomous") return "autonomous 已开启但 allowlist 为空，不会自动续聊";
   if (mode === "assisted") return "可分析故障并生成待审批恢复动作";
+  if (mode === "watchdog") return "只记录 stale/disconnected/retry-after watchdog 信号，不生成待审批动作";
   return "只分析并提出建议，等待人工审批";
 }
 

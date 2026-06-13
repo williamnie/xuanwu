@@ -6,7 +6,12 @@ export const piActionGateApi = {
   approve: (id) => request(`/api/pi/actions/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
   auditEvents: (filter = {}) => request(`/api/pi/audit-events${query(filter)}`),
   pendingActions: () => request('/api/pi/actions?status=pending'),
+  pendingApprovalRequests: () => request('/api/pi/approval-requests?status=open'),
   reject: (id) => request(`/api/pi/actions/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
+  resolveApprovalRequest: (id, decision, scope = 'turn') => request(`/api/pi/approval-requests/${encodeURIComponent(id)}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, scope }),
+  }),
   requestChanges: (id, comment) => request(`/api/pi/actions/${encodeURIComponent(id)}/request-changes`, {
     method: 'POST',
     body: JSON.stringify({ comment }),

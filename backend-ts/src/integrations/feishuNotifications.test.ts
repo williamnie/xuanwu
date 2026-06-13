@@ -8,16 +8,11 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
-import {
-  attachFeishuNotificationObservers,
-  queueFeishuApprovalNotification,
-  queueFeishuIssueStatusNotification
-} from "./feishuNotifications.ts";
+import { queueFeishuIssueStatusNotification } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];
 const BASE_URL = "http://127.0.0.1:3008";
@@ -50,92 +45,6 @@ describe("Feishu notification queue", () => {
         target_chat_id: "oc_group"
       });
     } finally {
-      db.close();
-    }
-  });
-
-  test("queues one Feishu notification when a linked issue session requests authorization", async () => {
-    const db = await fixtureDatabase();
-    try {
-      const issueID = linkedFeishuIssue(db);
-      upsertAgentSession(db, {
-        issue_id: issueID,
-        project_id: "demo",
-        provider: "codex",
-        provider_session_id: "thread-approval"
-      });
-
-      const first = queueFeishuApprovalNotification(db, {
-        method: "approval/requested",
-        payload: JSON.stringify({
-          id: "approval-1",
-          params: { command: "git status", cwd: "/repo", threadId: "thread-approval" }
-        }),
-        provider: "codex",
-        threadId: "thread-approval",
-        type: "codex.event"
-      });
-      const second = queueFeishuApprovalNotification(db, {
-        method: "approval/requested",
-        payload: JSON.stringify({ id: "approval-1", params: { command: "git status" } }),
-        provider: "codex",
-        threadId: "thread-approval",
-        type: "codex.event"
-      });
-      const outbox = listSyncOutbox(db, { source: "feishu" });
-      const content = outbox[0]?.content ?? "";
-
-      expect(first).toMatchObject({ queued: true, reason: "queued" });
-      expect(second).toMatchObject({ queued: false, reason: "duplicate" });
-      expect(outbox).toHaveLength(1);
-      expect(content).toContain("git status");
-      expect(outbox[0]).toMatchObject({
-        content: expect.stringContaining("issue #1 需要授权"),
-        issue_id: issueID,
-        status: "pending",
-        target_chat_id: "oc_group"
-      });
-    } finally {
-      db.close();
-    }
-  });
-
-  test("observer queues Feishu status and approval notifications from runtime events", async () => {
-    const db = await fixtureDatabase();
-    const bus = new EventBus();
-    const detach = attachFeishuNotificationObservers({ bus, database: db });
-    try {
-      const issueID = linkedFeishuIssue(db);
-      upsertAgentSession(db, {
-        issue_id: issueID,
-        project_id: "demo",
-        provider: "codex",
-        provider_session_id: "thread-observed"
-      });
-      updateIssue(db, issueID, { status: "done", error: "" });
-
-      bus.publish({
-        issueId: issueID,
-        payload: JSON.stringify({ status: "done" }),
-        type: "issue.status_changed"
-      });
-      bus.publish({
-        method: "approval/requested",
-        payload: JSON.stringify({
-          id: "approval-observed",
-          params: { command: "bun test", threadId: "thread-observed" }
-        }),
-        provider: "codex",
-        threadId: "thread-observed",
-        type: "codex.event"
-      });
-
-      const outbox = listSyncOutbox(db, { source: "feishu" });
-      expect(outbox).toHaveLength(2);
-      expect(outbox.map((item) => item.content).join("\n")).toContain("issue #1 已完成");
-      expect(outbox.map((item) => item.content).join("\n")).toContain("bun test");
-    } finally {
-      detach();
       db.close();
     }
   });

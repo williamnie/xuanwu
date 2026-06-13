@@ -110,7 +110,7 @@ function defaultProjectPiPolicy(projectID: string): ProjectPiPolicy {
     supervisor_cooldown_seconds: 300,
     supervisor_max_recoveries_per_issue: 2,
     supervisor_max_recoveries_per_project_per_hour: 10,
-    supervisor_mode: "propose_only",
+    supervisor_mode: "watchdog",
     supervisor_rate_limit_wait_policy: "respect_retry_after",
     timezone: "UTC",
     working_hours_json: "{}",
@@ -255,7 +255,7 @@ function mode(value: unknown): ProjectPiPolicyMode {
 
 function supervisorMode(value: unknown): PiSupervisorMode {
   const text = cleanString(value) as PiSupervisorMode;
-  return SUPERVISOR_MODES.has(text) ? text : "propose_only";
+  return SUPERVISOR_MODES.has(text) ? text : "watchdog";
 }
 
 function waitPolicy(value: unknown): PiSupervisorRateLimitWaitPolicy {

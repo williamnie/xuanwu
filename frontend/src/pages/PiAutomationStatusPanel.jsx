@@ -76,8 +76,8 @@ function SupervisorPolicyTargets({ supervisor = {} }) {
     <div className="pi-supervisor-policy-targets" aria-label="Supervisor 自动恢复策略">
       <div>
         <strong>Supervisor mode 实际状态</strong>
-        <p>{supervisor.reason || '默认只分析并提出建议，等待人工审批'}；allowed actions：{actionList(supervisor.allowed_actions)}</p>
-        <p>语义：off=关闭；propose_only=只建议；assisted=需审批；autonomous=allowlist 内可自动恢复。</p>
+        <p>{supervisor.reason || '默认只记录 watchdog 信号，不生成待审批动作'}；allowed actions：{actionList(supervisor.allowed_actions)}</p>
+        <p>语义：off=关闭；watchdog=只记录信号；propose_only=只建议；assisted=需审批；autonomous=allowlist 内可自动恢复。</p>
       </div>
       <div className="pi-supervisor-policy-list">
         {targets.length === 0 ? <p className="pi-automation-empty">暂无项目策略。</p> : targets.map(target => <SupervisorTargetRow key={target.project_id} target={target} />)}
@@ -256,6 +256,7 @@ function supervisorModeLabel(mode) {
     autonomous: '可自动恢复',
     off: '关闭',
     propose_only: '只建议',
+    watchdog: 'watchdog',
   };
   return labels[mode] || mode || '未配置';
 }

@@ -88,6 +88,17 @@ const CONFIRM_ACTIONS = new Set([
   "session.resume_followup"
 ]);
 const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);
+const TRUSTED_READONLY_ACTIONS = new Set([
+  "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose",
+  "issue.status_summary", "project.list", "project.status",
+  "repo.read_excerpt", "repo.search", "repo.tree",
+  "session.list", "session.read_summary",
+  "memory.search", "memory.write_candidate",
+  "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
+  "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
+  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend",
+  "mcp.resource.list", "mcp.resource.read"
+]);
 
 export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {
   const base = baseRisk(actionType);
@@ -125,6 +136,9 @@ export function decidePiAuthorization(
   if (!scopeDecision.matched) return { decision: "deny", reason: scopeDecision.reason };
   if (!authorizedMcpCapabilities(envelope, policy)) {
     return { decision: "deny", reason: "MCP capability is not covered by authorization allowlist" };
+  }
+  if (TRUSTED_READONLY_ACTIONS.has(envelope.action_type)) {
+    return { decision: "execute", reason: withScopeReason("trusted read-only action is allowed by gate", scopeDecision.reason) };
   }
   const mode = policy.mode ?? "attended";
   if (mode === "manual") return { decision: "ask", reason: "manual mode requires user approval" };

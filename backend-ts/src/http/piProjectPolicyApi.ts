@@ -8,7 +8,7 @@ import type { Router } from "./router.ts";
 
 type PiProjectPolicyContext = { database: RunnerDatabase };
 const MODES = new Set(["manual", "attended", "delegated", "autonomous"]);
-const SUPERVISOR_MODES = new Set(["off", "propose_only", "assisted", "autonomous"]);
+const SUPERVISOR_MODES = new Set(["off", "watchdog", "propose_only", "assisted", "autonomous"]);
 const SUPERVISOR_WAIT_POLICIES = new Set(["respect_retry_after", "default_cooldown", "ask"]);
 
 export function registerPiProjectPolicyRoutes(router: Router, context: PiProjectPolicyContext): void {

@@ -46,7 +46,8 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     agentBridge: runtime.feishuAgentBridge,
     bus,
     config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig(),
-    database: runtime.database
+    database: runtime.database,
+    providers: runtime.providers
   });
   if (runtime.database) {
     attachFeishuNotificationObservers({

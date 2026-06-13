@@ -38,7 +38,7 @@ export const issueSupervisorRecoveryMigration: SqlMigration = {
   apply(sqlite) {
     sqlite.run(EVENT_TABLE_SQL);
     addPolicyColumn(sqlite, "allowed_supervisor_actions_json", "text not null default '[]'");
-    addPolicyColumn(sqlite, "supervisor_mode", "text not null default 'propose_only'");
+    addPolicyColumn(sqlite, "supervisor_mode", "text not null default 'watchdog'");
     addPolicyColumn(sqlite, "supervisor_cooldown_seconds", "integer not null default 300");
     addPolicyColumn(sqlite, "supervisor_max_recoveries_per_issue", "integer not null default 2");
     addPolicyColumn(sqlite, "supervisor_max_recoveries_per_project_per_hour", "integer not null default 10");

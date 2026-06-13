@@ -123,12 +123,42 @@ function collectInput(input: ProviderErrorParserInput, state: ParseState): void 
 
 function collectIssueEventPayload(payload: unknown, state: ParseState): void {
   const value = parseJsonMaybe(payload);
-  collectValue({ value, state, key: "issue_event" });
   const record = asRecord(value);
+  if (!shouldInspectIssueEventPayload(record)) return;
+  collectValue({ value, state, key: "issue_event" });
   collectValue({ value: record.raw_payload, state, key: "raw_payload" });
   collectValue({ value: record.error, state, key: "error" });
   collectValue({ value: record.payload, state, key: "payload" });
   collectValue({ value: record.text, state, key: "text" });
+}
+
+function shouldInspectIssueEventPayload(record: Record<string, unknown>): boolean {
+  const type = cleanLower(record.type);
+  const status = cleanLower(record.status);
+  const rawMethod = cleanLower(record.raw_method);
+  if (type === "error") return true;
+  if (rawMethod === "turn/completed" && status !== "" && status !== "completed") return true;
+  if (status === "failed" || status === "error") return true;
+  if (status === "completed") return false;
+  if (hasStructuredProviderError(record)) return true;
+  const rawPayload = parseJsonMaybe(record.raw_payload);
+  return hasStructuredProviderError(asRecord(rawPayload));
+}
+
+function hasStructuredProviderError(record: Record<string, unknown>): boolean {
+  return Object.keys(record).some((key) => (
+    /^(status_code|statuscode|http_status|retry_after|retry_after_ms|retryafter|retryafterms|retry_after_at|retryafterat)$/i.test(key)
+  )) || cleanString(record.error) !== "" && (
+    cleanString(record.provider) !== "" || cleanString(record.code) !== "" || cleanString(record.kind) !== ""
+  );
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanLower(value: unknown): string {
+  return cleanString(value).toLowerCase();
 }
 
 function collectProviderEvent(event: Partial<ProviderEvent> | undefined, state: ParseState): void {

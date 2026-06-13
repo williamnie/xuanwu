@@ -121,16 +121,23 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
 }
 
 function fallbackDecision(context: IssueSupervisorRecoveryContext, reason: string): PiSupervisorDecisionJson {
+  const internal = internalDecisionFailure(reason);
   return {
     confidence: "low",
-    decision: issueID(context) > 0 ? "needs_user" : "noop",
+    decision: internal || issueID(context) <= 0 ? "noop" : "needs_user",
     evidence_refs: ["supervisor_decision_invalid", ...candidateEvidence(context)],
-    expected_outcome: "human reviews the invalid PI supervisor decision before any recovery action is dispatched",
+    expected_outcome: internal
+      ? "PI records the invalid supervisor decision as internal audit without user approval"
+      : "human reviews the invalid PI supervisor decision before any recovery action is dispatched",
     fallback_if_no_progress: "blocked",
     rationale: reason,
-    recovery_message: "PI supervisor returned invalid decision JSON; human review is required before attempting recovery.",
-    risk_level: "medium"
+    recovery_message: internal ? "" : "PI supervisor returned invalid decision JSON; human review is required before attempting recovery.",
+    risk_level: internal ? "low" : "medium"
   };
+}
+
+function internalDecisionFailure(reason: string): boolean {
+  return reason.includes("invalid supervisor decision JSON") || reason.includes("schema validation");
 }
 
 function semanticDecisionError(

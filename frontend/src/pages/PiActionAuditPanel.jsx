@@ -3,12 +3,12 @@ import { CheckCircle2, Clock3, GitBranch, Loader2, ShieldAlert, XCircle } from '
 import { api } from '../api/client';
 import { piActionGateApi } from '../api/piActionGateClient';
 import { message } from '../store/toastStore';
+import { isApprovalRequestID, loadPendingApprovals, resolveApprovalRequestDecision } from './piActionApprovalRequests';
 import { shortId } from './piChatState';
 import { actorLabel, decisionLabel, eventTypeLabel, riskLabel, runtimeMessageLabel } from './piCommandCenterTerms';
 import './PiActionAuditPanel.css';
 
-const AUDIT_LIMIT = 36;
-const SNOOZE_MS = 60 * 60 * 1000;
+const AUDIT_LIMIT = 36, SNOOZE_MS = 60 * 60 * 1000;
 
 export default function PiActionAuditPanel({ onChanged, showAuditTimeline = true, variant = 'sidebar' }) {
   const audit = usePiActionAudit(onChanged, showAuditTimeline);
@@ -44,7 +44,7 @@ function useApprovalData(includeEvents) {
     setLoading(true);
     try {
       const [pendingActions, auditEvents] = await Promise.all([
-        piActionGateApi.pendingActions(),
+        loadPendingApprovals(piActionGateApi),
         includeEvents ? piActionGateApi.auditEvents() : Promise.resolve([]),
       ]);
       const normalizedActions = Array.isArray(pendingActions) ? pendingActions : [];
@@ -64,7 +64,7 @@ function useApprovalData(includeEvents) {
   }, [load]);
 
   useEffect(() => api.subscribeToEvents((event) => {
-    if (String(event?.type || '').startsWith('pi.action_')) load();
+    if (String(event?.type || '').startsWith('pi.action_') || event?.method === 'approval/requested') load();
   }), [load]);
   const updateSnoozeTime = useCallback((id, value) => {
     setSnoozeTimes((current) => ({ ...current, [id]: value }));
@@ -139,8 +139,7 @@ function PendingApprovals({ audit }) {
 }
 
 function ApprovalCard({ action, audit }) {
-  const draft = audit.drafts[action.id] || '';
-  const scopeItems = actionScopeItems(action);
+  const draft = audit.drafts[action.id] || '', scopeItems = actionScopeItems(action), providerApproval = isApprovalRequestID(action.id);
   return (
     <article className="pi-action-approval-card">
       <div className="pi-action-card-topline">
@@ -156,8 +155,8 @@ function ApprovalCard({ action, audit }) {
         <div>{scopeItems.map((item) => <code key={item}>{item}</code>)}</div>
       </div>
       <div className="pi-action-decision-row">
-        <DecisionButton action={action} audit={audit} decision="approve" icon={<CheckCircle2 size={13} />} label="批准" />
-        <DecisionButton action={action} audit={audit} decision="request_changes" icon={<ShieldAlert size={13} />} label="要求修改" />
+        <DecisionButton action={action} audit={audit} decision="approve" icon={<CheckCircle2 size={13} />} label={providerApproval ? "批准一次" : "批准"} />
+        <DecisionButton action={action} audit={audit} decision="request_changes" icon={<ShieldAlert size={13} />} label={providerApproval ? "本 session 批准" : "要求修改"} />
         <DecisionButton action={action} audit={audit} decision="snooze" icon={<Clock3 size={13} />} label="暂缓" />
         <DecisionButton action={action} audit={audit} decision="reject" icon={<XCircle size={13} />} label="拒绝" />
       </div>
@@ -221,6 +220,7 @@ function TimelineEvent({ event }) {
 }
 
 async function runDecision(id, decision, draft, snoozeTime) {
+  if (isApprovalRequestID(id)) return resolveApprovalRequestDecision(piActionGateApi, id, decision);
   if (decision === 'approve') return piActionGateApi.approve(id);
   if (decision === 'reject') return piActionGateApi.reject(id);
   if (decision === 'request_changes') return piActionGateApi.requestChanges(id, draft.trim() || '需要 PI 修改动作说明');

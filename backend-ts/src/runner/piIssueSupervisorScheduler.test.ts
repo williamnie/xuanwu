@@ -21,11 +21,43 @@ afterEach(async () => {
 });
 
 describe("PI issue supervisor scheduler", () => {
-  test("default propose-only policy creates a manual pending follow-up without provider execution", async () => {
+  test("default watchdog policy only records signal without creating approval spam", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-watchdog-project-"));
+      insertRunningIssue(db, {
+        issueID: 498,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-498",
+        turnID: "turn-498"
+      });
+      insertIssueEvent(db, 498, { raw_payload: "stream disconnected before completion", type: "error" }, "2026-06-10T07:45:05Z");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => {
+          throw new Error("watchdog must not call PI decision");
+        },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 0, failed: 0, scanned: 1, signaled: 1, skipped: 1 });
+      expect(listPiActions(db, { issueId: 498 })).toEqual([]);
+      expect(listIssueSupervisorEvents(db, { issueId: 498 }).map((event) => event.event_type))
+        .toEqual(["signal"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("propose-only policy creates a manual pending follow-up without provider execution", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();
     try {
       insertProject(db, "demo", await tempRoot("supervisor-propose-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
       insertRunningIssue(db, {
         issueID: 500,
         projectID: "demo",
@@ -136,6 +168,7 @@ describe("PI issue supervisor scheduler", () => {
     const calls: number[] = [];
     try {
       insertProject(db, "demo", await tempRoot("supervisor-due-retry-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
       insertRunningIssue(db, {
         issueID: 505,
         projectID: "demo",
@@ -164,6 +197,41 @@ describe("PI issue supervisor scheduler", () => {
 
       expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
       expect(calls).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not create pending action when supervisor decision schema validation fails", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-invalid-decision-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
+      insertRunningIssue(db, {
+        issueID: 510,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-510",
+        turnID: "turn-510"
+      });
+      insertIssueEvent(db, 510, { raw_payload: "stream disconnected before completion", type: "error" }, "2026-06-10T07:45:05Z");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => ({
+          decision: noopDecision(),
+          error: "supervisor decision failed schema validation",
+          raw_text: "{}",
+          valid: false
+        }),
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 0, failed: 0, scanned: 1, signaled: 1, skipped: 1 });
+      expect(listPiActions(db, { issueId: 510 })).toEqual([]);
+      expect(listIssueSupervisorEvents(db, { issueId: 510 }).map((event) => event.event_type))
+        .toEqual(["signal"]);
     } finally {
       db.close();
     }
@@ -259,6 +327,7 @@ describe("PI issue supervisor scheduler", () => {
     const calls: number[] = [];
     try {
       insertProject(db, "demo", await tempRoot("supervisor-retry-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
       insertRunningIssue(db, {
         issueID: 502,
         projectID: "demo",
@@ -321,6 +390,7 @@ describe("PI issue supervisor scheduler", () => {
     let release!: () => void; const started: number[] = [];
     try {
       insertProject(db, "demo", await tempRoot("supervisor-lock-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
       insertRunningIssue(db, {
         issueID: 504,
         projectID: "demo",
@@ -354,6 +424,7 @@ describe("PI issue supervisor scheduler", () => {
     try {
       faux.setResponses([fauxAssistantMessage(JSON.stringify(noopDecision()))]);
       insertProject(db, "demo", await tempRoot("supervisor-global-agent-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
       insertGlobalPiAgent(db, "pi-supervisor-global");
       writeFauxModelsConfig(db, "pi-supervisor-global");
       insertRunningIssue(db, {
@@ -380,6 +451,7 @@ describe("PI issue supervisor scheduler", () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo", await tempRoot("supervisor-missing-agent-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "propose_only" });
       insertRunningIssue(db, {
         issueID: 507,
         projectID: "demo",

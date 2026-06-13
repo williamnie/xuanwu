@@ -54,6 +54,7 @@ describe("Bun SQLite database connection", () => {
         "external_events",
         "external_links",
         "feishu_conversation_state",
+        "feishu_project_selections",
         "im_reply_drafts",
         "issue_events",
         "issue_runs",
@@ -64,6 +65,7 @@ describe("Bun SQLite database connection", () => {
         "pi_action_events",
         "pi_actions",
         "pi_agents",
+        "pi_approval_requests",
         "pi_conversations",
         "pi_delegations",
         "pi_heartbeat_controls",
@@ -136,7 +138,9 @@ describe("Bun SQLite database connection", () => {
         { id: "022_external_links" },
         { id: "023_im_reply_outbox" },
         { id: "024_im_reply_outbox_dispatch" },
-        { id: "025_feishu_conversation_state" }
+        { id: "025_feishu_conversation_state" },
+        { id: "026_feishu_project_selection" },
+        { id: "027_pi_approval_requests" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -149,6 +153,7 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_source_dedupe");
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_received");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_external");
+      expect(indexNames(connection, "pi_approval_requests")).toContain("idx_pi_approval_requests_issue");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
@@ -172,7 +177,7 @@ describe("Bun SQLite database connection", () => {
         supervisor_cooldown_seconds: "300",
         supervisor_max_recoveries_per_issue: "2",
         supervisor_max_recoveries_per_project_per_hour: "10",
-        supervisor_mode: "'propose_only'",
+        supervisor_mode: "'watchdog'",
         supervisor_rate_limit_wait_policy: "'respect_retry_after'",
         verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
       });
@@ -256,7 +261,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 25 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 27 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

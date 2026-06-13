@@ -92,7 +92,7 @@ describe("PI issue supervisor recovery contract", () => {
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
-        supervisor_mode: "propose_only",
+        supervisor_mode: "watchdog",
         supervisor_rate_limit_wait_policy: "respect_retry_after"
       });
 
@@ -217,7 +217,7 @@ describe("PI issue supervisor recovery contract", () => {
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
-        supervisor_mode: "propose_only",
+        supervisor_mode: "watchdog",
         supervisor_rate_limit_wait_policy: "respect_retry_after"
       });
     } finally {

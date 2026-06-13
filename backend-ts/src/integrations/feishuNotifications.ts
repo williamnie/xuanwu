@@ -3,9 +3,21 @@ import { createImReplyDraft, approveImReplyDraft } from "../db/repositories/imRe
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { listExternalLinksByIssue, createExternalLink } from "../db/repositories/externalLinks.ts";
 import { listAgentSessions } from "../db/repositories/agentSessions.ts";
+import {
+  getPiApprovalRequest,
+  listPiApprovalRequests,
+  markPiApprovalDelivered,
+  upsertPiApprovalRequest
+} from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import { createFeishuMessageClient } from "./feishuClient.ts";
+import {
+  approvalRecordInput,
+  parseCodexApprovalPayload,
+  recordCodexApprovalResolved,
+  resolvePiApprovalRequestFromFeishu
+} from "./feishuApprovalRequests.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
@@ -15,6 +27,12 @@ type FeishuTarget = { chatID: string; eventID: number; messageID: string; thread
 const FEISHU_SOURCE = "feishu";
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
+
+export {
+  getPiApprovalRequest,
+  listPiApprovalRequests,
+  resolvePiApprovalRequestFromFeishu
+};
 
 export function attachFeishuNotificationObservers(input: {
   bus: Pick<EventBus, "observe">;
@@ -31,6 +49,9 @@ export function attachFeishuNotificationObservers(input: {
       if (event.type === "codex.event" && event.method === "approval/requested") {
         const result = queueFeishuApprovalNotification(input.database, event);
         dispatchIfQueued(input, result);
+      }
+      if (event.type === "codex.event" && event.method === "approval/resolved") {
+        recordCodexApprovalResolved(input.database, event);
       }
     } catch {
       // Notification writes are best-effort; the source runtime event should not fail.
@@ -68,19 +89,22 @@ export function queueFeishuIssueStatusNotification(db: RunnerDatabase, issueID: 
 
 export function queueFeishuApprovalNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
   if (event.method !== "approval/requested") return { queued: false, reason: "not_approval_request" };
-  const parsed = approvalPayload(event);
+  const parsed = parseCodexApprovalPayload(event);
   const approvalID = parsed.id || event.threadId || event.turnId;
   if (approvalID === "") return { queued: false, reason: "missing_approval_id" };
-  if (alreadyQueued(db, APPROVAL_NOTIFY_TYPE, approvalID)) return { queued: false, reason: "duplicate" };
   const issue = issueForApproval(db, event);
   if (!issue) return { queued: false, reason: "missing_issue" };
+  upsertPiApprovalRequest(db, approvalRecordInput(event, issue, parsed, approvalID));
   const target = feishuTargetForIssue(db, issue.id);
   if (!target) return { queued: false, reason: "missing_feishu_link" };
+  if (alreadyQueued(db, APPROVAL_NOTIFY_TYPE, approvalID)) return { queued: false, reason: "duplicate" };
   createNotificationDraft(db, issue, target, {
+    approvalActionID: approvalID,
     content: approvalText(issue, parsed.command, parsed.path),
     notifyID: approvalID,
     type: APPROVAL_NOTIFY_TYPE
   });
+  markPiApprovalDelivered(db, approvalID, { channel: "feishu" });
   return { queued: true, reason: "queued" };
 }
 
@@ -88,7 +112,7 @@ function createNotificationDraft(
   db: RunnerDatabase,
   issue: Issue,
   target: FeishuTarget,
-  input: { content: string; notifyID: string; type: string }
+  input: { approvalActionID?: string; content: string; notifyID: string; type: string }
 ): void {
   const draft = createImReplyDraft(db, {
     content: input.content,
@@ -98,6 +122,7 @@ function createNotificationDraft(
     risk: "low",
     source: FEISHU_SOURCE,
     status: "pending",
+    approval_action_id: safeText(input.approvalActionID),
     target_chat_id: target.chatID,
     target_message_id: target.messageID,
     target_thread_id: target.threadID
@@ -124,7 +149,12 @@ function issueStatusText(issue: Issue): string {
 
 function approvalText(issue: Issue, command: string, path: string): string {
   const detail = [command ? `命令：${command}` : "", path ? `路径：${path}` : ""].filter(Boolean).join("；");
-  return `Pi：issue #${issue.id} 需要授权才能继续。${detail || "请到 Runner/Codex 授权面板处理。"}`;
+  return [
+    `Pi：issue #${issue.id} 需要 Codex 授权才能继续。`,
+    detail || "授权详情请到 Runner/Codex 面板查看。",
+    "可选操作：批准一次 / 本 session 批准 / 拒绝 / 暂缓。",
+    "风险：会影响当前 Codex session 的执行授权；页面 PI 控制台仅作为备用入口。"
+  ].join("\n");
 }
 
 function feishuTargetForIssue(db: RunnerDatabase, issueID: number): FeishuTarget | null {
@@ -151,22 +181,11 @@ function alreadyQueued(db: RunnerDatabase, type: string, externalID: string): bo
 
 function issueForApproval(db: RunnerDatabase, event: AppEvent): Issue | null {
   if (event.issueId) return getIssue(db, event.issueId);
-  const threadID = safeText(event.threadId) || safeText(approvalPayload(event).threadID);
+  const threadID = safeText(event.threadId) || safeText(parseCodexApprovalPayload(event).threadID);
   if (threadID === "") return null;
   const session = listAgentSessions(db, { provider: safeText(event.provider) || "codex" })
     .find((item) => item.provider_session_id === threadID);
   return session?.issue_id ? getIssue(db, session.issue_id) : null;
-}
-
-function approvalPayload(event: AppEvent): { command: string; id: string; path: string; threadID: string } {
-  const raw = parseObject(event.payload);
-  const params = parseObject(raw.params);
-  return {
-    command: safeText(params.command || parseObject(params.item).command),
-    id: safeText(raw.id || params.approvalId || params.itemId || params.callId),
-    path: safeText(params.path || parseObject(params.item).path),
-    threadID: safeText(params.threadId || params.conversationId)
-  };
 }
 
 function parseObject(value: unknown): Record<string, unknown> {

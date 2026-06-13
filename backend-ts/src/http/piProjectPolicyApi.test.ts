@@ -47,7 +47,7 @@ describe("PI project policy API", () => {
       expect(await initial.json()).toMatchObject({
         default_mode: "manual",
         project_id: "demo",
-        supervisor_mode: "propose_only",
+        supervisor_mode: "watchdog",
         timezone: "UTC"
       });
       expect(patched.status).toBe(200);

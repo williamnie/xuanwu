@@ -218,7 +218,7 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("records invalid JSON and degrades to an auditable needs_user decision", async () => {
+  test("records invalid JSON as internal audit without creating needs_user fallback", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-invalid-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -233,14 +233,14 @@ describe("PI supervisor decision runtime", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("needs_user");
+      expect(result.decision.decision).toBe("noop");
       expect(result.error).toContain("invalid supervisor decision JSON");
       const events = fixture.db.sqlite.query<{ event_type: string; payload_json: string }, []>(
         "select event_type, payload_json from issue_supervisor_events order by id asc"
       ).all();
       expect(events).toMatchObject([{ event_type: "decision_failed" }]);
       expect(JSON.parse(events[0]?.payload_json ?? "{}")).toMatchObject({
-        fallback_decision: "needs_user",
+        fallback_decision: "noop",
         valid: false
       });
     } finally {

@@ -11,7 +11,10 @@ import { cleanString, recordValue } from "../integrations/feishuShared.ts";
 import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "../integrations/feishuIngest.ts";
 import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
 import { normalizeFeishuProjectSelectionAction } from "../integrations/feishuProjectSelection.ts";
+import { normalizeFeishuApprovalAction } from "../integrations/feishuApprovalCards.ts";
+import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuNotifications.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -20,6 +23,7 @@ export type FeishuEventRoutesContext = {
   bus?: EventBus;
   config: FeishuConnectorConfig;
   database?: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
 type AuditPayload = {
@@ -48,9 +52,22 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
   if (!validToken(parsed.body, context.config.verificationToken)) {
     return reject(context, "invalid_verification_token", rawRef, 401, parsed.encrypted);
   }
-  const action = normalizeFeishuProjectSelectionAction(parsed.body);
-  if (action) {
-    void context.agentBridge?.handleProjectSelectionAction(action).catch(() => undefined);
+  const approvalAction = normalizeFeishuApprovalAction(parsed.body);
+  if (approvalAction) {
+    if (!context.database) return json({ ok: false, reason: "database_unavailable" }, { status: 503 });
+    try {
+      const result = await resolvePiApprovalRequestFromFeishu(context.database, {
+        ...approvalAction,
+        provider: context.providers?.codex
+      });
+      return json(result, { status: 202 });
+    } catch (error) {
+      return reject(context, "approval_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
+    }
+  }
+  const projectAction = normalizeFeishuProjectSelectionAction(parsed.body);
+  if (projectAction) {
+    void context.agentBridge?.handleProjectSelectionAction(projectAction).catch(() => undefined);
     return json({ ok: true }, { status: 202 });
   }
   return acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);
@@ -128,4 +145,8 @@ function validToken(body: Record<string, unknown>, expected: string): boolean {
 
 function publishAudit(context: FeishuEventRoutesContext, payload: AuditPayload): void {
   publishFeishuAudit(context, payload);
+}
+
+function safeError(error: unknown): string {
+  return error instanceof Error ? error.message : "approval callback failed";
 }

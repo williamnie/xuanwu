@@ -7,6 +7,8 @@ import {
   markSyncOutboxRetry,
   markSyncOutboxSent
 } from "../db/repositories/imReplyOutboxDispatch.ts";
+import { getPiApprovalRequest } from "../db/repositories/pi.ts";
+import { buildFeishuApprovalCard } from "../integrations/feishuApprovalCards.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FeishuClientError, type FeishuMessageClient } from "../integrations/feishuClient.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -55,12 +57,32 @@ async function sendOne(
   const policy = preflightPolicy(options.database, outbox, options.config);
   if (policy) return fail(options.database, outbox, policy, now, result);
   try {
-    const sent = await options.sender.sendTextMessage({ ...sendTarget(outbox), text: outbox.content });
+    const sent = await sendFeishuMessage(options, outbox);
     markSyncOutboxSent(options.database, outbox.id, { feishuMessageId: sent.messageId, timestamp: now });
     result.sent += 1;
   } catch (error) {
     handleSendError(options.database, outbox, error, now, result);
   }
+}
+
+async function sendFeishuMessage(
+  options: FeishuOutboxDispatchOptions,
+  outbox: SyncOutboxRecord
+): Promise<{ messageId: string }> {
+  const target = sendTarget(outbox);
+  const approvalID = approvalRequestID(outbox);
+  const approval = approvalID ? getPiApprovalRequest(options.database, approvalID) : null;
+  if (approval && options.sender.sendInteractiveCard) {
+    return await options.sender.sendInteractiveCard({
+      ...target,
+      card: buildFeishuApprovalCard({
+        approvalID: approval.approval_id,
+        issueID: approval.issue_id || outbox.issue_id,
+        text: outbox.content
+      })
+    });
+  }
+  return await options.sender.sendTextMessage({ ...target, text: outbox.content });
 }
 
 function handleSendError(
@@ -98,10 +120,16 @@ function preflightPolicy(db: RunnerDatabase, outbox: SyncOutboxRecord, config: F
   if (outbox.feishu_message_id !== "") return "outbox already has Feishu message id";
   if (outbox.content.trim() === "") return "outbox content is empty";
   if (outbox.risk !== "low") return `outbox risk is not allowed: ${outbox.risk}`;
+  const approval = approvalRequestID(outbox);
+  if (approval !== "" && !getPiApprovalRequest(db, approval)) return "approval request is missing";
   const target = sendTarget(outbox);
   if (target.receiveId === "") return "outbox receive id is empty";
   if (!targetAllowed(config, target)) return `${target.receiveIdType.replace("_id", "")} is not allowed: ${target.receiveId}`;
   return "";
+}
+
+function approvalRequestID(outbox: SyncOutboxRecord): string {
+  return outbox.approval_action_id.trim();
 }
 
 function targetAllowed(config: FeishuConnectorConfig, target: SendTarget): boolean {

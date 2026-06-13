@@ -67,7 +67,15 @@ export async function runPiIssueSupervisorSchedulerOnce(
         continue;
       }
       recordSignal(input.database, target);
+      if (clean(target.context.policy.mode) === "watchdog") {
+        result.skipped += 1;
+        continue;
+      }
       const decision = await runDecision(input, target.context, now);
+      if (!decision.valid) {
+        result.skipped += 1;
+        continue;
+      }
       await applyIssueSupervisorDecisionActions({
         context: target.context,
         database: input.database,
