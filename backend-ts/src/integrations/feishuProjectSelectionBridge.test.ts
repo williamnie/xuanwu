@@ -47,6 +47,37 @@ describe("Feishu project selection bridge helper", () => {
     });
     database.close();
   });
+
+  test("asks project selection for explicit batch continuation without project context", async () => {
+    const database = await openFixtureDatabase();
+    const sentCards: Record<string, unknown>[] = [];
+    insertProject(database, "demo", "Demo Project");
+
+    const result = await maybeSendFeishuProjectSelection({
+      clock: { now: () => new Date("2026-06-13T01:02:03Z") },
+      config: () => ({ allowedChatIds: [], allowedUserIds: [], appId: "", appSecret: "", encryptKey: "", projectMappings: [], receiveMode: "websocket", verificationToken: "" }),
+      database,
+      runConversation: async () => ({ text: "unused" }),
+      sender: {
+        sendInteractiveCard: async (input) => {
+          sentCards.push(input.card);
+          return { messageId: "om_card_batch" };
+        },
+        sendTextMessage: async (_input: FeishuTextMessageInput) => ({ messageId: "om_text_unused" })
+      }
+    }, inputFixture("把 #387-#391 都开始做"), {
+      ...routeFixture(),
+      prompt: "把 #387-#391 都开始做"
+    }, missingContext(), "inbox_only");
+
+    const selectionId = selectionIDFromCard(sentCards[0]);
+    expect(result).toEqual({ messageId: "om_card_batch", reason: "project_selection_sent", replied: true });
+    expect(getFeishuPendingProjectSelection(database, selectionId)).toMatchObject({
+      original_prompt: "把 #387-#391 都开始做",
+      status: "pending"
+    });
+    database.close();
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {

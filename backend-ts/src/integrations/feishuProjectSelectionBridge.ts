@@ -85,7 +85,8 @@ function shouldAskProjectSelection(
 }
 
 function isContinuationPrompt(prompt: string): boolean {
-  return /^(开始|开始做|开始吧|开始做吧|继续|继续做|接着|接着做|下一个|跑起来)$/i.test(cleanString(prompt));
+  return /^(开始|开始做|开始吧|开始做吧|继续|继续做|接着|接着做|下一个|跑起来)$/i.test(cleanString(prompt)) ||
+    /#\s*\d+\s*[-~～—–]\s*#?\s*\d+|所有|全部|剩下都|剩余都|这个系列|这一系列|这组都|这一组都/i.test(cleanString(prompt));
 }
 
 function selectionCandidates(

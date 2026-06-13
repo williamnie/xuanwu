@@ -39,8 +39,8 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
-    expect(validateArgs(batchTriage, { project_id: "demo", max_count: 3, user_phrase: "完成所有 issue" }))
-      .toEqual({ project_id: "demo", max_count: 3, user_phrase: "完成所有 issue" });
+    expect(validateArgs(batchTriage, { issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" }))
+      .toEqual({ issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" });
     expect(validateArgs(nextTriage, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
     expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
@@ -98,9 +98,10 @@ describe("PI runner action tools", () => {
     await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
     await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
     await batchTriage.execute("tool-batch-triage", {
+      issue_ids: [387, 388],
       project_id: "demo",
       max_count: 3,
-      user_phrase: "完成所有 issue"
+      user_phrase: "把 #387-#388 都开始做"
     }, undefined, undefined, {} as never);
     await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
@@ -120,7 +121,7 @@ describe("PI runner action tools", () => {
       ["readIssue", { id: 7 }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
-      ["enqueueBatchTriageIssues", { project_id: "demo", max_count: 3, user_phrase: "完成所有 issue" }],
+      ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],

@@ -3,10 +3,17 @@ import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
+import { parseBatchTriageScope, type BatchTriageScope } from "./runnerBatchTriageScope.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 
 export type NextTriageIssueInput = { project_id?: string; rationale?: string };
-export type BatchTriageIssueInput = { max_count?: number; project_id?: string; rationale?: string; user_phrase?: string };
+export type BatchTriageIssueInput = {
+  issue_ids?: number[];
+  max_count?: number;
+  project_id?: string;
+  rationale?: string;
+  user_phrase?: string;
+};
 
 type NextTriageContext = PiActionContext & {
   onIssueEnqueued?: (projectID: string) => void;
@@ -43,8 +50,9 @@ export function createBatchTriageEnqueueAction(
   input: BatchTriageIssueInput
 ): unknown {
   const projectID = scopedProjectID(input.project_id, context);
-  if (!hasExplicitBatchIntent(input.user_phrase)) return refusedBatchIntent(projectID);
-  const candidates = triageIssues(db, projectID);
+  const scope = parseBatchTriageScope(input.user_phrase, input.issue_ids);
+  if (!scope.explicit) return refusedBatchIntent(projectID);
+  const candidates = scopedBatchCandidates(db, projectID, scope);
   if (candidates.length === 0) return noBatchTriageCandidate(projectID);
   const limit = batchLimit(input.max_count);
   const result = enqueueBatchCandidates(db, context, candidates.slice(0, limit), input.rationale);
@@ -58,6 +66,13 @@ function nextTriageIssue(db: RunnerDatabase, projectID: string): Issue | undefin
 
 function triageIssues(db: RunnerDatabase, projectID: string): Issue[] {
   return listIssues(db, { projectId: projectID, status: "triage" }).sort(nextTriageIssueOrder);
+}
+
+function scopedBatchCandidates(db: RunnerDatabase, projectID: string, scope: BatchTriageScope): Issue[] {
+  const candidates = triageIssues(db, projectID);
+  if (scope.kind !== "issue_refs") return candidates;
+  const byID = new Map(candidates.map((issue) => [issue.id, issue]));
+  return scope.issueIds.map((id) => byID.get(id)).filter((issue): issue is Issue => issue !== undefined);
 }
 
 function nextTriageIssueOrder(left: Issue, right: Issue): number {
@@ -214,12 +229,6 @@ function enqueueProposal(issue: Issue, rationale: string | undefined) {
 function batchLimit(value: unknown): number {
   const raw = typeof value === "number" && Number.isSafeInteger(value) ? value : DEFAULT_BATCH_TRIAGE_LIMIT;
   return Math.min(MAX_BATCH_TRIAGE_LIMIT, Math.max(1, raw));
-}
-
-function hasExplicitBatchIntent(value: unknown): boolean {
-  const text = cleanString(value);
-  if (text === "") return false;
-  return /所有|全部|这组都|这一组都|剩下都|剩余都|都做完|全做完|\b(all|everything|remaining|rest)\b/i.test(text);
 }
 
 function objectPayload(value: unknown): Record<string, unknown> {

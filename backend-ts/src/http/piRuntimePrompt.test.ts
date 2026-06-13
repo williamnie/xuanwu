@@ -65,6 +65,8 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("issue_enqueue_next_triage");
       expect(prompt).toContain("继续做下一个");
       expect(prompt).toContain("issue_enqueue_batch_triage");
+      expect(prompt).toContain("#387-#391");
+      expect(prompt).toContain("issue_ids");
       expect(prompt).toContain("完成所有");
       expect(prompt).toContain("开始做吧");
       expect(prompt).toContain("ordinary/high-risk paths must stay behind the gate");

@@ -185,6 +185,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     actionTool("issue_enqueue_batch_triage", "Issue Enqueue Batch Triage",
       "Batch-enqueue bounded same-project status=triage issues only when the user explicitly asks to complete all/remaining/current group issues.",
       Type.Object({
+        issue_ids: Type.Optional(Type.Array(positiveID)),
         max_count: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
         project_id: optionalString,
         rationale: optionalString,
