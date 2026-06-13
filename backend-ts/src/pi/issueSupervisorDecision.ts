@@ -8,6 +8,12 @@ import {
   PI_SUPERVISOR_DECISION_JSON_SCHEMA,
   type PiSupervisorDecisionJson
 } from "./issueSupervisorRecovery.ts";
+import {
+  decisionFailure,
+  decisionFailurePayload,
+  schemaDecisionFailure,
+  type DecisionFailure
+} from "./issueSupervisorDecisionFailure.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 
 export type PiSupervisorDecisionRuntimeInput = {
@@ -21,6 +27,7 @@ export type PiSupervisorDecisionRuntimeInput = {
 export type PiSupervisorDecisionRuntimeResult = {
   decision: PiSupervisorDecisionJson;
   error?: string;
+  error_summary?: string;
   raw_text: string;
   valid: boolean;
 };
@@ -53,14 +60,20 @@ export async function runPiSupervisorDecision(
   try {
     await runtime.session.prompt(decisionPrompt(input.context, input.now ?? new Date()), {
       expandPromptTemplates: false,
-      source: "pi_supervisor_decision"
+      source: "rpc"
     });
     const raw = runtime.session.getLastAssistantText() ?? "";
     const parsed = parseDecision(raw, input.context, input.now ?? new Date());
     if (!parsed.valid) {
       const fallback = fallbackDecision(input.context, parsed.error);
-      recordDecisionFailure(input.database, input.context, raw, parsed.error, fallback);
-      return { decision: fallback, error: parsed.error, raw_text: raw, valid: false };
+      recordDecisionFailure(input.database, input.context, raw, parsed, fallback);
+      return {
+        decision: fallback,
+        error: parsed.error,
+        error_summary: parsed.error_summary,
+        raw_text: raw,
+        valid: false
+      };
     }
     recordDecisionSuccess(input.database, input.context, parsed.decision);
     return { decision: parsed.decision, raw_text: raw, valid: true };
@@ -92,15 +105,15 @@ function parseDecision(
   raw: string,
   context: IssueSupervisorRecoveryContext,
   now: Date
-): { decision: PiSupervisorDecisionJson; valid: true } | { error: string; valid: false } {
+): { decision: PiSupervisorDecisionJson; valid: true } | DecisionFailure {
   const parsed = parseJsonObject(extractJson(raw));
-  if (!parsed) return { error: "invalid supervisor decision JSON", valid: false };
+  if (!parsed) return decisionFailure("invalid supervisor decision JSON");
   if (!Value.Check(PI_SUPERVISOR_DECISION_JSON_SCHEMA, parsed)) {
-    return { error: "supervisor decision failed schema validation", valid: false };
+    return schemaDecisionFailure(parsed);
   }
   const decision = parsed as PiSupervisorDecisionJson;
   const semanticError = semanticDecisionError(decision, context, now);
-  return semanticError ? { error: semanticError, valid: false } : { decision, valid: true };
+  return semanticError ? decisionFailure(semanticError) : { decision, valid: true };
 }
 
 function extractJson(raw: string): string {
@@ -145,16 +158,17 @@ function semanticDecisionError(
   context: IssueSupervisorRecoveryContext,
   now: Date
 ): string {
-  if (humanOnlyProviderFailure(context) && !["needs_user", "blocked"].includes(decision.decision)) {
+  const decisionType = cleanString(decision.decision);
+  if (humanOnlyProviderFailure(context) && !["needs_user", "blocked"].includes(decisionType)) {
     return "supervisor decision attempted automatic recovery for a human-only provider failure";
   }
-  if (futureRetryAfter(context, now) && !["wait", "needs_user", "blocked", "noop"].includes(decision.decision)) {
+  if (futureRetryAfter(context, now) && !["wait", "needs_user", "blocked", "noop"].includes(decisionType)) {
     return "supervisor decision ignored a future provider retry-after window";
   }
-  if (decision.decision === "wait" && cleanString(decision.wait_until) === "") {
+  if (decisionType === "wait" && cleanString(decision.wait_until) === "") {
     return "wait decision requires wait_until";
   }
-  if ((decision.decision === "resume_session" || decision.decision === "steer_running_turn") &&
+  if ((decisionType === "resume_session" || decisionType === "steer_running_turn") &&
     cleanString(decision.recovery_message) === "") {
     return "session recovery decision requires recovery_message";
   }
@@ -187,7 +201,7 @@ function recordDecisionFailure(
   db: RunnerDatabase,
   context: IssueSupervisorRecoveryContext,
   raw: string,
-  error: string,
+  failure: DecisionFailure,
   fallback: PiSupervisorDecisionJson
 ): void {
   createIssueSupervisorEvent(db, {
@@ -196,12 +210,7 @@ function recordDecisionFailure(
     diagnosis_code: primaryDiagnosis(context),
     event_type: "decision_failed",
     issue_id: issueID(context),
-    payload_json: {
-      error,
-      fallback_decision: fallback.decision,
-      raw_text: truncate(raw),
-      valid: false
-    },
+    payload_json: decisionFailurePayload({ context, failure, fallback, raw }),
     project_id: cleanString(context.project.id),
     provider: cleanString(context.session.provider) || cleanString(context.provider_error?.provider),
     provider_error_category: providerCategory(context),
@@ -261,8 +270,4 @@ function candidateEvidence(context: IssueSupervisorRecoveryContext): string[] {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function truncate(value: string): string {
-  return value.length <= 2_000 ? value : `${value.slice(0, 1_999)}…`;
 }

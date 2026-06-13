@@ -248,4 +248,42 @@ describe("PI supervisor decision runtime", () => {
       fixture.db.close();
     }
   });
+
+  test("records schema mismatch diagnostic without pending action", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-schema-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    try {
+      faux.setResponses([fauxAssistantMessage(`${JSON.stringify({
+        confidence: 0,
+        decision: "wait",
+        evidence_refs: ["provider_error"],
+        expected_outcome: "provider retry window is respected",
+        fallback_if_no_progress: "ask a human to inspect the malformed output",
+        rationale: "HTTP 429 includes a future retry-after timestamp",
+        risk_level: "low",
+        wait_until: null
+      })}\n${"x".repeat(2_100)}`)]);
+
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: rateLimitContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+      const events = fixture.db.sqlite.query<{ payload_json: string }, []>(
+        "select payload_json from issue_supervisor_events where event_type='decision_failed'"
+      ).all();
+      const payload = JSON.parse(events[0]?.payload_json ?? "{}");
+
+      expect(result).toMatchObject({ valid: false, decision: { decision: "noop" } });
+      expect(listPiActions(fixture.db, { status: "pending" })).toEqual([]);
+      expect(payload).toMatchObject({ fallback_decision: "noop", raw_text_truncated: true, valid: false });
+      expect(payload.error_summary).toContain("schema validation");
+      expect(String(payload.raw_text).length).toBeLessThanOrEqual(2_000);
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
 });
