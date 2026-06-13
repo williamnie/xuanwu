@@ -64,6 +64,10 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("call issue_enqueue_proposal by default");
       expect(prompt).toContain("issue_enqueue_next_triage");
       expect(prompt).toContain("继续做下一个");
+      expect(prompt).toContain("issue_enqueue_batch_triage");
+      expect(prompt).toContain("完成所有");
+      expect(prompt).toContain("开始做吧");
+      expect(prompt).toContain("ordinary/high-risk paths must stay behind the gate");
       expect(prompt).toContain("Only wait");
     } finally {
       db.close();

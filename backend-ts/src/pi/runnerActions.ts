@@ -17,7 +17,12 @@ import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStat
 import { createIssueScheduleEnqueueAction, type IssueScheduleEnqueueInput } from "./runnerIssueScheduleActions.ts";
 import { createPiAgentOrchestrationActions, type PiAgentOrchestrationActionLayer } from "./agentOrchestrationActions.ts";
 import { createPiRepoReadActions, type PiRepoReadActionLayer } from "./repoReadActionTools.ts";
-import { createNextTriageEnqueueAction, type NextTriageIssueInput } from "./runnerNextTriageActions.ts";
+import {
+  createBatchTriageEnqueueAction,
+  createNextTriageEnqueueAction,
+  type BatchTriageIssueInput,
+  type NextTriageIssueInput
+} from "./runnerNextTriageActions.ts";
 import {
   createCompactIssueList,
   createIssueExecutionStatus,
@@ -39,6 +44,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   readSkill(input: SkillReadInput): unknown;
   recommendSkills(input: SkillRecommendInput): unknown;
   auditSkillIntents(input: SkillIntentAuditInput): unknown;
+  enqueueBatchTriageIssues(input: BatchTriageIssueInput): unknown;
   enqueueNextTriageIssue(input: NextTriageIssueInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
   issueExecutionStatus(input: IssueExecutionStatusInput): unknown;
@@ -126,6 +132,7 @@ export function createPiRunnerActions(
       const actionContext = actionContextForProposal(context, proposal);
       return createPendingPiAction(db, actionContext, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
     },
+    enqueueBatchTriageIssues: (input) => createBatchTriageEnqueueAction(db, context, input),
     enqueueNextTriageIssue: (input) => createNextTriageEnqueueAction(db, context, input),
     scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
     issueExecutionStatus: (input) => safeIssueExecutionStatus(db, context, input),

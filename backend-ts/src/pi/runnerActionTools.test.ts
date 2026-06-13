@@ -28,6 +28,7 @@ describe("PI runner action tools", () => {
     const repoRead = toolByName(tools, "repo_read_excerpt");
     const repoTree = toolByName(tools, "repo_tree");
     const issueCreate = toolByName(tools, "issue_create_proposal");
+    const batchTriage = toolByName(tools, "issue_enqueue_batch_triage");
     const nextTriage = toolByName(tools, "issue_enqueue_next_triage");
     const issueList = toolByName(tools, "issue_list");
     const issueStatus = toolByName(tools, "issue_status_summary");
@@ -38,6 +39,8 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(batchTriage, { project_id: "demo", max_count: 3, user_phrase: "完成所有 issue" }))
+      .toEqual({ project_id: "demo", max_count: 3, user_phrase: "完成所有 issue" });
     expect(validateArgs(nextTriage, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
     expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
@@ -84,6 +87,8 @@ describe("PI runner action tools", () => {
     });
     expect(() => validateArgs(issueRead, { id: "bad" })).toThrow(/Validation failed/);
     expect(() => validateArgs(issueRead, { id: 1, unexpected: true })).toThrow(/Validation failed/);
+    expect(() => validateArgs(batchTriage, { max_count: 3 })).toThrow(/Validation failed/);
+    expect(() => validateArgs(batchTriage, { max_count: 11 })).toThrow(/Validation failed/);
     expect(() => validateArgs(steer, { session_key: "codex:thread-1", prompt: " " })).toThrow(/Validation failed/);
 
     await recommendProfile.execute("tool-profile", { issue_id: 1, role: "executor" }, undefined, undefined, {} as never);
@@ -92,6 +97,11 @@ describe("PI runner action tools", () => {
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
     await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
     await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
+    await batchTriage.execute("tool-batch-triage", {
+      project_id: "demo",
+      max_count: 3,
+      user_phrase: "完成所有 issue"
+    }, undefined, undefined, {} as never);
     await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repoSearch.execute("tool-repo-search", { query: "Accordion", max_results: 3 }, undefined, undefined, {} as never);
@@ -110,6 +120,7 @@ describe("PI runner action tools", () => {
       ["readIssue", { id: 7 }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
+      ["enqueueBatchTriageIssues", { project_id: "demo", max_count: 3, user_phrase: "完成所有 issue" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
@@ -620,6 +631,174 @@ describe("PI runner action tools", () => {
     }
   });
 
+  test("delegated runner chat batch-enqueues bounded triage issues for the current project", async () => {
+    const fixture = await openFixture();
+    const kickedProjects: string[] = [];
+    try {
+      fixture.db.sqlite.run(
+        `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?)`,
+        ["other", "Other", `${fixture.project.cwd}-other`, 2, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+      const otherProjectIssue = insertIssue(fixture.db, {
+        createdAt: "2026-01-01T00:00:00Z",
+        priority: 99,
+        projectID: "other",
+        status: "triage",
+        title: "Other project should not run"
+      });
+      const selectedA = insertIssue(fixture.db, {
+        createdAt: "2026-01-01T00:00:00Z",
+        priority: 10,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "First selected"
+      });
+      const selectedB = insertIssue(fixture.db, {
+        createdAt: "2026-01-02T00:00:00Z",
+        priority: 10,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Second selected"
+      });
+      const skippedByLimit = insertIssue(fixture.db, {
+        createdAt: "2026-01-03T00:00:00Z",
+        priority: 10,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: "Skipped by limit"
+      });
+      insertIssue(fixture.db, {
+        createdAt: "2026-01-01T00:00:00Z",
+        priority: 20,
+        projectID: fixture.project.id,
+        status: "todo",
+        title: "Already todo"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        onIssueEnqueued: (projectID) => kickedProjects.push(projectID),
+        project: fixture.project,
+        source: "runner_chat"
+      });
+
+      const result = actions.enqueueBatchTriageIssues({
+        max_count: 2,
+        rationale: "把剩下都做完",
+        user_phrase: "把剩下都做完"
+      }) as {
+        enqueued_count: number;
+        enqueued: Array<{ id: number; status: string; title: string }>;
+        skipped: Array<{ count: number; reason: string }>;
+        status: string;
+      };
+
+      expect(result).toMatchObject({
+        enqueued_count: 2,
+        enqueued: [
+          { id: selectedA, status: "todo", title: "First selected" },
+          { id: selectedB, status: "todo", title: "Second selected" }
+        ],
+        project_id: fixture.project.id,
+        skipped: [
+          { count: 1, reason: "limit_exceeded" }
+        ],
+        status: "completed"
+      });
+      expect(getIssue(fixture.db, selectedA)).toMatchObject({ status: "todo" });
+      expect(getIssue(fixture.db, selectedB)).toMatchObject({ status: "todo" });
+      expect(getIssue(fixture.db, skippedByLimit)).toMatchObject({ status: "triage" });
+      expect(getIssue(fixture.db, otherProjectIssue)).toMatchObject({ status: "triage" });
+      expect(kickedProjects).toEqual([fixture.project.id]);
+      expect(listPiActions(fixture.db, { status: "completed" }).filter((action) => action.action_type === "issue.enqueue"))
+        .toHaveLength(2);
+      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "issue.enqueue",
+        issue_id: selectedA,
+        payload_json: JSON.stringify({ issue_id: selectedA })
+      }));
+      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+        action_type: "issue.enqueue",
+        issue_id: selectedB,
+        payload_json: JSON.stringify({ issue_id: selectedB })
+      }));
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("batch triage enqueue keeps ordinary chat behind approval gate and default limit", async () => {
+    const fixture = await openFixture();
+    const kickedProjects: string[] = [];
+    try {
+      const issueIDs = Array.from({ length: 6 }, (_unused, index) => insertIssue(fixture.db, {
+        createdAt: `2026-01-0${index + 1}T00:00:00Z`,
+        priority: 1,
+        projectID: fixture.project.id,
+        status: "triage",
+        title: `Candidate ${index + 1}`
+      }));
+      const actions = createPiRunnerActions(fixture.db, {
+        onIssueEnqueued: (projectID) => kickedProjects.push(projectID),
+        project: fixture.project
+      });
+
+      const result = actions.enqueueBatchTriageIssues({
+        rationale: "完成所有 issue",
+        user_phrase: "完成所有 issue"
+      }) as {
+        enqueued_count: number;
+        max_count: number;
+        pending_count: number;
+        skipped: Array<{ count: number; reason: string }>;
+        status: string;
+      };
+
+      expect(result).toMatchObject({
+        enqueued_count: 0,
+        max_count: 5,
+        pending_count: 5,
+        skipped: expect.arrayContaining([
+          { count: 5, reason: "approval_required" },
+          { count: 1, reason: "limit_exceeded" }
+        ]),
+        status: "pending"
+      });
+      expect(issueIDs.map((id) => getIssue(fixture.db, id)?.status)).toEqual([
+        "triage", "triage", "triage", "triage", "triage", "triage"
+      ]);
+      expect(kickedProjects).toEqual([]);
+      expect(listPiActions(fixture.db, { status: "pending" })
+        .filter((action) => action.action_type === "issue.enqueue")).toHaveLength(5);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("batch triage enqueue refuses ambiguous continue phrases", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Should stay triage" });
+      const actions = createPiRunnerActions(fixture.db, {
+        project: fixture.project,
+        source: "runner_chat"
+      });
+
+      const result = actions.enqueueBatchTriageIssues({ user_phrase: "开始做吧" }) as {
+        reason: string;
+        status: string;
+      };
+
+      expect(result).toMatchObject({
+        reason: "missing_explicit_batch_intent",
+        status: "refused"
+      });
+      expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "triage" });
+      expect(listPiActions(fixture.db)).toHaveLength(0);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("next triage enqueue reports no candidate without mutating issues", async () => {
     const fixture = await openFixture();
     try {
@@ -783,6 +962,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     diagnoseIssueState: record("diagnoseIssueState"),
     escalateNeedsUser: record("escalateNeedsUser"),
     createSessionSteerProposal: record("createSessionSteerProposal"),
+    enqueueBatchTriageIssues: record("enqueueBatchTriageIssues"),
     enqueueNextTriageIssue: record("enqueueNextTriageIssue"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
     listIssues: record("listIssues"),

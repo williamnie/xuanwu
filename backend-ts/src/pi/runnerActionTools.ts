@@ -19,6 +19,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_state_diagnose",
   "issue_state_repair_proposal",
   "issue_comment",
+  "issue_enqueue_batch_triage",
   "issue_enqueue_proposal",
   "issue_enqueue_next_triage",
   "issue_schedule_enqueue",
@@ -181,6 +182,14 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
     actionTool("issue_enqueue_proposal", "Issue Enqueue Proposal",
       "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
+    actionTool("issue_enqueue_batch_triage", "Issue Enqueue Batch Triage",
+      "Batch-enqueue bounded same-project status=triage issues only when the user explicitly asks to complete all/remaining/current group issues.",
+      Type.Object({
+        max_count: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
+        project_id: optionalString,
+        rationale: optionalString,
+        user_phrase: requiredText
+      }, objectOptions), actions.enqueueBatchTriageIssues),
     actionTool("issue_enqueue_next_triage", "Issue Enqueue Next Triage",
       "Select and enqueue exactly one next triage issue in the current project when the user asks to continue the next/current-group task.",
       Type.Object({ project_id: optionalString, rationale: optionalString }, objectOptions), actions.enqueueNextTriageIssue),
