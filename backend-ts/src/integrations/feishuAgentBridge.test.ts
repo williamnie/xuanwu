@@ -161,7 +161,7 @@ describe("Feishu agent bridge", () => {
     expect(sent).toEqual([{
       receiveId: "oc_group",
       receiveIdType: "chat_id",
-      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请在设置页添加 Project Mappings，或在消息里带上项目名后再发。"
+      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请先发送 `/p <项目名>` 切换项目，或在消息里带上项目名后再发。"
     }]);
     database.close();
   });

@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { resolveFeishuProjectContextFromDatabase, type FeishuProjectContextResult } from "./feishuProjectContext.ts";
 import { createExternalLink, listExternalLinksByExternal } from "../db/repositories/externalLinks.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feishu.ts";
@@ -10,8 +11,10 @@ import {
 import {
   parseFeishuNewConversationCommand,
   routeFeishuConversation,
-  type FeishuConversationClock
+  type FeishuConversationClock,
+  type FeishuConversationRoute
 } from "./feishuConversationRouting.ts";
+import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
@@ -38,7 +41,7 @@ const REPLY_LINK_TYPE = "feishu_agent_reply";
 const REPLY_RELATIONSHIP = "agent_reply";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
-const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请在设置页添加 Project Mappings，或在消息里带上项目名后再发。";
+const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请先发送 `/p <项目名>` 切换项目，或在消息里带上项目名后再发。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   return {
@@ -53,12 +56,25 @@ async function handleFeishuAgentMessage(
   const policy = replyPolicy(input);
   if (policy) return { reason: policy, replied: false };
   if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
-  const direct = directReply(input, options);
+  const route = conversationRoute(options, input);
+  const projectContext = projectContextForRoute(options, input, route);
+  const projectSwitch = applyFeishuProjectSwitchCommand(options.database, {
+    route,
+    timestamp: options.clock?.now(),
+    text: input.event.text
+  });
+  if (projectSwitch.status !== "none") return sendReply(options, input, projectSwitch.text, {
+    conversationId: route.conversationId,
+    projectId: projectSwitch.projectId,
+    text: projectSwitch.text
+  }, projectSwitch.reason);
+  const direct = directReply(input, options, projectContext);
   if (direct) return sendReply(options, input, direct.text, {
-    conversationId: fallbackConversationID(input.event),
+    conversationId: route.conversationId,
+    projectId: resolvedProjectId(projectContext, input),
     text: direct.text
   }, direct.reason);
-  const runner = await runnerReply(options, input);
+  const runner = await runnerReply(options, input, route, projectContext);
   const text = cleanString(runner.text);
   if (text === "") return { reason: "empty_agent_reply", replied: false };
   return sendReply(options, input, text, runner, "agent_reply_sent");
@@ -82,23 +98,21 @@ async function sendReply(
 
 async function runnerReply(
   options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput
+  input: FeishuBridgeHandleInput,
+  route: FeishuConversationRoute,
+  projectContext: FeishuProjectContextResult
 ): Promise<FeishuRunnerResult> {
   try {
     if (!options.runConversation) return { text: "" };
     const prompt = input.event.text || "[Feishu attachment message]";
-    const route = routeFeishuConversation(options.database, {
-      clock: options.clock,
-      event: input.event,
-      prompt
-    });
+    const projectId = resolvedProjectId(projectContext, input);
     if (route.isNewCommand && route.prompt === "") {
-      return { conversationId: route.conversationId, projectId: attentionProjectId(input.ingest), text: NEW_CONVERSATION_ACK_TEXT };
+      return { conversationId: route.conversationId, projectId, text: NEW_CONVERSATION_ACK_TEXT };
     }
     return await options.runConversation({
       conversationId: route.conversationId,
       event: input.event,
-      projectId: attentionProjectId(input.ingest),
+      projectId,
       prompt: route.prompt || prompt
     });
   } catch (error) {
@@ -121,12 +135,16 @@ function replyPolicy(input: FeishuBridgeHandleInput): string {
   return "";
 }
 
-function directReply(input: FeishuBridgeHandleInput, options: FeishuAgentBridgeOptions): DirectReply | null {
+function directReply(
+  input: FeishuBridgeHandleInput,
+  options: FeishuAgentBridgeOptions,
+  projectContext: FeishuProjectContextResult
+): DirectReply | null {
   const decision = attentionDecision(input.ingest);
   if (decision === "inbox_only" && !options.runConversation) {
     return { reason: "chat_ack_sent", text: CHAT_ACK_TEXT };
   }
-  if (decision === "ask_clarification" && !isNewPromptWithContent(input.event.text)) {
+  if (decision === "ask_clarification" && projectContext.status !== "resolved" && !isNewPromptWithContent(input.event.text)) {
     return { reason: "project_clarification_sent", text: PROJECT_CLARIFICATION_TEXT };
   }
   return null;
@@ -135,6 +153,41 @@ function directReply(input: FeishuBridgeHandleInput, options: FeishuAgentBridgeO
 function isNewPromptWithContent(prompt: string): boolean {
   const command = parseFeishuNewConversationCommand(prompt);
   return command.isNewCommand && command.prompt !== "";
+}
+
+function conversationRoute(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput
+): FeishuConversationRoute {
+  return routeFeishuConversation(options.database, {
+    clock: options.clock,
+    event: input.event,
+    prompt: input.event.text || "[Feishu attachment message]"
+  });
+}
+
+function projectContextForRoute(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput,
+  route: FeishuConversationRoute
+): FeishuProjectContextResult {
+  return resolveFeishuProjectContextFromDatabase(options.database, {
+    mappings: options.config().projectMappings,
+    message: {
+      chatId: input.event.chat_id,
+      senderId: input.event.sender.id,
+      senderOpenId: input.event.sender.open_id
+    },
+    scopeKey: route.scopeKey,
+    text: route.prompt || input.event.text
+  });
+}
+
+function resolvedProjectId(
+  context: FeishuProjectContextResult,
+  input: FeishuBridgeHandleInput
+): string {
+  return context.status === "resolved" ? context.projectId : attentionProjectId(input.ingest);
 }
 
 function attentionDecision(input: FeishuIngestResult): string {
