@@ -6,6 +6,10 @@ import { openDatabase } from "./db/database.ts";
 import { EventBus } from "./events/bus.ts";
 import { runProjectPiCycle } from "./http/piProjectControlApi.ts";
 import { startServer } from "./http/server.ts";
+import type { FeishuConnectorConfig } from "./integrations/feishu.ts";
+import { createFeishuAgentBridge } from "./integrations/feishuAgentBridge.ts";
+import { createFeishuReceiverManager } from "./integrations/feishuReceiver.ts";
+import { runPiConversationPrompt } from "./http/piConversationApi.ts";
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
@@ -28,7 +32,28 @@ const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 const bus = new EventBus();
 const providers = executorProviders(config, bus);
-const server = await startServer(config, { bus, database, providers });
+const feishuBridge = createFeishuAgentBridge({
+  config: () => config.integrations.feishu,
+  database,
+  runConversation: async ({ event, projectId, prompt }) => {
+    const result = await runPiConversationPrompt({ bus, database }, {
+      conversationId: feishuConversationID(event.message_id),
+      projectId,
+      prompt,
+      title: `Feishu · ${event.chat_id || event.message_id}`
+    });
+    return { conversationId: result.conversation_id, projectId, text: result.text };
+  }
+});
+const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, bus, database });
+const server = await startServer(config, {
+  bus,
+  database,
+  feishuReceiverStatus: () => feishuReceiver.status(),
+  onFeishuConfigChanged: restartFeishuReceiver,
+  providers
+});
+void restartFeishuReceiver(config.integrations.feishu);
 void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config);
 
 console.log(JSON.stringify({
@@ -80,6 +105,16 @@ async function startAutoRunLoops(
 
 function logProjectLoopError(error: unknown, projectId: string): void {
   console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", projectId, error: safeError(error) }));
+}
+
+function feishuConversationID(messageID: string): string {
+  return `feishu-${messageID.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+async function restartFeishuReceiver(feishuConfig: FeishuConnectorConfig): Promise<void> {
+  await feishuReceiver.restart(feishuConfig).catch((error) => {
+    console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", connector: "feishu", error: safeError(error) }));
+  });
 }
 
 function safeError(error: unknown): string {

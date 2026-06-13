@@ -8,9 +8,9 @@ import { cleanString, firstDefined, firstString, recordValue, splitList } from "
 
 const REQUIRED_SECRETS = [
   { env: "FEISHU_APP_ID", key: "appId" },
-  { env: "FEISHU_APP_SECRET", key: "appSecret" },
-  { env: "FEISHU_VERIFICATION_TOKEN", key: "verificationToken" }
+  { env: "FEISHU_APP_SECRET", key: "appSecret" }
 ] as const;
+const DEFAULT_RECEIVE_MODE = "websocket";
 
 export function buildFeishuConnectorConfig(input: FeishuConfigInput = {}): FeishuConnectorConfig {
   const values = input as Record<string, unknown>;
@@ -21,6 +21,7 @@ export function buildFeishuConnectorConfig(input: FeishuConfigInput = {}): Feish
     appSecret: firstString(values.feishuAppSecret, values.appSecret, values.FEISHU_APP_SECRET),
     encryptKey: firstString(values.feishuEncryptKey, values.encryptKey, values.FEISHU_ENCRYPT_KEY),
     projectMappings: parseProjectMappings(firstDefined(values.feishuProjectMappings, values.projectMappings, values.FEISHU_PROJECT_MAPPINGS)),
+    receiveMode: parseReceiveMode(firstDefined(values.feishuReceiveMode, values.receiveMode, values.FEISHU_RECEIVE_MODE)),
     verificationToken: firstString(values.feishuVerificationToken, values.verificationToken, values.FEISHU_VERIFICATION_TOKEN)
   };
 }
@@ -42,6 +43,7 @@ export function feishuConnectorStatus(config: FeishuConnectorConfig): Record<str
     enabled: missing.length === 0,
     status: connectorState(config, missing),
     settings_mode: "settings_page_or_local_config",
+    receive_mode: config.receiveMode,
     supported_events: [...FEISHU_CONNECTOR_V0.supported_events],
     attachment_policy: FEISHU_CONNECTOR_V0.attachment_policy,
     auto_reply: FEISHU_CONNECTOR_V0.auto_reply,
@@ -60,14 +62,18 @@ function connectorSummary(config: FeishuConnectorConfig, missing: string[]): Rec
     callback_path: "/api/integrations/feishu/events",
     configured: status === "configured",
     error: status === "misconfigured" ? `missing ${missing.join(",")}` : "",
+    public_url_required: config.receiveMode === "callback",
     receive_enabled: status === "configured",
+    receive_mode: config.receiveMode,
     reply_mode: FEISHU_CONNECTOR_V0.auto_reply ? "auto" : "draft",
     state: status === "misconfigured" ? "error" : status
   };
 }
 
 function missingRequired(config: FeishuConnectorConfig): string[] {
-  return REQUIRED_SECRETS.filter((item) => cleanString(config[item.key]) === "").map((item) => item.env);
+  const missing: string[] = REQUIRED_SECRETS.filter((item) => cleanString(config[item.key]) === "").map((item) => item.env);
+  if (config.receiveMode === "callback" && cleanString(config.verificationToken) === "") missing.push("FEISHU_VERIFICATION_TOKEN");
+  return missing;
 }
 
 function connectorState(config: FeishuConnectorConfig, missing: string[]): string {
@@ -79,14 +85,18 @@ function secretStatus(config: FeishuConnectorConfig): Record<string, { configure
   return {
     app_id: { configured: config.appId !== "" },
     app_secret: { configured: config.appSecret !== "" },
-    verification_token: { configured: config.verificationToken !== "" },
+    verification_token: {
+      configured: config.verificationToken !== "",
+      ...(config.receiveMode === "websocket" ? { optional: true } : {})
+    },
     encrypt_key: { configured: config.encryptKey !== "", optional: true }
   };
 }
 
 function hasAnyConfig(config: FeishuConnectorConfig): boolean {
   return [config.appId, config.appSecret, config.verificationToken, config.encryptKey].some((value) => value !== "") ||
-    config.allowedChatIds.length > 0 || config.allowedUserIds.length > 0 || config.projectMappings.length > 0;
+    config.allowedChatIds.length > 0 || config.allowedUserIds.length > 0 || config.projectMappings.length > 0 ||
+    config.receiveMode !== DEFAULT_RECEIVE_MODE;
 }
 
 function parseProjectMappings(value: unknown): FeishuProjectMapping[] {
@@ -112,6 +122,13 @@ function parseProjectMapping(item: string): FeishuProjectMapping | null {
   if (target.startsWith("chat:")) return { chatId: target.slice(5).trim(), projectId };
   if (target.startsWith("user:")) return { projectId, userId: target.slice(5).trim() };
   return { chatId: target, projectId };
+}
+
+function parseReceiveMode(value: unknown): "websocket" | "callback" {
+  const text = cleanString(value).toLowerCase().replaceAll("-", "_");
+  if (text === "callback" || text === "webhook" || text === "request_url") return "callback";
+  if (text === "ws" || text === "websocket" || text === "long_connection" || text === "longconnection") return "websocket";
+  return DEFAULT_RECEIVE_MODE;
 }
 
 function redactSecret(value: string): string {

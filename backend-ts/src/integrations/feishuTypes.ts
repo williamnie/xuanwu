@@ -12,6 +12,7 @@ export const FEISHU_CONNECTOR_V0 = {
 } as const;
 
 export type FeishuProjectMapping = { chatId?: string; projectId: string; userId?: string };
+export type FeishuReceiveMode = "websocket" | "callback";
 
 export type FeishuConnectorConfig = {
   allowedChatIds: string[];
@@ -20,6 +21,7 @@ export type FeishuConnectorConfig = {
   appSecret: string;
   encryptKey: string;
   projectMappings: FeishuProjectMapping[];
+  receiveMode: FeishuReceiveMode;
   verificationToken: string;
 };
 
@@ -30,6 +32,7 @@ export type FeishuConnectorOverrides = {
   feishuAppSecret?: string;
   feishuEncryptKey?: string;
   feishuProjectMappings?: string | FeishuProjectMapping[];
+  feishuReceiveMode?: string;
   feishuVerificationToken?: string;
 };
 
@@ -40,6 +43,7 @@ export type FeishuEnvInput = {
   FEISHU_APP_SECRET?: string;
   FEISHU_ENCRYPT_KEY?: string;
   FEISHU_PROJECT_MAPPINGS?: string;
+  FEISHU_RECEIVE_MODE?: string;
   FEISHU_VERIFICATION_TOKEN?: string;
 };
 

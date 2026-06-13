@@ -41,6 +41,7 @@ describe("Bun backend config", () => {
           appSecret: "",
           encryptKey: "",
           projectMappings: [],
+          receiveMode: "websocket",
           verificationToken: ""
         }
       }
@@ -81,6 +82,7 @@ describe("Bun backend config", () => {
           appSecret: "local-secret",
           encryptKey: "local-encrypt",
           projectMappings: "chat:oc_local=local-project",
+          receiveMode: "websocket",
           verificationToken: "local-token"
         }
       }
@@ -100,6 +102,7 @@ describe("Bun backend config", () => {
       appSecret: "local-secret",
       encryptKey: "local-encrypt",
       projectMappings: [{ chatId: "oc_local", projectId: "local-project" }],
+      receiveMode: "websocket",
       verificationToken: "local-token"
     });
   });
@@ -128,6 +131,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.feishuAppSecret]: "app-secret-value",
       [ENV_KEYS.feishuEncryptKey]: "encrypt-secret-value",
       [ENV_KEYS.feishuProjectMappings]: "chat:oc_a=codex-runner",
+      [ENV_KEYS.feishuReceiveMode]: "callback",
       [ENV_KEYS.feishuVerificationToken]: "verify-secret-value"
     });
 
@@ -162,6 +166,7 @@ describe("Bun backend config", () => {
           appSecret: "app-secret-value",
           encryptKey: "encrypt-secret-value",
           projectMappings: [{ chatId: "oc_a", projectId: "codex-runner" }],
+          receiveMode: "callback",
           verificationToken: "verify-secret-value"
         }
       }
@@ -221,6 +226,7 @@ describe("Bun backend config", () => {
           appSecret: "",
           encryptKey: "",
           projectMappings: [],
+          receiveMode: "websocket",
           verificationToken: ""
         }
       }

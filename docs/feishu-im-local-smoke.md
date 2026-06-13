@@ -1,8 +1,8 @@
 # 飞书 IM connector 本地接入与 smoke
 
-本文用于把真实飞书应用事件打到本地 `codex-issue-runner`，并验证这条链路：
+本文用于把真实飞书应用事件接到本地 `codex-issue-runner`，并验证这条链路：
 
-`challenge → message event → external_events inbox → PI attention decision → triage issue proposal/create → reply draft → sync outbox`
+`Feishu long connection → message event → external_events inbox → PI attention decision → Runner/PI conversation → Feishu reply`
 
 ## 1. 创建飞书应用
 
@@ -10,18 +10,16 @@
 2. 记录应用凭据，只放在本地未提交配置或环境变量：
    - `FEISHU_APP_ID`
    - `FEISHU_APP_SECRET`
-   - `FEISHU_VERIFICATION_TOKEN`
-   - `FEISHU_ENCRYPT_KEY`（可选；如果在飞书后台启用事件加密则必须配置）
-3. 事件订阅里配置 Request URL：
-   - 本地直连：`http://127.0.0.1:3008/api/integrations/feishu/events`
-   - 通过 ngrok/内网穿透：`https://<public-host>/api/integrations/feishu/events`
+   - `FEISHU_VERIFICATION_TOKEN`（仅 HTTP callback 兼容模式必需；长连接模式可留空）
+   - `FEISHU_ENCRYPT_KEY`（仅 HTTP callback 且启用事件加密时需要）
+3. 事件订阅选择长连接模式；runner 会主动连接飞书开放平台，不需要公网域名、Request URL、ngrok 或内网穿透。
 4. 订阅事件：`im.message.receive_v1`。
 5. 权限建议最小化：
    - 接收消息事件：按飞书后台提示开通接收 IM 消息相关权限。
-   - 发送回复（只在手动批准 outbox 后使用）：开通发送消息相关权限。
+   - 发送回复：开通发送消息相关权限。
    - 不需要通讯录/文件内容读取权限；附件当前只记录 metadata。
 
-> 注意：飞书 callback endpoint 是公开回调路径，不走 runner bearer token；回调鉴权依赖 verification token 与可选签名/加密。其它 `/api/*` 仍需要 runner token。
+> 注意：HTTP callback endpoint 仍保留为兼容模式，不走 runner bearer token；回调鉴权依赖 verification token 与可选签名/加密。其它 `/api/*` 仍需要 runner token。
 
 ## 2. Runner 环境变量
 
@@ -30,8 +28,10 @@
 ```bash
 export FEISHU_APP_ID="cli_xxx"
 export FEISHU_APP_SECRET="..."
+export FEISHU_RECEIVE_MODE="websocket"
+
+# 仅 HTTP callback 模式需要：
 export FEISHU_VERIFICATION_TOKEN="..."
-# 如果飞书后台启用了 Encrypt Key：
 export FEISHU_ENCRYPT_KEY="..."
 
 # 可选 allowlist，配置后仅允许指定 chat/user 触发 attention：
@@ -52,9 +52,9 @@ codex-issue-runner system status
 状态语义：
 
 - `disabled`：未配置任何飞书必需项，服务仍可启动，本地测试不依赖真实飞书。
-- `misconfigured`：有部分配置但缺少 `FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_VERIFICATION_TOKEN`。
-- `configured`：callback 可以接收 challenge/message。
-- `auto_reply=false` / `reply_mode=draft`：不会自动把 PI 回复发回飞书；只生成 draft/outbox，发送需要显式 approve + dispatch。
+- `misconfigured`：有部分配置但缺少 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`；只有 `FEISHU_RECEIVE_MODE=callback` 时才还要求 `FEISHU_VERIFICATION_TOKEN`。
+- `configured`：长连接会在 runner 进程内启动；`/api/system/status` 的 `connectors[].runtime` 可看连接状态。
+- `reply_mode=draft`：issue 写回仍走 draft/outbox；普通 IM 对话会直接把 Runner/PI 回复发回原 chat，避免“发 hi 没反应”。
 
 ## 3. 本地 fixture smoke（无真实飞书配置）
 
@@ -67,8 +67,9 @@ bun test src/http/feishuInboxApi.test.ts src/http/imReplyOutboxApi.test.ts src/i
 
 关键断言：
 
-- challenge 返回 `{ challenge }`。
+- 长连接模式不需要 challenge / Request URL。
 - message event 被归一化并写入 `external_events`。
+- 可信消息会进入 Runner/PI conversation，并把回复发回原 chat。
 - attention decision 为 `propose_issue` 时，`/api/external-events/:id/create-issue` 创建 `triage` issue。
 - issue 创建后生成 `im_reply_drafts`；approve 后进入 `sync_outbox`。
 - 测试输出不包含 `app_secret`、`encrypt_key`、verification token 或本地临时路径。
@@ -81,7 +82,7 @@ bun test src/http/feishuInboxApi.test.ts src/http/imReplyOutboxApi.test.ts src/i
 scripts/feishu-smoke.mjs --mode check
 ```
 
-向当前 runner 发送 URL verification challenge（用于验证 callback/token/config，不需要真实飞书）：
+以下脚本验证的是 HTTP callback 兼容路径，不是长连接路径。向当前 runner 发送 URL verification challenge：
 
 ```bash
 scripts/feishu-smoke.mjs --mode challenge --addr 127.0.0.1:3008
@@ -98,7 +99,7 @@ scripts/feishu-smoke.mjs \
   --text "@PI 帮我实现这个折叠面板功能"
 ```
 
-如果飞书后台已通过 ngrok/内网穿透指向本机，也可以让真实飞书发事件；或者用脚本打公开 URL：
+如果显式选择 `FEISHU_RECEIVE_MODE=callback` 并配置了公开 URL，也可以用脚本打公开 URL：
 
 ```bash
 scripts/feishu-smoke.mjs --mode challenge --url https://<public-host>/api/integrations/feishu/events
@@ -106,16 +107,18 @@ scripts/feishu-smoke.mjs --mode challenge --url https://<public-host>/api/integr
 
 脚本会脱敏输出；不要把 `FEISHU_APP_SECRET`、`FEISHU_ENCRYPT_KEY`、`FEISHU_VERIFICATION_TOKEN` 写进命令参数。
 
-## 5. reply draft / outbox 与禁用自动回复
+## 5. IM 对话回复与 reply draft / outbox
 
-当前契约默认 `auto_reply=false`，所以 PI 只会创建回复草稿：
+长连接收到可信普通消息后，runner 会把消息送进 Runner/PI conversation，并把返回文本发回原 chat。
+
+issue 关联写回仍走 draft/outbox 安全边界。查看草稿：
 
 ```bash
 curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
   "http://127.0.0.1:3008/api/im-reply-drafts?source=feishu"
 ```
 
-批准草稿后才进入待发送 outbox：
+批准草稿后进入待发送 outbox：
 
 ```bash
 curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
@@ -131,13 +134,15 @@ curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
   "http://127.0.0.1:3008/api/sync-outbox/dispatch"
 ```
 
-如果只想本地观察，不要执行 approve/dispatch；或者保持 `FEISHU_APP_SECRET` 未配置，使 connector 处于 `disabled/misconfigured`。
+如果只想本地观察 issue 写回，不要执行 approve/dispatch；如果不想真实收发 IM，关闭飞书应用事件订阅或清空 App Secret。
 
 ## 6. 常见排障
 
-- 飞书 URL verification 失败：先看 `system status` 中 `connectors=feishu:<state>`；`misconfigured` 通常是缺 token/secret。
-- message 收到 503：connector 未 `configured`。
-- message 收到 401：verification token 不匹配，或启用 `FEISHU_ENCRYPT_KEY` 后签名头缺失/错误。
+- 长连接没连上：先看 `system status` 中 `connectors[].runtime.state/last_error`；通常是 App ID/App Secret、应用权限或事件订阅模式问题。
+- HTTP callback URL verification 失败：先看 `system status` 中 `connectors=feishu:<state>`；`misconfigured` 通常是 callback 模式缺 token/secret。
+- callback message 收到 503：connector 未 `configured`。
+- callback message 收到 401：verification token 不匹配，或启用 `FEISHU_ENCRYPT_KEY` 后签名头缺失/错误。
 - message 收到 202 但没有 issue：检查 `FEISHU_PROJECT_MAPPINGS`、allowlist，以及 `external_events.summary.attention_decision`。
-- 已创建 issue 但飞书没收到回复：这是默认行为；先查 `im_reply_drafts`，再人工 approve/dispatch。
+- 真实飞书发消息没进入 runner：优先看长连接 runtime 状态，不要先排公网域名。
+- 飞书没收到 Runner 回复：检查发送消息权限、allowed chat/user、`external_links` 是否已有 `feishu_agent_reply` 去重记录，以及 Runner/PI conversation 是否报错。
 - 线上调试只贴 `raw_payload_ref=sha256:...`、状态码和脱敏摘要，不贴飞书 token/secret 原文。

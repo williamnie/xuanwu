@@ -27,6 +27,7 @@ export const ENV_KEYS = {
   feishuAppSecret: "FEISHU_APP_SECRET",
   feishuEncryptKey: "FEISHU_ENCRYPT_KEY",
   feishuProjectMappings: "FEISHU_PROJECT_MAPPINGS",
+  feishuReceiveMode: "FEISHU_RECEIVE_MODE",
   feishuVerificationToken: "FEISHU_VERIFICATION_TOKEN"
 } as const;
 
@@ -111,6 +112,7 @@ function effectiveFeishuInput(overrides: ConfigOverrides): FeishuConfigInput {
     feishuAppSecret: local.feishuAppSecret ?? local.appSecret ?? overrides.feishuAppSecret,
     feishuEncryptKey: local.feishuEncryptKey ?? local.encryptKey ?? overrides.feishuEncryptKey,
     feishuProjectMappings: local.feishuProjectMappings ?? local.projectMappings ?? overrides.feishuProjectMappings,
+    feishuReceiveMode: local.feishuReceiveMode ?? local.receiveMode ?? overrides.feishuReceiveMode,
     feishuVerificationToken: local.feishuVerificationToken ?? local.verificationToken ?? overrides.feishuVerificationToken
   };
 }
@@ -139,6 +141,7 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     feishuAppSecret: cleanValue(env[ENV_KEYS.feishuAppSecret]),
     feishuEncryptKey: cleanValue(env[ENV_KEYS.feishuEncryptKey]),
     feishuProjectMappings: cleanValue(env[ENV_KEYS.feishuProjectMappings]),
+    feishuReceiveMode: cleanValue(env[ENV_KEYS.feishuReceiveMode]),
     feishuVerificationToken: cleanValue(env[ENV_KEYS.feishuVerificationToken])
   };
 }

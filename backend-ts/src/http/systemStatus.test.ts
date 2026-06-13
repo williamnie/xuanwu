@@ -110,24 +110,27 @@ describe("Bun system status endpoints", () => {
         enabled: false,
         status: "disabled",
         settings_mode: "settings_page_or_local_config",
+        receive_mode: "websocket",
         supported_events: ["message.text", "message.mention"],
         attachment_policy: "metadata_only",
         auto_reply: false,
         secrets: {
           app_id: { configured: false },
           app_secret: { configured: false },
-          verification_token: { configured: false },
+          verification_token: { configured: false, optional: true },
           encrypt_key: { configured: false, optional: true }
         },
         allowed_chat_count: 0,
         allowed_user_count: 0,
         project_mapping_count: 0,
-        missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"],
+        missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
         summary: {
           callback_path: "/api/integrations/feishu/events",
           configured: false,
           error: "",
+          public_url_required: false,
           receive_enabled: false,
+          receive_mode: "websocket",
           reply_mode: "draft",
           state: "disabled"
         }
@@ -157,8 +160,10 @@ describe("Bun system status endpoints", () => {
         status: "misconfigured",
         summary: {
           configured: false,
-          error: "missing FEISHU_APP_SECRET,FEISHU_VERIFICATION_TOKEN",
+          error: "missing FEISHU_APP_SECRET",
+          public_url_required: false,
           receive_enabled: false,
+          receive_mode: "websocket",
           reply_mode: "draft",
           state: "error"
         }
@@ -294,6 +299,7 @@ describe("Bun system status endpoints", () => {
       expect(body.connectors[0]).toMatchObject({
         id: "feishu",
         enabled: true,
+        receive_mode: "websocket",
         status: "configured",
         missing_required: [],
         secrets: {
@@ -306,7 +312,9 @@ describe("Bun system status endpoints", () => {
           callback_path: "/api/integrations/feishu/events",
           configured: true,
           error: "",
+          public_url_required: false,
           receive_enabled: true,
+          receive_mode: "websocket",
           reply_mode: "draft",
           state: "configured"
         }

@@ -6,13 +6,18 @@ import {
   buildFeishuConnectorConfig,
   feishuConnectorStatus,
   type FeishuConnectorConfig,
-  type FeishuProjectMapping
+  type FeishuProjectMapping,
+  type FeishuReceiveMode
 } from "../integrations/feishu.ts";
 import { cleanString, splitList } from "../integrations/feishuShared.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-type FeishuSettingsContext = { config?: RunnerConfig; database: RunnerDatabase };
+type FeishuSettingsContext = {
+  config?: RunnerConfig;
+  database: RunnerDatabase;
+  onConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
+};
 type LocalFeishuSettings = {
   allowedChatIds: string[];
   allowedUserIds: string[];
@@ -20,6 +25,7 @@ type LocalFeishuSettings = {
   appSecret: string;
   encryptKey: string;
   projectMappings: string;
+  receiveMode: FeishuReceiveMode;
   verificationToken: string;
 };
 
@@ -40,6 +46,7 @@ async function saveFeishuSettings(context: FeishuSettingsContext, body: Record<s
   }));
   const nextConfig = buildFeishuConnectorConfig(nextLocal);
   applyRuntimeFeishuConfig(context.config, nextConfig);
+  await context.onConfigChanged?.(nextConfig);
   return publicFeishuSettings(nextConfig, path);
 }
 
@@ -55,6 +62,8 @@ function publicFeishuSettings(config: FeishuConnectorConfig, path: string): Reco
     encrypt_key_configured: config.encryptKey !== "",
     missing_required: status.missing_required,
     project_mappings: formatProjectMappings(config.projectMappings),
+    public_url_required: config.receiveMode === "callback",
+    receive_mode: config.receiveMode,
     settings_file: path,
     status: status.status,
     verification_token_configured: config.verificationToken !== ""
@@ -69,6 +78,7 @@ function normalizeFeishuSettings(body: Record<string, unknown>, current: LocalFe
     appSecret: secretField(body, "app_secret", current.appSecret),
     encryptKey: secretField(body, "encrypt_key", current.encryptKey),
     projectMappings: stringField(body, "project_mappings", current.projectMappings),
+    receiveMode: receiveModeField(body, current.receiveMode),
     verificationToken: secretField(body, "verification_token", current.verificationToken)
   };
 }
@@ -81,6 +91,7 @@ function localSettingsFromConfig(config: FeishuConnectorConfig): LocalFeishuSett
     appSecret: config.appSecret,
     encryptKey: config.encryptKey,
     projectMappings: formatProjectMappings(config.projectMappings),
+    receiveMode: config.receiveMode,
     verificationToken: config.verificationToken
   };
 }
@@ -114,6 +125,11 @@ function listField(body: Record<string, unknown>, key: string, current: string[]
 
 function stringField(body: Record<string, unknown>, key: string, current: string): string {
   return hasOwn(body, key) ? cleanString(body[key]) : current;
+}
+
+function receiveModeField(body: Record<string, unknown>, current: FeishuReceiveMode): FeishuReceiveMode {
+  const value = stringField(body, "receive_mode", current);
+  return value === "callback" ? "callback" : "websocket";
 }
 
 function secretField(body: Record<string, unknown>, key: string, current: string): string {

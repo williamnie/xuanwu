@@ -10,6 +10,7 @@ const DEFAULT_FORM = {
   app_secret: '',
   encrypt_key: '',
   project_mappings: '',
+  receive_mode: 'websocket',
   verification_token: '',
 };
 
@@ -56,7 +57,7 @@ function PanelHeader({ enabled, status }) {
           <Bot size={18} color="var(--primary)" /> 飞书 Bot
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          配置企业自建应用的事件回调与自动回复凭据；保存到本机 runner-settings.local.json，不写入仓库。
+          默认使用飞书长连接模式，本机 runner 主动连飞书；无需公网域名或内网穿透。
         </p>
       </div>
       <StatusPill enabled={enabled} status={status} />
@@ -78,11 +79,12 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
   if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>加载飞书配置...</div>;
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      <CallbackHint callbackPath={remote?.callback_path} settingsFile={remote?.settings_file} />
+      <ReceiveModeHint callbackPath={remote?.callback_path} receiveMode={form.receive_mode} settingsFile={remote?.settings_file} />
+      <ReceiveModeField value={form.receive_mode} onChange={(value) => updateField('receive_mode', value)} />
       <div style={fieldGridStyle}>
         <TextField label="App ID" value={form.app_id} onChange={(value) => updateField('app_id', value)} placeholder="cli_xxx" />
         <SecretField configured={remote?.app_secret_configured} label="App Secret" value={form.app_secret} onChange={(value) => updateField('app_secret', value)} />
-        <SecretField configured={remote?.verification_token_configured} label="Verification Token" value={form.verification_token} onChange={(value) => updateField('verification_token', value)} />
+        <SecretField configured={remote?.verification_token_configured} label="Verification Token" optional value={form.verification_token} onChange={(value) => updateField('verification_token', value)} />
         <SecretField configured={remote?.encrypt_key_configured} label="Encrypt Key" optional value={form.encrypt_key} onChange={(value) => updateField('encrypt_key', value)} />
         <TextField label="Allowed Chat IDs" value={form.allowed_chat_ids} onChange={(value) => updateField('allowed_chat_ids', value)} placeholder="oc_xxx, oc_yyy" />
         <TextField label="Allowed User IDs" value={form.allowed_user_ids} onChange={(value) => updateField('allowed_user_ids', value)} placeholder="ou_xxx, ou_yyy" />
@@ -93,16 +95,30 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
   );
 }
 
-function CallbackHint({ callbackPath, settingsFile }) {
+function ReceiveModeHint({ callbackPath, receiveMode, settingsFile }) {
+  const isCallback = receiveMode === 'callback';
   return (
     <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px' }}>
       <div style={{ alignItems: 'center', display: 'flex', gap: '8px', fontWeight: 700 }}>
-        <KeyRound size={15} color="var(--primary)" /> 飞书开放平台回调
+        <KeyRound size={15} color="var(--primary)" /> 飞书事件接收：{isCallback ? 'HTTP 回调' : '长连接'}
       </div>
       <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '6px', wordBreak: 'break-all' }}>
-        Request URL 填：<code>{callbackPath || '/api/integrations/feishu/events'}</code>；本地配置文件：<code>{settingsFile || 'runner-settings.local.json'}</code>
+        {isCallback ? <>Request URL 填：<code>{callbackPath || '/api/integrations/feishu/events'}</code>；</> : '本机主动连接飞书开放平台，无需公网域名；'}
+        本地配置文件：<code>{settingsFile || 'runner-settings.local.json'}</code>
       </div>
     </div>
+  );
+}
+
+function ReceiveModeField({ onChange, value }) {
+  return (
+    <label className="form-group" style={{ marginBottom: 0 }}>
+      <span>Receive Mode</span>
+      <select className="form-control" value={value || 'websocket'} onChange={(event) => onChange(event.target.value)}>
+        <option value="websocket">长连接 WebSocket（推荐，无需公网域名）</option>
+        <option value="callback">HTTP Callback（高级，需要 Request URL）</option>
+      </select>
+    </label>
   );
 }
 
@@ -182,6 +198,7 @@ function formFromRemote(data) {
     allowed_user_ids: (data?.allowed_user_ids || []).join(', '),
     app_id: data?.app_id || '',
     project_mappings: data?.project_mappings || '',
+    receive_mode: data?.receive_mode || 'websocket',
   };
 }
 
@@ -190,5 +207,6 @@ function payloadFromForm(form) {
     ...form,
     allowed_chat_ids: form.allowed_chat_ids,
     allowed_user_ids: form.allowed_user_ids,
+    receive_mode: form.receive_mode || 'websocket',
   };
 }

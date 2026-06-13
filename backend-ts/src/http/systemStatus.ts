@@ -3,6 +3,7 @@ import { basename, delimiter, isAbsolute, join, relative } from "node:path";
 import { bunBuildInfo } from "../buildInfo.ts";
 import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
 import { feishuConnectorStatus } from "../integrations/feishu.ts";
+import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
 import { runningProjectLoopCount } from "../runner/projectLoopManager.ts";
@@ -12,6 +13,7 @@ type SystemStatusContext = {
   authEnabled: boolean;
   config: RunnerConfig;
   database: RunnerDatabase;
+  feishuReceiverStatus?: () => FeishuReceiverStatus;
   startedAt: Date;
 };
 
@@ -28,7 +30,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     security: { warnings: securityWarnings(context.config.addr, context.authEnabled) },
     codex: codexStatus(context.config),
     providers,
-    connectors: connectorStatus(context.config),
+    connectors: connectorStatus(context.config, context.feishuReceiverStatus?.()),
     runner: runnerStatus(context.database)
   };
 }
@@ -154,8 +156,9 @@ export function providerStatus(config: RunnerConfig): Array<{
   return out;
 }
 
-function connectorStatus(config: RunnerConfig): Array<Record<string, unknown>> {
-  return [feishuConnectorStatus(config.integrations.feishu)];
+function connectorStatus(config: RunnerConfig, receiver?: FeishuReceiverStatus): Array<Record<string, unknown>> {
+  const status = feishuConnectorStatus(config.integrations.feishu);
+  return receiver ? [{ ...status, runtime: receiver }] : [status];
 }
 
 function providerEntry(input: {

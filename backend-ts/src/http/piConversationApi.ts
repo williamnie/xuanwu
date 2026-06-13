@@ -31,6 +31,12 @@ import { publishPiSessionEvent } from "./piSessionEvents.ts";
 import type { Router } from "./router.ts";
 
 type PiConversationContext = { bus?: EventBus; database: RunnerDatabase };
+export type PiConversationPromptInput = {
+  conversationId?: string;
+  projectId?: string;
+  prompt: string;
+  title?: string;
+};
 
 const PI_SESSION_PROVIDER = "pi-sdk";
 const activePiRuns = new Map<string, PiRuntimeSession["session"]>();
@@ -149,6 +155,21 @@ async function sendPiConversationMessage(
     unsubscribe();
     runtime.dispose();
   }
+}
+
+export async function runPiConversationPrompt(
+  context: PiConversationContext,
+  input: PiConversationPromptInput
+) {
+  const id = cleanString(input.conversationId) || crypto.randomUUID();
+  if (!getPiConversation(context.database, id)) {
+    await createConversationWithRuntime(context, {
+      id,
+      project_id: cleanString(input.projectId),
+      title: cleanString(input.title) || "Feishu"
+    });
+  }
+  return sendPiConversationMessage(context, id, { prompt: input.prompt });
 }
 
 function ensureConversationTitle(

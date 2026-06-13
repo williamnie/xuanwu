@@ -17,6 +17,8 @@ import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
 import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
+import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
+import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 
 type ListenAddress = { hostname: string; port: number };
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
@@ -25,7 +27,9 @@ type DefaultRouterOptions = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database?: RunnerDatabase;
+  feishuReceiverStatus?: () => FeishuReceiverStatus;
   interruptTimeoutMs?: number;
+  onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
   feishuSender?: FeishuMessageSender;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
@@ -41,7 +45,11 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     database: runtime.database
   });
   if (runtime.database) {
-    registerFeishuSettingsRoutes(router, { config: runtime.config, database: runtime.database });
+    registerFeishuSettingsRoutes(router, {
+      config: runtime.config,
+      database: runtime.database,
+      onConfigChanged: runtime.onFeishuConfigChanged
+    });
     registerExternalEventRoutes(router, { database: runtime.database });
     registerImReplyOutboxRoutes(router, {
       config: runtime.config?.integrations.feishu,
@@ -93,6 +101,7 @@ export function registerSystemStatusRoute(
     authEnabled: context.authToken.trim() !== "",
     config: context.config,
     database: context.database,
+    feishuReceiverStatus: context.feishuReceiverStatus,
     startedAt
   };
   router.get("/api/system/status", () => json(buildSystemStatus(statusContext)));

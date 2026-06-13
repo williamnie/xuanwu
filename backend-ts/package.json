@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.76.0",
+    "@larksuiteoapi/node-sdk": "^1.66.1",
     "@sinclair/typebox": "^0.34.49"
   },
   "devDependencies": {

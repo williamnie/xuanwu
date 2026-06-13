@@ -192,6 +192,7 @@ function integrationSummary(context: PiCommandCenterContext) {
     appSecret: "",
     encryptKey: "",
     projectMappings: [],
+    receiveMode: "websocket",
     verificationToken: ""
   });
   return { feishu: feishu.summary };

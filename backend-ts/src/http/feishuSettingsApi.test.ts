@@ -45,6 +45,7 @@ describe("Feishu connector settings API", () => {
         app_secret: "app-secret-value",
         encrypt_key: "encrypt-secret-value",
         project_mappings: "chat:oc_a=demo,user:ou_1=mobile",
+        receive_mode: "websocket",
         verification_token: "verify-secret-value"
       });
 
@@ -58,6 +59,8 @@ describe("Feishu connector settings API", () => {
         encrypt_key_configured: true,
         enabled: true,
         project_mappings: "chat:oc_a=demo,user:ou_1=mobile",
+        public_url_required: false,
+        receive_mode: "websocket",
         verification_token_configured: true
       });
       expect(JSON.stringify(savedBody)).not.toContain("app-secret-value");
@@ -72,6 +75,7 @@ describe("Feishu connector settings API", () => {
         appSecret: "app-secret-value",
         encryptKey: "encrypt-secret-value",
         projectMappings: "chat:oc_a=demo,user:ou_1=mobile",
+        receiveMode: "websocket",
         verificationToken: "verify-secret-value"
       });
       const mode = (await stat(localSettingsPath(database))).mode & 0o777;

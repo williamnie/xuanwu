@@ -8,6 +8,7 @@ export {
   type FeishuMention,
   type FeishuNormalizedMessageEvent,
   type FeishuProjectMapping,
+  type FeishuReceiveMode,
   type FeishuSender
 } from "./feishuTypes.ts";
 export { buildFeishuConnectorConfig, feishuConnectorStatus, redactFeishuConnectorConfig } from "./feishuConfig.ts";

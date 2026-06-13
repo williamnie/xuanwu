@@ -21,14 +21,15 @@ describe("Feishu IM connector contract", () => {
       appSecret: "",
       encryptKey: "",
       projectMappings: [],
+      receiveMode: "websocket",
       verificationToken: ""
     });
     expect(feishuConnectorStatus(buildFeishuConnectorConfig({ FEISHU_APP_ID: "cli_app_id" }))).toMatchObject({
       enabled: false,
-      missing_required: ["FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"],
+      missing_required: ["FEISHU_APP_SECRET"],
       status: "misconfigured",
       summary: {
-        error: "missing FEISHU_APP_SECRET,FEISHU_VERIFICATION_TOKEN",
+        error: "missing FEISHU_APP_SECRET",
         state: "error"
       }
     });
@@ -38,24 +39,27 @@ describe("Feishu IM connector contract", () => {
       enabled: false,
       status: "disabled",
       settings_mode: "settings_page_or_local_config",
+      receive_mode: "websocket",
       supported_events: ["message.text", "message.mention"],
       attachment_policy: "metadata_only",
       auto_reply: false,
       secrets: {
         app_id: { configured: false },
         app_secret: { configured: false },
-        verification_token: { configured: false },
+        verification_token: { configured: false, optional: true },
         encrypt_key: { configured: false, optional: true }
       },
       allowed_chat_count: 0,
       allowed_user_count: 0,
       project_mapping_count: 0,
-      missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET", "FEISHU_VERIFICATION_TOKEN"],
+      missing_required: ["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
       summary: {
         callback_path: "/api/integrations/feishu/events",
         configured: false,
         error: "",
+        public_url_required: false,
         receive_enabled: false,
+        receive_mode: "websocket",
         reply_mode: "draft",
         state: "disabled"
       }
@@ -70,6 +74,7 @@ describe("Feishu IM connector contract", () => {
       FEISHU_APP_SECRET: "app-secret-value",
       FEISHU_ENCRYPT_KEY: "encrypt-secret-value",
       FEISHU_PROJECT_MAPPINGS: "chat:oc_a=codex-runner,user:ou_1=ops-runner",
+      FEISHU_RECEIVE_MODE: "callback",
       FEISHU_VERIFICATION_TOKEN: "verify-secret-value"
     });
     const redacted = JSON.stringify(redactFeishuConnectorConfig(config));
@@ -80,8 +85,10 @@ describe("Feishu IM connector contract", () => {
       { chatId: "oc_a", projectId: "codex-runner" },
       { projectId: "ops-runner", userId: "ou_1" }
     ]);
+    expect(config.receiveMode).toBe("callback");
     expect(feishuConnectorStatus(config)).toMatchObject({
       enabled: true,
+      receive_mode: "callback",
       status: "configured",
       allowed_chat_count: 2,
       allowed_user_count: 1,
