@@ -22,7 +22,11 @@ function listApprovalRequests(db: RunnerDatabase, request: Request) {
   const status = clean(params.get("status"));
   const rows = listPiApprovalRequests(db, {
     issueId: positiveID(params.get("issue_id")),
-    projectId: clean(params.get("project_id"))
+    projectId: clean(params.get("project_id")),
+    provider: clean(params.get("provider")),
+    runId: clean(params.get("run_id")),
+    sessionId: clean(params.get("session_id") ?? params.get("sessionId")),
+    threadId: clean(params.get("thread_id") ?? params.get("threadId"))
   });
   if (status === "open") return rows.filter((row) => row.status === "pending" || row.status === "delivered");
   if (status !== "") return rows.filter((row) => row.status === status);

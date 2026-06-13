@@ -1,3 +1,4 @@
+import type { Database as SQLiteDatabase } from "bun:sqlite";
 import type { SqlMigration } from "../migrations.ts";
 
 export const piApprovalRequestsMigration: SqlMigration = {
@@ -7,15 +8,20 @@ create table if not exists pi_approval_requests (
   approval_id text primary key,
   project_id text not null default '',
   issue_id integer not null default 0,
+  run_id text not null default '',
   provider text not null default '',
+  session_id text not null default '',
   thread_id text not null default '',
   turn_id text not null default '',
   request_type text not null default '',
+  summary text not null default '',
   request_summary text not null default '',
   risk text not null default 'medium',
   status text not null default 'pending',
+  decision text not null default '',
   approval_source text not null default '',
   provider_approval_id text not null default '',
+  delivery_state text not null default 'pending',
   delivery_channel text not null default '',
   delivered_at text not null default '',
   resolved_decision text not null default '',
@@ -34,5 +40,30 @@ create index if not exists idx_pi_approval_requests_project
 
 create index if not exists idx_pi_approval_requests_session
   on pi_approval_requests(provider, thread_id, turn_id);
-`
+`,
+  apply(sqlite) {
+    sqlite.run(this.sql);
+    addColumn(sqlite, "run_id", "text not null default ''");
+    addColumn(sqlite, "session_id", "text not null default ''");
+    addColumn(sqlite, "summary", "text not null default ''");
+    addColumn(sqlite, "decision", "text not null default ''");
+    addColumn(sqlite, "delivery_state", "text not null default 'pending'");
+    sqlite.run("update pi_approval_requests set session_id=thread_id where session_id=''");
+    sqlite.run("update pi_approval_requests set summary=request_summary where summary=''");
+    sqlite.run("update pi_approval_requests set decision=resolved_decision where decision=''");
+    sqlite.run(`
+create unique index if not exists ux_pi_approval_requests_provider_session_approval
+  on pi_approval_requests(provider, session_id, approval_id);
+`);
+  }
 };
+
+function addColumn(sqlite: SQLiteDatabase, name: string, definition: string): void {
+  if (columns(sqlite).has(name)) return;
+  sqlite.run(`alter table pi_approval_requests add column ${name} ${definition}`);
+}
+
+function columns(sqlite: SQLiteDatabase): Set<string> {
+  return new Set(sqlite.query<{ name: string }, []>("pragma table_info(pi_approval_requests)").all()
+    .map((row) => row.name));
+}

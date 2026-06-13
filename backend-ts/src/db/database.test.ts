@@ -144,6 +144,14 @@ describe("Bun SQLite database connection", () => {
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
+      expect(columnNames(connection, "pi_approval_requests")).toEqual(expect.arrayContaining([
+        "approval_id",
+        "decision",
+        "delivery_state",
+        "run_id",
+        "session_id",
+        "summary"
+      ]));
       expect(indexNames(connection, "pi_action_events")).toContain("idx_pi_action_events_action");
       expect(indexNames(connection, "pi_heartbeat_events")).toContain("idx_pi_heartbeat_events_run");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
@@ -154,6 +162,7 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_received");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_external");
       expect(indexNames(connection, "pi_approval_requests")).toContain("idx_pi_approval_requests_issue");
+      expect(indexNames(connection, "pi_approval_requests")).toContain("ux_pi_approval_requests_provider_session_approval");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
@@ -221,6 +230,13 @@ describe("Bun SQLite database connection", () => {
         active_project_source: "''",
         epoch: "0"
       });
+      expect(columnDefaults(connection, "pi_approval_requests")).toMatchObject({
+        decision: "''",
+        delivery_state: "'pending'",
+        run_id: "''",
+        session_id: "''",
+        summary: "''"
+      });
     } finally {
       connection.close();
     }
@@ -247,6 +263,72 @@ describe("Bun SQLite database connection", () => {
       expect(tableNames(repaired)).toContain("project_holds");
       expect(tableNames(repaired)).toContain("cron_tasks");
       expect(repaired.sqlite.query("select count(*) as count from schema_migrations where id='004_safe_go_import_tables'").get()).toEqual({ count: 1 });
+    } finally {
+      repaired.close();
+    }
+  });
+
+  test("repairs older approval request tables after the migration row exists", async () => {
+    const root = await tempPath("codex-runner-bun-approval-drift-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.close();
+
+    const raw = new Database(join(stateDir, "runner.db"));
+    try {
+      raw.run("drop table pi_approval_requests");
+      raw.run(`
+        create table pi_approval_requests (
+          approval_id text primary key,
+          project_id text not null default '',
+          issue_id integer not null default 0,
+          provider text not null default '',
+          thread_id text not null default '',
+          turn_id text not null default '',
+          request_type text not null default '',
+          request_summary text not null default '',
+          risk text not null default 'medium',
+          status text not null default 'pending',
+          approval_source text not null default '',
+          provider_approval_id text not null default '',
+          delivery_channel text not null default '',
+          delivered_at text not null default '',
+          resolved_decision text not null default '',
+          resolved_scope text not null default '',
+          resolved_at text not null default '',
+          raw_payload_json text not null default '{}',
+          created_at text not null,
+          updated_at text not null
+        )
+      `);
+      raw.run(`insert into pi_approval_requests (
+        approval_id, project_id, issue_id, provider, thread_id, request_type,
+        request_summary, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        "approval-old", "demo", 393, "codex", "thread-old", "command",
+        "command=git status", "2026-06-14T00:00:00Z", "2026-06-14T00:00:00Z"
+      ]);
+    } finally {
+      raw.close();
+    }
+
+    const repaired = await openDatabase({ stateDir });
+    try {
+      expect(columnNames(repaired, "pi_approval_requests")).toEqual(expect.arrayContaining([
+        "decision",
+        "delivery_state",
+        "run_id",
+        "session_id",
+        "summary"
+      ]));
+      expect(indexNames(repaired, "pi_approval_requests")).toContain("ux_pi_approval_requests_provider_session_approval");
+      expect(repaired.sqlite.query(
+        "select session_id, summary, decision from pi_approval_requests where approval_id='approval-old'"
+      ).get()).toEqual({
+        decision: "",
+        session_id: "thread-old",
+        summary: "command=git status"
+      });
     } finally {
       repaired.close();
     }

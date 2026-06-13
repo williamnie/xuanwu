@@ -46,6 +46,34 @@ describe("PI approval requests API", () => {
       db.close();
     }
   });
+
+  test("filters approval request list by provider session and run", async () => {
+    const db = await fixtureDatabase();
+    try {
+      createApprovalRequest(db, "approval-panel-2", {
+        runID: "issue-393-attempt-1",
+        sessionID: "thread-393"
+      });
+      createApprovalRequest(db, "approval-panel-3", {
+        runID: "issue-394-attempt-1",
+        sessionID: "thread-394"
+      });
+      const router = createDefaultRouter({ database: db });
+
+      const response = await router.handle(new Request(
+        `${BASE_URL}/api/pi/approval-requests?provider=codex&session_id=thread-393&run_id=issue-393-attempt-1`
+      ));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual([expect.objectContaining({
+        approval_id: "approval-panel-2",
+        run_id: "issue-393-attempt-1",
+        session_id: "thread-393"
+      })]);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
@@ -54,7 +82,11 @@ async function fixtureDatabase(): Promise<RunnerDatabase> {
   return openDatabase({ stateDir: join(root, "state") });
 }
 
-function createApprovalRequest(db: RunnerDatabase, approvalID: string): void {
+function createApprovalRequest(
+  db: RunnerDatabase,
+  approvalID: string,
+  options: { runID?: string; sessionID?: string } = {}
+): void {
   upsertPiApprovalRequest(db, {
     approval_id: approvalID,
     approval_source: "codex_provider_event",
@@ -64,8 +96,10 @@ function createApprovalRequest(db: RunnerDatabase, approvalID: string): void {
     provider_approval_id: approvalID,
     request_summary: "command=git status",
     request_type: "command",
+    run_id: options.runID,
+    session_id: options.sessionID,
     status: "delivered",
-    thread_id: "thread-panel"
+    thread_id: options.sessionID ?? "thread-panel"
   });
 }
 
