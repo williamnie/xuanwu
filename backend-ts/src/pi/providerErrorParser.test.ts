@@ -119,6 +119,25 @@ describe("provider error parser", () => {
     });
   });
 
+  test("ignores completed provider command output before it is persisted as issue log", () => {
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "tool",
+      command: "bun test",
+      raw: {
+        method: "item/commandExecution/outputDelta",
+        payload: {
+          delta: "unauthorized approval denied validation failed provider error",
+          status: "completed"
+        }
+      },
+      status: "completed",
+      text: "unauthorized approval denied validation failed provider error"
+    }, { now: NOW })).toMatchObject({
+      category: "unknown"
+    });
+  });
+
   test("keeps structured terminal provider failures eligible for incidents", () => {
     expect(parseIssueEventProviderError({
       error: "API returned 401 unauthorized",
@@ -129,6 +148,56 @@ describe("provider error parser", () => {
       category: "auth",
       diagnosis_code: "requires_human_decision",
       status_code: 401
+    });
+  });
+
+  test("does not scan failed turn raw payload completed command output for provider-looking words", () => {
+    expect(parseIssueEventProviderError({
+      error: "turn failed without structured provider error",
+      raw_method: "turn/completed",
+      raw_payload: {
+        turn: {
+          id: "turn-1",
+          items: [{
+            command: "cat fixture.log",
+            output: "unauthorized approval denied validation failed provider error",
+            status: "completed",
+            type: "commandExecution"
+          }, {
+            diff: "+ const fixture = 'provider error unauthorized';",
+            status: "completed",
+            type: "fileChange"
+          }],
+          status: "failed"
+        }
+      },
+      status: "failed",
+      type: "done"
+    }, { now: NOW })).toMatchObject({
+      category: "unknown"
+    });
+  });
+
+  test("keeps failed turn top-level structured error while ignoring nested completed output text", () => {
+    expect(parseIssueEventProviderError({
+      error: "HTTP 429: too many requests",
+      raw_method: "turn/completed",
+      raw_payload: {
+        turn: {
+          items: [{
+            output: "API returned 401 unauthorized in a completed fixture",
+            status: "completed",
+            type: "commandExecution"
+          }],
+          status: "failed"
+        }
+      },
+      status: "failed",
+      type: "done"
+    }, { now: NOW })).toMatchObject({
+      category: "rate_limit",
+      diagnosis_code: "provider_rate_limited",
+      status_code: 429
     });
   });
 

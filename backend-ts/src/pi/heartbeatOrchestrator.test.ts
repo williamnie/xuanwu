@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   diagnosePiHeartbeat,
+  listPiActions,
   listPiHeartbeatEvents,
   pausePiHeartbeat,
   resumePiHeartbeat
@@ -169,6 +170,41 @@ describe("PI heartbeat orchestrator", () => {
         .toContain("supervisor_signal");
       expect(statusOfIssue(db, failedIssue)).toBe("failed");
       expect(openRunCount(db)).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not create supervisor PI action from completed command output keywords", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "project-a");
+      const runningIssue = insertIssue(db, "project-a", "in_progress", "");
+      insertOpenRun(db, runningIssue);
+      insertAgentSession(db, "project-a", runningIssue, "2026-06-02T09:59:30Z", "running");
+      insertIssueEvent(db, runningIssue, {
+        error: "turn failed without structured provider error",
+        raw_method: "turn/completed",
+        raw_payload: {
+          turn: {
+            items: [{
+              command: "cat fixture.log",
+              output: "unauthorized approval denied validation failed provider error",
+              status: "completed",
+              type: "commandExecution"
+            }],
+            status: "failed"
+          }
+        },
+        status: "failed",
+        type: "done"
+      }, "2026-06-02T09:59:40Z");
+
+      const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
+
+      expect(result.signals.supervisor.candidates).toEqual([]);
+      expect(result.action_candidates.map((candidate) => candidate.action_type)).not.toContain("issue.supervisor_decision");
+      expect(listPiActions(db, { issueId: runningIssue })).toEqual([]);
     } finally {
       db.close();
     }

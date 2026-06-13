@@ -125,11 +125,13 @@ function collectIssueEventPayload(payload: unknown, state: ParseState): void {
   const value = parseJsonMaybe(payload);
   const record = asRecord(value);
   if (!shouldInspectIssueEventPayload(record)) return;
-  collectValue({ value, state, key: "issue_event" });
-  collectValue({ value: record.raw_payload, state, key: "raw_payload" });
+  collectIssueEventEnvelope(record, state);
   collectValue({ value: record.error, state, key: "error" });
-  collectValue({ value: record.payload, state, key: "payload" });
-  collectValue({ value: record.text, state, key: "text" });
+  if (explicitErrorIssueEvent(record)) collectValue({ value: record.text, state, key: "text" });
+  // Watchdog boundary: never recursively scan completed command/source/test output inside issue logs.
+  // Only explicit error text and structured provider diagnostic fields may become provider-error signals.
+  collectIssueEventDiagnosticField(record.payload, state, "payload", explicitErrorIssueEvent(record));
+  collectIssueEventDiagnosticField(record.raw_payload, state, "raw_payload", explicitErrorIssueEvent(record));
 }
 
 function shouldInspectIssueEventPayload(record: Record<string, unknown>): boolean {
@@ -161,14 +163,50 @@ function cleanLower(value: unknown): string {
   return cleanString(value).toLowerCase();
 }
 
+function explicitErrorIssueEvent(record: Record<string, unknown>): boolean {
+  return cleanLower(record.type) === "error" || cleanLower(record.status) === "error" || cleanLower(record.status) === "failed";
+}
+
+function collectIssueEventEnvelope(record: Record<string, unknown>, state: ParseState): void {
+  for (const key of ["provider", "model", "service_tier", "limit_id", "limit_name", "status_code", "http_status", "code", "kind"]) {
+    collectValue({ value: record[key], state, key });
+  }
+}
+
+function collectIssueEventDiagnosticField(value: unknown, state: ParseState, key: string, allowText: boolean): void {
+  const parsed = parseJsonMaybe(value);
+  if (typeof parsed === "string") {
+    if (allowText) collectValue({ value: parsed, state, key });
+    return;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [rawKey, item] of Object.entries(asRecord(parsed))) {
+    if (isProviderErrorField(normalizeKey(rawKey))) out[rawKey] = item;
+  }
+  if (Object.keys(out).length > 0) collectValue({ value: out, state, key });
+}
+
+function isProviderErrorField(value: string): boolean {
+  return /^(?:status|statuscode|httpstatus|httpstatuscode|code|kind|error|message|retryafter|retryafterms|retryafterat|ratelimited|ratelimitreset|ratelimitresetat|retryat|resetat|resetsat|resetsatiso|provider|model|servicetier|limitid|limitname)$/.test(value);
+}
+
 function collectProviderEvent(event: Partial<ProviderEvent> | undefined, state: ParseState): void {
   if (!event) return;
+  if (!shouldInspectProviderEvent(event)) return;
   if (event.provider) state.provider = event.provider;
   collectValue({ value: event.error, state, key: "error" });
   collectValue({ value: event.text, state, key: "text" });
   collectValue({ value: event.payload, state, key: "payload" });
   collectValue({ value: event.raw?.payload, state, key: "raw_payload" });
   collectValue({ value: event.raw?.method, state, key: "raw_method" });
+}
+
+function shouldInspectProviderEvent(event: Partial<ProviderEvent>): boolean {
+  const status = cleanLower(event.status);
+  if (cleanLower(event.type) === "error") return true;
+  if (status === "completed") return false;
+  if (cleanLower(event.raw?.method) === "turn/completed" && status !== "") return true;
+  return status === "failed" || status === "error";
 }
 
 type CollectValueInput = { depth?: number; key?: string; state: ParseState; value: unknown };
