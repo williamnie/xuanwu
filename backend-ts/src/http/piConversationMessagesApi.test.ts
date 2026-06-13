@@ -3,8 +3,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, registerFauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listIssues } from "../db/repositories/issues.ts";
+import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -116,6 +118,54 @@ describe("Bun PI conversation message API", () => {
 
       expect(message.status).toBe(201);
       expect(body.text).toBe(`images=1; mime=image/png; bytes=${PNG_FIXTURE.byteLength}`);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("Feishu PI conversation creates an issue, enqueues it, and starts executor session", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-run-faux-api", provider: "pi-feishu-run-faux" });
+    const provider = new FakeExecutorProvider();
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_create_proposal", {
+            description: "修复登录 bug",
+            title: "Feishu task"
+          }, { id: "issue-create" }),
+          fauxToolCall("issue_enqueue_proposal", {
+            issue_id: 1,
+            rationale: "Feishu task should start immediately"
+          }, { id: "issue-enqueue" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("已创建 issue #1 并开始执行。")
+      ]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-feishu-run-faux");
+      writeFauxModelsConfig(database, "pi-feishu-run-faux");
+      const router = createDefaultRouter({ database, providers: { codex: provider } });
+      await request(router, "/api/pi/conversations", {
+        id: "feishu-om-run", project_id: "demo", pi_agent_id: "pi-faux"
+      });
+
+      const message = await request(router, "/api/pi/conversations/feishu-om-run/messages", {
+        prompt: "@PI 帮我在 demo 修复登录 bug"
+      });
+      await until(() => provider.calls.length > 0);
+
+      const issues = listIssues(database, { projectId: "demo" });
+      expect(message.status).toBe(201);
+      expect(await message.json()).toMatchObject({
+        conversation_id: "feishu-om-run",
+        status: "completed",
+        text: "已创建 issue #1 并开始执行。"
+      });
+      expect(issues).toMatchObject([
+        { project_id: "demo", status: "in_progress", title: "Feishu task" }
+      ]);
+      expect(provider.calls).toMatchObject([{ issueId: issues[0]?.id, projectId: "demo" }]);
     } finally {
       faux.unregister();
       database.close();
@@ -272,11 +322,12 @@ function insertUpload(db: RunnerDatabase, id: string): void {
   );
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
+function insertProject(db: RunnerDatabase, id: string, options: { autoRun?: number } = {}): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects (id, name, cwd, provider, provider_config_json, auto_run, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}',
+      options.autoRun ?? 0, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -351,4 +402,18 @@ function imageSummary(context: { messages?: Array<{ content?: unknown[]; role?: 
 
 function isImageContent(value: unknown): value is { data: string; mimeType: string; type: string } {
   return typeof value === "object" && value !== null && (value as { type?: unknown }).type === "image";
+}
+
+class FakeExecutorProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly calls: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput) {
+    this.calls.push(input);
+    return {
+      runId: `fake-run-${input.issueId}`,
+      session: { provider: this.id, sessionId: `thread-${input.issueId}`, turnId: `turn-${input.issueId}` }
+    };
+  }
 }

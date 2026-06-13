@@ -7,6 +7,7 @@ import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
+import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const ENCRYPT_KEY = "fixture-encrypt-key";
@@ -76,6 +77,36 @@ describe("Feishu events endpoint", () => {
       expect(text).not.toContain(ENCRYPT_KEY);
     } finally {
       subscription.close();
+      database.close();
+    }
+  });
+
+  test("passes accepted callback messages to the Feishu agent bridge", async () => {
+    const bridgeCalls: Array<{ messageId: string; projectId: unknown; text: string }> = [];
+    const bridge: ReturnType<typeof createFeishuAgentBridge> = {
+      handle: async ({ event, ingest }) => {
+        bridgeCalls.push({
+          messageId: event.message_id,
+          projectId: ingest.normalized_summary.project_id,
+          text: event.text
+        });
+        return { reason: "agent_reply_sent", replied: true };
+      }
+    };
+    const { database, handle } = await fixtureHandler({
+      agentBridge: bridge,
+      projectMappings: "chat:oc_group=demo"
+    });
+    try {
+      const response = await postFeishu(handle, messageEvent({ token: "verify-token" }));
+
+      expect(response.status).toBe(202);
+      expect(bridgeCalls).toEqual([{
+        messageId: "om_message_1",
+        projectId: "demo",
+        text: "@PI implement it"
+      }]);
+    } finally {
       database.close();
     }
   });
@@ -192,7 +223,12 @@ describe("Feishu events endpoint", () => {
   });
 });
 
-async function fixtureHandler(options: { encryptKey?: string; projectMappings?: string; runnerAuthToken?: string }) {
+async function fixtureHandler(options: {
+  agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
+  encryptKey?: string;
+  projectMappings?: string;
+  runnerAuthToken?: string;
+}) {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-http-"));
   tempRoots.push(root);
   const bus = new EventBus();
@@ -205,7 +241,7 @@ async function fixtureHandler(options: { encryptKey?: string; projectMappings?: 
     feishuProjectMappings: options.projectMappings ?? "",
     feishuVerificationToken: "verify-token"
   });
-  const router = createDefaultRouter({ bus, config, database });
+  const router = createDefaultRouter({ bus, config, database, feishuAgentBridge: options.agentBridge });
   return { bus, database, handle: createRequestHandler(router, config.authToken) };
 }
 

@@ -86,6 +86,33 @@ describe("PI runner action gate", () => {
     }
   });
 
+  test("notifies runtime when delegated enqueue should start an executor session", async () => {
+    const fixture = await openFixture();
+    const kicked: string[] = [];
+    try {
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Run from Feishu" });
+      const actions = createPiRunnerActions(fixture.db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        onIssueEnqueued: (projectID: string) => kicked.push(projectID),
+        project: fixture.project
+      });
+
+      const result = actions.enqueueIssueProposal({ issue_id: issueID, rationale: "default run from Feishu" }) as {
+        action_id: string; decision: string; status: string;
+      };
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
+      expect(kicked).toEqual([fixture.project.id]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("delegated authorization does not auto-execute covered high-risk proposals", async () => {
     const fixture = await openFixture();
     try {

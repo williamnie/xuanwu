@@ -6,6 +6,22 @@ import { registerEventRoutes } from "./events.ts";
 const BASE_URL = "http://127.0.0.1:3008";
 
 describe("Bun SSE events endpoint", () => {
+  test("notifies observers while preserving the SSE subscriber stream", async () => {
+    const bus = new EventBus();
+    const observed: string[] = [];
+    const subscription = bus.subscribe();
+    const detach = bus.observe((event) => observed.push(event.type));
+
+    bus.publish({ issueId: 1, type: "issue.status_changed" });
+    detach();
+    bus.publish({ issueId: 2, type: "issue.status_changed" });
+
+    expect(observed).toEqual(["issue.status_changed"]);
+    expect(await subscription.next()).toMatchObject({ issueId: 1, type: "issue.status_changed" });
+    expect(await subscription.next()).toMatchObject({ issueId: 2, type: "issue.status_changed" });
+    subscription.close();
+  });
+
   test("opens an SSE stream, sends heartbeat, and cleans up on close", async () => {
     const bus = new EventBus();
     const router = createRouter();

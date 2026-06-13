@@ -15,6 +15,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
+import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { piConversationPromptImages } from "./piConversationImages.ts";
@@ -28,9 +29,14 @@ import {
   type PiRuntimeSession
 } from "./piRuntime.ts";
 import { publishPiSessionEvent } from "./piSessionEvents.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { Router } from "./router.ts";
 
-type PiConversationContext = { bus?: EventBus; database: RunnerDatabase };
+type PiConversationContext = {
+  bus?: EventBus;
+  database: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+};
 export type PiConversationPromptInput = {
   conversationId?: string;
   projectId?: string;
@@ -256,6 +262,11 @@ async function openConversationRuntime(context: PiConversationContext, conversat
     authorization: project ? runnerChatAuthorization(project) : undefined,
     bus: context.bus,
     conversationID: conversation.id,
+    onIssueEnqueued: (projectID) => startProjectLoop({
+      bus: context.bus,
+      database: context.database,
+      providers: context.providers
+    }, projectID, { forceOnce: true }),
     project,
     sessionFile: conversation.session_file
   });

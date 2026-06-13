@@ -11,14 +11,22 @@ export type ProjectLoopRuntime = {
   onError?: (error: unknown, projectID: string) => void;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
+export type ProjectLoopStartOptions = { forceOnce?: boolean };
 
 const activeLoops = new Set<string>();
+const forcedProjects = new Set<string>();
 const waitingProjects: string[] = [];
 let workerActive = false;
 
-export function startProjectLoop(runtime: ProjectLoopRuntime, projectID: string): void {
+export function startProjectLoop(
+  runtime: ProjectLoopRuntime,
+  projectID: string,
+  options: ProjectLoopStartOptions = {}
+): void {
   const id = projectID.trim();
-  if (id === "" || activeLoops.has(id)) return;
+  if (id === "") return;
+  if (options.forceOnce === true) forcedProjects.add(id);
+  if (activeLoops.has(id)) return;
   activeLoops.add(id);
   enqueueProject(id);
   if (!workerActive) {
@@ -59,6 +67,7 @@ async function runProject(runtime: ProjectLoopRuntime, projectID: string): Promi
   } catch (error) {
     runtime.onError?.(error, projectID);
   } finally {
+    forcedProjects.delete(projectID);
     activeLoops.delete(projectID);
     requeueProjectsWithTodo(runtime.database);
   }
@@ -69,14 +78,14 @@ function isAutoRunEnabled(db: RunnerDatabase, projectID: string): boolean {
 }
 
 async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): Promise<void> {
-  while (shouldContinue(runtime.database, projectID)) {
+  while (shouldContinue(runtime.database, projectID, forcedProjects.has(projectID))) {
     const result = await runProjectLoopOnce(loopInput(runtime, projectID));
     if (!result.claimed) break;
   }
 }
 
-function shouldContinue(db: RunnerDatabase, projectID: string): boolean {
-  return isAutoRunEnabled(db, projectID) && !hasActiveExecutorWork(db);
+function shouldContinue(db: RunnerDatabase, projectID: string, forceOnce: boolean): boolean {
+  return (forceOnce || isAutoRunEnabled(db, projectID)) && !hasActiveExecutorWork(db);
 }
 
 function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopInput {

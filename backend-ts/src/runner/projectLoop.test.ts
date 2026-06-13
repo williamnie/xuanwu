@@ -149,6 +149,23 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("forced loop starts one executor session even when project auto-run is off", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "manual-demo", provider: provider.id });
+      const issueId = insertIssue(db, { projectId: "manual-demo", title: "from IM" });
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "manual-demo", { forceOnce: true });
+      await waitFor(() => provider.inputs.length === 1);
+
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([issueId]);
+      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps issue in progress after provider run completes", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();

@@ -29,7 +29,7 @@ type DirectReply = { reason: string; text: string };
 
 const REPLY_LINK_TYPE = "feishu_agent_reply";
 const REPLY_RELATIONSHIP = "agent_reply";
-const CHAT_ACK_TEXT = "我在，已经收到。需要我处理具体任务时，直接说明要做什么；如果要绑定默认项目，可以在飞书设置里配置 Project Mappings。";
+const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请在设置页添加 Project Mappings，或在消息里带上项目名后再发。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
@@ -45,7 +45,7 @@ async function handleFeishuAgentMessage(
   const policy = replyPolicy(input);
   if (policy) return { reason: policy, replied: false };
   if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
-  const direct = directReply(input);
+  const direct = directReply(input, options);
   if (direct) return sendReply(options, input, direct.text, {
     conversationId: fallbackConversationID(input.event),
     text: direct.text
@@ -86,7 +86,7 @@ async function runnerReply(
   } catch (error) {
     return {
       conversationId: fallbackConversationID(input.event),
-      text: `Runner agent failed: ${safeError(error)}`
+      text: `我尝试交给 Runner 时出错了：${safeError(error)}。你可以稍后重试，或补充项目名和目标再发我一次。`
     };
   }
 }
@@ -103,9 +103,11 @@ function replyPolicy(input: FeishuBridgeHandleInput): string {
   return "";
 }
 
-function directReply(input: FeishuBridgeHandleInput): DirectReply | null {
+function directReply(input: FeishuBridgeHandleInput, options: FeishuAgentBridgeOptions): DirectReply | null {
   const decision = attentionDecision(input.ingest);
-  if (decision === "inbox_only") return { reason: "chat_ack_sent", text: CHAT_ACK_TEXT };
+  if (decision === "inbox_only" && !options.runConversation) {
+    return { reason: "chat_ack_sent", text: CHAT_ACK_TEXT };
+  }
   if (decision === "ask_clarification") {
     return { reason: "project_clarification_sent", text: PROJECT_CLARIFICATION_TEXT };
   }

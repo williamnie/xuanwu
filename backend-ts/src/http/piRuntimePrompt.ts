@@ -16,7 +16,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
-    "Runner Chat workflow: create requested issues directly, then ask in chat whether to run now or schedule for later. If the user says now, call issue_enqueue_proposal. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
+    "Runner Chat workflow: create requested issues directly. Feishu/IM task messages should create the issue and call issue_enqueue_proposal by default so the executor session starts. Only wait when the user explicitly says not to run, to just record it, or to schedule later. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
     repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
     skillContext.promptSection,
@@ -43,7 +43,7 @@ function repoAwareIssueProposalWorkflow(): string {
     "The created triage issue must include sections: 需求理解, 相关证据, 建议改动, 验收标准, 验证建议, 未确认问题.",
     "PI must not edit code or run destructive commands; the pack is non-binding and executor must re-read and verify.",
     "If information is insufficient, 最多追问一个关键问题 (ask at most one key question); do not block simple requests waiting for a perfect plan.",
-    "After creating the proposal/triage issue, ask whether to run now, schedule later, or wait."
+    "After creating the proposal/triage issue from chat/IM, enqueue it by default unless the user asks to wait or schedule later."
   ].join(" ");
 }
 

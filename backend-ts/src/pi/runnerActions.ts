@@ -42,7 +42,10 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   readSessionSummary(input: SessionReadSummaryInput): unknown;
 };
 
-export type PiRunnerActionContext = PiActionContext & { project?: Project };
+export type PiRunnerActionContext = PiActionContext & {
+  onIssueEnqueued?: (projectID: string) => void;
+  project?: Project;
+};
 
 type IssueListInput = { project_id?: string; status?: string };
 type IssueReadInput = { id: number };
@@ -107,7 +110,7 @@ export function createPiRunnerActions(
         projectID: issueProjectID(db, input.issue_id, context),
         rationale: input.rationale
       };
-      return createPendingPiAction(db, context, proposal, () => enqueueIssue(db, input.issue_id));
+      return createPendingPiAction(db, context, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
     },
     scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
     listIssues: (input) => safeListIssues(db, context, input),
@@ -124,6 +127,12 @@ export function createPiRunnerActions(
     readIssue: (input) => safeReadIssue(db, context, input),
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
+}
+
+function enqueueIssueAndNotify(db: RunnerDatabase, context: PiRunnerActionContext, issueID: number) {
+  const issue = enqueueIssue(db, issueID);
+  context.onIssueEnqueued?.(issue.project_id);
+  return issue;
 }
 
 

@@ -6,12 +6,14 @@ import { loadAuthToken, requireBearerAuth } from "./auth.ts";
 import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
+import { attachFeishuNotificationObservers } from "../integrations/feishuNotifications.ts";
 import { json } from "./errors.ts";
 import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerFeishuSettingsRoutes } from "./feishuSettingsApi.ts";
 import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
@@ -30,6 +32,7 @@ type DefaultRouterOptions = {
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   interruptTimeoutMs?: number;
   onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
+  feishuAgentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   feishuSender?: FeishuMessageSender;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
@@ -40,11 +43,18 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   router.get("/health", () => json({ status: "ok" }));
   registerEventRoutes(router, { bus });
   registerFeishuEventRoutes(router, {
+    agentBridge: runtime.feishuAgentBridge,
     bus,
     config: runtime.config?.integrations.feishu ?? buildFeishuConnectorConfig(),
     database: runtime.database
   });
   if (runtime.database) {
+    attachFeishuNotificationObservers({
+      bus,
+      config: runtime.config?.integrations.feishu,
+      database: runtime.database,
+      sender: runtime.feishuSender
+    });
     registerFeishuSettingsRoutes(router, {
       config: runtime.config,
       database: runtime.database,

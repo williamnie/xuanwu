@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import type { EventBus } from "../events/bus.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
   createPiAgent,
   createProjectPiSettings,
@@ -36,6 +37,7 @@ type PiApiContext = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
 type SettingsPatch = Partial<Pick<ProjectPiSettings,

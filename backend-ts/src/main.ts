@@ -36,7 +36,7 @@ const feishuBridge = createFeishuAgentBridge({
   config: () => config.integrations.feishu,
   database,
   runConversation: async ({ event, projectId, prompt }) => {
-    const result = await runPiConversationPrompt({ bus, database }, {
+    const result = await runPiConversationPrompt({ bus, database, providers }, {
       conversationId: feishuConversationID(event.message_id),
       projectId,
       prompt,
@@ -49,6 +49,7 @@ const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, 
 const server = await startServer(config, {
   bus,
   database,
+  feishuAgentBridge: feishuBridge,
   feishuReceiverStatus: () => feishuReceiver.status(),
   onFeishuConfigChanged: restartFeishuReceiver,
   providers

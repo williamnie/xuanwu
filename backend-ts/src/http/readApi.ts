@@ -127,6 +127,7 @@ function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, un
 function updateIssueAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
   if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
   const issue = updateIssue(context.database, id, body);
+  publishIssueStatusChange(context, issue, body);
   if (terminalForSkillAudit(issue.status)) safeAuditSkillIntents(context.database, issue.id);
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
@@ -137,12 +138,14 @@ function startIssueFromPatch(context: ReadApiContext, id: number, body: Record<s
   if (!current) throw new ProjectNotFoundError();
   if (current.status === "in_progress" && hasOpenIssueRun(context.database, id)) return current;
   const issue = enqueueIssue(context.database, id, actionOptions(body));
+  publishIssueStatusChange(context, issue, { status: issue.status });
   kickAutoProject(context, issue.project_id);
   return issue;
 }
 
 function reviewIssueVerificationAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
   const issue = reviewIssueVerification(context.database, id, body);
+  publishIssueStatusChange(context, issue, { status: issue.status });
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
   return issue;
 }
@@ -151,6 +154,7 @@ type IssueAction = (db: RunnerDatabase, id: number, options?: IssueActionOptions
 
 function actionAndKickLoop(context: ReadApiContext, action: IssueAction, id: number, options: IssueActionOptions): unknown {
   const output = action(context.database, id, options);
+  if (isIssue(output)) publishIssueStatusChange(context, output, { status: output.status });
   if (isQueuedIssue(output)) kickAutoProject(context, output.project_id);
   return output;
 }
@@ -163,6 +167,20 @@ function kickAutoProject(context: ReadApiContext, projectID: string): void {
 
 function isQueuedIssue(value: unknown): value is Issue {
   return Boolean(value && typeof value === "object" && (value as Issue).status === "todo");
+}
+
+function isIssue(value: unknown): value is Issue {
+  return Boolean(value && typeof value === "object" && typeof (value as Issue).id === "number");
+}
+
+function publishIssueStatusChange(context: ReadApiContext, issue: Issue, body: Record<string, unknown>): void {
+  if (!Object.hasOwn(body, "status")) return;
+  context.bus?.publish({
+    issueId: issue.id,
+    payload: JSON.stringify({ status: issue.status }),
+    projectId: issue.project_id,
+    type: "issue.status_changed"
+  });
 }
 
 async function cancelIssueResponse(context: ReadApiContext, request: Request): Promise<Response> {

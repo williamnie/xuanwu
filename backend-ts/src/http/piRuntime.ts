@@ -24,6 +24,7 @@ export type RuntimeSessionInput = {
   delegationID?: string;
   heartbeatID?: string;
   issueID?: number;
+  onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   sessionFile?: string;
   source?: string;
@@ -101,6 +102,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
         conversationID: input.conversationID,
         delegationID: input.delegationID,
         heartbeatID: input.heartbeatID,
+        onIssueEnqueued: input.onIssueEnqueued,
         source: input.source
       })
     });

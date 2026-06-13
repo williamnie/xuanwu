@@ -55,7 +55,7 @@ describe("Feishu agent bridge", () => {
     database.close();
   });
 
-  test("acknowledges trusted chat-only messages without starting Runner agent", async () => {
+  test("routes trusted chat-only messages to PI conversation for natural replies", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
     const prompts: string[] = [];
@@ -72,7 +72,7 @@ describe("Feishu agent bridge", () => {
       database,
       runConversation: async ({ prompt }) => {
         prompts.push(prompt);
-        return { text: "should not run" };
+        return { text: "我在，这件事我可以继续帮你跟进。" };
       },
       sender: { sendTextMessage: async (input) => {
         sent.push(input);
@@ -82,12 +82,12 @@ describe("Feishu agent bridge", () => {
 
     const result = await bridge.handle({ event, ingest });
 
-    expect(result).toEqual({ reason: "chat_ack_sent", replied: true });
-    expect(prompts).toEqual([]);
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(prompts).toEqual(["hi"]);
     expect(sent).toEqual([{
       receiveId: "oc_group",
       receiveIdType: "chat_id",
-      text: "我在，已经收到。需要我处理具体任务时，直接说明要做什么；如果要绑定默认项目，可以在飞书设置里配置 Project Mappings。"
+      text: "我在，这件事我可以继续帮你跟进。"
     }]);
     database.close();
   });
@@ -154,6 +154,41 @@ describe("Feishu agent bridge", () => {
     await bridge.handle({ event, ingest });
 
     expect(sent).toHaveLength(1);
+    database.close();
+  });
+
+  test("reports Runner errors as a natural Feishu reply", async () => {
+    const database = await openFixtureDatabase();
+    const sent: FeishuTextMessageInput[] = [];
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_PROJECT_MAPPINGS: "chat:oc_group=demo",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("@PI 帮我修复登录 bug", "om_agent_runner_error");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async () => {
+        throw new Error("provider failed CODEX_API_KEY=secret /Users/xiaobei/private");
+      },
+      sender: { sendTextMessage: async (input) => {
+        sent.push(input);
+        return { messageId: "om_reply_runner_error" };
+      } }
+    });
+
+    const result = await bridge.handle({ event, ingest });
+    const text = sent[0]?.text ?? "";
+
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(text).toContain("尝试交给 Runner 时出错");
+    expect(text).not.toContain("Runner agent failed");
+    expect(text).not.toContain("secret");
+    expect(text).not.toContain("/Users/xiaobei/private");
     database.close();
   });
 });

@@ -27,11 +27,15 @@ type Subscriber = {
   notify?: () => void;
 };
 
+type EventHandler = (event: AppEvent) => void;
+
 export class EventBus {
   #nextID = 0;
+  #handlers = new Set<EventHandler>();
   #subscribers = new Map<number, Subscriber>();
 
   publish(event: AppEvent): void {
+    for (const handler of this.#handlers) handler(event);
     for (const subscriber of this.#subscribers.values()) {
       subscriber.events.push(event);
       if (subscriber.events.length > BUS_BUFFER_SIZE) subscriber.events.shift();
@@ -49,6 +53,13 @@ export class EventBus {
 
   subscriberCount(): number {
     return this.#subscribers.size;
+  }
+
+  observe(handler: EventHandler): () => void {
+    this.#handlers.add(handler);
+    return () => {
+      this.#handlers.delete(handler);
+    };
   }
 }
 

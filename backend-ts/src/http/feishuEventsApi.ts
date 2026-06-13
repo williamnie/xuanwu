@@ -9,10 +9,13 @@ import {
 import type { EventBus } from "../events/bus.ts";
 import { cleanString, recordValue } from "../integrations/feishuShared.ts";
 import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "../integrations/feishuIngest.ts";
+import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
+import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
 
 export type FeishuEventRoutesContext = {
+  agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   bus?: EventBus;
   config: FeishuConnectorConfig;
   database?: RunnerDatabase;
@@ -54,11 +57,14 @@ function acceptMessageEvent(
   encrypted: boolean
 ): Response {
   try {
-    return json(ingestFeishuMessageEvent(body, context, {
+    const event = normalizeFeishuMessageEvent(body, { rawEventRef: rawRef });
+    const ingest = ingestFeishuMessageEvent(body, context, {
       encrypted,
       rawPayloadRef: rawRef,
       transport: "callback"
-    }), { status: 202 });
+    });
+    void context.agentBridge?.handle({ event, ingest });
+    return json(ingest, { status: 202 });
   } catch {
     return reject(context, "unsupported_or_invalid_event", rawRef, 400, encrypted);
   }

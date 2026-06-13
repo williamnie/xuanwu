@@ -28,6 +28,25 @@ describe("PI runtime prompt", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("tells PI to start IM-created issues by default unless the user asks to wait", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      const prompt = buildPiRuntimeSystemPrompt({
+        agent: agentRecord(),
+        conversationID: "conv-im-default-run",
+        project: projectRecord(join(root, "project"))
+      }, db);
+
+      expect(prompt).toContain("Feishu/IM task messages");
+      expect(prompt).toContain("call issue_enqueue_proposal by default");
+      expect(prompt).toContain("Only wait");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 function agentRecord() {
