@@ -5,7 +5,7 @@ import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
 import { getSkillMetadata, readSkillRegistry, recommendSkillIntents } from "../skills/registry.ts";
 import { parseSkillIntentList } from "../skills/intents.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
-import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import { listProjects, ProjectNotFoundError, type Project } from "../db/repositories/projects.ts";
 import { getAgentSession, listAgentSessions } from "../db/repositories/agentSessions.ts";
 import { createPiMcpActions, type PiMcpActionLayer } from "./mcpActionTools.ts";
@@ -17,6 +17,11 @@ import { createIssueStateRepairProposal, safeIssueStateDiagnosis, type IssueStat
 import { createIssueScheduleEnqueueAction, type IssueScheduleEnqueueInput } from "./runnerIssueScheduleActions.ts";
 import { createPiAgentOrchestrationActions, type PiAgentOrchestrationActionLayer } from "./agentOrchestrationActions.ts";
 import { createPiRepoReadActions, type PiRepoReadActionLayer } from "./repoReadActionTools.ts";
+import {
+  createCompactIssueList,
+  createIssueExecutionStatus,
+  createIssueStatusSummary
+} from "./issueToolViews.ts";
 import {
   renderIssueCreateProposalDescription,
   type IssueProposalContextFields
@@ -33,6 +38,8 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   recommendSkills(input: SkillRecommendInput): unknown;
   auditSkillIntents(input: SkillIntentAuditInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
+  issueExecutionStatus(input: IssueExecutionStatusInput): unknown;
+  issueStatusSummary(input: IssueStatusSummaryInput): unknown;
   scheduleIssueEnqueue(input: IssueScheduleEnqueueInput): unknown;
   listIssues(input: IssueListInput): unknown;
   listProjects(input: ProjectListInput): unknown;
@@ -47,8 +54,9 @@ export type PiRunnerActionContext = PiActionContext & {
   project?: Project;
 };
 
-type IssueListInput = { project_id?: string; status?: string };
+type IssueListInput = { limit?: number; project_id?: string; status?: string };
 type IssueReadInput = { id: number };
+type IssueExecutionStatusInput = { id: number };
 type IssueCommentInput = { body: string; issue_id: number };
 type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
@@ -66,6 +74,7 @@ type SkillListInput = {};
 type SkillReadInput = { id: string };
 type SkillRecommendInput = { description?: string; project_id?: string; title?: string };
 type SkillIntentAuditInput = { issue_id: number; issue_run_id?: string; used_skill_intents?: string[] };
+type IssueStatusSummaryInput = { project_id?: string; status?: string };
 type ProjectStatusInput = { project_id?: string };
 type SessionListInput = { project_id?: string; provider?: string; role?: string };
 type SessionReadSummaryInput = { session_key: string };
@@ -113,6 +122,8 @@ export function createPiRunnerActions(
       return createPendingPiAction(db, context, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
     },
     scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
+    issueExecutionStatus: (input) => safeIssueExecutionStatus(db, context, input),
+    issueStatusSummary: (input) => safeIssueStatusSummary(db, context, input),
     listIssues: (input) => safeListIssues(db, context, input),
     listSkills: () => safeListSkills(db, context),
     listProjects: () => executeSafePiAction(db, context, {
@@ -140,9 +151,37 @@ function safeListIssues(db: RunnerDatabase, context: PiRunnerActionContext, inpu
   const filter = normalizeIssueFilter(input, context);
   return executeSafePiAction(db, context, {
     actionType: "issue.list",
+    payload: cleanObjectPayload({ limit: input.limit, project_id: filter.projectId, status: filter.status }),
+    projectID: filter.projectId,
+    execute: () => createCompactIssueList(db, {
+      limit: input.limit,
+      projectId: filter.projectId,
+      status: filter.status
+    })
+  });
+}
+
+function safeIssueStatusSummary(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueStatusSummaryInput) {
+  const filter = normalizeIssueFilter(input, context);
+  return executeSafePiAction(db, context, {
+    actionType: "issue.status_summary",
     payload: cleanObject({ project_id: filter.projectId, status: filter.status }),
     projectID: filter.projectId,
-    execute: () => ({ items: listIssues(db, filter) })
+    execute: () => createIssueStatusSummary(db, {
+      projectId: filter.projectId,
+      status: filter.status
+    })
+  });
+}
+
+function safeIssueExecutionStatus(db: RunnerDatabase, context: PiRunnerActionContext, input: IssueExecutionStatusInput) {
+  const issue = mustGetIssue(db, input.id);
+  return executeSafePiAction(db, context, {
+    actionType: "issue.execution_status",
+    issueID: issue.id,
+    payload: { id: issue.id },
+    projectID: issue.project_id,
+    execute: () => createIssueExecutionStatus(db, issue.id)
   });
 }
 

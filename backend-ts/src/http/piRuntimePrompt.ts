@@ -18,6 +18,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     agentInstructionsSection(input.agent),
     "Feishu/IM normal chat: reply naturally, briefly, and in the same language as the user. Do not ask for a project mapping or create an issue for greetings, capability questions, how-to-use questions, or other non-task chat. Use the issue workflow only when the user gives a concrete task, asks to run/schedule/inspect a project, or names an issue/project.",
     "Runner Chat workflow: create requested issues directly. Feishu/IM task messages should create the issue and call issue_enqueue_proposal by default so the executor session starts. Only wait when the user explicitly says not to run, to just record it, or to schedule later. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
+    "Token economy: prefer deterministic compact tools. For counts/status questions use issue_status_summary. For one issue's execution progress use issue_execution_status. Use issue_list only for compact cards, and issue_read only when full issue body is explicitly needed.",
     repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
     skillContext.promptSection,
@@ -39,7 +40,7 @@ function repoAwareIssueProposalWorkflow(): string {
   return [
     "Repo-aware issue proposal workflow:",
     "When the user asks for implementation or a fix, identify the project and use only read-only repo/context tools when useful:",
-    "project_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
+    "project_status, issue_status_summary, issue_execution_status, issue_read, session_read_summary, repo_search, repo_read_excerpt, repo_tree, memory_search.",
     "Then call issue_create_proposal with a repo_context_pack-compatible context_pack/evidence/open_questions payload.",
     "The created triage issue must include sections: 需求理解, 相关证据, 建议改动, 验收标准, 验证建议, 未确认问题.",
     "PI must not edit code or run destructive commands; the pack is non-binding and executor must re-read and verify.",

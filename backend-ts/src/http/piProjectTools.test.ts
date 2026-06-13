@@ -64,7 +64,8 @@ describe("PI project tools", () => {
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "agent_profile_recommend", "executor_issue_create_proposal", "executor_profile_assign_proposal",
         "find", "grep", "issue_comment", "issue_create_proposal", "issue_enqueue_proposal",
-        "issue_list", "issue_read", "issue_schedule_enqueue", "issue_state_diagnose", "issue_state_repair_proposal",
+        "issue_execution_status", "issue_list", "issue_read", "issue_schedule_enqueue",
+        "issue_state_diagnose", "issue_state_repair_proposal", "issue_status_summary",
 "ls", "mcp_capability_read", "mcp_registry_list",
         "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
         "memory_search", "memory_write_candidate", "needs_user_escalation",

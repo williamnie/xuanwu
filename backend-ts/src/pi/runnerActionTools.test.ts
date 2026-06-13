@@ -28,9 +28,15 @@ describe("PI runner action tools", () => {
     const repoRead = toolByName(tools, "repo_read_excerpt");
     const repoTree = toolByName(tools, "repo_tree");
     const issueCreate = toolByName(tools, "issue_create_proposal");
+    const issueList = toolByName(tools, "issue_list");
+    const issueStatus = toolByName(tools, "issue_status_summary");
+    const issueExecution = toolByName(tools, "issue_execution_status");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
+    expect(validateArgs(issueList, { limit: 3, status: "todo" })).toEqual({ limit: 3, status: "todo" });
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
+    expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
     expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
       target_issue_id: 1,
@@ -80,7 +86,10 @@ describe("PI runner action tools", () => {
 
     await recommendProfile.execute("tool-profile", { issue_id: 1, role: "executor" }, undefined, undefined, {} as never);
     await verifier.execute("tool-verifier", { target_issue_id: 1, instructions: "verify" }, undefined, undefined, {} as never);
+    await issueList.execute("tool-list", { limit: 3, status: "todo" }, undefined, undefined, {} as never);
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
+    await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
+    await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repoSearch.execute("tool-repo-search", { query: "Accordion", max_results: 3 }, undefined, undefined, {} as never);
     await repoRead.execute("tool-repo-read", { path: "src/App.tsx" }, undefined, undefined, {} as never);
@@ -94,7 +103,10 @@ describe("PI runner action tools", () => {
     expect(calls).toEqual([
       ["recommendExecutorProfile", { issue_id: 1, role: "executor" }],
       ["createVerificationWorkflow", { target_issue_id: 1, instructions: "verify" }],
+      ["listIssues", { limit: 3, status: "todo" }],
       ["readIssue", { id: 7 }],
+      ["issueStatusSummary", { status: "todo" }],
+      ["issueExecutionStatus", { id: 7 }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
       ["readRepoExcerpt", { path: "src/App.tsx" }],
@@ -222,6 +234,99 @@ describe("PI runner action tools", () => {
         "issue.comment"
       ]);
       expect(listIssues(fixture.db, { projectId: fixture.project.id })[0]?.comment_count).toBe(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("returns compact issue list and status summary without full issue details", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+      insertIssue(fixture.db, {
+        description: "large detail TOKEN=secret " + "x".repeat(2000),
+        projectID: fixture.project.id,
+        status: "todo",
+        title: "First todo"
+      });
+      insertIssue(fixture.db, { projectID: fixture.project.id, status: "todo", title: "Second todo" });
+      insertIssue(fixture.db, { projectID: fixture.project.id, status: "done", title: "Done item" });
+
+      const list = actions.listIssues({}) as {
+        items: Array<Record<string, unknown>>;
+        limit: number;
+        status_counts: Record<string, number>;
+        total: number;
+        truncated: boolean;
+      };
+      const summary = actions.issueStatusSummary({}) as {
+        status_counts: Record<string, number>;
+        total: number;
+        unfinished_total: number;
+      };
+
+      expect(list).toMatchObject({
+        limit: 50,
+        status_counts: { done: 1, todo: 2 },
+        total: 3,
+        truncated: false
+      });
+      expect(list.items).toHaveLength(3);
+      expect(list.items).toContainEqual(expect.objectContaining({ id: 1, status: "todo", title: "First todo" }));
+      expect(JSON.stringify(list)).not.toContain("description");
+      expect(JSON.stringify(list)).not.toContain("TOKEN=secret");
+      expect(summary).toMatchObject({
+        status_counts: { done: 1, todo: 2 },
+        total: 3,
+        unfinished_total: 2
+      });
+      expect(JSON.stringify(summary)).not.toContain("First todo");
+
+      const limited = actions.listIssues({ limit: 1 }) as { items: unknown[]; limit: number; truncated: boolean };
+      expect(limited).toMatchObject({ limit: 1, truncated: true });
+      expect(limited.items).toHaveLength(1);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("returns compact execution status for one issue without description or raw logs", async () => {
+    const fixture = await openFixture();
+    try {
+      const actions = createPiRunnerActions(fixture.db, { project: fixture.project });
+      const issueID = insertIssue(fixture.db, {
+        description: "full issue body should stay out TOKEN=secret",
+        projectID: fixture.project.id,
+        status: "failed",
+        title: "Broken issue"
+      });
+      fixture.db.sqlite.run(
+        `insert into issue_runs
+          (id, issue_id, attempt, status, provider, provider_session_id, started_at, ended_at, exit_reason, error)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          "issue-1-attempt-1", issueID, 1, "failed", "codex", "thread-1",
+          "2026-01-01T01:00:00Z", "2026-01-01T01:05:00Z", "error", "context window TOKEN=secret"
+        ]
+      );
+      fixture.db.sqlite.run(
+        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+        [issueID, "issue.log", JSON.stringify({ text: "last useful line TOKEN=secret" }), "2026-01-01T01:04:00Z"]
+      );
+
+      const status = actions.issueExecutionStatus({ id: issueID }) as {
+        issue: Record<string, unknown>;
+        latest_run: Record<string, unknown>;
+        recent_events: Array<Record<string, unknown>>;
+      };
+
+      expect(status.issue).toMatchObject({ id: issueID, status: "failed", title: "Broken issue" });
+      expect(status.latest_run).toMatchObject({ attempt: 1, status: "failed", provider: "codex" });
+      expect(status.recent_events).toEqual([
+        expect.objectContaining({ type: "issue.log", payload_preview: expect.stringContaining("TOKEN=[redacted]") })
+      ]);
+      expect(JSON.stringify(status)).not.toContain("full issue body");
+      expect(JSON.stringify(status)).not.toContain("TOKEN=secret");
     } finally {
       await fixture.close();
     }
@@ -574,7 +679,9 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     recommendExecutorProfile: record("recommendExecutorProfile"),
     recommendMcpRequirements: record("recommendMcpRequirements"),
     recommendSkills: record("recommendSkills"),
-    auditSkillIntents: record("auditSkillIntents")
+    auditSkillIntents: record("auditSkillIntents"),
+    issueExecutionStatus: record("issueExecutionStatus"),
+    issueStatusSummary: record("issueStatusSummary")
   };
 }
 
@@ -604,10 +711,17 @@ async function openFixture(): Promise<{ close(): Promise<void>; db: RunnerDataba
   if (!project) throw new Error("missing fixture project");
   return { db, project, close: async () => { db.close(); await rm(root, { recursive: true, force: true }); } };
 }
-function insertIssue(db: RunnerDatabase, input: { projectID: string; status: string; title: string }): number {
+function insertIssue(
+  db: RunnerDatabase,
+  input: { description?: string; projectID: string; status: string; title: string }
+): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [input.projectID, input.title, input.status, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, description, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [
+      input.projectID, input.title, input.description ?? "", input.status,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+    ]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing issue id");
