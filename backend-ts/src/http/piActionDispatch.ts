@@ -29,7 +29,7 @@ export async function dispatchPiAction(
     case "issue.create":
       return createIssue(context.database, payload);
     case "issue.enqueue":
-      return enqueueIssue(context.database, positivePayloadID(payload, "issue_id"));
+      return enqueueIssueAndStartAutoRun(context, positivePayloadID(payload, "issue_id"));
     case "issue.schedule_enqueue":
       return createIssueEnqueueCron(context.database, payload);
     case "issue.comment":
@@ -63,7 +63,13 @@ function createWorkflowIssue(
   payload: Record<string, unknown>
 ): unknown {
   const issue = createIssue(context.database, workflowIssuePayload(context.database, action, payload));
-  if (issue.status === "todo") startAutoRunWorkflow(context, issue.project_id);
+  if (issue.status === "todo") startAutoRunProjectLoop(context, issue.project_id);
+  return issue;
+}
+
+function enqueueIssueAndStartAutoRun(context: PiActionDispatchContext, issueID: number): unknown {
+  const issue = enqueueIssue(context.database, issueID);
+  startAutoRunProjectLoop(context, issue.project_id);
   return issue;
 }
 
@@ -124,7 +130,7 @@ function workflowSnapshot(payload: Record<string, unknown>): Record<string, unkn
   }
 }
 
-function startAutoRunWorkflow(context: PiActionDispatchContext, projectID: string): void {
+function startAutoRunProjectLoop(context: PiActionDispatchContext, projectID: string): void {
   const project = getProject(context.database, projectID);
   const providerID = project?.provider ?? "";
   if (!project || project.auto_run !== 1 || !isExecutorProviderId(providerID)) return;

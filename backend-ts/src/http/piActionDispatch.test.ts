@@ -11,12 +11,51 @@ import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "..
 import { dispatchPiAction } from "./piActionDispatch.ts";
 
 const tempRoots: string[] = [];
+const NO_AUTO_RUN_SETTLE_MS = 25;
 
 afterEach(async () => {
   while (tempRoots.length > 0) await rm(tempRoots.pop() ?? "", { recursive: true, force: true });
 });
 
 describe("PI action dispatcher supervisor actions", () => {
+  test("issue.enqueue starts only auto-run project loop after approval dispatch", async () => {
+    const db = await fixtureDb();
+    const provider = new SupervisorProvider();
+    try {
+      insertProject(db, "manual-demo", { autoRun: 0, provider: provider.id });
+      insertProject(db, "auto-demo", { autoRun: 1, provider: provider.id });
+      insertIssue(db, { issueID: 411, projectID: "manual-demo", status: "triage" });
+      insertIssue(db, { issueID: 410, projectID: "auto-demo", status: "triage" });
+      const manualAction = createPiAction(db, {
+        action_type: "issue.enqueue",
+        id: "enqueue-manual-action",
+        issue_id: 411,
+        payload_json: JSON.stringify({ issue_id: 411 }),
+        project_id: "manual-demo",
+        status: "approved"
+      });
+      const autoAction = createPiAction(db, {
+        action_type: "issue.enqueue",
+        id: "enqueue-auto-action",
+        issue_id: 410,
+        payload_json: JSON.stringify({ issue_id: 410 }),
+        project_id: "auto-demo",
+        status: "approved"
+      });
+
+      await dispatchPiAction({ database: db, providers: { codex: provider } }, manualAction);
+      await Bun.sleep(NO_AUTO_RUN_SETTLE_MS);
+
+      expect(provider.inputs).toEqual([]);
+      expect(getIssue(db, 411)).toMatchObject({ status: "todo" });
+      await dispatchPiAction({ database: db, providers: { codex: provider } }, autoAction);
+
+      expect(provider.inputs[0]).toMatchObject({ issueId: 410, projectId: "auto-demo" });
+      expect(getIssue(db, 410)).toMatchObject({ status: "in_progress" });
+    } finally {
+      db.close();
+    }
+  });
   test("session.resume_followup sends a new session message and updates turn refs", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();
@@ -197,9 +236,20 @@ async function fixtureDb(): Promise<RunnerDatabase> {
   return openDatabase({ stateDir: join(root, "state") });
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
-  db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
-    values (?, ?, ?, 'codex', ?, ?)`, [id, id, `/tmp/${id}`, "2026-06-10T06:00:00Z", "2026-06-10T06:00:00Z"]);
+function insertProject(
+  db: RunnerDatabase,
+  id: string,
+  options: { autoRun?: number; provider?: string } = {}
+): void {
+  db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+    values (?, ?, ?, ?, ?, ?, ?)`, [id, id, `/tmp/${id}`, options.provider ?? "codex",
+      options.autoRun ?? 0, "2026-06-10T06:00:00Z", "2026-06-10T06:00:00Z"]);
+}
+
+function insertIssue(db: RunnerDatabase, input: { issueID: number; projectID: string; status: string }): void {
+  db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
+    values (?, ?, 'Queue me', ?, ?, ?)`,
+  [input.issueID, input.projectID, input.status, "2026-06-10T06:00:00Z", "2026-06-10T06:00:00Z"]);
 }
 
 function insertIssueRunSession(db: RunnerDatabase, input: {
@@ -224,11 +274,16 @@ function insertIssueRunSession(db: RunnerDatabase, input: {
 
 class SupervisorProvider implements ExecutorProvider {
   readonly calls: Record<string, unknown>[] = [];
-  readonly capabilities = ["resume_session"] as const;
+  readonly capabilities = ["issue_execution", "resume_session"] as const;
   readonly id = "codex" as const;
+  readonly inputs: ProviderRunInput[] = [];
 
-  async run(_input: ProviderRunInput): Promise<never> {
-    throw new Error("not implemented");
+  async run(input: ProviderRunInput) {
+    this.inputs.push(input);
+    return {
+      runId: `codex-run-${input.issueId}`,
+      session: { provider: this.id, sessionId: `codex-session-${input.issueId}`, turnId: `codex-turn-${input.issueId}` }
+    };
   }
 
   async sendSessionMessage(input: SessionMessageInput) {
