@@ -4,6 +4,7 @@ import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issue
 import type { RunnerDatabase } from "../db/database.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
+import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
@@ -92,6 +93,7 @@ function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string
 function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEvent, activeRunID: string): void {
   if (!input.database) return;
   const persisted = recordIssueLogEvent(input.database, input.issueId, event);
+  syncProviderApprovalRequest(input, event, activeRunID);
   publishIssueLog(input, event, persisted);
   if (!event.session) return;
   persistRuntime({
