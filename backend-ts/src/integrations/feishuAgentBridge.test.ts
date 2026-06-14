@@ -6,6 +6,7 @@ import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feish
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import type { FeishuTextMessageInput } from "./feishuClient.ts";
 
 const tempRoots: string[] = [];
@@ -126,6 +127,51 @@ describe("Feishu agent bridge", () => {
       receiveIdType: "chat_id",
       text: "我可以直接聊天，也可以帮你把明确任务建成 issue 并跟进执行。"
     }]);
+    database.close();
+  });
+
+  test("handles /memory command directly without starting Runner agent", async () => {
+    const database = await openFixtureDatabase();
+    const sent: FeishuTextMessageInput[] = [];
+    const prompts: string[] = [];
+    createPiMemoryItem(database, {
+      id: "12345678-1111-4111-8111-123456789abc",
+      scope: "project",
+      scope_id: "demo",
+      kind: "preference",
+      content: "Prefer compact memory review",
+      source_type: "pi.conversation",
+      source_id: "conv-1",
+      confidence: "high",
+      disabled: 1
+    });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_PROJECT_MAPPINGS: "chat:oc_group=demo",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("/memory", "om_agent_memory_command");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async ({ prompt }) => {
+        prompts.push(prompt);
+        return { text: "should not run" };
+      },
+      sender: { sendTextMessage: async (input) => {
+        sent.push(input);
+        return { messageId: "om_reply_memory_command" };
+      } }
+    });
+    const result = await bridge.handle({ event, ingest });
+    expect(result).toEqual({ reason: "memory_candidates_listed", replied: true });
+    expect(prompts).toEqual([]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.text).toContain("待审核记忆");
+    expect(sent[0]?.text).toContain("12345678");
     database.close();
   });
 

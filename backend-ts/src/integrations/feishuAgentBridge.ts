@@ -20,6 +20,7 @@ import {
   type FeishuProjectSelectionAction
 } from "./feishuProjectSelectionBridge.ts";
 import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishuIssueCommand.ts";
+import { applyFeishuMemoryCommand } from "./feishuMemoryCommands.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
@@ -67,6 +68,16 @@ async function handleFeishuAgentMessage(
   if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
   const route = conversationRoute(options, input);
   const projectContext = projectContextForRoute(options, input, route);
+  const memoryCommand = applyFeishuMemoryCommand(options.database, {
+    conversationId: route.conversationId,
+    projectId: resolvedProjectId(projectContext, input),
+    text: input.event.text
+  });
+  if (memoryCommand.handled) return sendReply(options, input, memoryCommand.text, {
+    conversationId: route.conversationId,
+    projectId: resolvedProjectId(projectContext, input),
+    text: memoryCommand.text
+  }, memoryCommand.reason);
   const projectSwitch = applyFeishuProjectSwitchCommand(options.database, {
     route,
     timestamp: options.clock?.now(),
