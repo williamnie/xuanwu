@@ -12,7 +12,7 @@ import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "../
 import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
 import { normalizeFeishuProjectSelectionAction } from "../integrations/feishuProjectSelection.ts";
 import { normalizeFeishuApprovalAction } from "../integrations/feishuApprovalCards.ts";
-import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuNotifications.ts";
+import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { json, jsonError } from "./errors.ts";
@@ -61,7 +61,7 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
     try {
       const result = await resolvePiApprovalRequestFromFeishu(context.database, {
         ...approvalAction,
-        provider: context.providers?.codex
+        providers: context.providers
       });
       return json(result, { status: 202 });
     } catch (error) {

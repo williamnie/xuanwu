@@ -127,6 +127,8 @@ describe("PI executor approval request repository", () => {
       expect(updated).toMatchObject({ delivery_state: "sent" });
       expect(resolved).toMatchObject({
         decision: "approve_session",
+        resolver_attempt_count: 0,
+        resolver_status: "",
         resolved_at: "2026-06-14T01:01:00.000Z",
         resolved_decision: "approve_session",
         resolved_scope: "session",

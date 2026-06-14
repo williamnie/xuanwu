@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { listPiApprovalRequests } from "../db/repositories/pi.ts";
+import { listPiApprovalRequests } from "../db/repositories/pi/approvalRequests.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuNotifications.ts";
+import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -28,7 +28,7 @@ function listApprovalRequests(db: RunnerDatabase, request: Request) {
     sessionId: clean(params.get("session_id") ?? params.get("sessionId")),
     threadId: clean(params.get("thread_id") ?? params.get("threadId"))
   });
-  if (status === "open") return rows.filter((row) => row.status === "pending" || row.status === "delivered");
+  if (status === "open") return rows.filter((row) => ["pending", "delivered", "resolve_failed"].includes(row.status));
   if (status !== "") return rows.filter((row) => row.status === status);
   return rows;
 }
@@ -41,7 +41,7 @@ async function resolveApprovalRequest(
   try {
     return await resolvePiApprovalRequestFromFeishu(context.database, {
       decision: clean(body.decision),
-      provider: context.providers?.codex,
+      providers: context.providers,
       requestID,
       scope: clean(body.scope)
     });

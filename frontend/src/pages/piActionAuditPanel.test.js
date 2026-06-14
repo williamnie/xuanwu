@@ -51,6 +51,7 @@ test('PI approval panel merges provider approval requests with PI action gate ap
   assert.match(approvalRequestsSource, /approval-request:/);
   assert.match(approvalRequestsSource, /codex\.approval/);
   assert.match(approvalRequestsSource, /pendingApprovalRequests/);
+  assert.match(approvalRequestsSource, /resolver_error/);
   assert.match(approvalRequestsSource, /resolveApprovalRequest\(requestID, 'approve_session', 'session'\)/);
   assert.match(panelSource, /event\?\.method === 'approval\/requested'/);
 });

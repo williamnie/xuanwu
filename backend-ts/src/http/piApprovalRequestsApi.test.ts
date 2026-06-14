@@ -74,6 +74,52 @@ describe("PI approval requests API", () => {
       db.close();
     }
   });
+
+  test("keeps failed resolver decisions visible and retryable from the panel", async () => {
+    const db = await fixtureDatabase();
+    let failNext = true;
+    const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    try {
+      createApprovalRequest(db, "approval-panel-fail");
+      const router = createDefaultRouter({
+        database: db,
+        providers: {
+          codex: approvalProvider(resolutions, async () => {
+            if (!failNext) return;
+            failNext = false;
+            throw new Error("approval request is not pending: approval-panel-fail");
+          })
+        }
+      });
+
+      const failed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-fail/resolve`, {
+        body: JSON.stringify({ decision: "approve", scope: "turn" }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      }));
+      const listed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests?status=open`));
+      const retried = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-fail/resolve`, {
+        body: JSON.stringify({ decision: "approve", scope: "turn" }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      }));
+
+      expect(failed.status).toBe(409);
+      expect(await failed.json()).toEqual({ message: "approval request is not pending: approval-panel-fail" });
+      expect(await listed.json()).toEqual([expect.objectContaining({
+        approval_id: "approval-panel-fail",
+        resolver_error: expect.stringContaining("approval request is not pending"),
+        resolver_retryable: 1,
+        resolver_status: "failed",
+        status: "resolve_failed"
+      })]);
+      expect(retried.status).toBe(200);
+      expect(await retried.json()).toMatchObject({ ok: true, status: "approved" });
+      expect(resolutions).toHaveLength(2);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
@@ -103,7 +149,10 @@ function createApprovalRequest(
   });
 }
 
-function approvalProvider(resolutions: Array<{ decision: string; id: string; scope: string }>): ExecutorProvider {
+function approvalProvider(
+  resolutions: Array<{ decision: string; id: string; scope: string }>,
+  onResolve?: () => Promise<void>
+): ExecutorProvider {
   return {
     capabilities: ["approvals"],
     id: "codex",
@@ -112,6 +161,7 @@ function approvalProvider(resolutions: Array<{ decision: string; id: string; sco
     },
     async resolveApproval(id, decision) {
       resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" });
+      await onResolve?.();
     }
   };
 }

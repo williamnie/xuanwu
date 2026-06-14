@@ -27,6 +27,11 @@ create table if not exists pi_approval_requests (
   resolved_decision text not null default '',
   resolved_scope text not null default '',
   resolved_at text not null default '',
+  resolver_status text not null default '',
+  resolver_error text not null default '',
+  resolver_retryable integer not null default 0,
+  resolver_attempt_count integer not null default 0,
+  resolver_last_attempt_at text not null default '',
   raw_payload_json text not null default '{}',
   created_at text not null,
   updated_at text not null
@@ -48,6 +53,11 @@ create index if not exists idx_pi_approval_requests_session
     addColumn(sqlite, "summary", "text not null default ''");
     addColumn(sqlite, "decision", "text not null default ''");
     addColumn(sqlite, "delivery_state", "text not null default 'pending'");
+    addColumn(sqlite, "resolver_status", "text not null default ''");
+    addColumn(sqlite, "resolver_error", "text not null default ''");
+    addColumn(sqlite, "resolver_retryable", "integer not null default 0");
+    addColumn(sqlite, "resolver_attempt_count", "integer not null default 0");
+    addColumn(sqlite, "resolver_last_attempt_at", "text not null default ''");
     sqlite.run("update pi_approval_requests set session_id=thread_id where session_id=''");
     sqlite.run("update pi_approval_requests set summary=request_summary where summary=''");
     sqlite.run("update pi_approval_requests set decision=resolved_decision where decision=''");

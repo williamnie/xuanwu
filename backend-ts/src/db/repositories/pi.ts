@@ -9,4 +9,5 @@ export * from "./pi/delegations.ts";
 export * from "./pi/heartbeatTimeline.ts";
 export * from "./pi/reports.ts";
 export * from "./pi/supervisorEvents.ts";
+export * from "./pi/approvalLifecycle.ts";
 export * from "./pi/approvalRequests.ts";

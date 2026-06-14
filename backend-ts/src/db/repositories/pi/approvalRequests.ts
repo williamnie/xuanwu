@@ -30,6 +30,11 @@ export type PiApprovalRequest = {
   request_summary: string;
   run_id: string;
   request_type: string;
+  resolver_attempt_count: number;
+  resolver_error: string;
+  resolver_last_attempt_at: string;
+  resolver_retryable: number;
+  resolver_status: string;
   resolved_at: string;
   resolved_decision: string;
   resolved_scope: string;
@@ -58,12 +63,14 @@ const TABLE = "pi_approval_requests";
 const COLUMNS = `approval_id, project_id, issue_id, run_id, provider, session_id, thread_id, turn_id,
   request_type, summary, request_summary, risk, status, decision, approval_source, provider_approval_id,
   delivery_state, delivery_channel, delivered_at, resolved_decision, resolved_scope, resolved_at,
+  resolver_status, resolver_error, resolver_retryable, resolver_attempt_count, resolver_last_attempt_at,
   raw_payload_json, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "project_id", "issue_id", "run_id", "provider", "session_id", "thread_id", "turn_id", "request_type",
   "summary", "request_summary", "risk", "status", "decision", "approval_source", "provider_approval_id",
   "delivery_state", "delivery_channel", "delivered_at", "resolved_decision", "resolved_scope",
-  "resolved_at", "raw_payload_json"
+  "resolved_at", "resolver_status", "resolver_error", "resolver_retryable", "resolver_attempt_count",
+  "resolver_last_attempt_at", "raw_payload_json"
 ] as const;
 
 export function createPiApprovalRequest(
@@ -79,7 +86,7 @@ export function upsertPiApprovalRequest(
 ): PiApprovalRequest {
   const record = normalizeCreate(input);
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(25)})
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(30)})
     on conflict(approval_id) do update set
       project_id=coalesce(nullif(excluded.project_id, ''), ${TABLE}.project_id),
       issue_id=case when excluded.issue_id > 0 then excluded.issue_id else ${TABLE}.issue_id end,
@@ -110,8 +117,9 @@ export function upsertPiApprovalRequest(
     record.session_id, record.thread_id, record.turn_id, record.request_type, record.summary,
     record.request_summary, record.risk, record.status, record.decision, record.approval_source,
     record.provider_approval_id, record.delivery_state, record.delivery_channel, record.delivered_at,
-    record.resolved_decision, record.resolved_scope, record.resolved_at, record.raw_payload_json,
-    timestamp, timestamp
+    record.resolved_decision, record.resolved_scope, record.resolved_at, record.resolver_status,
+    record.resolver_error, record.resolver_retryable, record.resolver_attempt_count,
+    record.resolver_last_attempt_at, record.raw_payload_json, timestamp, timestamp
   ]);
   return mustGetPiApprovalRequest(db, record.approval_id);
 }
@@ -133,38 +141,6 @@ export function listPiApprovalRequests(
     ["thread_id=?", filter.threadId],
     ["status=?", filter.status]
   ], "created_at asc, approval_id asc"));
-}
-
-export function markPiApprovalDelivered(
-  db: RunnerDatabase,
-  id: string,
-  input: { channel: string; timestamp?: Date }
-): PiApprovalRequest {
-  const current = mustGetPiApprovalRequest(db, id);
-  if (current.status !== "pending") return current;
-  return updatePiApprovalRequest(db, id, {
-    delivered_at: (input.timestamp ?? new Date()).toISOString(),
-    delivery_channel: input.channel,
-    delivery_state: "delivered",
-    status: "delivered"
-  });
-}
-
-export function resolvePiApprovalRequestRecord(
-  db: RunnerDatabase,
-  id: string,
-  input: { decision: string; scope?: string; status?: string; timestamp?: Date }
-): PiApprovalRequest {
-  const current = mustGetPiApprovalRequest(db, id);
-  if (isResolved(current.status)) return current;
-  const decision = cleanString(input.decision);
-  return updatePiApprovalRequest(db, id, {
-    decision,
-    resolved_at: (input.timestamp ?? new Date()).toISOString(),
-    resolved_decision: decision,
-    resolved_scope: cleanString(input.scope),
-    status: cleanString(input.status) || statusForDecision(decision)
-  });
 }
 
 export function updatePiApprovalRequest(
@@ -202,6 +178,11 @@ function normalizeCreate(input: PiApprovalRequestInput): PiApprovalRequest {
     raw_payload_json: payloadText(input.raw_payload_json),
     request_summary: approvalSummary(input),
     request_type: cleanString(input.request_type),
+    resolver_attempt_count: integerInput(input.resolver_attempt_count),
+    resolver_error: cleanString(input.resolver_error),
+    resolver_last_attempt_at: cleanString(input.resolver_last_attempt_at),
+    resolver_retryable: integerInput(input.resolver_retryable),
+    resolver_status: cleanString(input.resolver_status),
     resolved_at: cleanString(input.resolved_at),
     resolved_decision: cleanString(input.resolved_decision),
     resolved_scope: cleanString(input.resolved_scope),
@@ -219,6 +200,7 @@ function normalizeCreate(input: PiApprovalRequestInput): PiApprovalRequest {
 function normalizePatch(input: PiApprovalRequestInput): PiApprovalRequestInput {
   return {
     ...input,
+    resolver_error: input.resolver_error === undefined ? undefined : redactAuditText(cleanString(input.resolver_error)),
     summary: input.summary === undefined ? undefined : redactAuditText(cleanString(input.summary)),
     raw_payload_json: input.raw_payload_json === undefined ? undefined : payloadText(input.raw_payload_json),
     request_summary: input.request_summary === undefined ? undefined : redactAuditText(cleanString(input.request_summary))
@@ -241,6 +223,11 @@ function mapPiApprovalRequest(row: Record<string, unknown>): PiApprovalRequest {
     raw_payload_json: redactAuditJsonText(optionalString(row.raw_payload_json) || "{}"),
     request_summary: redactAuditText(optionalString(row.request_summary)),
     request_type: optionalString(row.request_type),
+    resolver_attempt_count: integerValue(row.resolver_attempt_count, "pi_approval_requests.resolver_attempt_count"),
+    resolver_error: optionalString(row.resolver_error),
+    resolver_last_attempt_at: optionalString(row.resolver_last_attempt_at),
+    resolver_retryable: integerValue(row.resolver_retryable, "pi_approval_requests.resolver_retryable"),
+    resolver_status: optionalString(row.resolver_status),
     resolved_at: optionalString(row.resolved_at),
     resolved_decision: optionalString(row.resolved_decision),
     resolved_scope: optionalString(row.resolved_scope),
@@ -267,19 +254,6 @@ function sessionID(input: PiApprovalRequestInput): string {
 function payloadText(value: unknown): string {
   if (typeof value === "string") return redactAuditJsonText(jsonText(value, "{}"));
   return redactAuditJsonText(JSON.stringify(value ?? {}));
-}
-
-function isResolved(status: string): boolean {
-  return ["approved", "rejected", "cancelled"].includes(status);
-}
-
-function statusForDecision(decision: string): string {
-  return isApprovalDecision(decision) ? "approved" : "rejected";
-}
-
-function isApprovalDecision(decision: string): boolean {
-  return ["approve", "approved", "accept", "approve_session", "approved_for_session", "acceptForSession"]
-    .includes(decision);
 }
 
 function mustGetPiApprovalRequest(db: RunnerDatabase, id: string): PiApprovalRequest {

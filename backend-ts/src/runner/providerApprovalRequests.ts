@@ -1,4 +1,5 @@
-import { getPiApprovalRequest, resolvePiApprovalRequestRecord, upsertPiApprovalRequest } from "../db/repositories/pi/approvalRequests.ts";
+import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositories/pi/approvalRequests.ts";
+import { resolvePiApprovalRequestRecord } from "../db/repositories/pi/approvalLifecycle.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
 
