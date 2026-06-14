@@ -3,11 +3,7 @@ import { resolveFeishuProjectContextFromDatabase, type FeishuProjectContextResul
 import { createExternalLink, listExternalLinksByExternal } from "../db/repositories/externalLinks.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feishu.ts";
-import {
-  createFeishuMessageClient,
-  type FeishuMessageClient,
-  type FeishuTextMessageResult
-} from "./feishuClient.ts";
+import { createFeishuMessageClient, type FeishuMessageClient, type FeishuTextMessageResult } from "./feishuClient.ts";
 import {
   parseFeishuNewConversationCommand,
   routeFeishuConversation,
@@ -22,19 +18,18 @@ import {
 import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishuIssueCommand.ts";
 import { applyFeishuMemoryCommand } from "./feishuMemoryCommands.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
+import { buildFeishuReviewCommandPrompt, normalizeFeishuReviewReply, parseFeishuReviewCommand } from "./feishuReviewCommand.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 export type FeishuRunnerInput = {
   conversationId: string;
   event: FeishuNormalizedMessageEvent;
+  intent?: string;
   prompt: string;
   projectId: string;
 };
 export type FeishuRunnerResult = { conversationId?: string; projectId?: string; text: string };
-export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ingest: FeishuIngestResult };
-export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
-
 type FeishuAgentBridgeOptions = {
   clock?: FeishuConversationClock;
   config: () => FeishuConnectorConfig;
@@ -43,9 +38,10 @@ type FeishuAgentBridgeOptions = {
   sender?: FeishuMessageClient;
 };
 type DirectReply = { reason: string; text: string };
+export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ingest: FeishuIngestResult };
+export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 
-const REPLY_LINK_TYPE = "feishu_agent_reply";
-const REPLY_RELATIONSHIP = "agent_reply";
+const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
 const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请先发送 `/p <项目名>` 切换项目，或在消息里带上项目名后再发。";
@@ -150,23 +146,24 @@ async function runnerReply(
       return { conversationId: route.conversationId, projectId, text: NEW_CONVERSATION_ACK_TEXT };
     }
     const command = parseFeishuIssueCommand(route.prompt || input.event.text);
-    const prompt = command ? buildFeishuIssueCommandPrompt(command) : route.prompt || promptText(input);
-    return await options.runConversation({
+    const review = parseFeishuReviewCommand(route.prompt || input.event.text);
+    const prompt = review
+      ? buildFeishuReviewCommandPrompt(options.database, { conversationId: route.conversationId, projectId })
+      : command ? buildFeishuIssueCommandPrompt(command) : route.prompt || input.event.text || "[Feishu attachment message]";
+    const result = await options.runConversation({
       conversationId: route.conversationId,
       event: input.event,
+      intent: review ? "review" : undefined,
       projectId,
       prompt
     });
+    return review ? { ...result, text: normalizeFeishuReviewReply(result.text) } : result;
   } catch (error) {
     return {
       conversationId: fallbackConversationID(input.event),
       text: `我尝试交给 Runner 时出错了：${safeError(error)}。你可以稍后重试，或补充项目名和目标再发我一次。`
     };
   }
-}
-
-function promptText(input: FeishuBridgeHandleInput): string {
-  return input.event.text || "[Feishu attachment message]";
 }
 
 function messageSender(options: FeishuAgentBridgeOptions): FeishuMessageClient {

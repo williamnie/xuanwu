@@ -29,6 +29,11 @@ import {
   type PiRuntimeSession
 } from "./piRuntime.ts";
 import { publishPiSessionEvent } from "./piSessionEvents.ts";
+import {
+  isReviewConversationIntent,
+  reviewConversationAuthorization,
+  reviewConversationSource
+} from "./piConversationReview.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { Router } from "./router.ts";
 
@@ -39,6 +44,7 @@ type PiConversationContext = {
 };
 export type PiConversationPromptInput = {
   conversationId?: string;
+  intent?: string;
   projectId?: string;
   prompt: string;
   title?: string;
@@ -134,10 +140,11 @@ async function sendPiConversationMessage(
 ) {
   const prompt = cleanString(body.prompt || body.message || body.content);
   if (prompt === "") throw new HttpError(400, "prompt is required");
+  const intent = cleanString(body.intent);
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
-  const runtime = await openConversationRuntime(context, titledConversation);
+  const runtime = await openConversationRuntime(context, titledConversation, intent);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
@@ -180,7 +187,7 @@ export async function runPiConversationPrompt(
     optionalConversationProject(context.database, projectID);
     updatePiConversation(context.database, existing.id, { project_id: projectID });
   }
-  return sendPiConversationMessage(context, id, { prompt: input.prompt });
+  return sendPiConversationMessage(context, id, { intent: input.intent, prompt: input.prompt });
 }
 
 function ensureConversationTitle(
@@ -257,14 +264,19 @@ function persistPiSessionIndex(
   });
 }
 
-async function openConversationRuntime(context: PiConversationContext, conversation: PiConversation) {
+async function openConversationRuntime(
+  context: PiConversationContext,
+  conversation: PiConversation,
+  intent = ""
+) {
   const project = conversation.project_id === ""
     ? undefined
     : requireConversationProject(context.database, conversation);
   const agent = requireConversationAgent(context.database, conversation);
+  const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: project ? runnerChatAuthorization(project) : undefined,
+    authorization: review ? reviewConversationAuthorization() : project ? runnerChatAuthorization(project) : undefined,
     bus: context.bus,
     conversationID: conversation.id,
     onIssueEnqueued: (projectID) => startProjectLoop({
@@ -274,7 +286,7 @@ async function openConversationRuntime(context: PiConversationContext, conversat
     }, projectID, { forceOnce: true }),
     project,
     sessionFile: conversation.session_file,
-    source: runnerChatSource(conversation)
+    source: review ? reviewConversationSource(conversation) : runnerChatSource(conversation)
   });
 }
 

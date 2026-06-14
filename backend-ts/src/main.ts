@@ -35,9 +35,10 @@ const providers = executorProviders(config, bus);
 const feishuBridge = createFeishuAgentBridge({
   config: () => config.integrations.feishu,
   database,
-  runConversation: async ({ conversationId, event, projectId, prompt }) => {
+  runConversation: async ({ conversationId, event, intent, projectId, prompt }) => {
     const result = await runPiConversationPrompt({ bus, database, providers }, {
       conversationId,
+      intent,
       projectId,
       prompt,
       title: `Feishu · ${event.chat_id || event.message_id}`
