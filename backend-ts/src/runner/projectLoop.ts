@@ -31,6 +31,7 @@ export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<Proje
   const project = mustGetProject(input.database, input.projectId);
   const issue = claimNextIssue(input.database, project.id);
   if (!issue) return { claimed: false };
+  publishIssueStatus(input, issue);
   const run = await runClaimedIssue(input, project, issue);
   return { claimed: true, issue, run };
 }
@@ -67,8 +68,19 @@ async function runClaimedIssue(
   } catch (error) {
     if (issueAlreadyClosed(input.database, issue.id)) return { runId: "interrupted" };
     failIssueExecution(input.database, issue.id, error, provider.id);
+    const failed = getIssue(input.database, issue.id);
+    if (failed) publishIssueStatus(input, failed);
     return { runId: "failed" };
   }
+}
+
+function publishIssueStatus(input: ProjectLoopInput, issue: Issue): void {
+  input.bus?.publish({
+    issueId: issue.id,
+    payload: JSON.stringify({ status: issue.status }),
+    projectId: issue.project_id,
+    type: "issue.status_changed"
+  });
 }
 
 type ResolvedServiceTier = { source: string; value: string };

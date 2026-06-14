@@ -123,7 +123,7 @@ describe("Feishu notification queue", () => {
       expect(sender.calls).toEqual([{
         receiveId: "oc_group",
         receiveIdType: "chat_id",
-        text: "Pi：issue #1 已完成：Feishu task"
+        text: "Pi：issue #1 已完成：Feishu task\n验证状态：已标记完成，未附加验证摘要。"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
     } finally {

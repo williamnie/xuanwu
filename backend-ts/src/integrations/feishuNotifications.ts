@@ -1,9 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { createImReplyDraft, approveImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
-import { listExternalLinksByIssue, createExternalLink } from "../db/repositories/externalLinks.ts";
 import { listAgentSessions } from "../db/repositories/agentSessions.ts";
 import {
+  getPiMemoryItem,
   getPiApprovalRequest,
   listPiApprovalRequests,
   markPiApprovalDelivered,
@@ -21,13 +20,27 @@ import {
 } from "./feishuApprovalRequests.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import {
+  formatApprovalNotification,
+  formatIssueStatusNotification,
+  formatMemoryCandidateNotification,
+  formatPiActionPendingNotification
+} from "./feishuNotificationFormatters.ts";
+import {
+  alreadyQueuedFeishuNotification,
+  createFeishuNotificationDraft
+} from "./feishuNotificationDrafts.ts";
+import {
+  feishuTargetForConversation,
+  feishuTargetForIssue
+} from "./feishuNotificationTargets.ts";
 
 type QueueResult = { queued: boolean; reason: string };
-type FeishuTarget = { chatID: string; eventID: number; messageID: string; threadID: string };
 
-const FEISHU_SOURCE = "feishu";
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
+const MEMORY_NOTIFY_TYPE = "feishu_memory_candidate_notification";
+const PI_ACTION_NOTIFY_TYPE = "feishu_pi_action_pending_notification";
 
 export {
   getPiApprovalRequest,
@@ -43,8 +56,22 @@ export function attachFeishuNotificationObservers(input: {
 }): () => void {
   return input.bus.observe((event) => {
     try {
-      if (event.type === "issue.status_changed" && event.issueId) {
+      if ((event.type === "issue.status_changed" || event.type === "issue.created") && event.issueId) {
         const result = queueFeishuIssueStatusNotification(input.database, event.issueId);
+        dispatchIfQueued(input, result);
+      }
+      if (isPiIssueStartEvent(event)) {
+        const result = queueFeishuIssueStatusNotification(input.database, event.issueId ?? 0, {
+          conversationId: event.conversationId
+        });
+        dispatchIfQueued(input, result);
+      }
+      if (event.type === "pi.memory_candidate") {
+        const result = queueFeishuMemoryCandidateNotification(input.database, event);
+        dispatchIfQueued(input, result);
+      }
+      if (event.type === "pi.action_pending") {
+        const result = queueFeishuPiActionPendingNotification(input.database, event);
         dispatchIfQueued(input, result);
       }
       if (event.type === "codex.event" && event.method === "approval/requested") {
@@ -73,20 +100,66 @@ function dispatchIfQueued(input: {
   void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
 }
 
-export function queueFeishuIssueStatusNotification(db: RunnerDatabase, issueID: number): QueueResult {
+export function queueFeishuIssueStatusNotification(
+  db: RunnerDatabase,
+  issueID: number,
+  options: { conversationId?: string } = {}
+): QueueResult {
   const issue = getIssue(db, issueID);
   if (!issue) return { queued: false, reason: "issue_not_found" };
-  if (!["done", "failed", "pending_verification"].includes(issue.status)) return { queued: false, reason: "non_terminal" };
-  const target = feishuTargetForIssue(db, issue.id);
+  if (!["todo", "in_progress", "done", "failed", "pending_verification"].includes(issue.status)) {
+    return { queued: false, reason: "not_notifiable" };
+  }
+  const target = feishuTargetForIssue(db, issue.id) ?? feishuTargetForConversation(db, options.conversationId ?? "");
   if (!target) return { queued: false, reason: "missing_feishu_link" };
-  const notifyID = `${issue.id}:${issue.status}`;
-  if (alreadyQueued(db, APPROVAL_NOTIFY_TYPE, notifyID) || alreadyQueued(db, ISSUE_STATUS_NOTIFY_TYPE, notifyID)) {
+  const notifyID = issueNotificationID(issue);
+  if (alreadyQueuedFeishuNotification(db, APPROVAL_NOTIFY_TYPE, notifyID) ||
+    alreadyQueuedFeishuNotification(db, ISSUE_STATUS_NOTIFY_TYPE, notifyID)) {
     return { queued: false, reason: "duplicate" };
   }
-  createNotificationDraft(db, issue, target, {
-    content: issueStatusText(issue),
+  createFeishuNotificationDraft(db, issue, target, {
+    content: formatIssueStatusNotification(issue),
     notifyID,
     type: ISSUE_STATUS_NOTIFY_TYPE
+  });
+  return { queued: true, reason: "queued" };
+}
+
+export function queueFeishuMemoryCandidateNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+  const payload = parseObject(event.payload);
+  const itemID = safeText(payload.id);
+  if (itemID === "") return { queued: false, reason: "missing_memory_id" };
+  const item = getPiMemoryItem(db, itemID);
+  if (!item || item.disabled !== 1) return { queued: false, reason: "memory_candidate_not_pending" };
+  if (alreadyQueuedFeishuNotification(db, MEMORY_NOTIFY_TYPE, item.id)) return { queued: false, reason: "duplicate" };
+  const target = feishuTargetForConversation(db, safeText(event.conversationId) || safeText(item.source_id));
+  if (!target) return { queued: false, reason: "missing_feishu_target" };
+  createFeishuNotificationDraft(db, { id: 0, project_id: safeText(event.projectId) || itemProjectID(item) }, target, {
+    content: formatMemoryCandidateNotification(item),
+    notifyID: item.id,
+    type: MEMORY_NOTIFY_TYPE
+  });
+  return { queued: true, reason: "queued" };
+}
+
+export function queueFeishuPiActionPendingNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+  const payload = parseObject(event.payload);
+  const actionID = safeText(payload.action_id);
+  if (actionID === "") return { queued: false, reason: "missing_action_id" };
+  if (alreadyQueuedFeishuNotification(db, PI_ACTION_NOTIFY_TYPE, actionID)) return { queued: false, reason: "duplicate" };
+  const issue = event.issueId ? getIssue(db, event.issueId) : null;
+  const target = issue ? feishuTargetForIssue(db, issue.id) : null;
+  const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
+  const finalTarget = target ?? fallback;
+  if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
+  createFeishuNotificationDraft(db, issue ?? { id: event.issueId ?? 0, project_id: safeText(event.projectId) }, finalTarget, {
+    content: formatPiActionPendingNotification({
+      actionID,
+      actionType: safeText(payload.action_type),
+      issueID: event.issueId
+    }),
+    notifyID: actionID,
+    type: PI_ACTION_NOTIFY_TYPE
   });
   return { queued: true, reason: "queued" };
 }
@@ -108,10 +181,10 @@ export function queueFeishuApprovalNotification(
   }
   const target = feishuTargetForIssue(db, issue.id);
   if (!target) return { queued: false, reason: "missing_feishu_link" };
-  if (alreadyQueued(db, APPROVAL_NOTIFY_TYPE, approvalID)) return { queued: false, reason: "duplicate" };
-  createNotificationDraft(db, issue, target, {
+  if (alreadyQueuedFeishuNotification(db, APPROVAL_NOTIFY_TYPE, approvalID)) return { queued: false, reason: "duplicate" };
+  createFeishuNotificationDraft(db, issue, target, {
     approvalActionID: approvalID,
-    content: approvalText(issue, parsed.command, parsed.path),
+    content: formatApprovalNotification(issue, parsed.command, parsed.path),
     notifyID: approvalID,
     type: APPROVAL_NOTIFY_TYPE
   });
@@ -123,75 +196,13 @@ function feishuConfigured(config: FeishuConnectorConfig | undefined): boolean {
   return config !== undefined && feishuConnectorStatus(config).enabled === true;
 }
 
-function createNotificationDraft(
-  db: RunnerDatabase,
-  issue: Issue,
-  target: FeishuTarget,
-  input: { approvalActionID?: string; content: string; notifyID: string; type: string }
-): void {
-  const draft = createImReplyDraft(db, {
-    content: input.content,
-    created_by: "pi",
-    external_event_id: target.eventID,
-    issue_id: issue.id,
-    risk: "low",
-    source: FEISHU_SOURCE,
-    status: "pending",
-    approval_action_id: safeText(input.approvalActionID),
-    target_chat_id: target.chatID,
-    target_message_id: target.messageID,
-    target_thread_id: target.threadID
-  });
-  approveImReplyDraft(db, draft.id);
-  createExternalLink(db, {
-    conversation_id: target.threadID || target.chatID,
-    external_event_id: target.eventID,
-    external_id: input.notifyID,
-    external_type: input.type,
-    issue_id: issue.id,
-    project_id: issue.project_id,
-    relationship: "notification",
-    source: FEISHU_SOURCE
-  });
+function issueNotificationID(issue: Issue): string {
+  return ["todo", "in_progress"].includes(issue.status) ? `${issue.id}:start` : `${issue.id}:${issue.status}`;
 }
 
-function issueStatusText(issue: Issue): string {
-  const title = issue.title || "任务";
-  if (issue.status === "done") return `Pi：issue #${issue.id} 已完成：${title}`;
-  if (issue.status === "pending_verification") return `Pi：issue #${issue.id} 已进入待验收：${title}`;
-  return `Pi：issue #${issue.id} 执行失败：${title}${issue.error ? `；${safeText(issue.error)}` : ""}`;
-}
-
-function approvalText(issue: Issue, command: string, path: string): string {
-  const detail = [command ? `命令：${command}` : "", path ? `路径：${path}` : ""].filter(Boolean).join("；");
-  return [
-    `Pi：issue #${issue.id} 需要 Codex 授权才能继续。`,
-    detail || "授权详情请到 Runner/Codex 面板查看。",
-    "可选操作：批准一次 / 本 session 批准 / 拒绝 / 暂缓。",
-    "风险：会影响当前 Codex session 的执行授权；页面 PI 控制台仅作为备用入口。"
-  ].join("\n");
-}
-
-function feishuTargetForIssue(db: RunnerDatabase, issueID: number): FeishuTarget | null {
-  const link = listExternalLinksByIssue(db, issueID)
-    .find((item) => item.source === FEISHU_SOURCE && item.external_type === "feishu_message");
-  if (!link) return null;
-  const message = db.sqlite.query<{ normalized_message_json: string }, [number]>(
-    "select normalized_message_json from external_events where id=?"
-  ).get(link.external_event_id);
-  const normalized = parseObject(message?.normalized_message_json);
-  const chatID = safeText(normalized.chat_id) || link.conversation_id;
-  const messageID = safeText(normalized.message_id) || link.external_id;
-  const threadID = safeText(normalized.thread_id) || safeText(normalized.root_id);
-  if (chatID === "" && messageID === "") return null;
-  return { chatID, eventID: link.external_event_id, messageID, threadID };
-}
-
-function alreadyQueued(db: RunnerDatabase, type: string, externalID: string): boolean {
-  const row = db.sqlite.query<{ count: number }, [string, string]>(
-    "select count(*) as count from external_links where source='feishu' and external_type=? and external_id=?"
-  ).get(type, externalID);
-  return (row?.count ?? 0) > 0;
+function isPiIssueStartEvent(event: AppEvent): boolean {
+  if (event.type !== "pi.action_completed" || !event.issueId) return false;
+  return safeText(parseObject(event.payload).action_type) === "issue.enqueue";
 }
 
 function issueForApproval(db: RunnerDatabase, event: AppEvent): Issue | null {
@@ -216,4 +227,8 @@ function parseObject(value: unknown): Record<string, unknown> {
 
 function safeText(value: unknown): string {
   return typeof value === "string" ? redactSensitiveText(value).trim() : "";
+}
+
+function itemProjectID(item: { scope: string; scope_id: string }): string {
+  return item.scope === "project" ? safeText(item.scope_id) : "";
 }
