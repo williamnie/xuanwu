@@ -67,6 +67,7 @@ const NON_TASK_QUESTIONS = [
   /你\s*是谁/,
   /怎么\s*用/
 ] as const;
+const ISSUE_COMMAND_PATTERN = /^\/issue(?:\s|$)/i;
 
 export function decidePiAttention(input: PiAttentionInput): PiAttentionDecision {
   const message = normalizeMessage(input.message);
@@ -140,6 +141,9 @@ function taskSignals(message: Required<PiAttentionMessage>): SignalMatch {
   const matches: SignalMatch = { evidence: [], signals: [] };
   const text = lower(message.text);
   if (isConversationalQuestion(text)) return matches;
+  if (isIssueCommand(message.text)) {
+    addSignal(matches, "slash_issue_command", "keyword", "slash_issue_command", "/issue");
+  }
   for (const keyword of REQUEST_KEYWORDS) {
     if (text.includes(lower(keyword.value))) {
       addSignal(matches, keyword.signal, "keyword", keyword.signal, keyword.value);
@@ -153,6 +157,10 @@ function taskSignals(message: Required<PiAttentionMessage>): SignalMatch {
 
 function isConversationalQuestion(text: string): boolean {
   return NON_TASK_QUESTIONS.some((pattern) => pattern.test(text));
+}
+
+function isIssueCommand(text: string): boolean {
+  return ISSUE_COMMAND_PATTERN.test(clean(text));
 }
 
 function resolveProject(

@@ -19,6 +19,7 @@ import {
   maybeSendFeishuProjectSelection,
   type FeishuProjectSelectionAction
 } from "./feishuProjectSelectionBridge.ts";
+import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishuIssueCommand.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
@@ -47,6 +48,7 @@ const REPLY_RELATIONSHIP = "agent_reply";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
 const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请先发送 `/p <项目名>` 切换项目，或在消息里带上项目名后再发。";
+const ISSUE_PROJECT_CLARIFICATION_TEXT = "这是哪个项目？你可以直接回复项目名，或把项目名带在任务里。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   return {
@@ -75,6 +77,12 @@ async function handleFeishuAgentMessage(
     projectId: projectSwitch.projectId,
     text: projectSwitch.text
   }, projectSwitch.reason);
+  const issueClarification = issueCommandClarification(input, route, projectContext);
+  if (issueClarification) return sendReply(options, input, issueClarification.text, {
+    conversationId: route.conversationId,
+    projectId: "",
+    text: issueClarification.text
+  }, issueClarification.reason);
   const selection = await maybeSendFeishuProjectSelection(
     options,
     input,
@@ -126,16 +134,17 @@ async function runnerReply(
 ): Promise<FeishuRunnerResult> {
   try {
     if (!options.runConversation) return { text: "" };
-    const prompt = input.event.text || "[Feishu attachment message]";
     const projectId = resolvedProjectId(projectContext, input);
     if (route.isNewCommand && route.prompt === "") {
       return { conversationId: route.conversationId, projectId, text: NEW_CONVERSATION_ACK_TEXT };
     }
+    const command = parseFeishuIssueCommand(route.prompt || input.event.text);
+    const prompt = command ? buildFeishuIssueCommandPrompt(command) : route.prompt || promptText(input);
     return await options.runConversation({
       conversationId: route.conversationId,
       event: input.event,
       projectId,
-      prompt: route.prompt || prompt
+      prompt
     });
   } catch (error) {
     return {
@@ -143,6 +152,10 @@ async function runnerReply(
       text: `我尝试交给 Runner 时出错了：${safeError(error)}。你可以稍后重试，或补充项目名和目标再发我一次。`
     };
   }
+}
+
+function promptText(input: FeishuBridgeHandleInput): string {
+  return input.event.text || "[Feishu attachment message]";
 }
 
 function messageSender(options: FeishuAgentBridgeOptions): FeishuMessageClient {
@@ -170,6 +183,16 @@ function directReply(
     return { reason: "project_clarification_sent", text: PROJECT_CLARIFICATION_TEXT };
   }
   return null;
+}
+
+function issueCommandClarification(
+  input: FeishuBridgeHandleInput,
+  route: FeishuConversationRoute,
+  projectContext: FeishuProjectContextResult
+): DirectReply | null {
+  if (!parseFeishuIssueCommand(route.prompt || input.event.text)) return null;
+  if (projectContext.status === "resolved") return null;
+  return { reason: "project_clarification_sent", text: ISSUE_PROJECT_CLARIFICATION_TEXT };
 }
 
 function isNewPromptWithContent(prompt: string): boolean {

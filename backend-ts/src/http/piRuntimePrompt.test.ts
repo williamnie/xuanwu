@@ -77,6 +77,28 @@ describe("PI runtime prompt", () => {
     }
   });
 
+  test("documents the Feishu /issue command contract", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      const prompt = buildPiRuntimeSystemPrompt({
+        agent: agentRecord(),
+        conversationID: "feishu-issue-command",
+        project: projectRecord(join(root, "project"))
+      }, db);
+
+      expect(prompt).toContain("Feishu /issue command");
+      expect(prompt).toContain("/issue <任务描述>");
+      expect(prompt).toContain("issue_create_proposal");
+      expect(prompt).toContain("issue_enqueue_proposal");
+      expect(prompt).toContain("issue id");
+      expect(prompt).toContain("session");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("keeps confirmed memory injection for new Feishu conversation ids without old conversation memory", async () => {
     const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
     const db = await openDatabase({ stateDir: join(root, "state") });

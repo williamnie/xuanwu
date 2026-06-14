@@ -52,6 +52,26 @@ describe("PI attention router v0", () => {
     ]));
   });
 
+  test("treats slash issue commands as explicit task signals in trusted chats", () => {
+    const decision = decidePiAttention({
+      message: { ...MESSAGE, mentions: [], text: "/issue 在 codex-issue-runner 修复飞书上下文爆炸" },
+      policy: {
+        allowedChatIds: ["oc_group"],
+        projectMappings: [{ chatId: "oc_group", projectId: "demo" }]
+      },
+      projects: [{ id: "demo", name: "Demo" }]
+    });
+
+    expect(decision).toMatchObject({
+      decision: "propose_issue",
+      needs_project: false,
+      project_id: "demo",
+      reason: "task_signal_with_project",
+      should_create_issue_proposal: true
+    });
+    expect(decision.signals).toEqual(expect.arrayContaining(["allowed_chat", "slash_issue_command"]));
+  });
+
   test("routes trusted bug and feature text without requiring an explicit mention", () => {
     const decision = decidePiAttention({
       message: {
