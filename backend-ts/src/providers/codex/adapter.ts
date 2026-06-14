@@ -77,7 +77,12 @@ export class CodexAdapter {
 
   async initialize(): Promise<CodexInitializeResult> {
     this.initialized ??= this.initializeOnce();
-    return await this.initialized;
+    try {
+      return await this.initialized;
+    } catch (error) {
+      this.initialized = undefined;
+      throw error;
+    }
   }
 
   private async initializeOnce(): Promise<CodexInitializeResult> {

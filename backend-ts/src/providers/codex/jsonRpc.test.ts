@@ -127,6 +127,24 @@ describe("Codex stdio JSON-RPC transport", () => {
     await expect(pending).rejects.toThrow("codex app-server exited before response (code 7)");
   });
 
+  test("times out hung app-server requests and stops the stale process", async () => {
+    let fake!: FakeCodexProcess;
+    const diagnostics: ProviderEvent[] = [];
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 1 }, {
+      onDiagnostic: (event) => diagnostics.push(event),
+      processFactory: () => {
+        fake = new FakeCodexProcess(() => {});
+        return fake;
+      }
+    });
+
+    const pending = transport.request("thread/list", {});
+
+    await expect(pending).rejects.toThrow("codex app-server request timed out after 1ms: thread/list");
+    expect(diagnostics).toContainEqual(expect.objectContaining({ type: "process/timeout" }));
+    await expect(fake.exited).resolves.toBe(0);
+  });
+
   test("captures stderr diagnostics with sensitive values redacted", async () => {
     let fake!: FakeCodexProcess;
     const diagnostics: string[] = [];

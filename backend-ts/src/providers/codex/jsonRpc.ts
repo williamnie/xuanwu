@@ -17,6 +17,7 @@ type JsonRpcResponse = {
 type PendingRequest = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
+  timeout?: ReturnType<typeof setTimeout>;
 };
 
 export type CodexJsonRpcProcess = {
@@ -43,6 +44,7 @@ export type CodexTransportOptions = {
 
 const MAX_STDERR_LINES = 50;
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
+const MAX_RPC_REQUEST_TIMEOUT_MS = 10_000;
 
 export class CodexStdioJsonRpcTransport {
   private nextId = 0;
@@ -83,11 +85,19 @@ export class CodexStdioJsonRpcTransport {
   async request(method: string, params: JsonRpcParams = null): Promise<unknown> {
     await this.start();
     const id = this.registerRequest();
-    const response = new Promise<unknown>((resolve, reject) => this.pending.set(id, { resolve, reject }));
+    const response = new Promise<unknown>((resolve, reject) => {
+      this.pending.set(id, {
+        resolve,
+        reject,
+        timeout: setTimeout(() => this.timeoutRequest(id, method), this.requestTimeoutMs())
+      });
+    });
     try {
       this.write({ id, method, params });
     } catch (error) {
+      const pending = this.pending.get(id);
       if (!this.pending.delete(id)) return await response;
+      clearPendingTimeout(pending);
       throw error;
     }
     return await response;
@@ -169,6 +179,7 @@ export class CodexStdioJsonRpcTransport {
     const request = this.pending.get(id);
     if (!request) return;
     this.pending.delete(id);
+    clearPendingTimeout(request);
     if (message.error) {
       request.reject(new Error(`codex rpc ${String(message.error.code ?? "error")}: ${String(message.error.message ?? "unknown error")}`));
       return;
@@ -197,12 +208,41 @@ export class CodexStdioJsonRpcTransport {
     const pending = [...this.pending.values()];
     this.pending.clear();
     this.approvals.rejectAll(error);
-    for (const request of pending) request.reject(error);
+    for (const request of pending) {
+      clearPendingTimeout(request);
+      request.reject(error);
+    }
   }
 
   private emitDiagnostic(type: string, text: string, error?: string): void {
     this.options.onDiagnostic?.({ provider: "codex", type, text, error });
   }
+
+  private requestTimeoutMs(): number {
+    return Math.min(Math.max(1, this.config.timeoutMs), MAX_RPC_REQUEST_TIMEOUT_MS);
+  }
+
+  private timeoutRequest(id: number, method: string): void {
+    const request = this.pending.get(id);
+    if (!request) return;
+    this.pending.delete(id);
+    const error = new Error(`codex app-server request timed out after ${this.requestTimeoutMs()}ms: ${method}`);
+    request.reject(error);
+    this.emitDiagnostic("process/timeout", error.message, error.message);
+    void this.restartAfterTimeout();
+  }
+
+  private async restartAfterTimeout(): Promise<void> {
+    try {
+      await this.stop();
+    } catch (error) {
+      this.emitDiagnostic("process/restart_failed", asError(error).message, asError(error).message);
+    }
+  }
+}
+
+function clearPendingTimeout(request: PendingRequest | undefined): void {
+  if (request?.timeout) clearTimeout(request.timeout);
 }
 
 export async function runCodexTransportInitializeSmoke(

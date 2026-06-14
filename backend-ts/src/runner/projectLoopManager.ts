@@ -62,14 +62,16 @@ async function drainQueue(runtime: ProjectLoopRuntime): Promise<void> {
 }
 
 async function runProject(runtime: ProjectLoopRuntime, projectID: string): Promise<void> {
+  let shouldRequeue = true;
   try {
-    await runProjectLoop(runtime, projectID);
+    shouldRequeue = await runProjectLoop(runtime, projectID);
   } catch (error) {
+    shouldRequeue = false;
     runtime.onError?.(error, projectID);
   } finally {
     forcedProjects.delete(projectID);
     activeLoops.delete(projectID);
-    requeueProjectsWithTodo(runtime.database);
+    if (shouldRequeue) requeueProjectsWithTodo(runtime.database);
   }
 }
 
@@ -77,11 +79,13 @@ function isAutoRunEnabled(db: RunnerDatabase, projectID: string): boolean {
   return (getProject(db, projectID)?.auto_run ?? 0) === 1;
 }
 
-async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): Promise<void> {
+async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): Promise<boolean> {
   while (shouldContinue(runtime.database, projectID, forcedProjects.has(projectID))) {
     const result = await runProjectLoopOnce(loopInput(runtime, projectID));
     if (!result.claimed) break;
+    if (result.run.runId === "failed") return false;
   }
+  return true;
 }
 
 function shouldContinue(db: RunnerDatabase, projectID: string, forceOnce: boolean): boolean {

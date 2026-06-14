@@ -1,5 +1,6 @@
 import { getProject } from "../db/repositories/projects.ts";
 import { listIssues } from "../db/repositories/issues.ts";
+import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { failIssueExecution } from "./statusGate.ts";
@@ -14,45 +15,49 @@ export type RecoveryInput = {
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
-export type RecoveryResult = { failed: number; recovered: number };
+export type RecoveryResult = { failed: number; recovered: number; requeued: number };
 
 const STATUS_IN_PROGRESS = "in_progress";
 
 export async function recoverInProgressIssues(input: RecoveryInput): Promise<RecoveryResult> {
-  const result = { failed: 0, recovered: 0 };
+  const result = { failed: 0, recovered: 0, requeued: 0 };
   const issues = listIssues(input.database, { status: STATUS_IN_PROGRESS });
   for (const issue of issues) {
-    const recovered = await recoverIssue(input, issue);
-    recovered ? result.recovered += 1 : result.failed += 1;
+    const status = await recoverIssue(input, issue);
+    result[status] += 1;
   }
   return result;
 }
 
-async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<boolean> {
+async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<keyof RecoveryResult> {
   const session = recoverableSession(issue);
   if (!session) {
+    if (canRequeueUnstartedClaim(issue)) {
+      requeueUnstartedClaim(input.database, issue);
+      return "requeued";
+    }
     markRecoveryFailed(input.database, issue.id, "missing provider_session_id; issue marked failed after restart");
-    return false;
+    return "failed";
   }
   const provider = input.providers[session.provider];
   if (!provider?.recover) {
     markRecoveryFailed(input.database, issue.id, `provider ${session.provider} does not support recovery`);
-    return false;
+    return "failed";
   }
   const project = getProject(input.database, issue.project_id);
   if (!project) {
     markRecoveryFailed(input.database, issue.id, `project ${issue.project_id} not found`);
-    return false;
+    return "failed";
   }
   recordRecoveryEvent(input.database, issue.id, "issue.recovery_started", recoveryPayload(session));
   try {
     const run = await provider.recover(recoveryInput(project, issue, session));
     persistRecoveredRuntime(input.database, issue.id, run);
     recordRecoveryEvent(input.database, issue.id, "issue.recovery_turn_started", recoveryPayload(run.session ?? session));
-    return true;
+    return "recovered";
   } catch (error) {
     markRecoveryFailed(input.database, issue.id, error);
-    return false;
+    return "failed";
   }
 }
 
@@ -89,6 +94,19 @@ function recoverableSession(issue: Issue): SessionRef | null {
   const turnId = run?.provider_turn_id || issue.codex_turn_id;
   if (sessionId === "") return null;
   return { provider, sessionId, ...(turnId === "" ? {} : { turnId }) };
+}
+
+function canRequeueUnstartedClaim(issue: Issue): boolean {
+  const run = issue.latest_run;
+  return issue.status === STATUS_IN_PROGRESS && run?.ended_at === "" &&
+    run.provider_session_id === "" && issue.codex_thread_id === "";
+}
+
+function requeueUnstartedClaim(db: RunnerDatabase, issue: Issue): void {
+  enqueueIssue(db, issue.id);
+  recordRecoveryEvent(db, issue.id, "issue.recovery_requeued", {
+    reason: "missing provider_session_id after restart; requeued unstarted claim"
+  });
 }
 
 function persistRecoveredRuntime(db: RunnerDatabase, issueID: number, result: ProviderRunResult): void {

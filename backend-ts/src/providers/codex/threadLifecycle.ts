@@ -125,7 +125,8 @@ export function threadStartParams(input: ThreadStartInput): Record<string, unkno
 export function threadListParams(input: ThreadListInput): Record<string, unknown> {
   const params: Record<string, unknown> = {};
   if (input.limit && input.limit > 0) params.limit = input.limit;
-  if (input.cursor?.trim()) params.cursor = input.cursor.trim();
+  const cursor = input.cursor?.trim();
+  if (cursor) params.cursor = cursor;
   return params;
 }
 
@@ -211,7 +212,7 @@ function turnSandboxPolicy(value: string | undefined): Record<string, string> {
     case undefined:
     case "workspace-write":
     case "workspaceWrite": return { type: "workspaceWrite" };
-    default: return { type: value.trim() };
+    default: return { type: value?.trim() || "workspaceWrite" };
   }
 }
 

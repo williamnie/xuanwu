@@ -149,6 +149,28 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+
+  test("auto-run stops after provider startup failure and leaves remaining todos queued", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FailingExecutionProvider();
+    try {
+      insertProject(db, { id: "failure-demo", provider: provider.id, autoRun: 1 });
+      const first = insertIssue(db, { projectId: "failure-demo", title: "first" });
+      const second = insertIssue(db, { projectId: "failure-demo", title: "second" });
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "failure-demo");
+      await waitFor(() => getIssue(db, first)?.status === "failed");
+      await Bun.sleep(20);
+
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+      expect(getIssue(db, first)).toMatchObject({ status: "failed", attempt_count: 1 });
+      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, second)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("forced loop starts one executor session even when project auto-run is off", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();

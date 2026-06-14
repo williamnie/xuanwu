@@ -14,7 +14,7 @@ class RecoveringCodexProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution", "resume_session"] as const;
   readonly inputs: ProviderRecoveryInput[] = [];
 
-  async run() {
+  async run(): Promise<{ runId: string }> {
     throw new Error("run should not be called during recovery");
   }
 
@@ -62,7 +62,7 @@ describe("Bun in-progress issue recovery", () => {
 
       const result = await recoverInProgressIssues({ database: db, providers: { codex: provider } });
 
-      expect(result).toEqual({ failed: 0, recovered: 1 });
+      expect(result).toEqual({ failed: 0, recovered: 1, requeued: 0 });
       expect(provider.inputs).toHaveLength(1);
       expect(provider.inputs[0]).toMatchObject({
         issueId,
@@ -86,32 +86,66 @@ describe("Bun in-progress issue recovery", () => {
     }
   });
 
-  test("fails unrecoverable in_progress issues and closes their open run", async () => {
+  test("fails recoverable sessions when the provider cannot resume them", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, { id: "demo", provider: "codex" });
-      const issueId = insertIssue(db, { projectId: "demo", status: "in_progress", title: "missing session" });
+      const issueId = insertIssue(db, {
+        codexThreadId: "thread-known",
+        projectId: "demo",
+        status: "in_progress",
+        title: "known session"
+      });
       insertOpenRun(db, { issueId, provider: "codex" });
 
       const result = await recoverInProgressIssues({ database: db, providers: {} });
 
       const issue = getIssue(db, issueId);
       const run = listIssueRuns(db, issueId).at(-1);
-      expect(result).toEqual({ failed: 1, recovered: 0 });
+      expect(result).toEqual({ failed: 1, recovered: 0, requeued: 0 });
       expect(issue).toMatchObject({
         status: "failed",
-        error: "missing provider_session_id; issue marked failed after restart"
+        error: "provider codex does not support recovery"
       });
       expect(run).toMatchObject({
         status: "failed",
         exit_reason: "failed",
-        error: "missing provider_session_id; issue marked failed after restart"
+        error: "provider codex does not support recovery"
       });
       expect(run?.ended_at).not.toBe("");
       expect(listEventTypes(db)).toEqual([
         "issue.status_changed",
         "issue.error",
         "issue.recovery_failed"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("requeues an in_progress claim that never created a provider session", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, { id: "demo", provider: "codex" });
+      const issueId = insertIssue(db, { projectId: "demo", status: "in_progress", title: "unstarted claim" });
+      insertOpenRun(db, { issueId, provider: "codex" });
+
+      const result = await recoverInProgressIssues({ database: db, providers: {} });
+
+      const issue = getIssue(db, issueId);
+      const run = listIssueRuns(db, issueId).at(-1);
+      expect(result).toEqual({ failed: 0, recovered: 0, requeued: 1 });
+      expect(issue).toMatchObject({ status: "todo", error: "" });
+      expect(run).toMatchObject({
+        status: "todo",
+        exit_reason: "status_changed",
+        provider_session_id: "",
+        provider_turn_id: ""
+      });
+      expect(run?.ended_at).not.toBe("");
+      expect(listEventTypes(db)).toEqual([
+        "issue.status_changed",
+        "issue.recovery_requeued"
       ]);
     } finally {
       db.close();

@@ -30,6 +30,17 @@ describe("Codex adapter RPC methods", () => {
     });
   });
 
+
+  test("retries initialize after a transient app-server failure", async () => {
+    const rpc = new FakeRpc({ initialize: [new Error("temporary init failure"), { protocolVersion: "fixture" }] });
+    const adapter = new CodexAdapter(rpc);
+
+    await expect(adapter.initialize()).rejects.toThrow("temporary init failure");
+    await expect(adapter.initialize()).resolves.toMatchObject({ protocolVersion: "fixture" });
+
+    expect(rpc.calls.map((call) => call.method)).toEqual(["initialize", "initialize"]);
+  });
+
   test("normalizes model list responses", async () => {
     const rpc = new FakeRpc({
       "model/list": {
@@ -136,6 +147,14 @@ describe("Codex adapter RPC methods", () => {
       }],
       nextCursor: "next"
     });
+  });
+
+  test("omits blank thread list cursors for the current Codex app-server contract", async () => {
+    const rpc = new FakeRpc({ "thread/list": { data: [] } });
+
+    await new CodexAdapter(rpc).listThreads({ cursor: "", limit: 20 });
+
+    expect(rpc.calls[0]).toEqual({ method: "thread/list", params: { limit: 20 } });
   });
 
   test("reads, resumes, and names threads through lifecycle RPC calls", async () => {
@@ -313,6 +332,11 @@ class FakeRpc {
   async request(method: string, params: JsonRpcParams = null): Promise<unknown> {
     this.calls.push({ method, params });
     const response = this.responses[method];
+    if (Array.isArray(response)) {
+      const item = response.shift();
+      if (item instanceof Error) throw item;
+      return item;
+    }
     if (response instanceof Error) throw response;
     return response;
   }
