@@ -32,14 +32,14 @@ export default function PiCommandCenter() {
       <Header pendingCount={pendingCount} state={state} />
       {state.error && <div className="pi-command-error" role="alert">{state.error}</div>}
       {state.loading && !state.data && <LoadingState />}
-      <section className="pi-command-above-fold" aria-label="PI 控制台首屏重点">
+      <section className="pi-command-above-fold" aria-label="PI 诊断首屏重点">
         <div className="pi-command-status-column">
-          <section className="pi-command-grid" aria-label="PI 控制台状态卡片">
+          <section className="pi-command-grid" aria-label="PI 诊断状态卡片">
             {cards.map(card => <StatusCard key={card.id} card={card} loading={state.loading && !state.data} />)}
           </section>
           <QuickActions activeModule={activeModule} onSelect={setActiveModule} />
         </div>
-        <section className="pi-command-priority-panel" aria-label="待处理事项">
+        <section className="pi-command-priority-panel" aria-label="审计与确认记录">
           <PendingApprovalCallout count={pendingCount} />
           <PiActionAuditPanel onChanged={state.reload} showAuditTimeline={false} variant="command-center" />
         </section>
@@ -57,7 +57,7 @@ function useCommandCenterStatus() {
     try {
       setState({ data: await api.getPiCommandCenter(), error: '', loading: false });
     } catch (err) {
-      setState(prev => ({ ...prev, error: err.message || '读取 PI 控制台失败', loading: false }));
+      setState(prev => ({ ...prev, error: err.message || '读取 PI 诊断状态失败', loading: false }));
     }
   }, []);
 
@@ -72,14 +72,14 @@ function Header({ pendingCount, state }) {
   return (
     <section className="pi-command-hero">
       <div>
-        <span className="pi-command-kicker">PI 托管控制台</span>
-        <h1>自动化状态与审批中心</h1>
+        <span className="pi-command-kicker">PI 诊断 / 审计</span>
+        <h1>诊断与高级设置</h1>
         <p>
-          区分 todo 自动领取、{COMMAND_CENTER_TERMS.supervisor}、项目巡检与
-          {COMMAND_CENTER_TERMS.heartbeat}，并管理 {COMMAND_CENTER_TERMS.delegation} 与 {COMMAND_CENTER_TERMS.policy}。
+          日常审批请优先在 Feishu IM 或单个 issue detail 完成；这里保留
+          debug、audit、system status 与高级策略设置，用于排障和复核。
         </p>
-        <div className="pi-command-hero-summary" aria-label="当前需要处理的事项">
-          <span className={pendingCount > 0 ? 'urgent' : ''}>待审批 {numberText(overview.pending_approvals)} 项</span>
+        <div className="pi-command-hero-summary" aria-label="当前诊断摘要">
+          <span className={pendingCount > 0 ? 'urgent' : ''}>审计待确认 {numberText(overview.pending_approvals)} 项</span>
           <span>当前模式：{mode}</span>
           <span>最近自动检查：{heartbeat.detail}</span>
           <span>{memorySummaryText(state.data?.memory)}</span>
@@ -100,10 +100,10 @@ function Header({ pendingCount, state }) {
 
 function QuickActions({ activeModule, onSelect }) {
   return (
-    <section className="pi-command-quick-actions" aria-label="主要操作入口">
+    <section className="pi-command-quick-actions" aria-label="PI 诊断入口">
       <div>
-        <span className="pi-command-label">主要操作入口</span>
-        <strong>先处理审批，再查看证据或调整授权。</strong>
+        <span className="pi-command-label">诊断入口</span>
+        <strong>保留排障、审计和高级策略入口；日常确认从 IM / issue detail 进入。</strong>
       </div>
       <div className="pi-command-quick-action-row">
         {DETAIL_MODULES.map(([id, label, description]) => (
@@ -136,14 +136,14 @@ function PendingApprovalCallout({ count }) {
 function DetailModules({ activeModule, automation, onSelect, reload }) {
   const current = DETAIL_MODULES.find(([id]) => id === activeModule) || DETAIL_MODULES[0];
   return (
-    <section className="pi-command-detail-shell" aria-label="PI 控制台二级模块">
+    <section className="pi-command-detail-shell" aria-label="PI 诊断二级模块">
       <div className="pi-command-detail-header">
         <div>
           <span className="pi-command-label">二级模块</span>
           <h2>{current[1]}</h2>
-          <p>{current[2]}。这些信息默认收起，不再抢占首屏处理焦点。</p>
+          <p>{current[2]}。这些信息用于排障和高级设置，不作为日常审批入口。</p>
         </div>
-        <div className="pi-command-tabs" role="tablist" aria-label="切换控制台模块">
+        <div className="pi-command-tabs" role="tablist" aria-label="切换诊断模块">
           {DETAIL_MODULES.map(([id, label]) => (
             <button
               aria-selected={activeModule === id}
@@ -177,7 +177,7 @@ function LoadingState() {
   return (
     <div className="pi-command-loading" aria-live="polite">
       <Loader2 size={16} className="spin-animation" />
-      正在读取 PI 控制台状态…
+      正在读取 PI 诊断状态…
     </div>
   );
 }
@@ -197,8 +197,8 @@ function StatusCard({ card, loading }) {
 function FrameworkPlaceholders() {
   if (FRAMEWORK_SECTIONS.length === 0) return null;
   return (
-    <section className="pi-command-module" aria-label="PI 控制台框架占位">
-      <h2><Command size={18} /> 控制台后续模块</h2>
+    <section className="pi-command-module" aria-label="PI 诊断框架占位">
+      <h2><Command size={18} /> 诊断后续模块</h2>
       <div className="pi-command-placeholder-grid">
         {FRAMEWORK_SECTIONS.map(([title, description]) => (
           <article className="pi-command-placeholder" key={title}>
@@ -218,7 +218,7 @@ function buildStatusCards(data) {
     { detail: modeDetail(data?.mode), icon: Command, id: 'mode', label: '当前模式', value: modeText(data?.mode) },
     { detail: heartbeat.detail, icon: Activity, id: 'heartbeat', label: '自动检查', value: heartbeat.value },
     { detail: `${numberText(overview.autonomous_projects)} 个项目开启 PI manager auto-manage`, icon: ShieldCheck, id: 'delegation', label: '项目巡检/委托', value: `${numberText(overview.active_delegations)} 个委托生效中` },
-    { detail: '需要人工确认的高风险动作', icon: CheckCircle2, id: 'approvals', label: '待我审批', value: `${numberText(overview.pending_approvals)} 项` },
+    { detail: '诊断视图：高风险动作的日常确认入口在 Feishu IM / issue detail', icon: CheckCircle2, id: 'approvals', label: '待确认审计', value: `${numberText(overview.pending_approvals)} 项` },
     { detail: supervisorDetail(data?.supervisor), icon: Bot, id: 'supervisor', label: '自动恢复', value: `${numberText(data?.supervisor?.recovery_actions)} 次` },
     { detail: memoryDetail(data?.memory), icon: Database, id: 'memory', label: 'PI 记忆', value: `待审核候选 ${numberText(data?.memory?.candidate_count)} 条` },
   ];

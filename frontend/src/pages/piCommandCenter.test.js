@@ -13,26 +13,30 @@ const layoutCssSource = readFileSync(new URL('./PiCommandCenter.layout.css', imp
 const reportsSource = readFileSync(new URL('./PiReportsPanel.jsx', import.meta.url), 'utf8');
 const sessionsClientCss = readFileSync(new URL('./sessions/SessionsClient.css', import.meta.url), 'utf8');
 
-test('PI Command Center is available as a first-class routed page with Chinese navigation copy', () => {
+test('PI diagnostics page remains routed but is downgraded in navigation', () => {
   assert.ok(existsSync(pageUrl), 'PiCommandCenter.jsx should exist');
   assert.match(appSource, /import PiCommandCenter from '\.\/pages\/PiCommandCenter'/);
   assert.match(appSource, /currentPage === 'pi-command-center'/);
   assert.match(sidebarSource, /pi-command-center/);
-  assert.match(sidebarSource, /PI 控制台/);
+  assert.match(sidebarSource, /PI 诊断/);
+  assert.match(sidebarSource, /nav-item-secondary/);
+  assert.doesNotMatch(sidebarSource, /PI 控制台/);
   assert.doesNotMatch(sidebarSource, /Command Center/);
+  assert.ok(sidebarSource.indexOf("currentPage === 'issues'") < sidebarSource.indexOf("currentPage === 'pi-command-center'"));
+  assert.ok(sidebarSource.indexOf("currentPage === 'pi-command-center'") < sidebarSource.indexOf("currentPage === 'settings'"));
 });
 
 test('PI Command Center renders Chinese status cards with loading and error states', () => {
-  for (const label of ['当前模式', '自动检查', '委托窗口', '待我审批', '自动恢复', 'PI 记忆']) {
+  for (const label of ['当前模式', '自动检查', '委托窗口', '待确认审计', '自动恢复', 'PI 记忆']) {
     assert.match(pageSource, new RegExp(label));
   }
-  for (const copy of ['PI 托管控制台', '自动化状态与审批中心', '待审批', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于', '待审核候选', '最近候选来源']) {
+  for (const copy of ['PI 诊断 / 审计', '诊断与高级设置', 'Feishu IM', 'issue detail', 'debug、audit、system status', '审计待确认', '当前模式：', '最近自动检查', 'Prompt 摘要：', '刷新状态', '状态更新于', '待审核候选', '最近候选来源']) {
     assert.match(pageSource, new RegExp(copy));
   }
   for (const copy of ['Supervisor Agent：', '已 fallback 到全局 PI agent', '请绑定或启用一个 PI agent']) {
     assert.match(pageSource, new RegExp(copy));
   }
-  for (const oldCopy of ['PI OpenClaw', 'Generated', 'Pending approvals']) {
+  for (const oldCopy of ['PI OpenClaw', 'Generated', 'Pending approvals', '自动化状态与审批中心', '待我审批']) {
     assert.doesNotMatch(pageSource, new RegExp(oldCopy));
   }
   assert.doesNotMatch(pageSource, />\s*Refresh\s*</);
@@ -77,7 +81,7 @@ test('PI Command Center separates auto-run, supervisor, manager and heartbeat au
   assert.doesNotMatch(automationPanelSource, /window\.confirm|window\.alert/);
 });
 
-test('PI Command Center prioritizes pending approvals above secondary modules', () => {
+test('PI diagnostics keeps audit access above secondary modules', () => {
   assert.match(pageSource, /pi-command-above-fold/);
   assert.match(pageSource, /PendingApprovalCallout/);
   assert.match(pageSource, /QuickActions/);
@@ -92,8 +96,8 @@ test('PI Command Center prioritizes pending approvals above secondary modules', 
   assert.match(layoutCssSource, /\.pi-command-tabs/);
 });
 
-test('PI Command Center has focused UI states for pending and no approval', () => {
-  for (const copy of ['需要你处理', '当前无阻塞', '项待审批动作优先处理', '暂无待审批动作']) {
+test('PI diagnostics explains IM and issue detail as daily approval entry points', () => {
+  for (const copy of ['诊断提示', '诊断正常', '项待确认动作可供审计', '暂无待确认审计项', 'Feishu IM', 'issue detail']) {
     assert.match(stateSource, new RegExp(copy));
   }
   assert.match(pageSource, /pendingApprovalCount\(state\.data\)/);

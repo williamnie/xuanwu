@@ -271,6 +271,11 @@ body {
   font-weight: 600;
 }
 
+.nav-item.nav-item-secondary {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 [data-theme="dark"] .nav-item.active {
   background: rgba(56, 189, 248, 0.12);
   color: var(--primary);

@@ -127,7 +127,7 @@ function PanelHeader({ audit, variant }) {
 
 function PendingApprovals({ audit }) {
   if (audit.actions.length === 0) {
-    return <div className="pi-action-audit-empty">暂无待审批动作；新的 confirm/high 动作会进入这里。</div>;
+    return <div className="pi-action-audit-empty">暂无待确认动作；新的 confirm/high 动作仍会进入审计区。</div>;
   }
   return (
     <div className="pi-action-approval-list">

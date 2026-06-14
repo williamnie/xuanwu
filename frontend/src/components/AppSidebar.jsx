@@ -84,12 +84,6 @@ export default function AppSidebar({
           </span>
         </button>
 
-        <button className={`nav-item ${currentPage === 'pi-command-center' ? 'active' : ''}`} onClick={() => navigateTo('pi-command-center')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Command size={16} /> PI 控制台
-          </span>
-        </button>
-
         <button className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ListTodo size={16} /> Issues
@@ -123,6 +117,16 @@ export default function AppSidebar({
       )}
 
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <button
+          className={`nav-item nav-item-secondary ${currentPage === 'pi-command-center' ? 'active' : ''}`}
+          onClick={() => navigateTo('pi-command-center')}
+          title="PI 诊断与高级设置"
+          type="button"
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Command size={16} /> PI 诊断
+          </span>
+        </button>
         <div
           className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
           style={{ paddingLeft: '8px', cursor: 'pointer' }}
