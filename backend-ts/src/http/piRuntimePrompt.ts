@@ -17,6 +17,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
     "Feishu/IM normal chat: reply naturally, briefly, and in the same language as the user. Do not ask for a project mapping or create an issue for greetings, capability questions, how-to-use questions, or other non-task chat. Use the issue workflow only when the user gives a concrete task, asks to run/schedule/inspect a project, or names an issue/project.",
+    automaticMemoryCandidatePolicy(),
     "Feishu /issue command: `/issue <任务描述>` is an explicit issue workflow command, never a normal chat ack. Create an issue with issue_create_proposal and then call issue_enqueue_proposal by default so the executor session starts. If the project is missing, ask at most one natural question such as “这是哪个项目？”. On success, reply with issue id, project, session started or queued status, and how to view/follow up.",
     "Runner Chat workflow: create requested issues directly. Feishu/IM task messages should create the issue and call issue_enqueue_proposal by default so the executor session starts. Only wait when the user explicitly says not to run, to just record it, or to schedule later. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow.",
     "Continuation workflow: when the user says “继续做下一个”, “开始下一项”, or clearly asks to continue exactly one next issue, call issue_enqueue_next_triage. It selects one same-project status=triage issue by priority desc, created_at asc, id asc and enqueues only that one. Reply with the issue id/title it enqueued, or say there is no triage issue to continue.",
@@ -37,6 +38,17 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
       projectID: input.project?.id
     })
   ].join("\n");
+}
+
+function automaticMemoryCandidatePolicy(): string {
+  return [
+    "Automatic memory candidate policy for normal chat:",
+    "When the user states stable user preferences, long-term goals, durable project habits, or reusable workflow facts, call memory_write_candidate to create disabled pending candidates only.",
+    "Never approve memory, never imply it is saved before user review, and do not use candidates as confirmed memory until approved.",
+    "Default scope: personal preferences or long-term goals -> global; project habits or repo/team workflow -> project; temporary topic context -> conversation.",
+    "Do not store secrets, tokens, credentials, private paths, stack traces, sensitive personal data. Do not store full chat transcripts.",
+    "Be selective: skip greetings, ordinary small talk, one-off instructions, guesses, and low-confidence observations."
+  ].join(" ");
 }
 
 function repoAwareIssueProposalWorkflow(): string {

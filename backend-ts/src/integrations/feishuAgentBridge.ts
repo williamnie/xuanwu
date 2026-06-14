@@ -17,6 +17,7 @@ import {
 } from "./feishuProjectSelectionBridge.ts";
 import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishuIssueCommand.ts";
 import { applyFeishuMemoryCommand } from "./feishuMemoryCommands.ts";
+import { appendFeishuMemoryCandidateNotice, snapshotFeishuMemoryCandidates } from "./feishuMemoryCandidateNotice.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
 import { buildFeishuReviewCommandPrompt, normalizeFeishuReviewReply, parseFeishuReviewCommand } from "./feishuReviewCommand.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
@@ -70,9 +71,7 @@ async function handleFeishuAgentMessage(
     text: input.event.text
   });
   if (memoryCommand.handled) return sendReply(options, input, memoryCommand.text, {
-    conversationId: route.conversationId,
-    projectId: resolvedProjectId(projectContext, input),
-    text: memoryCommand.text
+    conversationId: route.conversationId, projectId: resolvedProjectId(projectContext, input), text: memoryCommand.text
   }, memoryCommand.reason);
   const projectSwitch = applyFeishuProjectSwitchCommand(options.database, {
     route,
@@ -80,15 +79,11 @@ async function handleFeishuAgentMessage(
     text: input.event.text
   });
   if (projectSwitch.status !== "none") return sendReply(options, input, projectSwitch.text, {
-    conversationId: route.conversationId,
-    projectId: projectSwitch.projectId,
-    text: projectSwitch.text
+    conversationId: route.conversationId, projectId: projectSwitch.projectId, text: projectSwitch.text
   }, projectSwitch.reason);
   const issueClarification = issueCommandClarification(input, route, projectContext);
   if (issueClarification) return sendReply(options, input, issueClarification.text, {
-    conversationId: route.conversationId,
-    projectId: "",
-    text: issueClarification.text
+    conversationId: route.conversationId, projectId: "", text: issueClarification.text
   }, issueClarification.reason);
   const selection = await maybeSendFeishuProjectSelection(
     options,
@@ -107,9 +102,7 @@ async function handleFeishuAgentMessage(
   }
   const direct = directReply(input, options, projectContext);
   if (direct) return sendReply(options, input, direct.text, {
-    conversationId: route.conversationId,
-    projectId: resolvedProjectId(projectContext, input),
-    text: direct.text
+    conversationId: route.conversationId, projectId: resolvedProjectId(projectContext, input), text: direct.text
   }, direct.reason);
   const runner = await runnerReply(options, input, route, projectContext);
   const text = cleanString(runner.text);
@@ -147,6 +140,11 @@ async function runnerReply(
     }
     const command = parseFeishuIssueCommand(route.prompt || input.event.text);
     const review = parseFeishuReviewCommand(route.prompt || input.event.text);
+    const normalChat = !command && !review;
+    const memoryBefore = normalChat ? snapshotFeishuMemoryCandidates(options.database, {
+      conversationId: route.conversationId,
+      projectId
+    }) : [];
     const prompt = review
       ? buildFeishuReviewCommandPrompt(options.database, { conversationId: route.conversationId, projectId })
       : command ? buildFeishuIssueCommandPrompt(command) : route.prompt || input.event.text || "[Feishu attachment message]";
@@ -157,7 +155,10 @@ async function runnerReply(
       projectId,
       prompt
     });
-    return review ? { ...result, text: normalizeFeishuReviewReply(result.text) } : result;
+    const text = review ? normalizeFeishuReviewReply(result.text) : normalChat ? appendFeishuMemoryCandidateNotice(
+      options.database, { conversationId: route.conversationId, projectId }, result.text, memoryBefore
+    ) : result.text;
+    return { ...result, text };
   } catch (error) {
     return {
       conversationId: fallbackConversationID(input.event),

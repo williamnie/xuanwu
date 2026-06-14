@@ -50,6 +50,33 @@ describe("PI runtime prompt", () => {
     }
   });
 
+  test("documents automatic memory candidate boundaries for normal chat", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
+    const db = await openDatabase({ stateDir: join(root, "state") });
+    try {
+      const prompt = buildPiRuntimeSystemPrompt({
+        agent: agentRecord(),
+        conversationID: "feishu-memory-candidate",
+        project: projectRecord(join(root, "project"))
+      }, db);
+
+      expect(prompt).toContain("Automatic memory candidate policy");
+      expect(prompt).toContain("stable user preferences");
+      expect(prompt).toContain("memory_write_candidate");
+      expect(prompt).toContain("disabled pending candidates");
+      expect(prompt).toContain("Never approve memory");
+      expect(prompt).toContain("global");
+      expect(prompt).toContain("project");
+      expect(prompt).toContain("conversation");
+      expect(prompt).toContain("Do not store secrets");
+      expect(prompt).toContain("Do not store full chat transcripts");
+      expect(prompt).toContain("Be selective");
+    } finally {
+      db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("tells PI to start IM-created issues by default unless the user asks to wait", async () => {
     const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
     const db = await openDatabase({ stateDir: join(root, "state") });
