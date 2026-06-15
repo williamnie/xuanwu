@@ -209,7 +209,7 @@ function memorySummary(items: PiMemoryItem[]) {
     candidate_count: candidates.length,
     recent_candidate_sources: candidates.slice(0, 5).map(memoryCandidateSource),
     source_policy: {
-      chat: "enabled_candidate_only",
+      chat: "explicit_low_risk_preferences_auto_enable",
       manager_cycle: "enabled_candidate_only",
       supervisor: "enabled_candidate_only",
       failure_pattern_generator: "enabled_candidate_only",

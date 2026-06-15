@@ -22,7 +22,7 @@ export type FeishuMemoryCommandResult = {
 };
 
 type ParsedMemoryCommand =
-  | { action: "approve" | "reject"; id: string }
+  | { action: "approve" | "disable" | "reject"; id: string }
   | { action: "help" | "list"; query: string }
   | { action: "search"; query: string }
   | { action: "none"; query: string };
@@ -40,6 +40,7 @@ export function applyFeishuMemoryCommand(
   if (command.action === "none") return { handled: false, reason: "not_memory_command", text: "" };
   try {
     if (command.action === "approve") return approveMemoryCandidate(db, input, command.id);
+    if (command.action === "disable") return disableActiveMemory(db, input, command.id);
     if (command.action === "reject") return rejectMemoryCandidate(db, input, command.id);
     if (command.action === "search") return searchConfirmedMemory(db, input, command.query);
     if (command.action === "help") return handled("memory_command_usage", memoryUsageText());
@@ -58,6 +59,7 @@ function parseFeishuMemoryCommand(text: string): ParsedMemoryCommand {
   const verb = rawVerb.toLowerCase();
   const body = cleanString(rest.join(" "));
   if (verb === "approve") return body === "" ? { action: "help", query: "" } : { action: "approve", id: body };
+  if (verb === "disable") return body === "" ? { action: "help", query: "" } : { action: "disable", id: body };
   if (verb === "reject") return body === "" ? { action: "help", query: "" } : { action: "reject", id: body };
   if (verb === "search") return body === "" ? { action: "help", query: "" } : { action: "search", query: body };
   return { action: "help", query: "" };
@@ -83,6 +85,13 @@ function approveMemoryCandidate(db: RunnerDatabase, input: FeishuMemoryCommandIn
   }
   const item = updatePiMemoryItem(db, resolved.item.id, { disabled: 0 });
   return handled("memory_candidate_approved", `已确认记忆 ${shortID(item.id)}（${scopeText(item)}，${safeText(item.kind, 40)}）。后续会按 scope 注入 PI prompt。`);
+}
+
+function disableActiveMemory(db: RunnerDatabase, input: FeishuMemoryCommandInput, id: string): FeishuMemoryCommandResult {
+  const resolved = resolveMemoryItem(scopedMemoryItems(db, input, 0), id, "已启用记忆");
+  if (resolved.status !== "resolved") return handled(activeMemoryReason(resolved.reason), resolved.text);
+  const item = updatePiMemoryItem(db, resolved.item.id, { disabled: 1 });
+  return handled("memory_disabled", `已禁用记忆 ${shortID(item.id)}（${scopeText(item)}，${safeText(item.kind, 40)}）。后续不会注入 PI prompt。`);
 }
 
 function rejectMemoryCandidate(db: RunnerDatabase, input: FeishuMemoryCommandInput, id: string): FeishuMemoryCommandResult {
@@ -127,12 +136,25 @@ function scopeFilters(input: FeishuMemoryCommandInput, disabled: number): PiMemo
 function resolvePendingCandidate(items: PiMemoryItem[], id: string):
   | { item: PiMemoryItem; status: "resolved" }
   | { reason: string; status: "error"; text: string } {
+  return resolveMemoryItem(items, id, "待审核候选");
+}
+
+function resolveMemoryItem(items: PiMemoryItem[], id: string, label: string):
+  | { item: PiMemoryItem; status: "resolved" }
+  | { reason: string; status: "error"; text: string } {
   const key = cleanString(id);
   if (key.length < ID_MIN_LENGTH) return { reason: "memory_candidate_invalid_id", status: "error", text: "请提供至少 4 位记忆 id。" };
   const matches = items.filter((item) => item.id === key || item.id.startsWith(key));
-  if (matches.length === 0) return { reason: "memory_candidate_not_found", status: "error", text: "未找到待审核候选，请确认 id。" };
-  if (matches.length > 1) return { reason: "memory_candidate_ambiguous", status: "error", text: "候选 id 匹配多条，请输入更长 id。" };
+  if (matches.length === 0) return { reason: "memory_candidate_not_found", status: "error", text: `未找到${label}，请确认 id。` };
+  if (matches.length > 1) return { reason: "memory_candidate_ambiguous", status: "error", text: `${label} id 匹配多条，请输入更长 id。` };
   return { item: matches[0], status: "resolved" };
+}
+
+function activeMemoryReason(reason: string): string {
+  if (reason === "memory_candidate_not_found") return "memory_active_not_found";
+  if (reason === "memory_candidate_ambiguous") return "memory_active_ambiguous";
+  if (reason === "memory_candidate_invalid_id") return "memory_active_invalid_id";
+  return reason;
 }
 
 function memoryLine(item: PiMemoryItem): string {
@@ -167,13 +189,14 @@ function memoryUsageText(): string {
     "支持的 /memory 命令：",
     "- /memory：列出当前 conversation/project/global 的待审核候选",
     "- /memory approve <id>：确认候选",
+    "- /memory disable <id>：禁用已启用记忆",
     "- /memory reject <id>：删除候选",
     "- /memory search <关键词>：搜索已确认记忆"
   ].join("\n");
 }
 
 function memoryUsageHint(): string {
-  return "操作：/memory approve <id> 确认，/memory reject <id> 删除，/memory search <关键词> 搜索已确认记忆。";
+  return "操作：/memory approve <id> 确认，/memory reject <id> 删除，/memory disable <id> 禁用已启用记忆，/memory search <关键词> 搜索已确认记忆。";
 }
 
 function handled(reason: string, text: string): FeishuMemoryCommandResult {

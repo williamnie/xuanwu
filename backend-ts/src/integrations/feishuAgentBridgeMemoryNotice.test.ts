@@ -10,7 +10,7 @@ import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
 import type { FeishuTextMessageInput } from "./feishuClient.ts";
 
 describe("Feishu agent bridge memory candidate notices", () => {
-  test("appends approve/reject guidance when normal chat writes a new pending candidate", async () => {
+  test("does not append approve/reject guidance when normal chat auto-enables explicit preference", async () => {
     const fixture = await openFixture();
     try {
       const sent: FeishuTextMessageInput[] = [];
@@ -36,7 +36,7 @@ describe("Feishu agent bridge memory candidate notices", () => {
             source_type: "pi.conversation",
             source_id: conversationId,
             confidence: "high",
-            disabled: 1
+            disabled: 0
           });
           return { conversationId, projectId: "demo", text: "好的，我会按这个风格回复。" };
         },
@@ -49,15 +49,63 @@ describe("Feishu agent bridge memory candidate notices", () => {
       const result = await bridge.handle({ event, ingest });
 
       expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
-      expect(listPiMemoryItems(fixture.db, { disabled: 1 })).toMatchObject([
-        { disabled: 1, id: "12345678-2222-4222-8222-123456789abc" }
+      expect(listPiMemoryItems(fixture.db, { disabled: 0 })).toMatchObject([
+        { disabled: 0, id: "12345678-2222-4222-8222-123456789abc" }
       ]);
       expect(sent).toHaveLength(1);
       expect(sent[0]?.text).toContain("好的，我会按这个风格回复。");
+      expect(sent[0]?.text).not.toContain("我可以记住");
+      expect(sent[0]?.text).not.toContain("/memory approve");
+      expect(sent[0]?.text).not.toContain("/memory reject");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("appends approve/reject guidance when normal chat writes a new pending candidate", async () => {
+    const fixture = await openFixture();
+    try {
+      const sent: FeishuTextMessageInput[] = [];
+      const config = buildFeishuConnectorConfig({
+        FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+        FEISHU_PROJECT_MAPPINGS: "chat:oc_group=demo",
+        FEISHU_APP_ID: "cli_app_id",
+        FEISHU_APP_SECRET: "app-secret-value"
+      });
+      const raw = messageEvent("记住这个项目策略：提交前必须全量回归", "om_memory_notice_pending");
+      const event = normalizeFeishuMessageEvent(raw);
+      const ingest = ingestFeishuMessageEvent(raw, { config, database: fixture.db }, { transport: "websocket" });
+      const bridge = createFeishuAgentBridge({
+        config: () => config,
+        database: fixture.db,
+        runConversation: async ({ conversationId }) => {
+          createPiMemoryItem(fixture.db, {
+            id: "22345678-2222-4222-8222-123456789abc",
+            scope: "project",
+            scope_id: "demo",
+            kind: "project_policy",
+            content: "提交前必须全量回归",
+            source_type: "pi.conversation",
+            source_id: conversationId,
+            confidence: "medium",
+            disabled: 1
+          });
+          return { conversationId, projectId: "demo", text: "收到，我先作为候选记录。" };
+        },
+        sender: { sendTextMessage: async (input) => {
+          sent.push(input);
+          return { messageId: "om_reply_memory_notice_pending" };
+        } }
+      });
+
+      await bridge.handle({ event, ingest });
+
+      expect(listPiMemoryItems(fixture.db, { disabled: 1 })).toMatchObject([
+        { disabled: 1, id: "22345678-2222-4222-8222-123456789abc" }
+      ]);
       expect(sent[0]?.text).toContain("我可以记住");
-      expect(sent[0]?.text).toContain("12345678");
-      expect(sent[0]?.text).toContain("/memory approve 12345678");
-      expect(sent[0]?.text).toContain("/memory reject 12345678");
+      expect(sent[0]?.text).toContain("/memory approve 22345678");
+      expect(sent[0]?.text).toContain("/memory reject 22345678");
     } finally {
       await fixture.close();
     }

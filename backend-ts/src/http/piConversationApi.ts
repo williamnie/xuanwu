@@ -308,7 +308,7 @@ function runnerChatAuthorizedActions(projectID: string) {
 }
 
 function runnerChatSource(conversation: PiConversation): string | undefined {
-  return conversation.id.startsWith("feishu-") ? "feishu_runner_chat" : undefined;
+  return conversation.id.startsWith("feishu-") ? "feishu_runner_chat" : "runner_chat";
 }
 
 function optionalConversationProject(db: RunnerDatabase, id: string): Project | undefined {

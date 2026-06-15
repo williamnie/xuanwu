@@ -140,7 +140,7 @@ describe("PI Command Center API", () => {
           source_type: "pi.supervisor"
         }],
         source_policy: {
-          chat: "enabled_candidate_only",
+          chat: "explicit_low_risk_preferences_auto_enable",
           failure_pattern_generator: "enabled_candidate_only",
           manager_cycle: "enabled_candidate_only",
           promote: "manual_review_required",

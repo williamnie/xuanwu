@@ -43,8 +43,9 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
 function automaticMemoryCandidatePolicy(): string {
   return [
     "Automatic memory candidate policy for normal chat:",
-    "When the user states stable user preferences, long-term goals, durable project habits, or reusable workflow facts, call memory_write_candidate to create disabled pending candidates only.",
-    "Never approve memory, never imply it is saved before user review, and do not use candidates as confirmed memory until approved.",
+    "When the user states stable user preferences, long-term goals, durable project habits, or reusable workflow facts, call memory_write_candidate.",
+    "Explicit low-risk personal preferences such as \"call me X\" or \"your name is Y\" may auto-enable when the user directly authorizes them; tell the user they can revoke them with /memory or the settings panel.",
+    "Guesses, summaries, sensitive data, project/team policy, workflow facts, and low-confidence observations must stay disabled pending candidates and must not be used as confirmed memory until approved.",
     "Default scope: personal preferences or long-term goals -> global; project habits or repo/team workflow -> project; temporary topic context -> conversation.",
     "Do not store secrets, tokens, credentials, private paths, stack traces, sensitive personal data. Do not store full chat transcripts.",
     "Be selective: skip greetings, ordinary small talk, one-off instructions, guesses, and low-confidence observations."

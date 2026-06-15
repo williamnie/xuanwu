@@ -28,7 +28,7 @@ export function buildFeishuReviewCommandPrompt(
     "Feishu /review command: review the recent active conversation.",
     "Reply briefly and naturally in Chinese unless the user's recent language is clearly not Chinese.",
     "Use exactly these three section headings: 记忆候选, 待办候选, 需要你确认/授权的事项.",
-    "Memory candidates: only call memory_write_candidate for durable, user-confirmable observations; it creates disabled pending candidates only. Never approve memory.",
+    "Memory candidates: /review is a review flow, so call memory_write_candidate only for durable, user-confirmable observations and leave them as pending candidates; do not approve memory from review. Note that normal chat may auto-enable directly authorized low-risk personal preferences, but guesses, summaries, project/team policy, workflow facts, sensitive data, and low-confidence observations still require review.",
     "Todo candidates: list possible runner issues as candidates in text only. Do not create or enqueue runner issues.",
     "Confirmation items: list unfinished questions, missing details, or actions needing user authorization.",
     "Do not call issue_create_proposal, issue_enqueue_proposal, issue_schedule_enqueue, issue_enqueue_next_triage, or issue_enqueue_batch_triage.",

@@ -32,7 +32,7 @@ export function buildPiMemoryPromptContext(db: RunnerDatabase, input: PiMemoryPr
   return [
     "Confirmed PI memory:",
     lines.length > 0 ? lines.join("\n") : "- No confirmed memories for this scope.",
-    "Memory rule: write new observations only via memory_write_candidate; never promote guesses without user review."
+    "Memory rule: write new observations only via memory_write_candidate; only explicit low-risk user preferences from normal chat may auto-enable, and guesses or policy/workflow observations still require review."
   ].join("\n");
 }
 

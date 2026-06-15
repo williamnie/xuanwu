@@ -63,8 +63,9 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("Automatic memory candidate policy");
       expect(prompt).toContain("stable user preferences");
       expect(prompt).toContain("memory_write_candidate");
-      expect(prompt).toContain("disabled pending candidates");
-      expect(prompt).toContain("Never approve memory");
+      expect(prompt).toContain("Explicit low-risk personal preferences");
+      expect(prompt).toContain("may auto-enable");
+      expect(prompt).toContain("Guesses, summaries, sensitive data, project/team policy, workflow facts, and low-confidence observations must stay disabled pending candidates");
       expect(prompt).toContain("global");
       expect(prompt).toContain("project");
       expect(prompt).toContain("conversation");

@@ -14,7 +14,7 @@ export default function PiMemoryPanel() {
         <div>
           <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>PI Memory Review</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-            审核 PI 写入的候选记忆；promote 后才进入 heartbeat / prompt 检索上下文。
+            管理 PI 记忆；明确授权的低风险个人偏好可自动启用，候选 promote 后才进入 heartbeat / prompt 检索上下文。
           </p>
         </div>
         <button className="btn btn-secondary" onClick={state.load} disabled={state.loading}>
@@ -75,8 +75,8 @@ function MemoryList({ state }) {
     return (
       <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: 1.55 }}>
         暂无 PI memory 或候选记忆。Runner Chat / manager cycle / supervisor 会通过
-        <code> memory_write_candidate </code>写入 disabled candidate；failure-pattern generator 会在 heartbeat
-        发现重复失败时写候选。候选必须人工启用后才会注入 prompt。
+        <code> memory_write_candidate </code>写入记忆；明确授权的低风险个人偏好可自动启用，
+        failure-pattern generator 会在 heartbeat 发现重复失败时写候选。推断、敏感、低置信度、项目/团队策略仍会保留为候选。
       </div>
     );
   }
@@ -93,8 +93,9 @@ function MemorySummary({ activeCount, candidateCount, recentCandidateSource }) {
       <SummaryPill label="Candidate memory" value={`${candidateCount} 条待审核`} />
       <SummaryPill label="最近候选来源" value={source} />
       <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', gridColumn: '1 / -1', lineHeight: 1.55, margin: 0 }}>
-        写入来源：Runner Chat / manager cycle / supervisor 仅可调用 <code>memory_write_candidate</code> 写 disabled candidate；
-        failure-pattern generator 也只写候选，必须人工启用后才会注入 prompt。
+        写入来源：Runner Chat / manager cycle / supervisor 通过 <code>memory_write_candidate</code> 记录。
+        仅用户明确授权的低风险个人偏好可自动启用；推断、敏感、低置信度、项目/团队策略仍会保留为候选。
+        可随时禁用或删除已启用记忆。
       </p>
     </div>
   );

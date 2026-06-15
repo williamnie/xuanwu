@@ -166,6 +166,61 @@ describe("Feishu /memory commands", () => {
     }
   });
 
+  test("disables an active memory by short id so it leaves PI memory context", async () => {
+    const fixture = await openFixture();
+    try {
+      seedMemory(fixture.db, {
+        disabled: 0,
+        id: "12121212-1111-4111-8111-aaaaaaaaaaaa",
+        scope: "project",
+        scope_id: "demo",
+        content: "Call the user 小北"
+      });
+
+      expect(buildPiMemoryPromptContext(fixture.db, { projectID: "demo" }))
+        .toContain("Call the user 小北");
+
+      const result = applyFeishuMemoryCommand(fixture.db, {
+        conversationId: "conv-1",
+        projectId: "demo",
+        text: "/memory disable 12121212"
+      });
+
+      expect(result).toMatchObject({ handled: true, reason: "memory_disabled" });
+      expect(getPiMemoryItem(fixture.db, "12121212-1111-4111-8111-aaaaaaaaaaaa"))
+        .toMatchObject({ disabled: 1 });
+      expect(buildPiMemoryPromptContext(fixture.db, { projectID: "demo" }))
+        .not.toContain("Call the user 小北");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("does not disable active memory outside current scope", async () => {
+    const fixture = await openFixture();
+    try {
+      seedMemory(fixture.db, {
+        disabled: 0,
+        id: "34343434-1111-4111-8111-aaaaaaaaaaaa",
+        scope: "project",
+        scope_id: "other",
+        content: "Other project active memory"
+      });
+
+      const result = applyFeishuMemoryCommand(fixture.db, {
+        conversationId: "conv-1",
+        projectId: "demo",
+        text: "/memory disable 34343434"
+      });
+
+      expect(result).toMatchObject({ handled: true, reason: "memory_active_not_found" });
+      expect(getPiMemoryItem(fixture.db, "34343434-1111-4111-8111-aaaaaaaaaaaa"))
+        .toMatchObject({ disabled: 0 });
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("searches confirmed memory only and omits disabled candidates", async () => {
     const fixture = await openFixture();
     try {

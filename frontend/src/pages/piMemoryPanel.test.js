@@ -24,7 +24,9 @@ test('PI memory panel exposes review, promotion, edit, disable, and delete contr
   assert.match(panelSource, /Runner Chat \/ manager cycle \/ supervisor/);
   assert.match(panelSource, /failure-pattern generator/);
   assert.match(panelSource, /memory_write_candidate/);
-  assert.match(panelSource, /必须人工启用后才会注入 prompt/);
+  assert.match(panelSource, /明确授权的低风险个人偏好可自动启用/);
+  assert.match(panelSource, /推断、敏感、低置信度、项目\/团队策略仍会保留为候选/);
+  assert.match(panelSource, /可随时禁用或删除已启用记忆/);
   assert.doesNotMatch(panelSource, /window\.confirm/);
   assert.doesNotMatch(panelSource, /window\.alert/);
 });
