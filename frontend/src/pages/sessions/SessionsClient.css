@@ -633,12 +633,12 @@
 
 .client-chat-area .session-transcript {
   background: transparent;
-  padding: 30px 40px;
+  padding: 30px clamp(12px, 3.2vw, 40px);
   width: 100%;
 }
 
 .client-chat-area .session-transcript-search {
-  padding: 10px 40px;
+  padding: 10px clamp(12px, 3.2vw, 40px);
   background: var(--bg-primary);
 }
 
@@ -653,7 +653,7 @@
 
 .client-chat-area .chat-bubble-container.user {
   align-self: flex-end;
-  max-width: 80%;
+  max-width: min(100%, 80%);
 }
 
 .client-chat-area .chat-bubble-container.user .chat-bubble-body {
@@ -680,7 +680,7 @@
 
 /* 输入框在聊天区的位置 */
 .client-chat-composer-section {
-  padding: 16px 40px 24px 40px;
+  padding: 16px clamp(12px, 3.2vw, 40px) 24px;
   width: 100%;
   max-width: 100%;
   min-width: 0;

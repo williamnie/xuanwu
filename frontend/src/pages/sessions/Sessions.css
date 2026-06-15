@@ -248,12 +248,14 @@
 .session-runtime-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-muted);
   font-size: 0.78rem;
   font-weight: 600;
+  min-width: 0;
 }
 
 .runtime-status-pill {
@@ -359,6 +361,7 @@
   border-bottom: 1px solid var(--border-color);
   color: var(--text-muted);
   background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  min-width: 0;
 }
 
 .session-transcript-search input {
@@ -595,8 +598,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px;
   background: rgba(255, 255, 255, 0.01);
+  box-sizing: border-box;
 }
 
 .session-transcript-content {
@@ -604,6 +609,8 @@
   flex-direction: column;
   gap: 24px;
   min-height: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .session-markdown-search-text {
@@ -663,6 +670,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
   animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -703,7 +712,8 @@
 .chat-bubble-container {
   display: flex;
   gap: 14px;
-  max-width: 85%;
+  min-width: 0;
+  max-width: min(100%, 85%);
   margin-bottom: 8px;
 }
 
@@ -729,7 +739,7 @@
 }
 
 .chat-bubble-container.agent.streaming {
-  width: 85%;
+  width: min(100%, 85%);
 }
 
 .chat-bubble-avatar {
@@ -764,6 +774,7 @@
 .chat-bubble-content {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -777,16 +788,19 @@
 }
 
 .chat-bubble-body {
+  min-width: 0;
+  max-width: 100%;
   background: transparent !important;
   border: none !important;
   border-radius: 0 !important;
   padding: 4px 0 !important;
   box-shadow: none !important;
+  overflow-wrap: anywhere;
 }
 
 .chat-bubble-container.user {
   align-self: flex-end;
-  max-width: 80%;
+  max-width: min(100%, 80%);
 }
 
 .chat-bubble-container.user .chat-bubble-body {
@@ -796,6 +810,7 @@
   color: var(--text-primary) !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
   border: 1px solid rgba(0, 0, 0, 0.03) !important;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -914,6 +929,10 @@
   font-size: 0.88rem;
   line-height: 1.6;
   color: var(--text-primary);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .session-markdown p {
@@ -932,6 +951,18 @@
   border-radius: 4px;
 }
 
+.session-markdown :not(pre) > code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.session-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 [data-theme="dark"] .session-markdown code {
   background: rgba(255,255,255,0.06);
 }
@@ -941,6 +972,7 @@
   background: var(--bg-terminal);
   border-radius: 8px;
   padding: 14px;
+  max-width: 100%;
   overflow-x: auto;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -950,6 +982,9 @@
   color: #cbd5e1;
   padding: 0;
   font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* Tools Collapsible Tool executions */
