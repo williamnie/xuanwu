@@ -68,6 +68,8 @@ export type PiAuthorizationScope = {
   issueIds?: Array<number | string> | string;
   project_id?: string;
   projectId?: string;
+  runner_resource?: string;
+  runnerResource?: string;
 };
 
 export const PI_SAFE_ACTION_TYPES = [

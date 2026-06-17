@@ -34,13 +34,15 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   ...PI_SAFE_ACTION_TYPES,
   "issue.create",
   "issue.enqueue",
-  "issue.schedule_enqueue"
+  "issue.schedule_enqueue",
+  "issue.state_repair"
 ] as const;
 
 export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "issue.create",
   "issue.enqueue",
-  "issue.schedule_enqueue"
+  "issue.schedule_enqueue",
+  "issue.state_repair"
 ] as const;
 
 const PI_RUNTIME_ROOT = "pi-runtime";

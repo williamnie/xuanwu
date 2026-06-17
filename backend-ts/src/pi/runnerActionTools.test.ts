@@ -28,6 +28,7 @@ describe("PI runner action tools", () => {
     const repoRead = toolByName(tools, "repo_read_excerpt");
     const repoTree = toolByName(tools, "repo_tree");
     const issueCreate = toolByName(tools, "issue_create_proposal");
+    const repair = toolByName(tools, "issue_state_repair_proposal");
     const batchTriage = toolByName(tools, "issue_enqueue_batch_triage");
     const nextTriage = toolByName(tools, "issue_enqueue_next_triage");
     const issueList = toolByName(tools, "issue_list");
@@ -48,6 +49,8 @@ describe("PI runner action tools", () => {
       instructions: "verify"
     });
     expect(validateArgs(diagnose, { project_id: "demo" })).toEqual({ project_id: "demo" });
+    expect(validateArgs(repair, { issue_id: 1, operation: "move_status", status: "done" }))
+      .toEqual({ issue_id: 1, operation: "move_status", status: "done" });
     expect(validateArgs(schedule, { issue_id: 1, next_run_at: "2999-01-01T00:00:00.000Z" })).toEqual({
       issue_id: 1,
       next_run_at: "2999-01-01T00:00:00.000Z"
@@ -105,6 +108,11 @@ describe("PI runner action tools", () => {
     }, undefined, undefined, {} as never);
     await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
+    await repair.execute("tool-repair", {
+      issue_id: 1,
+      operation: "move_status",
+      status: "done"
+    }, undefined, undefined, {} as never);
     await repoSearch.execute("tool-repo-search", { query: "Accordion", max_results: 3 }, undefined, undefined, {} as never);
     await repoRead.execute("tool-repo-read", { path: "src/App.tsx" }, undefined, undefined, {} as never);
     await repoTree.execute("tool-repo-tree", { path: "src" }, undefined, undefined, {} as never);
@@ -124,6 +132,7 @@ describe("PI runner action tools", () => {
       ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
+      ["createIssueStateRepairProposal", { issue_id: 1, operation: "move_status", status: "done" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
       ["readRepoExcerpt", { path: "src/App.tsx" }],
       ["readRepoTree", { path: "src" }],

@@ -174,6 +174,60 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
+  test("Feishu runner chat can manage issues from another issue project without switching context", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-cross-issue-api", provider: "pi-feishu-cross-issue" });
+    const provider = new FakeExecutorProvider();
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_enqueue_proposal", {
+            issue_id: 501,
+            rationale: "start named issue project task"
+          }, { id: "issue-enqueue-501" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("已开始 movo-mobile 的 #501。")
+      ]);
+      insertProject(database, "codex-issue-runner");
+      insertProject(database, "movo-mobile");
+      insertIssue(database, { id: 501, projectID: "movo-mobile", title: "Mobile issue" });
+      insertFauxAgent(database, "pi-feishu-cross-issue");
+      writeFauxModelsConfig(database, "pi-feishu-cross-issue");
+      const router = createDefaultRouter({ database, providers: { codex: provider } });
+      await request(router, "/api/pi/conversations", {
+        id: "feishu-cross-issue", project_id: "codex-issue-runner", pi_agent_id: "pi-faux"
+      });
+
+      const message = await request(router, "/api/pi/conversations/feishu-cross-issue/messages", {
+        prompt: "开始 movo-mobile 的 #501"
+      });
+      await until(() => provider.calls.length > 0);
+
+      const actions = listPiActions(database);
+      expect(message.status).toBe(201);
+      expect(await message.json()).toMatchObject({
+        conversation_id: "feishu-cross-issue",
+        status: "completed",
+        text: "已开始 movo-mobile 的 #501。"
+      });
+      expect(actions.filter((action) => action.status === "pending")).toEqual([]);
+      expect(actions).toContainEqual(expect.objectContaining({
+        action_type: "issue.enqueue",
+        gate_decision: "execute",
+        issue_id: 501,
+        project_id: "movo-mobile",
+        status: "completed"
+      }));
+      expect(listIssues(database, { projectId: "movo-mobile" })).toMatchObject([
+        { id: 501, project_id: "movo-mobile", status: "in_progress" }
+      ]);
+      expect(provider.calls).toMatchObject([{ issueId: 501, projectId: "movo-mobile" }]);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
   test("Feishu issue-id prompt rebinds a global conversation and executes enqueue", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-feishu-issue-run-api", provider: "pi-feishu-issue-run" });

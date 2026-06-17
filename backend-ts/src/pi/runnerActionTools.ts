@@ -183,7 +183,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
     actionTool("issue_enqueue_batch_triage", "Issue Enqueue Batch Triage",
-      "Batch-enqueue bounded same-project status=triage issues only when the user explicitly asks to complete all/remaining/current group issues.",
+      "Batch-enqueue bounded status=triage issues in the requested/default Runner issue project when the user explicitly asks to complete all/remaining/current group issues.",
       Type.Object({
         issue_ids: Type.Optional(Type.Array(positiveID)),
         max_count: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
@@ -192,7 +192,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         user_phrase: requiredText
       }, objectOptions), actions.enqueueBatchTriageIssues),
     actionTool("issue_enqueue_next_triage", "Issue Enqueue Next Triage",
-      "Select and enqueue exactly one next triage issue in the current project when the user asks to continue the next/current-group task.",
+      "Select and enqueue exactly one next triage issue in the requested/default Runner issue project when the user asks to continue the next/current-group task.",
       Type.Object({ project_id: optionalString, rationale: optionalString }, objectOptions), actions.enqueueNextTriageIssue),
     actionTool("issue_schedule_enqueue", "Issue Schedule Enqueue",
       "Create a real one-time cron to enqueue exactly one issue at next_run_at (RFC3339). Use this when the user chooses a specific later time in chat.",
@@ -220,12 +220,14 @@ function issueStateDiagnoseTool(actions: PiRunnerActionLayer): ToolDefinition {
 
 function issueStateRepairTool(actions: PiRunnerActionLayer): ToolDefinition {
   return actionTool("issue_state_repair_proposal", "Issue State Repair Proposal",
-    "Create a pending issue state repair proposal; delegated mode can auto-execute authorized repairs.",
+    "Create an issue state repair/status update proposal; delegated Runner issue-manager mode can auto-execute authorized repairs.",
     Type.Object({
       diagnosis_code: optionalString,
+      error: optionalString,
       issue_id: positiveID,
       operation: optionalString,
-      rationale: optionalString
+      rationale: optionalString,
+      status: optionalString
     }, objectOptions), actions.createIssueStateRepairProposal);
 }
 

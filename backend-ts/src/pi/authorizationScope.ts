@@ -31,6 +31,8 @@ export function matchPiAuthorizationScope(
 
 function matchOneScope(envelope: PiActionEnvelope, scope: PiAuthorizationScope): PiAuthorizationScopeMatch {
   if (isEmptyScope(scope)) return denied("authorization scope is empty");
+  const runner = scopeRunnerResource(scope);
+  if (runner !== "") return matchRunnerScope(envelope, scope, runner);
   const project = scopeProjectID(scope);
   const projectResult = matchProject(project, envelope.project_id);
   if (!projectResult.matched) return projectResult;
@@ -69,6 +71,27 @@ function matchIssueScope(envelope: PiActionEnvelope, issueIDs: number[], project
   return denied(`issue scope ${issueIDs.join(",")} does not match action issue ${actionIssue || "<none>"}`);
 }
 
+function matchRunnerResourceScope(envelope: PiActionEnvelope, resource: string): PiAuthorizationScopeMatch {
+  if (resource !== "issues") return denied(`runner resource scope ${resource} is not supported`);
+  return runnerIssueAction(envelope.action_type)
+    ? matched("scope matched runner issues")
+    : denied(`runner issues scope does not match action ${envelope.action_type}`);
+}
+
+function matchRunnerScope(
+  envelope: PiActionEnvelope,
+  scope: PiAuthorizationScope,
+  runner: string
+): PiAuthorizationScopeMatch {
+  const runtime = matchRuntimeConstraints(envelope, scope);
+  if (!runtime.matched) return runtime;
+  return withRuntimeReason(matchRunnerResourceScope(envelope, runner), runtime.reason);
+}
+
+function runnerIssueAction(actionType: string): boolean {
+  return actionType.startsWith("issue.") || actionType === "project.status" || actionType === "project.list";
+}
+
 function matchProject(expected: string, actual: unknown): PiAuthorizationScopeMatch {
   const actionProject = cleanString(actual);
   if (expected === "" || actionProject === "" || expected === actionProject) return matched("");
@@ -97,7 +120,7 @@ function optionalMatchReason(label: string, expected: unknown, actual: unknown):
 function isEmptyScope(scope: PiAuthorizationScope): boolean {
   return scopeProjectID(scope) === "" && scopeIssueIDs(scope).length === 0 &&
     scopeGoalID(scope) === "" && cleanString(scope.delegation_id ?? scope.delegationId) === "" &&
-    cleanString(scope.heartbeat_id ?? scope.heartbeatId) === "";
+    cleanString(scope.heartbeat_id ?? scope.heartbeatId) === "" && scopeRunnerResource(scope) === "";
 }
 
 function scopeList(input: PiAuthorizationScope | PiAuthorizationScope[] | undefined): PiAuthorizationScope[] {
@@ -107,6 +130,10 @@ function scopeList(input: PiAuthorizationScope | PiAuthorizationScope[] | undefi
 
 function scopeProjectID(scope: PiAuthorizationScope): string {
   return cleanString(scope.project_id ?? scope.projectId);
+}
+
+function scopeRunnerResource(scope: PiAuthorizationScope): string {
+  return cleanString(scope.runner_resource ?? scope.runnerResource);
 }
 
 function scopeGoalID(scope: PiAuthorizationScope): string {

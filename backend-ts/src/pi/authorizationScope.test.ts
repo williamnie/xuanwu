@@ -31,6 +31,22 @@ describe("PI authorization scope matcher", () => {
       .toEqual({ matched: false, reason: "authorization scope is empty" });
   });
 
+  test("matches runner issue-manager resource without using project_id as cwd scope", () => {
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "issue.enqueue", project_id: "other" }, { runner_resource: "issues" }))
+      .toEqual({ matched: true, reason: "scope matched runner issues" });
+
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "project.status", project_id: "other" }, { runnerResource: "issues" }))
+      .toEqual({ matched: true, reason: "scope matched runner issues" });
+
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "repo.search", project_id: "other" }, { runner_resource: "issues" }))
+      .toEqual({ matched: false, reason: "runner issues scope does not match action repo.search" });
+
+    expect(matchPiAuthorizationScope({ ...BASE, action_type: "issue.enqueue", heartbeat_id: "hb-other", project_id: "other" }, {
+      heartbeat_id: "hb-1",
+      runner_resource: "issues"
+    })).toEqual({ matched: false, reason: "heartbeat scope hb-1 does not match action heartbeat hb-other" });
+  });
+
   test("matches goal scope through its associated issue_ids", () => {
     expect(matchPiAuthorizationScope(BASE, { goal_id: "night-run", issue_ids: [7, 8], project_id: "demo" }))
       .toEqual({ matched: true, reason: "scope matched goal night-run issue 7" });

@@ -17,7 +17,7 @@ export type IssueStateDiagnosisInput = {
   deadline_at?: string; project_id?: string; target_issue_ids?: number[]; target_label?: string; target_status?: string;
 };
 export type IssueStateRepairProposalInput = {
-  diagnosis_code?: string; issue_id: number; operation?: string; rationale?: string;
+  diagnosis_code?: string; error?: string; issue_id: number; operation?: string; rationale?: string; status?: string;
 };
 
 export function safeIssueStateDiagnosis(
@@ -49,7 +49,7 @@ function issueStateRepairProposal(
   context: PiRunnerActionContext
 ): ProposalInput {
   const issue = mustGetIssue(db, input.issue_id);
-  const payload = recommendedRepairPayload(db, issue.id, {
+  const payload = directStatusRepairPayload(issue.id, input) ?? recommendedRepairPayload(db, issue.id, {
     diagnosisCode: input.diagnosis_code,
     operation: input.operation,
     projectID: issue.project_id
@@ -63,6 +63,19 @@ function issueStateRepairProposal(
   };
 }
 
+function directStatusRepairPayload(issueID: number, input: IssueStateRepairProposalInput): Record<string, unknown> | undefined {
+  const status = cleanString(input.status);
+  if (status === "") return undefined;
+  const operation = cleanString(input.operation) === "patch_status" ? "patch_status" : "move_status";
+  return {
+    action_type: "issue.state_repair",
+    diagnosis_code: cleanString(input.diagnosis_code) || "user_requested_status_update",
+    issue_id: issueID,
+    operation,
+    patch: cleanObject({ error: cleanString(input.error), status }),
+    rationale: cleanString(input.rationale) || `Move issue to ${status}`
+  };
+}
 
 function diagnosisOptions(input: IssueStateDiagnosisInput) {
   const issueIDs = Array.isArray(input.target_issue_ids) ? input.target_issue_ids : [];

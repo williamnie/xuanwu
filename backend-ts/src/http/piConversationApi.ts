@@ -23,7 +23,6 @@ import { piConversationDetail } from "./piConversationTranscript.ts";
 import {
   createOrRestorePiRuntime,
   PI_RUNNER_CHAT_ACTIONS,
-  PI_RUNNER_CHAT_MUTATION_ACTIONS,
   createPiRuntimeSession,
   type PiRuntimeResult,
   type PiRuntimeSession
@@ -294,17 +293,14 @@ function runnerChatAuthorization(project: Project) {
   return {
     allowedActions: [...PI_RUNNER_CHAT_ACTIONS],
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,
-    authorizedActions: runnerChatAuthorizedActions(project.id),
+    authorizedActions: runnerChatAuthorizedActions(),
     mode: "delegated" as const,
-    scope: { project_id: project.id }
+    scopes: [{ runner_resource: "issues" }, { project_id: project.id }]
   };
 }
 
-function runnerChatAuthorizedActions(projectID: string) {
-  return [
-    ...PI_RUNNER_CHAT_ACTIONS.map((action_type) => ({ action_type })),
-    ...PI_RUNNER_CHAT_MUTATION_ACTIONS.map((action_type) => ({ action_type, project_id: projectID }))
-  ];
+function runnerChatAuthorizedActions() {
+  return PI_RUNNER_CHAT_ACTIONS.map((action_type) => ({ action_type }));
 }
 
 function runnerChatSource(conversation: PiConversation): string | undefined {

@@ -3,7 +3,8 @@ import type { PiActionContext } from "./actionEngine.ts";
 const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue.create",
   "issue.enqueue",
-  "issue.schedule_enqueue"
+  "issue.schedule_enqueue",
+  "issue.state_repair"
 ]);
 
 export function scopedRunnerChatActionContext<T extends PiActionContext>(
