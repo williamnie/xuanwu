@@ -96,8 +96,10 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("#387-#391");
       expect(prompt).toContain("issue_ids");
       expect(prompt).toContain("完成所有");
+      expect(prompt).toContain("开始这25个issue");
+      expect(prompt).toContain("回复：全部开始");
       expect(prompt).toContain("开始做吧");
-      expect(prompt).toContain("ordinary/high-risk paths must stay behind the gate");
+      expect(prompt).toContain("继续做下一个");
       expect(prompt).toContain("Only wait");
     } finally {
       db.close();

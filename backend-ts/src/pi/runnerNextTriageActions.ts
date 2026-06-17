@@ -165,7 +165,7 @@ function noBatchTriageCandidate(projectID: string) {
 
 function refusedBatchIntent(projectID: string) {
   return {
-    message: "批量继续需要明确包含所有/全部/这组都/剩下都等语义",
+    message: "请明确批量范围，例如：全部开始 / 开始这25个",
     project_id: projectID,
     reason: "missing_explicit_batch_intent",
     source: "issue_enqueue_batch_triage",

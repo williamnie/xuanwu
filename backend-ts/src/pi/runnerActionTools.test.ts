@@ -743,8 +743,8 @@ describe("PI runner action tools", () => {
 
       const result = actions.enqueueBatchTriageIssues({
         max_count: 2,
-        rationale: "把剩下都做完",
-        user_phrase: "把剩下都做完"
+        rationale: "开始这25个issue",
+        user_phrase: "开始这25个issue"
       }) as {
         enqueued_count: number;
         enqueued: Array<{ id: number; status: string; title: string }>;
@@ -844,11 +844,13 @@ describe("PI runner action tools", () => {
       });
 
       const result = actions.enqueueBatchTriageIssues({ user_phrase: "开始做吧" }) as {
+        message: string;
         reason: string;
         status: string;
       };
 
       expect(result).toMatchObject({
+        message: "请明确批量范围，例如：全部开始 / 开始这25个",
         reason: "missing_explicit_batch_intent",
         status: "refused"
       });

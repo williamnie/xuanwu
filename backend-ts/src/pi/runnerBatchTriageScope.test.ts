@@ -13,7 +13,37 @@ describe("PI batch triage scope parsing", () => {
       issueIds: [],
       kind: "all"
     });
+    expect(parseBatchTriageScope("开始这25个issue")).toEqual({
+      explicit: true,
+      issueIds: [],
+      kind: "all"
+    });
+    expect(parseBatchTriageScope("movo-mobile 这 25 个 issue 都开始")).toEqual({
+      explicit: true,
+      issueIds: [],
+      kind: "all"
+    });
+    expect(parseBatchTriageScope("把剩下 25 个 issue 开始")).toEqual({
+      explicit: true,
+      issueIds: [],
+      kind: "all"
+    });
     expect(parseBatchTriageScope("开始做吧")).toEqual({
+      explicit: false,
+      issueIds: [],
+      kind: "missing"
+    });
+    expect(parseBatchTriageScope("继续")).toEqual({
+      explicit: false,
+      issueIds: [],
+      kind: "missing"
+    });
+    expect(parseBatchTriageScope("继续做下一个")).toEqual({
+      explicit: false,
+      issueIds: [],
+      kind: "missing"
+    });
+    expect(parseBatchTriageScope("start issue 25")).toEqual({
       explicit: false,
       issueIds: [],
       kind: "missing"
