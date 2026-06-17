@@ -68,19 +68,60 @@ describe("Feishu WebSocket receiver", () => {
     });
     database.close();
   });
+
+  test("dispatches project selection card actions from long connection callbacks", async () => {
+    const { database, factory, messages } = await receiverFixture();
+    const actions: unknown[] = [];
+    const manager = createFeishuReceiverManager({
+      agentBridge: {
+        handle: async () => ({ reason: "unused", replied: false }),
+        handleProjectSelectionAction: async (action: unknown) => {
+          actions.push(action);
+          return { reason: "project_selection_continued", replied: true };
+        }
+      } as Parameters<typeof createFeishuReceiverManager>[0]["agentBridge"],
+      database,
+      wsFactory: factory
+    });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+
+    await manager.restart(config);
+    const response = await messages.emit(projectSelectionActionEvent());
+
+    expect(actions).toEqual([{
+      action_id: "evt_card_ws_1",
+      chat_id: "oc_group",
+      message_id: "om_card_ws_1",
+      project_id: "demo",
+      selection_id: "fps_ws_1",
+      user_id: "ou_user_1",
+      user_open_id: "ou_open_1"
+    }]);
+    expect(response).toEqual({
+      toast: {
+        content: "已收到项目选择，正在继续处理。",
+        type: "info"
+      }
+    });
+    expect(manager.status()).toMatchObject({ connected: true, state: "connected" });
+    database.close();
+  });
 });
 
 async function receiverFixture(): Promise<{
   database: RunnerDatabase;
   factory: FeishuWsFactory & { starts: number };
-  messages: { emit(event: unknown): Promise<void> };
+  messages: { emit(event: unknown): Promise<unknown> };
 }> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-ws-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
   const messages = { emit: async (_event: unknown) => undefined as void };
   const factory = Object.assign(((input) => {
-    messages.emit = input.onMessage;
+    messages.emit = (event: unknown) => isCardAction(event) ? input.onCardAction(event) : input.onMessage(event);
     return {
       close: () => undefined,
       start: async () => {
@@ -91,6 +132,14 @@ async function receiverFixture(): Promise<{
     };
   }) satisfies FeishuWsFactory, { starts: 0 });
   return { database, factory, messages };
+}
+
+function isCardAction(event: unknown): boolean {
+  const root = event && typeof event === "object" && !Array.isArray(event) ? event as Record<string, unknown> : {};
+  const header = root.header && typeof root.header === "object" && !Array.isArray(root.header)
+    ? root.header as Record<string, unknown>
+    : {};
+  return header.event_type === "card.action.trigger";
 }
 
 function messageEvent(text: string): Record<string, unknown> {
@@ -107,5 +156,34 @@ function messageEvent(text: string): Record<string, unknown> {
       sender_type: "user",
       tenant_key: "tenant_a"
     }
+  };
+}
+
+function projectSelectionActionEvent(): Record<string, unknown> {
+  return {
+    event: {
+      action: {
+        value: {
+          action: "feishu_project_select",
+          project_id: "demo",
+          selection_id: "fps_ws_1"
+        }
+      },
+      context: {
+        open_chat_id: "oc_group",
+        open_message_id: "om_card_ws_1"
+      },
+      operator: {
+        operator_id: {
+          open_id: "ou_open_1",
+          user_id: "ou_user_1"
+        }
+      }
+    },
+    header: {
+      event_id: "evt_card_ws_1",
+      event_type: "card.action.trigger"
+    },
+    schema: "2.0"
   };
 }

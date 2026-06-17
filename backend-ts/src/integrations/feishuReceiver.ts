@@ -3,7 +3,9 @@ import type { EventBus } from "../events/bus.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { feishuConnectorStatus, normalizeFeishuMessageEvent, type FeishuConnectorConfig } from "./feishu.ts";
 import type { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
+import { projectSelectionCallbackAcceptedBody } from "./feishuCardCallbackResponse.ts";
 import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "./feishuIngest.ts";
+import { normalizeFeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
 
 export type FeishuReceiverStatus = {
   connected: boolean;
@@ -15,6 +17,7 @@ export type FeishuReceiverStatus = {
 };
 
 export type FeishuWsFactory = (input: {
+  onCardAction: (event: unknown) => Promise<unknown>;
   config: FeishuConnectorConfig;
   onError: (error: unknown) => void;
   onMessage: (event: unknown) => Promise<void>;
@@ -57,6 +60,7 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
     status = { ...status, state: "connecting" };
     client = await factory({
       config,
+      onCardAction: (event) => ingestCardAction(event, config),
       onError: (error) => fail(error),
       onMessage: (event) => ingest(event, config),
       onReady: () => connect(),
@@ -102,6 +106,15 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
     }
   }
 
+  async function ingestCardAction(event: unknown, config: FeishuConnectorConfig): Promise<unknown> {
+    status = { ...status, last_event_at: new Date().toISOString() };
+    const rawRef = rawPayloadRef(event);
+    const projectAction = normalizeFeishuProjectSelectionAction(event);
+    if (!projectAction) return publishRejectedCardAction(config, rawRef);
+    await options.agentBridge?.handleProjectSelectionAction(projectAction);
+    return projectSelectionCallbackAcceptedBody();
+  }
+
   function receiverContext(config: FeishuConnectorConfig) {
     return { bus: options.bus, config, database: options.database };
   }
@@ -134,6 +147,7 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
 export const defaultFeishuWsFactory: FeishuWsFactory = async (input) => {
   const Lark = await import("@larksuiteoapi/node-sdk");
   const dispatcher = new Lark.EventDispatcher({}).register({
+    "card.action.trigger": async (data: unknown) => input.onCardAction(data),
     "im.message.receive_v1": async (data: unknown) => input.onMessage(data)
   });
   const wsClient = new Lark.WSClient({
@@ -159,6 +173,16 @@ export const defaultFeishuWsFactory: FeishuWsFactory = async (input) => {
 
 function shouldStart(config: FeishuConnectorConfig): boolean {
   return config.receiveMode === "websocket" && feishuConnectorStatus(config).enabled === true;
+}
+
+function publishRejectedCardAction(config: FeishuConnectorConfig, rawRef: string): void {
+  publishFeishuAudit({ config }, {
+    connector: "feishu",
+    outcome: "rejected",
+    raw_payload_ref: rawRef,
+    reason: "unsupported_card_action",
+    transport: "websocket"
+  });
 }
 
 function normalizeState(

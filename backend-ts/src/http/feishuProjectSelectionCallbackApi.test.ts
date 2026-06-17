@@ -27,7 +27,13 @@ describe("Feishu project selection callback endpoint", () => {
     try {
       const response = await postFeishu(handle, projectSelectionCallback());
 
-      expect(response.status).toBe(202);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        toast: {
+          content: "已收到项目选择，正在继续处理。",
+          type: "info"
+        }
+      });
       expect(actions).toEqual([{
         action_id: "event-card-1",
         chat_id: "oc_group",

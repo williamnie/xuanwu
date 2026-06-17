@@ -13,6 +13,7 @@ import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
 import { normalizeFeishuProjectSelectionAction } from "../integrations/feishuProjectSelection.ts";
 import { normalizeFeishuApprovalAction } from "../integrations/feishuApprovalCards.ts";
 import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
+import { projectSelectionCallbackAcceptedBody } from "../integrations/feishuCardCallbackResponse.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { json, jsonError } from "./errors.ts";
@@ -71,9 +72,13 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
   const projectAction = normalizeFeishuProjectSelectionAction(parsed.body);
   if (projectAction) {
     void context.agentBridge?.handleProjectSelectionAction(projectAction).catch(() => undefined);
-    return json({ ok: true }, { status: 202 });
+    return projectSelectionCallbackAccepted();
   }
   return acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);
+}
+
+function projectSelectionCallbackAccepted(): Response {
+  return json(projectSelectionCallbackAcceptedBody());
 }
 
 function acceptMessageEvent(
