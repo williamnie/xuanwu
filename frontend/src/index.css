@@ -1484,6 +1484,12 @@ input:checked + .slider:before {
   flex-shrink: 0;
 }
 
+.sidebar-profile-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .sidebar-profile-link {
   font-size: 0.82rem;
 }

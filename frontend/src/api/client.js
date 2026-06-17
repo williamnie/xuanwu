@@ -116,6 +116,10 @@ function dispatchEventMessage(event) {
   }
 }
 
+function createIdempotencyKey() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}`;
+}
+
 export const api = {
   validateAuthToken: () => request('/api/system/status'),
 
@@ -355,6 +359,16 @@ export const api = {
     const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/pi/conversations/archived${query}`);
   },
+
+  getPaymentCatalog: () => request('/api/v1/payments/catalog'),
+
+  createPaymentPurchase: (purchase) => request('/api/v1/payments/purchases', {
+    method: 'POST',
+    headers: {
+      'Idempotency-Key': createIdempotencyKey(),
+    },
+    body: JSON.stringify(purchase),
+  }),
 
   createPiConversation: (conversation) => request('/api/pi/conversations', {
     method: 'POST',
