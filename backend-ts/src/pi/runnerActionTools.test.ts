@@ -40,8 +40,8 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
-    expect(validateArgs(batchTriage, { issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" }))
-      .toEqual({ issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" });
+    expect(validateArgs(batchTriage, { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }))
+      .toEqual({ issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" });
     expect(validateArgs(nextTriage, { project_id: "demo" })).toEqual({ project_id: "demo" });
     expect(validateArgs(recommendProfile, { issue_id: 1, role: "executor" })).toEqual({ issue_id: 1, role: "executor" });
     expect(validateArgs(verifier, { target_issue_id: 1, instructions: "verify" })).toEqual({
@@ -90,8 +90,8 @@ describe("PI runner action tools", () => {
     });
     expect(() => validateArgs(issueRead, { id: "bad" })).toThrow(/Validation failed/);
     expect(() => validateArgs(issueRead, { id: 1, unexpected: true })).toThrow(/Validation failed/);
-    expect(() => validateArgs(batchTriage, { max_count: 3 })).toThrow(/Validation failed/);
-    expect(() => validateArgs(batchTriage, { max_count: 11 })).toThrow(/Validation failed/);
+    expect(validateArgs(batchTriage, { user_phrase: "这些都开始" })).toEqual({ user_phrase: "这些都开始" });
+    expect(() => validateArgs(batchTriage, { max_count: 3, user_phrase: "这些都开始" })).toThrow(/Validation failed/);
     expect(() => validateArgs(steer, { session_key: "codex:thread-1", prompt: " " })).toThrow(/Validation failed/);
 
     await recommendProfile.execute("tool-profile", { issue_id: 1, role: "executor" }, undefined, undefined, {} as never);
@@ -103,7 +103,6 @@ describe("PI runner action tools", () => {
     await batchTriage.execute("tool-batch-triage", {
       issue_ids: [387, 388],
       project_id: "demo",
-      max_count: 3,
       user_phrase: "把 #387-#388 都开始做"
     }, undefined, undefined, {} as never);
     await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
@@ -129,7 +128,7 @@ describe("PI runner action tools", () => {
       ["readIssue", { id: 7 }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
-      ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", max_count: 3, user_phrase: "把 #387-#388 都开始做" }],
+      ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["createIssueStateRepairProposal", { issue_id: 1, operation: "move_status", status: "done" }],
@@ -691,7 +690,7 @@ describe("PI runner action tools", () => {
     }
   });
 
-  test("delegated runner chat batch-enqueues bounded triage issues for the current project", async () => {
+  test("delegated runner chat batch-enqueues all matching triage issues for the current project", async () => {
     const fixture = await openFixture();
     const kickedProjects: string[] = [];
     try {
@@ -742,7 +741,6 @@ describe("PI runner action tools", () => {
       });
 
       const result = actions.enqueueBatchTriageIssues({
-        max_count: 2,
         rationale: "开始这25个issue",
         user_phrase: "开始这25个issue"
       }) as {
@@ -753,24 +751,23 @@ describe("PI runner action tools", () => {
       };
 
       expect(result).toMatchObject({
-        enqueued_count: 2,
+        enqueued_count: 3,
         enqueued: [
           { id: selectedA, status: "todo", title: "First selected" },
-          { id: selectedB, status: "todo", title: "Second selected" }
+          { id: selectedB, status: "todo", title: "Second selected" },
+          { id: skippedByLimit, status: "todo", title: "Skipped by limit" }
         ],
         project_id: fixture.project.id,
-        skipped: [
-          { count: 1, reason: "limit_exceeded" }
-        ],
+        skipped: [],
         status: "completed"
       });
       expect(getIssue(fixture.db, selectedA)).toMatchObject({ status: "todo" });
       expect(getIssue(fixture.db, selectedB)).toMatchObject({ status: "todo" });
-      expect(getIssue(fixture.db, skippedByLimit)).toMatchObject({ status: "triage" });
+      expect(getIssue(fixture.db, skippedByLimit)).toMatchObject({ status: "todo" });
       expect(getIssue(fixture.db, otherProjectIssue)).toMatchObject({ status: "triage" });
       expect(kickedProjects).toEqual([fixture.project.id]);
       expect(listPiActions(fixture.db, { status: "completed" }).filter((action) => action.action_type === "issue.enqueue"))
-        .toHaveLength(2);
+        .toHaveLength(3);
       expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
         action_type: "issue.enqueue",
         issue_id: selectedA,
@@ -786,7 +783,7 @@ describe("PI runner action tools", () => {
     }
   });
 
-  test("batch triage enqueue keeps ordinary chat behind approval gate and default limit", async () => {
+  test("batch triage enqueue keeps ordinary chat behind approval gate without a count cap", async () => {
     const fixture = await openFixture();
     const kickedProjects: string[] = [];
     try {
@@ -807,7 +804,6 @@ describe("PI runner action tools", () => {
         user_phrase: "完成所有 issue"
       }) as {
         enqueued_count: number;
-        max_count: number;
         pending_count: number;
         skipped: Array<{ count: number; reason: string }>;
         status: string;
@@ -815,12 +811,10 @@ describe("PI runner action tools", () => {
 
       expect(result).toMatchObject({
         enqueued_count: 0,
-        max_count: 5,
-        pending_count: 5,
-        skipped: expect.arrayContaining([
-          { count: 5, reason: "approval_required" },
-          { count: 1, reason: "limit_exceeded" }
-        ]),
+        pending_count: 6,
+        skipped: [
+          { count: 6, reason: "approval_required" }
+        ],
         status: "pending"
       });
       expect(issueIDs.map((id) => getIssue(fixture.db, id)?.status)).toEqual([
@@ -828,13 +822,13 @@ describe("PI runner action tools", () => {
       ]);
       expect(kickedProjects).toEqual([]);
       expect(listPiActions(fixture.db, { status: "pending" })
-        .filter((action) => action.action_type === "issue.enqueue")).toHaveLength(5);
+        .filter((action) => action.action_type === "issue.enqueue")).toHaveLength(6);
     } finally {
       await fixture.close();
     }
   });
 
-  test("batch triage enqueue refuses ambiguous continue phrases", async () => {
+  test("batch triage enqueue trusts agent intent instead of re-parsing ambiguous phrases", async () => {
     const fixture = await openFixture();
     try {
       const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "triage", title: "Should stay triage" });
@@ -844,18 +838,16 @@ describe("PI runner action tools", () => {
       });
 
       const result = actions.enqueueBatchTriageIssues({ user_phrase: "开始做吧" }) as {
-        message: string;
-        reason: string;
+        enqueued_count: number;
         status: string;
       };
 
       expect(result).toMatchObject({
-        message: "请明确批量范围，例如：全部开始 / 开始这25个",
-        reason: "missing_explicit_batch_intent",
-        status: "refused"
+        enqueued_count: 1,
+        status: "completed"
       });
-      expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "triage" });
-      expect(listPiActions(fixture.db)).toHaveLength(0);
+      expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
+      expect(listPiActions(fixture.db, { status: "completed" })).toHaveLength(1);
     } finally {
       await fixture.close();
     }

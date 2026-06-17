@@ -1,25 +1,18 @@
-export type BatchTriageScopeKind = "all" | "issue_refs" | "missing";
+export type BatchTriageScopeKind = "all" | "issue_refs";
 export type BatchTriageScope = {
-  explicit: boolean;
   issueIds: number[];
   kind: BatchTriageScopeKind;
 };
 
 const MAX_PARSED_RANGE_SIZE = 50;
-const EXPLICIT_BATCH_PATTERN =
-  /所有|全部|全都|全量|剩下都|剩余都|都做完|全做完|这个系列|这一系列|这组任务|这组都|这一组都|\b(all|everything|remaining|rest|series)\b/i;
-const ISSUE_COUNT_BATCH_PATTERN =
-  /(?:这|这些|这批|这组|剩下|剩余|余下)?\s*\d+\s*(?:个|条|项)\s*(?:issue|issues|任务|问题|工单)?|(?:these|this batch|remaining|rest)\s+\d+\s+(?:issues|tasks)\b|\d+\s+(?:issues|tasks)\b/i;
 const ISSUE_RANGE_PATTERN = /#\s*(\d+)(?:\s*[-~～—–]\s*#?\s*(\d+))?/g;
 
 export function parseBatchTriageScope(value: unknown, explicitIssueIds: unknown = undefined): BatchTriageScope {
   const inputIds = positiveUniqueIntegers(explicitIssueIds);
   if (inputIds.length > 1) return scope("issue_refs", inputIds);
   const issueIds = issueIdsFromPhrase(cleanString(value));
-  const phrase = cleanString(value);
   if (issueIds.length > 1) return scope("issue_refs", issueIds);
-  if (EXPLICIT_BATCH_PATTERN.test(phrase) || ISSUE_COUNT_BATCH_PATTERN.test(phrase)) return scope("all", []);
-  return { explicit: false, issueIds: [], kind: "missing" };
+  return scope("all", []);
 }
 
 function issueIdsFromPhrase(text: string): number[] {
@@ -55,8 +48,8 @@ function unique(values: number[]): number[] {
   return [...new Set(values)];
 }
 
-function scope(kind: Exclude<BatchTriageScopeKind, "missing">, issueIds: number[]): BatchTriageScope {
-  return { explicit: true, issueIds, kind };
+function scope(kind: BatchTriageScopeKind, issueIds: number[]): BatchTriageScope {
+  return { issueIds, kind };
 }
 
 function cleanString(value: unknown): string {

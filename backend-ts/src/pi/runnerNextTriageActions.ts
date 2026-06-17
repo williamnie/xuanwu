@@ -9,7 +9,6 @@ import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 export type NextTriageIssueInput = { project_id?: string; rationale?: string };
 export type BatchTriageIssueInput = {
   issue_ids?: number[];
-  max_count?: number;
   project_id?: string;
   rationale?: string;
   user_phrase?: string;
@@ -19,9 +18,6 @@ type NextTriageContext = PiActionContext & {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
 };
-
-const DEFAULT_BATCH_TRIAGE_LIMIT = 5;
-const MAX_BATCH_TRIAGE_LIMIT = 10;
 
 export function createNextTriageEnqueueAction(
   db: RunnerDatabase,
@@ -51,13 +47,11 @@ export function createBatchTriageEnqueueAction(
 ): unknown {
   const projectID = scopedProjectID(input.project_id, context);
   const scope = parseBatchTriageScope(input.user_phrase, input.issue_ids);
-  if (!scope.explicit) return refusedBatchIntent(projectID);
   const candidates = scopedBatchCandidates(db, projectID, scope);
   if (candidates.length === 0) return noBatchTriageCandidate(projectID);
-  const limit = batchLimit(input.max_count);
-  const result = enqueueBatchCandidates(db, context, candidates.slice(0, limit), input.rationale);
+  const result = enqueueBatchCandidates(db, context, candidates, input.rationale);
   if (result.enqueued.length > 0) context.onIssueEnqueued?.(projectID);
-  return batchSummary(projectID, limit, candidates.length, result);
+  return batchSummary(projectID, candidates.length, result);
 }
 
 function nextTriageIssue(db: RunnerDatabase, projectID: string): Issue | undefined {
@@ -163,26 +157,15 @@ function noBatchTriageCandidate(projectID: string) {
   };
 }
 
-function refusedBatchIntent(projectID: string) {
-  return {
-    message: "请明确批量范围，例如：全部开始 / 开始这25个",
-    project_id: projectID,
-    reason: "missing_explicit_batch_intent",
-    source: "issue_enqueue_batch_triage",
-    status: "refused"
-  };
-}
-
-function batchSummary(projectID: string, limit: number, total: number, result: BatchBuckets) {
+function batchSummary(projectID: string, total: number, result: BatchBuckets) {
   return {
     candidate_count: total,
     enqueued: result.enqueued,
     enqueued_count: result.enqueued.length,
-    max_count: limit,
     pending: result.pending,
     pending_count: result.pending.length,
     project_id: projectID,
-    skipped: skipReasons(total, limit, result),
+    skipped: skipReasons(result),
     source: "issue_enqueue_batch_triage",
     status: batchStatus(result)
   };
@@ -191,11 +174,10 @@ function batchSummary(projectID: string, limit: number, total: number, result: B
 type BatchBuckets = { enqueued: unknown[]; failed: unknown[]; pending: unknown[] };
 type SkipReason = { count: number; reason: string };
 
-function skipReasons(total: number, limit: number, result: BatchBuckets): SkipReason[] {
+function skipReasons(result: BatchBuckets): SkipReason[] {
   return [
     skipReason("approval_required", result.pending.length),
-    skipReason("enqueue_failed", result.failed.length),
-    skipReason("limit_exceeded", Math.max(0, total - limit))
+    skipReason("enqueue_failed", result.failed.length)
   ].filter((item) => item.count > 0);
 }
 
@@ -224,11 +206,6 @@ function enqueueProposal(issue: Issue, rationale: string | undefined) {
     projectID: issue.project_id,
     rationale
   };
-}
-
-function batchLimit(value: unknown): number {
-  const raw = typeof value === "number" && Number.isSafeInteger(value) ? value : DEFAULT_BATCH_TRIAGE_LIMIT;
-  return Math.min(MAX_BATCH_TRIAGE_LIMIT, Math.max(1, raw));
 }
 
 function objectPayload(value: unknown): Record<string, unknown> {

@@ -183,10 +183,9 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
     actionTool("issue_enqueue_batch_triage", "Issue Enqueue Batch Triage",
-      "Batch-enqueue bounded status=triage issues in the requested/default Runner issue project when the user explicitly asks to start all/remaining/current group or a counted batch of issues.",
+      "Batch-enqueue all matching status=triage issues in the requested/default Runner issue project when PI understands the user wants a batch start; execution remains serial.",
       Type.Object({
         issue_ids: Type.Optional(Type.Array(positiveID)),
-        max_count: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
         project_id: optionalString,
         rationale: optionalString,
         user_phrase: requiredText
