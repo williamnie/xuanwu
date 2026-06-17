@@ -90,6 +90,7 @@ describe("PI runtime prompt", () => {
 
       expect(prompt).toContain("Feishu/IM task messages");
       expect(prompt).toContain("call issue_enqueue_proposal by default");
+      expect(prompt).toContain("choose a compact natural summary");
       expect(prompt).toContain("issue_enqueue_next_triage");
       expect(prompt).toContain("继续做下一个");
       expect(prompt).toContain("issue_enqueue_batch_triage");
@@ -100,6 +101,8 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("use your language understanding");
       expect(prompt).toContain("Do not require the user to copy a template sentence");
       expect(prompt).toContain("no artificial count cap");
+      expect(prompt).toContain("Your final IM reply is the user-facing start notification");
+      expect(prompt).toContain("do not rely on per-issue lifecycle start notices");
       expect(prompt).toContain("继续做下一个");
       expect(prompt).toContain("Only wait");
     } finally {

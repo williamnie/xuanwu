@@ -7,9 +7,11 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { createPiMemoryItem } from "../db/repositories/pi.ts";
+import { createPiAction, createPiMemoryItem } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
+import { createPiRunnerActions } from "../pi/runnerActions.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runProjectLoopOnce } from "../runner/projectLoop.ts";
 import {
@@ -119,6 +121,75 @@ describe("Feishu lifecycle notifications", () => {
       expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group", "oc_group"]);
       expect(outbox.map((item) => item.content).join("\n")).toContain("准备启动");
       expect(outbox.map((item) => item.content).join("\n")).toContain("已完成");
+    } finally {
+      detach();
+      db.close();
+    }
+  });
+
+  test("observer lets PI summarize auto-executed runner chat enqueue actions instead of sending per-issue start notifications", async () => {
+    const db = await fixtureDatabase();
+    const bus = new EventBus();
+    const detach = attachFeishuNotificationObservers({ bus, database: db });
+    try {
+      const first = createIssue(db, { project_id: "demo", title: "Batch A", status: "triage" });
+      createIssue(db, { project_id: "demo", title: "Batch B", status: "triage" });
+      createIssue(db, { project_id: "demo", title: "Batch C", status: "triage" });
+      const project = getProject(db, "demo");
+      if (!project) throw new Error("missing fixture project");
+      const actions = createPiRunnerActions(db, {
+        bus,
+        conversationID: "feishu-chat-oc_group-20260614",
+        project,
+        source: "feishu_runner_chat"
+      });
+
+      const result = actions.enqueueBatchTriageIssues({ user_phrase: "把剩下的 issue 都开始" }) as {
+        enqueued_count: number;
+        status: string;
+      };
+
+      expect(result).toMatchObject({ enqueued_count: 3, status: "completed" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+
+      updateIssue(db, first.id, { error: "", status: "in_progress" });
+      bus.publish({ issueId: first.id, payload: JSON.stringify({ status: "in_progress" }), projectId: "demo", type: "issue.status_changed" });
+
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+    } finally {
+      detach();
+      db.close();
+    }
+  });
+
+  test("observer still sends start notifications for approved non-runner-chat enqueue actions", async () => {
+    const db = await fixtureDatabase();
+    const bus = new EventBus();
+    const detach = attachFeishuNotificationObservers({ bus, database: db });
+    try {
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { status: "todo", error: "" });
+      createPiAction(db, {
+        action_type: "issue.enqueue",
+        gate_decision: "ask",
+        id: "manual-approved-enqueue",
+        issue_id: issueID,
+        project_id: "demo",
+        source: "pi_tool",
+        status: "completed"
+      });
+
+      bus.publish({
+        conversationId: "feishu-chat-oc_group-20260614",
+        issueId: issueID,
+        payload: JSON.stringify({ action_id: "manual-approved-enqueue", action_type: "issue.enqueue", status: "completed" }),
+        projectId: "demo",
+        type: "pi.action_completed"
+      });
+
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]?.content).toContain("准备启动");
     } finally {
       detach();
       db.close();

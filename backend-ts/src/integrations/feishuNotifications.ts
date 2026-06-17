@@ -2,8 +2,10 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { listAgentSessions } from "../db/repositories/agentSessions.ts";
 import {
+  getPiAction,
   getPiMemoryItem,
   getPiApprovalRequest,
+  listPiActions,
   listPiApprovalRequests,
   markPiApprovalDelivered,
   upsertPiApprovalRequest
@@ -57,10 +59,12 @@ export function attachFeishuNotificationObservers(input: {
   return input.bus.observe((event) => {
     try {
       if ((event.type === "issue.status_changed" || event.type === "issue.created") && event.issueId) {
-        const result = queueFeishuIssueStatusNotification(input.database, event.issueId);
+        const result = shouldSuppressLifecycleStartNotification(input.database, event.issueId)
+          ? { queued: false, reason: "runner_chat_start_summarized_by_pi" }
+          : queueFeishuIssueStatusNotification(input.database, event.issueId);
         dispatchIfQueued(input, result);
       }
-      if (isPiIssueStartEvent(event)) {
+      if (isPiIssueStartEvent(input.database, event)) {
         const result = queueFeishuIssueStatusNotification(input.database, event.issueId ?? 0, {
           conversationId: event.conversationId
         });
@@ -200,9 +204,35 @@ function issueNotificationID(issue: Issue): string {
   return ["todo", "in_progress"].includes(issue.status) ? `${issue.id}:start` : `${issue.id}:${issue.status}`;
 }
 
-function isPiIssueStartEvent(event: AppEvent): boolean {
+function isPiIssueStartEvent(db: RunnerDatabase, event: AppEvent): boolean {
   if (event.type !== "pi.action_completed" || !event.issueId) return false;
-  return safeText(parseObject(event.payload).action_type) === "issue.enqueue";
+  const payload = parseObject(event.payload);
+  if (safeText(payload.action_type) !== "issue.enqueue") return false;
+  return !isRunnerChatEnqueueAction(db, payload);
+}
+
+function shouldSuppressLifecycleStartNotification(db: RunnerDatabase, issueID: number): boolean {
+  const issue = getIssue(db, issueID);
+  if (!issue || !["todo", "in_progress"].includes(issue.status)) return false;
+  const action = latestCompletedEnqueueAction(db, issue.id);
+  return action ? isRunnerChatSource(action.source) : false;
+}
+
+function latestCompletedEnqueueAction(db: RunnerDatabase, issueID: number) {
+  const actions = listPiActions(db, { issueId: issueID })
+    .filter((action) => action.action_type === "issue.enqueue" && action.status === "completed");
+  return actions.at(-1);
+}
+
+function isRunnerChatEnqueueAction(db: RunnerDatabase, payload: Record<string, unknown>): boolean {
+  const actionID = safeText(payload.action_id);
+  const source = actionID ? getPiAction(db, actionID)?.source : safeText(payload.source);
+  return isRunnerChatSource(source);
+}
+
+function isRunnerChatSource(value: unknown): boolean {
+  const source = safeText(value);
+  return source === "feishu_runner_chat" || source === "runner_chat";
 }
 
 function issueForApproval(db: RunnerDatabase, event: AppEvent): Issue | null {

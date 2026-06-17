@@ -49,8 +49,9 @@ const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交�
 const ISSUE_PROJECT_CLARIFICATION_TEXT = "这是哪个项目？你可以直接回复项目名，或把项目名带在任务里。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
+  const inFlightReplies = new Set<string>();
   return {
-    handle: (input: FeishuBridgeHandleInput) => handleFeishuAgentMessage(options, input),
+    handle: (input: FeishuBridgeHandleInput) => handleFeishuAgentMessage(options, input, inFlightReplies),
     handleProjectSelectionAction: (action: FeishuProjectSelectionAction) =>
       handleFeishuProjectSelectionAction(options, action)
   };
@@ -58,13 +59,42 @@ export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
 
 async function handleFeishuAgentMessage(
   options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput
+  input: FeishuBridgeHandleInput,
+  inFlightReplies: Set<string>
 ): Promise<FeishuBridgeHandleResult> {
   const policy = replyPolicy(input);
   if (policy) return { reason: policy, replied: false };
+  const replyKey = replyDedupeKey(input.event);
+  if (inFlightReplies.has(replyKey)) return { reason: "duplicate_reply_in_flight", replied: false };
+  inFlightReplies.add(replyKey);
+  try {
+    return await handleFeishuAgentMessageOnce(options, input);
+  } finally {
+    inFlightReplies.delete(replyKey);
+  }
+}
+
+async function handleFeishuAgentMessageOnce(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput
+): Promise<FeishuBridgeHandleResult> {
   if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
   const route = conversationRoute(options, input);
   const projectContext = projectContextForRoute(options, input, route);
+  const handled = await handledReply(options, input, route, projectContext);
+  if (handled) return handled;
+  const runner = await runnerReply(options, input, route, projectContext);
+  const text = cleanString(runner.text);
+  if (text === "") return { reason: "empty_agent_reply", replied: false };
+  return sendReply(options, input, text, runner, "agent_reply_sent");
+}
+
+async function handledReply(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput,
+  route: FeishuConversationRoute,
+  projectContext: FeishuProjectContextResult
+): Promise<FeishuBridgeHandleResult | null> {
   const memoryCommand = applyFeishuMemoryCommand(options.database, {
     conversationId: route.conversationId,
     projectId: resolvedProjectId(projectContext, input),
@@ -73,6 +103,15 @@ async function handleFeishuAgentMessage(
   if (memoryCommand.handled) return sendReply(options, input, memoryCommand.text, {
     conversationId: route.conversationId, projectId: resolvedProjectId(projectContext, input), text: memoryCommand.text
   }, memoryCommand.reason);
+  return handledNonMemoryReply(options, input, route, projectContext);
+}
+
+async function handledNonMemoryReply(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput,
+  route: FeishuConversationRoute,
+  projectContext: FeishuProjectContextResult
+): Promise<FeishuBridgeHandleResult | null> {
   const projectSwitch = applyFeishuProjectSwitchCommand(options.database, {
     route,
     timestamp: options.clock?.now(),
@@ -85,29 +124,25 @@ async function handleFeishuAgentMessage(
   if (issueClarification) return sendReply(options, input, issueClarification.text, {
     conversationId: route.conversationId, projectId: "", text: issueClarification.text
   }, issueClarification.reason);
-  const selection = await maybeSendFeishuProjectSelection(
-    options,
-    input,
-    route,
-    projectContext,
-    attentionDecision(input.ingest)
-  );
+  return handledSelectionOrDirectReply(options, input, route, projectContext);
+}
+
+async function handledSelectionOrDirectReply(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput,
+  route: FeishuConversationRoute,
+  projectContext: FeishuProjectContextResult
+): Promise<FeishuBridgeHandleResult | null> {
+  const selection = await maybeSendFeishuProjectSelection(options, input, route, projectContext, attentionDecision(input.ingest));
   if (selection) {
-    recordReplyLink(options.database, input, {
-      conversationId: route.conversationId,
-      projectId: "",
-      text: "project selection requested"
-    }, { messageId: selection.messageId });
+    recordReplyLink(options.database, input, { conversationId: route.conversationId, projectId: "", text: "project selection requested" }, { messageId: selection.messageId });
     return { reason: selection.reason, replied: selection.replied };
   }
   const direct = directReply(input, options, projectContext);
-  if (direct) return sendReply(options, input, direct.text, {
+  if (!direct) return null;
+  return sendReply(options, input, direct.text, {
     conversationId: route.conversationId, projectId: resolvedProjectId(projectContext, input), text: direct.text
   }, direct.reason);
-  const runner = await runnerReply(options, input, route, projectContext);
-  const text = cleanString(runner.text);
-  if (text === "") return { reason: "empty_agent_reply", replied: false };
-  return sendReply(options, input, text, runner, "agent_reply_sent");
 }
 
 async function sendReply(
@@ -267,6 +302,10 @@ function alreadyReplied(db: RunnerDatabase, event: FeishuNormalizedMessageEvent)
     limit: 1,
     source: "feishu"
   }).some((item) => item.relationship === REPLY_RELATIONSHIP);
+}
+
+function replyDedupeKey(event: FeishuNormalizedMessageEvent): string {
+  return cleanString(event.dedupe_key) || `feishu:message:${cleanString(event.message_id)}`;
 }
 
 function recordReplyLink(

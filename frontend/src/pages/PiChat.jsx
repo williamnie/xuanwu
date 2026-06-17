@@ -1,10 +1,11 @@
-import { Bot, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
+import { Bot, ChevronDown, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import SessionComposer from './sessions/SessionComposer';
 import PiChatComposerMeta from './PiChatComposerMeta';
 import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
 import { projectFromPrompt } from './piChatProjectContext';
 import { shortId, usePiChatState } from './piChatState';
+import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import './PiChat.css';
 import './PiChatSidebar.css';
 import './PiChatThread.css';
@@ -131,12 +132,39 @@ function ConversationList({ conversations, onSelect, selectedId }) {
 }
 
 function ChatThread({ navigateTo, state }) {
+  const lastMessage = state.transcript[state.transcript.length - 1];
+  const autoScrollWatchKey = [
+    state.transcript.length,
+    lastMessage?.id || '',
+    lastMessage?.text || '',
+    state.sending ? 'sending' : 'idle',
+  ].join(':');
+  const {
+    scrollRef,
+    contentRef,
+    showScrollButton,
+    handleScroll,
+    scrollToLatest,
+  } = useSmartAutoScroll({
+    resetKey: state.selectedConversationId,
+    watchKey: autoScrollWatchKey,
+  });
   return (
-    <div className="pi-chat-thread">
-      {state.transcript.length === 0 ? (
-        <EmptyChat navigateTo={navigateTo} hasAgents={state.agents.length > 0} />
-      ) : state.transcript.map((item) => <ChatBubble key={item.id} item={item} />)}
-      {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Runner 正在思考...</div>}
+    <div className="pi-chat-thread-frame">
+      <div className="pi-chat-thread" ref={scrollRef} onScroll={handleScroll}>
+        <div className="pi-chat-thread-content" ref={contentRef}>
+          {state.transcript.length === 0 ? (
+            <EmptyChat navigateTo={navigateTo} hasAgents={state.agents.length > 0} />
+          ) : state.transcript.map((item) => <ChatBubble key={item.id} item={item} />)}
+          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Runner 正在思考...</div>}
+        </div>
+      </div>
+      {showScrollButton && (
+        <button type="button" className="pi-chat-scroll-bottom-button" onClick={scrollToLatest}>
+          <ChevronDown size={14} />
+          回到底部
+        </button>
+      )}
     </div>
   );
 }

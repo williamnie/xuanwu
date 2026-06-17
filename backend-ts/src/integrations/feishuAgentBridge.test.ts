@@ -240,6 +240,58 @@ describe("Feishu agent bridge", () => {
     database.close();
   });
 
+  test("suppresses concurrent replays for the same Feishu message while the first reply is still running", async () => {
+    const database = await openFixtureDatabase();
+    const sent: FeishuTextMessageInput[] = [];
+    const calls: string[] = [];
+    let releaseRunner: () => void = () => {};
+    let runnerStarted: Promise<void>;
+    let markRunnerStarted: () => void = () => {};
+    runnerStarted = new Promise<void>((resolve) => {
+      markRunnerStarted = resolve;
+    });
+    const runnerGate = new Promise<void>((resolve) => {
+      releaseRunner = resolve;
+    });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("hi concurrently", "om_agent_concurrent_replay");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async ({ prompt }) => {
+        calls.push(prompt);
+        markRunnerStarted();
+        await runnerGate;
+        return { text: "runner once" };
+      },
+      sender: { sendTextMessage: async (input) => {
+        sent.push(input);
+        return { messageId: `om_reply_${sent.length}` };
+      } }
+    });
+
+    const first = bridge.handle({ event, ingest });
+    await runnerStarted;
+    const second = bridge.handle({ event, ingest });
+    releaseRunner();
+    const results = await Promise.all([first, second]);
+
+    expect(results.map((item) => item.reason).sort()).toEqual(["agent_reply_sent", "duplicate_reply_in_flight"]);
+    expect(calls).toEqual(["hi concurrently"]);
+    expect(sent).toEqual([{
+      receiveId: "oc_group",
+      receiveIdType: "chat_id",
+      text: "runner once"
+    }]);
+    database.close();
+  });
+
   test("reports Runner errors as a natural Feishu reply", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
