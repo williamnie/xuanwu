@@ -1,6 +1,7 @@
 import {
   CalendarClock,
   ChevronLeft,
+  ArchiveRestore,
   BotMessageSquare,
   Command,
   FolderGit2,
@@ -64,6 +65,16 @@ export default function AppSidebar({
           <ChevronLeft size={16} />
         </button>
       </div>
+
+      <button
+        className={`nav-item sidebar-profile-link ${currentPage === 'archived-chats' ? 'active' : ''}`}
+        onClick={() => navigateTo('archived-chats')}
+        type="button"
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <ArchiveRestore size={16} /> Archived Chats
+        </span>
+      </button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
         <button className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>

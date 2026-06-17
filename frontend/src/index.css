@@ -1483,3 +1483,7 @@ input:checked + .slider:before {
   gap: 6px;
   flex-shrink: 0;
 }
+
+.sidebar-profile-link {
+  font-size: 0.82rem;
+}
