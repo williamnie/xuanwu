@@ -68,11 +68,15 @@ describe("Bun SQLite database connection", () => {
         "pi_approval_requests",
         "pi_conversations",
         "pi_delegations",
+        "pi_guardian_event_inbox",
         "pi_heartbeat_controls",
         "pi_heartbeat_events",
         "pi_heartbeat_runs",
         "pi_memory_items",
+        "pi_notification_intents",
         "pi_reports",
+        "pi_run_group_items",
+        "pi_run_groups",
         "pi_skill_intent_audits",
         "project_holds",
         "project_pi_policies",
@@ -140,7 +144,8 @@ describe("Bun SQLite database connection", () => {
         { id: "024_im_reply_outbox_dispatch" },
         { id: "025_feishu_conversation_state" },
         { id: "026_feishu_project_selection" },
-        { id: "027_pi_approval_requests" }
+        { id: "027_pi_approval_requests" },
+        { id: "028_pi_guardian_runtime" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -163,6 +168,9 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_external");
       expect(indexNames(connection, "pi_approval_requests")).toContain("idx_pi_approval_requests_issue");
       expect(indexNames(connection, "pi_approval_requests")).toContain("ux_pi_approval_requests_provider_session_approval");
+      expect(indexNames(connection, "pi_guardian_event_inbox")).toContain("ux_pi_guardian_event_source");
+      expect(indexNames(connection, "pi_notification_intents")).toContain("ux_pi_notification_intent_key");
+      expect(indexNames(connection, "pi_run_group_items")).toContain("idx_pi_run_group_items_status");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
@@ -236,6 +244,28 @@ describe("Bun SQLite database connection", () => {
         run_id: "''",
         session_id: "''",
         summary: "''"
+      });
+      expect(columnDefaults(connection, "pi_guardian_event_inbox")).toMatchObject({
+        redaction_profile: "'prompt'",
+        severity: "'info'",
+        status: "'pending'"
+      });
+      expect(columnDefaults(connection, "pi_run_groups")).toMatchObject({
+        digest_policy_json: "'{}'",
+        max_interval_minutes: "120",
+        status: "'active'"
+      });
+      expect(columnDefaults(connection, "pi_run_group_items")).toMatchObject({
+        enqueue_status: "'pending'",
+        report_bucket: "'active'",
+        report_status: "'active'",
+        status: "'active'"
+      });
+      expect(columnDefaults(connection, "pi_notification_intents")).toMatchObject({
+        decision: "'aggregate'",
+        flush_reason: "''",
+        flush_sequence: "0",
+        state: "'pending'"
       });
     } finally {
       connection.close();
@@ -343,7 +373,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 27 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 28 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

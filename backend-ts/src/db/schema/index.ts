@@ -25,6 +25,7 @@ import { imReplyOutboxDispatchMigration } from "./024_im_reply_outbox_dispatch.t
 import { feishuConversationStateMigration } from "./025_feishu_conversation_state.ts";
 import { feishuProjectSelectionMigration } from "./026_feishu_project_selection.ts";
 import { piApprovalRequestsMigration } from "./027_pi_approval_requests.ts";
+import { piGuardianRuntimeMigration } from "./028_pi_guardian_runtime.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -53,5 +54,6 @@ export const migrations = [
   imReplyOutboxDispatchMigration,
   feishuConversationStateMigration,
   feishuProjectSelectionMigration,
-  piApprovalRequestsMigration
+  piApprovalRequestsMigration,
+  piGuardianRuntimeMigration
 ];

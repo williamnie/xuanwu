@@ -29,7 +29,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "024_im_reply_outbox_dispatch",
   "025_feishu_conversation_state",
   "026_feishu_project_selection",
-  "027_pi_approval_requests"
+  "027_pi_approval_requests",
+  "028_pi_guardian_runtime"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `
