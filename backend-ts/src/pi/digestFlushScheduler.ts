@@ -18,8 +18,9 @@ import { redactSensitiveText } from "../util/redact.ts";
 
 export type DigestFlushSchedulerResult = { flushed: number; scanned: number; skipped: number };
 export type DigestFlushSchedulerInput = { limit?: number; now?: Date | string };
+export type ManualDigestFlushInput = { now?: Date | string; runGroupID: string };
 
-type FlushReason = "completed" | "partial_deadline" | "partial_interval";
+type FlushReason = "completed" | "manual" | "partial_deadline" | "partial_interval";
 type DigestCounts = {
   active: number; completed: number; failed: number; needsUser: number;
   skipped: number; total: number; verification: number;
@@ -45,7 +46,11 @@ export function runDigestFlushSchedulerOnce(
   const result: DigestFlushSchedulerResult = { flushed: 0, scanned: groups.length, skipped: 0 };
   for (const group of groups) {
     const refreshed = refreshGroupForDigest(db, group.id, nowText);
-    const reason = refreshed ? dueReason(db, refreshed, nowText) : "";
+    if (!refreshed) {
+      result.skipped += 1;
+      continue;
+    }
+    const reason = dueReason(db, refreshed, nowText);
     if (!reason) {
       result.skipped += 1;
       continue;
@@ -60,21 +65,34 @@ export function runDigestFlushSchedulerOnce(
   return result;
 }
 
+export function flushRunGroupDigest(
+  db: RunnerDatabase,
+  input: ManualDigestFlushInput
+): DigestFlushSchedulerResult {
+  const nowText = iso(input.now);
+  const group = refreshGroupForDigest(db, input.runGroupID, nowText);
+  if (!group) return { flushed: 0, scanned: 0, skipped: 1 };
+  if (activeDigestFlushGroups.has(group.id)) return { flushed: 0, scanned: 1, skipped: 1 };
+  const flushed = flushGroupDigest(db, group, "manual", nowText, true);
+  return { flushed: flushed ? 1 : 0, scanned: 1, skipped: flushed ? 0 : 1 };
+}
+
 function flushGroupDigest(
   db: RunnerDatabase,
   group: PiRunGroup,
   reason: FlushReason,
-  nowText: string
+  nowText: string,
+  force = false
 ): boolean {
   activeDigestFlushGroups.add(group.id);
   try {
     return db.transaction(() => {
       const current = getPiRunGroup(db, group.id);
-      if (!current || dueReason(db, current, nowText) !== reason) return false;
+      if (!current || (!force && dueReason(db, current, nowText) !== reason)) return false;
       const reserved = updatePiRunGroup(db, group.id, {
         digest_flush_sequence: current.digest_flush_sequence + 1,
         last_digest_at: nowText,
-        status: reason === "completed" ? "completed" : "partial"
+        status: nextGroupStatus(current.status, reason)
       });
       const items = listPiRunGroupItems(db, group.id);
       const payload = digestPayload(group.id, group.expected_issue_count, items);
@@ -98,6 +116,11 @@ function flushGroupDigest(
   } finally {
     activeDigestFlushGroups.delete(group.id);
   }
+}
+
+function nextGroupStatus(currentStatus: string, reason: FlushReason): string {
+  if (reason === "completed" || currentStatus === "completed") return "completed";
+  return "partial";
 }
 
 function refreshGroupForDigest(db: RunnerDatabase, runGroupID: string, timestamp: string): PiRunGroup | null {

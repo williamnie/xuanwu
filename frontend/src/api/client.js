@@ -410,6 +410,36 @@ export const api = {
     return request(`/api/pi/reports${query}`);
   },
 
+  getPiGuardianRunGroups: ({ projectId = '', status = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append('project_id', projectId);
+    if (status) params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/guardian/run-groups${query}`);
+  },
+
+  getPiGuardianRunGroup: (id) => request(`/api/pi/guardian/run-groups/${encodeURIComponent(id)}`),
+
+  getPiGuardianNotificationIntents: ({ issueId = '', kind = '', projectId = '', runGroupId = '', state = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (issueId) params.append('issue_id', String(issueId));
+    if (kind) params.append('kind', kind);
+    if (projectId) params.append('project_id', projectId);
+    if (runGroupId) params.append('run_group_id', runGroupId);
+    if (state) params.append('state', state);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/guardian/notification-intents${query}`);
+  },
+
+  flushPiGuardianDigest: ({ limit = 0, now = '', runGroupId = '' } = {}) => request('/api/pi/guardian/digest/flush', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(limit ? { limit } : {}),
+      ...(now ? { now } : {}),
+      ...(runGroupId ? { run_group_id: runGroupId } : {}),
+    }),
+  }),
+
   getProjectPiSettings: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`),
 
   updateProjectPiSettings: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`, {
