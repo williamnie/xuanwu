@@ -6,7 +6,7 @@ import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifec
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
 import {
-  runGuardianDecisionOrchestratorOnce,
+  drainGuardianDecisionOrchestrator,
   type GuardianDecisionOrchestratorSummary
 } from "../pi/guardianDecisionOrchestrator.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
@@ -126,7 +126,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     runProjectCycle: input.runProjectCycle
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
-  const guardianDecisions = runGuardianDecisionOrchestratorOnce(input.database);
+  const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);

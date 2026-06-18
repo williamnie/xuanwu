@@ -50,6 +50,20 @@ export type GuardianDecisionOrchestratorSummary = {
 
 const DEFAULT_LIMIT = 50;
 
+export function drainGuardianDecisionOrchestrator(
+  db: RunnerDatabase,
+  options: GuardianDecisionOrchestratorOptions = {}
+): GuardianDecisionOrchestratorSummary {
+  const limit = Math.max(1, options.limit ?? DEFAULT_LIMIT);
+  const now = options.now ?? new Date();
+  const total = emptySummary();
+  while (true) {
+    const batch = runGuardianDecisionOrchestratorOnce(db, { ...options, limit, now });
+    addSummary(total, batch);
+    if (batch.scanned < limit) return total;
+  }
+}
+
 export function runGuardianDecisionOrchestratorOnce(
   db: RunnerDatabase,
   options: GuardianDecisionOrchestratorOptions = {}
@@ -242,6 +256,23 @@ function emptySummary(): GuardianDecisionOrchestratorSummary {
     rescheduled: 0,
     scanned: 0
   };
+}
+
+function addSummary(
+  total: GuardianDecisionOrchestratorSummary,
+  next: GuardianDecisionOrchestratorSummary
+): void {
+  total.break_window += next.break_window;
+  total.bypassed += next.bypassed;
+  total.cooldown_suppressed += next.cooldown_suppressed;
+  total.created += next.created;
+  total.deferred += next.deferred;
+  total.errors += next.errors;
+  total.leases_acquired += next.leases_acquired;
+  total.lease_skipped += next.lease_skipped;
+  total.merged += next.merged;
+  total.rescheduled += next.rescheduled;
+  total.scanned += next.scanned;
 }
 
 function cleanString(value: unknown): string {

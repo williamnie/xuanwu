@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiGuardianEvent, listPiGuardianDecisions, pausePiHeartbeat } from "../db/repositories/pi.ts";
+import { createPiGuardianEvent, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 
 class FakePiCycleRunner {
@@ -222,6 +222,34 @@ describe("PI auto-manage scheduler", () => {
 
       expect(result.guardianDecisions).toMatchObject({ created: 1, scanned: 1 });
       expect(listPiGuardianDecisions(db, { issueId: 901, projectId: "demo" })).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("drains the pending Guardian inbox during one schedule layer cycle", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    try {
+      for (let index = 1; index <= 55; index += 1) {
+        createPiGuardianEvent(db, {
+          event_type: "guardian.supervisor.candidate",
+          id: `scheduled-guardian-signal-${index}`,
+          idempotency_key: `guardian.supervisor.candidate:demo:${1000 + index}:scheduled`,
+          issue_id: 1000 + index,
+          normalized_payload_json: { diagnosis_code: "provider_timeout" },
+          project_id: "demo",
+          severity: "urgent",
+          source: "supervisor",
+          source_event_id: `scheduled-guardian-signal-${index}`,
+          status: "pending"
+        });
+      }
+
+      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
+
+      expect(result.guardianDecisions).toMatchObject({ created: 55, scanned: 55 });
+      expect(listPiGuardianEvents(db, { projectId: "demo", status: "pending" })).toEqual([]);
     } finally {
       db.close();
     }
