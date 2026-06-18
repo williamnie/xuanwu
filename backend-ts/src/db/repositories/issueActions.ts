@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { getIssue, type Issue } from "./issues.ts";
+import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
 
 const STATUS_TODO = "todo";
@@ -26,6 +27,12 @@ export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_canc
       auto_retry_reason='', updated_at=? where id=?`, [STATUS_CANCELLED, timestamp, record.id]);
     closeOpenIssueRun(db, { ...record, status: STATUS_CANCELLED }, STATUS_CANCELLED, reason, timestamp);
     recordStatusEvent(db, record.id, { status: STATUS_CANCELLED, reason }, timestamp);
+    syncPiRunGroupsForIssueStatus(db, {
+      completedAt: timestamp,
+      issueID: record.id,
+      reason,
+      status: STATUS_CANCELLED
+    });
   });
   write(issue);
   return mustGetIssue(db, issue.id);

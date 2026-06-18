@@ -51,7 +51,7 @@ describe("PI batch triage enqueue ranges", () => {
       ]);
       expect(listPiRunGroupItems(fixture.db, runGroupID)).toMatchObject(requested.map((id, index) => ({
         enqueue_action_id: actionsForBatch.find((action) => action.issue_id === id)?.id,
-        enqueue_status: "pending",
+        enqueue_status: "completed",
         issue_id: id,
         issue_title_snapshot: `P26.${id}`,
         position: index + 1,

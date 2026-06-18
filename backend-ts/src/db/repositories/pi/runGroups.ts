@@ -11,6 +11,9 @@ import {
   requiredString,
   type PatchInput
 } from "./common.ts";
+import {
+  deriveRunGroupReportView, isRunGroupItemReportable
+} from "../../../pi/runGroupReportStatus.ts";
 
 export type PiRunGroup = {
   completed_at: string; created_at: string; deadline_at: string; digest_flush_sequence: number;
@@ -139,6 +142,34 @@ export function updatePiRunGroupItem(
   return requirePiRunGroupItem(db, runGroupID, issueID);
 }
 
+export function refreshPiRunGroupCompletion(db: RunnerDatabase, runGroupID: string): PiRunGroup {
+  const group = requirePiRunGroup(db, runGroupID);
+  const items = listPiRunGroupItems(db, group.id);
+  const completed = items.length >= group.expected_issue_count && items.every(isRunGroupItemReportable);
+  if (!completed) return group;
+  return updatePiRunGroup(db, group.id, {
+    completed_at: group.completed_at || now(),
+    status: "completed"
+  });
+}
+
+export function syncPiRunGroupsForIssueStatus(
+  db: RunnerDatabase,
+  input: { completedAt?: string; issueID: number; reason?: string; status: string }
+): PiRunGroup[] {
+  const rows = db.sqlite.query<{ run_group_id: string }, [number]>(
+    `select run_group_id from ${ITEM_TABLE} where issue_id=?`
+  ).all(input.issueID);
+  for (const row of rows) {
+    updatePiRunGroupItem(db, row.run_group_id, input.issueID, {
+      completed_at: cleanString(input.completedAt),
+      final_issue_status: input.status,
+      report_reason: cleanString(input.reason)
+    });
+  }
+  return rows.map((row) => refreshPiRunGroupCompletion(db, row.run_group_id));
+}
+
 function normalizeGroupCreate(input: PiRunGroupInput): PiRunGroup {
   const timestamp = now();
   return {
@@ -160,16 +191,16 @@ function normalizeGroupCreate(input: PiRunGroupInput): PiRunGroup {
 function normalizeItemCreate(input: PiRunGroupItemInput): PiRunGroupItem {
   const timestamp = now();
   const enqueue = cleanString(input.enqueue_status) || "pending";
-  const report = reportFromInput(enqueue, input);
+  const report = deriveRunGroupReportView({ ...input, enqueue_status: enqueue });
   return {
-    completed_at: cleanString(input.completed_at) || report.completedAt,
+    completed_at: reportableTime(input.completed_at, report, timestamp),
     enqueue_action_id: cleanString(input.enqueue_action_id), enqueue_status: enqueue,
     final_issue_status: cleanString(input.final_issue_status), issue_id: integerInput(input.issue_id),
     issue_title_snapshot: cleanString(input.issue_title_snapshot), joined_at: timestamp,
     last_intent_id: cleanString(input.last_intent_id), position: integerInput(input.position),
-    report_bucket: report.bucket, report_reason: cleanString(input.report_reason),
-    report_status: report.status, reportable_at: cleanString(input.reportable_at) || report.reportableAt,
-    run_group_id: requiredString(input.run_group_id, "run_group_id"), status: report.itemStatus,
+    report_bucket: report.report_bucket, report_reason: cleanString(input.report_reason),
+    report_status: report.report_status, reportable_at: reportableTime(input.reportable_at, report, timestamp),
+    run_group_id: requiredString(input.run_group_id, "run_group_id"), status: report.status,
     updated_at: timestamp
   };
 }
@@ -190,36 +221,27 @@ function normalizeItemPatch(input: PiRunGroupItemInput): PiRunGroupItemInput {
     issue_id: input.issue_id === undefined ? undefined : integerInput(input.issue_id),
     position: input.position === undefined ? undefined : integerInput(input.position)
   };
-  if (input.enqueue_status === undefined) return patch;
-  const terminal = terminalForEnqueue(cleanString(input.enqueue_status));
-  if (!terminal) return patch;
+  if (!hasReportInput(input)) return patch;
+  const report = deriveRunGroupReportView(patch);
   return {
     ...patch,
-    report_bucket: patch.report_bucket ?? terminal.bucket,
-    report_status: patch.report_status ?? terminal.status,
-    reportable_at: patch.reportable_at ?? now(),
-    status: patch.status ?? terminal.itemStatus
+    completed_at: report.reportable ? patch.completed_at ?? now() : "",
+    report_bucket: patch.report_bucket ?? report.report_bucket,
+    report_status: patch.report_status ?? report.report_status,
+    reportable_at: report.reportable ? patch.reportable_at ?? now() : "",
+    status: patch.status ?? report.status
   };
 }
 
-function reportFromInput(enqueue: string, input: PiRunGroupItemInput): { bucket: string; completedAt: string; itemStatus: string; reportableAt: string; status: string } {
-  const explicitStatus = cleanString(input.status);
-  const explicitReport = cleanString(input.report_status);
-  const explicitBucket = cleanString(input.report_bucket);
-  const terminal = terminalForEnqueue(enqueue);
-  if (terminal) return { ...terminal, completedAt: cleanString(input.completed_at), reportableAt: cleanString(input.reportable_at) || now() };
-  return {
-    bucket: explicitBucket || "active", completedAt: cleanString(input.completed_at),
-    itemStatus: explicitStatus || "active", reportableAt: cleanString(input.reportable_at),
-    status: explicitReport || "active"
-  };
+function hasReportInput(input: PiRunGroupItemInput): boolean {
+  return input.enqueue_status !== undefined || input.final_issue_status !== undefined ||
+    input.report_bucket !== undefined || input.report_status !== undefined || input.status !== undefined;
 }
 
-function terminalForEnqueue(enqueue: string): { bucket: string; itemStatus: string; status: string } | null {
-  if (enqueue === "failed") return { bucket: "skipped", itemStatus: "reportable", status: "enqueue_failed" };
-  if (enqueue === "skipped") return { bucket: "skipped", itemStatus: "reportable", status: "skipped" };
-  if (enqueue === "pending_approval") return { bucket: "needs_user", itemStatus: "reportable", status: "enqueue_pending_approval" };
-  return null;
+function reportableTime(value: unknown, report: { reportable: boolean }, timestamp: string): string {
+  const explicit = cleanString(value);
+  if (explicit !== "") return explicit;
+  return report.reportable ? timestamp : "";
 }
 
 function mapGroup(row: Record<string, unknown>): PiRunGroup {

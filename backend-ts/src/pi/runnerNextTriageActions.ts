@@ -5,7 +5,7 @@ import { ProjectNotFoundError, type Project } from "../db/repositories/projects.
 import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
 import { parseBatchTriageScope, type BatchTriageScope } from "./runnerBatchTriageScope.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
-import { attachRunGroupEnqueueAction, createBatchRunGroup } from "./runGroupService.ts";
+import { attachRunGroupEnqueueAction, createBatchRunGroup, updateRunGroupEnqueueResult } from "./runGroupService.ts";
 
 export type NextTriageIssueInput = { project_id?: string; rationale?: string };
 export type BatchTriageIssueInput = {
@@ -104,6 +104,13 @@ function enqueueBatchCandidates(
     const actionResult = runEnqueueAction(db, context, issue, rationale, runGroupID);
     const actionID = cleanString(objectPayload(actionResult).action_id);
     attachRunGroupEnqueueAction(db, runGroupID, issue.id, actionID);
+    updateRunGroupEnqueueResult(
+      db,
+      runGroupID,
+      issue.id,
+      cleanString(objectPayload(actionResult).status),
+      cleanString(objectPayload(actionResult).error)
+    );
     collectBatchResult(result, issue, actionResult);
   }
   return result;

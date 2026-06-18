@@ -12,6 +12,7 @@ import {
 import { normalizeMcpCapabilityList } from "../../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../../skills/intents.ts";
 import { ProjectNotFoundError } from "./projects.ts";
+import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 
 export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>>;
 
@@ -90,10 +91,20 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
           [current.id, "issue.status_changed", JSON.stringify({ status: record.status }), timestamp]
         );
       }
+      syncPiRunGroupItems(db, record, timestamp);
     }
   });
   write(next);
   return mustGetIssue(db, current.id);
+}
+
+function syncPiRunGroupItems(db: RunnerDatabase, issue: NormalizedIssuePatch, timestamp: string): void {
+  syncPiRunGroupsForIssueStatus(db, {
+    completedAt: timestamp,
+    issueID: issue.id,
+    reason: issue.error,
+    status: issue.status
+  });
 }
 
 function normalizeIssuePatch(input: UpdateIssueInput): Partial<NormalizedIssuePatch> {

@@ -15,6 +15,7 @@ import {
   listPiNotificationIntents,
   listPiRunGroupItems,
   listPiRunGroups,
+  refreshPiRunGroupCompletion,
   updatePiGuardianEvent,
   updatePiNotificationIntent,
   updatePiRunGroup,
@@ -126,10 +127,8 @@ describe("PI Guardian runtime repositories", () => {
       });
       const completedItem = updatePiRunGroupItem(db, "group-1", 101, {
         final_issue_status: "done",
-        report_bucket: "done",
-        report_status: "done",
-        status: "reportable"
       });
+      const completedGroup = refreshPiRunGroupCompletion(db, "group-1");
       const partial = updatePiRunGroup(db, "group-1", {
         digest_flush_sequence: 1,
         last_digest_at: "2026-06-18T01:00:00Z",
@@ -139,6 +138,7 @@ describe("PI Guardian runtime repositories", () => {
       expect(group).toMatchObject({ id: "group-1", expected_issue_count: 3, status: "active" });
       expect(duplicateGroup).toMatchObject({ id: "group-1", expected_issue_count: 3 });
       expect(completedItem).toMatchObject({ issue_id: 101, report_bucket: "done", status: "reportable" });
+      expect(completedGroup).toMatchObject({ id: "group-1", status: "completed" });
       expect(pendingApproval).toMatchObject({
         enqueue_status: "pending_approval",
         report_bucket: "needs_user",
@@ -153,6 +153,46 @@ describe("PI Guardian runtime repositories", () => {
       expect(partial).toMatchObject({ digest_flush_sequence: 1, status: "partial" });
       expect(getPiRunGroup(db, "group-1")).toMatchObject({ last_digest_at: "2026-06-18T01:00:00Z" });
       expect(listPiRunGroups(db, { projectId: "demo", status: "partial" }).map((item) => item.id)).toEqual(["group-1"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("maps lifecycle statuses and enqueue outcomes through one report table", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      for (const id of [201, 202, 203, 204, 205, 206, 207, 208]) insertIssue(db, id, `Issue ${id}`);
+      createPiRunGroup(db, { id: "group-lifecycle", project_id: "demo", expected_issue_count: 8 });
+      for (const [index, id] of [201, 202, 203, 204, 205, 206, 207, 208].entries()) {
+        addPiRunGroupItem(db, {
+          run_group_id: "group-lifecycle",
+          issue_id: id,
+          position: index + 1,
+          enqueue_status: "completed"
+        });
+      }
+
+      updatePiRunGroupItem(db, "group-lifecycle", 201, { final_issue_status: "done" });
+      updatePiRunGroupItem(db, "group-lifecycle", 202, { final_issue_status: "pending_verification" });
+      updatePiRunGroupItem(db, "group-lifecycle", 203, { final_issue_status: "failed" });
+      updatePiRunGroupItem(db, "group-lifecycle", 204, { final_issue_status: "cancelled" });
+      updatePiRunGroupItem(db, "group-lifecycle", 205, { enqueue_status: "pending_approval" });
+      updatePiRunGroupItem(db, "group-lifecycle", 206, { final_issue_status: "blocked" });
+      updatePiRunGroupItem(db, "group-lifecycle", 207, { report_status: "budget_exhausted" });
+      updatePiRunGroupItem(db, "group-lifecycle", 208, { enqueue_status: "skipped" });
+      const group = refreshPiRunGroupCompletion(db, "group-lifecycle");
+
+      expect(listPiRunGroupItems(db, "group-lifecycle")).toMatchObject([
+        { issue_id: 201, report_bucket: "done", report_status: "done", status: "reportable" },
+        { issue_id: 202, report_bucket: "verification", report_status: "pending_verification", status: "reportable" },
+        { issue_id: 203, report_bucket: "failed", report_status: "failed", status: "reportable" },
+        { issue_id: 204, report_bucket: "skipped", report_status: "cancelled", status: "reportable" },
+        { issue_id: 205, report_bucket: "needs_user", report_status: "enqueue_pending_approval", status: "reportable" },
+        { issue_id: 206, report_bucket: "failed", report_status: "blocked", status: "reportable" },
+        { issue_id: 207, report_bucket: "needs_user", report_status: "budget_exhausted", status: "reportable" },
+        { issue_id: 208, report_bucket: "skipped", report_status: "skipped", status: "reportable" }
+      ]);
+      expect(group.status).toBe("completed");
     } finally {
       db.close();
     }
