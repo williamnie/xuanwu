@@ -71,17 +71,30 @@ export type HeartbeatProjectSettingsSignal = {
   };
 };
 export type HeartbeatSupervisorCandidateSignal = {
+  allowed_actions?: string[];
   budget_remaining: number;
+  cooldown_until?: string;
   diagnosis_code: string;
   evidence_refs: string[];
+  issue_status?: string;
+  issue_updated_at?: string;
   issue_id: number;
   project_id: string;
+  project_budget_remaining?: number;
+  provider?: string;
   provider_error_category: string;
   provider_session_id: string;
+  provider_turn_id?: string;
   ready: boolean;
   reason: string;
+  run_ended_at?: string;
   run_id: string;
+  run_status?: string;
+  session_status?: string;
+  session_turn_id?: string;
+  session_updated_at?: string;
   stale_gap_seconds: number;
+  supervisor_mode?: string;
   wait_until: string;
 };
 export type HeartbeatSupervisorRetryWindowSignal = {

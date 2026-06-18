@@ -92,17 +92,30 @@ function candidateSignals(
   options: SupervisorSignalCollectorOptions
 ): HeartbeatSupervisorCandidateSignal[] {
   return context.candidates.map((candidate) => ({
+    allowed_actions: stringArray(context.policy.allowed_actions),
     budget_remaining: numberValue(context.recovery_history.budget_remaining),
+    cooldown_until: cooldownUntil(context, now),
     diagnosis_code: candidate.diagnosis_code,
     evidence_refs: candidate.evidence_refs ?? [],
+    issue_status: clean(context.issue.status),
+    issue_updated_at: clean(context.issue.updated_at),
     issue_id: issueID(context),
     project_id: projectID(context),
+    project_budget_remaining: numberValue(context.policy.project_budget_remaining),
+    provider: clean(context.session.provider) || clean(context.provider_error?.provider),
     provider_error_category: clean(context.provider_error?.category),
     provider_session_id: clean(context.session.provider_session_id),
+    provider_turn_id: clean(context.session.provider_turn_id),
     ready: supervisorCandidateReady(context, candidate, now, options),
     reason: candidate.reason,
+    run_ended_at: clean(context.latest_run?.ended_at),
     run_id: clean(context.latest_run?.id),
+    run_status: clean(context.latest_run?.status),
+    session_status: clean(context.session.raw_status),
+    session_turn_id: clean(context.session.provider_turn_id),
+    session_updated_at: clean(context.session.updated_at),
     stale_gap_seconds: staleGapSeconds(context),
+    supervisor_mode: clean(context.policy.mode),
     wait_until: clean(candidate.wait_until)
   }));
 }
@@ -166,6 +179,18 @@ function issueID(context: IssueSupervisorRecoveryContext): number {
 
 function projectID(context: IssueSupervisorRecoveryContext): string {
   return clean(context.project.id);
+}
+
+function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): string {
+  const last = Date.parse(clean(context.recovery_history.last_action_at));
+  const seconds = numberValue(context.policy.cooldown_seconds);
+  if (!Number.isFinite(last) || seconds <= 0) return "";
+  const until = new Date(last + seconds * 1_000);
+  return until.getTime() > now.getTime() ? iso(until) : "";
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
 }
 
 function positiveNumber(value: unknown, fallback: number): number {

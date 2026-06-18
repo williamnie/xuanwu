@@ -12,6 +12,8 @@ import {
   createPendingPiAction,
   type PiActionRequest
 } from "./actionEngine.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
+import { recoveryLimitDecision } from "./actionGateRecovery.ts";
 
 type ActionExecutionSummary = {
   leases_acquired: number;
@@ -98,7 +100,8 @@ function executeOneRequest(
   if (lease.status === "held") return skipHeldDecision(db, decision.id, summary);
   if (lease.status === "idempotent_replay") return true;
   summary.leases_acquired += 1;
-  createPendingPiAction(db, guardianContext(leasedDecision), {
+  request = applyRecoveryGateOverride(request, now);
+  createPendingPiAction(db, guardianContext(leasedDecision, request, now), {
     ...request,
     idempotencyKey: lease.idempotency_key,
     payload: { ...request.payload, lease_expires_at: lease.until }
@@ -106,8 +109,43 @@ function executeOneRequest(
   return true;
 }
 
-function guardianContext(decision: PiGuardianDecision) {
-  return { guardianDecisionID: decision.id, legacyBypassReason: "", source: "pi_guardian_orchestrator" };
+function applyRecoveryGateOverride(request: PiActionRequest, now: Date): PiActionRequest {
+  const policy = recoveryGatePolicy(request.authorization, now);
+  if (!policy) return request;
+  const decision = recoveryLimitDecision(actionEnvelopeForRecoveryGate(request), policy);
+  if (!decision) return request;
+  return { ...request, authorization: policy };
+}
+
+function recoveryGatePolicy(policy: PiGatePolicy | undefined, now: Date): PiGatePolicy | undefined {
+  if (!policy) return undefined;
+  const record = policy as Record<string, unknown>;
+  const gate = objectPayload(record.recovery_gate);
+  const budget = numberValue(gate.budget_remaining ?? record.budget_remaining);
+  const cooldown = cleanString(gate.cooldown_until ?? record.cooldown_until);
+  if (budget === undefined && cooldown === "") return undefined;
+  return { budget_remaining: budget, cooldown_until: cooldown, now: iso(now) } as PiGatePolicy;
+}
+
+function actionEnvelopeForRecoveryGate(request: PiActionRequest) {
+  return {
+    action_type: request.actionType,
+    issue_id: request.issueID,
+    payload: request.payload,
+    project_id: request.projectID,
+    requires_confirmation: false,
+    risk_level: "low",
+    source: "pi_guardian_orchestrator"
+  } as const;
+}
+
+function guardianContext(decision: PiGuardianDecision, request: PiActionRequest, now: Date) {
+  return {
+    authorization: authorizationAt(request.authorization, now),
+    guardianDecisionID: decision.id,
+    legacyBypassReason: "",
+    source: "pi_guardian_orchestrator"
+  };
 }
 
 function skipHeldDecision(db: RunnerDatabase, id: string, summary: ActionExecutionSummary): false {
@@ -139,6 +177,7 @@ function actionRequestFromPayload(decision: PiGuardianDecision, item: Record<str
   const issueID = positiveNumber(item.issue_id) || positiveNumber(payload.issue_id) || decision.issue_id;
   return {
     actionType,
+    authorization: authorizationPolicy(item),
     guardianDecisionID: decision.id,
     idempotencyKey: cleanString(item.idempotency_key),
     issueID: issueID > 0 ? issueID : undefined,
@@ -169,6 +208,25 @@ function riskOverride(item: Record<string, unknown>): PiActionRequest["riskOverr
   };
 }
 
+function authorizationPolicy(item: Record<string, unknown>): PiGatePolicy | undefined {
+  const gatePolicy = objectPayload(item.gate_policy);
+  const authorization = Object.keys(gatePolicy).length > 0 ? gatePolicy : objectPayload(item.authorization);
+  hydrateRedactedAuthorizedActions(authorization);
+  return Object.keys(authorization).length > 0 ? authorization as PiGatePolicy : undefined;
+}
+
+function authorizationAt(policy: PiGatePolicy | undefined, now: Date): PiGatePolicy | undefined {
+  return policy ? { ...policy, now: iso(now) } : undefined;
+}
+
+function hydrateRedactedAuthorizedActions(authorization: Record<string, unknown>): void {
+  const allowed = stringArray(authorization.allowed_actions ?? authorization.allowedActions);
+  if (allowed.length === 0) return;
+  const current = authorization.authorizedActions;
+  if (Array.isArray(current) && current.length > 0) return;
+  authorization.authorizedActions = allowed.map((action_type) => ({ action_type }));
+}
+
 function guardianOwner(): string {
   return `guardian-orchestrator:${crypto.randomUUID()}`;
 }
@@ -186,8 +244,18 @@ function objectPayload(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function stringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(cleanString).filter(Boolean);
+  const text = cleanString(value);
+  return text === "" ? [] : text.split(/\n|,/).map(cleanString).filter(Boolean);
+}
+
 function positiveNumber(value: unknown): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function booleanValue(value: unknown): boolean | undefined {

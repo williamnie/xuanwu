@@ -23,6 +23,7 @@ import { actionRecordMetadata } from "./actionRecordMetadata.ts";
 
 export type PiActionRequest = {
   actionType: string;
+  authorization?: PiGatePolicy;
   conversationID?: string;
   goalID?: string;
   goal_id?: string;
@@ -79,7 +80,7 @@ function createGatedPiAction(
   const candidate = createPiActionRecord(db, context, input, envelope);
   if (isReplay(candidate)) return replayGateResult(candidate);
   recordPiActionAuditEvent(db, candidate, "candidate", { actor: "pi", payload: envelope });
-  const decision = gatePiActionEnvelope(envelope, context.authorization);
+  const decision = gatePiActionEnvelope(envelope, input.authorization ?? context.authorization);
   return { action: persistGateDecision(db, context, candidate, decision), decision };
 }
 

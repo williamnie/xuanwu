@@ -147,17 +147,30 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): 
   });
   writeGuardianSignals(db, guardianSignalsFromSupervisorCandidates(
     target.candidates.map((item) => ({
+      allowed_actions: stringArray(target.context.policy.allowed_actions),
       budget_remaining: numberValue(target.context.recovery_history.budget_remaining),
+      cooldown_until: cooldownUntil(target.context, now),
       diagnosis_code: clean(item.diagnosis_code),
       evidence_refs: item.evidence_refs ?? [],
+      issue_status: clean(target.context.issue.status),
+      issue_updated_at: clean(target.context.issue.updated_at),
       issue_id: target.issueID,
       project_id: target.projectID,
+      project_budget_remaining: numberValue(target.context.policy.project_budget_remaining),
+      provider: clean(target.context.session.provider) || clean(target.context.provider_error?.provider),
       provider_error_category: clean(target.context.provider_error?.category),
       provider_session_id: clean(target.context.session.provider_session_id),
+      provider_turn_id: clean(target.context.session.provider_turn_id),
       ready: true,
       reason: item.reason,
+      run_ended_at: clean(target.context.latest_run?.ended_at),
       run_id: clean(target.context.latest_run?.id),
+      run_status: clean(target.context.latest_run?.status),
+      session_status: clean(target.context.session.raw_status),
+      session_turn_id: clean(target.context.session.provider_turn_id),
+      session_updated_at: clean(target.context.session.updated_at),
       stale_gap_seconds: numberValue(target.context.session.stale_gap_seconds),
+      supervisor_mode: clean(target.context.policy.mode),
       wait_until: clean(item.wait_until)
     })),
     { heartbeatID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`, now, projectID: target.projectID }
@@ -229,4 +242,16 @@ function safeError(error: unknown): string {
 }
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+}
+
+function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): string {
+  const last = Date.parse(clean(context.recovery_history.last_action_at));
+  const seconds = numberValue(context.policy.cooldown_seconds);
+  if (!Number.isFinite(last) || seconds <= 0) return "";
+  const until = new Date(last + seconds * 1_000);
+  return until.getTime() > now.getTime() ? iso(until) : "";
 }

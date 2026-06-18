@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueSupervisorEvents, listPiActions, listPiGuardianEvents, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
+import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 
@@ -66,6 +67,45 @@ describe("PI issue supervisor scheduler", () => {
       expect(provider.calls).toEqual([]);
       expect(listPiActions(db, { issueId: 500 })).toEqual([]);
       expect(listIssueSupervisorEvents(db, { issueId: 500 }).map((event) => event.event_type)).toEqual(["signal"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("autonomous supervisor signal can be planned into a gated recovery action later", async () => {
+    const db = await fixtureDb();
+    const provider = new SupervisorProvider();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-planner-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "autonomous", allowed_supervisor_actions_json: ["session.resume_followup"] });
+      insertRunningIssue(db, { issueID: 501, projectID: "demo", sessionUpdatedAt: "2026-06-10T07:45:00Z", threadID: "thread-501", turnID: "turn-501" });
+      insertIssueEvent(db, 501, { raw_payload: "stream disconnected before completion", type: "error" }, "2026-06-10T07:45:05Z");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        providers: { codex: provider },
+        staleAfterSeconds: 300
+      });
+      const queued = runGuardianDecisionOrchestratorOnce(db, { now: NOW });
+      const settled = runGuardianDecisionOrchestratorOnce(db, { now: new Date(NOW.getTime() + 31_000) });
+      const [action] = listPiActions(db, { issueId: 501 });
+
+      expect(result).toMatchObject({ decisions: 0, signaled: 1 });
+      expect(queued).toMatchObject({ created: 1, scanned: 1 });
+      expect(settled).toMatchObject({ leases_acquired: 1, scanned: 0 });
+      expect(action).toMatchObject({
+        action_type: "session.resume_followup",
+        gate_decision: "execute",
+        status: "approved"
+      });
+      expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+        expected_provider_turn_id: "turn-501",
+        expected_run_id: "issue-501-attempt-1",
+        expected_session_updated_at: "2026-06-10T07:45:00Z",
+        provider_session_id: "thread-501"
+      });
+      expect(provider.calls).toEqual([]);
     } finally {
       db.close();
     }

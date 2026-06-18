@@ -1,4 +1,5 @@
 import type { PiGuardianDecision, PiGuardianEvent } from "../db/repositories/pi.ts";
+import { guardianDecisionActionsJson } from "./guardianDecisionActionCandidates.ts";
 import { classifyRecoveryDiagnosis } from "./recoveryDiagnosis.ts";
 
 export const GUARDIAN_DECISION_TERMINAL_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
@@ -58,7 +59,7 @@ export function guardianDecisionCandidate(event: PiGuardianEvent): GuardianDecis
   const decisionKind = decisionKindForEvent(event, payload);
   return {
     action_type: clean(payload.action_type),
-    actions_json: actionCandidatesJson(event, payload),
+    actions_json: guardianDecisionActionsJson(event, payload),
     conversation_id: event.conversation_id,
     created_at: event.created_at,
     decision: decisionValue(decisionKind, severity),
@@ -235,30 +236,6 @@ function riskLevel(severity: GuardianDecisionSeverity): string {
   if (severity === "urgent") return "high";
   if (severity === "actionable") return "medium";
   return "low";
-}
-
-function actionCandidatesJson(event: PiGuardianEvent, payload: Record<string, unknown>): string {
-  const explicit = recordArray(payload.actions ?? payload.action_candidates);
-  if (explicit.length > 0) return JSON.stringify(explicit);
-  const actionType = clean(payload.action_type);
-  const original = jsonRecord(payload.original_payload);
-  if (event.event_type !== "guardian.heartbeat.action_candidate" || actionType === "" ||
-    Object.keys(original).length === 0) {
-    return "[]";
-  }
-  return JSON.stringify([{
-    action_type: actionType,
-    issue_id: event.issue_id,
-    payload: original,
-    project_id: event.project_id,
-    rationale: clean(payload.rationale),
-    risk_level: clean(payload.risk_level)
-  }]);
-}
-
-function recordArray(value: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(value)) return [];
-  return value.map(jsonRecord).filter((item) => Object.keys(item).length > 0);
 }
 
 function severityValue(value: unknown): GuardianDecisionSeverity {
