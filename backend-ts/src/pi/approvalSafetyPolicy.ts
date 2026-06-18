@@ -41,7 +41,7 @@ const REMOTE_SCRIPT_PATTERNS = [
   /\beval\s+["'`$ ()]*(?:curl|wget)\b/i
 ];
 const SECRET_PATTERN =
-  /(?:^|[\s"'`=])(?:~\/)?\.ssh(?:\/|\s|$)|\b(?:id_rsa|id_ed25519|known_hosts|authorized_keys|keychain|login\.keychain|credentials?|secrets?|token|api[_-]?key|access[_-]?key|password|\.pem|\.p12|\.pfx)\b/i;
+  /(?:^|[\s"'`=])(?:~\/)?\.ssh(?:\/|\s|$)|(?:^|[\s"'`=])\.env(?:[.\w-]*)?(?:\s|$)|\b(?:id_rsa|id_ed25519|known_hosts|authorized_keys|keychain|login\.keychain|credentials?|secrets?|token|api[_-]?key|access[_-]?key|password|\.pem|\.p12|\.pfx)\b/i;
 const SYSTEM_COMMAND_PATTERN = new RegExp(`${COMMAND_BOUNDARY}(?:launchctl|systemctl|service)(?:\\s|$)`, "i");
 const SYSTEM_PATH_PATTERN = /(?:^|[\s"'`=])\/(?:Library|System|etc)(?:\/|\s|$)|(?:^|[\s"'`=])\/usr\/local(?:\/|\s|$)/;
 const PARENT_PATH_PATTERN = /(?:^|[\s"'`=])\.\.(?:\/|\s|$)/;
@@ -77,7 +77,9 @@ function approvalSafetyContext(input: ApprovalSafetyInput): ApprovalSafetyContex
   return {
     command: cleanString(params.command ?? item.command),
     cwd: cleanString(params.cwd ?? params.workingDirectory ?? params.workspace ?? item.cwd),
-    path: cleanString(params.path ?? item.path)
+    path: [cleanString(params.path ?? item.path), ...changesPaths(params), ...changesPaths(item)]
+      .filter(Boolean)
+      .join(" ")
   };
 }
 
@@ -171,6 +173,11 @@ function truncateReason(text: string): string {
 
 function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function changesPaths(raw: Record<string, unknown>): string[] {
+  const changes = Array.isArray(raw.changes) ? raw.changes : [];
+  return changes.map((value) => cleanString(recordValue(value).path)).filter(Boolean);
 }
 
 function cleanString(value: unknown): string {

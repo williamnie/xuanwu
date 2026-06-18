@@ -222,10 +222,10 @@ describe("Codex stdio JSON-RPC transport", () => {
     expect(fake.requests).toContainEqual({ id: 99, result: { answers: {} } });
   });
 
-  test("holds approval server requests until the runner resolves them", async () => {
+  test("declines gray approval requests without publishing approval events", async () => {
     let fake!: FakeCodexProcess;
     const events: ProviderEvent[] = [];
-    const transport = new CodexStdioJsonRpcTransport(config, {
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 50 }, {
       onEvent: (event) => events.push(event),
       processFactory: () => {
         fake = new FakeCodexProcess((request, process) => {
@@ -251,31 +251,10 @@ describe("Codex stdio JSON-RPC transport", () => {
       }
     });
 
-    const pending = transport.request("initialize", {});
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
 
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      provider: "codex",
-      type: "approval",
-      session: { provider: "codex", sessionId: "thread-approval", turnId: "turn-approval" },
-      raw: { method: "approval/requested" }
-    });
-    expect(JSON.parse(String(events[0].raw?.payload))).toMatchObject({
-      id: "item-command",
-      method: "item/commandExecution/requestApproval",
-      params: { command: "git commit -m test", cwd: "/repo" }
-    });
-
-    await transport.resolveApprovalRequest("item-command", { decision: "approve_session", scope: "session" });
-
-    await expect(pending).resolves.toEqual({ protocolVersion: "fixture" });
-    expect(fake.requests).toContainEqual({ id: 99, result: { decision: "acceptForSession" } });
-    expect(events.at(-1)).toMatchObject({
-      provider: "codex",
-      type: "approval",
-      raw: { method: "approval/resolved" }
-    });
+    expect(fake.requests).toContainEqual({ id: 99, result: { decision: "decline" } });
+    expect(events).toEqual([]);
   });
 
   test("declines deterministic high-risk approval requests without publishing approval events", async () => {
@@ -309,6 +288,40 @@ describe("Codex stdio JSON-RPC transport", () => {
     await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
 
     expect(fake.requests).toContainEqual({ id: 99, result: { decision: "decline" } });
+    expect(events).toEqual([]);
+  });
+
+  test("accepts exact low-risk approval requests without publishing approval events", async () => {
+    let fake!: FakeCodexProcess;
+    const events: ProviderEvent[] = [];
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 50 }, {
+      onEvent: (event) => events.push(event),
+      processFactory: () => {
+        fake = new FakeCodexProcess((request, process) => {
+          if (request.method === "initialize") {
+            process.sendStdout({
+              id: 99,
+              method: "item/commandExecution/requestApproval",
+              params: {
+                threadId: "thread-approval",
+                turnId: "turn-approval",
+                itemId: "item-command",
+                command: "git status",
+                cwd: "/repo"
+              }
+            });
+          }
+          if (request.id === 99 && request.result) {
+            process.sendStdout({ id: 1, result: { protocolVersion: "fixture" } });
+          }
+        });
+        return fake;
+      }
+    });
+
+    await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
+
+    expect(fake.requests).toContainEqual({ id: 99, result: { decision: "accept" } });
     expect(events).toEqual([]);
   });
 

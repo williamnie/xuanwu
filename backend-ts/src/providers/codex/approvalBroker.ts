@@ -34,7 +34,7 @@ export class CodexApprovalBroker {
   async request(jsonRpcId: string | number, method: string, params: unknown): Promise<unknown> {
     const request = approvalRequest(jsonRpcId, method, params);
     const fastDecision = evaluateApprovalFastPolicy({ method: request.method, params: request.params });
-    if (fastDecision.decision === "deny-now") {
+    if (fastDecision.decision === "deny-now" || fastDecision.decision === "approve-now") {
       return approvalResponse(request.method, request.params, fastDecision.resolver_decision);
     }
     if (this.pending.has(request.id)) throw new Error(`approval request already pending: ${request.id}`);

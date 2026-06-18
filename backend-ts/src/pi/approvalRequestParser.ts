@@ -37,8 +37,8 @@ export type ParseCodexApprovalRequestInput = {
   params: unknown;
 };
 
-const PATH_TOKEN_PATTERN = /(?:^|[\s"'`=])((?:~\/|\/|\.\.?\/)[^\s"'`,;|)]+)/g;
-const REDACTABLE_PATH_PATTERN = /(?:^|[\s"'`=,])((?:~\/|\/|\.\.?\/)[^\s"'`,;|)]+)/g;
+const PATH_TOKEN_PATTERN = /(?:^|[\s"'`=])((?:~\/|\/|\.\.?\/|[A-Za-z0-9_.-]+\/)[^\s"'`,;|)]+)/g;
+const REDACTABLE_PATH_PATTERN = /(?:^|[\s"'`=,])((?:~\/|\/|\.\.?\/|[A-Za-z0-9_.-]+\/)[^\s"'`,;|)]+)/g;
 const SUMMARY_MAX_LENGTH = 320;
 
 export function parseCodexApprovalRequest(input: ParseCodexApprovalRequestInput): NormalizedApprovalRequest {
