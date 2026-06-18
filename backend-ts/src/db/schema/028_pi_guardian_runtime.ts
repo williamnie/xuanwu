@@ -73,6 +73,26 @@ create table if not exists pi_guardian_decisions (
 create unique index if not exists ux_pi_guardian_decisions_key
   on pi_guardian_decisions(idempotency_key);
 
+create table if not exists pi_recovery_attempts (
+  id text primary key, idempotency_key text not null, source_decision_id text not null default '',
+  project_id text not null default '', issue_id integer not null, run_id text not null default '',
+  session_id text not null default '', provider_session_id text not null default '',
+  provider_turn_id text not null default '', expected_provider_turn_id text not null default '',
+  result_provider_turn_id text not null default '', run_group_id text not null default '',
+  diagnosis_code text not null, action_type text not null,
+  status text not null default 'planned', executing_started_at text not null default '',
+  hard_timeout_at text not null default '', progress_detected integer not null default 0,
+  progress_reasons_json text not null default '[]', ignored_reasons_json text not null default '[]',
+  budget_window_started_at text not null, before_snapshot_json text not null default '{}',
+  after_snapshot_json text not null default '{}', error text not null default '',
+  created_at text not null, updated_at text not null
+);
+create unique index if not exists ux_pi_recovery_attempts_key on pi_recovery_attempts(idempotency_key);
+create index if not exists idx_pi_recovery_attempts_issue_window on pi_recovery_attempts(issue_id, created_at, action_type, status);
+create index if not exists idx_pi_recovery_attempts_session_window on pi_recovery_attempts(session_id, created_at, action_type, status);
+create index if not exists idx_pi_recovery_attempts_project_window on pi_recovery_attempts(project_id, created_at, action_type, status);
+create index if not exists idx_pi_recovery_attempts_decision on pi_recovery_attempts(source_decision_id);
+
 create index if not exists idx_pi_guardian_decisions_issue
   on pi_guardian_decisions(project_id, issue_id, decision_kind, state, created_at desc);
 

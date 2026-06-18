@@ -16,3 +16,4 @@ export * from "./pi/guardianEvents.ts";
 export * from "./pi/runGroups.ts";
 export * from "./pi/notificationIntents.ts";
 export * from "./pi/notificationPreferences.ts";
+export * from "./pi/recoveryAttempts.ts";

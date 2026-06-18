@@ -76,6 +76,7 @@ describe("Bun SQLite database connection", () => {
         "pi_memory_items",
         "pi_notification_intents",
         "pi_notification_preferences",
+        "pi_recovery_attempts",
         "pi_reports",
         "pi_run_group_items",
         "pi_run_groups",
@@ -194,6 +195,13 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_notification_intents")).toContain("ux_pi_notification_intent_key");
       expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_scope");
       expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_effective");
+      expect(indexNames(connection, "pi_recovery_attempts")).toEqual(expect.arrayContaining([
+        "idx_pi_recovery_attempts_decision",
+        "idx_pi_recovery_attempts_issue_window",
+        "idx_pi_recovery_attempts_project_window",
+        "idx_pi_recovery_attempts_session_window",
+        "ux_pi_recovery_attempts_key"
+      ]));
       expect(indexNames(connection, "pi_run_group_items")).toContain("idx_pi_run_group_items_status");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
@@ -293,6 +301,13 @@ describe("Bun SQLite database connection", () => {
         flush_reason: "''",
         flush_sequence: "0",
         state: "'pending'"
+      });
+      expect(columnDefaults(connection, "pi_recovery_attempts")).toMatchObject({
+        after_snapshot_json: "'{}'",
+        ignored_reasons_json: "'[]'",
+        progress_detected: "0",
+        progress_reasons_json: "'[]'",
+        status: "'planned'"
       });
       expect(columnNames(connection, "pi_notification_preferences")).toEqual(expect.arrayContaining([
         "confirmation_text",
