@@ -128,7 +128,7 @@ function lifecycleDecision(
   severity: string,
   preference: ResolvedPiNotificationPreference
 ): LifecycleIntentDecision {
-  const preferenceDecision = preferenceLifecycleDecision(preference, runGroupID, severity);
+  const preferenceDecision = preferenceLifecycleDecision(preference, severity);
   if (preferenceDecision) return preferenceDecision;
   if (runGroupID === "") return "send_now";
   if (isStartStatus(status)) return "suppress";
@@ -137,13 +137,12 @@ function lifecycleDecision(
 
 function preferenceLifecycleDecision(
   preference: ResolvedPiNotificationPreference,
-  runGroupID: string,
   severity: string
 ): LifecycleIntentDecision | null {
   if (preference.source === "system_default") return null;
   if (mustNotify(preference, severity)) return "send_now";
   if (preference.effective.mode === "quiet") return "suppress";
-  if (preference.effective.mode === "digest" && runGroupID !== "") return "aggregate";
+  if (preference.effective.mode === "digest") return "aggregate";
   return null;
 }
 
