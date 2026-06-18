@@ -19,6 +19,7 @@ import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishu
 import { applyFeishuMemoryCommand } from "./feishuMemoryCommands.ts";
 import { appendFeishuMemoryCandidateNotice, snapshotFeishuMemoryCandidates } from "./feishuMemoryCandidateNotice.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
+import { applyFeishuNotificationPreferenceCommand } from "./feishuNotificationPreferenceBridge.ts";
 import { buildFeishuReviewCommandPrompt, normalizeFeishuReviewReply, parseFeishuReviewCommand } from "./feishuReviewCommand.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
 
@@ -112,6 +113,17 @@ async function handledNonMemoryReply(
   route: FeishuConversationRoute,
   projectContext: FeishuProjectContextResult
 ): Promise<FeishuBridgeHandleResult | null> {
+  const notificationPreference = applyFeishuNotificationPreferenceCommand(options.database, {
+    conversationId: route.conversationId,
+    event: input.event,
+    ingest: input.ingest,
+    now: options.clock?.now(),
+    projectId: resolvedProjectId(projectContext, input),
+    text: input.event.text
+  });
+  if (notificationPreference.handled) return sendReply(options, input, notificationPreference.text, {
+    conversationId: route.conversationId, projectId: resolvedProjectId(projectContext, input), text: notificationPreference.text
+  }, notificationPreference.reason);
   const projectSwitch = applyFeishuProjectSwitchCommand(options.database, {
     route,
     timestamp: options.clock?.now(),

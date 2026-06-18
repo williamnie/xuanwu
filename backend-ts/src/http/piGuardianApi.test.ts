@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   addPiRunGroupItem,
+  createPiGuardianEvent,
   createPiNotificationIntent,
+  listPiNotificationPreferences,
   createPiRunGroup,
   updatePiNotificationIntent
 } from "../db/repositories/pi.ts";
@@ -159,6 +161,77 @@ describe("PI Guardian API", () => {
       database.close();
     }
   });
+
+  test("writes structured notification preferences only after validator and DB persistence", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const anchor = createPiGuardianEvent(database, {
+        id: "event-before-api-pref",
+        event_type: "issue.failed",
+        idempotency_key: "issue.failed:demo:901:event-before-api-pref",
+        issue_id: 901,
+        project_id: "demo",
+        source: "issue_events",
+        source_event_id: "issue_event:901"
+      });
+      const router = createDefaultRouter({ database });
+
+      const created = await postJson(router, "/api/pi/guardian/preferences", {
+        conversation_id: "conv-api",
+        expires_at: "2026-06-18T06:00:00Z",
+        mode: "digest",
+        now: "2026-06-18T01:00:00Z",
+        notify_on: ["needs_user"],
+        project_id: "demo",
+        scope: "conversation",
+        source_message_id: "om_api_pref",
+        temporary: true
+      });
+      const listed = await getJson(router, "/api/pi/guardian/preferences?project_id=demo&conversation_id=conv-api");
+
+      expect(created).toMatchObject({
+        confirmation_text: expect.stringContaining("scope=conversation"),
+        preference: {
+          conversation_id: "conv-api",
+          effective_after_sequence: anchor.sequence_id,
+          expires_at: "2026-06-18T06:00:00Z",
+          mode: "digest",
+          project_id: "demo",
+          scope: "conversation"
+        }
+      });
+      expect(JSON.stringify(created)).toContain("覆盖关系");
+      expect(listed).toMatchObject([{
+        confirmation_text: expect.stringContaining("mode=digest"),
+        effective_after_sequence: anchor.sequence_id,
+        expires_at: "2026-06-18T06:00:00Z",
+        notify_on: expect.arrayContaining(["needs_user"]),
+        scope: "conversation"
+      }]);
+      expect(listPiNotificationPreferences(database, { scope: "conversation" })).toHaveLength(1);
+
+      const invalid = await postRaw(router, "/api/pi/guardian/preferences", {
+        mode: "quiet",
+        scope: "conversation",
+        temporary: true,
+        ttl_minutes: 999999
+      });
+      expect(invalid.status).toBe(400);
+      expect(listPiNotificationPreferences(database, { scope: "conversation" })).toHaveLength(1);
+
+      database.sqlite.run("drop table pi_notification_preferences");
+      const dbFailed = await postRaw(router, "/api/pi/guardian/preferences", {
+        mode: "quiet",
+        scope: "global",
+        temporary: true,
+        ttl_minutes: 60
+      });
+      expect(dbFailed.status).toBe(500);
+      expect(await dbFailed.text()).not.toContain("confirmation_text");
+    } finally {
+      database.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -174,13 +247,17 @@ async function getJson(router: ReturnType<typeof createDefaultRouter>, path: str
 }
 
 async function postJson(router: ReturnType<typeof createDefaultRouter>, path: string, body: unknown): Promise<unknown> {
-  const response = await router.handle(new Request(`${BASE_URL}${path}`, {
+  const response = await postRaw(router, path, body);
+  expect(response.status).toBe(200);
+  return response.json();
+}
+
+async function postRaw(router: ReturnType<typeof createDefaultRouter>, path: string, body: unknown): Promise<Response> {
+  return router.handle(new Request(`${BASE_URL}${path}`, {
     body: JSON.stringify(body),
     headers: { "content-type": "application/json" },
     method: "POST"
   }));
-  expect(response.status).toBe(200);
-  return response.json();
 }
 
 function insertIssue(db: RunnerDatabase, id: number, title: string, status: string): void {

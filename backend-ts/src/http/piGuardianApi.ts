@@ -11,6 +11,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { flushRunGroupDigest, runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import { registerPiGuardianPreferenceRoutes } from "./piGuardianPreferencesApi.ts";
 import type { Router } from "./router.ts";
 
 type PiGuardianContext = { database: RunnerDatabase };
@@ -24,6 +25,7 @@ export function registerPiGuardianRoutes(router: Router, context: PiGuardianCont
   router.get("/api/pi/guardian/run-groups", (request) => json(runGroupsResponse(context.database, request)));
   router.get("/api/pi/guardian/run-groups/:id", (request) => json(runGroupDetailResponse(context.database, request)));
   router.get("/api/pi/guardian/notification-intents", (request) => json(notificationIntentsResponse(context.database, request)));
+  registerPiGuardianPreferenceRoutes(router, context);
   router.post("/api/pi/guardian/digest/flush", async (request) => json(
     await digestFlushResponse(context.database, request)
   ));
