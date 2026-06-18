@@ -14,3 +14,4 @@ export * from "./pi/approvalRequests.ts";
 export * from "./pi/guardianEvents.ts";
 export * from "./pi/runGroups.ts";
 export * from "./pi/notificationIntents.ts";
+export * from "./pi/notificationPreferences.ts";

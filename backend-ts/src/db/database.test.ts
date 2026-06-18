@@ -74,6 +74,7 @@ describe("Bun SQLite database connection", () => {
         "pi_heartbeat_runs",
         "pi_memory_items",
         "pi_notification_intents",
+        "pi_notification_preferences",
         "pi_reports",
         "pi_run_group_items",
         "pi_run_groups",
@@ -170,6 +171,8 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_approval_requests")).toContain("ux_pi_approval_requests_provider_session_approval");
       expect(indexNames(connection, "pi_guardian_event_inbox")).toContain("ux_pi_guardian_event_source");
       expect(indexNames(connection, "pi_notification_intents")).toContain("ux_pi_notification_intent_key");
+      expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_scope");
+      expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_effective");
       expect(indexNames(connection, "pi_run_group_items")).toContain("idx_pi_run_group_items_status");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
@@ -266,6 +269,26 @@ describe("Bun SQLite database connection", () => {
         flush_reason: "''",
         flush_sequence: "0",
         state: "'pending'"
+      });
+      expect(columnNames(connection, "pi_notification_preferences")).toEqual(expect.arrayContaining([
+        "confirmation_text",
+        "digest_policy_json",
+        "effective_after_sequence",
+        "expires_at",
+        "mode",
+        "notify_on_json",
+        "policy_kind",
+        "scope"
+      ]));
+      expect(columnDefaults(connection, "pi_notification_preferences")).toMatchObject({
+        confirmation_text: "''",
+        digest_policy_json: "'{}'",
+        effective_after_sequence: "0",
+        expires_at: "''",
+        mode: "'normal'",
+        notify_on_json: "'[]'",
+        policy_kind: "'user_preference'",
+        status: "'active'"
       });
     } finally {
       connection.close();

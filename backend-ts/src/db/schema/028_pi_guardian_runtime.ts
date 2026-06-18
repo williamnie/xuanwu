@@ -97,6 +97,35 @@ create index if not exists idx_pi_run_group_items_issue
 create index if not exists idx_pi_run_group_items_status
   on pi_run_group_items(run_group_id, status, report_status, final_issue_status, enqueue_status);
 
+create table if not exists pi_notification_preferences (
+  id text primary key,
+  project_id text not null default '',
+  conversation_id text not null default '',
+  run_group_id text not null default '',
+  scope text not null,
+  policy_kind text not null default 'user_preference',
+  mode text not null default 'normal',
+  notify_on_json text not null default '[]',
+  digest_policy_json text not null default '{}',
+  source_message_id text not null default '',
+  source_event_id text not null default '',
+  source_event_sequence_id integer not null default 0,
+  confirmation_text text not null default '',
+  effective_after_sequence integer not null default 0,
+  effective_after_time text not null default '',
+  version integer not null default 1,
+  status text not null default 'active',
+  expires_at text not null default '',
+  created_at text not null,
+  updated_at text not null
+);
+
+create index if not exists idx_pi_notification_preferences_scope
+  on pi_notification_preferences(scope, project_id, conversation_id, run_group_id, status, version desc);
+
+create index if not exists idx_pi_notification_preferences_effective
+  on pi_notification_preferences(status, effective_after_sequence, expires_at);
+
 create table if not exists pi_notification_intents (
   id text primary key,
   source_event_id text not null default '',
