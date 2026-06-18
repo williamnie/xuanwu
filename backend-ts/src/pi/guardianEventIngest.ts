@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { Issue } from "../db/repositories/issues.ts";
-import { createPiGuardianEvent, type PiGuardianEvent } from "../db/repositories/pi.ts";
+import { createPiGuardianEvent, type PiGuardianEvent } from "../db/repositories/pi/guardianEvents.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 export type IssueLifecycleEventInput = {
@@ -8,6 +8,13 @@ export type IssueLifecycleEventInput = {
   eventType?: string;
   issue: Issue;
   runGroupID?: string;
+};
+export type PiGuardianEventIngestInput = {
+  conversationID?: string; createdAt?: string; error?: string; eventType: string;
+  id?: string; idempotencyKey?: string; issueID?: number; normalizedPayload?: unknown;
+  projectID?: string; redactionProfile?: string; runGroupID?: string;
+  severity?: string; source: string; sourceEventID?: string; sourceSequence?: number;
+  status?: string;
 };
 
 type IssueEventAnchor = { id: number; type: string };
@@ -20,19 +27,43 @@ export function ingestIssueLifecycleEvent(
   const eventType = cleanString(input.eventType) || anchor?.type || "issue.status_changed";
   const sourceEventID = anchor ? `issue_event:${anchor.id}` : fallbackSourceEventID(input.issue, eventType);
   const runGroupID = cleanString(input.runGroupID) || latestRunGroupIDForIssue(db, input.issue.id);
-  return createPiGuardianEvent(db, {
-    conversation_id: cleanString(input.conversationID),
-    event_type: eventType,
-    idempotency_key: lifecycleEventKey(input.issue, eventType, sourceEventID),
-    issue_id: input.issue.id,
-    normalized_payload_json: lifecyclePayload(input.issue),
-    project_id: input.issue.project_id,
-    run_group_id: runGroupID,
+  return ingestPiGuardianEvent(db, {
+    conversationID: cleanString(input.conversationID),
+    eventType,
+    idempotencyKey: lifecycleEventKey(input.issue, eventType, sourceEventID),
+    issueID: input.issue.id,
+    normalizedPayload: lifecyclePayload(input.issue),
+    projectID: input.issue.project_id,
+    runGroupID,
     severity: lifecycleSeverity(input.issue.status),
     source: anchor ? "issue_events" : "event_bus",
-    source_event_id: sourceEventID,
-    source_sequence: anchor?.id ?? 0,
+    sourceEventID,
+    sourceSequence: anchor?.id ?? 0,
     status: "consumed"
+  });
+}
+
+export function ingestPiGuardianEvent(
+  db: RunnerDatabase,
+  input: PiGuardianEventIngestInput
+): PiGuardianEvent {
+  return createPiGuardianEvent(db, {
+    conversation_id: cleanString(input.conversationID),
+    created_at: cleanString(input.createdAt),
+    error: cleanString(input.error),
+    event_type: input.eventType,
+    id: cleanString(input.id),
+    idempotency_key: cleanString(input.idempotencyKey),
+    issue_id: integer(input.issueID),
+    normalized_payload_json: redactedPayload(input.normalizedPayload ?? {}),
+    project_id: cleanString(input.projectID),
+    redaction_profile: cleanString(input.redactionProfile) || "prompt",
+    run_group_id: cleanString(input.runGroupID),
+    severity: cleanString(input.severity) || "info",
+    source: cleanString(input.source),
+    source_event_id: cleanString(input.sourceEventID),
+    source_sequence: integer(input.sourceSequence),
+    status: cleanString(input.status) || "pending"
   });
 }
 
@@ -73,6 +104,18 @@ function lifecyclePayload(issue: Issue): Record<string, string | number> {
 function lifecycleSeverity(status: string): string {
   if (status === "failed" || status === "pending_verification") return "watch";
   return "info";
+}
+
+function redactedPayload(value: unknown): unknown {
+  if (typeof value === "string") return redactSensitiveText(value);
+  if (Array.isArray(value)) return value.map(redactedPayload);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value)
+    .map(([key, item]) => [key, redactedPayload(item)]));
+}
+
+function integer(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) ? value : 0;
 }
 
 function cleanString(value: unknown): string {

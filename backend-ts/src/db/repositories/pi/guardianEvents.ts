@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../database.ts";
 import {
   buildFilter,
   cleanString,
   integerInput,
   integerValue,
+  jsonText,
   listRows,
   now,
   optionalString,
@@ -26,6 +28,8 @@ export type PiGuardianEventFilter = {
 
 type SQLValue = string | number;
 const TABLE = "pi_guardian_event_inbox";
+const KEY_PART_LIMIT = 64;
+const MINUTE_MS = 60_000;
 const COLUMNS = `sequence_id, id, source, source_event_id, source_sequence, event_type,
   project_id, issue_id, run_group_id, conversation_id, severity, normalized_payload_json,
   redaction_profile, status, lease_owner, lease_expires_at, consumed_at, idempotency_key,
@@ -39,13 +43,14 @@ export function createPiGuardianEvent(db: RunnerDatabase, input: PiGuardianEvent
   const record = normalizeCreate(input);
   const existing = findExistingEvent(db, record);
   if (existing) return existing;
-  const timestamp = now();
+  const timestamp = record.created_at || now();
+  const updatedAt = now();
   db.sqlite.run(`insert or ignore into ${TABLE} (${insertColumns()}) values (${placeholders(20)})`, [
     record.id, record.source, record.source_event_id, record.source_sequence,
     record.event_type, record.project_id, record.issue_id, record.run_group_id,
     record.conversation_id, record.severity, record.normalized_payload_json,
     record.redaction_profile, record.status, record.lease_owner, record.lease_expires_at,
-    record.consumed_at, record.idempotency_key, record.error, timestamp, timestamp
+    record.consumed_at, record.idempotency_key, record.error, timestamp, updatedAt
   ]);
   return mustGetPiGuardianEvent(db, record);
 }
@@ -92,13 +97,16 @@ export function updatePiGuardianEvent(
 function normalizeCreate(input: PiGuardianEventInput): PiGuardianEvent {
   const id = cleanString(input.id) || crypto.randomUUID();
   const eventType = requiredString(input.event_type, "event_type");
-  const idempotencyKey = cleanString(input.idempotency_key) || defaultEventKey(input, eventType);
+  const normalizedPayload = jsonPayload(input.normalized_payload_json);
+  const createdAt = cleanString(input.created_at) || now();
+  const idempotencyKey = cleanString(input.idempotency_key) ||
+    defaultEventKey(input, eventType, normalizedPayload, createdAt);
   return {
     consumed_at: cleanString(input.consumed_at), conversation_id: cleanString(input.conversation_id),
-    created_at: "", error: cleanString(input.error), event_type: eventType, id,
+    created_at: createdAt, error: cleanString(input.error), event_type: eventType, id,
     idempotency_key: idempotencyKey, issue_id: integerInput(input.issue_id),
     lease_expires_at: cleanString(input.lease_expires_at), lease_owner: cleanString(input.lease_owner),
-    normalized_payload_json: jsonPayload(input.normalized_payload_json), project_id: cleanString(input.project_id),
+    normalized_payload_json: normalizedPayload, project_id: cleanString(input.project_id),
     redaction_profile: cleanString(input.redaction_profile) || "prompt", run_group_id: cleanString(input.run_group_id),
     sequence_id: 0, severity: cleanString(input.severity) || "info", source: cleanString(input.source),
     source_event_id: cleanString(input.source_event_id), source_sequence: integerInput(input.source_sequence),
@@ -146,14 +154,93 @@ function findExistingEvent(db: RunnerDatabase, record: PiGuardianEvent): PiGuard
   return row ? mapEvent(row) : null;
 }
 
-function defaultEventKey(input: PiGuardianEventInput, eventType: string): string {
+function defaultEventKey(
+  input: PiGuardianEventInput,
+  eventType: string,
+  payload: string,
+  createdAt: string
+): string {
+  const projectID = cleanString(input.project_id);
+  const scope = eventScope(input);
+  const sourceEventID = cleanString(input.source_event_id);
+  if (sourceEventID !== "") return `${eventType}:${projectID}:${scope}:${sourceEventID}`;
+
+  const sourceSequence = integerInput(input.source_sequence);
+  if (sourceSequence > 0) {
+    return `${eventType}:${projectID}:${scope}:${cleanString(input.source)}:${sourceSequence}`;
+  }
+
+  const hash = payloadHash(payload);
+  const bucket = minuteBucket(createdAt);
+  if (isFailureLike(eventType)) {
+    return `${eventType}:${projectID}:${scope}:${diagnosisCode(payload)}:${bucket}:${hash}`;
+  }
+  return `${eventType}:${projectID}:${scope}:${hash}:${bucket}`;
+}
+
+function eventScope(input: PiGuardianEventInput): string {
   const issueScope = integerInput(input.issue_id) > 0 ? String(integerInput(input.issue_id)) : "";
-  const scope = issueScope || cleanString(input.run_group_id) || cleanString(input.conversation_id);
-  return `${eventType}:${cleanString(input.project_id)}:${scope}:${cleanString(input.source_event_id)}`;
+  return issueScope || cleanString(input.run_group_id) || cleanString(input.conversation_id);
+}
+
+function payloadHash(payload: string): string {
+  return `sha256:${createHash("sha256").update(canonicalPayload(payload)).digest("hex")}`;
+}
+
+function canonicalPayload(payload: string): string {
+  try {
+    return stableJson(JSON.parse(payload) as unknown);
+  } catch {
+    return payload;
+  }
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") return stableObjectJson(value as Record<string, unknown>);
+  return JSON.stringify(value ?? null);
+}
+
+function stableObjectJson(value: Record<string, unknown>): string {
+  const body = Object.keys(value).sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+    .join(",");
+  return `{${body}}`;
+}
+
+function minuteBucket(timestamp: string): string {
+  const time = Date.parse(timestamp);
+  const raw = Number.isFinite(time) ? time : Date.now();
+  const bucket = Math.floor(raw / MINUTE_MS) * MINUTE_MS;
+  return new Date(bucket).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function isFailureLike(eventType: string): boolean {
+  return /fail|error|disconnect|recovery|recover|provider/i.test(eventType);
+}
+
+function diagnosisCode(payload: string): string {
+  const parsed = parsePayloadObject(payload);
+  return safeKeyPart(parsed?.diagnosis_code) || safeKeyPart(parsed?.code) ||
+    safeKeyPart(parsed?.reason) || "unknown";
+}
+
+function parsePayloadObject(payload: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeKeyPart(value: unknown): string {
+  const text = cleanString(value).toLowerCase();
+  return text.replace(/[^a-z0-9_:-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, KEY_PART_LIMIT);
 }
 
 function jsonPayload(value: unknown): string {
-  if (typeof value === "string") return cleanString(value) || "{}";
+  if (typeof value === "string") return jsonText(value, "{}");
   return JSON.stringify(value ?? {});
 }
 
