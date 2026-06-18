@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { createIssueSupervisorEvent, listIssueSupervisorEvents, listPiActionEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { buildIssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 import { applyIssueSupervisorDecisionActions } from "./issueSupervisorActions.ts";
@@ -138,14 +139,21 @@ describe("PI issue supervisor actions", () => {
         supervisor_max_recoveries_per_issue: 1,
         supervisor_mode: "autonomous"
       });
-      createIssueSupervisorEvent(db, {
-        action_id: "previous",
-        action_type: "session.resume_followup",
-        event_type: "action",
-        issue_id: 306,
-        project_id: "demo"
-      });
-      db.sqlite.run("update issue_supervisor_events set created_at='2026-06-10T07:55:00Z' where action_id='previous'");
+      for (const index of [1, 2, 3]) {
+        recordPiRecoveryAttempt(db, {
+          action_type: "issue.retry",
+          budget_window_started_at: "2026-06-10T00:00:00Z",
+          created_at: `2026-06-10T07:5${index}:00Z`,
+          diagnosis_code: "provider_timeout",
+          id: `previous-${index}`,
+          idempotency_key: `previous-${index}`,
+          issue_id: 306,
+          project_id: "demo",
+          session_id: "codex:thread-306",
+          status: "executing",
+          updated_at: `2026-06-10T07:5${index}:00Z`
+        });
+      }
       db.close();
 
       const reopened = await openDatabase({ stateDir: join(root, "state") });

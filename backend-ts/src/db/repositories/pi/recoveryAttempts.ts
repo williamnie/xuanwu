@@ -32,6 +32,7 @@ export type PiRecoveryAttemptCountFilter = {
   actionType?: string; issueId?: number; projectId?: string; sessionId?: string; since: string;
   statuses?: PiRecoveryAttemptStatus[];
 };
+export type PiRecoveryAttemptWindowFilter = PiRecoveryAttemptCountFilter;
 export type PiRecoveryAttemptStatusPatch = {
   after_snapshot_json?: unknown; error?: string; executing_started_at?: string;
   hard_timeout_at?: string; ignored_reasons_json?: unknown; progress_detected?: number;
@@ -111,6 +112,25 @@ export function updatePiRecoveryAttemptStatus(
 }
 
 export function countPiRecoveryAttempts(db: RunnerDatabase, filter: PiRecoveryAttemptCountFilter): number {
+  const query = windowQuery(filter);
+  const row = db.sqlite.query<{ count: number }, SQLValue[]>(
+    `select count(*) as count from ${TABLE} where ${query.where}`
+  ).get(...query.args);
+  return row?.count ?? 0;
+}
+
+export function firstPiRecoveryAttemptCreatedAt(
+  db: RunnerDatabase,
+  filter: PiRecoveryAttemptWindowFilter
+): string {
+  const query = windowQuery(filter);
+  const row = db.sqlite.query<{ created_at: string }, SQLValue[]>(
+    `select created_at from ${TABLE} where ${query.where} order by created_at asc, id asc limit 1`
+  ).get(...query.args);
+  return cleanString(row?.created_at);
+}
+
+function windowQuery(filter: PiRecoveryAttemptWindowFilter): { args: SQLValue[]; where: string } {
   const conditions = ["created_at>=?"];
   const args: SQLValue[] = [requiredString(filter.since, "since")];
   addCondition(conditions, args, "project_id=?", filter.projectId);
@@ -122,10 +142,7 @@ export function countPiRecoveryAttempts(db: RunnerDatabase, filter: PiRecoveryAt
     conditions.push(`status in (${placeholders(statuses.length)})`);
     args.push(...statuses);
   }
-  const row = db.sqlite.query<{ count: number }, SQLValue[]>(
-    `select count(*) as count from ${TABLE} where ${conditions.join(" and ")}`
-  ).get(...args);
-  return row?.count ?? 0;
+  return { args, where: conditions.join(" and ") };
 }
 
 function normalizeCreate(input: PiRecoveryAttemptInput): PiRecoveryAttempt {

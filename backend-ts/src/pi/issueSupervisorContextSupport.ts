@@ -7,6 +7,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { redactAuditJsonText, redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { parseIssueEventProviderError, type ProviderErrorSignal } from "./providerErrorParser.ts";
 import type { PiSupervisorDiagnosisCode } from "./issueSupervisorRecovery.ts";
+import { recoveryBudgetCandidate } from "./recoveryBudget.ts";
 
 export type RecentSupervisorEvent = {
   at: string;
@@ -53,6 +54,11 @@ const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "i
 export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const out: SupervisorCandidate[] = [];
   const { providerError, session, history, now } = input;
+  const budgetCandidate = recoveryBudgetCandidate(history);
+  if (budgetCandidate) {
+    out.push(budgetCandidate);
+    return out;
+  }
   if (Number(history.consecutive_no_progress) >= 2 || Number(history.budget_remaining) <= 0) {
     out.push({
       diagnosis_code: "session_recovery_exhausted",
@@ -146,12 +152,14 @@ export function policyContext(input: PolicyContextInput): Record<string, unknown
   const projectAttempts = projectEvents.filter((event) =>
     isRecoveryAction(event) && Date.parse(event.created_at) >= now.getTime() - 60 * 60 * 1_000
   ).length;
+  const projectBudgetRemaining = numberFromHistory(history.project_budget_remaining);
   return {
     allowed_actions: jsonArray(policy.allowed_supervisor_actions_json),
     budget_remaining: history.budget_remaining,
     cooldown_seconds: policy.supervisor_cooldown_seconds,
     mode: policy.supervisor_mode,
-    project_budget_remaining: Math.max(0, policy.supervisor_max_recoveries_per_project_per_hour - projectAttempts),
+    project_budget_remaining: projectBudgetRemaining ??
+      Math.max(0, policy.supervisor_max_recoveries_per_project_per_hour - projectAttempts),
     rate_limit_wait_policy: policy.supervisor_rate_limit_wait_policy
   };
 }
@@ -297,6 +305,10 @@ function consecutiveNoProgress(events: IssueSupervisorEvent[]): number {
 
 function outcome(event: IssueSupervisorEvent | undefined): string {
   return clean(objectValue(parsePayload(event?.payload_json ?? "{}")).outcome);
+}
+
+function numberFromHistory(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function isRecoveryAction(event: IssueSupervisorEvent): boolean {

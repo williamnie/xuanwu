@@ -3,6 +3,7 @@ import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.t
 import { listIssueSupervisorEvents, readProjectPiPolicy } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { applyRecoveryBudgetToHistory, readPiRecoveryBudget } from "./recoveryBudget.ts";
 import type { ProviderErrorSignal } from "./providerErrorParser.ts";
 import {
   candidates,
@@ -59,7 +60,18 @@ export function buildIssueSupervisorRecoveryContext(
   const policy = readProjectPiPolicy(db, issue.project_id);
   const supervisorEvents = listIssueSupervisorEvents(db, { issueId: issue.id });
   const projectSupervisorEvents = listIssueSupervisorEvents(db, { projectId: issue.project_id });
-  const history = recoveryHistory(supervisorEvents, policy.supervisor_max_recoveries_per_issue, now);
+  const budget = readPiRecoveryBudget(db, {
+    actionType: "session.resume_followup",
+    issueID: issue.id,
+    now,
+    projectID: issue.project_id,
+    projectLimit: policy.supervisor_max_recoveries_per_project_per_hour,
+    sessionID: session?.session_key
+  });
+  const history = applyRecoveryBudgetToHistory(
+    recoveryHistory(supervisorEvents, policy.supervisor_max_recoveries_per_issue, now),
+    budget
+  );
   return {
     candidates: candidates({
       history,
