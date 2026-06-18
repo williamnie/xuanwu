@@ -5,6 +5,7 @@ import type { EventBus } from "../events/bus.ts";
 import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
+import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
@@ -17,6 +18,10 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
+  guardianDecisions: {
+    break_window: number; bypassed: number; cooldown_suppressed: number;
+    created: number; errors: number; merged: number; scanned: number;
+  };
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
 };
 
@@ -121,6 +126,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     runProjectCycle: input.runProjectCycle
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
+  const guardianDecisions = runGuardianDecisionOrchestratorOnce(input.database);
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);
@@ -130,6 +136,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
     digestFlush,
     digestNotifications,
+    guardianDecisions,
     supervisor
   };
 }
