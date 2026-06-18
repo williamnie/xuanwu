@@ -20,6 +20,11 @@ import {
   type GuardianDecisionCandidate,
   type GuardianDecisionPlan
 } from "./guardianDecisionMerge.ts";
+import {
+  createDeferredGuardianDecision,
+  guardianDecisionRateLimit,
+  rescheduleDeferredGuardianDecisions
+} from "./guardianDecisionRateLimit.ts";
 
 export type GuardianDecisionOrchestratorOptions = {
   limit?: number;
@@ -30,8 +35,10 @@ export type GuardianDecisionOrchestratorSummary = {
   bypassed: number;
   cooldown_suppressed: number;
   created: number;
+  deferred: number;
   errors: number;
   merged: number;
+  rescheduled: number;
   scanned: number;
 };
 
@@ -43,6 +50,7 @@ export function runGuardianDecisionOrchestratorOnce(
 ): GuardianDecisionOrchestratorSummary {
   const summary = emptySummary();
   const now = options.now ?? new Date();
+  summary.rescheduled += rescheduleDeferredGuardianDecisions(db, now);
   const events = pendingEvents(db, options.limit ?? DEFAULT_LIMIT);
   for (const event of events) {
     summary.scanned += 1;
@@ -81,12 +89,25 @@ function processEvent(
     });
   }
   const plan = guardianDecisionPlan(candidate, now, forceImmediate);
+  if (opensNewTurn(current, forceImmediate)) {
+    const rateLimit = guardianDecisionRateLimit(db, candidate, now);
+    if (!rateLimit.allowed) {
+      createDeferredGuardianDecision({ candidate, db, plan, rateLimit });
+      summary.deferred += 1;
+      consumeEvent(db, event, now);
+      return;
+    }
+  }
   const existing = reusableDecision(db, current, plan, forceImmediate);
   writeDecision(db, candidate, plan, existing);
   summary.created += existing ? 0 : 1;
   summary.merged += existing ? 1 : 0;
   summary.bypassed += plan.window_ms === 0 ? 1 : 0;
   consumeEvent(db, event, now);
+}
+
+function opensNewTurn(current: PiGuardianDecision | null, forceImmediate: boolean): boolean {
+  return forceImmediate || !current;
 }
 
 function reusableDecision(
@@ -199,8 +220,10 @@ function emptySummary(): GuardianDecisionOrchestratorSummary {
     bypassed: 0,
     cooldown_suppressed: 0,
     created: 0,
+    deferred: 0,
     errors: 0,
     merged: 0,
+    rescheduled: 0,
     scanned: 0
   };
 }

@@ -5,7 +5,10 @@ import type { EventBus } from "../events/bus.ts";
 import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
-import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
+import {
+  runGuardianDecisionOrchestratorOnce,
+  type GuardianDecisionOrchestratorSummary
+} from "../pi/guardianDecisionOrchestrator.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
@@ -18,10 +21,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
-  guardianDecisions: {
-    break_window: number; bypassed: number; cooldown_suppressed: number;
-    created: number; errors: number; merged: number; scanned: number;
-  };
+  guardianDecisions: GuardianDecisionOrchestratorSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
 };
 
