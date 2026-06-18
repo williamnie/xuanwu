@@ -99,6 +99,37 @@ describe("PI notification coordinator preference boundaries", () => {
     }
   });
 
+  test("legacy no-run-group needs-user event bypasses conversation quiet", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Needs user task" });
+      createPiNotificationPreference(db, {
+        conversation_id: "conv-1",
+        effective_after_sequence: 0,
+        id: "pref-conversation-quiet",
+        mode: "quiet",
+        project_id: "demo",
+        scope: "conversation"
+      });
+      const event = guardianEvent(db, issue, "event-needs-user-conversation", {
+        conversationID: "conv-1",
+        severity: "needs_user"
+      });
+
+      const result = coordinateIssueLifecycleNotification(db, { event, issue });
+
+      expect(result).toMatchObject({ decision: "send_now", runGroupID: "" });
+      expect(result.intent).toMatchObject({
+        decision: "send_now",
+        preference_id: "pref-conversation-quiet",
+        severity: "needs_user",
+        state: "ready"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("admin enforced digest preference overrides conversation quiet routing", async () => {
     const db = await fixtureDatabase();
     try {

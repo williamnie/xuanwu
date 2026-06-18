@@ -44,6 +44,32 @@ describe("Feishu lifecycle notification preference routing", () => {
     }
   });
 
+  test("conversation quiet preference applies to legacy issues without run group", async () => {
+    const db = await fixtureDatabase();
+    try {
+      createConversationPreference(db, "pref-conversation-quiet", "quiet", "oc_group");
+      const issueID = linkedFeishuIssue(db);
+
+      updateIssue(db, issueID, { status: "done", error: "" });
+      const result = queueFeishuIssueStatusNotification(db, issueID);
+
+      expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_suppressed" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+        {
+          conversation_id: "oc_group",
+          decision: "suppress",
+          kind: "issue_done",
+          preference_id: "pref-conversation-quiet",
+          run_group_id: "",
+          state: "suppressed"
+        }
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("digest preference aggregates ordinary single issue lifecycle without direct Feishu drafts", async () => {
     const db = await fixtureDatabase();
     try {
@@ -136,5 +162,21 @@ function createProjectPreference(db: RunnerDatabase, id: string, mode: string): 
     mode,
     project_id: "demo",
     scope: "project"
+  });
+}
+
+function createConversationPreference(
+  db: RunnerDatabase,
+  id: string,
+  mode: string,
+  conversationID: string
+): void {
+  createPiNotificationPreference(db, {
+    conversation_id: conversationID,
+    effective_after_sequence: 0,
+    id,
+    mode,
+    project_id: "demo",
+    scope: "conversation"
   });
 }

@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
+import { listExternalLinksByIssue } from "../db/repositories/externalLinks.ts";
 import {
   getPiRunGroup,
   listPiActions,
@@ -42,12 +43,15 @@ export function queueFeishuIssueStatusNotification(
   const issue = getIssue(db, issueID);
   if (!issue) return { queued: false, reason: "issue_not_found" };
   if (!isLifecycleStatus(issue.status)) return { queued: false, reason: "not_notifiable" };
+  const runGroupID = latestRunGroupIDForIssue(db, issue.id);
+  const conversationID = lifecycleConversationID(db, issue, options.conversationId, runGroupID);
   const event = ingestIssueLifecycleEvent(db, {
-    conversationID: options.conversationId,
+    conversationID,
     eventType: options.eventType || "issue.status_changed",
-    issue
+    issue,
+    runGroupID
   });
-  const target = lifecycleTarget(db, issue.id, options.conversationId, event.run_group_id);
+  const target = lifecycleTarget(db, issue.id, conversationID, event.run_group_id);
   const intentResult = createLifecycleIntent(db, issue, event, target);
   if (intentResult.decision === "suppress") {
     return { queued: false, reason: "run_group_lifecycle_suppressed" };
@@ -116,6 +120,38 @@ function legacyEnqueueConversationID(db: RunnerDatabase, issueID: number): strin
     .map((action) => action.conversation_id)
     .filter((conversationID) => conversationID !== "")
     .at(-1) ?? "";
+}
+
+function lifecycleConversationID(
+  db: RunnerDatabase,
+  issue: Issue,
+  explicitConversationID: string | undefined,
+  runGroupID: string
+): string {
+  const explicit = cleanString(explicitConversationID);
+  if (explicit !== "" || runGroupID !== "") return explicit;
+  return issueLinkConversationID(db, issue.id) ||
+    legacyEnqueueConversationID(db, issue.id) || sourceSessionConversationID(issue.source_session_id);
+}
+
+function latestRunGroupIDForIssue(db: RunnerDatabase, issueID: number): string {
+  const row = db.sqlite.query<{ run_group_id: string }, [number]>(
+    `select run_group_id from pi_run_group_items
+     where issue_id=? order by joined_at desc, run_group_id desc limit 1`
+  ).get(issueID);
+  return cleanString(row?.run_group_id);
+}
+
+function issueLinkConversationID(db: RunnerDatabase, issueID: number): string {
+  return listExternalLinksByIssue(db, issueID)
+    .filter((link) => link.source === "feishu")
+    .map((link) => cleanString(link.conversation_id))
+    .find(Boolean) ?? "";
+}
+
+function sourceSessionConversationID(value: string): string {
+  const text = cleanString(value);
+  return text.startsWith("feishu:") ? cleanString(text.slice("feishu:".length)) : "";
 }
 
 function queueLegacyFeishuDraft(
@@ -210,6 +246,10 @@ function boundedLimit(limit: number): number {
 
 function safeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function issueNotificationID(issue: Issue): string {
