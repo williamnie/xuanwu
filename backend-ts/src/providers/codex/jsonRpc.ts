@@ -49,6 +49,7 @@ const MAX_RPC_REQUEST_TIMEOUT_MS = 10_000;
 export class CodexStdioJsonRpcTransport {
   private nextId = 0;
   private process?: CodexJsonRpcProcess;
+  private processGeneration = 0;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly approvals: CodexApprovalBroker;
   private readonly stderrBuffer: string[] = [];
@@ -76,10 +77,15 @@ export class CodexStdioJsonRpcTransport {
     const current = this.process;
     this.process = undefined;
     if (!current) return;
+    this.processGeneration += 1;
     this.failPending(new Error("codex app-server transport stopped"));
     current.kill("SIGINT");
     await current.exited.catch(() => 1);
     current.stdin.end?.();
+  }
+
+  generation(): number {
+    return this.processGeneration;
   }
 
   async request(method: string, params: JsonRpcParams = null): Promise<unknown> {
@@ -198,9 +204,13 @@ export class CodexStdioJsonRpcTransport {
     void process.exited.then((code) => {
       if (this.process !== process) return;
       this.process = undefined;
+      this.processGeneration += 1;
       if (!this.stopped) this.failPending(new Error(`codex app-server exited before response (code ${code})`));
     }, (error) => {
-      if (this.process === process) this.failPending(asError(error));
+      if (this.process !== process) return;
+      this.process = undefined;
+      this.processGeneration += 1;
+      this.failPending(asError(error));
     });
   }
 

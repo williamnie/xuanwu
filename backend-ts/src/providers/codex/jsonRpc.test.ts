@@ -127,6 +127,25 @@ describe("Codex stdio JSON-RPC transport", () => {
     await expect(pending).rejects.toThrow("codex app-server exited before response (code 7)");
   });
 
+  test("advances process generation when the app-server exits unexpectedly", async () => {
+    let fake!: FakeCodexProcess;
+    const transport = new CodexStdioJsonRpcTransport(config, {
+      processFactory: () => {
+        fake = new FakeCodexProcess(() => {});
+        return fake;
+      }
+    });
+    await transport.start();
+
+    const initialGeneration = transport.generation();
+
+    fake.exit(7);
+    await fake.exited;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(transport.generation()).toBeGreaterThan(initialGeneration);
+  });
+
   test("times out hung app-server requests and stops the stale process", async () => {
     let fake!: FakeCodexProcess;
     const diagnostics: ProviderEvent[] = [];
@@ -142,6 +161,24 @@ describe("Codex stdio JSON-RPC transport", () => {
 
     await expect(pending).rejects.toThrow("codex app-server request timed out after 1ms: thread/list");
     expect(diagnostics).toContainEqual(expect.objectContaining({ type: "process/timeout" }));
+    await expect(fake.exited).resolves.toBe(0);
+  });
+
+  test("advances process generation when a timeout stops the stale process", async () => {
+    let fake!: FakeCodexProcess;
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 1 }, {
+      processFactory: () => {
+        fake = new FakeCodexProcess(() => {});
+        return fake;
+      }
+    });
+
+    const initialGeneration = transport.generation();
+    const pending = transport.request("thread/start", {});
+
+    await expect(pending).rejects.toThrow("codex app-server request timed out after 1ms: thread/start");
+
+    expect(transport.generation()).toBeGreaterThan(initialGeneration);
     await expect(fake.exited).resolves.toBe(0);
   });
 

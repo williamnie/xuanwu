@@ -41,6 +41,7 @@ const PROVIDER_CODEX = "codex";
 
 export type CodexRpcClient = {
   request(method: string, params?: JsonRpcParams): Promise<unknown>;
+  generation?(): number;
   resolveApprovalRequest?(requestID: string, decision: ApprovalDecision): Promise<unknown>;
 };
 
@@ -72,15 +73,22 @@ export type ApprovalDecision = { decision: string; scope?: string };
 
 export class CodexAdapter {
   private initialized?: Promise<CodexInitializeResult>;
+  private initializedGeneration?: number;
 
   constructor(private readonly rpc: CodexRpcClient) {}
 
   async initialize(): Promise<CodexInitializeResult> {
+    const generation = this.rpc.generation?.();
+    if (this.initialized && generation !== undefined && generation !== this.initializedGeneration) {
+      this.initialized = undefined;
+    }
     this.initialized ??= this.initializeOnce();
+    this.initializedGeneration = generation;
     try {
       return await this.initialized;
     } catch (error) {
       this.initialized = undefined;
+      this.initializedGeneration = undefined;
       throw error;
     }
   }

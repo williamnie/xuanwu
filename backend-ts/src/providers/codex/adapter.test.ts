@@ -41,6 +41,20 @@ describe("Codex adapter RPC methods", () => {
     expect(rpc.calls.map((call) => call.method)).toEqual(["initialize", "initialize"]);
   });
 
+  test("reinitializes after the RPC process generation changes", async () => {
+    const rpc = new FakeRpc({
+      initialize: [{ protocolVersion: "before-restart" }, { protocolVersion: "after-restart" }]
+    });
+    const adapter = new CodexAdapter(rpc);
+
+    await expect(adapter.initialize()).resolves.toMatchObject({ protocolVersion: "before-restart" });
+
+    rpc.bumpGeneration();
+
+    await expect(adapter.initialize()).resolves.toMatchObject({ protocolVersion: "after-restart" });
+    expect(rpc.calls.map((call) => call.method)).toEqual(["initialize", "initialize"]);
+  });
+
   test("normalizes model list responses", async () => {
     const rpc = new FakeRpc({
       "model/list": {
@@ -326,8 +340,17 @@ class FakeRpc {
   readonly calls: Array<{ method: string; params: JsonRpcParams }> = [];
   readonly approvalResolutions: Array<{ requestID: string; decision: unknown }> = [];
   resolveApprovalRequest?: (requestID: string, decision: unknown) => Promise<void>;
+  private processGeneration = 0;
 
   constructor(private readonly responses: Record<string, unknown>) {}
+
+  generation(): number {
+    return this.processGeneration;
+  }
+
+  bumpGeneration(): void {
+    this.processGeneration += 1;
+  }
 
   async request(method: string, params: JsonRpcParams = null): Promise<unknown> {
     this.calls.push({ method, params });
