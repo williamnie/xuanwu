@@ -136,6 +136,44 @@ describe("PI notification preference resolver", () => {
     }
   });
 
+  test("uses superseded old preference for events at the new preference boundary", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      createPreference(db, "pref-project-old", "project", "quiet", {
+        effective_after_sequence: 0,
+        project_id: "demo"
+      });
+      createPreference(db, "pref-project-new", "project", "normal", {
+        effective_after_sequence: 10,
+        project_id: "demo"
+      });
+
+      const oldEventPreference = resolvePiNotificationPreference(db, {
+        eventSequence: 10,
+        projectID: "demo",
+        referenceTime: "2026-06-18T08:00:00Z"
+      });
+      const newEventPreference = resolvePiNotificationPreference(db, {
+        eventSequence: 11,
+        projectID: "demo",
+        referenceTime: "2026-06-18T08:00:00Z"
+      });
+
+      expect(oldEventPreference).toMatchObject({
+        preferenceID: "pref-project-old",
+        reason: "matched_project",
+        source: "project"
+      });
+      expect(newEventPreference).toMatchObject({
+        preferenceID: "pref-project-new",
+        reason: "matched_project",
+        source: "project"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("resolves admin enforced preference with override reason", async () => {
     const db = await openFixtureDatabase();
     try {

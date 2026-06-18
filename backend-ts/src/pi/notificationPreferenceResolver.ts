@@ -113,7 +113,7 @@ function filterForScope(
   scope: "conversation" | "global" | "project" | "run_group"
 ) {
   return {
-    eventSequence: context.eventSequence,
+    eventSequence: comparableSequence(context.eventSequence),
     projectId: scope === "global" ? "" : context.projectID,
     referenceTime: context.referenceTime,
     scope,
@@ -156,6 +156,10 @@ function parseJson(value: string, fallback: unknown): unknown {
   } catch {
     return fallback;
   }
+}
+
+function comparableSequence(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

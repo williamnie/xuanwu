@@ -88,19 +88,23 @@ export function listActivePiNotificationPreferences(
   db: RunnerDatabase,
   filter: ActivePiNotificationPreferenceFilter = {}
 ): PiNotificationPreference[] {
-  const conditions = ["status='active'", "(expires_at='' or expires_at>?)"];
+  const eventSequence = comparableEventSequence(filter.eventSequence);
+  const historical = eventSequence !== undefined;
+  const statusCondition = historical ? "status in ('active', 'superseded')" : "status='active'";
+  const conditions = [statusCondition, "(expires_at='' or expires_at>?)"];
   const args: SQLValue[] = [cleanString(filter.referenceTime) || now()];
   addOptionalFilter(conditions, args, "project_id", filter.projectId);
   addOptionalFilter(conditions, args, "conversation_id", filter.conversationId);
   addOptionalFilter(conditions, args, "run_group_id", filter.runGroupId);
   addOptionalFilter(conditions, args, "scope", filter.scope);
-  if (filter.eventSequence !== undefined) {
+  if (eventSequence !== undefined) {
     conditions.push("effective_after_sequence<?");
-    args.push(integerInput(filter.eventSequence));
+    args.push(eventSequence);
   }
-  return db.sqlite.query<Record<string, unknown>, SQLValue[]>(
+  const preferences = db.sqlite.query<Record<string, unknown>, SQLValue[]>(
     `select ${COLUMNS} from ${TABLE} where ${conditions.join(" and ")} order by ${preferenceOrder()}`
   ).all(...args).map(mapPreference);
+  return historical ? latestEffectivePreferences(preferences) : preferences;
 }
 
 export function expirePiNotificationPreferences(db: RunnerDatabase, referenceTime = now()): number {
@@ -223,6 +227,30 @@ function addOptionalFilter(
   if (text === "") return;
   conditions.push(`${column}=?`);
   args.push(text);
+}
+
+function latestEffectivePreferences(preferences: PiNotificationPreference[]): PiNotificationPreference[] {
+  const seen = new Set<string>();
+  return preferences.filter((preference) => {
+    const key = preferenceScopeKey(preference);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function preferenceScopeKey(preference: PiNotificationPreference): string {
+  return [
+    preference.scope,
+    preference.project_id,
+    preference.conversation_id,
+    preference.run_group_id
+  ].join("\0");
+}
+
+function comparableEventSequence(value: unknown): number | undefined {
+  const sequence = integerInput(value);
+  return sequence > 0 ? sequence : undefined;
 }
 
 function preferenceOrder(): string {

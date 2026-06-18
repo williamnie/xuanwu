@@ -9,6 +9,10 @@ import {
   type PiRunGroupItem
 } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import {
+  resolvePiNotificationPreference,
+  type ResolvedPiNotificationPreference
+} from "./notificationPreferenceResolver.ts";
 
 export type LifecycleIntentDecision = "aggregate" | "send_now" | "suppress";
 export type LifecycleIntentResult = {
@@ -23,7 +27,8 @@ export function coordinateIssueLifecycleNotification(
 ): LifecycleIntentResult {
   const item = latestRunGroupItemForIssue(db, input.issue.id);
   const runGroupID = item?.run_group_id ?? "";
-  const decision = lifecycleDecision(input.issue.status, runGroupID);
+  const preference = resolveLifecyclePreference(db, input.event, input.issue, runGroupID);
+  const decision = lifecycleDecision(input.issue.status, runGroupID, input.event.severity, preference);
   const intent = createPiNotificationIntent(db, {
     conversation_id: input.event.conversation_id,
     decision,
@@ -31,6 +36,7 @@ export function coordinateIssueLifecycleNotification(
     issue_id: input.issue.id,
     kind: lifecycleKind(input.issue.status),
     payload_json: lifecycleIntentPayload(input.issue),
+    preference_id: preference.preferenceID,
     project_id: input.issue.project_id,
     run_group_id: runGroupID,
     severity: input.event.severity,
@@ -102,10 +108,49 @@ function latestRunGroupItemForIssue(db: RunnerDatabase, issueID: number): PiRunG
     .find((item) => item.issue_id === issueID) ?? null;
 }
 
-function lifecycleDecision(status: string, runGroupID: string): LifecycleIntentDecision {
+function resolveLifecyclePreference(
+  db: RunnerDatabase,
+  event: PiGuardianEvent,
+  issue: Issue,
+  runGroupID: string
+): ResolvedPiNotificationPreference {
+  return resolvePiNotificationPreference(db, {
+    conversationID: event.conversation_id,
+    eventSequence: event.sequence_id,
+    projectID: issue.project_id,
+    runGroupID
+  });
+}
+
+function lifecycleDecision(
+  status: string,
+  runGroupID: string,
+  severity: string,
+  preference: ResolvedPiNotificationPreference
+): LifecycleIntentDecision {
+  const preferenceDecision = preferenceLifecycleDecision(preference, runGroupID, severity);
+  if (preferenceDecision) return preferenceDecision;
   if (runGroupID === "") return "send_now";
   if (isStartStatus(status)) return "suppress";
   return "aggregate";
+}
+
+function preferenceLifecycleDecision(
+  preference: ResolvedPiNotificationPreference,
+  runGroupID: string,
+  severity: string
+): LifecycleIntentDecision | null {
+  if (preference.source === "system_default") return null;
+  if (mustNotify(preference, severity)) return "send_now";
+  if (preference.effective.mode === "quiet") return "suppress";
+  if (preference.effective.mode === "digest" && runGroupID !== "") return "aggregate";
+  return null;
+}
+
+function mustNotify(preference: ResolvedPiNotificationPreference, severity: string): boolean {
+  const token = severity.trim().toLowerCase();
+  return ["urgent", "actionable", "pi_unavailable", "needs_user", "budget_exhausted", "unsafe_or_external"].includes(token) ||
+    preference.effective.notify_on.includes(token);
 }
 
 function lifecycleIntentState(decision: LifecycleIntentDecision): string {
