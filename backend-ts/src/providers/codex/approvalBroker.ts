@@ -1,4 +1,5 @@
 import { redactSensitiveText } from "../../util/redact.ts";
+import { evaluateApprovalFastPolicy } from "../../pi/approvalFastPolicy.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 
 type PendingApproval = {
@@ -32,6 +33,10 @@ export class CodexApprovalBroker {
 
   async request(jsonRpcId: string | number, method: string, params: unknown): Promise<unknown> {
     const request = approvalRequest(jsonRpcId, method, params);
+    const fastDecision = evaluateApprovalFastPolicy({ method: request.method, params: request.params });
+    if (fastDecision.decision === "deny-now") {
+      return approvalResponse(request.method, request.params, fastDecision.resolver_decision);
+    }
     if (this.pending.has(request.id)) throw new Error(`approval request already pending: ${request.id}`);
     return await new Promise((resolve, reject) => {
       this.pending.set(request.id, { ...request, resolve, reject });

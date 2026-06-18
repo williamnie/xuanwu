@@ -278,6 +278,40 @@ describe("Codex stdio JSON-RPC transport", () => {
     });
   });
 
+  test("declines deterministic high-risk approval requests without publishing approval events", async () => {
+    let fake!: FakeCodexProcess;
+    const events: ProviderEvent[] = [];
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 50 }, {
+      onEvent: (event) => events.push(event),
+      processFactory: () => {
+        fake = new FakeCodexProcess((request, process) => {
+          if (request.method === "initialize") {
+            process.sendStdout({
+              id: 99,
+              method: "item/commandExecution/requestApproval",
+              params: {
+                threadId: "thread-approval",
+                turnId: "turn-approval",
+                itemId: "item-command",
+                command: "sudo cat CODEX_API_KEY=fixture-secret /Users/example/private.txt",
+                cwd: "/repo"
+              }
+            });
+          }
+          if (request.id === 99 && request.result) {
+            process.sendStdout({ id: 1, result: { protocolVersion: "fixture" } });
+          }
+        });
+        return fake;
+      }
+    });
+
+    await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
+
+    expect(fake.requests).toContainEqual({ id: 99, result: { decision: "decline" } });
+    expect(events).toEqual([]);
+  });
+
   test("normalizes app-server notification events from fake stdout stream", async () => {
     let fake!: FakeCodexProcess;
     const events: ProviderEvent[] = [];
