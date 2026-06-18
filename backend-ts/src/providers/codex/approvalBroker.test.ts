@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CodexApprovalBroker } from "./approvalBroker.ts";
+import { CodexApprovalBroker, codexProviderApprovalDecision } from "./approvalBroker.ts";
 
 describe("Codex approval broker fast policy", () => {
   test("accepts exact low-risk approvals once without creating pending approval state", async () => {
@@ -15,6 +15,11 @@ describe("Codex approval broker fast policy", () => {
     expect(events).toEqual([]);
     await flushTimers();
     expect(events).toEqual([expect.objectContaining({
+      payload: expect.objectContaining({
+        scope: "turn",
+        session_grant_reusable: false,
+        session_grant_ttl_ms: 0
+      }),
       raw: expect.objectContaining({ method: "approval/fast_resolved" }),
       status: "approve"
     })]);
@@ -82,6 +87,20 @@ describe("Codex approval broker fast policy", () => {
     expect(hookCalls).toBe(1);
     await expect(broker.resolveApproval("approval-audit-throw", { decision: "approve" }))
       .rejects.toThrow("approval request is not pending");
+  });
+
+  test("downgrades approve-for-session to current-turn approval when provider semantics are opaque", () => {
+    expect(codexProviderApprovalDecision({
+      decision: "approve_session",
+      scope: "session"
+    })).toEqual({ decision: "approve", scope: "turn" });
+  });
+
+  test("keeps explicit turn approval on the current turn", () => {
+    expect(codexProviderApprovalDecision({
+      decision: "approve",
+      scope: "turn"
+    })).toEqual({ decision: "approve", scope: "turn" });
   });
 });
 

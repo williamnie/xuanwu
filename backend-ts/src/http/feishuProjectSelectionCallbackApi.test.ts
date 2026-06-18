@@ -77,10 +77,10 @@ describe("Feishu project selection callback endpoint", () => {
       expect(await replay.json()).toMatchObject({ ok: true, status: "approved" });
       expect(second.status).toBe(202);
       expect(await second.json()).toMatchObject({ ok: true, status: "approved" });
-      expect(resolutions).toEqual([{ decision: "approve_session", id: "approval-card-1", scope: "session" }]);
+      expect(resolutions).toEqual([{ decision: "approve", id: "approval-card-1", scope: "turn" }]);
       expect(getPiApprovalRequest(database, "approval-card-1")).toMatchObject({
-        resolved_decision: "approve_session",
-        resolved_scope: "session",
+        resolved_decision: "approve",
+        resolved_scope: "turn",
         status: "approved"
       });
     } finally {

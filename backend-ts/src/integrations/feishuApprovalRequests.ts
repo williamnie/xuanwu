@@ -7,6 +7,7 @@ import type { Issue } from "../db/repositories/issues.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { AppEvent } from "../events/bus.ts";
 import type { ApprovalDecision, ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { type FeishuApprovalAction } from "./feishuApprovalCards.ts";
 
@@ -36,21 +37,26 @@ export async function resolvePiApprovalRequestFromFeishu(
   if (["approved", "rejected", "cancelled", "expired"].includes(request.status)) return { ok: true, status: request.status };
   const decision = normalizeApprovalDecision(input.decision || request.decision || request.resolved_decision);
   const scope = cleanScope(input.scope || request.resolved_scope);
+  const scoped = constrainApprovalGrantScope({ decision, scope }, {
+    provider: request.provider,
+    requestType: request.request_type,
+    sessionId: request.session_id || request.thread_id
+  });
   if (decision !== "defer") {
     const provider = input.provider ?? providerForRequest(input.providers, request.provider);
     await resolveProviderApproval(db, request.approval_id, request.provider_approval_id || request.approval_id, provider, {
-      decision,
-      scope
+      decision: scoped.decision.decision,
+      scope: scoped.decision.scope
     });
     recordPiApprovalResolverAttempt(db, request.approval_id, {
-      decision,
-      scope,
+      decision: scoped.decision.decision,
+      scope: scoped.decision.scope,
       status: "succeeded"
     });
   }
   const resolved = resolvePiApprovalRequestRecord(db, request.approval_id, {
-    decision,
-    scope,
+    decision: decision === "defer" ? decision : scoped.decision.decision,
+    scope: decision === "defer" ? scope : scoped.decision.scope,
     status: decision === "defer" ? "delivered" : undefined
   });
   return { ok: true, status: resolved.status };

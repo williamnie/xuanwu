@@ -24,6 +24,10 @@ type FastAuditPayload = {
   requestType: string;
   ruleID: string;
   scope: string;
+  sessionGrantExpiresAt: string;
+  sessionGrantReason: string;
+  sessionGrantReusable: boolean;
+  sessionGrantTtlMs: number;
 };
 
 export function recordApprovalFastAudit(
@@ -146,7 +150,11 @@ function fastAuditPayload(event: ProviderEvent): FastAuditPayload {
     requestSummary: cleanString(payload.request_summary),
     requestType: cleanString(payload.request_type),
     ruleID: cleanString(payload.rule_id),
-    scope: cleanString(payload.scope)
+    scope: cleanString(payload.scope),
+    sessionGrantExpiresAt: cleanString(payload.session_grant_expires_at),
+    sessionGrantReason: cleanString(payload.session_grant_reason),
+    sessionGrantReusable: payload.session_grant_reusable === true,
+    sessionGrantTtlMs: nonNegativeInteger(payload.session_grant_ttl_ms)
   };
 }
 
@@ -155,6 +163,10 @@ function auditSummaryRef(audit: FastAuditPayload, summary: string): Record<strin
     payload_hash: payloadHash(audit.payload),
     reason: audit.reason,
     rule_id: audit.ruleID,
+    session_grant_expires_at: audit.sessionGrantExpiresAt,
+    session_grant_reason: audit.sessionGrantReason,
+    session_grant_reusable: audit.sessionGrantReusable,
+    session_grant_ttl_ms: audit.sessionGrantTtlMs,
     summary
   };
 }

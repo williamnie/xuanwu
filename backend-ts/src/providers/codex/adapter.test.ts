@@ -287,7 +287,7 @@ describe("Codex adapter RPC methods", () => {
 
     expect(rpc.calls[0]).toEqual({
       method: "approval/resolve",
-      params: { requestId: "approval-1", decision: "approve_session", scope: "session" }
+      params: { requestId: "approval-1", decision: "approve", scope: "turn" }
     });
   });
 

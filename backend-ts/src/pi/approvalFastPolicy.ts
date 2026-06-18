@@ -14,12 +14,14 @@ export type ApprovalFastDecision =
       reason: string;
       resolver_decision: ApprovalDecision;
       rule_id: ApprovalAllowRuleID;
+      session_grant: ApprovalFastSessionGrant;
     }
   | {
       decision: "deny-now";
       reason: string;
       resolver_decision: ApprovalDecision;
       rule_id: ApprovalSafetyRuleID | ApprovalUnknownRuleID;
+      session_grant: ApprovalFastSessionGrant;
     };
 
 export type ApprovalFastInput = ApprovalSafetyInput & {
@@ -39,6 +41,21 @@ export type ApprovalUnknownRuleID =
   | "pi_approval_deny_policy_cache_unavailable";
 
 type AllowMatch = { reason: string; rule_id: ApprovalAllowRuleID };
+export type ApprovalFastSessionGrant = {
+  enabled: false;
+  expires_at: "";
+  reason: string;
+  reusable: false;
+  ttl_ms: 0;
+};
+
+const DISABLED_SESSION_GRANT: ApprovalFastSessionGrant = {
+  enabled: false,
+  expires_at: "",
+  reason: "provider acceptForSession semantics are not proven narrow",
+  reusable: false,
+  ttl_ms: 0
+};
 
 export function evaluateApprovalFastPolicy(input: ApprovalFastInput): ApprovalFastDecision {
   const safetyDecision = fastDenyDecision(evaluateApprovalSafetyPolicy(input));
@@ -64,7 +81,8 @@ function allowListDecision(input: ApprovalFastInput): ApprovalFastDecision {
     decision: "approve-now",
     reason: match.reason,
     resolver_decision: { decision: "approve", scope: "turn" },
-    rule_id: match.rule_id
+    rule_id: match.rule_id,
+    session_grant: DISABLED_SESSION_GRANT
   };
 }
 
@@ -171,6 +189,7 @@ function denyNow(
     decision: "deny-now",
     reason,
     resolver_decision: { decision: "deny", scope: "turn" },
-    rule_id
+    rule_id,
+    session_grant: DISABLED_SESSION_GRANT
   };
 }

@@ -1,5 +1,6 @@
 import { redactSensitiveText } from "../../util/redact.ts";
 import { evaluateApprovalFastPolicy, type ApprovalFastDecision } from "../../pi/approvalFastPolicy.ts";
+import { constrainApprovalGrantScope, type ScopedApprovalDecision } from "../../pi/approvalGrantScope.ts";
 import { parseCodexApprovalRequest } from "../../pi/approvalRequestParser.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 
@@ -59,8 +60,14 @@ export class CodexApprovalBroker {
     const pending = this.pending.get(id);
     if (!pending) throw new Error(`approval request is not pending: ${id}`);
     this.pending.delete(id);
-    pending.resolve(approvalResponse(pending.method, pending.params, decision));
-    this.publish("approval/resolved", { id, decision: decision.decision, scope: decision.scope ?? "" }, decision.decision);
+    const parsed = parseCodexApprovalRequest({ method: pending.method, params: pending.params });
+    const scoped = constrainApprovalGrantScope(decision, {
+      provider: "codex",
+      requestType: parsed.request_type,
+      sessionId: parsed.thread_id
+    });
+    pending.resolve(approvalResponse(pending.method, pending.params, scoped.decision));
+    this.publish("approval/resolved", approvalResolvedPayload(id, pending, parsed, scoped), scoped.decision.decision);
   }
 
   rejectAll(error: Error): void {
@@ -82,6 +89,10 @@ export class CodexApprovalBroker {
       }
     }, 0);
   }
+}
+
+export function codexProviderApprovalDecision(decision: ApprovalDecision): ApprovalDecision {
+  return constrainApprovalGrantScope(decision, { provider: "codex" }).decision;
 }
 
 function approvalRequest(jsonRpcId: string | number, method: string, params: unknown): PendingApproval {
@@ -132,8 +143,29 @@ function approvalFastResolvedEvent(
     reason: decision.reason,
     request_summary: parsed.summary,
     request_type: parsed.request_type,
-    rule_id: decision.rule_id
+    rule_id: decision.rule_id,
+    session_grant_expires_at: decision.session_grant.expires_at,
+    session_grant_reason: decision.session_grant.reason,
+    session_grant_reusable: decision.session_grant.reusable,
+    session_grant_ttl_ms: decision.session_grant.ttl_ms
   }, decision.resolver_decision.decision);
+}
+
+function approvalResolvedPayload(
+  id: string,
+  pending: PendingApproval,
+  parsed: ReturnType<typeof parseCodexApprovalRequest>,
+  scoped: ScopedApprovalDecision
+): Record<string, unknown> {
+  return {
+    id,
+    method: pending.method,
+    params: approvalAuditParams(pending.params),
+    decision: scoped.decision.decision,
+    scope: scoped.decision.scope ?? "turn",
+    request_summary: parsed.summary,
+    ...scoped.audit
+  };
 }
 
 function approvalAuditParams(params: Record<string, unknown>): Record<string, unknown> {

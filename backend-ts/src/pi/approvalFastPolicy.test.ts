@@ -38,7 +38,13 @@ describe("approval fast policy", () => {
       expect(commandDecision(command)).toMatchObject({
         decision: "approve-now",
         resolver_decision: { decision: "approve", scope: "turn" },
-        rule_id: ruleID
+        rule_id: ruleID,
+        session_grant: {
+          enabled: false,
+          expires_at: "",
+          reusable: false,
+          ttl_ms: 0
+        }
       });
     }
   });

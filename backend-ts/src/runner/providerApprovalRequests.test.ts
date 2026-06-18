@@ -192,6 +192,8 @@ describe("provider runtime approval request sync", () => {
       expect(requests[0].request_summary).toContain("CODEX_API_KEY=[redacted]");
       expect(requests[0].request_summary).toContain("[redacted-path]");
       expect(requests[0].raw_payload_json).toContain("sha256:");
+      expect(requests[0].raw_payload_json).toContain("session_grant_reusable");
+      expect(requests[0].raw_payload_json).toContain("session_grant_ttl_ms");
       expect(requests[0].raw_payload_json).not.toContain("fixture-secret");
       expect(requests[0].raw_payload_json).not.toContain("/Users/example");
       expect(decisions).toHaveLength(1);

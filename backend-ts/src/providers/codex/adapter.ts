@@ -1,4 +1,5 @@
 import type { JsonRpcParams } from "./jsonRpc.ts";
+import { codexProviderApprovalDecision } from "./approvalBroker.ts";
 import {
   CodexThreadLifecycleError,
   normalizeThreadListResult,
@@ -149,7 +150,12 @@ export class CodexAdapter {
       await this.rpc.resolveApprovalRequest(cleanID, decision);
       return { ok: true };
     }
-    await this.lifecycleRequest("approval/resolve", { requestId: cleanID, decision: decision.decision, scope: decision.scope ?? "" });
+    const scopedDecision = codexProviderApprovalDecision(decision);
+    await this.lifecycleRequest("approval/resolve", {
+      requestId: cleanID,
+      decision: scopedDecision.decision,
+      scope: scopedDecision.scope ?? ""
+    });
     return { ok: true };
   }
 

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -198,6 +199,27 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
+  test("downgrades compatibility approval session resolve to turn scope", async () => {
+    const { database } = await openFixtureDatabase();
+    const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    try {
+      const router = createDefaultRouter({
+        database,
+        providers: { codex: approvalProvider(resolutions) }
+      });
+
+      const approval = await requestJSON(router, "/api/codex/approvals/req-session/resolve", "POST", {
+        decision: "approve_session",
+        scope: "session"
+      });
+
+      expect(approval).toEqual({ ok: true });
+      expect(resolutions).toEqual([{ decision: "approve", id: "req-session", scope: "turn" }]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("lists notifications and marks them read", async () => {
     const { cwd, database } = await openFixtureDatabase();
     try {
@@ -267,6 +289,19 @@ async function requestError(
   body?: Record<string, unknown>
 ): Promise<any> {
   return await requestJSON(router, path, method, body, 400);
+}
+
+function approvalProvider(resolutions: Array<{ decision: string; id: string; scope: string }>): ExecutorProvider {
+  return {
+    capabilities: ["approvals"],
+    id: "codex",
+    async run(_input: ProviderRunInput): Promise<never> {
+      throw new Error("not implemented");
+    },
+    async resolveApproval(id, decision) {
+      resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" });
+    }
+  };
 }
 
 function rawRequest(

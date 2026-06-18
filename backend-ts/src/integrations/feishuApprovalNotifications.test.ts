@@ -120,12 +120,12 @@ describe("Feishu approval notification queue", () => {
         turn_id: "turn-record"
       });
       expect(getPiApprovalRequest(db, "approval-record-1")).toMatchObject({
-        resolved_decision: "approve_session",
-        resolved_scope: "session"
+        resolved_decision: "approve",
+        resolved_scope: "turn"
       });
       expect(resolved).toMatchObject({ ok: true, status: "approved" });
       expect(duplicate).toMatchObject({ ok: true, status: "approved" });
-      expect(resolutions).toEqual([{ decision: "approve_session", id: "approval-record-1", scope: "session" }]);
+      expect(resolutions).toEqual([{ decision: "approve", id: "approval-record-1", scope: "turn" }]);
     } finally {
       db.close();
     }

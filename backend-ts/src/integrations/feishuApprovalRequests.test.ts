@@ -57,6 +57,32 @@ describe("Feishu approval request resolver", () => {
     }
   });
 
+  test("downgrades approve-for-session to a current-turn provider approval when scope is not proven narrow", async () => {
+    const db = await fixtureDatabase();
+    const resolutions: Resolution[] = [];
+    try {
+      createRequest(db, "approval-session", "provider-session");
+
+      await resolvePiApprovalRequestFromFeishu(db, {
+        decision: "approve_session",
+        provider: fakeCodexResolver(resolutions),
+        requestID: "approval-session",
+        scope: "session"
+      });
+
+      expect(resolutions).toEqual([
+        { decision: "approve", id: "provider-session", scope: "turn" }
+      ]);
+      expect(getPiApprovalRequest(db, "approval-session")).toMatchObject({
+        resolved_decision: "approve",
+        resolved_scope: "turn",
+        status: "approved"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps failed resolver decisions retryable without terminal resolve", async () => {
     const db = await fixtureDatabase();
     const resolutions: Resolution[] = [];

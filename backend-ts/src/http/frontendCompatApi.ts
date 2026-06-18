@@ -16,6 +16,7 @@ import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import { isProjectLoopActive, startProjectLoop as startManagedProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
+import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
@@ -167,7 +168,11 @@ function verifierReport(db: RunnerDatabase, id: number): Record<string, unknown>
 }
 
 async function resolveApproval(context: FrontendCompatContext, id: string, body: Record<string, unknown>): Promise<Record<string, boolean>> {
-  if (context.providers?.codex?.resolveApproval) await context.providers.codex.resolveApproval(id, { decision: cleanString(body.decision), scope: cleanString(body.scope) });
+  const decision = constrainApprovalGrantScope({
+    decision: cleanString(body.decision),
+    scope: cleanString(body.scope)
+  }, { provider: "codex" }).decision;
+  if (context.providers?.codex?.resolveApproval) await context.providers.codex.resolveApproval(id, decision);
   return { ok: true };
 }
 
