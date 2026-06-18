@@ -325,6 +325,37 @@ describe("Codex stdio JSON-RPC transport", () => {
     expect(events).toEqual([]);
   });
 
+  test("denies unknown permission scope without holding the RPC", async () => {
+    let fake!: FakeCodexProcess;
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 50 }, {
+      processFactory: () => {
+        fake = new FakeCodexProcess((request, process) => {
+          if (request.method === "initialize") {
+            process.sendStdout({
+              id: 99,
+              method: "item/permissions/requestApproval",
+              params: {
+                threadId: "thread-approval",
+                turnId: "turn-approval",
+                itemId: "item-permissions",
+                permissions: { network: true },
+                cwd: "/repo"
+              }
+            });
+          }
+          if (request.id === 99 && request.result) {
+            process.sendStdout({ id: 1, result: { protocolVersion: "fixture" } });
+          }
+        });
+        return fake;
+      }
+    });
+
+    await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
+
+    expect(fake.requests).toContainEqual({ id: 99, result: { permissions: {}, scope: "turn" } });
+  });
+
   test("writes fast approval responses before deferred audit hook failures", async () => {
     let fake!: FakeCodexProcess;
     const hookMethods: string[] = [];

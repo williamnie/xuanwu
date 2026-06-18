@@ -105,6 +105,25 @@ describe("approval fast policy", () => {
       rule_id: "pi_approval_deny_policy_cache_unavailable"
     });
   });
+
+  test("denies unclear provider permission grants without session approval", () => {
+    expect(evaluateApprovalFastPolicy({
+      method: "item/permissions/requestApproval",
+      params: {
+        cwd: "/workspace/demo",
+        permissions: { network: true }
+      }
+    })).toMatchObject({
+      decision: "deny-now",
+      resolver_decision: { decision: "deny", scope: "turn" },
+      rule_id: "pi_approval_deny_allowlist_miss",
+      session_grant: {
+        enabled: false,
+        reusable: false,
+        ttl_ms: 0
+      }
+    });
+  });
 });
 
 function commandDecision(command: string) {

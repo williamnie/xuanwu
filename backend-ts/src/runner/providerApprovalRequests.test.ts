@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getPiApprovalRequest, listPiApprovalRequests } from "../db/repositories/pi/approvalRequests.ts";
 import { listPiGuardianDecisions } from "../db/repositories/pi/guardianDecisions.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, SessionRef } from "../providers/types.ts";
+import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -100,6 +101,8 @@ describe("provider runtime approval request sync", () => {
       });
       expect(requests[0].request_summary).toContain("command=cat CODEX_API_KEY=[redacted]");
       expect(requests[0].request_summary).toContain("[redacted-path]");
+      expect(requests[0].request_summary).not.toContain("fixture-secret");
+      expect(requests[0].request_summary).not.toContain("/Users/example");
       expect(requests[0].raw_payload_json).not.toContain("fixture-secret");
       expect(requests[0].raw_payload_json).not.toContain("/Users/example");
       expect(getPiApprovalRequest(db, "ordinary command output says approval denied")).toBeNull();
@@ -191,6 +194,8 @@ describe("provider runtime approval request sync", () => {
       });
       expect(requests[0].request_summary).toContain("CODEX_API_KEY=[redacted]");
       expect(requests[0].request_summary).toContain("[redacted-path]");
+      expect(requests[0].request_summary).not.toContain("fixture-secret");
+      expect(requests[0].request_summary).not.toContain("/Users/example");
       expect(requests[0].raw_payload_json).toContain("sha256:");
       expect(requests[0].raw_payload_json).toContain("session_grant_reusable");
       expect(requests[0].raw_payload_json).toContain("session_grant_ttl_ms");
@@ -211,6 +216,16 @@ describe("provider runtime approval request sync", () => {
     } finally {
       db.close();
     }
+  });
+
+  test("swallows SQLite audit failures for fast approval events", () => {
+    const session = { provider: "codex" as const, sessionId: "thread-fast", turnId: "turn-fast" };
+
+    expect(() => syncProviderApprovalRequest({
+      database: failingAuditDatabase(),
+      issueId: 1,
+      projectId: "demo"
+    }, fastResolvedEvent(session), "issue-1-attempt-1")).not.toThrow();
   });
 });
 
@@ -298,4 +313,20 @@ function insertIssue(db: RunnerDatabase, projectId: string): number {
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function failingAuditDatabase(): RunnerDatabase {
+  return {
+    close: () => {},
+    path: "/tmp/failing-audit.sqlite",
+    readonly: false,
+    sqlite: {
+      run: () => {
+        throw new Error("database is locked");
+      }
+    },
+    transaction: () => {
+      throw new Error("database is locked");
+    }
+  } as unknown as RunnerDatabase;
 }
