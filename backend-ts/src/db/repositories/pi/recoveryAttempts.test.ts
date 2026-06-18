@@ -98,6 +98,40 @@ describe("PI recovery attempts", () => {
     }
   });
 
+  test("redacts before and after snapshots", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const attempt = recordPiRecoveryAttempt(db, {
+        action_type: "session.resume_followup",
+        before_snapshot_json: { cwd: "/Users/example/private", token: "fixture-secret" },
+        budget_window_started_at: "2026-06-18T00:00:00Z",
+        diagnosis_code: "stream_disconnected",
+        id: "attempt-redacted",
+        idempotency_key: "resume:redacted",
+        issue_id: 103,
+        project_id: "demo",
+        status: "executing"
+      });
+
+      expect(attempt.before_snapshot_json).toContain("[redacted]");
+      expect(attempt.before_snapshot_json).toContain("[redacted-path]");
+      expect(attempt.before_snapshot_json).not.toContain("fixture-secret");
+      expect(attempt.before_snapshot_json).not.toContain("/Users/example/private");
+
+      const updated = updatePiRecoveryAttemptStatus(db, "attempt-redacted", {
+        after_snapshot_json: { path: "/tmp/private/output", api_key: "secret-after" },
+        status: "no_progress"
+      });
+
+      expect(updated.after_snapshot_json).toContain("[redacted]");
+      expect(updated.after_snapshot_json).toContain("[redacted-path]");
+      expect(updated.after_snapshot_json).not.toContain("secret-after");
+      expect(updated.after_snapshot_json).not.toContain("/tmp/private/output");
+    } finally {
+      db.close();
+    }
+  });
+
   test("counts issue, session, and project windows without using issues.attempt_count", async () => {
     const db = await openFixtureDatabase();
     try {

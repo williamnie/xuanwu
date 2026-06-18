@@ -58,4 +58,36 @@ describe("meaningful progress detector", () => {
       "empty_turn"
     ]));
   });
+
+  test("ignores keepalive, nested token usage, and timestamp-only updates", () => {
+    const result = detectMeaningfulProgress({
+      baseline: {
+        git_diff_hash: "same",
+        issue: { status: "in_progress", updated_at: "2026-06-10T02:00:00Z" },
+        run: { status: "in_progress", updated_at: "2026-06-10T02:00:00Z" },
+        session: { status: "running", updated_at: "2026-06-10T02:00:00Z" }
+      },
+      current: {
+        git_diff_hash: "same",
+        issue: { status: "in_progress", updated_at: "2026-06-10T02:05:00Z" },
+        run: { status: "in_progress", updated_at: "2026-06-10T02:05:00Z" },
+        session: { status: "running", updated_at: "2026-06-10T02:05:00Z" }
+      },
+      events: [
+        { type: "issue.log", payload: { type: "keepalive", text: "keepalive 2026-06-10T02:01:00Z" } },
+        { type: "issue.log", payload: { type: "event_msg", payload: { type: "token_count", info: { last_token_usage: { total_tokens: 20 } } } } },
+        { type: "issue.log", payload: { timestamp: "2026-06-10T02:02:00Z" } },
+        { type: "issue.log", payload: { raw_method: "turn/completed", raw_payload: "{\"turn\":{\"status\":\"completed\"}}", status: "completed" } }
+      ]
+    });
+
+    expect(result.has_progress).toBe(false);
+    expect(result.reasons).toEqual([]);
+    expect(result.ignored_reasons).toEqual(expect.arrayContaining([
+      "empty_turn",
+      "keepalive",
+      "timestamp_only",
+      "token_usage"
+    ]));
+  });
 });

@@ -11,6 +11,7 @@ import {
   requiredString,
   type PatchInput
 } from "./common.ts";
+import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 
 export type PiRecoveryAttempt = {
   action_type: string; after_snapshot_json: string; before_snapshot_json: string;
@@ -111,6 +112,20 @@ export function updatePiRecoveryAttemptStatus(
   return requireAttempt(db, current.id);
 }
 
+export function latestPiRecoveryAttemptForAction(
+  db: RunnerDatabase,
+  input: { actionID: string; issueID: number }
+): PiRecoveryAttempt | null {
+  const actionID = cleanString(input.actionID);
+  if (actionID === "") return null;
+  const row = db.sqlite.query<Record<string, unknown>, [number, string, string]>(
+    `select ${COLUMNS} from ${TABLE}
+      where issue_id=? and (source_decision_id=? or idempotency_key like ? escape '\\')
+      order by created_at desc, id desc limit 1`
+  ).get(integerInput(input.issueID), actionID, `%${escapeLike(actionID)}%`);
+  return row ? mapAttempt(row) : null;
+}
+
 export function countPiRecoveryAttempts(db: RunnerDatabase, filter: PiRecoveryAttemptCountFilter): number {
   const query = windowQuery(filter);
   const row = db.sqlite.query<{ count: number }, SQLValue[]>(
@@ -150,11 +165,11 @@ function normalizeCreate(input: PiRecoveryAttemptInput): PiRecoveryAttempt {
   const createdAt = cleanString(input.created_at) || timestamp;
   return {
     action_type: requiredString(input.action_type, "action_type"),
-    after_snapshot_json: jsonPayload(input.after_snapshot_json, "{}"),
-    before_snapshot_json: jsonPayload(input.before_snapshot_json, "{}"),
+    after_snapshot_json: redactedJsonPayload(input.after_snapshot_json, "{}"),
+    before_snapshot_json: redactedJsonPayload(input.before_snapshot_json, "{}"),
     budget_window_started_at: requiredString(input.budget_window_started_at, "budget_window_started_at"),
     created_at: createdAt, diagnosis_code: requiredString(input.diagnosis_code, "diagnosis_code"),
-    error: cleanString(input.error), executing_started_at: cleanString(input.executing_started_at),
+    error: redactAuditText(cleanString(input.error)), executing_started_at: cleanString(input.executing_started_at),
     expected_provider_turn_id: cleanString(input.expected_provider_turn_id),
     hard_timeout_at: cleanString(input.hard_timeout_at), id: cleanString(input.id) || crypto.randomUUID(),
     idempotency_key: requiredString(input.idempotency_key, "idempotency_key"),
@@ -172,8 +187,9 @@ function normalizeCreate(input: PiRecoveryAttemptInput): PiRecoveryAttempt {
 
 function normalizeStatusPatch(input: PiRecoveryAttemptStatusPatch): NormalizedStatusPatch {
   return {
-    after_snapshot_json: input.after_snapshot_json === undefined ? undefined : jsonPayload(input.after_snapshot_json, "{}"),
-    error: input.error, executing_started_at: input.executing_started_at,
+    after_snapshot_json: input.after_snapshot_json === undefined ? undefined : redactedJsonPayload(input.after_snapshot_json, "{}"),
+    error: input.error === undefined ? undefined : redactAuditText(cleanString(input.error)),
+    executing_started_at: input.executing_started_at,
     hard_timeout_at: input.hard_timeout_at, ignored_reasons_json: input.ignored_reasons_json === undefined
       ? undefined : jsonPayload(input.ignored_reasons_json, "[]"),
     progress_detected: input.progress_detected === undefined ? undefined : integerInput(input.progress_detected),
@@ -242,6 +258,14 @@ function jsonPayload(value: unknown, fallback: string): string {
   return JSON.stringify(value ?? JSON.parse(fallback));
 }
 
+function redactedJsonPayload(value: unknown, fallback: string): string {
+  return redactAuditJsonText(jsonPayload(value, fallback));
+}
+
 function placeholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }

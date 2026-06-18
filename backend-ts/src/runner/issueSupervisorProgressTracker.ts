@@ -4,9 +4,14 @@ import {
   listIssueSupervisorEvents,
   type IssueSupervisorEvent
 } from "../db/repositories/pi.ts";
+import {
+  latestPiRecoveryAttemptForAction,
+  updatePiRecoveryAttemptStatus,
+  type PiRecoveryAttempt
+} from "../db/repositories/pi/recoveryAttempts.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { IssueSupervisorRecoveryContext } from "../pi/issueSupervisorContext.ts";
-import { detectMeaningfulProgress } from "../pi/meaningfulProgress.ts";
+import { detectMeaningfulProgress, type ProgressSnapshot } from "../pi/meaningfulProgress.ts";
 
 const DEFAULT_STALE_SECONDS = 5 * 60;
 const FINAL_OUTCOMES = new Set(["failed", "no_progress", "progress", "queued", "recorded", "scheduled"]);
@@ -27,8 +32,23 @@ export function refreshSupervisorProgressResult(input: {
   if (!action || hasFinalResult(events, action)) return null;
   if (!staleEnough(action.created_at, input.now, input.staleAfterSeconds)) return null;
   const progressEvents = issueEventsAfter(input.database, input.issueID, action.created_at);
-  const progress = detectMeaningfulProgress({ events: progressEvents });
+  const attempt = latestPiRecoveryAttemptForAction(input.database, { actionID: action.action_id, issueID: input.issueID });
+  const afterSnapshot = snapshotFromContext(input.context);
+  const progress = detectMeaningfulProgress({
+    baseline: baselineSnapshot(action, attempt),
+    current: afterSnapshot,
+    events: progressEvents
+  });
   const outcome = progress.has_progress ? "progress" : "no_progress";
+  if (attempt) {
+    updatePiRecoveryAttemptStatus(input.database, attempt.id, {
+      after_snapshot_json: afterSnapshot,
+      ignored_reasons_json: progress.ignored_reasons,
+      progress_detected: progress.has_progress ? 1 : 0,
+      progress_reasons_json: progress.reasons,
+      status: outcome
+    });
+  }
   createIssueSupervisorEvent(input.database, {
     action_id: action.action_id,
     action_type: action.action_type,
@@ -40,6 +60,7 @@ export function refreshSupervisorProgressResult(input: {
       ignored_reasons: progress.ignored_reasons,
       observed_issue_events: progressEvents.length,
       outcome,
+      recovery_attempt_id: attempt?.id ?? "",
       reasons: progress.reasons,
       since_action_at: action.created_at
     },
@@ -91,6 +112,58 @@ function staleEnough(createdAt: string, now: Date, staleAfterSeconds: number | u
 
 function primaryDiagnosis(context: IssueSupervisorRecoveryContext): string {
   return clean(context.candidates[0]?.diagnosis_code) || clean(context.provider_error?.diagnosis_code);
+}
+
+function baselineSnapshot(action: IssueSupervisorEvent, attempt: PiRecoveryAttempt | null): ProgressSnapshot {
+  return snapshotFromJson(attempt?.before_snapshot_json) ?? snapshotFromAction(action);
+}
+
+function snapshotFromAction(action: IssueSupervisorEvent): ProgressSnapshot {
+  const payload = objectValue(parseJson(action.payload_json));
+  return snapshotFromJson(payload.before_snapshot) ?? {};
+}
+
+function snapshotFromContext(context: IssueSupervisorRecoveryContext): ProgressSnapshot {
+  return {
+    git_diff_hash: clean(context.workspace_snapshot.git_diff_hash),
+    issue: {
+      status: clean(context.issue.status),
+      updated_at: clean(context.issue.updated_at)
+    },
+    run: {
+      status: clean(context.latest_run?.status),
+      updated_at: clean(context.latest_run?.ended_at) || clean(context.latest_run?.started_at)
+    },
+    session: {
+      status: clean(context.session.raw_status) || clean(context.session.status),
+      updated_at: clean(context.session.updated_at)
+    }
+  };
+}
+
+function snapshotFromJson(value: unknown): ProgressSnapshot | null {
+  const snapshot = objectValue(parseJson(value));
+  if (Object.keys(snapshot).length === 0) return null;
+  return {
+    git_diff_hash: clean(snapshot.git_diff_hash),
+    issue: statePoint(snapshot.issue),
+    run: statePoint(snapshot.run),
+    session: statePoint(snapshot.session)
+  };
+}
+
+function statePoint(value: unknown): { status?: string; updated_at?: string } {
+  const point = objectValue(value);
+  return { status: clean(point.status), updated_at: clean(point.updated_at) };
+}
+
+function parseJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value) as unknown; } catch { return {}; }
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function clean(value: unknown): string {

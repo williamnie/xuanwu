@@ -16,7 +16,10 @@ import {
   writeGuardianSignals
 } from "../pi/guardianSignals.ts";
 import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
-import { supervisorResultOutcome } from "./issueSupervisorProgressTracker.ts";
+import {
+  refreshSupervisorProgressResult,
+  supervisorResultOutcome
+} from "./issueSupervisorProgressTracker.ts";
 export type PiIssueSupervisorSchedulerInput = {
   database: RunnerDatabase;
   limit?: number;
@@ -86,11 +89,24 @@ function collectTargets(
   for (const issueID of issueIDs) {
     const issue = getIssue(db, issueID);
     if (!issue) continue;
-    const context = buildIssueSupervisorRecoveryContext(db, issueID, {
+    let context = buildIssueSupervisorRecoveryContext(db, issueID, {
       now,
       staleAfterSeconds: options.staleAfterSeconds
     });
     if (clean(context.policy.mode) === "off") continue;
+    if (refreshSupervisorProgressResult({
+      context,
+      database: db,
+      issueID,
+      now,
+      projectID: issue.project_id,
+      staleAfterSeconds: options.staleAfterSeconds
+    }) !== null) {
+      context = buildIssueSupervisorRecoveryContext(db, issueID, {
+        now,
+        staleAfterSeconds: options.staleAfterSeconds
+      });
+    }
     const readyCandidates = context.candidates.filter((candidate) =>
       supervisorCandidateReady(context, candidate, now, { staleAfterSeconds: options.staleAfterSeconds })
     );

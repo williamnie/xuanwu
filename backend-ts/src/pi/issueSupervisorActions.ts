@@ -10,6 +10,7 @@ import {
   PI_SUPERVISOR_DECISIONS,
   type PiSupervisorDecisionJson
 } from "./issueSupervisorRecovery.ts";
+import { recordSupervisorRecoveryAttempt } from "./issueSupervisorRecoveryAttemptRecorder.ts";
 
 export type IssueSupervisorActionInput = {
   context: IssueSupervisorRecoveryContext;
@@ -121,6 +122,7 @@ async function executeIfApproved(
   if (!action || action.gate_decision !== "execute" || action.status !== "approved") return actionSummary(action);
   const executing = updatePiAction(input.database, action.id, { status: "executing" });
   recordPiActionAuditEvent(input.database, executing, "execution_started", { actor: "gate", decision: "execute" });
+  recordSupervisorRecoveryAttempt(input, executing);
   try {
     const result = await dispatchPiAction({ database: input.database, providers: input.providers }, executing);
     const completed = updatePiAction(input.database, action.id, { result_json: JSON.stringify(result ?? null), status: "completed" });

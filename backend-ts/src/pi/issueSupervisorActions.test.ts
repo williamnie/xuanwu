@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { createIssueSupervisorEvent, listIssueSupervisorEvents, listPiActionEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
-import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
+import { getPiRecoveryAttempt, listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { buildIssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 import { applyIssueSupervisorDecisionActions } from "./issueSupervisorActions.ts";
@@ -78,6 +78,16 @@ describe("PI issue supervisor actions", () => {
         status: "completed"
       }));
       expect(listIssueEvents(db, 305).map((event) => event.type)).toContain("issue.supervisor_resume_followup");
+      const [attempt] = listPiRecoveryAttempts(db, { issueId: 305 });
+      expect(attempt).toMatchObject({
+        action_type: "session.resume_followup",
+        expected_provider_turn_id: "turn-old",
+        progress_detected: 0,
+        status: "executing"
+      });
+      expect(getPiRecoveryAttempt(db, `recovery-${result.executed_actions[0]}`)).toMatchObject({
+        before_snapshot_json: expect.stringContaining('"issue":{"status":"in_progress"')
+      });
       expect(listIssueSupervisorEvents(db, { issueId: 305 }).map((event) => event.event_type))
         .toEqual(["decision", "action", "result"]);
     } finally {
