@@ -20,7 +20,9 @@ export type PiActionEnvelope = {
   action_type: string;
   delegation_id?: string;
   goal_id?: string;
+  guardian_decision_id?: string;
   heartbeat_id?: string;
+  idempotency_key?: string;
   issue_id?: number;
   payload: Record<string, unknown>;
   project_id?: string;

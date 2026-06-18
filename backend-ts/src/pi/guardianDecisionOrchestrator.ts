@@ -25,6 +25,10 @@ import {
   guardianDecisionRateLimit,
   rescheduleDeferredGuardianDecisions
 } from "./guardianDecisionRateLimit.ts";
+import {
+  executeDecisionActions,
+  executeReadyDecisionActions
+} from "./guardianDecisionActions.ts";
 
 export type GuardianDecisionOrchestratorOptions = {
   limit?: number;
@@ -37,6 +41,8 @@ export type GuardianDecisionOrchestratorSummary = {
   created: number;
   deferred: number;
   errors: number;
+  leases_acquired: number;
+  lease_skipped: number;
   merged: number;
   rescheduled: number;
   scanned: number;
@@ -51,6 +57,7 @@ export function runGuardianDecisionOrchestratorOnce(
   const summary = emptySummary();
   const now = options.now ?? new Date();
   summary.rescheduled += rescheduleDeferredGuardianDecisions(db, now);
+  executeReadyDecisionActions(db, now, summary);
   const events = pendingEvents(db, options.limit ?? DEFAULT_LIMIT);
   for (const event of events) {
     summary.scanned += 1;
@@ -103,6 +110,7 @@ function processEvent(
   summary.created += existing ? 0 : 1;
   summary.merged += existing ? 1 : 0;
   summary.bypassed += plan.window_ms === 0 ? 1 : 0;
+  executeDecisionActions(db, getPiGuardianDecision(db, existing?.id || plan.id), now, summary);
   consumeEvent(db, event, now);
 }
 
@@ -166,6 +174,7 @@ function writeDecision(
     cooldown_until: existing?.cooldown_until || effectivePlan.cooldown_until,
     decision: existing?.decision || candidate.decision,
     decision_kind: candidate.decision_kind,
+    actions_json: actionsJson(existing, candidate.actions_json),
     evidence_json: mergeEvidenceJson(existing, candidate, effectivePlan),
     id: existing?.id || effectivePlan.id,
     idempotency_key: effectivePlan.idempotency_key,
@@ -184,6 +193,11 @@ function writeDecision(
 function riskLevel(existing: string | undefined, next: string): string {
   const rank: Record<string, number> = { high: 3, low: 1, medium: 2 };
   return (rank[existing ?? ""] ?? 0) > (rank[next] ?? 0) ? existing as string : next;
+}
+
+function actionsJson(existing: PiGuardianDecision | null, next: string): string {
+  if (!existing) return next;
+  return existing.actions_json === "" || existing.actions_json === "[]" ? next : existing.actions_json;
 }
 
 function pendingEvents(db: RunnerDatabase, limit: number): PiGuardianEvent[] {
@@ -222,10 +236,16 @@ function emptySummary(): GuardianDecisionOrchestratorSummary {
     created: 0,
     deferred: 0,
     errors: 0,
+    leases_acquired: 0,
+    lease_skipped: 0,
     merged: 0,
     rescheduled: 0,
     scanned: 0
   };
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function iso(value: Date): string {

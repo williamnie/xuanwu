@@ -22,7 +22,10 @@ export type PiAction = {
   status: string; risk_level: string; requires_confirmation: number; payload_json: string;
   result_json: string; rationale: string; source: string; gate_decision: string; gate_reason: string;
   requested_changes: string; snoozed_until: string; decided_by: string; approved_by: string;
-  delegation_id: string; heartbeat_id: string; created_at: string; updated_at: string;
+  delegation_id: string; guardian_decision_id: string; heartbeat_id: string; idempotency_key: string;
+  lease_key: string; lease_expires_at: string;
+  expected_state_json: string; before_snapshot_json: string; legacy_bypass_reason: string;
+  created_at: string; updated_at: string;
 };
 
 export type PiActionEvent = {
@@ -47,28 +50,37 @@ const EVENT_TABLE = "pi_action_events";
 const COLUMNS = `id, project_id, issue_id, conversation_id, action_type, status,
   risk_level, requires_confirmation, payload_json, result_json, rationale, source,
   gate_decision, gate_reason, requested_changes, snoozed_until, decided_by, approved_by,
-  delegation_id, heartbeat_id, created_at, updated_at`;
+  delegation_id, heartbeat_id, guardian_decision_id, idempotency_key, lease_key,
+  lease_expires_at, expected_state_json, before_snapshot_json, legacy_bypass_reason,
+  created_at, updated_at`;
 const EVENT_COLUMNS = `id, action_id, project_id, issue_id, conversation_id, event_type, actor,
   decision, reason, payload_json, result_json, error, delegation_id, heartbeat_id, created_at`;
 const UPDATE_COLUMNS = [
   "project_id", "issue_id", "conversation_id", "action_type", "status", "risk_level",
   "requires_confirmation", "payload_json", "result_json", "rationale", "source",
   "gate_decision", "gate_reason", "requested_changes", "snoozed_until", "decided_by",
-  "approved_by", "delegation_id", "heartbeat_id"
+  "approved_by", "delegation_id", "heartbeat_id", "guardian_decision_id",
+  "idempotency_key", "lease_key", "lease_expires_at", "expected_state_json",
+  "before_snapshot_json", "legacy_bypass_reason"
 ] as const;
 
 export function createPiAction(db: RunnerDatabase, input: PiActionInput): PiAction {
   const record = normalizeCreate(input);
   requireCreateFields(record, ["id", "action_type", "status"]);
+  const existing = findExistingPiAction(db, record);
+  if (existing) return existing;
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(22)})`, [
+  db.sqlite.run(`insert or ignore into ${TABLE} (${COLUMNS}) values (${placeholders(29)})`, [
     record.id, record.project_id, record.issue_id, record.conversation_id, record.action_type,
     record.status, record.risk_level, record.requires_confirmation, record.payload_json,
     record.result_json, record.rationale, record.source, record.gate_decision, record.gate_reason,
     record.requested_changes, record.snoozed_until, record.decided_by, record.approved_by,
-    record.delegation_id, record.heartbeat_id, timestamp, timestamp
+    record.delegation_id, record.heartbeat_id, record.guardian_decision_id,
+    record.idempotency_key, record.lease_key, record.lease_expires_at,
+    record.expected_state_json, record.before_snapshot_json, record.legacy_bypass_reason,
+    timestamp, timestamp
   ]);
-  return mustGetPiAction(db, record.id);
+  return findExistingPiAction(db, record) ?? mustGetPiAction(db, record.id);
 }
 
 export function updatePiAction(db: RunnerDatabase, id: string, input: PiActionInput): PiAction {
@@ -121,6 +133,14 @@ function mustGetPiAction(db: RunnerDatabase, id: string): PiAction {
   return record;
 }
 
+function findExistingPiAction(db: RunnerDatabase, record: PiAction): PiAction | null {
+  if (record.idempotency_key === "") return getPiAction(db, record.id);
+  const row = db.sqlite.query<Record<string, unknown>, [string, string]>(
+    `select ${COLUMNS} from ${TABLE} where id=? or idempotency_key=? order by created_at asc, id asc limit 1`
+  ).get(record.id, record.idempotency_key);
+  return row ? mapPiAction(row) : null;
+}
+
 function mustGetPiActionEvent(db: RunnerDatabase, id: number): PiActionEvent {
   const row = db.sqlite.query<Record<string, unknown>, [number]>(
     `select ${EVENT_COLUMNS} from ${EVENT_TABLE} where id=?`
@@ -141,7 +161,13 @@ function normalizeCreate(input: PiActionInput): PiAction {
     gate_decision: cleanString(input.gate_decision), gate_reason: cleanString(input.gate_reason),
     requested_changes: cleanString(input.requested_changes), snoozed_until: cleanString(input.snoozed_until),
     decided_by: cleanString(input.decided_by), approved_by: cleanString(input.approved_by),
-    delegation_id: cleanString(input.delegation_id), heartbeat_id: cleanString(input.heartbeat_id),
+    delegation_id: cleanString(input.delegation_id), guardian_decision_id: cleanString(input.guardian_decision_id),
+    heartbeat_id: cleanString(input.heartbeat_id), idempotency_key: cleanString(input.idempotency_key),
+    lease_key: cleanString(input.lease_key), lease_expires_at: cleanString(input.lease_expires_at),
+    expected_state_json: jsonText(input.expected_state_json, "{}"),
+    before_snapshot_json: jsonText(input.before_snapshot_json, "{}"),
+    legacy_bypass_reason: cleanString(input.legacy_bypass_reason) ||
+      (cleanString(input.guardian_decision_id) === "" ? "legacy_direct_action" : ""),
     created_at: "", updated_at: ""
   };
 }
@@ -149,6 +175,8 @@ function normalizeCreate(input: PiActionInput): PiAction {
 function normalizePatch(input: PiActionInput): PiActionInput {
   return {
     ...input,
+    before_snapshot_json: input.before_snapshot_json === undefined ? undefined : jsonText(input.before_snapshot_json, "{}"),
+    expected_state_json: input.expected_state_json === undefined ? undefined : jsonText(input.expected_state_json, "{}"),
     payload_json: input.payload_json === undefined ? undefined : jsonText(input.payload_json, "{}"),
     result_json: input.result_json === undefined ? undefined : jsonText(input.result_json, "{}")
   };
@@ -181,7 +209,12 @@ function mapPiAction(row: Record<string, unknown>): PiAction {
     gate_decision: optionalString(row.gate_decision), gate_reason: optionalString(row.gate_reason),
     requested_changes: optionalString(row.requested_changes), snoozed_until: optionalString(row.snoozed_until),
     decided_by: optionalString(row.decided_by), approved_by: optionalString(row.approved_by),
-    delegation_id: optionalString(row.delegation_id), heartbeat_id: optionalString(row.heartbeat_id),
+    delegation_id: optionalString(row.delegation_id), guardian_decision_id: optionalString(row.guardian_decision_id),
+    heartbeat_id: optionalString(row.heartbeat_id), idempotency_key: optionalString(row.idempotency_key),
+    lease_key: optionalString(row.lease_key), lease_expires_at: optionalString(row.lease_expires_at),
+    expected_state_json: optionalString(row.expected_state_json) || "{}",
+    before_snapshot_json: optionalString(row.before_snapshot_json) || "{}",
+    legacy_bypass_reason: optionalString(row.legacy_bypass_reason),
     created_at: requiredString(row.created_at, "pi_actions.created_at"),
     updated_at: requiredString(row.updated_at, "pi_actions.updated_at")
   };

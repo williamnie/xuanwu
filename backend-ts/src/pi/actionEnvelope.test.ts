@@ -6,7 +6,9 @@ describe("PI action envelope normalize", () => {
     const envelope = normalizePiActionEnvelope({
       action_type: " issue.enqueue ",
       delegation_id: " delegation-a ",
+      guardian_decision_id: " decision-a ",
       heartbeat_id: " heartbeat-a ",
+      idempotency_key: " action-key-a ",
       payload: { issue_id: 7, note: "ready" },
       project_id: " demo ",
       rationale: " ready to run ",
@@ -18,7 +20,9 @@ describe("PI action envelope normalize", () => {
     expect(envelope).toEqual({
       action_type: "issue.enqueue",
       delegation_id: "delegation-a",
+      guardian_decision_id: "decision-a",
       heartbeat_id: "heartbeat-a",
+      idempotency_key: "action-key-a",
       issue_id: 7,
       payload: { issue_id: 7, note: "ready" },
       project_id: "demo",

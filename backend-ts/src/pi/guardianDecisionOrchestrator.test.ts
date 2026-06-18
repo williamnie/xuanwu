@@ -202,6 +202,7 @@ describe("PI Guardian decision orchestrator merge window", () => {
       db.close();
     }
   });
+
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -230,6 +231,7 @@ function signalEvent(
     status: "pending"
   });
 }
+
 
 function approvalEvent(db: RunnerDatabase, id: string, issueID: number): void {
   createPiGuardianEvent(db, {

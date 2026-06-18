@@ -136,8 +136,37 @@ describe("PI runtime repositories", () => {
         requires_confirmation: 0,
         result_json: "{}",
         source: "",
-        gate_decision: ""
+        gate_decision: "",
+        guardian_decision_id: "",
+        idempotency_key: "",
+        legacy_bypass_reason: "legacy_direct_action"
       });
+      const guardianAction = createPiAction(db, {
+        id: "action-guardian",
+        action_type: "issue.enqueue",
+        guardian_decision_id: "decision-1",
+        idempotency_key: "decision-1:issue.enqueue:1",
+        issue_id: 1,
+        payload_json: "{\"issue_id\":1}",
+        project_id: "demo",
+        status: "approved"
+      });
+      const duplicateGuardianAction = createPiAction(db, {
+        id: "action-guardian-duplicate",
+        action_type: "issue.enqueue",
+        guardian_decision_id: "decision-1",
+        idempotency_key: "decision-1:issue.enqueue:1",
+        issue_id: 1,
+        payload_json: "{\"issue_id\":1}",
+        project_id: "demo",
+        status: "approved"
+      });
+      expect(guardianAction).toMatchObject({
+        guardian_decision_id: "decision-1",
+        idempotency_key: "decision-1:issue.enqueue:1",
+        legacy_bypass_reason: ""
+      });
+      expect(duplicateGuardianAction.id).toBe(guardianAction.id);
       const auditEvent = createPiActionEvent(db, {
         action_id: action.id,
         actor: "pi",
@@ -161,7 +190,8 @@ describe("PI runtime repositories", () => {
         result_json: "{\"ok\":true}",
         status: "done"
       })).toMatchObject({ result_json: "{\"ok\":true}", status: "done" });
-      expect(listPiActions(db, { projectId: "demo" }).map((item) => item.id)).toEqual(["action-1"]);
+      expect(listPiActions(db, { projectId: "demo" }).map((item) => item.id))
+        .toEqual(["action-1", "action-guardian"]);
 
       const memory = createPiMemoryItem(db, {
         id: "mem-1",
@@ -177,6 +207,7 @@ describe("PI runtime repositories", () => {
 
       expect(deletePiAction(db, "action-1")).toBe(true);
       expect(getPiAction(db, "action-1")).toBeNull();
+      expect(deletePiAction(db, "action-guardian")).toBe(true);
       expect(deletePiMemoryItem(db, "mem-1")).toBe(true);
       expect(getPiMemoryItem(db, "mem-1")).toBeNull();
       expect(deletePiConversation(db, "conv-1")).toBe(true);

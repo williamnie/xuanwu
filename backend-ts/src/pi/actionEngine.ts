@@ -1,14 +1,15 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   createPiAction,
-  createPiActionEvent,
   getPiAction,
   updatePiAction,
   type PiAction
 } from "../db/repositories/pi.ts";
-import type { AppEvent, EventBus } from "../events/bus.ts";
+import type { EventBus } from "../events/bus.ts";
 
 export { classifyPiActionRisk, decidePiAuthorization, gatePiActionEnvelope } from "./actionGate.ts";
+export { acquireGuardianActionLease, actionLeaseTtlMs } from "./guardianActionLease.ts";
+export { publishPiActionEvent, recordPiActionAuditEvent } from "./actionAudit.ts";
 import {
   gatePiActionEnvelope,
   type PiActionDecision,
@@ -17,12 +18,16 @@ import {
   type PiGatePolicy
 } from "./actionGate.ts";
 import { normalizePiActionEnvelope } from "./actionEnvelope.ts";
+import { publishGateEvent, publishPiActionEvent, recordPiActionAuditEvent } from "./actionAudit.ts";
+import { actionRecordMetadata } from "./actionRecordMetadata.ts";
 
 export type PiActionRequest = {
   actionType: string;
   conversationID?: string;
   goalID?: string;
   goal_id?: string;
+  guardianDecisionID?: string;
+  idempotencyKey?: string;
   issueID?: number;
   payload: Record<string, unknown>;
   projectID?: string;
@@ -35,23 +40,19 @@ export type PiActionContext = {
   bus?: EventBus;
   conversationID?: string;
   delegationID?: string;
+  guardianDecisionID?: string;
   heartbeatID?: string;
+  legacyBypassReason?: string;
   source?: string;
 };
 
 type SafeActionInput = PiActionRequest & { execute: () => unknown; resultForAudit?: (result: unknown) => unknown };
-type AuditInput = {
-  actor?: string;
-  decision?: string;
-  error?: string;
-  payload?: unknown;
-  reason?: string;
-  result?: unknown;
-};
 
 export function executeSafePiAction(db: RunnerDatabase, context: PiActionContext, input: SafeActionInput) {
   const gated = createGatedPiAction(db, context, input);
-  if (gated.decision.decision !== "execute") return actionResultFromRecord(gated.action);
+  if (gated.decision.decision !== "execute" || gated.action.status !== "approved") {
+    return actionResultFromRecord(gated.action);
+  }
   return executePiActionWithAudit(db, context, gated.action, input.execute, input.resultForAudit);
 }
 
@@ -62,34 +63,11 @@ export function createPendingPiAction(
   execute?: () => unknown
 ) {
   const gated = createGatedPiAction(db, context, input);
-  if (gated.decision.decision === "execute" && execute) {
+  if (gated.decision.decision === "execute" && gated.action.status === "approved" && execute) {
     executePiActionWithAudit(db, context, gated.action, execute);
     return actionResultFromRecord(requireStoredPiAction(db, gated.action.id));
   }
   return actionResultFromRecord(gated.action);
-}
-
-export function recordPiActionAuditEvent(
-  db: RunnerDatabase,
-  action: PiAction,
-  eventType: string,
-  input: AuditInput = {}
-): void {
-  createPiActionEvent(db, {
-    action_id: action.id,
-    actor: cleanString(input.actor),
-    conversation_id: action.conversation_id,
-    decision: cleanString(input.decision),
-    delegation_id: action.delegation_id,
-    error: cleanString(input.error),
-    event_type: eventType,
-    heartbeat_id: action.heartbeat_id,
-    issue_id: action.issue_id,
-    payload_json: JSON.stringify(input.payload ?? {}),
-    project_id: action.project_id,
-    reason: cleanString(input.reason),
-    result_json: JSON.stringify(input.result ?? {})
-  });
 }
 
 function createGatedPiAction(
@@ -99,6 +77,7 @@ function createGatedPiAction(
 ): { action: PiAction; decision: PiGateDecision } {
   const envelope = actionEnvelope(input, context);
   const candidate = createPiActionRecord(db, context, input, envelope);
+  if (isReplay(candidate)) return replayGateResult(candidate);
   recordPiActionAuditEvent(db, candidate, "candidate", { actor: "pi", payload: envelope });
   const decision = gatePiActionEnvelope(envelope, context.authorization);
   return { action: persistGateDecision(db, context, candidate, decision), decision };
@@ -167,13 +146,21 @@ function createPiActionRecord(
   input: PiActionRequest,
   envelope: PiActionEnvelope
 ): PiAction {
+  const metadata = actionRecordMetadata(input, context, envelope);
   return createPiAction(db, {
     id: crypto.randomUUID(),
     action_type: envelope.action_type,
     conversation_id: cleanString(input.conversationID) || cleanString(context.conversationID),
     delegation_id: cleanString(envelope.delegation_id),
+    before_snapshot_json: metadata.before_snapshot_json,
+    expected_state_json: metadata.expected_state_json,
+    guardian_decision_id: cleanString(envelope.guardian_decision_id),
     heartbeat_id: cleanString(envelope.heartbeat_id),
+    idempotency_key: metadata.idempotency_key,
     issue_id: envelope.issue_id ?? 0,
+    lease_expires_at: cleanString(input.payload.lease_expires_at) || metadata.lease_expires_at,
+    lease_key: metadata.lease_key,
+    legacy_bypass_reason: metadata.legacy_bypass_reason,
     payload_json: JSON.stringify(envelope.payload),
     project_id: cleanString(envelope.project_id),
     rationale: cleanString(envelope.rationale),
@@ -192,7 +179,9 @@ function actionEnvelope(
     action_type: input.actionType,
     delegation_id: cleanString(context.delegationID),
     goal_id: cleanString(input.goalID ?? input.goal_id),
+    guardian_decision_id: cleanString(input.guardianDecisionID) || cleanString(context.guardianDecisionID),
     heartbeat_id: cleanString(context.heartbeatID),
+    idempotency_key: cleanString(input.idempotencyKey),
     issue_id: input.issueID ?? 0,
     payload: input.payload,
     project_id: cleanString(input.projectID),
@@ -207,6 +196,31 @@ function requireStoredPiAction(db: RunnerDatabase, id: string): PiAction {
   const action = getPiAction(db, id);
   if (!action) throw new Error("PI action missing after execution");
   return action;
+}
+
+function replayGateResult(action: PiAction): { action: PiAction; decision: PiGateDecision } {
+  return {
+    action,
+    decision: {
+      decision: decisionFromAction(action),
+      reason: action.gate_reason || "idempotent PI action replay"
+    }
+  };
+}
+
+function isReplay(action: PiAction): boolean {
+  return action.status !== "candidate" || action.gate_decision !== "";
+}
+
+function decisionFromAction(action: PiAction): PiActionDecision {
+  if (action.gate_decision === "execute" || action.gate_decision === "ask" ||
+    action.gate_decision === "deny" || action.gate_decision === "snooze") {
+    return action.gate_decision;
+  }
+  if (action.status === "denied") return "deny";
+  if (action.status === "snoozed") return "snooze";
+  if (action.status === "pending") return "ask";
+  return "execute";
 }
 
 function actionResult(id: string, action: Pick<PiAction, "action_type" | "issue_id" | "requires_confirmation" | "risk_level" | "status">) {
@@ -224,6 +238,8 @@ function actionResultFromRecord(action: PiAction) {
   return {
     ...actionResult(action.id, action),
     decision: action.gate_decision,
+    guardian_decision_id: action.guardian_decision_id,
+    idempotency_key: action.idempotency_key,
     ...completedResult(action)
   };
 }
@@ -242,33 +258,6 @@ function gateStatus(decision: PiActionDecision): string {
   if (decision === "ask") return "pending";
   if (decision === "snooze") return "snoozed";
   return "denied";
-}
-
-function publishGateEvent(bus: EventBus | undefined, decision: PiActionDecision, action: PiAction): void {
-  if (decision === "deny") publishPiActionEvent(bus, "pi.action_denied", action);
-  if (decision === "snooze") publishPiActionEvent(bus, "pi.action_snoozed", action);
-}
-
-export function publishPiActionEvent(bus: EventBus | undefined, type: string, action: PiAction): void {
-  bus?.publish(piActionEvent(type, action));
-}
-
-function piActionEvent(type: string, action: PiAction): AppEvent {
-  return {
-    type,
-    conversationId: action.conversation_id,
-    issueId: action.issue_id || undefined,
-    projectId: action.project_id,
-    payload: JSON.stringify({
-      action_id: action.id,
-      action_type: action.action_type,
-      decision: action.gate_decision,
-      requires_confirmation: action.requires_confirmation === 1,
-      risk_level: action.risk_level,
-      status: action.status
-    }),
-    created_at: action.updated_at
-  };
 }
 
 function safeError(error: unknown): string {

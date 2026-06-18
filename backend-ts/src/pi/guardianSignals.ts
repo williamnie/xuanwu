@@ -76,12 +76,13 @@ function heartbeatActionSignal(action: HeartbeatActionCandidate, context: Guardi
   return {
     action_type: "heartbeat.action_candidate",
     classification: { ...classification, severity },
-    diagnosis_code: clean(action.payload.diagnosis_code),
+    diagnosis_code: clean(action.payload.diagnosis_code) || action.action_type,
     event_type: "guardian.heartbeat.action_candidate",
     idempotency_key: ["guardian.heartbeat.action_candidate", projectID, issueID, action.action_type, sourceID(context)].join(":"),
     issue_id: issueID,
     payload: {
       action_type: action.action_type,
+      diagnosis_code: clean(action.payload.diagnosis_code) || action.action_type,
       original_payload: action.payload,
       rationale: action.rationale,
       risk_level: action.risk_level,

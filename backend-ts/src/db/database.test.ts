@@ -151,6 +151,15 @@ describe("Bun SQLite database connection", () => {
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
+      expect(columnNames(connection, "pi_actions")).toEqual(expect.arrayContaining([
+        "before_snapshot_json",
+        "expected_state_json",
+        "guardian_decision_id",
+        "idempotency_key",
+        "lease_expires_at",
+        "lease_key",
+        "legacy_bypass_reason"
+      ]));
       expect(columnNames(connection, "pi_approval_requests")).toEqual(expect.arrayContaining([
         "approval_id",
         "decision",
@@ -179,6 +188,9 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_approval_requests")).toContain("ux_pi_approval_requests_provider_session_approval");
       expect(indexNames(connection, "pi_guardian_event_inbox")).toContain("ux_pi_guardian_event_source");
       expect(indexNames(connection, "pi_guardian_decisions")).toContain("ux_pi_guardian_decisions_key");
+      expect(indexNames(connection, "pi_actions")).toContain("ux_pi_actions_idempotency_key");
+      expect(indexNames(connection, "pi_actions")).toContain("idx_pi_actions_guardian_decision");
+      expect(indexNames(connection, "pi_actions")).toContain("idx_pi_actions_lease_key");
       expect(indexNames(connection, "pi_notification_intents")).toContain("ux_pi_notification_intent_key");
       expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_scope");
       expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_effective");

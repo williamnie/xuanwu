@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { classifyPiActionRisk, gatePiActionEnvelope } from "./actionEngine.ts";
+import {
+  classifyPiActionRisk,
+  gatePiActionEnvelope
+} from "./actionEngine.ts";
+import type { PiGatePolicy } from "./actionGate.ts";
 
 describe("PI action engine risk classifier", () => {
   test("classifies safe, confirm-required, and high-risk actions", () => {
@@ -112,12 +116,12 @@ describe("PI action engine risk classifier", () => {
   });
 
   test("delegated allowlists do not create approval noise for ordinary read-only context collection", () => {
-    const policy = {
+    const policy: PiGatePolicy = {
       allowed_actions: ["issue.enqueue"],
       authorizedActions: [{ action_type: "issue.enqueue", issue_id: 7, project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }
-    } as const;
+    };
 
     for (const actionType of [
       "repo.search",
@@ -268,5 +272,4 @@ describe("PI action engine risk classifier", () => {
       reason: expect.stringContaining("confirmation")
     });
   });
-
 });

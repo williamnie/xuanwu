@@ -217,6 +217,7 @@ create index if not exists idx_pi_notification_intents_issue
   apply(sqlite) {
     sqlite.run(this.sql);
     ensureGuardianDecisionColumns(sqlite);
+    ensurePiActionGuardianColumns(sqlite);
   }
 };
 
@@ -245,5 +246,33 @@ function addColumn(sqlite: SQLiteDatabase, name: string, definition: string): vo
 
 function columns(sqlite: SQLiteDatabase): Set<string> {
   return new Set(sqlite.query<{ name: string }, []>("pragma table_info(pi_guardian_decisions)").all()
+    .map((row: { name: string }) => row.name));
+}
+
+function ensurePiActionGuardianColumns(sqlite: SQLiteDatabase): void {
+  addPiActionColumn(sqlite, "guardian_decision_id", "text not null default ''");
+  addPiActionColumn(sqlite, "idempotency_key", "text not null default ''");
+  addPiActionColumn(sqlite, "lease_key", "text not null default ''");
+  addPiActionColumn(sqlite, "lease_expires_at", "text not null default ''");
+  addPiActionColumn(sqlite, "expected_state_json", "text not null default '{}'");
+  addPiActionColumn(sqlite, "before_snapshot_json", "text not null default '{}'");
+  addPiActionColumn(sqlite, "legacy_bypass_reason", "text not null default ''");
+  sqlite.run(`update pi_actions set legacy_bypass_reason='pre_guardian_action'
+    where guardian_decision_id='' and legacy_bypass_reason=''`);
+  sqlite.run(`create unique index if not exists ux_pi_actions_idempotency_key
+    on pi_actions(idempotency_key) where idempotency_key<>''`);
+  sqlite.run(`create index if not exists idx_pi_actions_guardian_decision
+    on pi_actions(guardian_decision_id)`);
+  sqlite.run(`create index if not exists idx_pi_actions_lease_key
+    on pi_actions(lease_key, status, lease_expires_at)`);
+}
+
+function addPiActionColumn(sqlite: SQLiteDatabase, name: string, definition: string): void {
+  if (piActionColumns(sqlite).has(name)) return;
+  sqlite.run(`alter table pi_actions add column ${name} ${definition}`);
+}
+
+function piActionColumns(sqlite: SQLiteDatabase): Set<string> {
+  return new Set(sqlite.query<{ name: string }, []>("pragma table_info(pi_actions)").all()
     .map((row: { name: string }) => row.name));
 }

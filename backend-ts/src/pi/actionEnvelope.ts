@@ -6,7 +6,9 @@ export type PiActionEnvelopeInput = {
   action_type?: unknown;
   delegation_id?: unknown;
   goal_id?: unknown;
+  guardian_decision_id?: unknown;
   heartbeat_id?: unknown;
+  idempotency_key?: unknown;
   issue_id?: unknown;
   payload?: unknown;
   project_id?: unknown;
@@ -39,7 +41,9 @@ export function normalizePiActionEnvelope(input: PiActionEnvelopeInput): PiActio
   };
   setText(envelope, "delegation_id", input.delegation_id);
   setText(envelope, "goal_id", input.goal_id);
+  setText(envelope, "guardian_decision_id", input.guardian_decision_id);
   setText(envelope, "heartbeat_id", input.heartbeat_id);
+  setText(envelope, "idempotency_key", input.idempotency_key);
   if (issueID > 0) envelope.issue_id = issueID;
   setText(envelope, "project_id", input.project_id);
   setText(envelope, "rationale", input.rationale);
