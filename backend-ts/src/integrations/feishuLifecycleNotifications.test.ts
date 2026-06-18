@@ -8,7 +8,7 @@ import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { listPiGuardianEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
+import { createPiAction, listPiGuardianEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { createBatchRunGroup, updateRunGroupEnqueueResult } from "../pi/runGroupService.ts";
 import { queueFeishuIssueStatusNotification } from "./feishuLifecycleNotifications.ts";
@@ -23,6 +23,38 @@ afterEach(async () => {
 });
 
 describe("Feishu lifecycle notification intents", () => {
+  test("legacy no-run-group lifecycle still sends start done and failed notifications", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { status: "todo", error: "" });
+      const start = queueFeishuIssueStatusNotification(db, issueID);
+      updateIssue(db, issueID, { status: "done", error: "focused verification passed" });
+      const done = queueFeishuIssueStatusNotification(db, issueID);
+
+      const failedIssueID = linkedFeishuIssue(db);
+      updateIssue(db, failedIssueID, { status: "failed", error: "tests failed" });
+      const failed = queueFeishuIssueStatusNotification(db, failedIssueID);
+
+      const intents = listPiNotificationIntents(db);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      const content = outbox.map((item) => item.content).join("\n");
+
+      expect(start).toMatchObject({ queued: true, reason: "queued" });
+      expect(done).toMatchObject({ queued: true, reason: "queued" });
+      expect(failed).toMatchObject({ queued: true, reason: "queued" });
+      expect(outbox).toHaveLength(3);
+      expect(content).toContain("准备启动");
+      expect(content).toContain("已完成");
+      expect(content).toContain("执行失败/阻塞");
+      expectSendNowIntent(intents, { issueID, kind: "issue_start" });
+      expectSendNowIntent(intents, { issueID, kind: "issue_done" });
+      expectSendNowIntent(intents, { issueID: failedIssueID, kind: "issue_failed" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("legacy lifecycle notification writes inbox and intent before existing Feishu outbox", async () => {
     const db = await fixtureDatabase();
     try {
@@ -51,6 +83,38 @@ describe("Feishu lifecycle notification intents", () => {
       expect(intents[0]?.source_event_sequence_id).toBe(inbox[0]?.sequence_id);
       expect(outbox).toHaveLength(1);
       expect(outbox[0]?.content).toContain("issue #1 已完成");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("legacy no-run-group terminal notification falls back to enqueue action conversation", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const doneIssueID = legacyPiActionIssue(db, "legacy-enqueue-done");
+      const failedIssueID = legacyPiActionIssue(db, "legacy-enqueue-failed");
+      updateIssue(db, doneIssueID, { status: "done", error: "legacy done" });
+      updateIssue(db, failedIssueID, { status: "failed", error: "legacy failed" });
+
+      const done = queueFeishuIssueStatusNotification(db, doneIssueID);
+      const failed = queueFeishuIssueStatusNotification(db, failedIssueID);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      const content = outbox.map((item) => item.content).join("\n");
+
+      expect(done).toMatchObject({ queued: true, reason: "queued" });
+      expect(failed).toMatchObject({ queued: true, reason: "queued" });
+      expect(outbox).toHaveLength(2);
+      expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group", "oc_group"]);
+      expect(content).toContain("已完成");
+      expect(content).toContain("执行失败/阻塞");
+      expectSendNowIntent(listPiNotificationIntents(db, { issueId: doneIssueID }), {
+        issueID: doneIssueID,
+        kind: "issue_done"
+      });
+      expectSendNowIntent(listPiNotificationIntents(db, { issueId: failedIssueID }), {
+        issueID: failedIssueID,
+        kind: "issue_failed"
+      });
     } finally {
       db.close();
     }
@@ -90,6 +154,43 @@ describe("Feishu lifecycle notification intents", () => {
       db.close();
     }
   });
+
+  test("legacy no-run-group send-now fallback coexists with run-group aggregation", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const legacyIssueID = linkedFeishuIssue(db);
+      const groupedIssueID = linkedFeishuIssue(db, { conversationID: "feishu-chat-oc_group-20260614" });
+      const groupedIssue = getIssue(db, groupedIssueID);
+      if (!groupedIssue) throw new Error("missing grouped fixture issue");
+      const group = createBatchRunGroup(db, {
+        conversationID: "feishu-chat-oc_group-20260614",
+        issues: [groupedIssue],
+        projectID: "demo",
+        userPhrase: "把这一批做完"
+      });
+      updateRunGroupEnqueueResult(db, group.id, groupedIssueID, "completed");
+
+      updateIssue(db, legacyIssueID, { status: "done", error: "" });
+      const legacy = queueFeishuIssueStatusNotification(db, legacyIssueID);
+      updateIssue(db, groupedIssueID, { status: "done", error: "" });
+      const grouped = queueFeishuIssueStatusNotification(db, groupedIssueID);
+
+      const legacyIntents = listPiNotificationIntents(db, { issueId: legacyIssueID });
+      const groupedIntents = listPiNotificationIntents(db, { runGroupId: group.id });
+
+      expect(legacy).toMatchObject({ queued: true, reason: "queued" });
+      expect(grouped).toMatchObject({ queued: false, reason: "run_group_lifecycle_aggregated" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
+      expect(legacyIntents).toMatchObject([
+        { decision: "send_now", issue_id: legacyIssueID, kind: "issue_done", run_group_id: "", state: "sent" }
+      ]);
+      expect(groupedIntents).toMatchObject([
+        { decision: "aggregate", issue_id: groupedIssueID, kind: "issue_done", run_group_id: group.id, state: "aggregated" }
+      ]);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
@@ -124,4 +225,33 @@ function linkedFeishuIssue(db: RunnerDatabase, input: { conversationID?: string 
     source: "feishu"
   });
   return issue.id;
+}
+
+function legacyPiActionIssue(db: RunnerDatabase, actionID: string): number {
+  const issue = createIssue(db, { project_id: "demo", title: "Legacy PI task", status: "todo" });
+  createPiAction(db, {
+    action_type: "issue.enqueue",
+    conversation_id: "feishu-chat-oc_group-20260614",
+    id: actionID,
+    issue_id: issue.id,
+    project_id: "demo",
+    source: "feishu_runner_chat",
+    status: "completed"
+  });
+  return issue.id;
+}
+
+function expectSendNowIntent(
+  intents: ReturnType<typeof listPiNotificationIntents>,
+  input: { issueID: number; kind: string }
+): void {
+  expect(intents).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      decision: "send_now",
+      issue_id: input.issueID,
+      kind: input.kind,
+      run_group_id: "",
+      state: "sent"
+    })
+  ]));
 }

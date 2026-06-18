@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import {
   getPiRunGroup,
+  listPiActions,
   listPiNotificationIntents,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
@@ -105,7 +106,16 @@ function lifecycleTarget(
 ) {
   return feishuTargetForIssue(db, issueID) ??
     feishuTargetForConversation(db, conversationID ?? "") ??
-    feishuTargetForConversation(db, getPiRunGroup(db, runGroupID)?.origin_conversation_id ?? "");
+    feishuTargetForConversation(db, getPiRunGroup(db, runGroupID)?.origin_conversation_id ?? "") ??
+    feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID));
+}
+
+function legacyEnqueueConversationID(db: RunnerDatabase, issueID: number): string {
+  return listPiActions(db, { issueId: issueID })
+    .filter((action) => action.action_type === "issue.enqueue" && action.status === "completed")
+    .map((action) => action.conversation_id)
+    .filter((conversationID) => conversationID !== "")
+    .at(-1) ?? "";
 }
 
 function queueLegacyFeishuDraft(
