@@ -1,0 +1,126 @@
+import type { RunnerDatabase } from "../db/database.ts";
+import type { Issue } from "../db/repositories/issues.ts";
+import {
+  createPiNotificationIntent,
+  listPiRunGroupItems,
+  updatePiNotificationIntent,
+  type PiGuardianEvent,
+  type PiNotificationIntent,
+  type PiRunGroupItem
+} from "../db/repositories/pi.ts";
+import { redactSensitiveText } from "../util/redact.ts";
+
+export type LifecycleIntentDecision = "aggregate" | "send_now" | "suppress";
+export type LifecycleIntentResult = {
+  decision: LifecycleIntentDecision;
+  intent: PiNotificationIntent;
+  runGroupID: string;
+};
+
+export function coordinateIssueLifecycleNotification(
+  db: RunnerDatabase,
+  input: { event: PiGuardianEvent; issue: Issue; target?: LifecycleTarget }
+): LifecycleIntentResult {
+  const item = latestRunGroupItemForIssue(db, input.issue.id);
+  const runGroupID = item?.run_group_id ?? "";
+  const decision = lifecycleDecision(input.issue.status, runGroupID);
+  const intent = createPiNotificationIntent(db, {
+    conversation_id: input.event.conversation_id,
+    decision,
+    idempotency_key: lifecycleIntentKey(input.issue, input.event, runGroupID),
+    issue_id: input.issue.id,
+    kind: lifecycleKind(input.issue.status),
+    payload_json: lifecycleIntentPayload(input.issue),
+    project_id: input.issue.project_id,
+    run_group_id: runGroupID,
+    severity: input.event.severity,
+    source_event_id: input.event.id,
+    source_event_sequence_id: input.event.sequence_id,
+    source_event_type: input.event.event_type,
+    state: lifecycleIntentState(decision),
+    summary: lifecycleSummary(input.issue),
+    target_channel: input.target ? "feishu" : "",
+    target_chat_id: input.target?.chatID ?? "",
+    target_message_id: input.target?.messageID ?? "",
+    target_thread_id: input.target?.threadID ?? ""
+  });
+  return { decision, intent, runGroupID };
+}
+
+export function markLifecycleIntentSent(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  sentOutboxID: number
+): PiNotificationIntent {
+  return updatePiNotificationIntent(db, intent.id, {
+    sent_at: new Date().toISOString(),
+    sent_outbox_id: sentOutboxID,
+    state: "sent"
+  });
+}
+
+export function suppressLifecycleIntent(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  reason: string
+): PiNotificationIntent {
+  return updatePiNotificationIntent(db, intent.id, {
+    decision: "suppress",
+    error: reason,
+    state: "suppressed"
+  });
+}
+
+export type LifecycleTarget = { chatID: string; messageID: string; threadID: string };
+
+function latestRunGroupItemForIssue(db: RunnerDatabase, issueID: number): PiRunGroupItem | null {
+  const row = db.sqlite.query<{ run_group_id: string }, [number]>(
+    `select run_group_id from pi_run_group_items
+     where issue_id=? order by joined_at desc, run_group_id desc limit 1`
+  ).get(issueID);
+  if (!row) return null;
+  return listPiRunGroupItems(db, row.run_group_id)
+    .find((item) => item.issue_id === issueID) ?? null;
+}
+
+function lifecycleDecision(status: string, runGroupID: string): LifecycleIntentDecision {
+  if (runGroupID === "") return "send_now";
+  if (isStartStatus(status)) return "suppress";
+  return "aggregate";
+}
+
+function lifecycleIntentState(decision: LifecycleIntentDecision): string {
+  if (decision === "send_now") return "ready";
+  if (decision === "suppress") return "suppressed";
+  return "aggregated";
+}
+
+function lifecycleKind(status: string): string {
+  if (isStartStatus(status)) return "issue_start";
+  if (status === "done") return "issue_done";
+  if (status === "pending_verification") return "issue_pending_verification";
+  if (status === "failed") return "issue_failed";
+  return `issue_${status}`;
+}
+
+function lifecycleIntentKey(issue: Issue, event: PiGuardianEvent, runGroupID: string): string {
+  const source = isStartStatus(issue.status) ? "start" : event.id;
+  return `${lifecycleKind(issue.status)}:${issue.project_id}:${issue.id}:${runGroupID}:${source}:feishu`;
+}
+
+function lifecycleSummary(issue: Issue): string {
+  return `issue #${issue.id} ${issue.status}: ${issue.title}`;
+}
+
+function lifecycleIntentPayload(issue: Issue): Record<string, string | number> {
+  return {
+    error: redactSensitiveText(issue.error),
+    issue_id: issue.id,
+    status: issue.status,
+    title: issue.title
+  };
+}
+
+function isStartStatus(status: string): boolean {
+  return status === "todo" || status === "in_progress";
+}

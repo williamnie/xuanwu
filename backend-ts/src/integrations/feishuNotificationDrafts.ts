@@ -15,7 +15,7 @@ export function createFeishuNotificationDraft(
   issue: NotificationIssue,
   target: FeishuTarget,
   input: DraftInput
-): void {
+): { outboxID: number } {
   const draft = createImReplyDraft(db, {
     content: input.content,
     created_by: "pi",
@@ -29,7 +29,7 @@ export function createFeishuNotificationDraft(
     target_message_id: target.messageID,
     target_thread_id: target.threadID
   });
-  approveImReplyDraft(db, draft.id);
+  const approved = approveImReplyDraft(db, draft.id);
   createExternalLink(db, {
     conversation_id: target.threadID || target.chatID,
     external_event_id: target.eventID,
@@ -40,6 +40,7 @@ export function createFeishuNotificationDraft(
     relationship: "notification",
     source: FEISHU_SOURCE
   });
+  return { outboxID: approved.outbox.id };
 }
 
 export function alreadyQueuedFeishuNotification(db: RunnerDatabase, type: string, externalID: string): boolean {

@@ -24,7 +24,6 @@ import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOut
 import { redactSensitiveText } from "../util/redact.ts";
 import {
   formatApprovalNotification,
-  formatIssueStatusNotification,
   formatMemoryCandidateNotification,
   formatPiActionPendingNotification
 } from "./feishuNotificationFormatters.ts";
@@ -36,10 +35,11 @@ import {
   feishuTargetForConversation,
   feishuTargetForIssue
 } from "./feishuNotificationTargets.ts";
+import {
+  queueFeishuIssueStatusNotification,
+  type QueueResult
+} from "./feishuLifecycleNotifications.ts";
 
-type QueueResult = { queued: boolean; reason: string };
-
-const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
 const MEMORY_NOTIFY_TYPE = "feishu_memory_candidate_notification";
 const PI_ACTION_NOTIFY_TYPE = "feishu_pi_action_pending_notification";
@@ -47,6 +47,7 @@ const PI_ACTION_NOTIFY_TYPE = "feishu_pi_action_pending_notification";
 export {
   getPiApprovalRequest,
   listPiApprovalRequests,
+  queueFeishuIssueStatusNotification,
   resolvePiApprovalRequestFromFeishu
 };
 
@@ -59,9 +60,10 @@ export function attachFeishuNotificationObservers(input: {
   return input.bus.observe((event) => {
     try {
       if ((event.type === "issue.status_changed" || event.type === "issue.created") && event.issueId) {
-        const result = shouldSuppressLifecycleStartNotification(input.database, event.issueId)
-          ? { queued: false, reason: "runner_chat_start_summarized_by_pi" }
-          : queueFeishuIssueStatusNotification(input.database, event.issueId);
+        const result = queueFeishuIssueStatusNotification(input.database, event.issueId, {
+          eventType: event.type,
+          suppressDirectStart: shouldSuppressLifecycleStartNotification(input.database, event.issueId)
+        });
         dispatchIfQueued(input, result);
       }
       if (isPiIssueStartEvent(input.database, event)) {
@@ -102,31 +104,6 @@ function dispatchIfQueued(input: {
   if (!result.queued || !input.config) return;
   const sender = input.sender ?? createFeishuMessageClient({ config: input.config });
   void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
-}
-
-export function queueFeishuIssueStatusNotification(
-  db: RunnerDatabase,
-  issueID: number,
-  options: { conversationId?: string } = {}
-): QueueResult {
-  const issue = getIssue(db, issueID);
-  if (!issue) return { queued: false, reason: "issue_not_found" };
-  if (!["todo", "in_progress", "done", "failed", "pending_verification"].includes(issue.status)) {
-    return { queued: false, reason: "not_notifiable" };
-  }
-  const target = feishuTargetForIssue(db, issue.id) ?? feishuTargetForConversation(db, options.conversationId ?? "");
-  if (!target) return { queued: false, reason: "missing_feishu_link" };
-  const notifyID = issueNotificationID(issue);
-  if (alreadyQueuedFeishuNotification(db, APPROVAL_NOTIFY_TYPE, notifyID) ||
-    alreadyQueuedFeishuNotification(db, ISSUE_STATUS_NOTIFY_TYPE, notifyID)) {
-    return { queued: false, reason: "duplicate" };
-  }
-  createFeishuNotificationDraft(db, issue, target, {
-    content: formatIssueStatusNotification(issue),
-    notifyID,
-    type: ISSUE_STATUS_NOTIFY_TYPE
-  });
-  return { queued: true, reason: "queued" };
 }
 
 export function queueFeishuMemoryCandidateNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
@@ -200,10 +177,6 @@ function feishuConfigured(config: FeishuConnectorConfig | undefined): boolean {
   return config !== undefined && feishuConnectorStatus(config).enabled === true;
 }
 
-function issueNotificationID(issue: Issue): string {
-  return ["todo", "in_progress"].includes(issue.status) ? `${issue.id}:start` : `${issue.id}:${issue.status}`;
-}
-
 function isPiIssueStartEvent(db: RunnerDatabase, event: AppEvent): boolean {
   if (event.type !== "pi.action_completed" || !event.issueId) return false;
   const payload = parseObject(event.payload);
@@ -214,8 +187,16 @@ function isPiIssueStartEvent(db: RunnerDatabase, event: AppEvent): boolean {
 function shouldSuppressLifecycleStartNotification(db: RunnerDatabase, issueID: number): boolean {
   const issue = getIssue(db, issueID);
   if (!issue || !["todo", "in_progress"].includes(issue.status)) return false;
+  if (hasRunGroupMembership(db, issue.id)) return false;
   const action = latestCompletedEnqueueAction(db, issue.id);
   return action ? isRunnerChatSource(action.source) : false;
+}
+
+function hasRunGroupMembership(db: RunnerDatabase, issueID: number): boolean {
+  const row = db.sqlite.query<{ count: number }, [number]>(
+    "select count(*) as count from pi_run_group_items where issue_id=?"
+  ).get(issueID);
+  return (row?.count ?? 0) > 0;
 }
 
 function latestCompletedEnqueueAction(db: RunnerDatabase, issueID: number) {
