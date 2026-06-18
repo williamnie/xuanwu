@@ -325,6 +325,45 @@ describe("Codex stdio JSON-RPC transport", () => {
     expect(events).toEqual([]);
   });
 
+  test("writes fast approval responses before deferred audit hook failures", async () => {
+    let fake!: FakeCodexProcess;
+    const hookMethods: string[] = [];
+    const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 50 }, {
+      onEvent: (event) => {
+        hookMethods.push(event.raw?.method ?? "");
+        throw new Error("audit unavailable");
+      },
+      processFactory: () => {
+        fake = new FakeCodexProcess((request, process) => {
+          if (request.method === "initialize") {
+            process.sendStdout({
+              id: 99,
+              method: "item/commandExecution/requestApproval",
+              params: {
+                threadId: "thread-approval",
+                turnId: "turn-approval",
+                itemId: "item-command",
+                command: "git status",
+                cwd: "/repo"
+              }
+            });
+          }
+          if (request.id === 99 && request.result) {
+            process.sendStdout({ id: 1, result: { protocolVersion: "fixture" } });
+          }
+        });
+        return fake;
+      }
+    });
+
+    await expect(transport.request("initialize", {})).resolves.toEqual({ protocolVersion: "fixture" });
+
+    expect(fake.requests).toContainEqual({ id: 99, result: { decision: "accept" } });
+    expect(hookMethods).toEqual([]);
+    await flushTimers();
+    expect(hookMethods).toEqual(["approval/fast_resolved"]);
+  });
+
   test("normalizes app-server notification events from fake stdout stream", async () => {
     let fake!: FakeCodexProcess;
     const events: ProviderEvent[] = [];
@@ -397,6 +436,10 @@ describe("Codex stdio JSON-RPC transport", () => {
     }]);
   });
 });
+
+async function flushTimers(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function encode(text: string): Uint8Array {
   return new TextEncoder().encode(text);

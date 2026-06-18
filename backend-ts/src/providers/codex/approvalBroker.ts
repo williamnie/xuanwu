@@ -1,5 +1,5 @@
 import { redactSensitiveText } from "../../util/redact.ts";
-import { evaluateApprovalFastPolicy } from "../../pi/approvalFastPolicy.ts";
+import { evaluateApprovalFastPolicy, type ApprovalFastDecision } from "../../pi/approvalFastPolicy.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 
 type PendingApproval = {
@@ -35,12 +35,19 @@ export class CodexApprovalBroker {
     const request = approvalRequest(jsonRpcId, method, params);
     const fastDecision = evaluateApprovalFastPolicy({ method: request.method, params: request.params });
     if (fastDecision.decision === "deny-now" || fastDecision.decision === "approve-now") {
-      return approvalResponse(request.method, request.params, fastDecision.resolver_decision);
+      const response = approvalResponse(request.method, request.params, fastDecision.resolver_decision);
+      this.publishDeferred(approvalFastResolvedEvent(request, fastDecision));
+      return response;
     }
     if (this.pending.has(request.id)) throw new Error(`approval request already pending: ${request.id}`);
     return await new Promise((resolve, reject) => {
       this.pending.set(request.id, { ...request, resolve, reject });
-      this.publish("approval/requested", request, "pending");
+      try {
+        this.publish("approval/requested", request, "pending");
+      } catch (error) {
+        this.pending.delete(request.id);
+        reject(asError(error));
+      }
     });
   }
 
@@ -60,6 +67,17 @@ export class CodexApprovalBroker {
 
   private publish(method: string, payload: Record<string, unknown>, status: string): void {
     this.options.onEvent?.(approvalEvent(method, payload, status));
+  }
+
+  private publishDeferred(event: ProviderEvent | undefined): void {
+    if (!event) return;
+    setTimeout(() => {
+      try {
+        this.options.onEvent?.(event);
+      } catch {
+        // Fast-path audit hooks are best-effort and must not affect the resolver.
+      }
+    }, 0);
   }
 }
 
@@ -92,6 +110,26 @@ function approvalResponse(
   if (method === "item/commandExecution/requestApproval") return { decision: commandDecision(decision) };
   if (method === "item/fileChange/requestApproval") return { decision: fileChangeDecision(decision) };
   return { decision: legacyDecision(decision) };
+}
+
+function approvalFastResolvedEvent(request: PendingApproval, decision: ApprovalFastDecision): ProviderEvent {
+  return approvalEvent("approval/fast_resolved", {
+    id: request.id,
+    method: request.method,
+    params: approvalAuditParams(request.params),
+    decision: decision.resolver_decision.decision,
+    scope: decision.resolver_decision.scope ?? "",
+    fast_decision: decision.decision,
+    reason: decision.reason,
+    rule_id: decision.rule_id
+  }, decision.resolver_decision.decision);
+}
+
+function approvalAuditParams(params: Record<string, unknown>): Record<string, unknown> {
+  return {
+    threadId: stringField(params, "threadId"),
+    turnId: stringField(params, "turnId")
+  };
 }
 
 function permissionsResponse(params: Record<string, unknown>, decision: ApprovalDecision): Record<string, unknown> {
@@ -181,4 +219,8 @@ function stringField(raw: Record<string, unknown>, key: string): string {
 
 function firstNonEmpty(...values: string[]): string {
   return values.find((value) => value !== "") ?? "";
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

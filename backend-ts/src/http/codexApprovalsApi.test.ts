@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe("Codex approvals compatibility API", () => {
-  test("auto-approves exact low-risk app-server approval requests without SSE events", async () => {
+  test("auto-approves exact low-risk app-server approval requests before audit events", async () => {
     const database = await openFixtureDatabase();
     const bus = new EventBus();
     const events: unknown[] = [];
