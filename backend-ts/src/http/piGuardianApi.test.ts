@@ -11,6 +11,7 @@ import {
   createPiRunGroup,
   updatePiNotificationIntent
 } from "../db/repositories/pi.ts";
+import { resolvePiNotificationPreference } from "../pi/notificationPreferenceResolver.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -178,6 +179,7 @@ describe("PI Guardian API", () => {
 
       const created = await postJson(router, "/api/pi/guardian/preferences", {
         conversation_id: "conv-api",
+        digest_policy: { interval_minutes: 90, raw_provider_payload: { token: "fixture-provider-secret" } },
         expires_at: "2026-06-18T06:00:00Z",
         mode: "digest",
         now: "2026-06-18T01:00:00Z",
@@ -193,6 +195,7 @@ describe("PI Guardian API", () => {
         confirmation_text: expect.stringContaining("scope=conversation"),
         preference: {
           conversation_id: "conv-api",
+          digest_policy: { interval_minutes: 90 },
           effective_after_sequence: anchor.sequence_id,
           expires_at: "2026-06-18T06:00:00Z",
           mode: "digest",
@@ -208,6 +211,29 @@ describe("PI Guardian API", () => {
         notify_on: expect.arrayContaining(["needs_user"]),
         scope: "conversation"
       }]);
+      expect(JSON.stringify(created)).not.toContain("fixture-provider-secret");
+      expect(resolvePiNotificationPreference(database, {
+        conversationID: "conv-api",
+        eventSequence: anchor.sequence_id + 1,
+        projectID: "demo",
+        referenceTime: "2026-06-18T02:00:00Z"
+      })).toMatchObject({ preferenceID: expect.any(String), source: "conversation" });
+
+      const preferenceID = (created as { preference: { id: string } }).preference.id;
+      const disabled = await postJson(router, `/api/pi/guardian/preferences/${preferenceID}/disable`, {});
+      expect(disabled).toMatchObject({
+        preference: {
+          admin_enforced: false,
+          id: preferenceID,
+          status: "disabled"
+        }
+      });
+      expect(resolvePiNotificationPreference(database, {
+        conversationID: "conv-api",
+        eventSequence: anchor.sequence_id + 1,
+        projectID: "demo",
+        referenceTime: "2026-06-18T02:00:00Z"
+      })).toMatchObject({ preferenceID: "", source: "system_default" });
       expect(listPiNotificationPreferences(database, { scope: "conversation" })).toHaveLength(1);
 
       const invalid = await postRaw(router, "/api/pi/guardian/preferences", {

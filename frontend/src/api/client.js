@@ -431,6 +431,27 @@ export const api = {
     return request(`/api/pi/guardian/notification-intents${query}`);
   },
 
+  getPiGuardianPreferences: ({ conversationId = '', projectId = '', runGroupId = '', scope = '', status = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (conversationId) params.append('conversation_id', conversationId);
+    if (projectId) params.append('project_id', projectId);
+    if (runGroupId) params.append('run_group_id', runGroupId);
+    if (scope) params.append('scope', scope);
+    if (status) params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/guardian/preferences${query}`);
+  },
+
+  createPiGuardianPreference: (preference) => request('/api/pi/guardian/preferences', {
+    method: 'POST',
+    body: JSON.stringify(preference),
+  }),
+
+  disablePiGuardianPreference: (id) => request(`/api/pi/guardian/preferences/${encodeURIComponent(id)}/disable`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   flushPiGuardianDigest: ({ limit = 0, now = '', runGroupId = '' } = {}) => request('/api/pi/guardian/digest/flush', {
     method: 'POST',
     body: JSON.stringify({

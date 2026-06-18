@@ -5,6 +5,7 @@ import PiActionAuditPanel from './PiActionAuditPanel';
 import PiAutomationStatusPanel from './PiAutomationStatusPanel';
 import PiDelegationsPanel from './PiDelegationsPanel';
 import PiHeartbeatTimelinePanel from './PiHeartbeatTimelinePanel';
+import PiGuardianPreferencesPanel from './PiGuardianPreferencesPanel';
 import PiPolicyEditorPanel from './PiPolicyEditorPanel';
 import PiReportsPanel from './PiReportsPanel';
 import { COMMAND_CENTER_TERMS, modeLabel, statusLabel } from './piCommandCenterTerms';
@@ -17,6 +18,7 @@ const DETAIL_MODULES = [
   ['automation', '巡检启用状态', '区分自动执行、恢复、项目巡检与 heartbeat'],
   ['timeline', '自动检查时间线', '追踪最近运行证据'],
   ['reports', '恢复报告', '查看自动恢复汇总'],
+  ['preferences', '通知偏好', '查看当前 preference 并提供最小创建/禁用入口'],
   ['delegations', '委托窗口', '创建或暂停授权窗口'],
   ['policy', '执行策略', '调整项目默认规则'],
 ];
@@ -168,6 +170,7 @@ function DetailModules({ activeModule, automation, onSelect, reload }) {
 function renderActiveModule(activeModule, reload, automation) {
   if (activeModule === 'automation') return <PiAutomationStatusPanel automation={automation} onChanged={reload} />;
   if (activeModule === 'reports') return <PiReportsPanel />;
+  if (activeModule === 'preferences') return <PiGuardianPreferencesPanel />;
   if (activeModule === 'delegations') return <PiDelegationsPanel onChanged={reload} />;
   if (activeModule === 'policy') return <PiPolicyEditorPanel onChanged={reload} />;
   return <PiHeartbeatTimelinePanel />;

@@ -11,6 +11,7 @@ const automationPanelSource = readFileSync(new URL('./PiAutomationStatusPanel.js
 const stateSource = readFileSync(new URL('./piCommandCenterState.js', import.meta.url), 'utf8');
 const layoutCssSource = readFileSync(new URL('./PiCommandCenter.layout.css', import.meta.url), 'utf8');
 const reportsSource = readFileSync(new URL('./PiReportsPanel.jsx', import.meta.url), 'utf8');
+const guardianPreferencesSource = readFileSync(new URL('./PiGuardianPreferencesPanel.jsx', import.meta.url), 'utf8');
 const sessionsClientCss = readFileSync(new URL('./sessions/SessionsClient.css', import.meta.url), 'utf8');
 
 test('PI diagnostics page remains routed but is downgraded in navigation', () => {
@@ -41,6 +42,7 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   }
   assert.doesNotMatch(pageSource, />\s*Refresh\s*</);
   assert.match(pageSource, /import PiDelegationsPanel from '\.\/PiDelegationsPanel'/);
+  assert.match(pageSource, /import PiGuardianPreferencesPanel from '\.\/PiGuardianPreferencesPanel'/);
   assert.match(pageSource, /import PiActionAuditPanel from '\.\/PiActionAuditPanel'/);
   assert.match(pageSource, /import PiHeartbeatTimelinePanel from '\.\/PiHeartbeatTimelinePanel'/);
   assert.match(pageSource, /import PiAutomationStatusPanel from '\.\/PiAutomationStatusPanel'/);
@@ -48,6 +50,7 @@ test('PI Command Center renders Chinese status cards with loading and error stat
   assert.match(pageSource, /<PiHeartbeatTimelinePanel \/>/);
   assert.match(pageSource, /<PiAutomationStatusPanel automation=\{.*automation.*\} onChanged=\{reload\} \/>/s);
   assert.match(pageSource, /<PiReportsPanel \/>/);
+  assert.match(pageSource, /<PiGuardianPreferencesPanel \/>/);
   assert.match(pageSource, /<PiActionAuditPanel onChanged=\{state\.reload\} showAuditTimeline=\{false\} variant="command-center" \/>/);
   assert.match(pageSource, /<PiDelegationsPanel onChanged=\{reload\} \/>/);
   assert.match(pageSource, /pi-command-loading/);
@@ -124,6 +127,18 @@ test('PI Command Center reports panel summarizes supervisor recovery outcomes', 
   assert.match(reportsSource, /需人工处理/);
   assert.doesNotMatch(reportsSource, />\s*Refresh\s*</);
   assert.doesNotMatch(reportsSource, /window\.confirm|window\.alert/);
+});
+
+test('PI Command Center exposes minimal Guardian notification preference UI', () => {
+  for (const copy of ['通知偏好', 'notification preference', '最小创建/禁用入口', 'Mode', 'Notify on', 'Expires at', 'effective_after', 'admin_enforced']) {
+    assert.match(guardianPreferencesSource, new RegExp(copy));
+  }
+  assert.match(pageSource, /preferences', '通知偏好'/);
+  assert.match(clientSource, /getPiGuardianPreferences:/);
+  assert.match(clientSource, /createPiGuardianPreference:/);
+  assert.match(clientSource, /disablePiGuardianPreference:/);
+  assert.match(clientSource, /\/api\/pi\/guardian\/preferences/);
+  assert.doesNotMatch(guardianPreferencesSource, /window\.confirm|window\.alert/);
 });
 
 test('PI Command Center keeps main content scrollable instead of inheriting sessions overflow lock', () => {

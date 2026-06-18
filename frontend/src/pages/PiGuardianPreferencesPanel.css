@@ -1,0 +1,59 @@
+.pi-guardian-preferences-panel { gap: 14px; }
+
+.pi-guardian-preferences-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.pi-guardian-preferences-header p {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.pi-guardian-preferences-form { display: flex; flex-direction: column; gap: 12px; }
+.pi-guardian-preferences-fields { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(128px, 1fr)); }
+.pi-guardian-preferences-form label { color: var(--text-muted); display: flex; flex-direction: column; font-size: 0.72rem; font-weight: 780; gap: 6px; letter-spacing: 0.02em; }
+.pi-guardian-preferences-wide { grid-column: span 2; }
+.pi-guardian-preferences-form .btn { align-self: flex-start; min-height: 38px; }
+.pi-guardian-preferences-list { display: flex; flex-direction: column; gap: 10px; }
+
+.pi-guardian-preferences-row {
+  align-items: center;
+  background: var(--pi-surface-soft);
+  border: 1px solid var(--pi-line-soft);
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 13px;
+}
+
+.pi-guardian-preferences-main { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.pi-guardian-preferences-title,
+.pi-guardian-preferences-meta { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.pi-guardian-preferences-title strong { color: var(--text-primary); }
+.pi-guardian-preferences-meta span { color: var(--text-muted); font-size: 0.72rem; font-weight: 760; min-width: 92px; }
+.pi-guardian-preferences-meta code { background: color-mix(in srgb, var(--text-muted) 8%, transparent); border-radius: 8px; color: var(--text-secondary); font-size: 0.72rem; max-width: 100%; overflow-wrap: anywhere; padding: 2px 7px; }
+
+.pi-guardian-preferences-error,
+.pi-guardian-preferences-empty {
+  align-items: center;
+  background: var(--pi-surface-soft);
+  border: 1px dashed var(--pi-line);
+  border-radius: 14px;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+}
+
+.pi-guardian-preferences-error { background: var(--error-bg); border-color: rgba(239, 68, 68, 0.24); color: var(--error); }
+
+@media (max-width: 760px) {
+  .pi-guardian-preferences-header { flex-direction: column; }
+  .pi-guardian-preferences-fields { grid-template-columns: 1fr; }
+  .pi-guardian-preferences-row { align-items: stretch; grid-template-columns: 1fr; }
+  .pi-guardian-preferences-wide { grid-column: auto; }
+}
