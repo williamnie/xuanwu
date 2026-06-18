@@ -62,14 +62,14 @@ describe("PI Guardian decision orchestrator merge window", () => {
     const db = await openFixtureDatabase();
     try {
       for (let index = 1; index <= 4; index++) {
-        signalEvent(db, { id: `info-${index}`, issueID: 102, severity: "info" });
+        notificationEvent(db, { id: `info-${index}`, issueID: 102, severity: "info" });
       }
 
       const summary = runGuardianDecisionOrchestratorOnce(db, {
         now: new Date("2026-06-18T00:03:00Z")
       });
       const [decision] = listPiGuardianDecisions(db, {
-        decisionKind: "recovery",
+        decisionKind: "notification",
         issueId: 102,
         projectId: "demo"
       });
@@ -147,6 +147,68 @@ describe("PI Guardian decision orchestrator merge window", () => {
     }
   });
 
+  test("does not let event severity downgrade deterministic actionable diagnosis", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      signalEvent(db, {
+        diagnosisCode: "missing_user_input",
+        id: "pi-downgrade-attempt",
+        issueID: 203,
+        severity: "info"
+      });
+
+      const summary = runGuardianDecisionOrchestratorOnce(db, {
+        now: new Date("2026-06-18T00:00:00Z")
+      });
+      const [decision] = listPiGuardianDecisions(db, {
+        decisionKind: "recovery",
+        issueId: 203,
+        projectId: "demo"
+      });
+
+      expect(summary).toMatchObject({ created: 1, scanned: 1 });
+      expect(decision).toMatchObject({
+        decision: "needs_user",
+        requires_user: 1
+      });
+      expect(mergeMeta(decision)).toMatchObject({
+        merge_key: "recovery:demo:issue:203:missing_user_input:actionable",
+        severity: "actionable"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("routes unknown diagnosis to needs_user instead of aggregate", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      signalEvent(db, {
+        diagnosisCode: "future_unknown_code",
+        id: "unknown-diagnosis",
+        issueID: 204,
+        severity: "watch"
+      });
+
+      runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:00:00Z") });
+      const [decision] = listPiGuardianDecisions(db, {
+        decisionKind: "recovery",
+        issueId: 204,
+        projectId: "demo"
+      });
+
+      expect(decision).toMatchObject({
+        decision: "needs_user",
+        requires_user: 1
+      });
+      expect(mergeMeta(decision)).toMatchObject({
+        merge_key: "recovery:demo:issue:204:future_unknown_code:actionable"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
 
   test("does not create another decision while a completed diagnosis is cooling down", async () => {
     const db = await openFixtureDatabase();
@@ -213,15 +275,16 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 
 function signalEvent(
   db: RunnerDatabase,
-  input: { id: string; issueID: number; severity: string }
+  input: { diagnosisCode?: string; id: string; issueID: number; severity: string }
 ): void {
+  const diagnosisCode = input.diagnosisCode ?? "provider_timeout";
   createPiGuardianEvent(db, {
     event_type: "guardian.supervisor.candidate",
     id: input.id,
     idempotency_key: `guardian.supervisor.candidate:demo:${input.issueID}:${input.id}`,
     issue_id: input.issueID,
     normalized_payload_json: {
-      diagnosis_code: "provider_timeout",
+      diagnosis_code: diagnosisCode,
       signal_type: "supervisor.candidate"
     },
     project_id: "demo",
@@ -232,6 +295,27 @@ function signalEvent(
   });
 }
 
+
+function notificationEvent(
+  db: RunnerDatabase,
+  input: { id: string; issueID: number; severity: string }
+): void {
+  createPiGuardianEvent(db, {
+    event_type: "guardian.notification.intent",
+    id: input.id,
+    idempotency_key: `guardian.notification.intent:demo:${input.issueID}:${input.id}`,
+    issue_id: input.issueID,
+    normalized_payload_json: {
+      kind: "issue_created",
+      signal_type: "notification.intent"
+    },
+    project_id: "demo",
+    severity: input.severity,
+    source: "notification",
+    source_event_id: input.id,
+    status: "pending"
+  });
+}
 
 function approvalEvent(db: RunnerDatabase, id: string, issueID: number): void {
   createPiGuardianEvent(db, {

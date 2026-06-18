@@ -1,15 +1,7 @@
 import { Type, type Static, type TSchema } from "@sinclair/typebox";
+import { RECOVERY_DIAGNOSIS_CODES } from "./recoveryDiagnosis.ts";
 
-export const PI_SUPERVISOR_DIAGNOSIS_CODES = [
-  "executor_stream_disconnected",
-  "provider_rate_limited",
-  "provider_retry_after_waiting",
-  "provider_retry_after_ready",
-  "provider_transient_network_error",
-  "session_no_recent_progress",
-  "session_recovery_exhausted",
-  "requires_human_decision"
-] as const;
+export const PI_SUPERVISOR_DIAGNOSIS_CODES = RECOVERY_DIAGNOSIS_CODES;
 
 export const PI_SUPERVISOR_DECISIONS = [
   "wait",

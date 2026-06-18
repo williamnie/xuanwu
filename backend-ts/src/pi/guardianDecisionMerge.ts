@@ -1,4 +1,5 @@
 import type { PiGuardianDecision, PiGuardianEvent } from "../db/repositories/pi.ts";
+import { classifyRecoveryDiagnosis } from "./recoveryDiagnosis.ts";
 
 export const GUARDIAN_DECISION_TERMINAL_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
 
@@ -52,7 +53,8 @@ const WATCH_MERGE_WINDOW_MS = 30_000;
 
 export function guardianDecisionCandidate(event: PiGuardianEvent): GuardianDecisionCandidate {
   const payload = jsonRecord(event.normalized_payload_json);
-  const severity = severityValue(event.severity);
+  const diagnosis = diagnosisCode(event, payload);
+  const severity = deterministicSeverity(event, payload, diagnosis, severityValue(event.severity));
   const decisionKind = decisionKindForEvent(event, payload);
   return {
     action_type: clean(payload.action_type),
@@ -61,7 +63,7 @@ export function guardianDecisionCandidate(event: PiGuardianEvent): GuardianDecis
     created_at: event.created_at,
     decision: decisionValue(decisionKind, severity),
     decision_kind: decisionKind,
-    diagnosis_code: diagnosisCode(event, payload),
+    diagnosis_code: diagnosis,
     event_id: event.id,
     event_type: event.event_type,
     issue_id: event.issue_id,
@@ -180,6 +182,27 @@ function diagnosisCode(event: PiGuardianEvent, payload: Record<string, unknown>)
   const classification = jsonRecord(payload.classification);
   return clean(payload.diagnosis_code) || clean(classification.diagnosis_code) ||
     clean(payload.kind) || clean(payload.signal_type) || clean(event.event_type);
+}
+
+function deterministicSeverity(
+  event: PiGuardianEvent,
+  payload: Record<string, unknown>,
+  diagnosis: string,
+  fallback: GuardianDecisionSeverity
+): GuardianDecisionSeverity {
+  if (!classifiesRecoveryDiagnosis(event, payload)) return fallback;
+  const deterministic = classifyRecoveryDiagnosis({
+    diagnosisCode: diagnosis,
+    providerErrorCategory: clean(payload.provider_error_category),
+    status: clean(payload.status)
+  });
+  return maxSeverity(fallback, deterministic.severity);
+}
+
+function classifiesRecoveryDiagnosis(event: PiGuardianEvent, payload: Record<string, unknown>): boolean {
+  return clean(event.event_type) === "guardian.supervisor.candidate" ||
+    clean(payload.signal_type) === "supervisor.candidate" ||
+    clean(payload.provider_error_category) !== "";
 }
 
 function decisionScope(candidate: GuardianDecisionCandidate): string {

@@ -12,6 +12,10 @@ import {
 } from "./issueSupervisorContext.ts";
 import type { SupervisorCandidate } from "./issueSupervisorContextSupport.ts";
 import { iso } from "./heartbeatOrchestratorSupport.ts";
+import {
+  isAutomaticRecoveryBlockedDiagnosis,
+  isTransientRecoveryDiagnosis
+} from "./recoveryDiagnosis.ts";
 
 export type SupervisorSignalCollectorOptions = {
   issueIDs?: number[];
@@ -46,11 +50,8 @@ export function supervisorCandidateReady(
   if (futureTime(candidate.wait_until, now)) return false;
   if (candidate.diagnosis_code === "provider_retry_after_waiting") return false;
   if (candidate.diagnosis_code === "provider_retry_after_ready") return true;
-  if (candidate.exhausted || candidate.diagnosis_code === "requires_human_decision") return true;
-  if (candidate.diagnosis_code === "session_no_recent_progress") return true;
-  if (["executor_stream_disconnected", "provider_transient_network_error", "provider_rate_limited"].includes(candidate.diagnosis_code)) {
-    return staleGapSeconds(context) >= staleAfterSeconds(options);
-  }
+  if (candidate.exhausted || isAutomaticRecoveryBlockedDiagnosis(candidate.diagnosis_code)) return true;
+  if (isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return staleGapSeconds(context) >= staleAfterSeconds(options);
   return false;
 }
 

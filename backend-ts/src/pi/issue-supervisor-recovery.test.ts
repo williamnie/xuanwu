@@ -21,6 +21,11 @@ import {
   PI_SUPERVISOR_DECISIONS,
   PI_SUPERVISOR_DIAGNOSIS_CODES
 } from "./issueSupervisorRecovery.ts";
+import {
+  classifyRecoveryDiagnosis,
+  isAutomaticRecoveryBlockedDiagnosis,
+  isTransientRecoveryDiagnosis
+} from "./recoveryDiagnosis.ts";
 import { issueSupervisorRecoveryFixtures } from "./issueSupervisorRecoveryFixtures.ts";
 
 const tempRoots: string[] = [];
@@ -35,14 +40,28 @@ afterEach(async () => {
 describe("PI issue supervisor recovery contract", () => {
   test("defines diagnosis codes, decision JSON schema, and action payload schemas", () => {
     expect(PI_SUPERVISOR_DIAGNOSIS_CODES).toEqual([
+      "provider_eof",
+      "stream_disconnect",
       "executor_stream_disconnected",
+      "provider_timeout",
       "provider_rate_limited",
       "provider_retry_after_waiting",
       "provider_retry_after_ready",
       "provider_transient_network_error",
+      "transport_restart",
+      "scheduler_retryable_error",
       "session_no_recent_progress",
+      "missing_user_input",
+      "ambiguous_requirement",
+      "auth_required",
+      "approval_denied",
+      "external_account_required",
+      "business_decision_required",
+      "build_broken_needs_decision",
+      "requires_human_decision",
+      "unsafe_or_external",
       "session_recovery_exhausted",
-      "requires_human_decision"
+      "recovery_budget_exhausted"
     ]);
     expect(PI_SUPERVISOR_DECISIONS).toEqual([
       "wait",
@@ -82,6 +101,34 @@ describe("PI issue supervisor recovery contract", () => {
       provider: "codex",
       provider_session_id: "thread-298"
     })).toBe(true);
+  });
+
+  test("classifies canonical recovery diagnoses deterministically", () => {
+    expect(classifyRecoveryDiagnosis({ diagnosisCode: "provider_timeout" })).toMatchObject({
+      failure_class: "transient",
+      severity: "watch"
+    });
+    expect(classifyRecoveryDiagnosis({ diagnosisCode: "auth_required" })).toMatchObject({
+      failure_class: "needs_context",
+      severity: "actionable"
+    });
+    expect(classifyRecoveryDiagnosis({ diagnosisCode: "unsafe_or_external" })).toMatchObject({
+      failure_class: "unsafe",
+      severity: "urgent"
+    });
+    expect(classifyRecoveryDiagnosis({ diagnosisCode: "session_recovery_exhausted" })).toMatchObject({
+      failure_class: "exhausted",
+      severity: "actionable"
+    });
+    expect(classifyRecoveryDiagnosis({
+      diagnosisCode: "future_unknown_code",
+      providerErrorCategory: "network"
+    })).toMatchObject({
+      failure_class: "needs_context",
+      severity: "actionable"
+    });
+    expect(isTransientRecoveryDiagnosis("provider_eof")).toBe(true);
+    expect(isAutomaticRecoveryBlockedDiagnosis("missing_user_input")).toBe(true);
   });
 
   test("extends project policy with supervisor mode, allowed actions, cooldown, budget, and 429 wait policy", async () => {

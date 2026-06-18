@@ -15,6 +15,7 @@ import {
   type DecisionFailure
 } from "./issueSupervisorDecisionFailure.ts";
 import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
+import { isAutomaticRecoveryBlockedDiagnosis } from "./recoveryDiagnosis.ts";
 
 export type PiSupervisorDecisionRuntimeInput = {
   agent: PiAgent;
@@ -159,8 +160,8 @@ function semanticDecisionError(
   now: Date
 ): string {
   const decisionType = cleanString(decision.decision);
-  if (humanOnlyProviderFailure(context) && !["needs_user", "blocked"].includes(decisionType)) {
-    return "supervisor decision attempted automatic recovery for a human-only provider failure";
+  if (deterministicNeedsUser(context) && !["needs_user", "blocked"].includes(decisionType)) {
+    return "supervisor decision attempted automatic recovery for a deterministic needs_context diagnosis or human-only provider failure";
   }
   if (futureRetryAfter(context, now) && !["wait", "needs_user", "blocked", "noop"].includes(decisionType)) {
     return "supervisor decision ignored a future provider retry-after window";
@@ -255,8 +256,9 @@ function providerCategory(context: IssueSupervisorRecoveryContext): string {
   return cleanString(context.provider_error?.category);
 }
 
-function humanOnlyProviderFailure(context: IssueSupervisorRecoveryContext): boolean {
-  return ["auth", "permission", "quota", "business_failure"].includes(providerCategory(context));
+function deterministicNeedsUser(context: IssueSupervisorRecoveryContext): boolean {
+  return isAutomaticRecoveryBlockedDiagnosis(primaryDiagnosis(context)) ||
+    ["auth", "permission", "quota", "business_failure"].includes(providerCategory(context));
 }
 
 function futureRetryAfter(context: IssueSupervisorRecoveryContext, now: Date): boolean {
