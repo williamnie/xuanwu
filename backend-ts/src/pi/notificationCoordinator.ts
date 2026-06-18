@@ -52,10 +52,29 @@ export function markLifecycleIntentSent(
   intent: PiNotificationIntent,
   sentOutboxID: number
 ): PiNotificationIntent {
+  return markNotificationIntentSent(db, intent, sentOutboxID);
+}
+
+export function markNotificationIntentSent(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  sentOutboxID: number
+): PiNotificationIntent {
   return updatePiNotificationIntent(db, intent.id, {
     sent_at: new Date().toISOString(),
     sent_outbox_id: sentOutboxID,
     state: "sent"
+  });
+}
+
+export function markNotificationIntentRetry(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  reason: string
+): PiNotificationIntent {
+  return updatePiNotificationIntent(db, intent.id, {
+    error: redactSensitiveText(reason),
+    state: "ready"
   });
 }
 

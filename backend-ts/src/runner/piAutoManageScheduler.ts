@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
+import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
@@ -15,6 +16,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   cron: { executed: number; failed: number; scanned: number; skipped: number };
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
+  digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
 };
 
@@ -120,12 +122,14 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
+  const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
     cron,
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
     digestFlush,
+    digestNotifications,
     supervisor
   };
 }

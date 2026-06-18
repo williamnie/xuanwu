@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import {
   addPiRunGroupItem,
   createPiNotificationIntent,
@@ -26,7 +27,12 @@ describe("PI auto-manage digest flush integration", () => {
     try {
       seedAutoManagedProject(db);
       insertIssue(db, 801, "Done issue", "done");
-      createPiRunGroup(db, { id: "group-scheduled", project_id: "enabled", expected_issue_count: 1 });
+      createPiRunGroup(db, {
+        id: "group-scheduled",
+        origin_conversation_id: "feishu-chat-oc_group-20260618",
+        project_id: "enabled",
+        expected_issue_count: 1
+      });
       addPiRunGroupItem(db, {
         enqueue_status: "completed",
         final_issue_status: "done",
@@ -48,10 +54,12 @@ describe("PI auto-manage digest flush integration", () => {
       const intents = listPiNotificationIntents(db, { runGroupId: "group-scheduled" });
 
       expect(result.digestFlush).toEqual({ flushed: 1, scanned: 1, skipped: 0 });
+      expect(result.digestNotifications).toEqual({ failed: 0, queued: 1, scanned: 1, skipped: 0 });
       expect(intents.filter((intent) => intent.kind === "digest")).toMatchObject([
-        { flush_reason: "completed", flush_sequence: 1, state: "ready" }
+        { flush_reason: "completed", flush_sequence: 1, state: "sent" }
       ]);
       expect(intents.find((intent) => intent.id === "scheduled-life-801")).toMatchObject({ state: "aggregated" });
+      expect(listSyncOutbox(db, { source: "feishu" })[0]?.content).toContain("运行组 group-scheduled 摘要");
     } finally {
       db.close();
     }

@@ -1,10 +1,17 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
-import { getPiRunGroup } from "../db/repositories/pi.ts";
+import {
+  getPiRunGroup,
+  listPiNotificationIntents,
+  type PiNotificationIntent
+} from "../db/repositories/pi.ts";
+import { formatRunGroupDigest } from "../pi/digestFormatter.ts";
 import { ingestIssueLifecycleEvent } from "../pi/guardianEventIngest.ts";
 import {
   coordinateIssueLifecycleNotification,
   markLifecycleIntentSent,
+  markNotificationIntentRetry,
+  markNotificationIntentSent,
   suppressLifecycleIntent,
   type LifecycleIntentResult
 } from "../pi/notificationCoordinator.ts";
@@ -19,9 +26,12 @@ import {
 } from "./feishuNotificationTargets.ts";
 
 export type QueueResult = { queued: boolean; reason: string };
+export type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
 
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
+const DIGEST_NOTIFY_TYPE = "feishu_run_group_digest_notification";
+const DEFAULT_DIGEST_LIMIT = 20;
 
 export function queueFeishuIssueStatusNotification(
   db: RunnerDatabase,
@@ -50,6 +60,16 @@ export function queueFeishuIssueStatusNotification(
   }
   if (!target) return { queued: false, reason: "missing_feishu_link" };
   return queueLegacyFeishuDraft(db, issue, target, intentResult);
+}
+
+export function queueReadyFeishuDigestNotifications(
+  db: RunnerDatabase,
+  options: { limit?: number } = {}
+): DigestQueueResult {
+  const intents = readyDigestIntents(db, options.limit ?? DEFAULT_DIGEST_LIMIT);
+  const result: DigestQueueResult = { failed: 0, queued: 0, scanned: intents.length, skipped: 0 };
+  for (const intent of intents) safelyQueueDigestIntent(db, intent, result);
+  return result;
 }
 
 function isLifecycleStatus(status: string): boolean {
@@ -109,6 +129,77 @@ function queueLegacyFeishuDraft(
   });
   markLifecycleIntentSent(db, intentResult.intent, draft.outboxID);
   return { queued: true, reason: "queued" };
+}
+
+function safelyQueueDigestIntent(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  result: DigestQueueResult
+): void {
+  try {
+    queueDigestIntent(db, intent, result);
+  } catch (error) {
+    markNotificationIntentRetry(db, intent, safeError(error));
+    result.failed += 1;
+  }
+}
+
+function queueDigestIntent(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  result: DigestQueueResult
+): void {
+  if (intent.target_channel !== "feishu" || intent.sent_outbox_id > 0) {
+    result.skipped += 1;
+    return;
+  }
+  const target = digestTarget(db, intent);
+  if (!target) {
+    markNotificationIntentRetry(db, intent, "missing_feishu_target");
+    result.failed += 1;
+    return;
+  }
+  if (alreadyQueuedFeishuNotification(db, DIGEST_NOTIFY_TYPE, digestNotificationID(intent))) {
+    result.skipped += 1;
+    return;
+  }
+  const draft = createFeishuNotificationDraft(db, { id: 0, project_id: intent.project_id }, target, {
+    content: formatRunGroupDigest(intent),
+    notifyID: digestNotificationID(intent),
+    type: DIGEST_NOTIFY_TYPE
+  });
+  markNotificationIntentSent(db, intent, draft.outboxID);
+  result.queued += 1;
+}
+
+function readyDigestIntents(db: RunnerDatabase, limit: number): PiNotificationIntent[] {
+  return listPiNotificationIntents(db, { kind: "digest", state: "ready" })
+    .slice(0, boundedLimit(limit));
+}
+
+function digestTarget(db: RunnerDatabase, intent: PiNotificationIntent) {
+  if (intent.target_chat_id !== "" || intent.target_message_id !== "") {
+    return {
+      chatID: intent.target_chat_id,
+      eventID: 0,
+      messageID: intent.target_message_id,
+      threadID: intent.target_thread_id
+    };
+  }
+  return feishuTargetForConversation(db, intent.conversation_id) ??
+    feishuTargetForConversation(db, getPiRunGroup(db, intent.run_group_id)?.origin_conversation_id ?? "");
+}
+
+function digestNotificationID(intent: PiNotificationIntent): string {
+  return intent.idempotency_key || intent.id;
+}
+
+function boundedLimit(limit: number): number {
+  return Number.isInteger(limit) && limit > 0 ? Math.min(limit, DEFAULT_DIGEST_LIMIT) : DEFAULT_DIGEST_LIMIT;
+}
+
+function safeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function issueNotificationID(issue: Issue): string {
