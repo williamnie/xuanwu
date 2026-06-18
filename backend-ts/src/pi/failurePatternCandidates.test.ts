@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiMemoryItems } from "../db/repositories/pi.ts";
 import { generateFailurePatternMemoryCandidates } from "./failurePatternCandidates.ts";
-import { runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 
 const tempRoots: string[] = [];
 
@@ -34,7 +33,7 @@ describe("PI failure pattern memory candidates", () => {
     }
   });
 
-  test("heartbeat creates a disabled failure pattern candidate for repeated failed issue/session sources", async () => {
+  test("creates a disabled failure pattern candidate for repeated failed issue/session sources", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -44,7 +43,7 @@ describe("PI failure pattern memory candidates", () => {
       insertFailedSession(db, "demo", second, "thread-quota-b", "quota exhaustion still blocked");
       insertFailedIssue(db, "demo", "thread-single", "permission denied in local sandbox");
 
-      await runPiHeartbeatOnce({ database: db, projectID: "demo", now: new Date("2026-06-03T10:00:00Z") });
+      generateFailurePatternMemoryCandidates(db, "demo");
 
       const active = listPiMemoryItems(db, { disabled: 0, scope: "project", scopeId: "demo" });
       const candidates = listPiMemoryItems(db, { disabled: 1, scope: "project", scopeId: "demo" });

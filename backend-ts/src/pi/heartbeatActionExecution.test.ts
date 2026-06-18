@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { getPiAction, listPiActionEvents, listPiHeartbeatEvents } from "../db/repositories/pi.ts";
+import { listPiGuardianEvents, listPiHeartbeatEvents } from "../db/repositories/pi.ts";
 import { runDelegationHeartbeatsOnce, runPiHeartbeatOnce } from "./heartbeatOrchestrator.ts";
 
 const tempRoots: string[] = [];
@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 describe("PI heartbeat action execution", () => {
-  test("attended heartbeat creates pending approvals through authorization gate", async () => {
+  test("attended heartbeat writes Guardian signal instead of pending approval", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
@@ -27,24 +27,19 @@ describe("PI heartbeat action execution", () => {
       const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
       expect(result).toMatchObject({ actions_proposed: 1, executed_actions: [], status: "completed" });
-      const action = db.sqlite.query<{ id: string }, []>("select id from pi_actions order by created_at desc limit 1").get();
-      expect(getPiAction(db, action?.id ?? "")).toMatchObject({
-        action_type: "issue.enqueue",
-        gate_decision: "ask",
-        heartbeat_id: result.heartbeat_id,
+      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
+        event_type: "guardian.heartbeat.action_candidate",
         issue_id: issueID,
-        status: "pending"
-      });
-      expect(listPiActionEvents(db, { actionId: action?.id }).map((event) => event.event_type)).toEqual([
-        "candidate", "gate_decision", "pending_approval"
-      ]);
+        source: "heartbeat"
+      }));
+      expect(rowCount(db, "pi_actions")).toBe(0);
       expect(statusOfIssue(db, issueID)).toBe("todo");
     } finally {
       db.close();
     }
   });
 
-  test("delegated heartbeat executes authorized actions and records audit result", async () => {
+  test("delegated heartbeat still writes only Guardian signal and audit", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
@@ -60,28 +55,24 @@ describe("PI heartbeat action execution", () => {
 
       const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
       const run = result.runs[0];
-      const actionID = String(run?.executed_actions[0] ?? "");
 
-      expect(run?.executed_actions).toHaveLength(1);
+      expect(run?.executed_actions).toEqual([]);
       expect(run).toMatchObject({ actions_proposed: 1, status: "completed" });
       expect(run?.policy.authorization_summary).toMatchObject({
         allowed_mcp_capabilities: ["docs:resource:runbook"],
         allowed_skill_intents: ["codex-issue-runner"]
       });
-      expect(getPiAction(db, actionID)).toMatchObject({ gate_decision: "execute", status: "completed" });
-      expect(listPiActionEvents(db, { actionId: actionID }).map((event) => event.event_type)).toEqual([
-        "candidate", "gate_decision", "execution_started", "execution_result"
-      ]);
+      expect(rowCount(db, "pi_actions")).toBe(0);
       const audit = listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).find((event) => event.event_type === "audit");
-      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({ actions_executed: 1, actions_proposed: 1 });
-      expect(listIssueEvents(db, issueID).map((event) => event.type)).toEqual(["issue.status_changed"]);
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({ actions_executed: 0, actions_proposed: 1 });
+      expect(listIssueEvents(db, issueID).map((event) => event.type)).toEqual([]);
       expect(statusOfIssue(db, issueID)).toBe("todo");
     } finally {
       db.close();
     }
   });
 
-  test("delegated execution errors keep heartbeat and action audit", async () => {
+  test("delegated heartbeat does not execute provider-specific enqueue side effects", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a", "noop");
@@ -95,14 +86,11 @@ describe("PI heartbeat action execution", () => {
 
       const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
       const run = result.runs[0];
-      const action = db.sqlite.query<{ id: string }, []>("select id from pi_actions limit 1").get();
 
-      expect(run).toMatchObject({ status: "failed", error: expect.stringContaining("暂不支持") });
-      expect(listPiActionEvents(db, { actionId: action?.id }).map((event) => event.event_type)).toEqual([
-        "candidate", "gate_decision", "execution_started", "execution_error"
-      ]);
+      expect(run).toMatchObject({ status: "completed", error: "" });
+      expect(rowCount(db, "pi_actions")).toBe(0);
       expect(listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).map((event) => event.event_type)).toEqual([
-        "collect_signals", "evaluate_policies", "plan_actions", "authorization_gate", "action_proposed", "error", "audit"
+        "collect_signals", "evaluate_policies", "plan_actions", "authorization_gate", "guardian_signal", "audit", "schedule_next_tick"
       ]);
     } finally {
       db.close();
@@ -145,4 +133,8 @@ function insertDelegation(db: RunnerDatabase, id: string, projectID: string, aut
 
 function statusOfIssue(db: RunnerDatabase, issueID: number): string {
   return db.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueID)?.status ?? "";
+}
+
+function rowCount(db: RunnerDatabase, table: string): number {
+  return db.sqlite.query<{ count: number }, []>(`select count(*) as count from ${table}`).get()?.count ?? 0;
 }

@@ -1,34 +1,8 @@
-import type { RunnerDatabase } from "../db/database.ts";
-import { enqueueIssue } from "../db/repositories/issueActions.ts";
-import { createIssueComment } from "../db/repositories/issueEvents.ts";
-import { createPendingPiAction, type PiActionRequest } from "./actionEngine.ts";
 import type { PiActionMode, PiAuthorizationScope, PiGatePolicy } from "./actionGate.ts";
-import { recordHeartbeatEvent, type heartbeatContext } from "./heartbeatOrchestratorSupport.ts";
-import type { HeartbeatActionCandidate, HeartbeatActionSummary, HeartbeatInput, HeartbeatPolicy } from "./heartbeatTypes.ts";
+import type { heartbeatContext } from "./heartbeatOrchestratorSupport.ts";
+import type { HeartbeatInput } from "./heartbeatTypes.ts";
 
 type HeartbeatContext = ReturnType<typeof heartbeatContext>;
-
-export function applyHeartbeatActionPlan(
-  db: RunnerDatabase,
-  ctx: HeartbeatContext,
-  policy: HeartbeatPolicy,
-  plan: HeartbeatActionCandidate[]
-): HeartbeatActionSummary[] {
-  return plan.map((candidate) => {
-    recordHeartbeatEvent(db, ctx, "action_proposed", candidate);
-    return createPendingPiAction(
-      db,
-      {
-        authorization: policy.authorization,
-        delegationID: ctx.delegationID,
-        heartbeatID: ctx.heartbeatID,
-        source: "pi_heartbeat"
-      },
-      actionRequest(candidate),
-      policy.executor_busy ? undefined : executableAction(db, candidate)
-    ) as HeartbeatActionSummary;
-  });
-}
 
 export function heartbeatAuthorizationPolicy(input: HeartbeatInput, ctx: HeartbeatContext): PiGatePolicy {
   const delegation = input.delegation;
@@ -63,37 +37,6 @@ export function heartbeatAuthorizationSummary(policy: PiGatePolicy): Record<stri
     scope_present: policy.scope !== undefined || policy.scopes !== undefined,
     window: { expires_at: cleanString(policy.expires_at), starts_at: cleanString(policy.starts_at) }
   };
-}
-
-function actionRequest(candidate: HeartbeatActionCandidate): PiActionRequest {
-  return {
-    actionType: candidate.action_type,
-    issueID: candidate.issue_id,
-    payload: candidate.payload,
-    projectID: candidate.project_id,
-    rationale: candidate.rationale,
-    riskOverride: {
-      requiresConfirmation: candidate.requires_confirmation,
-      riskLevel: candidate.risk_level
-    }
-  };
-}
-
-function executableAction(db: RunnerDatabase, candidate: HeartbeatActionCandidate): (() => unknown) | undefined {
-  if (candidate.action_type === "issue.enqueue") return () => enqueueIssue(db, positiveIssueID(candidate));
-  if (candidate.action_type === "needs_user.escalate") {
-    return () => createIssueComment(db, positiveIssueID(candidate), {
-      author: "agent",
-      body: cleanString(candidate.payload.body) || candidate.rationale || "Heartbeat escalation"
-    });
-  }
-  return undefined;
-}
-
-function positiveIssueID(candidate: HeartbeatActionCandidate): number {
-  const id = candidate.issue_id ?? Number(candidate.payload.issue_id);
-  if (Number.isSafeInteger(id) && id > 0) return id;
-  throw new Error("heartbeat action issue_id is required");
 }
 
 function cleanPolicy(policy: PiGatePolicy): PiGatePolicy {

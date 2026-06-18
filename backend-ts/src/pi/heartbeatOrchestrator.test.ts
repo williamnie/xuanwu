@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   diagnosePiHeartbeat,
   listPiActions,
+  listPiGuardianEvents,
   listPiHeartbeatEvents,
   pausePiHeartbeat,
   resumePiHeartbeat
@@ -51,7 +52,7 @@ describe("PI heartbeat orchestrator", () => {
         "evaluate_policies",
         "plan_actions",
         "authorization_gate",
-        "action_proposed",
+        "guardian_signal",
         "audit",
         "schedule_next_tick"
       ]);
@@ -106,15 +107,12 @@ describe("PI heartbeat orchestrator", () => {
         issue_id: issueID
       }));
 
-      const action = db.sqlite.query<{ gate_decision: string; heartbeat_id: string; project_id: string; status: string }, []>(
-        "select gate_decision, heartbeat_id, project_id, status from pi_actions order by created_at desc limit 1"
-      ).get();
-      expect(action?.project_id).toBe("project-a");
-      expect(action).toMatchObject({
-        gate_decision: "deny",
-        heartbeat_id: result.runs[0]?.heartbeat_id,
-        status: "denied"
-      });
+      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
+        event_type: "guardian.heartbeat.action_candidate",
+        issue_id: issueID,
+        source: "heartbeat"
+      }));
+      expect(rowCount(db, "pi_actions")).toBe(0);
     } finally {
       db.close();
     }
@@ -346,4 +344,8 @@ function statusOfIssue(db: RunnerDatabase, issueID: number): string {
 
 function openRunCount(db: RunnerDatabase): number {
   return db.sqlite.query<{ count: number }, []>("select count(*) as count from issue_runs where ended_at=''").get()?.count ?? 0;
+}
+
+function rowCount(db: RunnerDatabase, table: string): number {
+  return db.sqlite.query<{ count: number }, []>(`select count(*) as count from ${table}`).get()?.count ?? 0;
 }
