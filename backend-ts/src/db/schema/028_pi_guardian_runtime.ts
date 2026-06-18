@@ -1,3 +1,4 @@
+import type { Database as SQLiteDatabase } from "bun:sqlite";
 import type { SqlMigration } from "../migrations.ts";
 
 export const piGuardianRuntimeMigration: SqlMigration = {
@@ -41,6 +42,42 @@ create index if not exists idx_pi_guardian_event_issue
 
 create index if not exists idx_pi_guardian_event_group
   on pi_guardian_event_inbox(run_group_id, sequence_id desc);
+
+create table if not exists pi_guardian_decisions (
+  id text primary key,
+  idempotency_key text not null,
+  source_event_id text not null default '',
+  source_event_sequence_id integer not null default 0,
+  decision_kind text not null,
+  authority text not null default 'policy',
+  project_id text not null default '',
+  issue_id integer not null default 0,
+  run_group_id text not null default '',
+  conversation_id text not null default '',
+  decision text not null,
+  risk_level text not null default 'low',
+  requires_user integer not null default 0,
+  rationale text not null default '',
+  evidence_json text not null default '[]',
+  actions_json text not null default '[]',
+  state text not null default 'proposed',
+  lease_owner text not null default '',
+  lease_expires_at text not null default '',
+  cooldown_until text not null default '',
+  pi_session_id text not null default '',
+  raw_pi_text_ref text not null default '',
+  created_at text not null,
+  updated_at text not null
+);
+
+create unique index if not exists ux_pi_guardian_decisions_key
+  on pi_guardian_decisions(idempotency_key);
+
+create index if not exists idx_pi_guardian_decisions_issue
+  on pi_guardian_decisions(project_id, issue_id, decision_kind, state, created_at desc);
+
+create index if not exists idx_pi_guardian_decisions_group
+  on pi_guardian_decisions(run_group_id, decision_kind, state, created_at desc);
 
 create table if not exists pi_run_groups (
   id text primary key,
@@ -176,5 +213,37 @@ create index if not exists idx_pi_notification_intents_group
 
 create index if not exists idx_pi_notification_intents_issue
   on pi_notification_intents(issue_id, kind, state, created_at desc);
-`
+`,
+  apply(sqlite) {
+    sqlite.run(this.sql);
+    ensureGuardianDecisionColumns(sqlite);
+  }
 };
+
+function ensureGuardianDecisionColumns(sqlite: SQLiteDatabase): void {
+  addColumn(sqlite, "source_event_id", "text not null default ''");
+  addColumn(sqlite, "source_event_sequence_id", "integer not null default 0");
+  addColumn(sqlite, "run_group_id", "text not null default ''");
+  addColumn(sqlite, "conversation_id", "text not null default ''");
+  addColumn(sqlite, "risk_level", "text not null default 'low'");
+  addColumn(sqlite, "requires_user", "integer not null default 0");
+  addColumn(sqlite, "rationale", "text not null default ''");
+  addColumn(sqlite, "evidence_json", "text not null default '[]'");
+  addColumn(sqlite, "actions_json", "text not null default '[]'");
+  addColumn(sqlite, "state", "text not null default 'proposed'");
+  addColumn(sqlite, "lease_owner", "text not null default ''");
+  addColumn(sqlite, "lease_expires_at", "text not null default ''");
+  addColumn(sqlite, "cooldown_until", "text not null default ''");
+  addColumn(sqlite, "pi_session_id", "text not null default ''");
+  addColumn(sqlite, "raw_pi_text_ref", "text not null default ''");
+}
+
+function addColumn(sqlite: SQLiteDatabase, name: string, definition: string): void {
+  if (columns(sqlite).has(name)) return;
+  sqlite.run(`alter table pi_guardian_decisions add column ${name} ${definition}`);
+}
+
+function columns(sqlite: SQLiteDatabase): Set<string> {
+  return new Set(sqlite.query<{ name: string }, []>("pragma table_info(pi_guardian_decisions)").all()
+    .map((row: { name: string }) => row.name));
+}

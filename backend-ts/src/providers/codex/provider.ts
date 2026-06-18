@@ -34,7 +34,7 @@ type CodexIssueAdapter = {
   steerTurn(threadID: string, turnID: string, input: Parameters<CodexAdapter["steerTurn"]>[2]): Promise<TurnStartResult>;
   interruptTurn(threadID: string, turnID: string): Promise<Awaited<ReturnType<CodexAdapter["interruptTurn"]>>>;
   listModels(): Promise<unknown>;
-  resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;
+  resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<unknown>;
 };
 export type CodexEventHandler = (event: ProviderEvent) => void;
 export type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
@@ -219,7 +219,9 @@ export function codexProviderAppEvent(event: ProviderEvent): AppEvent {
 
 
 function isApprovalProviderEvent(event: ProviderEvent): boolean {
-  return event.raw?.method === "approval/requested" || event.raw?.method === "approval/resolved";
+  return event.raw?.method === "approval/requested" ||
+    event.raw?.method === "approval/resolved" ||
+    event.raw?.method === "approval/fast_resolved";
 }
 
 function sessionRef(turn: TurnStartResult): ProviderRunResult["session"] {

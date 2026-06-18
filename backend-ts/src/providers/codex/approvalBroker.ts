@@ -1,5 +1,6 @@
 import { redactSensitiveText } from "../../util/redact.ts";
 import { evaluateApprovalFastPolicy, type ApprovalFastDecision } from "../../pi/approvalFastPolicy.ts";
+import { parseCodexApprovalRequest } from "../../pi/approvalRequestParser.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 
 type PendingApproval = {
@@ -32,11 +33,13 @@ export class CodexApprovalBroker {
   }
 
   async request(jsonRpcId: string | number, method: string, params: unknown): Promise<unknown> {
+    const startedAt = performance.now();
     const request = approvalRequest(jsonRpcId, method, params);
     const fastDecision = evaluateApprovalFastPolicy({ method: request.method, params: request.params });
+    const latencyMs = Math.max(0, Math.round(performance.now() - startedAt));
     if (fastDecision.decision === "deny-now" || fastDecision.decision === "approve-now") {
       const response = approvalResponse(request.method, request.params, fastDecision.resolver_decision);
-      this.publishDeferred(approvalFastResolvedEvent(request, fastDecision));
+      this.publishDeferred(approvalFastResolvedEvent(request, fastDecision, latencyMs));
       return response;
     }
     if (this.pending.has(request.id)) throw new Error(`approval request already pending: ${request.id}`);
@@ -112,7 +115,12 @@ function approvalResponse(
   return { decision: legacyDecision(decision) };
 }
 
-function approvalFastResolvedEvent(request: PendingApproval, decision: ApprovalFastDecision): ProviderEvent {
+function approvalFastResolvedEvent(
+  request: PendingApproval,
+  decision: ApprovalFastDecision,
+  latencyMs: number
+): ProviderEvent {
+  const parsed = parseCodexApprovalRequest({ method: request.method, params: request.params });
   return approvalEvent("approval/fast_resolved", {
     id: request.id,
     method: request.method,
@@ -120,7 +128,10 @@ function approvalFastResolvedEvent(request: PendingApproval, decision: ApprovalF
     decision: decision.resolver_decision.decision,
     scope: decision.resolver_decision.scope ?? "",
     fast_decision: decision.decision,
+    latency_ms: latencyMs,
     reason: decision.reason,
+    request_summary: parsed.summary,
+    request_type: parsed.request_type,
     rule_id: decision.rule_id
   }, decision.resolver_decision.decision);
 }

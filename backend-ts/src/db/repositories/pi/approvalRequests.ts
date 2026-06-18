@@ -17,11 +17,16 @@ import { redactAuditJsonText, redactAuditText } from "./auditRedaction.ts";
 export type PiApprovalRequest = {
   approval_id: string;
   approval_source: string;
+  async_escalation_state: string;
   created_at: string;
   decision: string;
   delivered_at: string;
   delivery_channel: string;
   delivery_state: string;
+  fast_decision: string;
+  fast_decision_reason: string;
+  fast_policy_latency_ms: number;
+  fast_policy_rule: string;
   issue_id: number;
   project_id: string;
   provider: string;
@@ -64,13 +69,15 @@ const COLUMNS = `approval_id, project_id, issue_id, run_id, provider, session_id
   request_type, summary, request_summary, risk, status, decision, approval_source, provider_approval_id,
   delivery_state, delivery_channel, delivered_at, resolved_decision, resolved_scope, resolved_at,
   resolver_status, resolver_error, resolver_retryable, resolver_attempt_count, resolver_last_attempt_at,
+  fast_decision, fast_decision_reason, fast_policy_rule, fast_policy_latency_ms, async_escalation_state,
   raw_payload_json, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "project_id", "issue_id", "run_id", "provider", "session_id", "thread_id", "turn_id", "request_type",
   "summary", "request_summary", "risk", "status", "decision", "approval_source", "provider_approval_id",
   "delivery_state", "delivery_channel", "delivered_at", "resolved_decision", "resolved_scope",
   "resolved_at", "resolver_status", "resolver_error", "resolver_retryable", "resolver_attempt_count",
-  "resolver_last_attempt_at", "raw_payload_json"
+  "resolver_last_attempt_at", "fast_decision", "fast_decision_reason", "fast_policy_rule",
+  "fast_policy_latency_ms", "async_escalation_state", "raw_payload_json"
 ] as const;
 
 export function createPiApprovalRequest(
@@ -86,7 +93,7 @@ export function upsertPiApprovalRequest(
 ): PiApprovalRequest {
   const record = normalizeCreate(input);
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(30)})
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(35)})
     on conflict(approval_id) do update set
       project_id=coalesce(nullif(excluded.project_id, ''), ${TABLE}.project_id),
       issue_id=case when excluded.issue_id > 0 then excluded.issue_id else ${TABLE}.issue_id end,
@@ -111,6 +118,15 @@ export function upsertPiApprovalRequest(
         else excluded.delivery_state end,
       delivery_channel=coalesce(nullif(excluded.delivery_channel, ''), ${TABLE}.delivery_channel),
       delivered_at=coalesce(nullif(excluded.delivered_at, ''), ${TABLE}.delivered_at),
+      resolved_decision=coalesce(nullif(${TABLE}.resolved_decision, ''), nullif(excluded.resolved_decision, ''), ${TABLE}.resolved_decision),
+      resolved_scope=coalesce(nullif(${TABLE}.resolved_scope, ''), nullif(excluded.resolved_scope, ''), ${TABLE}.resolved_scope),
+      resolved_at=coalesce(nullif(${TABLE}.resolved_at, ''), nullif(excluded.resolved_at, ''), ${TABLE}.resolved_at),
+      fast_decision=coalesce(nullif(${TABLE}.fast_decision, ''), nullif(excluded.fast_decision, ''), ${TABLE}.fast_decision),
+      fast_decision_reason=coalesce(nullif(${TABLE}.fast_decision_reason, ''), nullif(excluded.fast_decision_reason, ''), ${TABLE}.fast_decision_reason),
+      fast_policy_rule=coalesce(nullif(${TABLE}.fast_policy_rule, ''), nullif(excluded.fast_policy_rule, ''), ${TABLE}.fast_policy_rule),
+      fast_policy_latency_ms=case when ${TABLE}.fast_policy_latency_ms > 0
+        then ${TABLE}.fast_policy_latency_ms else excluded.fast_policy_latency_ms end,
+      async_escalation_state=coalesce(nullif(${TABLE}.async_escalation_state, ''), nullif(excluded.async_escalation_state, ''), ${TABLE}.async_escalation_state),
       raw_payload_json=case when excluded.raw_payload_json <> '{}' then excluded.raw_payload_json else ${TABLE}.raw_payload_json end,
       updated_at=excluded.updated_at`, [
     record.approval_id, record.project_id, record.issue_id, record.run_id, record.provider,
@@ -119,7 +135,9 @@ export function upsertPiApprovalRequest(
     record.provider_approval_id, record.delivery_state, record.delivery_channel, record.delivered_at,
     record.resolved_decision, record.resolved_scope, record.resolved_at, record.resolver_status,
     record.resolver_error, record.resolver_retryable, record.resolver_attempt_count,
-    record.resolver_last_attempt_at, record.raw_payload_json, timestamp, timestamp
+    record.resolver_last_attempt_at, record.fast_decision, record.fast_decision_reason,
+    record.fast_policy_rule, record.fast_policy_latency_ms, record.async_escalation_state,
+    record.raw_payload_json, timestamp, timestamp
   ]);
   return mustGetPiApprovalRequest(db, record.approval_id);
 }
@@ -166,11 +184,16 @@ function normalizeCreate(input: PiApprovalRequestInput): PiApprovalRequest {
   return {
     approval_id: approvalID,
     approval_source: cleanString(input.approval_source),
+    async_escalation_state: cleanString(input.async_escalation_state),
     created_at: "",
     decision: cleanString(input.decision),
     delivered_at: cleanString(input.delivered_at),
     delivery_channel: cleanString(input.delivery_channel),
     delivery_state: cleanString(input.delivery_state) || "pending",
+    fast_decision: cleanString(input.fast_decision),
+    fast_decision_reason: cleanString(input.fast_decision_reason),
+    fast_policy_latency_ms: integerInput(input.fast_policy_latency_ms),
+    fast_policy_rule: cleanString(input.fast_policy_rule),
     issue_id: integerInput(input.issue_id),
     project_id: cleanString(input.project_id),
     provider: cleanString(input.provider),
@@ -200,6 +223,11 @@ function normalizeCreate(input: PiApprovalRequestInput): PiApprovalRequest {
 function normalizePatch(input: PiApprovalRequestInput): PiApprovalRequestInput {
   return {
     ...input,
+    async_escalation_state: input.async_escalation_state === undefined ? undefined : cleanString(input.async_escalation_state),
+    fast_decision: input.fast_decision === undefined ? undefined : cleanString(input.fast_decision),
+    fast_decision_reason: input.fast_decision_reason === undefined ? undefined : redactAuditText(cleanString(input.fast_decision_reason)),
+    fast_policy_latency_ms: input.fast_policy_latency_ms === undefined ? undefined : integerInput(input.fast_policy_latency_ms),
+    fast_policy_rule: input.fast_policy_rule === undefined ? undefined : cleanString(input.fast_policy_rule),
     resolver_error: input.resolver_error === undefined ? undefined : redactAuditText(cleanString(input.resolver_error)),
     summary: input.summary === undefined ? undefined : redactAuditText(cleanString(input.summary)),
     raw_payload_json: input.raw_payload_json === undefined ? undefined : payloadText(input.raw_payload_json),
@@ -211,11 +239,16 @@ function mapPiApprovalRequest(row: Record<string, unknown>): PiApprovalRequest {
   return {
     approval_id: requiredString(row.approval_id, "pi_approval_requests.approval_id"),
     approval_source: optionalString(row.approval_source),
+    async_escalation_state: optionalString(row.async_escalation_state),
     created_at: requiredString(row.created_at, "pi_approval_requests.created_at"),
     decision: optionalString(row.decision),
     delivered_at: optionalString(row.delivered_at),
     delivery_channel: optionalString(row.delivery_channel),
     delivery_state: optionalString(row.delivery_state),
+    fast_decision: optionalString(row.fast_decision),
+    fast_decision_reason: redactAuditText(optionalString(row.fast_decision_reason)),
+    fast_policy_latency_ms: integerValue(row.fast_policy_latency_ms, "pi_approval_requests.fast_policy_latency_ms"),
+    fast_policy_rule: optionalString(row.fast_policy_rule),
     issue_id: integerValue(row.issue_id, "pi_approval_requests.issue_id"),
     project_id: optionalString(row.project_id),
     provider: optionalString(row.provider),

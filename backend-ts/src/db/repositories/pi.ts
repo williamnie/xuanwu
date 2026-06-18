@@ -11,6 +11,7 @@ export * from "./pi/reports.ts";
 export * from "./pi/supervisorEvents.ts";
 export * from "./pi/approvalLifecycle.ts";
 export * from "./pi/approvalRequests.ts";
+export * from "./pi/guardianDecisions.ts";
 export * from "./pi/guardianEvents.ts";
 export * from "./pi/runGroups.ts";
 export * from "./pi/notificationIntents.ts";

@@ -2,6 +2,7 @@ import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositorie
 import { resolvePiApprovalRequestRecord } from "../db/repositories/pi/approvalLifecycle.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
+import { recordApprovalFastAudit } from "../pi/approvalFastAudit.ts";
 
 export type ApprovalRuntimeContext = {
   database?: RunnerDatabase;
@@ -31,6 +32,16 @@ export function syncProviderApprovalRequest(
     recordApprovalRequested(input, event, activeRunID);
   } else if (method === "approval/resolved") {
     recordApprovalResolved(input, event);
+  } else if (method === "approval/fast_resolved") {
+    recordFastApprovalAudit(input, event, activeRunID);
+  }
+}
+
+function recordFastApprovalAudit(input: ApprovalRuntimeContext, event: ProviderEvent, activeRunID: string): void {
+  try {
+    recordApprovalFastAudit(input, event, activeRunID);
+  } catch {
+    // Fast resolver audit is best-effort and must not affect provider decisions or runtime flow.
   }
 }
 

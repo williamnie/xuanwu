@@ -68,6 +68,7 @@ describe("Bun SQLite database connection", () => {
         "pi_approval_requests",
         "pi_conversations",
         "pi_delegations",
+        "pi_guardian_decisions",
         "pi_guardian_event_inbox",
         "pi_heartbeat_controls",
         "pi_heartbeat_events",
@@ -158,6 +159,13 @@ describe("Bun SQLite database connection", () => {
         "session_id",
         "summary"
       ]));
+      expect(columnNames(connection, "pi_approval_requests")).toEqual(expect.arrayContaining([
+        "async_escalation_state",
+        "fast_decision",
+        "fast_decision_reason",
+        "fast_policy_latency_ms",
+        "fast_policy_rule"
+      ]));
       expect(indexNames(connection, "pi_action_events")).toContain("idx_pi_action_events_action");
       expect(indexNames(connection, "pi_heartbeat_events")).toContain("idx_pi_heartbeat_events_run");
       expect(indexNames(connection, "pi_delegations")).toContain("idx_pi_delegations_active");
@@ -170,6 +178,7 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_approval_requests")).toContain("idx_pi_approval_requests_issue");
       expect(indexNames(connection, "pi_approval_requests")).toContain("ux_pi_approval_requests_provider_session_approval");
       expect(indexNames(connection, "pi_guardian_event_inbox")).toContain("ux_pi_guardian_event_source");
+      expect(indexNames(connection, "pi_guardian_decisions")).toContain("ux_pi_guardian_decisions_key");
       expect(indexNames(connection, "pi_notification_intents")).toContain("ux_pi_notification_intent_key");
       expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_scope");
       expect(indexNames(connection, "pi_notification_preferences")).toContain("idx_pi_notification_preferences_effective");
@@ -246,7 +255,10 @@ describe("Bun SQLite database connection", () => {
         delivery_state: "'pending'",
         run_id: "''",
         session_id: "''",
-        summary: "''"
+        summary: "''",
+        fast_decision: "''",
+        fast_policy_latency_ms: "0",
+        async_escalation_state: "''"
       });
       expect(columnDefaults(connection, "pi_guardian_event_inbox")).toMatchObject({
         redaction_profile: "'prompt'",
@@ -368,8 +380,12 @@ describe("Bun SQLite database connection", () => {
     const repaired = await openDatabase({ stateDir });
     try {
       expect(columnNames(repaired, "pi_approval_requests")).toEqual(expect.arrayContaining([
+        "async_escalation_state",
         "decision",
         "delivery_state",
+        "fast_decision",
+        "fast_policy_latency_ms",
+        "fast_policy_rule",
         "run_id",
         "session_id",
         "summary"
