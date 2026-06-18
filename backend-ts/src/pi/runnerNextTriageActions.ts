@@ -5,6 +5,7 @@ import { ProjectNotFoundError, type Project } from "../db/repositories/projects.
 import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
 import { parseBatchTriageScope, type BatchTriageScope } from "./runnerBatchTriageScope.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
+import { attachRunGroupEnqueueAction, createBatchRunGroup } from "./runGroupService.ts";
 
 export type NextTriageIssueInput = { project_id?: string; rationale?: string };
 export type BatchTriageIssueInput = {
@@ -49,9 +50,15 @@ export function createBatchTriageEnqueueAction(
   const scope = parseBatchTriageScope(input.user_phrase, input.issue_ids);
   const candidates = scopedBatchCandidates(db, projectID, scope);
   if (candidates.length === 0) return noBatchTriageCandidate(projectID);
-  const result = enqueueBatchCandidates(db, context, candidates, input.rationale);
+  const group = createBatchRunGroup(db, {
+    conversationID: context.conversationID,
+    issues: candidates,
+    projectID,
+    userPhrase: input.user_phrase
+  });
+  const result = enqueueBatchCandidates(db, context, candidates, input.rationale, group.id);
   if (result.enqueued.length > 0) context.onIssueEnqueued?.(projectID);
-  return batchSummary(projectID, candidates.length, result);
+  return batchSummary(projectID, candidates.length, result, group.id);
 }
 
 function nextTriageIssue(db: RunnerDatabase, projectID: string): Issue | undefined {
@@ -89,10 +96,16 @@ function enqueueBatchCandidates(
   db: RunnerDatabase,
   context: NextTriageContext,
   issues: Issue[],
-  rationale: string | undefined
+  rationale: string | undefined,
+  runGroupID: string
 ) {
   const result = { enqueued: [] as unknown[], pending: [] as unknown[], failed: [] as unknown[] };
-  for (const issue of issues) collectBatchResult(result, issue, runEnqueueAction(db, context, issue, rationale));
+  for (const issue of issues) {
+    const actionResult = runEnqueueAction(db, context, issue, rationale, runGroupID);
+    const actionID = cleanString(objectPayload(actionResult).action_id);
+    attachRunGroupEnqueueAction(db, runGroupID, issue.id, actionID);
+    collectBatchResult(result, issue, actionResult);
+  }
   return result;
 }
 
@@ -100,10 +113,11 @@ function runEnqueueAction(
   db: RunnerDatabase,
   context: NextTriageContext,
   issue: Issue,
-  rationale: string | undefined
+  rationale: string | undefined,
+  runGroupID: string
 ): unknown {
   try {
-    return createPendingPiAction(db, enqueueActionContext(context, issue), enqueueProposal(issue, rationale),
+    return createPendingPiAction(db, enqueueActionContext(context, issue), enqueueProposal(issue, rationale, runGroupID),
       () => compactEnqueuedIssue(enqueueIssue(db, issue.id)));
   } catch (error) {
     return { error: safeError(error), status: "failed" };
@@ -157,7 +171,7 @@ function noBatchTriageCandidate(projectID: string) {
   };
 }
 
-function batchSummary(projectID: string, total: number, result: BatchBuckets) {
+function batchSummary(projectID: string, total: number, result: BatchBuckets, runGroupID = "") {
   return {
     candidate_count: total,
     enqueued: result.enqueued,
@@ -165,6 +179,7 @@ function batchSummary(projectID: string, total: number, result: BatchBuckets) {
     pending: result.pending,
     pending_count: result.pending.length,
     project_id: projectID,
+    run_group_id: runGroupID,
     skipped: skipReasons(result),
     source: "issue_enqueue_batch_triage",
     status: batchStatus(result)
@@ -198,11 +213,11 @@ function enqueueActionContext(context: NextTriageContext, issue: Issue): NextTri
   });
 }
 
-function enqueueProposal(issue: Issue, rationale: string | undefined) {
+function enqueueProposal(issue: Issue, rationale: string | undefined, runGroupID = "") {
   return {
     actionType: "issue.enqueue",
     issueID: issue.id,
-    payload: { issue_id: issue.id },
+    payload: cleanObject({ issue_id: issue.id, run_group_id: runGroupID }),
     projectID: issue.project_id,
     rationale
   };
@@ -232,4 +247,11 @@ function scopedProjectID(id: unknown, context: NextTriageContext): string {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanObject(input: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(input).filter(([_key, value]) => {
+    if (value === null || value === undefined) return false;
+    return typeof value !== "string" || value.trim() !== "";
+  }));
 }

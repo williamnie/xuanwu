@@ -770,14 +770,19 @@ describe("PI runner action tools", () => {
         .toHaveLength(3);
       expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
         action_type: "issue.enqueue",
-        issue_id: selectedA,
-        payload_json: JSON.stringify({ issue_id: selectedA })
+        issue_id: selectedA
       }));
       expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
         action_type: "issue.enqueue",
-        issue_id: selectedB,
-        payload_json: JSON.stringify({ issue_id: selectedB })
+        issue_id: selectedB
       }));
+      const payloads = listPiActions(fixture.db, { status: "completed" })
+        .filter((action) => action.action_type === "issue.enqueue")
+        .map((action) => JSON.parse(action.payload_json));
+      const runGroupIDs = new Set(payloads.map((payload) => payload.run_group_id));
+      expect(runGroupIDs.size).toBe(1);
+      expect(payloads).toContainEqual(expect.objectContaining({ issue_id: selectedA, run_group_id: expect.any(String) }));
+      expect(payloads).toContainEqual(expect.objectContaining({ issue_id: selectedB, run_group_id: expect.any(String) }));
     } finally {
       await fixture.close();
     }

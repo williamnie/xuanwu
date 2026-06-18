@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
-import { listPiActions } from "../db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions, listPiRunGroupItems, listPiRunGroups } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
 
@@ -32,22 +32,47 @@ describe("PI batch triage enqueue ranges", () => {
       }) as {
         enqueued: Array<{ id: number; status: string; title: string }>;
         enqueued_count: number;
+        run_group_id: string;
         status: string;
       };
+
+      const actionsForBatch = listPiActions(fixture.db, { status: "completed" });
+      const runGroups = listPiRunGroups(fixture.db, { projectId: fixture.project.id });
+      const runGroupID = runGroups[0]?.id ?? "";
 
       expect(result).toMatchObject({
         enqueued: requested.map((id) => ({ id, status: "todo", title: `P26.${id}` })),
         enqueued_count: 5,
+        run_group_id: runGroupID,
         status: "completed"
       });
+      expect(runGroups).toMatchObject([
+        { expected_issue_count: 5, project_id: fixture.project.id, status: "active", user_phrase: "把 #387-#391 都开始做" }
+      ]);
+      expect(listPiRunGroupItems(fixture.db, runGroupID)).toMatchObject(requested.map((id, index) => ({
+        enqueue_action_id: actionsForBatch.find((action) => action.issue_id === id)?.id,
+        enqueue_status: "pending",
+        issue_id: id,
+        issue_title_snapshot: `P26.${id}`,
+        position: index + 1,
+        report_bucket: "active",
+        report_status: "active",
+        status: "active"
+      })));
       expect(requested.map((id) => getIssue(fixture.db, id)?.status)).toEqual([
         "todo", "todo", "todo", "todo", "todo"
       ]);
       expect(getIssue(fixture.db, 392)).toMatchObject({ status: "triage" });
       expect(getIssue(fixture.db, 3890)).toMatchObject({ status: "triage" });
       expect(kickedProjects).toEqual([fixture.project.id]);
-      expect(listPiActions(fixture.db, { status: "completed" }).map((item) => item.issue_id).sort((a, b) => a - b))
-        .toEqual(requested);
+      expect(actionsForBatch.map((item) => item.issue_id).sort((a, b) => a - b)).toEqual(requested);
+      for (const action of actionsForBatch) {
+        expect(JSON.parse(action.payload_json)).toMatchObject({ run_group_id: runGroupID });
+        expect(listPiActionEvents(fixture.db, { actionId: action.id }).map((event) => JSON.parse(event.payload_json)))
+          .toContainEqual(expect.objectContaining({
+            payload: expect.objectContaining({ run_group_id: runGroupID })
+          }));
+      }
       expect(listIssues(fixture.db, { projectId: fixture.project.id, status: "todo" }).map((item) => item.id).sort((a, b) => a - b))
         .toEqual(requested);
     } finally {
