@@ -48,6 +48,19 @@ export type PiGuardianDecisionFilter = {
   projectId?: string;
   state?: string;
 };
+export type PiGuardianDecisionState =
+  "approved" | "completed" | "deferred" | "executing" | "failed" | "proposed" | "skipped" | "superseded";
+export type PiGuardianDecisionTransitionInput = {
+  cooldownUntil?: string;
+  from?: PiGuardianDecisionState;
+  rationale?: string;
+  to: PiGuardianDecisionState;
+};
+export type PiGuardianDecisionLeaseInput = {
+  now?: Date;
+  owner: string;
+  ttlMs: number;
+};
 
 type SQLValue = string | number;
 const TABLE = "pi_guardian_decisions";
@@ -56,6 +69,9 @@ const COLUMNS = `id, idempotency_key, source_event_id, source_event_sequence_id,
   decision, risk_level, requires_user, rationale, evidence_json, actions_json,
   state, lease_owner, lease_expires_at, cooldown_until, pi_session_id,
   raw_pi_text_ref, created_at, updated_at`;
+const TERMINAL_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
+const VALID_STATES = new Set(["proposed", "approved", "deferred", "executing", ...TERMINAL_STATES]);
+const CLEAR_LEASE_STATES = new Set(["completed", "failed", "skipped", "superseded"]);
 
 export function upsertPiGuardianDecision(
   db: RunnerDatabase,
@@ -80,7 +96,6 @@ export function upsertPiGuardianDecision(
       rationale=coalesce(nullif(excluded.rationale, ''), ${TABLE}.rationale),
       evidence_json=case when excluded.evidence_json <> '[]' then excluded.evidence_json else ${TABLE}.evidence_json end,
       actions_json=case when excluded.actions_json <> '[]' then excluded.actions_json else ${TABLE}.actions_json end,
-      state=coalesce(nullif(excluded.state, ''), ${TABLE}.state),
       updated_at=excluded.updated_at`, [
     record.id, record.idempotency_key, record.source_event_id, record.source_event_sequence_id,
     record.decision_kind, record.authority, record.project_id, record.issue_id,
@@ -94,6 +109,51 @@ export function upsertPiGuardianDecision(
 
 export function getPiGuardianDecision(db: RunnerDatabase, id: string): PiGuardianDecision | null {
   return getByID(db, TABLE, COLUMNS, id, mapDecision);
+}
+
+export function transitionPiGuardianDecisionState(
+  db: RunnerDatabase,
+  id: string,
+  input: PiGuardianDecisionTransitionInput
+): PiGuardianDecision {
+  const current = requirePiGuardianDecision(db, id);
+  if (input.from && current.state !== input.from) {
+    throw new Error(`expected state ${input.from} for PI guardian decision ${current.id}, got ${current.state}`);
+  }
+  assertTransition(current, input.to);
+  if (current.state === input.to) return current;
+  const shouldClearLease = CLEAR_LEASE_STATES.has(input.to);
+  db.sqlite.run(`update ${TABLE} set state=?, lease_owner=?, lease_expires_at=?,
+    cooldown_until=?, rationale=?, updated_at=? where id=?`, [
+    input.to,
+    shouldClearLease ? "" : current.lease_owner,
+    shouldClearLease ? "" : current.lease_expires_at,
+    cleanString(input.cooldownUntil) || current.cooldown_until,
+    cleanString(input.rationale) === "" ? current.rationale : redactAuditText(cleanString(input.rationale)),
+    now(),
+    current.id
+  ]);
+  return requirePiGuardianDecision(db, current.id);
+}
+
+export function claimPiGuardianDecisionLease(
+  db: RunnerDatabase,
+  id: string,
+  input: PiGuardianDecisionLeaseInput
+): PiGuardianDecision | null {
+  const owner = requiredString(input.owner, "owner");
+  if (!Number.isInteger(input.ttlMs) || input.ttlMs <= 0) throw new Error("ttlMs must be a positive integer");
+  const key = requiredString(id, "id");
+  const nowDate = input.now ?? new Date();
+  const timestamp = iso(nowDate);
+  const expiresAt = iso(new Date(nowDate.getTime() + input.ttlMs));
+  const result = db.sqlite.run(`update ${TABLE} set lease_owner=?, lease_expires_at=?, updated_at=?
+    where id=? and state in ('proposed', 'approved', 'deferred', 'executing')
+      and (cooldown_until='' or cooldown_until<=?)
+      and (lease_owner='' or lease_owner=? or lease_expires_at='' or lease_expires_at<=?)`, [
+    owner, expiresAt, timestamp, key, timestamp, owner, timestamp
+  ]);
+  return result.changes > 0 ? requirePiGuardianDecision(db, key) : null;
 }
 
 export function listPiGuardianDecisions(
@@ -111,6 +171,7 @@ export function listPiGuardianDecisions(
 function normalizeCreate(input: PiGuardianDecisionInput): PiGuardianDecision {
   const idempotencyKey = requiredString(input.idempotency_key, "idempotency_key");
   const decisionKind = requiredString(input.decision_kind, "decision_kind");
+  const state = decisionState(cleanString(input.state) || "proposed");
   return {
     actions_json: jsonArrayText(input.actions_json),
     authority: cleanString(input.authority) || "policy",
@@ -128,13 +189,13 @@ function normalizeCreate(input: PiGuardianDecisionInput): PiGuardianDecision {
     pi_session_id: cleanString(input.pi_session_id),
     project_id: cleanString(input.project_id),
     rationale: redactAuditText(cleanString(input.rationale)),
-    raw_pi_text_ref: cleanString(input.raw_pi_text_ref),
+    raw_pi_text_ref: piTextReference(input.raw_pi_text_ref),
     requires_user: integerInput(input.requires_user),
     risk_level: cleanString(input.risk_level) || "low",
     run_group_id: cleanString(input.run_group_id),
     source_event_id: cleanString(input.source_event_id),
     source_event_sequence_id: integerInput(input.source_event_sequence_id),
-    state: cleanString(input.state) || "proposed",
+    state,
     updated_at: ""
   };
 }
@@ -157,7 +218,7 @@ function mapDecision(row: Record<string, unknown>): PiGuardianDecision {
     pi_session_id: optionalString(row.pi_session_id),
     project_id: optionalString(row.project_id),
     rationale: redactAuditText(optionalString(row.rationale)),
-    raw_pi_text_ref: optionalString(row.raw_pi_text_ref),
+    raw_pi_text_ref: piTextReference(row.raw_pi_text_ref),
     requires_user: integerValue(row.requires_user, `${TABLE}.requires_user`),
     risk_level: optionalString(row.risk_level) || "low",
     run_group_id: optionalString(row.run_group_id),
@@ -177,6 +238,46 @@ function mustGetPiGuardianDecision(
   ).get(record.id, record.idempotency_key);
   if (!row) throw new Error("PI guardian decision missing after write");
   return mapDecision(row);
+}
+
+function requirePiGuardianDecision(db: RunnerDatabase, id: string): PiGuardianDecision {
+  const decision = getPiGuardianDecision(db, id);
+  if (!decision) throw new Error(`PI guardian decision ${cleanString(id)} not found`);
+  return decision;
+}
+
+function assertTransition(current: PiGuardianDecision, to: PiGuardianDecisionState): void {
+  const from = decisionState(current.state);
+  if (from === to) return;
+  if (TERMINAL_STATES.has(from)) {
+    throw new Error(`cannot transition PI guardian decision ${current.id} from ${from} to ${to}`);
+  }
+  const allowed = allowedNextStates(from);
+  if (allowed.includes(to)) return;
+  throw new Error(`cannot transition PI guardian decision ${current.id} from ${from} to ${to}`);
+}
+
+function allowedNextStates(from: PiGuardianDecisionState): PiGuardianDecisionState[] {
+  if (from === "proposed") return ["approved", "deferred", "executing", "completed", "failed", "skipped", "superseded"];
+  if (from === "deferred") return ["approved", "executing", "failed", "skipped", "superseded"];
+  return ["executing", "completed", "failed", "skipped", "superseded"];
+}
+
+function decisionState(value: string): PiGuardianDecisionState {
+  if (VALID_STATES.has(value)) return value as PiGuardianDecisionState;
+  throw new Error(`invalid PI guardian decision state ${value}`);
+}
+
+function piTextReference(value: unknown): string {
+  const text = cleanString(value);
+  if (text === "") return "";
+  const redacted = redactAuditText(text);
+  if (redacted !== text || /\s/.test(text)) return "";
+  return /^[a-z][a-z0-9_.-]*:[^\s]+$/i.test(text) ? text : "";
+}
+
+function iso(value: Date): string {
+  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function jsonArrayText(value: unknown): string {

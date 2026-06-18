@@ -60,7 +60,7 @@ create table if not exists pi_guardian_decisions (
   rationale text not null default '',
   evidence_json text not null default '[]',
   actions_json text not null default '[]',
-  state text not null default 'proposed',
+  state text not null default 'proposed', -- proposed | approved | deferred | executing | completed | failed | skipped | superseded
   lease_owner text not null default '',
   lease_expires_at text not null default '',
   cooldown_until text not null default '',
