@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import { clearAuthToken } from '../api/authToken';
 import { api } from '../api/client';
-import { sameCronTasks, sameIssueTemplates, sameIssues, sameProjects } from '../utils/stateGuards';
+import {
+  sameCronTasks,
+  sameGuardianAlerts,
+  sameIssueTemplates,
+  sameIssues,
+  sameProjects,
+} from '../utils/stateGuards';
 
 const DATA_SLICE_CONFIG = {
   projects: {
@@ -60,6 +66,7 @@ export const useDataStore = create((set, get) => ({
   issues: [],
   issueTemplates: [],
   cronTasks: [],
+  guardianAlerts: [],
   loading: true,
   backendOnline: false,
 
@@ -70,6 +77,12 @@ export const useDataStore = create((set, get) => ({
 
   setProjects: (projects) => {
     set({ projects: Array.isArray(projects) ? projects : [] });
+  },
+
+  setGuardianAlerts: (alerts) => {
+    const nextAlerts = Array.isArray(alerts) ? alerts : [];
+    if (sameGuardianAlerts(get().guardianAlerts, nextAlerts)) return;
+    set({ guardianAlerts: nextAlerts });
   },
 
   refreshData: async (slices = ALL_DATA_SLICES) => {
@@ -121,9 +134,11 @@ export const selectProjects = (state) => state.projects;
 export const selectIssues = (state) => state.issues;
 export const selectIssueTemplates = (state) => state.issueTemplates;
 export const selectCronTasks = (state) => state.cronTasks;
+export const selectGuardianAlerts = (state) => state.guardianAlerts;
 export const selectBackendOnline = (state) => state.backendOnline;
 export const selectLoading = (state) => state.loading;
 export const selectRefreshData = (state) => state.refreshData;
 export const selectRefreshAllData = (state) => state.refreshAllData;
 export const selectSetBackendOnline = (state) => state.setBackendOnline;
+export const selectSetGuardianAlerts = (state) => state.setGuardianAlerts;
 export const selectSetProjects = (state) => state.setProjects;

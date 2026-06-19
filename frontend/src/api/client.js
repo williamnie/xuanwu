@@ -461,6 +461,20 @@ export const api = {
     }),
   }),
 
+  getPiGuardianAlerts: ({ alertType = '', projectId = '', status = 'open' } = {}) => {
+    const params = new URLSearchParams();
+    if (alertType) params.append('alert_type', alertType);
+    if (projectId) params.append('project_id', projectId);
+    if (status) params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/guardian/alerts${query}`);
+  },
+
+  ackPiGuardianAlert: (id) => request(`/api/pi/guardian/alerts/${encodeURIComponent(id)}/ack`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getProjectPiSettings: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`),
 
   updateProjectPiSettings: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`, {

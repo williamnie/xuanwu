@@ -14,6 +14,7 @@ import PiCommandCenter from './pages/PiCommandCenter';
 import Cron from './pages/Cron';
 import Settings from './pages/Settings';
 import AppSidebar from './components/AppSidebar';
+import GuardianAlertBanner from './components/GuardianAlertBanner';
 import {
   selectLoading,
   selectRefreshData,
@@ -24,6 +25,7 @@ import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Loader2, Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
+import './App.css';
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
@@ -264,6 +266,7 @@ export default function App() {
 
       {/* 右侧主工作区 */}
       <main className="main-content">
+        <GuardianAlertBanner />
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px' }}>
             <Loader2 className="animate-spin" size={32} color="var(--primary)" />

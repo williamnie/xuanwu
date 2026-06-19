@@ -1,1 +1,178 @@
-/* App.css cleared */
+/* App-level Guardian system alert banner */
+.guardian-alert-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.in-sessions-page .guardian-alert-stack {
+  left: 12px;
+  position: fixed;
+  right: 12px;
+  top: 0;
+  z-index: 90;
+}
+
+.in-sessions-page:not(.sidebar-collapsed) .guardian-alert-stack {
+  left: calc(var(--sidebar-width) + 12px);
+}
+
+.guardian-alert-banner {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--border-color));
+  border-left: 4px solid var(--warning);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.guardian-alert-banner.urgent {
+  background: color-mix(in srgb, var(--error) 9%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--error) 36%, var(--border-color));
+  border-left-color: var(--error);
+}
+
+.guardian-alert-banner.stale {
+  background: color-mix(in srgb, var(--triage) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--triage) 38%, var(--border-color));
+  border-left-color: var(--triage);
+}
+
+.guardian-alert-banner.degraded {
+  background: color-mix(in srgb, var(--info) 9%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--info) 30%, var(--border-color));
+  border-left-color: var(--info);
+}
+
+.guardian-alert-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 12px;
+  color: var(--warning);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.guardian-alert-banner.urgent .guardian-alert-icon { color: var(--error); }
+.guardian-alert-banner.stale .guardian-alert-icon { color: var(--triage); }
+.guardian-alert-banner.degraded .guardian-alert-icon { color: var(--info); }
+
+.guardian-alert-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.guardian-alert-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.guardian-alert-title-row strong {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.guardian-alert-body p,
+.guardian-alert-body small,
+.guardian-alert-inline-error {
+  overflow-wrap: anywhere;
+}
+
+.guardian-alert-body p {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.guardian-alert-body small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.guardian-alert-severity {
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 24%, transparent);
+  border-radius: 999px;
+  color: var(--warning);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  text-transform: uppercase;
+}
+
+.guardian-alert-severity.urgent {
+  background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 24%, transparent);
+  color: var(--error);
+}
+
+.guardian-alert-action {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.74rem;
+  font-weight: 800;
+  gap: 6px;
+  padding: 7px 11px;
+}
+
+.guardian-alert-action:hover:not(:disabled) {
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.guardian-alert-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.guardian-alert-inline-error {
+  background: var(--error-bg);
+  border: 1px solid color-mix(in srgb, var(--error) 24%, transparent);
+  border-radius: 12px;
+  color: var(--error);
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 9px 12px;
+}
+
+[data-theme="dark"] .guardian-alert-icon {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 760px) {
+  .guardian-alert-banner {
+    flex-direction: column;
+  }
+
+  .guardian-alert-action {
+    justify-content: center;
+    width: 100%;
+  }
+}

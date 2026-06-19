@@ -76,6 +76,26 @@ const CRON_TASK_FIELDS = [
   'updated_at',
 ];
 
+const GUARDIAN_ALERT_FIELDS = [
+  'id',
+  'alert_type',
+  'severity',
+  'status',
+  'project_id',
+  'issue_id',
+  'run_group_id',
+  'message',
+  'ui_visible',
+  'direct_feishu_state',
+  'direct_feishu_error',
+  'next_retry_at',
+  'retry_count',
+  'max_retry_count',
+  'watchdog_seen_at',
+  'created_at',
+  'updated_at',
+];
+
 export const RECONCILE_INTERVAL_MS = 30_000;
 
 function fieldSignature(item, fields) {
@@ -125,6 +145,10 @@ export function sameIssueTemplates(current, next) {
 
 export function sameCronTasks(current, next) {
   return sameListByFields(current, next, CRON_TASK_FIELDS);
+}
+
+export function sameGuardianAlerts(current, next) {
+  return sameListByFields(current, next, GUARDIAN_ALERT_FIELDS);
 }
 
 
