@@ -9,6 +9,10 @@ import {
   drainGuardianDecisionOrchestrator,
   type GuardianDecisionOrchestratorSummary
 } from "../pi/guardianDecisionOrchestrator.ts";
+import {
+  runPiGuardianWatchdogOnce,
+  type PiGuardianWatchdogSummary
+} from "../pi/guardianWatchdog.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
@@ -23,6 +27,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
   guardianDecisions: GuardianDecisionOrchestratorSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
+  watchdog: PiGuardianWatchdogSummary;
 };
 
 export type PiAutoManageCycleInput = {
@@ -33,6 +38,8 @@ export type PiAutoManageCycleInput = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
+  watchdogNow?: Date | string;
+  watchdogStaleAfterMs?: number;
 };
 
 export type PiAutoManageSchedulerClock<Timer = unknown> = {
@@ -129,6 +136,10 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
+  const watchdog = runPiGuardianWatchdogOnce(input.database, {
+    now: input.watchdogNow,
+    staleAfterMs: input.watchdogStaleAfterMs
+  });
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
@@ -137,7 +148,8 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     digestFlush,
     digestNotifications,
     guardianDecisions,
-    supervisor
+    supervisor,
+    watchdog
   };
 }
 
