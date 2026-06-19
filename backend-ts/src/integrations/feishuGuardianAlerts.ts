@@ -4,6 +4,11 @@ import {
   type PiGuardianAlert
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
+import {
+  failedGuardianAlertRetryPatch,
+  sentGuardianAlertRetryPatch,
+  shouldAttemptGuardianAlertFeishu
+} from "../pi/guardianAlertRetryPolicy.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import {
   createFeishuMessageClient,
@@ -27,7 +32,7 @@ export async function sendDirectFeishuGuardianAlert(
   alert: PiGuardianAlert,
   options: PiGuardianDirectFeishuOptions
 ): Promise<void> {
-  if (!shouldAttempt(alert, options.now ?? new Date())) return;
+  if (!shouldAttemptGuardianAlertFeishu(alert, options.now ?? new Date())) return;
   const target = resolveTarget(db, alert, options.config);
   if (!target) return recordFailure(db, alert, "missing direct Feishu target", options.now);
   if (!targetAllowed(options.config, target)) {
@@ -36,21 +41,14 @@ export async function sendDirectFeishuGuardianAlert(
   try {
     const sender = options.sender ?? createFeishuMessageClient({ config: options.config });
     const sent = await sender.sendTextMessage({ ...target, text: directText(alert) });
-    updatePiGuardianAlert(db, alert.id, {
-      direct_feishu_error: "",
-      direct_feishu_message_id: sent.messageId,
-      direct_feishu_state: "sent",
-      next_retry_at: ""
-    });
+    updatePiGuardianAlert(db, alert.id, sentGuardianAlertRetryPatch({
+      alert,
+      messageId: sent.messageId,
+      now: options.now
+    }));
   } catch (error) {
     recordFailure(db, alert, safeError(error), options.now, permanentError(error), retryAfter(error));
   }
-}
-
-function shouldAttempt(alert: PiGuardianAlert, now: Date): boolean {
-  if (alert.direct_feishu_state === "" || alert.direct_feishu_state === "not_attempted") return true;
-  if (alert.direct_feishu_state !== "retry") return false;
-  return alert.next_retry_at === "" || Date.parse(alert.next_retry_at) <= now.getTime();
 }
 
 function resolveTarget(
@@ -76,13 +74,9 @@ function recordFailure(
   permanent = false,
   retryAfterSeconds = DEFAULT_RETRY_SECONDS
 ): void {
-  const retryCount = alert.retry_count + 1;
-  const failed = permanent || retryCount >= alert.max_retry_count;
   updatePiGuardianAlert(db, alert.id, {
     direct_feishu_error: redactAuditText(error),
-    direct_feishu_state: failed ? "failed" : "retry",
-    next_retry_at: failed ? "" : iso(new Date(now.getTime() + retryAfterSeconds * 1000)),
-    retry_count: retryCount
+    ...failedGuardianAlertRetryPatch({ alert, now, permanent, retryAfterSeconds })
   });
 }
 
@@ -140,8 +134,4 @@ function field(value: string): string {
 
 function oneLine(value: string): string {
   return redactAuditText(value).replace(/\s+/g, " ").trim();
-}
-
-function iso(value: Date): string {
-  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
 }

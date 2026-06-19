@@ -45,6 +45,8 @@ describe("PI Guardian watchdog detector", () => {
       expect(alerts[0]).toMatchObject({
         direct_feishu_message_id: "om_guardian_sent_1",
         direct_feishu_state: "sent",
+        next_retry_at: "2026-06-19T01:15:00Z",
+        retry_count: 0,
         status: "open",
         ui_visible: 1
       });
@@ -96,7 +98,8 @@ describe("PI Guardian watchdog detector", () => {
 
       expect(alert).toMatchObject({
         direct_feishu_state: "retry",
-        next_retry_at: "2026-06-19T01:00:30Z",
+        max_retry_count: 3,
+        next_retry_at: "2026-06-19T01:15:00Z",
         retry_count: 1,
         status: "open",
         ui_visible: 1
@@ -114,6 +117,157 @@ describe("PI Guardian watchdog detector", () => {
       db.close();
     }
   });
+
+  test("backs off urgent alert retries and keeps UI visible after max cap", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianFeishuSender([
+      new FeishuClientError("temporary outage 1", { kind: "temporary" }),
+      new FeishuClientError("temporary outage 2", { kind: "temporary" }),
+      new FeishuClientError("temporary outage 3", { kind: "temporary" })
+    ]);
+    try {
+      insertProject(db, "demo");
+
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: NOW,
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T01:10:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T01:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T02:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T06:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+
+      expect(sender.calls).toHaveLength(3);
+      expect(alert).toMatchObject({
+        direct_feishu_state: "failed",
+        next_retry_at: "",
+        retry_count: 3,
+        status: "open",
+        ui_visible: 1
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retries unacknowledged sent urgent alerts with backoff and max cap", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianFeishuSender([
+      { messageId: "om_initial" },
+      { messageId: "om_retry_1" },
+      { messageId: "om_retry_2" },
+      { messageId: "om_retry_3" },
+      { messageId: "om_unexpected" }
+    ]);
+    try {
+      insertProject(db, "demo");
+
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: NOW,
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T01:10:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T01:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T02:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T06:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T10:15:00Z"),
+        staleAfterMs: STALE_MS
+      });
+      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+
+      expect(sender.calls).toHaveLength(4);
+      expect(alert).toMatchObject({
+        direct_feishu_message_id: "om_retry_3",
+        direct_feishu_state: "sent",
+        next_retry_at: "",
+        retry_count: 3,
+        status: "open",
+        ui_visible: 1
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  for (const status of ["acked", "resolved", "suppressed"] as const) {
+    test(`does not reopen or retry ${status} alerts for the same watchdog condition`, async () => {
+      const db = await openFixtureDatabase();
+      const sender = new FakeGuardianFeishuSender([{ messageId: "om_guardian_sent_1" }]);
+      try {
+        insertProject(db, "demo");
+        await runPiGuardianWatchdogOnce(db, {
+          checks: [failingProbe()],
+          directFeishu: { config: feishuConfig(), sender },
+          now: NOW,
+          staleAfterMs: STALE_MS
+        });
+        const firstAlert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+        if (!firstAlert) throw new Error("expected open alert");
+        markAlertStatus(db, firstAlert.id, status);
+
+        await runPiGuardianWatchdogOnce(db, {
+          checks: [failingProbe()],
+          directFeishu: { config: feishuConfig(), sender },
+          now: new Date("2026-06-19T01:15:00Z"),
+          staleAfterMs: STALE_MS
+        });
+
+        expect(sender.calls).toHaveLength(1);
+        expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(0);
+        expect(listPiGuardianAlerts(db, { projectId: "demo", status })).toHaveLength(1);
+      } finally {
+        db.close();
+      }
+    });
+  }
 
   test("writes PI runtime alert, refreshes liveness, and avoids PI/outbox side effects", async () => {
     const db = await openFixtureDatabase();
@@ -358,6 +512,12 @@ function insertPendingGuardianInboxEvent(db: RunnerDatabase): void {
      values ('event-pending', 'guardian.test', 'demo', 'event-pending-key', 'pending', ?, ?)`,
     ["2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
   );
+}
+
+function markAlertStatus(db: RunnerDatabase, id: string, status: string): void {
+  db.sqlite.run("update pi_guardian_alerts set status=?, updated_at=? where id=?", [
+    status, "2026-06-19T01:01:00Z", id
+  ]);
 }
 
 function sideEffectCounts(db: RunnerDatabase): Record<string, number> {

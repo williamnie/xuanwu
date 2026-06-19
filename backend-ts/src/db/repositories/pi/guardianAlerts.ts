@@ -31,6 +31,7 @@ export type PiGuardianAlertRetryInput = {
 };
 
 type SQLValue = string | number;
+export const DEFAULT_GUARDIAN_ALERT_MAX_RETRY_COUNT = 3;
 const TABLE = "pi_guardian_alerts";
 const COLUMNS = `id, alert_type, severity, status, project_id, issue_id,
   run_group_id, message, evidence_json, ui_visible, direct_feishu_state,
@@ -42,6 +43,7 @@ const UPDATE_COLUMNS = [
   "next_retry_at", "retry_count", "max_retry_count", "watchdog_seen_at"
 ] as const;
 const STATUSES = new Set<PiGuardianAlertStatus>(["open", "acked", "resolved", "suppressed"]);
+const SILENCED_STATUSES: PiGuardianAlertStatus[] = ["acked", "resolved", "suppressed"];
 
 export function upsertPiGuardianAlert(
   db: RunnerDatabase,
@@ -50,6 +52,8 @@ export function upsertPiGuardianAlert(
   const record = normalizeCreate(input);
   const existing = findOpenAlert(db, record);
   if (existing) return refreshPiGuardianAlert(db, existing.id, record);
+  const silenced = findSilencedAlert(db, record);
+  if (silenced) return silenced;
   db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(19)})`, [
     record.id, record.alert_type, record.severity, record.status,
     record.project_id, record.issue_id, record.run_group_id, record.message,
@@ -149,7 +153,7 @@ function normalizeCreate(input: PiGuardianAlertInput): PiGuardianAlert {
     evidence_json: redactedJsonPayload(input.evidence_json, "[]"),
     id: cleanString(input.id) || crypto.randomUUID(),
     issue_id: integerInput(input.issue_id),
-    max_retry_count: integerInput(input.max_retry_count, 5),
+    max_retry_count: integerInput(input.max_retry_count, DEFAULT_GUARDIAN_ALERT_MAX_RETRY_COUNT),
     message: redactAuditText(requiredString(input.message, "message")),
     next_retry_at: cleanString(input.next_retry_at),
     project_id: cleanString(input.project_id),
@@ -173,7 +177,9 @@ function normalizePatch(input: PiGuardianAlertInput): PiGuardianAlertInput {
   if (input.status !== undefined) patch.status = alertStatus(input.status);
   if (input.ui_visible !== undefined) patch.ui_visible = integerInput(input.ui_visible);
   if (input.retry_count !== undefined) patch.retry_count = integerInput(input.retry_count);
-  if (input.max_retry_count !== undefined) patch.max_retry_count = integerInput(input.max_retry_count, 5);
+  if (input.max_retry_count !== undefined) {
+    patch.max_retry_count = integerInput(input.max_retry_count, DEFAULT_GUARDIAN_ALERT_MAX_RETRY_COUNT);
+  }
   return patch;
 }
 
@@ -207,6 +213,16 @@ function findOpenAlert(db: RunnerDatabase, record: PiGuardianAlert): PiGuardianA
       where status='open' and alert_type=? and project_id=? and issue_id=? and run_group_id=?
       order by created_at asc, id asc limit 1`
   ).get(record.alert_type, record.project_id, record.issue_id, record.run_group_id);
+  return row ? mapAlert(row) : null;
+}
+
+function findSilencedAlert(db: RunnerDatabase, record: PiGuardianAlert): PiGuardianAlert | null {
+  const row = db.sqlite.query<Record<string, unknown>, [string, string, number, string, ...string[]]>(
+    `select ${COLUMNS} from ${TABLE}
+      where alert_type=? and project_id=? and issue_id=? and run_group_id=?
+        and status in (${placeholders(SILENCED_STATUSES.length)})
+      order by updated_at desc, created_at desc, id asc limit 1`
+  ).get(record.alert_type, record.project_id, record.issue_id, record.run_group_id, ...SILENCED_STATUSES);
   return row ? mapAlert(row) : null;
 }
 
