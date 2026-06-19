@@ -49,7 +49,7 @@ describe("PI runner issue-manager scope", () => {
     }
   });
 
-  test("can directly update issue status across issue projects", async () => {
+  test("rejects natural-language status repair across issue projects without deterministic mismatch", async () => {
     const fixture = await openFixture();
     try {
       insertProject(fixture.db, "other", `${fixture.project.cwd}-other`);
@@ -60,20 +60,16 @@ describe("PI runner issue-manager scope", () => {
         source: "feishu_runner_chat"
       });
 
-      const result = actions.createIssueStateRepairProposal({
+      expect(() => actions.createIssueStateRepairProposal({
         issue_id: issueID,
         operation: "move_status",
-        rationale: "用户要求标记完成",
-        status: "done"
-      }) as { decision: string; status: string };
+        rationale: "用户要求标记完成"
+      })).toThrow(/repair recommendation|deterministic/i);
 
-      expect(result).toMatchObject({ decision: "execute", status: "completed" });
-      expect(getIssue(fixture.db, issueID)).toMatchObject({ project_id: "other", status: "done" });
-      expect(listPiActions(fixture.db, { status: "completed" })).toContainEqual(expect.objectContaining({
+      expect(getIssue(fixture.db, issueID)).toMatchObject({ project_id: "other", status: "triage" });
+      expect(listPiActions(fixture.db, { status: "completed" })).not.toContainEqual(expect.objectContaining({
         action_type: "issue.state_repair",
-        gate_decision: "execute",
-        issue_id: issueID,
-        project_id: "other"
+        issue_id: issueID
       }));
     } finally {
       await fixture.close();

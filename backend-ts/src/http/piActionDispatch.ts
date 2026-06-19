@@ -47,7 +47,7 @@ export async function dispatchPiAction(
     case "issue.comment":
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), payload);
     case "issue.state_repair":
-      return applyIssueStateRepair(context.database, payload);
+      return applyIssueStateRepair(context.database, actionPayload(action, payload));
     case "agent.executor_assign":
       return updateIssue(context.database, positivePayloadID(payload, "issue_id"), objectPayload(payload.patch));
     case "agent.workflow_request":
@@ -67,6 +67,10 @@ export async function dispatchPiAction(
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+function actionPayload(action: PiAction, payload: Record<string, unknown>): Record<string, unknown> {
+  return { ...payload, action_id: action.id, decision_id: action.guardian_decision_id, idempotency_key: action.idempotency_key };
 }
 
 function createWorkflowIssue(

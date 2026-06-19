@@ -49,8 +49,8 @@ describe("PI runner action tools", () => {
       instructions: "verify"
     });
     expect(validateArgs(diagnose, { project_id: "demo" })).toEqual({ project_id: "demo" });
-    expect(validateArgs(repair, { issue_id: 1, operation: "move_status", status: "done" }))
-      .toEqual({ issue_id: 1, operation: "move_status", status: "done" });
+    expect(validateArgs(repair, { diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" }))
+      .toEqual({ diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" });
     expect(validateArgs(schedule, { issue_id: 1, next_run_at: "2999-01-01T00:00:00.000Z" })).toEqual({
       issue_id: 1,
       next_run_at: "2999-01-01T00:00:00.000Z"
@@ -108,9 +108,9 @@ describe("PI runner action tools", () => {
     await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repair.execute("tool-repair", {
+      diagnosis_code: "done_missing_verification_evidence",
       issue_id: 1,
-      operation: "move_status",
-      status: "done"
+      operation: "patch_status"
     }, undefined, undefined, {} as never);
     await repoSearch.execute("tool-repo-search", { query: "Accordion", max_results: 3 }, undefined, undefined, {} as never);
     await repoRead.execute("tool-repo-read", { path: "src/App.tsx" }, undefined, undefined, {} as never);
@@ -131,7 +131,7 @@ describe("PI runner action tools", () => {
       ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
-      ["createIssueStateRepairProposal", { issue_id: 1, operation: "move_status", status: "done" }],
+      ["createIssueStateRepairProposal", { diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
       ["readRepoExcerpt", { path: "src/App.tsx" }],
       ["readRepoTree", { path: "src" }],

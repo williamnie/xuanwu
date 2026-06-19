@@ -7,6 +7,7 @@ import { listAgentSessions, type AgentSession } from "../db/repositories/agentSe
 import { redactSensitiveText } from "../util/redact.ts";
 import { defaultFindingCategory, evaluateFailedRetryPolicy, projectRetryPolicy, type FailedRetryPolicy } from "./failedRetryPolicy.ts";
 import { hasVerificationEvidence, pendingVerificationDiagnostics } from "./issueStateVerification.ts";
+import { currentIssueStateSnapshot, issueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
 export { applyIssueStateRepair } from "./issueStateRepairExecutor.ts";
 
 export type IssueStateEvidence = {
@@ -17,7 +18,7 @@ export type IssueStateSuggestedOperation = "enqueue" | "kick_project_loop";
 export type IssueStateAction = {
   action_type: "issue.state_repair"; evidence_refs: string[]; issue_id: number;
   operation: IssueStateRepairOperation; patch?: Record<string, string>; rationale: string;
-  suggested_operation?: IssueStateSuggestedOperation;
+  suggested_operation?: IssueStateSuggestedOperation; expected_state: IssueStateSnapshot;
 };
 export type IssueStateDiagnostic = {
   code: string; evidence: IssueStateEvidence[]; issue_id: number; project_id: string;
@@ -77,7 +78,7 @@ function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManage
   if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, events, options, now);
   if (issue.status === "failed") return [failedDiagnostic(db, issue, options, now)];
   if (issue.status === "pending_verification") return pendingVerificationDiagnostics(db, issue, events, options.pendingVerificationTimeoutMs, now);
-  if (issue.status === "done" && !hasVerificationEvidence(issue, latestRun, events)) return [doneMissingEvidence(issue, latestRun, events)];
+  if (issue.status === "done" && !hasVerificationEvidence(issue, latestRun, events)) return [doneMissingEvidence(issue, latestRun, sessions[0], events)];
   return [];
 }
 
@@ -95,7 +96,9 @@ function todoWithoutSession(
     projectRunnerEvidence(db, issue, now)
   ]);
   const suggested = todoSuggestedOperation(db, issue);
-  return diagnostic(issue, "todo_without_session", "watch", evidence, [action(issue, "enqueue", evidence, "Re-enqueue or kick the project loop for todo issue without active runtime session.", undefined, suggested)]);
+  return diagnostic(issue, "todo_without_session", "watch", evidence, [
+    action(issue, "enqueue", evidence, "Re-enqueue or kick the project loop for todo issue without active runtime session.", undefined, suggested, issueStateSnapshot(issue, latestRun, latestSession))
+  ]);
 }
 
 function inProgressDiagnostics(
@@ -115,34 +118,43 @@ function inProgressDiagnostics(
 function inProgressEnded(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, events: IssueEvent[]): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "issue still in_progress"), runEvidence(run), sessionEvidence(session)]);
   const failed = isFailureStatus(run?.status) || isFailureStatus(session?.status) || cleanString(run?.error) !== "";
-  const patch = failed ? { error: run?.error || "session ended with failure", status: "failed" } : { status: hasVerificationEvidence(issue, run, events) ? "done" : "pending_verification" };
-  return diagnostic(issue, "in_progress_session_ended", "repair", evidence, [action(issue, "patch_status", evidence, "Align issue status with ended runtime session.", patch)]);
+  const patch: Record<string, string> = failed
+    ? { error: run?.error || "session ended with failure", status: "failed" }
+    : { status: hasVerificationEvidence(issue, run, events) ? "done" : "pending_verification" };
+  return diagnostic(issue, "in_progress_session_ended", "repair", evidence, [
+    action(issue, "patch_status", evidence, "Align issue status with ended runtime session.", patch, undefined, issueStateSnapshot(issue, run, session))
+  ]);
 }
 
 function staleInProgress(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, now: Date): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, `inactive for ${duration(now.getTime() - parseTime(latestActivity(issue, run, session)))}`), runEvidence(run), sessionEvidence(session)]);
   return diagnostic(issue, "stale_in_progress", "needs_user", evidence, [action(issue, "comment", evidence, "Escalate stale in-progress issue for user decision.", {
     body: `State manager: issue #${issue.id} appears stale; please decide whether to resume, retry, or cancel.`
-  })]);
+  }, undefined, issueStateSnapshot(issue, run, session))]);
 }
 
 function failedDiagnostic(db: RunnerDatabase, issue: Issue, options: IssueStateManagerOptions, now: Date): IssueStateDiagnostic {
   const retry = failedRetry(db, issue, options, now);
+  const snapshot = currentIssueStateSnapshot(db, issue.id);
   const evidence = [issueEvidence(issue, issue.error || "issue failed"), policyEvidence(issue, retry, now)];
-  if (!retry.retry_candidate) return nonRetryableFailedDiagnostic(issue, retry, evidence);
-  return diagnostic(issue, "failed_retry_ready", "repair", evidence, [action(issue, "retry", evidence, "Retry failed issue after transient failure cooldown.")]);
+  if (!retry.retry_candidate) return nonRetryableFailedDiagnostic(issue, retry, evidence, snapshot);
+  return diagnostic(issue, "failed_retry_ready", "repair", evidence, [
+    action(issue, "retry", evidence, "Retry failed issue after transient failure cooldown.", undefined, undefined, snapshot)
+  ]);
 }
 
-function nonRetryableFailedDiagnostic(issue: Issue, retry: ReturnType<typeof failedRetry>, evidence: IssueStateEvidence[]): IssueStateDiagnostic {
+function nonRetryableFailedDiagnostic(issue: Issue, retry: ReturnType<typeof failedRetry>, evidence: IssueStateEvidence[], snapshot: IssueStateSnapshot): IssueStateDiagnostic {
   if (retry.reason === "failed_retry_cooling_down") return diagnostic(issue, retry.reason, "watch", evidence, []);
-  if (retry.reason === "needs_user") return diagnostic(issue, "needs_user_escalation", "needs_user", evidence, [needsUserAction(issue, evidence)]);
-  if (retry.reason === "failed_retry_exhausted") return diagnostic(issue, retry.reason, "needs_user", evidence, [needsUserAction(issue, evidence)]);
-  return diagnostic(issue, "blocked_escalation", "blocked", evidence, [needsUserAction(issue, evidence)]);
+  if (retry.reason === "needs_user") return diagnostic(issue, "needs_user_escalation", "needs_user", evidence, [needsUserAction(issue, evidence, snapshot)]);
+  if (retry.reason === "failed_retry_exhausted") return diagnostic(issue, retry.reason, "needs_user", evidence, [needsUserAction(issue, evidence, snapshot)]);
+  return diagnostic(issue, "blocked_escalation", "blocked", evidence, [needsUserAction(issue, evidence, snapshot)]);
 }
 
-function doneMissingEvidence(issue: Issue, run: IssueRun | undefined, events: IssueEvent[]): IssueStateDiagnostic {
+function doneMissingEvidence(issue: Issue, run: IssueRun | undefined, session: AgentSession | undefined, events: IssueEvent[]): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "status done without verification evidence"), runEvidence(run), latestEventEvidence(events)]);
-  return diagnostic(issue, "done_missing_verification_evidence", "repair", evidence, [action(issue, "patch_status", evidence, "Move weak done issue back to pending verification for evidence review.", { status: "pending_verification" })]);
+  return diagnostic(issue, "done_missing_verification_evidence", "repair", evidence, [
+    action(issue, "patch_status", evidence, "Move weak done issue back to pending verification for evidence review.", { status: "pending_verification" }, undefined, issueStateSnapshot(issue, run, session))
+  ]);
 }
 
 function diagnostic(issue: Issue, code: string, severity: IssueStateDiagnostic["severity"], evidence: IssueStateEvidence[], actions: IssueStateAction[]): IssueStateDiagnostic {
@@ -155,11 +167,13 @@ function action(
   evidence: IssueStateEvidence[],
   rationale: string,
   patch?: Record<string, string>,
-  suggestedOperation?: IssueStateSuggestedOperation
+  suggestedOperation?: IssueStateSuggestedOperation,
+  expectedState?: IssueStateSnapshot
 ): IssueStateAction {
   return {
     action_type: "issue.state_repair",
     evidence_refs: evidence.map((item) => item.ref),
+    expected_state: expectedState ?? issueStateSnapshot(issue, undefined, undefined),
     issue_id: issue.id,
     operation,
     ...(patch ? { patch } : {}),
@@ -168,10 +182,10 @@ function action(
   };
 }
 
-function needsUserAction(issue: Issue, evidence: IssueStateEvidence[]): IssueStateAction {
+function needsUserAction(issue: Issue, evidence: IssueStateEvidence[], snapshot: IssueStateSnapshot): IssueStateAction {
   return action(issue, "comment", evidence, "Escalate blocked or needs-user issue for human decision.", {
     body: `State manager: issue #${issue.id} needs user input before retrying or closing.`
-  });
+  }, undefined, snapshot);
 }
 
 function issueSessions(db: RunnerDatabase, issue: Issue): AgentSession[] {

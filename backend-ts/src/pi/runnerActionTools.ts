@@ -219,14 +219,12 @@ function issueStateDiagnoseTool(actions: PiRunnerActionLayer): ToolDefinition {
 
 function issueStateRepairTool(actions: PiRunnerActionLayer): ToolDefinition {
   return actionTool("issue_state_repair_proposal", "Issue State Repair Proposal",
-    "Create an issue state repair/status update proposal; delegated Runner issue-manager mode can auto-execute authorized repairs.",
+    "Create a deterministic issue state repair proposal from issue_state_diagnose output; delegated Runner issue-manager mode can auto-execute authorized repairs.",
     Type.Object({
       diagnosis_code: optionalString,
-      error: optionalString,
       issue_id: positiveID,
       operation: optionalString,
-      rationale: optionalString,
-      status: optionalString
+      rationale: optionalString
     }, objectOptions), actions.createIssueStateRepairProposal);
 }
 

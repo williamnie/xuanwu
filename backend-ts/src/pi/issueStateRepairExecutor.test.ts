@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue } from "../db/repositories/issues.ts";
-import { applyIssueStateRepair } from "./issueStateManager.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
+import { applyIssueStateRepair, recommendedRepairPayload } from "./issueStateManager.ts";
 
 const tempRoots: string[] = [];
 
@@ -21,28 +23,18 @@ describe("Issue state repair executor", () => {
     const db = await openFixture();
     try {
       const commented = insertIssue(db, "in_progress", "Stale");
-      const queued = insertIssue(db, "triage", "Queue me");
+      const queued = insertIssue(db, "todo", "Queue me");
       const retried = insertIssue(db, "failed", "Retry me", "network error");
       const moved = insertIssue(db, "done", "Weak done");
       const running = insertIssue(db, "in_progress", "Other running");
       insertOpenRun(db, running);
 
-      applyIssueStateRepair(db, {
-        diagnosis_code: "stale_in_progress",
-        issue_id: commented,
-        operation: "comment",
-        patch: { body: "please decide" },
-        rationale: "stale"
-      });
-      applyIssueStateRepair(db, { issue_id: queued, operation: "enqueue" });
-      applyIssueStateRepair(db, { issue_id: retried, operation: "retry" });
-      const result = applyIssueStateRepair(db, {
-        diagnosis_code: "done_missing_verification_evidence",
-        issue_id: moved,
-        operation: "move_status",
-        patch: { status: "pending_verification" },
-        rationale: "move weak done back to verification"
-      });
+      applyIssueStateRepair(db, recommendedRepairPayload(db, commented, { diagnosisCode: "stale_in_progress" }));
+      applyIssueStateRepair(db, recommendedRepairPayload(db, queued, { diagnosisCode: "todo_without_session" }));
+      applyIssueStateRepair(db, recommendedRepairPayload(db, retried, { diagnosisCode: "failed_retry_ready" }));
+      const result = applyIssueStateRepair(db, recommendedRepairPayload(db, moved, {
+        diagnosisCode: "done_missing_verification_evidence"
+      }));
 
       expect(result).toMatchObject({ status: "pending_verification" });
       expect(getIssue(db, queued)).toMatchObject({ status: "todo" });
@@ -60,7 +52,66 @@ describe("Issue state repair executor", () => {
       db.close();
     }
   });
+
+  test("aborts without mutating the issue when expected state changes", async () => {
+    const db = await openFixture();
+    try {
+      const issueID = insertIssue(db, "done", "Weak done");
+      const payload = recommendedRepairPayload(db, issueID, {
+        diagnosisCode: "done_missing_verification_evidence"
+      });
+      updateIssue(db, issueID, { status: "triage" });
+
+      expect(() => applyIssueStateRepair(db, payload)).toThrow(/precondition|changed/i);
+
+      expect(getIssue(db, issueID)).toMatchObject({ status: "triage" });
+      expect(listIssueEvents(db, issueID).map((event) => event.type)).toEqual(["issue.status_changed"]);
+      expect(listPiRecoveryAttempts(db, { issueId: issueID })).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("records before and after snapshots on deterministic repairs", async () => {
+    const db = await openFixture();
+    try {
+      const issueID = insertIssue(db, "done", "Weak done");
+      const payload = recommendedRepairPayload(db, issueID, {
+        diagnosisCode: "done_missing_verification_evidence"
+      });
+
+      applyIssueStateRepair(db, payload);
+
+      const repairEvent = listIssueEvents(db, issueID)
+        .find((event) => event.type === "issue.state_manager_repair");
+      const audit = JSON.parse(repairEvent?.payload ?? "{}") as Record<string, unknown>;
+      const before = objectPayload(audit.before_snapshot);
+      const after = objectPayload(audit.after_snapshot);
+      expect(objectPayload(before.issue)).toMatchObject({ status: "done" });
+      expect(objectPayload(after.issue)).toMatchObject({ status: "pending_verification" });
+
+      const attempts = listPiRecoveryAttempts(db, { issueId: issueID });
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0]).toMatchObject({
+        action_type: "issue.state_repair",
+        diagnosis_code: "done_missing_verification_evidence",
+        status: "progress"
+      });
+      expect(JSON.parse(attempts[0].before_snapshot_json)).toMatchObject({
+        issue: { status: "done" }
+      });
+      expect(JSON.parse(attempts[0].after_snapshot_json)).toMatchObject({
+        issue: { status: "pending_verification" }
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
+
+function objectPayload(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
 async function openFixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-state-repair-executor-"));

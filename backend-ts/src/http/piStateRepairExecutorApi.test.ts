@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { createPiAction, listPiActionEvents } from "../db/repositories/pi.ts";
+import { recommendedRepairPayload } from "../pi/issueStateManager.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -28,12 +29,9 @@ describe("PI state repair executor API", () => {
         gate_decision: "ask",
         id: "repair-move",
         issue_id: issueID,
-        payload_json: JSON.stringify({
-          diagnosis_code: "done_missing_verification_evidence",
-          issue_id: issueID,
-          operation: "move_status",
-          patch: { status: "pending_verification" }
-        }),
+        payload_json: JSON.stringify(recommendedRepairPayload(db, issueID, {
+          diagnosisCode: "done_missing_verification_evidence"
+        })),
         project_id: "demo",
         status: "approved"
       });

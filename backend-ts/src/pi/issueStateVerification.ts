@@ -3,6 +3,7 @@ import type { Issue, IssueRun } from "../db/repositories/issues.ts";
 import type { IssueEvent } from "../db/repositories/issueEvents.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { IssueStateDiagnostic, IssueStateEvidence } from "./issueStateManager.ts";
+import { currentIssueStateSnapshot, type IssueStateSnapshot } from "./issueStateSnapshot.ts";
 import { projectVerificationPolicy } from "./verificationPolicy.ts";
 
 const VERIFY_PATTERN = /verification|verified|verify|验收|验证|测试|tests?\s+(?:passed|failed|ok)|(?:vitest|jest|node --test|npm (?:run )?test|pnpm (?:exec )?vitest|build|lint)\s+(?:passed|failed|ok|success|succeeded)/i;
@@ -15,12 +16,17 @@ export function pendingVerificationDiagnostics(
   timeoutOverrideMs: number | undefined,
   now: Date
 ): IssueStateDiagnostic[] {
-  if (hasVerificationEvidence(issue, undefined, events)) return [pendingHasEvidence(issue, events)];
+  const snapshot = currentIssueStateSnapshot(db, issue.id);
+  if (hasVerificationEvidence(issue, undefined, events)) return [pendingHasEvidence(issue, events, snapshot)];
   const age = now.getTime() - parseTime(issue.updated_at);
   const timeout = timeoutOverrideMs ?? projectVerificationPolicy(db, issue.project_id).pending_timeout_ms;
   if (age < timeout) return [];
   const evidence = [issueEvidence(issue, `pending verification for ${duration(age)}`)];
-  return [diagnostic(issue, "pending_verification_timeout", "needs_user", evidence, [action(issue, "comment", evidence, "Escalate timed-out verification for user review.", { body: `State manager: issue #${issue.id} has been pending verification for ${duration(age)}.` })])];
+  return [diagnostic(issue, "pending_verification_timeout", "needs_user", evidence, [
+    action(issue, "comment", evidence, "Escalate timed-out verification for user review.", snapshot, {
+      body: `State manager: issue #${issue.id} has been pending verification for ${duration(age)}.`
+    })
+  ])];
 }
 
 export function hasVerificationEvidence(issue: Issue, run: IssueRun | undefined, events: IssueEvent[]): boolean {
@@ -28,17 +34,26 @@ export function hasVerificationEvidence(issue: Issue, run: IssueRun | undefined,
   return events.some(isVerificationEvent);
 }
 
-function pendingHasEvidence(issue: Issue, events: IssueEvent[]): IssueStateDiagnostic {
+function pendingHasEvidence(issue: Issue, events: IssueEvent[], snapshot: IssueStateSnapshot): IssueStateDiagnostic {
   const evidence = compact([issueEvidence(issue, "pending verification has verification evidence"), latestVerificationEventEvidence(events)]);
-  return diagnostic(issue, "pending_verification_has_evidence", "repair", evidence, [action(issue, "patch_status", evidence, "Close pending verification issue because verification evidence is already recorded.", { status: "done" })]);
+  return diagnostic(issue, "pending_verification_has_evidence", "repair", evidence, [
+    action(issue, "patch_status", evidence, "Close pending verification issue because verification evidence is already recorded.", snapshot, { status: "done" })
+  ]);
 }
 
 function diagnostic(issue: Issue, code: string, severity: IssueStateDiagnostic["severity"], evidence: IssueStateEvidence[], recommended_actions: IssueStateDiagnostic["recommended_actions"]): IssueStateDiagnostic {
   return { code, evidence, issue_id: issue.id, project_id: issue.project_id, recommended_actions, severity, status: issue.status, title: safeText(issue.title) };
 }
 
-function action(issue: Issue, operation: "comment" | "patch_status", evidence: IssueStateEvidence[], rationale: string, patch?: Record<string, string>) {
-  return { action_type: "issue.state_repair" as const, evidence_refs: evidence.map((item) => item.ref), issue_id: issue.id, operation, ...(patch ? { patch } : {}), rationale };
+function action(
+  issue: Issue,
+  operation: "comment" | "patch_status",
+  evidence: IssueStateEvidence[],
+  rationale: string,
+  expected_state: IssueStateSnapshot,
+  patch?: Record<string, string>
+) {
+  return { action_type: "issue.state_repair" as const, evidence_refs: evidence.map((item) => item.ref), expected_state, issue_id: issue.id, operation, ...(patch ? { patch } : {}), rationale };
 }
 
 function issueEvidence(issue: Issue, summary: string): IssueStateEvidence {
