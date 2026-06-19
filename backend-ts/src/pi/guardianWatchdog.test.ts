@@ -8,6 +8,8 @@ import {
   listPiGuardianAlerts,
   upsertPiGuardianWatchdogStatus
 } from "../db/repositories/pi.ts";
+import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
+import { FeishuClientError } from "../integrations/feishuClient.ts";
 import { runPiGuardianWatchdogOnce } from "./guardianWatchdog.ts";
 
 const tempRoots: string[] = [];
@@ -22,13 +24,104 @@ afterEach(async () => {
 });
 
 describe("PI Guardian watchdog detector", () => {
+  test("writes UI alert before direct Feishu and records sent id without pipeline side effects", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianFeishuSender([{ messageId: "om_guardian_sent_1" }], () => {
+      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+      expect(alert).toMatchObject({ direct_feishu_state: "not_attempted", ui_visible: 1 });
+    });
+    try {
+      insertProject(db, "demo");
+
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: NOW,
+        staleAfterMs: STALE_MS
+      });
+      const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toMatchObject({
+        direct_feishu_message_id: "om_guardian_sent_1",
+        direct_feishu_state: "sent",
+        status: "open",
+        ui_visible: 1
+      });
+      expect(sender.calls).toEqual([{
+        receiveId: "oc_guardian",
+        receiveIdType: "chat_id",
+        text: [
+          "[PI Guardian watchdog]",
+          "alert=pi_runtime_down",
+          "severity=urgent",
+          "project=demo",
+          "issue=-",
+          "run_group=-",
+          "message=[redacted sensitive line]",
+          "seen_at=2026-06-19T01:00:00Z"
+        ].join("\n")
+      }]);
+      expect(sender.calls[0]?.text).not.toContain("fixture-token");
+      expect(sender.calls[0]?.text).not.toContain("/Users/demo");
+      expect(sideEffectCounts(db)).toEqual({
+        conversations: 0,
+        drafts: 0,
+        intents: 0,
+        outbox: 0
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps UI alert open when direct Feishu falls back to retry", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianFeishuSender([
+      new FeishuClientError("socket closed CODEX_RUNNER_AUTH_TOKEN=fixture-token at /Users/demo/private.log", {
+        kind: "temporary",
+        retryAfterSeconds: 30
+      })
+    ]);
+    try {
+      insertProject(db, "demo");
+
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()],
+        directFeishu: { config: feishuConfig(), sender },
+        now: NOW,
+        staleAfterMs: STALE_MS
+      });
+      const alert = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+
+      expect(alert).toMatchObject({
+        direct_feishu_state: "retry",
+        next_retry_at: "2026-06-19T01:00:30Z",
+        retry_count: 1,
+        status: "open",
+        ui_visible: 1
+      });
+      expect(alert.direct_feishu_error).toContain("[redacted");
+      expect(alert.direct_feishu_error).not.toContain("fixture-token");
+      expect(alert.direct_feishu_error).not.toContain("/Users/demo");
+      expect(sideEffectCounts(db)).toEqual({
+        conversations: 0,
+        drafts: 0,
+        intents: 0,
+        outbox: 0
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("writes PI runtime alert, refreshes liveness, and avoids PI/outbox side effects", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
       insertProjectPiSettings(db, "demo", "missing-agent");
 
-      const result = runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+      const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
       const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
 
       expect(result).toMatchObject({ alerts: 1, errors: 0 });
@@ -69,9 +162,9 @@ describe("PI Guardian watchdog detector", () => {
     try {
       insertStuckOutbox(db, "2026-06-19T00:00:00Z");
 
-      const first = runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+      const first = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
       const firstAlert = listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })[0];
-      const second = runPiGuardianWatchdogOnce(db, {
+      const second = await runPiGuardianWatchdogOnce(db, {
         now: new Date("2026-06-19T01:05:00Z"),
         schedulerStaleAfterMs: 10 * 60_000,
         staleAfterMs: STALE_MS
@@ -110,7 +203,7 @@ describe("PI Guardian watchdog detector", () => {
         last_success_at: "2026-06-19T00:00:00Z"
       });
 
-      const result = runPiGuardianWatchdogOnce(db, {
+      const result = await runPiGuardianWatchdogOnce(db, {
         now: NOW,
         schedulerStaleAfterMs: STALE_MS,
         staleAfterMs: STALE_MS
@@ -135,7 +228,7 @@ describe("PI Guardian watchdog detector", () => {
   test("records detector failure in last_error without throwing", async () => {
     const db = await openFixtureDatabase();
     try {
-      const result = runPiGuardianWatchdogOnce(db, {
+      const result = await runPiGuardianWatchdogOnce(db, {
         checks: [{
           component: "coordinator",
           run: () => {
@@ -172,6 +265,46 @@ function insertProject(db: RunnerDatabase, id: string): void {
      values (?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, "2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
   );
+}
+
+function failingProbe() {
+  return {
+    component: "pi_runtime" as const,
+    run: () => ({
+      alert_type: "pi_runtime_down",
+      component: "pi_runtime" as const,
+      evidence: { path: "/Users/demo/private.log", token: "fixture-token" },
+      message: "PI runtime unavailable CODEX_RUNNER_AUTH_TOKEN=fixture-token at /Users/demo/private.log",
+      ok: false,
+      project_id: "demo"
+    })
+  };
+}
+
+function feishuConfig() {
+  return buildFeishuConnectorConfig({
+    feishuAllowedChatIds: "oc_guardian",
+    feishuAppId: "cli_app_id",
+    feishuAppSecret: "app-secret-value",
+    feishuProjectMappings: "chat:oc_guardian=demo"
+  });
+}
+
+class FakeGuardianFeishuSender {
+  calls: Array<{ receiveId: string; receiveIdType: string; text: string }> = [];
+  constructor(
+    private readonly outcomes: Array<{ messageId: string } | Error>,
+    private readonly onSend: () => void = () => {}
+  ) {}
+
+  async sendTextMessage(input: { receiveId: string; receiveIdType: string; text: string }): Promise<{ messageId: string }> {
+    this.calls.push(input);
+    this.onSend();
+    const next = this.outcomes.shift();
+    if (next instanceof Error) throw next;
+    if (!next) throw new Error("unexpected fake guardian Feishu send");
+    return next;
+  }
 }
 
 function insertProjectPiSettings(db: RunnerDatabase, projectID: string, agentID: string): void {

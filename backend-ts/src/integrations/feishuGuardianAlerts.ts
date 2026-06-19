@@ -1,0 +1,147 @@
+import type { RunnerDatabase } from "../db/database.ts";
+import {
+  updatePiGuardianAlert,
+  type PiGuardianAlert
+} from "../db/repositories/pi.ts";
+import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
+import type { FeishuConnectorConfig } from "./feishu.ts";
+import {
+  createFeishuMessageClient,
+  FeishuClientError,
+  type FeishuMessageClient
+} from "./feishuClient.ts";
+import { feishuTargetForIssue } from "./feishuNotificationTargets.ts";
+
+export type PiGuardianDirectFeishuOptions = {
+  config: FeishuConnectorConfig;
+  now?: Date;
+  sender?: FeishuMessageClient;
+};
+
+type SendTarget = { receiveId: string; receiveIdType: string };
+
+const DEFAULT_RETRY_SECONDS = 60;
+
+export async function sendDirectFeishuGuardianAlert(
+  db: RunnerDatabase,
+  alert: PiGuardianAlert,
+  options: PiGuardianDirectFeishuOptions
+): Promise<void> {
+  if (!shouldAttempt(alert, options.now ?? new Date())) return;
+  const target = resolveTarget(db, alert, options.config);
+  if (!target) return recordFailure(db, alert, "missing direct Feishu target", options.now);
+  if (!targetAllowed(options.config, target)) {
+    return recordFailure(db, alert, `${target.receiveIdType} is not allowed`, options.now, true);
+  }
+  try {
+    const sender = options.sender ?? createFeishuMessageClient({ config: options.config });
+    const sent = await sender.sendTextMessage({ ...target, text: directText(alert) });
+    updatePiGuardianAlert(db, alert.id, {
+      direct_feishu_error: "",
+      direct_feishu_message_id: sent.messageId,
+      direct_feishu_state: "sent",
+      next_retry_at: ""
+    });
+  } catch (error) {
+    recordFailure(db, alert, safeError(error), options.now, permanentError(error), retryAfter(error));
+  }
+}
+
+function shouldAttempt(alert: PiGuardianAlert, now: Date): boolean {
+  if (alert.direct_feishu_state === "" || alert.direct_feishu_state === "not_attempted") return true;
+  if (alert.direct_feishu_state !== "retry") return false;
+  return alert.next_retry_at === "" || Date.parse(alert.next_retry_at) <= now.getTime();
+}
+
+function resolveTarget(
+  db: RunnerDatabase,
+  alert: PiGuardianAlert,
+  config: FeishuConnectorConfig
+): SendTarget | null {
+  if (alert.issue_id > 0) {
+    const issueTarget = feishuTargetForIssue(db, alert.issue_id);
+    if (issueTarget?.chatID) return { receiveId: issueTarget.chatID, receiveIdType: "chat_id" };
+  }
+  const mapping = config.projectMappings.find((item) => item.projectId === alert.project_id);
+  if (mapping?.chatId) return { receiveId: mapping.chatId, receiveIdType: "chat_id" };
+  if (mapping?.userId) return { receiveId: mapping.userId, receiveIdType: userReceiveType(mapping.userId) };
+  return null;
+}
+
+function recordFailure(
+  db: RunnerDatabase,
+  alert: PiGuardianAlert,
+  error: string,
+  now = new Date(),
+  permanent = false,
+  retryAfterSeconds = DEFAULT_RETRY_SECONDS
+): void {
+  const retryCount = alert.retry_count + 1;
+  const failed = permanent || retryCount >= alert.max_retry_count;
+  updatePiGuardianAlert(db, alert.id, {
+    direct_feishu_error: redactAuditText(error),
+    direct_feishu_state: failed ? "failed" : "retry",
+    next_retry_at: failed ? "" : iso(new Date(now.getTime() + retryAfterSeconds * 1000)),
+    retry_count: retryCount
+  });
+}
+
+function directText(alert: PiGuardianAlert): string {
+  return [
+    "[PI Guardian watchdog]",
+    `alert=${field(alert.alert_type)}`,
+    `severity=${field(alert.severity)}`,
+    `project=${field(alert.project_id)}`,
+    `issue=${alert.issue_id > 0 ? alert.issue_id : "-"}`,
+    `run_group=${field(alert.run_group_id)}`,
+    `message=${oneLine(alert.message)}`,
+    `seen_at=${field(alert.watchdog_seen_at)}`
+  ].join("\n");
+}
+
+function targetAllowed(config: FeishuConnectorConfig, target: SendTarget): boolean {
+  if (target.receiveIdType === "chat_id") return allowed(config.allowedChatIds, target.receiveId);
+  if (["open_id", "user_id", "union_id"].includes(target.receiveIdType)) {
+    return allowed(config.allowedUserIds, target.receiveId);
+  }
+  return true;
+}
+
+function allowed(values: string[], value: string): boolean {
+  return values.length === 0 || values.includes(value);
+}
+
+function userReceiveType(value: string): string {
+  if (value.startsWith("ou_")) return "open_id";
+  if (value.startsWith("on_")) return "union_id";
+  if (value.includes("@")) return "email";
+  return "user_id";
+}
+
+function permanentError(error: unknown): boolean {
+  return error instanceof FeishuClientError && (error.kind === "auth" || error.kind === "permanent");
+}
+
+function retryAfter(error: unknown): number {
+  const seconds = error instanceof FeishuClientError ? error.retryAfterSeconds : undefined;
+  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
+    ? Math.ceil(seconds)
+    : DEFAULT_RETRY_SECONDS;
+}
+
+function safeError(error: unknown): string {
+  return redactAuditText(error instanceof Error ? error.message : String(error));
+}
+
+function field(value: string): string {
+  const text = oneLine(value);
+  return text === "" ? "-" : text;
+}
+
+function oneLine(value: string): string {
+  return redactAuditText(value).replace(/\s+/g, " ").trim();
+}
+
+function iso(value: Date): string {
+  return value.toISOString().replace(/\.\d{3}Z$/, "Z");
+}

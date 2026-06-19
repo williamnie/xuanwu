@@ -136,7 +136,8 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
-  const watchdog = runPiGuardianWatchdogOnce(input.database, {
+  const watchdog = await runPiGuardianWatchdogOnce(input.database, {
+    directFeishu: input.config ? { config: input.config.integrations.feishu } : undefined,
     now: input.watchdogNow,
     staleAfterMs: input.watchdogStaleAfterMs
   });

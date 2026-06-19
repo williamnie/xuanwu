@@ -1,10 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import {
-  getPiGuardianWatchdogStatus,
-  upsertPiGuardianAlert,
-  upsertPiGuardianWatchdogStatus
-} from "../db/repositories/pi.ts";
+import { getPiGuardianWatchdogStatus, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
+import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
+import { writeGuardianWatchdogAlerts, type WatchdogAlertWriteResult } from "./guardianWatchdogAlerts.ts";
 
 export type PiGuardianWatchdogComponent =
   "approval" | "coordinator" | "digest" | "inbox" | "outbox" | "pi_runtime" | "scheduler";
@@ -28,6 +26,7 @@ export type PiGuardianWatchdogContext = {
 
 export type PiGuardianWatchdogInput = {
   checks?: PiGuardianWatchdogProbe[]; limit?: number; now?: Date | string;
+  directFeishu?: PiGuardianDirectFeishuOptions;
   schedulerStaleAfterMs?: number; staleAfterMs?: number;
 };
 
@@ -44,6 +43,7 @@ type PiRuntimeRow = CountRow & { reason: string };
 const DEFAULT_LIMIT = 20;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
 const DEFAULT_SCHEDULER_STALE_AFTER_MS = 120_000;
+
 const DEFAULT_CHECKS: PiGuardianWatchdogProbe[] = [
   { component: "pi_runtime", run: piRuntimeChecks },
   { component: "coordinator", run: coordinatorChecks },
@@ -53,29 +53,46 @@ const DEFAULT_CHECKS: PiGuardianWatchdogProbe[] = [
   { component: "scheduler", run: schedulerChecks },
   { component: "inbox", run: inboxChecks }
 ];
-export function runPiGuardianWatchdogOnce(
+export async function runPiGuardianWatchdogOnce(
   db: RunnerDatabase,
   input: PiGuardianWatchdogInput = {}
-): PiGuardianWatchdogSummary {
+): Promise<PiGuardianWatchdogSummary> {
   const context = watchdogContext(db, input);
   const probes = input.checks ?? DEFAULT_CHECKS;
   const summary: PiGuardianWatchdogSummary = { alerts: 0, checks: [], errors: 0, scanned: 0 };
   const errors: string[] = [];
   for (const probe of probes) {
     summary.scanned += 1;
-    try {
-      const checks = asArray(probe.run(context));
-      summary.checks.push(...checks);
-      summary.alerts += writeAlerts(db, checks, context.nowText);
-    } catch (error) {
+    const result = await runProbe(db, probe, context, input.directFeishu);
+    summary.checks.push(...result.checks);
+    summary.alerts += result.alerts;
+    if (result.error !== "") {
       summary.errors += 1;
-      const message = safeError(error);
-      errors.push(`${probe.component}: ${message}`);
-      summary.checks.push({ component: probe.component, evidence: { error: message }, ok: false });
+      errors.push(result.error);
     }
   }
   writeStatus({ checks: summary.checks, context, db, errors });
   return summary;
+}
+
+async function runProbe(
+  db: RunnerDatabase,
+  probe: PiGuardianWatchdogProbe,
+  context: PiGuardianWatchdogContext,
+  directFeishu: PiGuardianDirectFeishuOptions | undefined
+): Promise<WatchdogAlertWriteResult & { checks: PiGuardianWatchdogCheck[] }> {
+  try {
+    const checks = asArray(probe.run(context));
+    const writer = await writeGuardianWatchdogAlerts(db, checks, context, directFeishu);
+    return { checks, ...writer };
+  } catch (error) {
+    const message = safeError(error);
+    return {
+      alerts: 0,
+      checks: [{ component: probe.component, evidence: { error: message }, ok: false }],
+      error: `${probe.component}: ${message}`
+    };
+  }
 }
 function watchdogContext(db: RunnerDatabase, input: PiGuardianWatchdogInput): PiGuardianWatchdogContext {
   const now = input.now instanceof Date ? input.now : new Date(input.now ?? Date.now());
@@ -222,25 +239,6 @@ function countAlerts(input: {
     message: `${input.message}: ${row.count} stale item(s)`,
     project_id: row.project_id
   }));
-}
-
-function writeAlerts(db: RunnerDatabase, checks: PiGuardianWatchdogCheck[], seenAt: string): number {
-  let count = 0;
-  for (const check of checks) {
-    if (check.ok || !check.alert_type) continue;
-    upsertPiGuardianAlert(db, {
-      alert_type: check.alert_type,
-      evidence_json: check.evidence ?? {},
-      issue_id: check.issue_id,
-      message: check.message || `${check.component} unhealthy`,
-      project_id: check.project_id,
-      run_group_id: check.run_group_id,
-      severity: check.severity || "urgent",
-      watchdog_seen_at: seenAt
-    });
-    count += 1;
-  }
-  return count;
 }
 
 function writeStatus(input: {
