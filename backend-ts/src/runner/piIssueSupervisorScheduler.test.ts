@@ -209,6 +209,7 @@ describe("PI issue supervisor scheduler", () => {
       db.close();
     }
   });
+
 });
 
 async function fixtureDb(): Promise<RunnerDatabase> {

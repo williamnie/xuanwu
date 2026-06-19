@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import {
   countPiRecoveryAttempts,
   firstPiRecoveryAttemptCreatedAt,
+  latestPiRecoveryAttemptInWindow,
   type PiRecoveryAttemptStatus
 } from "../db/repositories/pi/recoveryAttempts.ts";
 
@@ -21,10 +22,16 @@ export type PiRecoveryBudgetDecision = {
   issue_attempts_24h: number;
   issue_budget_remaining: number;
   issue_limit: number;
+  issue_window_started_at: string;
+  last_action_at: string;
+  last_action_type: string;
+  last_attempt_id: string;
+  last_attempt_status: string;
   project_attempts_1h: number;
   project_budget_remaining: number;
   project_defer_until: string;
   project_limit: number;
+  project_window_started_at: string;
   recommended_action: "allow" | "budget_exhausted" | "defer_or_escalate";
   session_resume_attempts_24h: number;
   session_resume_budget_remaining: number;
@@ -51,6 +58,16 @@ export function readPiRecoveryBudget(db: RunnerDatabase, input: PiRecoveryBudget
   const limits = normalizedLimits(input);
   const issueSince = iso(input.now.getTime() - DAY_MS);
   const projectSince = iso(input.now.getTime() - HOUR_MS);
+  const issueLastAttempt = latestPiRecoveryAttemptInWindow(db, {
+    issueId: input.issueID,
+    since: issueSince,
+    statuses: BUDGET_STATUSES
+  });
+  const projectLastAttempt = latestPiRecoveryAttemptInWindow(db, {
+    projectId: input.projectID,
+    since: projectSince,
+    statuses: BUDGET_STATUSES
+  });
   const issueAttempts = countPiRecoveryAttempts(db, {
     issueId: input.issueID,
     since: issueSince,
@@ -66,6 +83,10 @@ export function readPiRecoveryBudget(db: RunnerDatabase, input: PiRecoveryBudget
     issueAttempts,
     projectAttempts,
     projectDeferUntil: deferUntil(db, input, limits, projectAttempts, projectSince),
+    projectSince,
+    issueSince,
+    issueLastAttempt,
+    projectLastAttempt,
     sessionAttempts,
     ...limits
   });
@@ -82,9 +103,15 @@ export function applyRecoveryBudgetToHistory(
     budget_reason: budgetReason(budget),
     budget_remaining: budget.issue_budget_remaining,
     budget_status: budget.status,
+    budget_window_started_at: budget.issue_window_started_at,
+    last_action_at: budget.last_action_at,
+    last_action_status: budget.last_attempt_status,
+    last_action_type: budget.last_action_type,
+    last_recovery_attempt_id: budget.last_attempt_id,
     project_attempts_1h: budget.project_attempts_1h,
     project_budget_remaining: budget.project_budget_remaining,
     project_defer_until: budget.project_defer_until,
+    project_window_started_at: budget.project_window_started_at,
     session_resume_attempts_24h: budget.session_resume_attempts_24h,
     session_resume_budget_remaining: budget.session_resume_budget_remaining
   };
@@ -92,6 +119,14 @@ export function applyRecoveryBudgetToHistory(
 
 export function recoveryBudgetCandidate(history: RecoveryHistoryBudgetInput): RecoveryBudgetCandidate | null {
   const diagnosis = clean(history.budget_diagnosis_code);
+  if (clean(history.budget_status) === "project_budget_exhausted") {
+    return {
+      diagnosis_code: "recovery_budget_exhausted",
+      evidence_refs: ["recovery_budget"],
+      exhausted: true,
+      reason: clean(history.budget_reason) || "project automatic recovery budget exhausted"
+    };
+  }
   if (diagnosis !== "recovery_budget_exhausted" && diagnosis !== "session_recovery_exhausted") return null;
   return {
     diagnosis_code: diagnosis,
@@ -104,8 +139,10 @@ export function recoveryBudgetCandidate(history: RecoveryHistoryBudgetInput): Re
 function decision(
   input: PiRecoveryBudgetInput,
   state: {
-    issueAttempts: number; issueLimit: number; projectAttempts: number; projectDeferUntil: string;
-    projectLimit: number; sessionAttempts: number; sessionLimit: number;
+    issueAttempts: number; issueLastAttempt: ReturnType<typeof latestPiRecoveryAttemptInWindow>;
+    issueLimit: number; issueSince: string;
+    projectAttempts: number; projectDeferUntil: string; projectLimit: number; projectSince: string;
+    projectLastAttempt: ReturnType<typeof latestPiRecoveryAttemptInWindow>; sessionAttempts: number; sessionLimit: number;
   }
 ): PiRecoveryBudgetDecision {
   const base = baseDecision(state);
@@ -116,30 +153,42 @@ function decision(
     return exhausted(base, "session_resume_exhausted", "session_recovery_exhausted", "budget_exhausted");
   }
   if (state.projectAttempts >= state.projectLimit) {
-    return { ...base, recommended_action: "defer_or_escalate", status: "project_budget_exhausted" };
+    return {
+      ...withLastAttempt(base, state.projectLastAttempt),
+      recommended_action: "defer_or_escalate",
+      status: "project_budget_exhausted"
+    };
   }
   return base;
 }
 
 function baseDecision(state: {
-  issueAttempts: number; issueLimit: number; projectAttempts: number; projectDeferUntil: string;
-  projectLimit: number; sessionAttempts: number; sessionLimit: number;
+  issueAttempts: number; issueLastAttempt: ReturnType<typeof latestPiRecoveryAttemptInWindow>;
+  issueLimit: number; issueSince: string;
+  projectAttempts: number; projectDeferUntil: string; projectLimit: number; projectSince: string;
+  sessionAttempts: number; sessionLimit: number;
 }): PiRecoveryBudgetDecision {
-  return {
+  return withLastAttempt({
     diagnosis_code: "",
     issue_attempts_24h: state.issueAttempts,
     issue_budget_remaining: remaining(state.issueLimit, state.issueAttempts),
     issue_limit: state.issueLimit,
+    issue_window_started_at: state.issueSince,
+    last_action_at: "",
+    last_action_type: "",
+    last_attempt_id: "",
+    last_attempt_status: "",
     project_attempts_1h: state.projectAttempts,
     project_budget_remaining: remaining(state.projectLimit, state.projectAttempts),
     project_defer_until: state.projectDeferUntil,
     project_limit: state.projectLimit,
+    project_window_started_at: state.projectSince,
     recommended_action: "allow",
     session_resume_attempts_24h: state.sessionAttempts,
     session_resume_budget_remaining: remaining(state.sessionLimit, state.sessionAttempts),
     session_resume_limit: state.sessionLimit,
     status: "allow"
-  };
+  }, state.issueLastAttempt);
 }
 
 function exhausted(
@@ -149,6 +198,19 @@ function exhausted(
   action: PiRecoveryBudgetDecision["recommended_action"]
 ): PiRecoveryBudgetDecision {
   return { ...base, diagnosis_code: diagnosis, recommended_action: action, status };
+}
+
+function withLastAttempt(
+  base: PiRecoveryBudgetDecision,
+  attempt: ReturnType<typeof latestPiRecoveryAttemptInWindow>
+): PiRecoveryBudgetDecision {
+  return {
+    ...base,
+    last_action_at: attempt?.created_at ?? "",
+    last_action_type: attempt?.action_type ?? "",
+    last_attempt_id: attempt?.id ?? "",
+    last_attempt_status: attempt?.status ?? ""
+  };
 }
 
 function sessionResumeAttempts(db: RunnerDatabase, input: PiRecoveryBudgetInput, since: string): number {

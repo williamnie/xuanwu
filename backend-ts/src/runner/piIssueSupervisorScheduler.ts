@@ -16,6 +16,7 @@ import {
   writeGuardianSignals
 } from "../pi/guardianSignals.ts";
 import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
+import { recordBudgetExhaustedEscalation } from "./piIssueSupervisorBudgetEscalation.ts";
 import {
   refreshSupervisorProgressResult,
   supervisorResultOutcome
@@ -67,7 +68,7 @@ export async function runPiIssueSupervisorSchedulerOnce(
         result.skipped += 1;
         continue;
       }
-      recordSignal(input.database, target, now);
+      recordTarget(input.database, target, now);
       result.skipped += 1;
     } catch (error) {
       result.failed += 1;
@@ -142,6 +143,15 @@ function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
     order by i.updated_at asc, i.id asc limit ${boundedLimit(limit)}
   `).all(nowText).map((row) => row.id);
 }
+function recordTarget(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
+  const exhausted = target.candidates.find((candidate) => candidate.exhausted);
+  if (exhausted) {
+    recordBudgetExhaustedEscalation(db, { ...target, candidate: exhausted }, now);
+    return;
+  }
+  recordSignal(db, target, now);
+}
+
 function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
   const candidate = target.candidates[0];
   createIssueSupervisorEvent(db, {
@@ -189,6 +199,7 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): 
     { heartbeatID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`, now, projectID: target.projectID }
   ));
 }
+
 function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown): void {
   createIssueSupervisorEvent(db, {
     diagnosis_code: primaryDiagnosis(target.context),
@@ -219,7 +230,7 @@ function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTar
   const retryAfter = readyRetryAfterTime(target.context);
   const threshold = retryAfter || latestEvidenceTime(target.context);
   return events.some((event) => {
-    if (!["decision", "action", "result"].includes(event.event_type)) return false;
+    if (!["budget_exhausted", "decision", "action", "result"].includes(event.event_type)) return false;
     if (diagnosis !== "" && event.diagnosis_code !== diagnosis) return false;
     return threshold === 0 || Date.parse(event.created_at) >= threshold;
   });

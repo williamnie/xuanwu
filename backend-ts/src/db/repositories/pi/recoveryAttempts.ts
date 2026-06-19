@@ -154,6 +154,14 @@ export function countPiRecoveryAttempts(db: RunnerDatabase, filter: PiRecoveryAt
   return row?.count ?? 0;
 }
 
+export function latestPiRecoveryAttemptInWindow(db: RunnerDatabase, filter: PiRecoveryAttemptWindowFilter): PiRecoveryAttempt | null {
+  const query = windowQuery(filter);
+  const row = db.sqlite.query<Record<string, unknown>, SQLValue[]>(
+    `select ${COLUMNS} from ${TABLE} where ${query.where} order by created_at desc, id desc limit 1`
+  ).get(...query.args);
+  return row ? mapAttempt(row) : null;
+}
+
 export function firstPiRecoveryAttemptCreatedAt(
   db: RunnerDatabase,
   filter: PiRecoveryAttemptWindowFilter
