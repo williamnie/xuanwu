@@ -151,6 +151,50 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
+  test("scheduled retry-after stays quiet before due and re-enters planner when due", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-retry-after-due-project-"));
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "autonomous", allowed_supervisor_actions_json: ["issue.retry_after", "issue.retry"] });
+      insertRunningIssue(db, { issueID: 504, projectID: "demo", sessionUpdatedAt: "2026-06-10T07:45:00Z", threadID: "thread-504", turnID: "turn-504" });
+      db.sqlite.run("update issues set auto_retry_next_at=?, auto_retry_reason=? where id=?", [
+        "2026-06-10T08:10:00Z", "provider_rate_limited", 504
+      ]);
+      insertIssueEvent(db, 504, {
+        reason: "provider_rate_limited",
+        retry_after_at: "2026-06-10T08:10:00Z"
+      }, "2026-06-10T08:00:00Z", "issue.retry_after_scheduled");
+
+      const waiting = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+
+      expect(waiting).toMatchObject({ decisions: 0, failed: 0, signaled: 0, skipped: 0 });
+      expect(listIssueSupervisorEvents(db, { issueId: 504 })).toEqual([]);
+      expect(listPiGuardianEvents(db, { projectId: "demo" })).toEqual([]);
+
+      const due = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: new Date("2026-06-10T08:11:00Z"),
+        staleAfterSeconds: 300
+      });
+
+      expect(due).toMatchObject({ decisions: 0, failed: 0, signaled: 1, skipped: 1 });
+      expect(JSON.parse(listPiGuardianEvents(db, { projectId: "demo" })[0]?.normalized_payload_json ?? "{}"))
+        .toMatchObject({ diagnosis_code: "provider_retry_after_ready", retry_after_ready: "true" });
+      const queued = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-10T08:11:00Z") });
+      const settled = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-10T08:11:31Z") });
+
+      expect(queued).toMatchObject({ created: 1, scanned: 1 });
+      expect(settled).toMatchObject({ leases_acquired: 1, scanned: 0 });
+      expect(listPiActions(db, { issueId: 504 })[0]).toMatchObject({
+        action_type: "issue.retry",
+        gate_decision: "execute",
+        status: "approved"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not mark a normally active executor session as stale", async () => {
     const db = await fixtureDb();
     try {
@@ -201,9 +245,15 @@ function insertRunningIssue(db: RunnerDatabase, input: {
     JSON.stringify({ provider_turn_id: input.turnID }), input.sessionUpdatedAt]);
 }
 
-function insertIssueEvent(db: RunnerDatabase, issueID: number, payload: unknown, createdAt: string): void {
+function insertIssueEvent(
+  db: RunnerDatabase,
+  issueID: number,
+  payload: unknown,
+  createdAt: string,
+  type = "issue.log"
+): void {
   db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-    [issueID, "issue.log", JSON.stringify(payload), createdAt]);
+    [issueID, type, JSON.stringify(payload), createdAt]);
 }
 
 function resumeDecision(): PiSupervisorDecisionJson {

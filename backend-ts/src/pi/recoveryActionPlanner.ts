@@ -94,6 +94,7 @@ function recoveryActionType(failureClass: RecoveryFailureClass, payload: Record<
   }
   if (failureClass !== "transient") return "";
   if (shouldScheduleRetryAfter(payload)) return "issue.retry_after";
+  if (clean(payload.retry_after_ready) === "true") return "issue.retry";
   return clean(payload.provider_session_id) !== "" ? "session.resume_followup" : "issue.retry";
 }
 

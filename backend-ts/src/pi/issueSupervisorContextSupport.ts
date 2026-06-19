@@ -22,6 +22,7 @@ export type SupervisorCandidate = {
   evidence_refs: string[];
   exhausted?: boolean;
   reason: string;
+  source_event_type?: string;
   wait_until?: string;
 };
 
@@ -79,7 +80,11 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
 export function latestProviderError(events: IssueEvent[], now: Date): ProviderErrorSignal | null {
   for (const event of [...events].reverse()) {
     const payload = parsePayload(event.payload);
-    const signal = adjustRetryWindow(parseIssueEventProviderError(payload, { now: eventDate(event, now) }), now);
+    const signal = adjustRetryWindow(
+      parseIssueEventProviderError(payload, { now: eventDate(event, now) }),
+      now,
+      eventDate(event, now)
+    );
     if (signal.category !== "unknown") return signal;
     const scheduled = retryAfterScheduledSignal(event, payload, now);
     if (scheduled) return scheduled;
@@ -98,13 +103,14 @@ function retryAfterScheduledSignal(event: IssueEvent, payload: unknown, now: Dat
     observed_at: event.created_at,
     raw_summary: truncate(redactAuditText(clean(record.reason) || "issue retry-after scheduled")),
     retry_after_at: retryAfterAt,
-    retry_after_seconds: secondsUntil(retryAfterAt, now)
+    retry_after_seconds: secondsUntil(retryAfterAt, now),
+    source_event_type: event.type
   };
 }
 
-function adjustRetryWindow(signal: ProviderErrorSignal, now: Date): ProviderErrorSignal {
+function adjustRetryWindow(signal: ProviderErrorSignal, now: Date, observedAt: Date): ProviderErrorSignal {
   const retryAfterAt = clean(signal.retry_after_at);
-  const observed = signal.observed_at || now.toISOString();
+  const observed = signal.observed_at || observedAt.toISOString();
   if (signal.category !== "rate_limit" || retryAfterAt === "") return { ...signal, observed_at: observed };
   return {
     ...signal,
@@ -238,6 +244,7 @@ function providerErrorCandidate(
     diagnosis_code: diagnosis,
     evidence_refs: ["provider_error"],
     reason: providerError.raw_summary,
+    ...(providerError.source_event_type ? { source_event_type: providerError.source_event_type } : {}),
     ...(waitUntil ? { wait_until: waitUntil } : {})
   };
 }

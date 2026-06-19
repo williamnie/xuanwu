@@ -107,13 +107,13 @@ function collectTargets(
         staleAfterSeconds: options.staleAfterSeconds
       });
     }
-    const readyCandidates = context.candidates.filter((candidate) =>
-      supervisorCandidateReady(context, candidate, now, { staleAfterSeconds: options.staleAfterSeconds })
+    const dispatchableCandidates = context.candidates.filter((candidate) =>
+      supervisorCandidateDispatchable(context, candidate, now, options)
     );
-    if (context.candidates.length > 0) signaled += 1;
-    if (context.candidates.length === 0) continue;
+    if (dispatchableCandidates.length > 0) signaled += 1;
+    if (dispatchableCandidates.length === 0) continue;
     ready.push({
-      candidates: readyCandidates.length > 0 ? readyCandidates : context.candidates,
+      candidates: dispatchableCandidates,
       context,
       issueID,
       projectID: issue.project_id
@@ -121,6 +121,18 @@ function collectTargets(
   }
   return { ready, scanned: issueIDs.length, signaled };
 }
+
+function supervisorCandidateDispatchable(
+  context: IssueSupervisorRecoveryContext,
+  candidate: IssueSupervisorRecoveryContext["candidates"][number],
+  now: Date,
+  options: Pick<PiIssueSupervisorSchedulerInput, "staleAfterSeconds">
+): boolean {
+  if (supervisorCandidateReady(context, candidate, now, { staleAfterSeconds: options.staleAfterSeconds })) return true;
+  return candidate.diagnosis_code === "provider_retry_after_waiting" &&
+    clean(candidate.source_event_type) !== "issue.retry_after_scheduled";
+}
+
 function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
   const nowText = iso(now);
   return db.sqlite.query<{ id: number }, [string]>(`
@@ -171,7 +183,8 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): 
       session_updated_at: clean(target.context.session.updated_at),
       stale_gap_seconds: numberValue(target.context.session.stale_gap_seconds),
       supervisor_mode: clean(target.context.policy.mode),
-      wait_until: clean(item.wait_until)
+      wait_until: clean(item.wait_until),
+      ...retryAfterPayload(item)
     })),
     { heartbeatID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`, now, projectID: target.projectID }
   ));
@@ -254,4 +267,8 @@ function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): stri
   if (!Number.isFinite(last) || seconds <= 0) return "";
   const until = new Date(last + seconds * 1_000);
   return until.getTime() > now.getTime() ? iso(until) : "";
+}
+
+function retryAfterPayload(candidate: IssueSupervisorRecoveryContext["candidates"][number]): Record<string, string> {
+  return clean(candidate.source_event_type) === "issue.retry_after_scheduled" ? { retry_after_ready: "true" } : {};
 }

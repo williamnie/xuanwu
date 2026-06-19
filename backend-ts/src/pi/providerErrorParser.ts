@@ -52,6 +52,7 @@ export type ProviderErrorSignal = {
   retry_after_at?: string;
   retry_after_seconds?: number;
   service_tier?: string;
+  source_event_type?: string;
   status_code?: number;
 };
 

@@ -1,11 +1,11 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { retryIssue } from "../db/repositories/issueActions.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
-import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { createIssueSupervisorEvent, type PiAction } from "../db/repositories/pi.ts";
+import { updatePiRecoveryAttemptStatus } from "../db/repositories/pi/recoveryAttempts.ts";
 import {
   isExecutorProviderId,
   type ExecutorProvider,
@@ -17,6 +17,8 @@ import {
   prepareResumeFollowupAttempt,
   resolveResumeFollowupReplay
 } from "./piSupervisorResumeIdempotency.ts";
+import { prepareIssueRecoveryAttempt, issueRecoverySnapshot } from "./piSupervisorIssueRecoveryAttempts.ts";
+import { assertFreshSupervisorState } from "./piSupervisorPreconditions.ts";
 
 export type SupervisorDispatchContext = {
   database: RunnerDatabase;
@@ -84,14 +86,30 @@ function retryIssueNow(
     "expected_issue_updated_at", "expected_run_id"
   ]);
   const reason = cleanString(payload.reason) || cleanString(payload.diagnosis_code) || "supervisor retry";
-  const issue = retryIssue(context.database, issueID);
-  recordIssueEvent(context.database, issueID, "issue.supervisor_retry", {
-    action_id: action.id,
-    decision_id: cleanString(payload.decision_id),
-    reason
+  const attempt = prepareIssueRecoveryAttempt(context.database, action, payload, {
+    actionType: "issue.retry",
+    issueID,
+    status: "executing"
   });
-  recordSupervisorResult(context.database, action, payload, { outcome: "queued", reason, status: issue.status });
-  return issue;
+  try {
+    const issue = retryIssue(context.database, issueID);
+    updatePiRecoveryAttemptStatus(context.database, attempt.id, {
+      after_snapshot_json: issueRecoverySnapshot(context.database, issueID, payload),
+      progress_detected: 1,
+      progress_reasons_json: ["issue_requeued"],
+      status: "progress"
+    });
+    recordIssueEvent(context.database, issueID, "issue.supervisor_retry", {
+      action_id: action.id,
+      decision_id: cleanString(payload.decision_id),
+      reason
+    });
+    recordSupervisorResult(context.database, action, payload, { outcome: "queued", reason, status: issue.status });
+    return issue;
+  } catch (error) {
+    updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: safeError(error), status: "failed" });
+    throw error;
+  }
 }
 
 function scheduleRetryAfter(
@@ -105,15 +123,26 @@ function scheduleRetryAfter(
   ]);
   const retryAfterAt = requiredTime(payload.retry_after_at, "retry_after_at");
   const reason = requiredText(payload.reason, "reason");
-  const issue = updateIssue(context.database, issueID, { auto_retry_next_at: retryAfterAt, auto_retry_reason: reason });
-  recordIssueEvent(context.database, issueID, "issue.retry_after_scheduled", {
-    action_id: action.id,
-    reason,
-    retry_after_at: retryAfterAt,
-    source_event_id: payload.source_event_id
+  const attempt = prepareIssueRecoveryAttempt(context.database, action, payload, {
+    actionType: "issue.retry_after",
+    hardTimeoutAt: retryAfterAt,
+    issueID,
+    status: "planned"
   });
-  recordSupervisorResult(context.database, action, payload, { outcome: "scheduled", retry_after_at: retryAfterAt });
-  return issue;
+  try {
+    const issue = updateIssue(context.database, issueID, { auto_retry_next_at: retryAfterAt, auto_retry_reason: reason });
+    recordIssueEvent(context.database, issueID, "issue.retry_after_scheduled", {
+      action_id: action.id,
+      reason,
+      retry_after_at: retryAfterAt,
+      source_event_id: payload.source_event_id
+    });
+    recordSupervisorResult(context.database, action, payload, { outcome: "scheduled", retry_after_at: retryAfterAt });
+    return issue;
+  } catch (error) {
+    updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: safeError(error), status: "failed" });
+    throw error;
+  }
 }
 
 function recordSupervisorDecision(
@@ -131,54 +160,6 @@ function recordSupervisorDecision(
   });
   recordSupervisorResult(context.database, action, payload, { outcome: "recorded" });
   return { recorded: true };
-}
-
-function assertFreshSupervisorState(
-  db: RunnerDatabase,
-  issueID: number,
-  provider: ExecutorProviderId,
-  sessionID: string,
-  payload: Record<string, unknown>,
-  requiredKeys: string[] = []
-): void {
-  const issue = getIssue(db, issueID);
-  if (!issue) throw new Error(`issue ${issueID} not found`);
-  const latestRun = listIssueRuns(db, issueID).at(-1);
-  assertPreconditionsPresent(payload, requiredKeys);
-  assertIssueSnapshot(issue, payload);
-  assertRunSnapshot(latestRun, payload);
-  if (sessionID !== "") assertSessionSnapshot(db, provider, sessionID, payload);
-}
-
-function assertPreconditionsPresent(payload: Record<string, unknown>, keys: string[]): void {
-  const missing = keys.filter((key) => cleanString(payload[key]) === "");
-  if (missing.length > 0) throw new Error(`supervisor action precondition missing: ${missing.join(", ")}`);
-}
-
-function assertIssueSnapshot(issue: Issue, payload: Record<string, unknown>): void {
-  assertExpected("issue changed before PI action execution", payload.expected_issue_updated_at, issue.updated_at);
-  assertExpected("issue changed before PI action execution", payload.expected_issue_status, issue.status);
-}
-
-function assertRunSnapshot(run: IssueRun | undefined, payload: Record<string, unknown>): void {
-  const expectedRunID = cleanString(payload.expected_run_id);
-  if (expectedRunID !== "" && run?.id !== expectedRunID) throw new Error("run changed before PI action execution");
-  assertExpected("run changed before PI action execution", payload.expected_provider_session_id, run?.provider_session_id ?? "");
-  assertExpected("run changed before PI action execution", payload.expected_provider_turn_id, run?.provider_turn_id ?? "");
-  assertExpected("run changed before PI action execution", payload.expected_run_status, run?.status ?? "");
-  assertExpected("run changed before PI action execution", payload.expected_run_ended_at, run?.ended_at ?? "");
-}
-
-function assertSessionSnapshot(
-  db: RunnerDatabase,
-  provider: ExecutorProviderId,
-  sessionID: string,
-  payload: Record<string, unknown>
-): void {
-  const session = getAgentSession(db, `${provider}:${sessionID}`);
-  assertExpected("session changed before PI action execution", payload.expected_session_updated_at, session?.updated_at ?? "");
-  assertExpected("session changed before PI action execution", payload.expected_session_status, session?.status ?? "");
-  assertExpected("session changed before PI action execution", payload.expected_session_turn_id, rawRefTurnID(session?.raw_ref));
 }
 
 function persistFollowupRuntime(
@@ -231,11 +212,6 @@ function recordSupervisorResult(
   });
 }
 
-function assertExpected(message: string, expected: unknown, actual: string): void {
-  const text = cleanString(expected);
-  if (text !== "" && text !== actual) throw new Error(message);
-}
-
 function sessionProviderID(payload: Record<string, unknown>): ExecutorProviderId {
   const sessionKey = cleanString(payload.session_key);
   const provider = cleanString(payload.provider) || sessionKey.split(":")[0] || "codex";
@@ -279,11 +255,6 @@ function requiredTime(value: unknown, key: string): string {
   return text;
 }
 
-function rawRefTurnID(rawRef: string | undefined): string {
-  if (!rawRef) return "";
-  try { return cleanString((JSON.parse(rawRef) as Record<string, unknown>).provider_turn_id); } catch { return ""; }
-}
-
 function sessionIDFromKey(sessionKey: string): string {
   const separator = sessionKey.indexOf(":");
   return separator < 0 ? sessionKey : sessionKey.slice(separator + 1).trim();
@@ -291,6 +262,10 @@ function sessionIDFromKey(sessionKey: string): string {
 
 function objectPayload(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function safeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function cleanString(value: unknown): string {
