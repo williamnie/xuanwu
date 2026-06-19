@@ -6,6 +6,10 @@ import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifec
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
 import {
+  runGuardianMissedIntentSweepOnce,
+  type GuardianMissedIntentSweepResult
+} from "../pi/guardianMissedIntentSweep.ts";
+import {
   drainGuardianDecisionOrchestrator,
   type GuardianDecisionOrchestratorSummary
 } from "../pi/guardianDecisionOrchestrator.ts";
@@ -25,6 +29,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
+  missedIntentSweep: GuardianMissedIntentSweepResult;
   guardianDecisions: GuardianDecisionOrchestratorSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
   watchdog: PiGuardianWatchdogSummary;
@@ -135,12 +140,13 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
-  const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const watchdog = await runPiGuardianWatchdogOnce(input.database, {
     directFeishu: input.config ? { config: input.config.integrations.feishu } : undefined,
     now: input.watchdogNow,
     staleAfterMs: input.watchdogStaleAfterMs
   });
+  const missedIntentSweep = runGuardianMissedIntentSweepOnce(input.database, { watchdog });
+  const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
@@ -149,6 +155,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     digestFlush,
     digestNotifications,
     guardianDecisions,
+    missedIntentSweep,
     supervisor,
     watchdog
   };
