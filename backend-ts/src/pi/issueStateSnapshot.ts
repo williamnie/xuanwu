@@ -1,6 +1,7 @@
 import { getAgentSession, listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 
 export type IssueStateSnapshot = {
   issue: {
@@ -33,6 +34,7 @@ export type IssueStateSnapshot = {
 const ISSUE_KEYS = ["codex_thread_id", "codex_turn_id", "error", "id", "project_id", "status", "updated_at"];
 const RUN_KEYS = ["ended_at", "id", "provider", "provider_session_id", "provider_turn_id", "started_at", "status"];
 const SESSION_KEYS = ["provider", "provider_session_id", "session_key", "status", "updated_at"];
+const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 
 export function currentIssueStateSnapshot(db: RunnerDatabase, issueID: number): IssueStateSnapshot {
   const issue = getIssue(db, issueID);
@@ -50,7 +52,7 @@ export function issueStateSnapshot(
     issue: {
       codex_thread_id: clean(issue.codex_thread_id),
       codex_turn_id: clean(issue.codex_turn_id),
-      error: clean(issue.error),
+      error: safeText(issue.error),
       id: issue.id,
       project_id: clean(issue.project_id),
       status: clean(issue.status),
@@ -133,7 +135,7 @@ function normalizeIssueSnapshot(value: unknown): IssueStateSnapshot["issue"] {
   return {
     codex_thread_id: clean(input.codex_thread_id),
     codex_turn_id: clean(input.codex_turn_id),
-    error: clean(input.error),
+    error: safeText(input.error),
     id: positiveID(input.id, "expected_state.issue.id"),
     project_id: clean(input.project_id),
     status: clean(input.status),
@@ -184,4 +186,8 @@ function positiveID(value: unknown, label: string): number {
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function safeText(value: unknown): string {
+  return redactSensitiveText(clean(value)).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
 }

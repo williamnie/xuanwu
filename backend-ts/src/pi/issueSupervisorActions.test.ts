@@ -107,14 +107,19 @@ describe("PI issue supervisor actions", () => {
         supervisor_cooldown_seconds: 600,
         supervisor_mode: "autonomous"
       });
-      createIssueSupervisorEvent(db, {
-        action_id: "previous",
+      recordPiRecoveryAttempt(db, {
         action_type: "session.resume_followup",
-        event_type: "action",
+        budget_window_started_at: "2026-06-09T08:00:00Z",
+        created_at: "2026-06-10T07:55:00Z",
+        diagnosis_code: "provider_timeout",
+        id: "previous",
+        idempotency_key: "previous",
         issue_id: 305,
-        project_id: "demo"
+        project_id: "demo",
+        session_id: "codex:thread-305",
+        status: "executing",
+        updated_at: "2026-06-10T07:55:00Z"
       });
-      db.sqlite.run("update issue_supervisor_events set created_at='2026-06-10T07:55:00Z' where action_id='previous'");
 
       const result = await applyIssueSupervisorDecisionActions({
         context: buildIssueSupervisorRecoveryContext(db, 305, { now: NOW }),
