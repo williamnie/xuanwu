@@ -29,6 +29,9 @@ export type PiRecoveryAttemptStatus =
 export type PiRecoveryAttemptFilter = {
   actionType?: string; issueId?: number; projectId?: string; sessionId?: string; status?: string;
 };
+export type PiRecoveryResumeTurnFilter = {
+  expectedProviderTurnID: string; issueID: number; providerSessionID: string;
+};
 export type PiRecoveryAttemptCountFilter = {
   actionType?: string; issueId?: number; projectId?: string; sessionId?: string; since: string;
   statuses?: PiRecoveryAttemptStatus[];
@@ -88,6 +91,23 @@ export function listPiRecoveryAttempts(
     ["project_id=?", filter.projectId], ["issue_id=?", filter.issueId],
     ["session_id=?", filter.sessionId], ["action_type=?", filter.actionType], ["status=?", filter.status]
   ], "created_at asc, id asc"));
+}
+
+export function listPiRecoveryAttemptsForResumeTurn(
+  db: RunnerDatabase,
+  filter: PiRecoveryResumeTurnFilter
+): PiRecoveryAttempt[] {
+  const rows = db.sqlite.query<Record<string, unknown>, [number, string, string]>(
+    `select ${COLUMNS} from ${TABLE}
+      where issue_id=? and action_type='session.resume_followup'
+        and provider_session_id=? and expected_provider_turn_id=?
+      order by created_at desc, id desc`
+  ).all(
+    integerInput(filter.issueID),
+    cleanString(filter.providerSessionID),
+    cleanString(filter.expectedProviderTurnID)
+  );
+  return rows.map(mapAttempt);
 }
 
 export function updatePiRecoveryAttemptStatus(

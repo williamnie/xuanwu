@@ -4,7 +4,7 @@ import type { IssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts
 import type { IssueSupervisorActionInput } from "./issueSupervisorActions.ts";
 import type { ProgressSnapshot } from "./meaningfulProgress.ts";
 
-const RECOVERY_ATTEMPT_ACTIONS = new Set(["session.resume_followup", "session.steer"]);
+const RECOVERY_ATTEMPT_ACTIONS = new Set(["session.steer"]);
 const RECOVERY_HARD_TIMEOUT_MS = 5 * 60_000;
 
 export function recordSupervisorRecoveryAttempt(

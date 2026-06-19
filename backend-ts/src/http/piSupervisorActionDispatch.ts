@@ -12,6 +12,11 @@ import {
   type ExecutorProviderId,
   type SessionMessageResult
 } from "../providers/types.ts";
+import {
+  markResumeFollowupAttemptStarted,
+  prepareResumeFollowupAttempt,
+  resolveResumeFollowupReplay
+} from "./piSupervisorResumeIdempotency.ts";
 
 export type SupervisorDispatchContext = {
   database: RunnerDatabase;
@@ -38,22 +43,34 @@ async function resumeSessionFollowup(
   const issueID = positivePayloadID(payload, "issue_id");
   const providerID = sessionProviderID(payload);
   const sessionID = sessionProviderSessionID(payload);
-  assertFreshSupervisorState(context.database, issueID, providerID, sessionID, payload, [
-    "expected_issue_updated_at", "expected_run_id", "expected_provider_turn_id", "expected_session_updated_at"
-  ]);
   const prompt = requiredText(payload.prompt, "prompt");
   const provider = context.providers?.[providerID];
   if (!provider?.sendSessionMessage) throw new Error(`provider "${providerID}" 不支持 capability "resume_session"`);
+  const replay = await resolveResumeFollowupReplay(context.database, { action, issueID, payload, provider, providerID, sessionID });
+  if (replay) {
+    recordSupervisorResult(context.database, action, payload, replay.result);
+    return replay.result;
+  }
+  assertFreshSupervisorState(context.database, issueID, providerID, sessionID, payload, [
+    "expected_issue_updated_at", "expected_run_id", "expected_provider_turn_id", "expected_session_updated_at"
+  ]);
+  const prepared = await prepareResumeFollowupAttempt(context.database, { action, issueID, payload, provider, providerID, sessionID });
+  if (prepared.skip) {
+    recordSupervisorResult(context.database, action, payload, prepared.result);
+    return prepared.result;
+  }
   const result = await provider.sendSessionMessage({ prompt, sessionId: sessionID });
+  const turnID = cleanString(result.turn_id);
   persistFollowupRuntime(context.database, { action, issueID, providerID, result, sessionID });
+  markResumeFollowupAttemptStarted(context.database, prepared.attempt.id, turnID);
   recordIssueEvent(context.database, issueID, "issue.supervisor_resume_followup", {
     action_id: action.id,
     decision_id: cleanString(payload.decision_id),
     provider: providerID,
     provider_session_id: sessionID,
-    provider_turn_id: result.turn_id
+    provider_turn_id: turnID
   });
-  recordSupervisorResult(context.database, action, payload, { outcome: "started", provider_turn_id: result.turn_id });
+  recordSupervisorResult(context.database, action, payload, { outcome: "started", provider_turn_id: turnID });
   return result;
 }
 
