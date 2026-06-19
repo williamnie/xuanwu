@@ -233,6 +233,43 @@ create index if not exists idx_pi_notification_intents_group
 
 create index if not exists idx_pi_notification_intents_issue
   on pi_notification_intents(issue_id, kind, state, created_at desc);
+
+create table if not exists pi_guardian_alerts (
+  id text primary key,
+  alert_type text not null,
+  severity text not null default 'urgent',
+  status text not null default 'open',
+  project_id text not null default '',
+  issue_id integer not null default 0,
+  run_group_id text not null default '',
+  message text not null,
+  evidence_json text not null default '[]',
+  ui_visible integer not null default 1,
+  direct_feishu_state text not null default '',
+  direct_feishu_message_id text not null default '',
+  direct_feishu_error text not null default '',
+  next_retry_at text not null default '',
+  retry_count integer not null default 0,
+  max_retry_count integer not null default 5,
+  watchdog_seen_at text not null default '',
+  created_at text not null,
+  updated_at text not null
+);
+
+create index if not exists idx_pi_guardian_alerts_open
+  on pi_guardian_alerts(status, severity, created_at desc);
+
+create index if not exists idx_pi_guardian_alerts_project
+  on pi_guardian_alerts(project_id, status, created_at desc);
+
+create table if not exists pi_guardian_watchdog_status (
+  singleton_id integer primary key check (singleton_id = 1),
+  last_seen_at text not null,
+  last_success_at text not null default '',
+  last_error text not null default '',
+  checked_components_json text not null default '[]',
+  updated_at text not null
+);
 `,
   apply(sqlite) {
     sqlite.run(this.sql);

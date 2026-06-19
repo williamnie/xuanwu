@@ -13,6 +13,8 @@ export * from "./pi/approvalLifecycle.ts";
 export * from "./pi/approvalRequests.ts";
 export * from "./pi/guardianDecisions.ts";
 export * from "./pi/guardianEvents.ts";
+export * from "./pi/guardianAlerts.ts";
+export * from "./pi/watchdogStatus.ts";
 export * from "./pi/runGroups.ts";
 export * from "./pi/notificationIntents.ts";
 export * from "./pi/notificationPreferences.ts";
