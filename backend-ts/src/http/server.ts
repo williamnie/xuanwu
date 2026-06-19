@@ -18,6 +18,7 @@ import { registerReadApiRoutes } from "./readApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
+import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
 import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
@@ -115,7 +116,10 @@ export function registerSystemStatusRoute(
     feishuReceiverStatus: context.feishuReceiverStatus,
     startedAt
   };
-  router.get("/api/system/status", () => json(buildSystemStatus(statusContext)));
+  router.get("/api/system/status", () => json({
+    ...buildSystemStatus(statusContext),
+    pi_guardian: buildPiGuardianSystemStatus(context.database)
+  }));
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }
 
