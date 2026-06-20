@@ -1,60 +1,6 @@
 const HIDDEN_DETAIL_KEYS = new Set(['encrypted_content']);
 const EMPTY_DETAIL_KEYS = new Set(['type', 'status', 'call_id', 'id']);
 
-export function splitTextBySearchQuery(text, query) {
-  const value = String(text ?? '');
-  const needle = normalizeSearchQuery(query);
-  if (!needle) return [{ text: value, match: false }];
-
-  const haystack = value.toLowerCase();
-  const lowerNeedle = needle.toLowerCase();
-  const parts = [];
-  let cursor = 0;
-  let matchIndex = haystack.indexOf(lowerNeedle);
-
-  while (matchIndex !== -1) {
-    if (matchIndex > cursor) parts.push({ text: value.slice(cursor, matchIndex), match: false });
-    const nextCursor = matchIndex + needle.length;
-    parts.push({ text: value.slice(matchIndex, nextCursor), match: true });
-    cursor = nextCursor;
-    matchIndex = haystack.indexOf(lowerNeedle, cursor);
-  }
-
-  if (cursor < value.length) parts.push({ text: value.slice(cursor), match: false });
-  return parts.length > 0 ? parts : [{ text: value, match: false }];
-}
-
-export function countSearchMatchesInText(text, query) {
-  const value = String(text ?? '');
-  const needle = normalizeSearchQuery(query);
-  if (!value || !needle) return 0;
-
-  const haystack = value.toLowerCase();
-  const lowerNeedle = needle.toLowerCase();
-  let count = 0;
-  let cursor = 0;
-  let matchIndex = haystack.indexOf(lowerNeedle, cursor);
-
-  while (matchIndex !== -1) {
-    count += 1;
-    cursor = matchIndex + needle.length;
-    matchIndex = haystack.indexOf(lowerNeedle, cursor);
-  }
-
-  return count;
-}
-
-export function nextTranscriptSearchIndex(currentIndex, total, direction) {
-  if (!Number.isFinite(total) || total <= 0) return -1;
-  const step = direction < 0 ? -1 : 1;
-  if (currentIndex < 0) return step < 0 ? total - 1 : 0;
-  return (currentIndex + step + total) % total;
-}
-
-function normalizeSearchQuery(query) {
-  return String(query ?? '').trim();
-}
-
 export function isRenderableToolItem(item) {
   if (!item || isMessageItem(item)) return false;
   if (item.type === 'commandExecution' || item.type === 'fileChange') return true;

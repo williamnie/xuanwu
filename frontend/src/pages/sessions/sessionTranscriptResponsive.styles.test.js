@@ -51,12 +51,10 @@ test('session markdown wraps long user content without overflowing small screens
 
 test('client chat spacing uses viewport-aware padding instead of fixed desktop width', () => {
   const transcriptRule = ruleFor(clientCss, '.client-chat-area .session-transcript');
-  const searchRule = ruleFor(clientCss, '.client-chat-area .session-transcript-search');
   const composerRule = ruleFor(clientCss, '.client-chat-composer-section');
   const userBubbleRule = ruleFor(clientCss, '.client-chat-area .chat-bubble-container.user');
 
   assert.match(transcriptRule, /padding:\s*30px\s+clamp\(12px,\s*3\.2vw,\s*40px\)/);
-  assert.match(searchRule, /padding:\s*10px\s+clamp\(12px,\s*3\.2vw,\s*40px\)/);
   assert.match(composerRule, /padding:\s*16px\s+clamp\(12px,\s*3\.2vw,\s*40px\)\s+24px/);
   assert.match(userBubbleRule, /max-width:\s*min\(100%,\s*80%\)/);
 });

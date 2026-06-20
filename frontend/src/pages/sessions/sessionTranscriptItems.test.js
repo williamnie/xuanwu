@@ -2,12 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  countSearchMatchesInText,
   isRenderableToolItem,
-  nextTranscriptSearchIndex,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
-  splitTextBySearchQuery,
   toolDisplayForItem,
 } from './sessionTranscriptItems.js';
 
@@ -188,27 +185,4 @@ test('live transcript is rendered while running and closes after normal completi
   assert.equal(shouldRenderLiveTurn(liveEvents, true), true);
   assert.equal(shouldRenderLiveTurn(liveEvents, false), false);
   assert.equal(shouldRenderLiveTurn([], true), true);
-});
-
-test('transcript search splits text into case-insensitive highlight parts', () => {
-  assert.deepEqual(splitTextBySearchQuery('npm Test\nNPM run build', 'npm'), [
-    { text: 'npm', match: true },
-    { text: ' Test\n', match: false },
-    { text: 'NPM', match: true },
-    { text: ' run build', match: false },
-  ]);
-});
-
-test('transcript search counts non-overlapping matches and ignores blank queries', () => {
-  assert.equal(countSearchMatchesInText('error: Error: failed', 'error'), 2);
-  assert.equal(countSearchMatchesInText('aaaa', 'aa'), 2);
-  assert.equal(countSearchMatchesInText('anything', '   '), 0);
-});
-
-test('transcript search navigation wraps and starts from no active result', () => {
-  assert.equal(nextTranscriptSearchIndex(-1, 3, 1), 0);
-  assert.equal(nextTranscriptSearchIndex(2, 3, 1), 0);
-  assert.equal(nextTranscriptSearchIndex(-1, 3, -1), 2);
-  assert.equal(nextTranscriptSearchIndex(0, 3, -1), 2);
-  assert.equal(nextTranscriptSearchIndex(0, 0, 1), -1);
 });
