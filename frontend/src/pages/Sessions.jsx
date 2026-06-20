@@ -56,6 +56,7 @@ import {
   toolDisplayForItem,
 } from './sessions/sessionTranscriptItems';
 import { buildSessionComposerSuggestions } from './sessions/sessionComposerAssist';
+import { messageSettingsForRuntimeKey, sessionRuntimeSettingsKey } from './sessions/sessionRuntimeSettings';
 import {
   addSessionReference,
   buildReferenceDetails,
@@ -460,6 +461,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     prompt: message, references: messageReferences, projectId: selectedSessionProject?.id || '',
     sessionId: selectedId, linkedIssues: selectedSession?.source_issues || [],
   }), [message, messageReferences, selectedId, selectedSession?.source_issues, selectedSessionProject?.id]);
+  const selectedSessionRuntimeKey = sessionRuntimeSettingsKey(selectedSession);
   const pathSearchRequest = useMemo(() => (
     pathReferenceSearchFromText(prompt, projectId) ||
     pathReferenceSearchFromText(message, selectedSessionProject?.id || '')
@@ -595,7 +597,9 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   }, [loadSelected, selectedId]);
 
   useEffect(() => { loadModels(); }, [loadModels]);
-  useEffect(() => { setMessageSettings(defaultMessageSettings(selectedSessionProject)); }, [selectedId, selectedSessionProject]);
+  useEffect(() => {
+    setMessageSettings(messageSettingsForRuntimeKey(selectedSessionRuntimeKey, selectedSessionProject));
+  }, [selectedId, selectedSessionProject, selectedSessionRuntimeKey]);
 
   const scheduleListRefresh = useCallback(() => {
     window.clearTimeout(listRefreshTimer.current);

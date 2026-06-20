@@ -5,6 +5,7 @@ import { lastSessionProject } from "../db/repositories/preferences.ts";
 import { interruptSession } from "../runner/interrupt.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId, SessionCreateInput, SessionMessageInput } from "../providers/types.ts";
+import { runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -56,7 +57,7 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   const sessionId = parseSessionID(rawSessionID);
   const result = await readProviderSession(context, sessionId);
   if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
-  return result;
+  return await withSessionRuntimeSettings(context.database, sessionId, result);
 }
 
 async function readProviderSession(context: SessionApiContext, sessionId: string): Promise<Record<string, unknown> | undefined> {
@@ -71,9 +72,10 @@ async function readProviderSession(context: SessionApiContext, sessionId: string
 
 async function sessionMessage(context: SessionApiContext, rawSessionID: string, body: Record<string, unknown>) {
   const sessionId = parseSessionID(rawSessionID);
-  const result = await codexProvider(context).sendSessionMessage?.(sessionMessageInput(context, sessionId, body));
+  const input = sessionMessageInput(context, sessionId, body);
+  const result = await codexProvider(context).sendSessionMessage?.(input);
   if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
-  persistSessionTurn(context, result.provider_session_id, result.turn_id);
+  persistSessionTurn(context, input, result.provider_session_id, result.turn_id);
   return { thread_id: result.provider_session_id, turn_id: result.turn_id };
 }
 
@@ -195,17 +197,20 @@ function persistSession(context: SessionApiContext, input: SessionCreateInput, s
     provider_session_id: sessionId,
     project_id: input.projectId ?? "",
     preview: sessionPreview(input.prompt ?? ""),
-    raw_ref: turnId ? { provider_turn_id: turnId } : {},
+    raw_ref: runtimeRawRef(input, turnId),
     status: input.prompt?.trim() ? "running" : "idle"
   });
 }
 
-function persistSessionTurn(context: SessionApiContext, sessionId: string, turnId: string): void {
+function persistSessionTurn(context: SessionApiContext, input: SessionMessageInput, sessionId: string, turnId: string): void {
   if (sessionId === "" || turnId === "") return;
   upsertAgentSession(context.database, {
     provider: "codex",
     provider_session_id: sessionId,
-    raw_ref: { provider_turn_id: turnId },
+    raw_ref: {
+      ...runtimeSettingsFromAgentSession(context.database, sessionId),
+      ...runtimeRawRef(input, turnId)
+    },
     status: "running"
   });
 }

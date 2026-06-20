@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -103,6 +103,50 @@ describe("Bun Sessions API compatibility", () => {
       expect(provider.calls).toEqual([
         ["sendSessionMessage", { sessionId: "thread-running", prompt: "adjust", mode: "steer", turnId: "turn-running" }]
       ]);
+    } finally {
+      database.close();
+    }
+  });
+
+
+  test("read session detail exposes runtime settings from rollout turn context", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-session-runtime-"));
+    tempRoots.push(root);
+    const rolloutPath = join(root, "rollout.jsonl");
+    await writeFile(rolloutPath, [
+      JSON.stringify({ type: "session_meta", payload: { id: "thread-runtime", cwd: "/tmp/demo" } }),
+      JSON.stringify({ type: "turn_context", payload: {
+        model: "gpt-5.5",
+        effort: "xhigh",
+        service_tier: "priority",
+        approval_policy: "never",
+        sandbox_policy: { type: "danger-full-access" }
+      } })
+    ].join("\n") + "\n");
+    provider.readSessionResult = { ...sessionSummary("thread-runtime"), path: rolloutPath };
+    try {
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-runtime`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        model: "gpt-5.5",
+        reasoning_effort: "xhigh",
+        service_tier: "priority",
+        approval_policy: "never",
+        sandbox: "danger-full-access",
+        runtime_settings: {
+          model: "gpt-5.5",
+          reasoning_effort: "xhigh",
+          service_tier: "priority",
+          approval_policy: "never",
+          sandbox: "danger-full-access"
+        }
+      });
     } finally {
       database.close();
     }
@@ -236,6 +280,7 @@ class SessionsProvider implements ExecutorProvider {
   readonly interrupts: Array<{ sessionId: string; turnId: string }> = [];
   createResult: SessionCreateFixture | null = null;
   readSessionError: Error | null = null;
+  readSessionResult: Record<string, unknown> | null = null;
 
   async run(_input: ProviderRunInput) {
     throw new Error("not implemented");
@@ -253,7 +298,7 @@ class SessionsProvider implements ExecutorProvider {
   async readSession(sessionId: string) {
     this.calls.push(["readSession", { sessionId }]);
     if (this.readSessionError) throw this.readSessionError;
-    return sessionSummary(sessionId);
+    return this.readSessionResult ?? sessionSummary(sessionId);
   }
 
   async createSession(input: Record<string, unknown>) {
