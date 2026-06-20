@@ -19,7 +19,6 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiActionRoutes } from "./piActionsApi.ts";
 import { registerPiApprovalRequestRoutes } from "./piApprovalRequestsApi.ts";
 import { registerPiCommandCenterRoutes } from "./piCommandCenterApi.ts";
-import { registerPiConversationArchiveRoutes } from "./piConversationArchiveApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
 import { registerPiDelegationRoutes } from "./piDelegationsApi.ts";
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
@@ -60,7 +59,6 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiActionRoutes(router, context);
   registerPiApprovalRequestRoutes(router, context);
   registerPiCommandCenterRoutes(router, context);
-  registerPiConversationArchiveRoutes(router, context);
   registerPiConversationRoutes(router, context);
   registerPiDelegationRoutes(router, context);
   registerPiMaintenanceRoutes(router, context);

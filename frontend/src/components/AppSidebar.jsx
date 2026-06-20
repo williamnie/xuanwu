@@ -1,10 +1,8 @@
 import {
   CalendarClock,
   ChevronLeft,
-  ArchiveRestore,
   BotMessageSquare,
   Command,
-  CreditCard,
   FolderGit2,
   Layers,
   ListTodo,
@@ -67,26 +65,6 @@ export default function AppSidebar({
         </button>
       </div>
 
-      <div className="sidebar-profile-links">
-        <button
-          className={`nav-item sidebar-profile-link ${currentPage === 'purchase-credits' ? 'active' : ''}`}
-          onClick={() => navigateTo('purchase-credits')}
-          type="button"
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CreditCard size={16} /> More Credits
-          </span>
-        </button>
-        <button
-          className={`nav-item sidebar-profile-link ${currentPage === 'archived-chats' ? 'active' : ''}`}
-          onClick={() => navigateTo('archived-chats')}
-          type="button"
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ArchiveRestore size={16} /> Archived Chats
-          </span>
-        </button>
-      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
         <button className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>

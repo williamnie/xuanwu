@@ -116,9 +116,6 @@ function dispatchEventMessage(event) {
   }
 }
 
-function createIdempotencyKey() {
-  return globalThis.crypto?.randomUUID?.() || `${Date.now()}`;
-}
 
 export const api = {
   validateAuthToken: () => request('/api/system/status'),
@@ -351,24 +348,6 @@ export const api = {
     return request(`/api/pi/conversations${query}`);
   },
 
-  getArchivedPiConversations: ({ cursor = '', pageSize = 20, projectId = '' } = {}) => {
-    const params = new URLSearchParams();
-    if (cursor) params.append('cursor', cursor);
-    if (pageSize) params.append('page_size', String(pageSize));
-    if (projectId) params.append('project_id', projectId);
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return request(`/api/pi/conversations/archived${query}`);
-  },
-
-  getPaymentCatalog: () => request('/api/v1/payments/catalog'),
-
-  createPaymentPurchase: (purchase) => request('/api/v1/payments/purchases', {
-    method: 'POST',
-    headers: {
-      'Idempotency-Key': createIdempotencyKey(),
-    },
-    body: JSON.stringify(purchase),
-  }),
 
   createPiConversation: (conversation) => request('/api/pi/conversations', {
     method: 'POST',
@@ -377,10 +356,6 @@ export const api = {
 
   getPiConversation: (id) => request(`/api/pi/conversations/${encodeURIComponent(id)}`),
 
-  restorePiConversation: (id) => request(`/api/pi/conversations/${encodeURIComponent(id)}/restore`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
 
   sendPiConversationMessage: (id, message) => request(`/api/pi/conversations/${encodeURIComponent(id)}/messages`, {
     method: 'POST',
