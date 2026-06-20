@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
+import IssueEditModal from '../components/IssueEditModal';
 import CronTasksPanel from '../components/CronTasksPanel';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
@@ -53,6 +54,7 @@ export default function Issues({
   const [draggedOverColumnId, setDraggedOverColumnId] = useState(null);
   const [retryingIssueId, setRetryingIssueId] = useState(null);
   const [issueToDelete, setIssueToDelete] = useState(null);
+  const [issueToEdit, setIssueToEdit] = useState(null);
   const [deletingIssueId, setDeletingIssueId] = useState(null);
   const [pendingServiceTiers, setPendingServiceTiers] = useState({});
 
@@ -103,6 +105,17 @@ export default function Issues({
       return;
     }
     setIssueToDelete(issue);
+  };
+
+  const handleRequestEditIssue = (event, issue) => {
+    stopCardAction(event);
+    setIssueToEdit(issue);
+  };
+
+  const handleIssueSaved = async () => {
+    setIssueToEdit(null);
+    await refreshData(['issues']);
+    message.success('Issue 已保存');
   };
 
   const handleConfirmDeleteIssue = async () => {
@@ -443,6 +456,7 @@ export default function Issues({
                       onOpenIssue={(issueId) => navigateTo('issues', issueId)}
                       onOpenSession={handleOpenSession}
                       onRequestDelete={handleRequestDeleteIssue}
+                      onRequestEdit={handleRequestEditIssue}
                       onRetry={handleRetryIssue}
                       onServiceTierChange={handleIssueServiceTierChange}
                       getRelativeTime={getRelativeTime}
@@ -593,6 +607,14 @@ export default function Issues({
           deleting={deletingIssueId === issueToDelete.id}
           onCancel={() => setIssueToDelete(null)}
           onConfirm={handleConfirmDeleteIssue}
+        />
+      )}
+
+      {issueToEdit && (
+        <IssueEditModal
+          issue={issueToEdit}
+          onClose={() => setIssueToEdit(null)}
+          onSaved={handleIssueSaved}
         />
       )}
 

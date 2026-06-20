@@ -1,12 +1,9 @@
-import { useState } from 'react';
 import {
   AlertTriangle,
   Clock,
   ExternalLink,
   Link2,
-  MoreHorizontal,
   RotateCw,
-  Trash2,
   Zap,
 } from 'lucide-react';
 import {
@@ -19,10 +16,12 @@ import {
   providerLabel,
   shortId,
 } from '../utils/issueRuns';
+import { canEditIssue } from '../utils/issueEdit';
 import {
   serviceTierRunLabel,
 } from '../utils/serviceTier';
 import { issueSpeedToggleCopy } from '../utils/issueSpeedToggle';
+import IssueCardMoreActions from './IssueCardMoreActions';
 
 export default function IssueCard({
   issue,
@@ -34,6 +33,7 @@ export default function IssueCard({
   onOpenIssue,
   onOpenSession,
   onRequestDelete,
+  onRequestEdit,
   onRetry,
   onServiceTierChange,
   getRelativeTime,
@@ -64,6 +64,7 @@ export default function IssueCard({
         retrying={retrying}
         onOpenSession={onOpenSession}
         onRequestDelete={onRequestDelete}
+        onRequestEdit={onRequestEdit}
         onRetry={onRetry}
         onServiceTierChange={onServiceTierChange}
       />
@@ -135,10 +136,12 @@ function runTooltipText({ attempt, runStatus, provider, speed, sessionId, turnId
   ].filter(Boolean).join(' · ');
 }
 
-function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onRequestDelete, onRetry, onServiceTierChange }) {
+function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onRequestDelete, onRequestEdit, onRetry, onServiceTierChange }) {
   const showRetry = issue.status === 'failed';
-  const canDelete = issue.status !== 'in_progress';
-  if (!showRetry && !sessionRef && !canDelete && !onServiceTierChange) return null;
+  const canDelete = issue.status !== 'in_progress' && Boolean(onRequestDelete);
+  const canEdit = canEditIssue(issue) && Boolean(onRequestEdit);
+  const hasMoreActions = canDelete || canEdit;
+  if (!showRetry && !sessionRef && !hasMoreActions && !onServiceTierChange) return null;
   return (
     <div className="kanban-card-actions" onClick={(event) => event.stopPropagation()}>
       {onServiceTierChange && (
@@ -154,7 +157,13 @@ function IssueQuickActions({ issue, sessionRef, retrying, onOpenSession, onReque
           <RotateCw size={12} /> {retrying ? 'Retrying' : 'Retry'}
         </button>
       )}
-      <IssueMoreActions issue={issue} canDelete={canDelete} onRequestDelete={onRequestDelete} />
+      <IssueCardMoreActions
+        issue={issue}
+        canDelete={canDelete}
+        canEdit={canEdit}
+        onRequestDelete={onRequestDelete}
+        onRequestEdit={onRequestEdit}
+      />
     </div>
   );
 }
@@ -180,47 +189,6 @@ function IssueSpeedToggle({ issue, onServiceTierChange }) {
   );
 }
 
-function IssueMoreActions({ issue, canDelete, onRequestDelete }) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  if (!canDelete || !onRequestDelete) return null;
-  const menuId = `issue-${issue.id}-more-menu`;
-  const toggleMenu = (event) => {
-    event.stopPropagation();
-    setMoreOpen(open => !open);
-  };
-  const closeOnEscape = (event) => {
-    if (event.key !== 'Escape') return;
-    event.stopPropagation();
-    setMoreOpen(false);
-  };
-  const requestDelete = (event) => {
-    event.stopPropagation();
-    setMoreOpen(false);
-    onRequestDelete(event, issue);
-  };
-  return (
-    <div className="kanban-card-more" onClick={(event) => event.stopPropagation()} onKeyDown={closeOnEscape}>
-      <button
-        type="button"
-        className="kanban-card-more-trigger"
-        aria-label={`更多操作：Issue #${issue.id}`}
-        aria-haspopup="menu"
-        aria-expanded={moreOpen}
-        aria-controls={menuId}
-        onClick={toggleMenu}
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      {moreOpen && (
-        <div id={menuId} className="kanban-card-more-menu" role="menu" aria-label={`Issue #${issue.id} 更多操作`}>
-          <button type="button" className="kanban-card-more-item danger" role="menuitem" onClick={requestDelete}>
-            <Trash2 size={13} /> Delete
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function IssueCardFooter({ issue, project, getRelativeTime }) {
   return (
