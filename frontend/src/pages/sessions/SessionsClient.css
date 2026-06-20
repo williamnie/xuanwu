@@ -27,46 +27,60 @@
   transition: background-color 0.3s, border-color 0.3s;
 }
 
-.sessions-sidebar-resize-handle {
-  flex: 0 0 8px;
-  width: 8px;
-  height: 100%;
-  position: relative;
-  cursor: col-resize;
-  touch-action: none;
-  background: transparent;
-  outline: none;
-  z-index: 2;
-}
-
-.sessions-sidebar-resize-handle::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 1px;
-  background: var(--border-color);
-  opacity: 0.55;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-}
-
-.sessions-sidebar-resize-handle:hover::after,
-.sessions-sidebar-resize-handle:focus-visible::after,
-.resizing-session-sidebar .sessions-sidebar-resize-handle::after {
-  background: var(--primary);
-  opacity: 1;
-}
-
-.resizing-session-sidebar,
-.resizing-session-sidebar * {
-  cursor: col-resize !important;
-  user-select: none !important;
-}
-
 [data-theme="dark"] .sessions-client-sidebar {
   background-color: #1e1e24; /* 深色下稍微暗一点的侧边栏 */
   border-right: 0;
+}
+
+
+.sessions-app-sidebar-slot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: 20px -2px 0;
+}
+
+.sessions-app-sidebar-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  user-select: none;
+}
+
+.sessions-app-sidebar-panel .sidebar-shortcut-items {
+  margin-bottom: 18px;
+}
+
+.sessions-app-sidebar-panel .sidebar-section-title {
+  margin: 12px 0 6px 8px;
+}
+
+.sessions-app-sidebar-panel .session-list-filter-tabs {
+  padding: 0 8px 8px;
+}
+
+.sessions-app-sidebar-panel .sidebar-scroll-area {
+  margin-right: -8px;
+  padding-right: 4px;
+}
+
+.sessions-app-sidebar-panel .session-list-viewport {
+  padding: 8px 4px 8px 0;
+}
+
+.sessions-app-sidebar-panel .project-session-groups {
+  gap: 6px;
+}
+
+.sessions-app-sidebar-panel .project-group-header {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.sessions-app-sidebar-panel .project-group-sessions {
+  padding-left: 22px;
 }
 
 /* macOS 红黄绿窗口按钮 */
@@ -764,12 +778,11 @@
   padding-left: 0 !important;
 }
 
-/* 当主侧边栏折叠时，在 Sessions 页面的左边栏上空出间距，避免浮动的展开按钮盖住快捷项 */
-.sidebar-collapsed .sessions-client-sidebar {
-  padding-top: 56px !important;
-}
-
 @media (max-width: 960px) {
+  .sessions-app-sidebar-slot {
+    display: none;
+  }
+
   .sessions-client-container {
     flex-direction: column;
     overflow-y: auto;
@@ -786,10 +799,6 @@
 
   .sidebar-scroll-area {
     min-height: 160px;
-  }
-
-  .sessions-sidebar-resize-handle {
-    display: none;
   }
 
   .sessions-client-main {

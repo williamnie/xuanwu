@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const css = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
+const appSidebar = readFileSync(new URL('../../components/AppSidebar.jsx', import.meta.url), 'utf8');
+const sessionsPage = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -11,15 +13,20 @@ function ruleFor(selector) {
   return match[1];
 }
 
-test('session sidebar resize boundary renders one visible divider line', () => {
-  const sidebarRule = ruleFor('.sessions-client-sidebar');
-  const darkSidebarRule = ruleFor('[data-theme="dark"] .sessions-client-sidebar');
-  const handleRule = ruleFor('.sessions-sidebar-resize-handle');
-  const lineRule = ruleFor('.sessions-sidebar-resize-handle::after');
+test('sessions list is hosted in the app sidebar slot', () => {
+  const slotRule = ruleFor('.sessions-app-sidebar-slot');
+  const panelRule = ruleFor('.sessions-app-sidebar-panel');
 
-  assert.match(sidebarRule, /border-right:\s*0/);
-  assert.match(darkSidebarRule, /border-right:\s*0/);
-  assert.match(handleRule, /width:\s*8px/);
-  assert.match(lineRule, /width:\s*1px/);
-  assert.doesNotMatch(lineRule, /width:\s*2px/);
+  assert.match(appSidebar, /id="sessions-app-sidebar-slot"/);
+  assert.match(sessionsPage, /createPortal\(sidebarContent, sidebarPortalTarget\)/);
+  assert.match(slotRule, /flex:\s*1 1 auto/);
+  assert.match(slotRule, /min-height:\s*0/);
+  assert.match(panelRule, /flex-direction:\s*column/);
+});
+
+test('sessions no longer renders an inner resizable sidebar divider', () => {
+  assert.doesNotMatch(sessionsPage, /sessions-client-sidebar/);
+  assert.doesNotMatch(sessionsPage, /sessions-sidebar-resize-handle/);
+  assert.doesNotMatch(css, /sessions-sidebar-resize-handle/);
+  assert.doesNotMatch(css, /resizing-session-sidebar/);
 });

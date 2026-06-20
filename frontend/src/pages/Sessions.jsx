@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ChevronDown, ChevronRight, ExternalLink, FileCode, Info, Loader2, Plus, Settings,
   Pin, MessageSquarePlus,
@@ -80,41 +81,8 @@ const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
 const DEFAULT_SESSION_PROVIDER = 'codex';
 const EMPTY_CAPABILITIES = { skills: [], plugins: [] };
-const SESSION_SIDEBAR_WIDTH_KEY = 'codex-session-sidebar-width';
-const SESSION_SIDEBAR_DEFAULT_WIDTH = 260;
-const SESSION_SIDEBAR_MIN_WIDTH = 220;
-const SESSION_SIDEBAR_MAX_WIDTH = 420;
-const SESSION_DETAIL_MIN_WIDTH = 420;
-const SESSION_RESIZE_HANDLE_WIDTH = 8;
-const SESSION_SIDEBAR_KEY_STEP = 16;
+const SESSION_APP_SIDEBAR_SLOT_ID = 'sessions-app-sidebar-slot';
 const MESSAGE_QUEUE_STORAGE_KEY = 'codex-session-message-queue';
-
-function clampSessionSidebarWidth(width, containerWidth = 0) {
-  const fallback = SESSION_SIDEBAR_DEFAULT_WIDTH;
-  const parsedWidth = width == null || (typeof width === 'string' && width.trim() === '') ? NaN : Number(width);
-  const resolved = Number.isFinite(parsedWidth) ? parsedWidth : fallback;
-  const availableMax = containerWidth > 0
-    ? containerWidth - SESSION_DETAIL_MIN_WIDTH - SESSION_RESIZE_HANDLE_WIDTH
-    : SESSION_SIDEBAR_MAX_WIDTH;
-  const maxWidth = Math.min(SESSION_SIDEBAR_MAX_WIDTH, Math.max(SESSION_SIDEBAR_MIN_WIDTH, availableMax));
-  return Math.round(Math.min(Math.max(resolved, SESSION_SIDEBAR_MIN_WIDTH), maxWidth));
-}
-
-function readSessionSidebarWidth() {
-  try {
-    return clampSessionSidebarWidth(window.localStorage.getItem(SESSION_SIDEBAR_WIDTH_KEY));
-  } catch {
-    return SESSION_SIDEBAR_DEFAULT_WIDTH;
-  }
-}
-
-function persistSessionSidebarWidth(width) {
-  try {
-    window.localStorage.setItem(SESSION_SIDEBAR_WIDTH_KEY, String(Math.round(width)));
-  } catch {
-    // localStorage 不可用时忽略，拖拽本身仍可用。
-  }
-}
 
 function readQueuedSessionMessages() {
   try {
@@ -280,11 +248,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const interruptStateRef = useRef(interruptState);
   const messageQueueRef = useRef(messageQueue);
   const activeQueuedSendsRef = useRef(new Set());
-  const containerRef = useRef(null);
-  const resizingSidebarRef = useRef(false);
-  const [sessionSidebarWidth, setSessionSidebarWidth] = useState(readSessionSidebarWidth);
-  const sessionSidebarWidthRef = useRef(sessionSidebarWidth);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [sidebarPortalTarget, setSidebarPortalTarget] = useState(null);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -323,77 +287,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     persistQueuedSessionMessages(messageQueue);
   }, [messageQueue]);
 
-  const applySessionSidebarWidth = useCallback((width) => {
-    const nextWidth = Math.round(width);
-    sessionSidebarWidthRef.current = nextWidth;
-    containerRef.current?.style.setProperty('--sessions-sidebar-width', `${nextWidth}px`);
-  }, []);
-
-  const updateSessionSidebarWidthFromPointer = useCallback((clientX) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    const nextWidth = clampSessionSidebarWidth(clientX - (rect?.left || 0), rect?.width || 0);
-    applySessionSidebarWidth(nextWidth);
-    return nextWidth;
-  }, [applySessionSidebarWidth]);
-
-  const finishSessionSidebarResize = useCallback((event) => {
-    if (!resizingSidebarRef.current) return;
-    resizingSidebarRef.current = false;
-    setIsResizingSidebar(false);
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    const nextWidth = sessionSidebarWidthRef.current;
-    setSessionSidebarWidth(nextWidth);
-    persistSessionSidebarWidth(nextWidth);
-  }, []);
-
-  const handleSessionSidebarResizeStart = useCallback((event) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    resizingSidebarRef.current = true;
-    setIsResizingSidebar(true);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setSessionSidebarWidth(updateSessionSidebarWidthFromPointer(event.clientX));
-  }, [updateSessionSidebarWidthFromPointer]);
-
-  const handleSessionSidebarResizeMove = useCallback((event) => {
-    if (!resizingSidebarRef.current) return;
-    event.preventDefault();
-    updateSessionSidebarWidthFromPointer(event.clientX);
-  }, [updateSessionSidebarWidthFromPointer]);
-
-  const handleSessionSidebarResizeKeyDown = useCallback((event) => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const containerWidth = containerRef.current?.getBoundingClientRect().width || 0;
-    const current = sessionSidebarWidthRef.current;
-    const target = {
-      ArrowLeft: current - SESSION_SIDEBAR_KEY_STEP,
-      ArrowRight: current + SESSION_SIDEBAR_KEY_STEP,
-      Home: SESSION_SIDEBAR_MIN_WIDTH,
-      End: SESSION_SIDEBAR_MAX_WIDTH,
-    }[event.key];
-    const nextWidth = clampSessionSidebarWidth(target, containerWidth);
-    applySessionSidebarWidth(nextWidth);
-    setSessionSidebarWidth(nextWidth);
-    persistSessionSidebarWidth(nextWidth);
-  }, [applySessionSidebarWidth]);
-
-  useEffect(() => {
-    const clampToContainer = () => {
-      const containerWidth = containerRef.current?.getBoundingClientRect().width || 0;
-      if (window.matchMedia('(max-width: 960px)').matches) return;
-      const nextWidth = clampSessionSidebarWidth(sessionSidebarWidthRef.current, containerWidth);
-      if (nextWidth === sessionSidebarWidthRef.current) return;
-      applySessionSidebarWidth(nextWidth);
-      setSessionSidebarWidth(nextWidth);
-    };
-    clampToContainer();
-    window.addEventListener('resize', clampToContainer);
-    return () => window.removeEventListener('resize', clampToContainer);
-  }, [applySessionSidebarWidth]);
-
   // 客户端风格路由与置顶状态
   const [activeView, setActiveView] = useState('chat');
   const [sessionListFilter, setSessionListFilter] = useState(SESSION_LIST_FILTER_ALL);
@@ -410,6 +303,10 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       return next;
     });
   };
+
+  useEffect(() => {
+    setSidebarPortalTarget(document.getElementById(SESSION_APP_SIDEBAR_SLOT_ID));
+  }, []);
 
   useEffect(() => {
     if (selectedId) {
@@ -968,111 +865,55 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     setSessionRunning(isSessionRunning(nextSession));
   }, [sessions]);
 
+  const openNewSession = useCallback(() => {
+    ignorePropSelectionRef.current = true;
+    autoSelectFirstSessionRef.current = false;
+    navigateTo?.('sessions');
+    setSelectedId('');
+    setActiveView('new');
+    setPrompt('');
+    setPromptCommand(clearSessionCommandState());
+    setPromptCommandResult(null);
+    setPromptCommandError('');
+    setSessionRunning(false);
+  }, [navigateTo]);
+
+  const sidebarContent = (
+    <SessionSidebarContent
+      activeView={activeView}
+      cursor={cursor}
+      loading={loading && sessions.length === 0}
+      loadingMore={loadingMore}
+      pinnedSessions={pinnedSessions}
+      projects={projects}
+      savingProjectOrder={savingProjectOrder}
+      selectedId={selectedId}
+      sessionListFilter={sessionListFilter}
+      sessions={sessions}
+      onLoadMore={loadMore}
+      onNewSession={openNewSession}
+      onReorderProjects={handleReorderProjects}
+      onSelectSession={selectSession}
+      onSessionListFilterChange={setSessionListFilter}
+      onTogglePinSession={togglePinSession}
+    />
+  );
+
   if (loading && sessions.length === 0) {
-    return <LoadingState />;
+    return (
+      <>
+        {sidebarPortalTarget ? createPortal(sidebarContent, sidebarPortalTarget) : null}
+        <LoadingState />
+      </>
+    );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className={`sessions-client-container client-animate-fade-in${isResizingSidebar ? ' resizing-session-sidebar' : ''}`}
-      style={{ '--sessions-sidebar-width': `${sessionSidebarWidth}px` }}
-    >
-      {/* 左侧 macOS 风格侧边栏 */}
-      <aside className="sessions-client-sidebar">
-
-
-        {/* 快捷菜单项 */}
-        <div className="sidebar-shortcut-items">
-          <button 
-            className={`sidebar-shortcut-item ${activeView === 'new' ? 'active' : ''}`}
-            onClick={() => {
-              ignorePropSelectionRef.current = true;
-              autoSelectFirstSessionRef.current = false;
-              navigateTo?.('sessions');
-              setSelectedId('');
-              setActiveView('new');
-              setPrompt('');
-              setPromptCommand(clearSessionCommandState());
-              setPromptCommandResult(null);
-              setPromptCommandError('');
-              setSessionRunning(false);
-            }}
-          >
-            <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
-            <span>新对话</span>
-          </button>
-          
-        </div>
-
-        {/* 置顶会话列表 */}
-        {pinnedSessions.length > 0 && (
-          <>
-            <div className="sidebar-section-title">置顶</div>
-            <div className="pinned-sessions-list">
-              {pinnedSessions.map((s) => (
-                <button 
-                  key={s.id} 
-                  className={`pinned-session-row ${selectedId === s.id && activeView === 'chat' ? 'active' : ''}`}
-                  onClick={() => selectSession(s.id)}
-                >
-                  <span className="pinned-title" title={s.name || s.preview}>{s.name || s.preview || '未命名 Codex 会话'}</span>
-                  <div className="pinned-actions">
-                    <span className="session-provider-pill">{providerLabel(s.provider)}</span>
-                    <button 
-                      className="pinned-action-btn" 
-                      onClick={(e) => togglePinSession(s.id, e)} 
-                      title="取消置顶"
-                    >
-                      <Pin size={11} fill="currentColor" style={{ transform: 'rotate(45deg)', color: 'var(--primary)' }} />
-                    </button>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* 项目会话列表 */}
-        <div className="sidebar-section-title">项目</div>
-        <SessionListFilterTabs value={sessionListFilter} onChange={setSessionListFilter} />
-        <div className="sidebar-scroll-area">
-          <VirtualSessionList
-            sessions={sessions}
-            projects={projects}
-            selectedId={selectedId}
-            hasMore={Boolean(cursor)}
-            loadingMore={loadingMore}
-            savingOrder={savingProjectOrder}
-            autoCollapseEmptyProjects={sessionListFilter === SESSION_LIST_FILTER_ALL}
-            filterMode={sessionListFilter}
-            onSelect={selectSession}
-            onLoadMore={loadMore}
-            onReorderProjects={handleReorderProjects}
-          />
-        </div>
-
-
-      </aside>
-
-      <div
-        className="sessions-sidebar-resize-handle"
-        role="separator"
-        aria-label="调整 session 列表宽度"
-        aria-orientation="vertical"
-        aria-valuemin={SESSION_SIDEBAR_MIN_WIDTH}
-        aria-valuemax={SESSION_SIDEBAR_MAX_WIDTH}
-        aria-valuenow={sessionSidebarWidth}
-        tabIndex={0}
-        onPointerDown={handleSessionSidebarResizeStart}
-        onPointerMove={handleSessionSidebarResizeMove}
-        onPointerUp={finishSessionSidebarResize}
-        onPointerCancel={finishSessionSidebarResize}
-        onKeyDown={handleSessionSidebarResizeKeyDown}
-      />
-
-      {/* 右侧主工作区 */}
-      <main className="sessions-client-main">
+    <>
+      {sidebarPortalTarget ? createPortal(sidebarContent, sidebarPortalTarget) : null}
+      <div className="sessions-client-container client-animate-fade-in">
+        {/* 右侧主工作区 */}
+        <main className="sessions-client-main">
 
         {activeView === 'chat' && (
           <div className="active-session-shell">
@@ -1241,7 +1082,94 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
           </div>
         )}
 
-      </main>
+        </main>
+      </div>
+    </>
+  );
+}
+
+
+function SessionSidebarContent({
+  activeView,
+  cursor,
+  loading,
+  loadingMore,
+  pinnedSessions,
+  projects,
+  savingProjectOrder,
+  selectedId,
+  sessionListFilter,
+  sessions,
+  onLoadMore,
+  onNewSession,
+  onReorderProjects,
+  onSelectSession,
+  onSessionListFilterChange,
+  onTogglePinSession,
+}) {
+  return (
+    <div className="sessions-app-sidebar-panel">
+      <div className="sidebar-shortcut-items">
+        <button
+          className={`sidebar-shortcut-item ${activeView === 'new' ? 'active' : ''}`}
+          onClick={onNewSession}
+          type="button"
+        >
+          <span className="sidebar-shortcut-item-icon"><MessageSquarePlus size={16} /></span>
+          <span>新对话</span>
+        </button>
+      </div>
+
+      {pinnedSessions.length > 0 && (
+        <>
+          <div className="sidebar-section-title">置顶</div>
+          <div className="pinned-sessions-list">
+            {pinnedSessions.map((session) => (
+              <button
+                key={session.id}
+                className={`pinned-session-row ${selectedId === session.id && activeView === 'chat' ? 'active' : ''}`}
+                onClick={() => onSelectSession(session.id)}
+                type="button"
+              >
+                <span className="pinned-title" title={session.name || session.preview}>{session.name || session.preview || '未命名 Codex 会话'}</span>
+                <div className="pinned-actions">
+                  <span className="session-provider-pill">{providerLabel(session.provider)}</span>
+                  <button
+                    className="pinned-action-btn"
+                    onClick={(event) => onTogglePinSession(session.id, event)}
+                    title="取消置顶"
+                    type="button"
+                  >
+                    <Pin size={11} fill="currentColor" style={{ transform: 'rotate(45deg)', color: 'var(--primary)' }} />
+                  </button>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="sidebar-section-title">项目</div>
+      <SessionListFilterTabs value={sessionListFilter} onChange={onSessionListFilterChange} />
+      <div className="sidebar-scroll-area">
+        {loading ? (
+          <div className="session-list-loading">加载 provider sessions...</div>
+        ) : (
+          <VirtualSessionList
+            sessions={sessions}
+            projects={projects}
+            selectedId={selectedId}
+            hasMore={Boolean(cursor)}
+            loadingMore={loadingMore}
+            savingOrder={savingProjectOrder}
+            autoCollapseEmptyProjects={sessionListFilter === SESSION_LIST_FILTER_ALL}
+            filterMode={sessionListFilter}
+            onSelect={onSelectSession}
+            onLoadMore={onLoadMore}
+            onReorderProjects={onReorderProjects}
+          />
+        )}
+      </div>
     </div>
   );
 }

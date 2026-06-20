@@ -117,6 +117,10 @@ export default function AppSidebar({
         />
       )}
 
+      {currentPage === 'sessions' && (
+        <div id="sessions-app-sidebar-slot" className="sessions-app-sidebar-slot" />
+      )}
+
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <button
           className={`nav-item nav-item-secondary ${currentPage === 'pi-command-center' ? 'active' : ''}`}
