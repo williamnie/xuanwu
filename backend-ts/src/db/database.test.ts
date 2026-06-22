@@ -224,11 +224,11 @@ describe("Bun SQLite database connection", () => {
         allowed_actions_json: "'[]'",
         allowed_mcp_capabilities_json: "'[]'",
         allowed_skill_intents_json: "'[]'",
-        allowed_supervisor_actions_json: "'[]'",
+        allowed_supervisor_actions_json: "'[\"session.resume_followup\"]'",
         supervisor_cooldown_seconds: "300",
         supervisor_max_recoveries_per_issue: "2",
         supervisor_max_recoveries_per_project_per_hour: "10",
-        supervisor_mode: "'watchdog'",
+        supervisor_mode: "'autonomous'",
         supervisor_rate_limit_wait_policy: "'respect_retry_after'",
         verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
       });

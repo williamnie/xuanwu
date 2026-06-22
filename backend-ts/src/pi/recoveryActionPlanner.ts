@@ -47,7 +47,7 @@ function actionPayload(input: RecoveryActionPlanInput, actionType: string, fallb
   if (actionType !== "session.resume_followup") return base;
   return {
     ...base,
-    prompt: clean(input.payload.recovery_message) || `Inspect current state, avoid duplicate work, and continue safely. ${reasonText(input.payload, fallback)}`,
+    prompt: clean(input.payload.recovery_message) || defaultResumePrompt(input.payload, fallback),
     provider: clean(input.payload.provider) || "codex",
     provider_session_id: clean(input.payload.provider_session_id),
     provider_turn_id: clean(input.payload.provider_turn_id)
@@ -130,6 +130,10 @@ function shouldScheduleRetryAfter(payload: Record<string, unknown>): boolean {
 
 function reasonText(payload: Record<string, unknown>, fallback: string): string {
   return clean(payload.reason) || clean(payload.rationale) || clean(payload.message) || fallback || "supervisor recovery candidate";
+}
+
+function defaultResumePrompt(payload: Record<string, unknown>, fallback: string): string {
+  return `继续。请先检查当前 issue/session 状态，避免重复工作，然后只恢复未完成部分。原因：${reasonText(payload, fallback)}`;
 }
 
 function stringList(value: unknown): string[] {

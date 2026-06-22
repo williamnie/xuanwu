@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiGuardianEvent, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
+import { createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
+import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 
 class FakePiCycleRunner {
@@ -255,6 +256,43 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("executes approved supervisor resume follow-up during schedule layer cycle", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new ResumeProvider();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "demo", 1);
+      insertIssueRunSession(db, 519);
+      insertSettings(db, "demo", 0, 5);
+
+      const first = await runScheduleLayerCycle({
+        database: db,
+        providers: { codex: provider },
+        runProjectCycle: runner.run.bind(runner),
+        watchdogNow: NOW
+      });
+      db.sqlite.run("update pi_guardian_decisions set cooldown_until='' where project_id='demo'");
+      const second = await runScheduleLayerCycle({
+        database: db,
+        providers: { codex: provider },
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false,
+        watchdogNow: new Date(NOW.getTime() + 31_000)
+      });
+
+      expect(first.supervisor).toMatchObject({ signaled: 1 });
+      expect(second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(provider.calls).toEqual([{ prompt: expect.stringContaining("继续"), sessionId: "thread-519" }]);
+      expect(listPiActions(db, { issueId: 519 })[0]).toMatchObject({
+        action_type: "session.resume_followup",
+        status: "completed"
+      });
+      expect(listIssueSupervisorEvents(db, { issueId: 519 }).map((event) => event.event_type)).toContain("result");
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not run delegation heartbeats while project heartbeat is paused", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
@@ -321,6 +359,34 @@ function insertSettings(db: DB, projectID: string, autoManage: number, maxAction
      values (?, ?, ?, ?, ?, ?)`,
     [projectID, agentID, autoManage, maxActions, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+const NOW = new Date("2026-06-22T08:40:00Z");
+
+function insertIssueRunSession(db: DB, issueID: number): void {
+  db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
+    values (?, 'demo', 'Idle issue', 'in_progress', ?, ?)`, [issueID, "2026-06-22T08:00:00Z", "2026-06-22T08:35:07Z"]);
+  db.sqlite.run(`insert into issue_runs
+    (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
+    values (?, ?, 1, 'in_progress', 'codex', ?, ?, ?, '')`,
+  [`issue-${issueID}-attempt-1`, issueID, `thread-${issueID}`, `turn-${issueID}`, "2026-06-22T08:15:07Z"]);
+  db.sqlite.run(`insert into agent_sessions
+    (session_key, provider, provider_session_id, agent_role, project_id, issue_id, status, raw_ref, created_at, updated_at)
+    values (?, 'codex', ?, 'executor', 'demo', ?, 'idle', ?, ?, ?)`,
+  [`codex:thread-${issueID}`, `thread-${issueID}`, issueID, JSON.stringify({ provider_turn_id: `turn-${issueID}` }),
+    "2026-06-22T08:15:07Z", "2026-06-22T08:35:07Z"]);
+}
+
+class ResumeProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution", "resume_session"] as const;
+  readonly calls: Array<{ prompt: string; sessionId: string }> = [];
+  readonly id = "codex" as const;
+  async run(input: ProviderRunInput) { return { runId: `codex-run-${input.issueId}` }; }
+  async readSession(sessionId: string) { return { provider_session_id: sessionId, provider_turn_id: "turn-519", sessionId }; }
+  async sendSessionMessage(input: SessionMessageInput) {
+    this.calls.push({ prompt: input.prompt || "", sessionId: input.sessionId });
+    return { provider: "codex" as const, provider_session_id: input.sessionId, sessionId: input.sessionId, turn_id: "turn-followup" };
+  }
 }
 
 function insertDelegation(db: DB, id: string, projectID: string): void {

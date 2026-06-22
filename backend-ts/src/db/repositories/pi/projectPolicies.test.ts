@@ -34,12 +34,12 @@ describe("project PI policy repository", () => {
         allowed_actions_json: "[]",
         allowed_mcp_capabilities_json: "[]",
         allowed_skill_intents_json: "[]",
-        allowed_supervisor_actions_json: "[]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\"]",
         default_mode: "manual",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
-        supervisor_mode: "watchdog",
+        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "respect_retry_after",
         timezone: "UTC",
         working_hours_json: "{}",
@@ -51,6 +51,24 @@ describe("project PI policy repository", () => {
         updated_at: ""
       });
       expect(getProjectPiPolicy(db, "demo")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps explicit supervisor off policy when project opts out", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const policy = upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: [],
+        project_id: "demo",
+        supervisor_mode: "off"
+      });
+
+      expect(policy).toMatchObject({
+        allowed_supervisor_actions_json: "[]",
+        supervisor_mode: "off"
+      });
     } finally {
       db.close();
     }

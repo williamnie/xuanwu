@@ -2,6 +2,33 @@ import { describe, expect, test } from "bun:test";
 import { supervisorRecoveryActionCandidates } from "./recoveryActionPlanner.ts";
 
 describe("supervisor recovery action planner", () => {
+  test("plans resume follow-up with a concise continue prompt for idle sessions", () => {
+    expect(supervisorRecoveryActionCandidates({
+      eventID: "event-idle",
+      issueID: 519,
+      payload: {
+        allowed_actions: ["session.resume_followup"],
+        diagnosis_code: "session_no_recent_progress",
+        issue_status: "in_progress",
+        issue_updated_at: "2026-06-22T08:35:07Z",
+        provider: "codex",
+        provider_session_id: "thread-519",
+        provider_turn_id: "turn-519",
+        ready: true,
+        run_id: "issue-519-attempt-1",
+        signal_type: "supervisor.candidate",
+        supervisor_mode: "autonomous"
+      },
+      projectID: "movo-mobile"
+    })).toContainEqual(expect.objectContaining({
+      action_type: "session.resume_followup",
+      payload: expect.objectContaining({
+        prompt: expect.stringContaining("继续"),
+        provider_session_id: "thread-519"
+      })
+    }));
+  });
+
   test("plans retry-after for rate limit wait windows", () => {
     expect(supervisorRecoveryActionCandidates({
       eventID: "event-retry-after",

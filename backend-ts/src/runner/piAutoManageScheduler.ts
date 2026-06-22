@@ -14,6 +14,10 @@ import {
   type GuardianDecisionOrchestratorSummary
 } from "../pi/guardianDecisionOrchestrator.ts";
 import {
+  dispatchApprovedGuardianActions,
+  type PiGuardianActionDispatchResult
+} from "./piGuardianActionDispatcher.ts";
+import {
   runPiGuardianWatchdogOnce,
   type PiGuardianWatchdogSummary
 } from "../pi/guardianWatchdog.ts";
@@ -29,6 +33,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
+  guardianActionDispatch: PiGuardianActionDispatchResult;
   missedIntentSweep: GuardianMissedIntentSweepResult;
   guardianDecisions: GuardianDecisionOrchestratorSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
@@ -139,6 +144,10 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
+  const guardianActionDispatch = await dispatchApprovedGuardianActions({
+    database: input.database,
+    providers: input.providers
+  });
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
   const watchdog = await runPiGuardianWatchdogOnce(input.database, {
     directFeishu: input.config ? { config: input.config.integrations.feishu } : undefined,
@@ -154,6 +163,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
     digestFlush,
     digestNotifications,
+    guardianActionDispatch,
     guardianDecisions,
     missedIntentSweep,
     supervisor,

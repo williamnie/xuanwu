@@ -5,10 +5,12 @@ import { COMMAND_CENTER_TERMS, modeLabel } from './piCommandCenterTerms';
 import './PiPolicyEditorPanel.css';
 
 const DEFAULT_ACTIONS = ['issue.enqueue', 'issue.state_repair', 'needs_user.escalate', 'session.read_summary'];
+const DEFAULT_SUPERVISOR_ACTIONS = ['session.resume_followup'];
 const WEEKDAYS = [
   ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun'],
 ];
 const DEFAULT_MODES = ['manual', 'attended', 'delegated', 'autonomous'];
+const SUPERVISOR_MODES = ['off', 'watchdog', 'propose_only', 'assisted', 'autonomous'];
 
 export default function PiPolicyEditorPanel({ onChanged }) {
   const state = usePolicyEditorState(onChanged);
@@ -99,6 +101,10 @@ function PolicyForm({ state }) {
         </summary>
         <div className="pi-policy-grid pi-policy-allowlists">
           <AllowlistField formKey="allowedActions" label="允许动作" suggestions={suggestions.actions} state={state} />
+          <Field label="Supervisor 模式"><select className="form-control" value={state.form.supervisorMode} onChange={e => state.updateField('supervisorMode', e.target.value)}>
+            {SUPERVISOR_MODES.map(mode => <option key={mode} value={mode}>{supervisorModeLabel(mode)}</option>)}
+          </select></Field>
+          <AllowlistField formKey="allowedSupervisorActions" label="允许自动恢复动作" suggestions={suggestions.supervisorActions} state={state} />
           <AllowlistField formKey="allowedSkills" label="允许技能" suggestions={suggestions.skills} state={state} />
           <AllowlistField formKey="allowedMcp" label="允许的 MCP 工具能力" suggestions={suggestions.mcp} state={state} />
         </div>
@@ -178,7 +184,9 @@ function buildPolicyPayload(form) {
     allowed_actions: parseCSV(form.allowedActions),
     allowed_mcp_capabilities: parseCSV(form.allowedMcp),
     allowed_skill_intents: parseCSV(form.allowedSkills),
+    allowed_supervisor_actions: parseCSV(form.allowedSupervisorActions),
     default_mode: form.defaultMode,
+    supervisor_mode: form.supervisorMode,
     timezone: form.timezone.trim(),
     working_hours: {
       end: form.workingEnd,
@@ -193,8 +201,10 @@ function blankForm(projectId = '') {
     allowedActions: DEFAULT_ACTIONS.join(', '),
     allowedMcp: '',
     allowedSkills: '',
+    allowedSupervisorActions: DEFAULT_SUPERVISOR_ACTIONS.join(', '),
     defaultMode: 'manual',
     projectId,
+    supervisorMode: 'autonomous',
     timezone: 'UTC',
     weekdays: '1,2,3,4,5',
     workingEnd: '18:00',
@@ -209,8 +219,10 @@ function formFromPolicy(policy, fallbackProjectId = '') {
     allowedActions: parseArray(policy.allowed_actions_json).join(', '),
     allowedMcp: parseArray(policy.allowed_mcp_capabilities_json).join(', '),
     allowedSkills: parseArray(policy.allowed_skill_intents_json).join(', '),
+    allowedSupervisorActions: parseArray(policy.allowed_supervisor_actions_json).join(', '),
     defaultMode: policy.default_mode || 'manual',
     projectId: policy.project_id || fallbackProjectId,
+    supervisorMode: policy.supervisor_mode || 'autonomous',
     timezone: policy.timezone || 'UTC',
     weekdays: arrayText(working.weekdays, '1,2,3,4,5'),
     workingEnd: typeof working.end === 'string' ? working.end : '18:00',
@@ -230,7 +242,19 @@ function suggestionGroups(registries) {
     actions: DEFAULT_ACTIONS,
     mcp: registries.mcp.map(item => item.id).filter(Boolean),
     skills: registries.skills.map(item => item.id).filter(Boolean),
+    supervisorActions: ['session.resume_followup', 'issue.retry_after', 'issue.retry', 'needs_user.escalate'],
   };
+}
+
+function supervisorModeLabel(mode) {
+  const labels = {
+    assisted: 'assisted（需审批）',
+    autonomous: 'autonomous（允许列表内自动恢复）',
+    off: 'off（关闭）',
+    propose_only: 'propose_only（只建议）',
+    watchdog: 'watchdog（只记录信号）',
+  };
+  return labels[mode] || mode;
 }
 
 function emptyRegistries() {

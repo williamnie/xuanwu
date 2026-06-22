@@ -55,6 +55,7 @@ const TIMEOUT_ACTIONS = new Set(["escalate", "request_verifier"]);
 const DEFAULT_RETRY: ProjectPiRetryPolicy = { enabled: false, max_attempts: 0, backoff_minutes: [] };
 const DEFAULT_CONCURRENCY: ProjectPiConcurrencyPolicy = { max_parallel_issues: 1, max_parallel_pi_cycles: 1 };
 const DEFAULT_VERIFICATION: ProjectPiVerificationPolicy = { pending_timeout_minutes: 24 * 60, on_timeout: "escalate", evidence_required: true };
+const DEFAULT_SUPERVISOR_ACTIONS = ["session.resume_followup"];
 const ACTION_ID_RE = /^[a-z0-9_.:-]+$/;
 const MAX_ACTION_ID_LENGTH = 128;
 
@@ -105,12 +106,12 @@ function defaultProjectPiPolicy(projectID: string): ProjectPiPolicy {
     allowed_actions_json: "[]",
     allowed_mcp_capabilities_json: "[]",
     allowed_skill_intents_json: "[]",
-    allowed_supervisor_actions_json: "[]",
+    allowed_supervisor_actions_json: JSON.stringify(DEFAULT_SUPERVISOR_ACTIONS),
     default_mode: "manual",
     supervisor_cooldown_seconds: 300,
     supervisor_max_recoveries_per_issue: 2,
     supervisor_max_recoveries_per_project_per_hour: 10,
-    supervisor_mode: "watchdog",
+    supervisor_mode: "autonomous",
     supervisor_rate_limit_wait_policy: "respect_retry_after",
     timezone: "UTC",
     working_hours_json: "{}",

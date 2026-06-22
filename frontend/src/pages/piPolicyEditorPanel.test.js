@@ -24,12 +24,14 @@ test('Policy editor is mounted in Command Center and uses policy registry APIs',
 test('Policy form captures policy, working hours, actions, skill and MCP allowlists', () => {
   for (const label of [
     '默认执行模式', '时区', '工作日', '工作开始时间', '工作结束时间',
-    '允许动作', '允许技能', '允许的 MCP 工具能力'
+    '允许动作', 'Supervisor 模式', '允许自动恢复动作', '允许技能', '允许的 MCP 工具能力'
   ]) {
     assert.match(panelSource, new RegExp(label));
   }
   assert.match(panelSource, /buildPolicyPayload\(form\)/);
   assert.match(panelSource, /allowed_actions: parseCSV\(form\.allowedActions\)/);
+  assert.match(panelSource, /supervisor_mode: form\.supervisorMode/);
+  assert.match(panelSource, /allowed_supervisor_actions: parseCSV\(form\.allowedSupervisorActions\)/);
   assert.match(panelSource, /allowed_skill_intents: parseCSV\(form\.allowedSkills\)/);
   assert.match(panelSource, /allowed_mcp_capabilities: parseCSV\(form\.allowedMcp\)/);
 });
