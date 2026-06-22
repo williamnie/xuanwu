@@ -7,6 +7,7 @@ export const RECOVERY_DIAGNOSIS_CODES = [
   "provider_retry_after_waiting",
   "provider_retry_after_ready",
   "provider_transient_network_error",
+  "provider_runtime_unavailable",
   "transport_restart",
   "scheduler_retryable_error",
   "session_no_recent_progress",
@@ -68,6 +69,7 @@ const NEEDS_CONTEXT_DIAGNOSIS = new Set([
   "business_decision_required",
   "external_account_required",
   "missing_user_input",
+  "provider_runtime_unavailable",
   "requires_human_decision"
 ]);
 const UNSAFE_DIAGNOSIS = new Set(["unsafe_or_external"]);

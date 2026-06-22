@@ -283,7 +283,8 @@ describe("PI issue supervisor context builder", () => {
     try {
       insertProject(db, "runner", await tempRoot("runner-deferred-provider-"));
       insertIssue(db, { id: 405, projectID: "runner", title: "Deferred provider", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
-      insertRun(db, { issueID: 405, id: "issue-405-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-405", turnID: "turn-405" });
+      insertRun(db, { issueID: 405, id: "issue-405-attempt-1", status: "in_progress", endedAt: "", provider: "claude", sessionID: "thread-405", turnID: "turn-405" });
+      insertSession(db, { issueID: 405, projectID: "runner", provider: "claude", sessionID: "thread-405", status: "running", updatedAt: "2026-06-10T07:59:30Z" });
       insertEvent(db, { issueID: 405, type: "issue.provider_deferred", payload: {
         error: "Claude Code run timed out after 10000ms",
         provider: "claude",
@@ -302,6 +303,115 @@ describe("PI issue supervisor context builder", () => {
         diagnosis_code: "provider_transient_network_error",
         evidence_refs: ["provider_error"]
       }));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("promotes initialize timeout without a recoverable session to provider runtime unavailable", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-runtime-outage-"));
+      insertIssue(db, { id: 406, projectID: "runner", title: "Initialize timeout", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 406, id: "issue-406-attempt-1", status: "in_progress", endedAt: "", sessionID: "", turnID: "" });
+      insertEvent(db, { issueID: 406, type: "issue.provider_deferred", payload: {
+        error: "app-server request timed out after 10000ms: initialize cwd=/Users/xiaobei/private token=sk-live-secret",
+        provider: "codex",
+        reason: "provider_infra_transient"
+      }, createdAt: "2026-06-10T07:59:45Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 406, { now: NOW });
+
+      expect(context.provider_error).toMatchObject({
+        category: "network",
+        diagnosis_code: "provider_transient_network_error"
+      });
+      expect(context.session).toMatchObject({ provider_session_id: "", status: "unknown" });
+      expect(context.candidates[0]).toMatchObject({
+        diagnosis_code: "provider_runtime_unavailable",
+        evidence_refs: expect.arrayContaining(["provider_error", "latest_run", "session"])
+      });
+      const serialized = JSON.stringify(context.candidates);
+      expect(serialized).not.toContain("sk-live-secret");
+      expect(serialized).not.toContain("/Users/xiaobei/private");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps a single transient stream disconnect recoverable when session exists", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-recoverable-transient-"));
+      insertIssue(db, { id: 407, projectID: "runner", title: "Recoverable transient", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 407, id: "issue-407-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-407", turnID: "turn-407" });
+      insertSession(db, { issueID: 407, projectID: "runner", sessionID: "thread-407", status: "running", updatedAt: "2026-06-10T07:59:30Z" });
+      insertEvent(db, { issueID: 407, type: "issue.log", payload: {
+        type: "error",
+        provider: "codex",
+        raw_payload: "stream disconnected before completion"
+      }, createdAt: "2026-06-10T07:59:45Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 407, { now: NOW });
+
+      expect(context.provider_error).toMatchObject({ diagnosis_code: "executor_stream_disconnected" });
+      expect(context.candidates.map((item) => item.diagnosis_code)).toContain("executor_stream_disconnected");
+      expect(context.candidates.map((item) => item.diagnosis_code)).not.toContain("provider_runtime_unavailable");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("promotes repeated deferred events on the same issue to provider runtime unavailable", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-repeated-deferred-"));
+      insertIssue(db, { id: 410, projectID: "runner", title: "Repeated deferrals", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 410, id: "issue-410-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-410", turnID: "turn-410" });
+      insertSession(db, { issueID: 410, projectID: "runner", sessionID: "thread-410", status: "running", updatedAt: "2026-06-10T07:59:30Z" });
+      for (const [index, type] of ["issue.provider_deferred", "issue.recovery_deferred"].entries()) {
+        insertEvent(db, { issueID: 410, type, payload: {
+          error: "app-server request timed out after 10000ms: initialize",
+          provider: "codex",
+          reason: "provider_infra_transient"
+        }, createdAt: `2026-06-10T07:59:4${index}Z` });
+      }
+
+      const context = buildIssueSupervisorRecoveryContext(db, 410, { now: NOW });
+
+      expect(context.candidates[0]).toMatchObject({
+        diagnosis_code: "provider_runtime_unavailable",
+        evidence_refs: expect.arrayContaining(["provider_error", "recent_events"])
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("promotes same project/provider deferred failures to provider runtime unavailable", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-provider-outage-"));
+      for (const id of [408, 409]) {
+        insertIssue(db, { id, projectID: "runner", title: `Deferred provider ${id}`, status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+        insertRun(db, { issueID: id, id: `issue-${id}-attempt-1`, status: "in_progress", endedAt: "", provider: "claude", sessionID: `thread-${id}`, turnID: `turn-${id}` });
+        insertSession(db, { issueID: id, projectID: "runner", provider: "claude", sessionID: `thread-${id}`, status: "running", updatedAt: "2026-06-10T07:59:30Z" });
+        insertEvent(db, { issueID: id, type: "issue.provider_deferred", payload: {
+          error: `Claude Code run timed out after 10000ms in /Users/xiaobei/private?token=sk-live-secret-${id}`,
+          provider: "claude",
+          reason: "provider_infra_transient"
+        }, createdAt: `2026-06-10T07:59:4${id - 408}Z` });
+      }
+
+      const context = buildIssueSupervisorRecoveryContext(db, 408, { now: NOW });
+
+      expect(context.candidates[0]).toMatchObject({
+        diagnosis_code: "provider_runtime_unavailable",
+        evidence_refs: expect.arrayContaining(["provider_error", "project_provider_deferred_events"])
+      });
+      const serialized = JSON.stringify(context.candidates);
+      expect(serialized).not.toContain("sk-live-secret");
+      expect(serialized).not.toContain("/Users/xiaobei/private");
     } finally {
       db.close();
     }
@@ -369,27 +479,29 @@ function insertRun(db: RunnerDatabase, input: {
   endedAt: string;
   id: string;
   issueID: number;
+  provider?: string;
   sessionID: string;
   status: string;
   turnID: string;
 }): void {
   db.sqlite.run(`insert into issue_runs
     (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
-    values (?, ?, 1, ?, 'codex', ?, ?, '2026-06-10T01:50:00Z', ?)`,
-    [input.id, input.issueID, input.status, input.sessionID, input.turnID, input.endedAt]);
+    values (?, ?, 1, ?, ?, ?, ?, '2026-06-10T01:50:00Z', ?)`,
+    [input.id, input.issueID, input.status, input.provider ?? "codex", input.sessionID, input.turnID, input.endedAt]);
 }
 
 function insertSession(db: RunnerDatabase, input: {
   issueID: number;
   projectID: string;
+  provider?: string;
   sessionID: string;
   status: string;
   updatedAt: string;
 }): void {
   db.sqlite.run(`insert into agent_sessions
     (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
-    values (?, 'codex', ?, ?, ?, ?, '{}', ?, ?)`,
-    [`codex:${input.sessionID}`, input.sessionID, input.projectID, input.issueID, input.status, "2026-06-10T01:55:00Z", input.updatedAt]);
+    values (?, ?, ?, ?, ?, ?, '{}', ?, ?)`,
+    [`${input.provider ?? "codex"}:${input.sessionID}`, input.provider ?? "codex", input.sessionID, input.projectID, input.issueID, input.status, "2026-06-10T01:55:00Z", input.updatedAt]);
 }
 
 function insertEvent(db: RunnerDatabase, input: {

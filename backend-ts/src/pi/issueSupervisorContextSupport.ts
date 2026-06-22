@@ -8,6 +8,7 @@ import { redactAuditJsonText, redactAuditText } from "../db/repositories/pi/audi
 import { parseIssueEventProviderError, type ProviderErrorSignal } from "./providerErrorParser.ts";
 import type { PiSupervisorDiagnosisCode } from "./issueSupervisorRecovery.ts";
 import { recoveryBudgetCandidate } from "./recoveryBudget.ts";
+import { providerOutageCandidate } from "./providerOutageDiagnosis.ts";
 
 export type RecentSupervisorEvent = {
   at: string;
@@ -27,9 +28,12 @@ export type SupervisorCandidate = {
 };
 
 type CandidateInput = {
+  events: IssueEvent[];
   history: Record<string, unknown>;
+  latestRun: IssueRun | null;
   now: Date;
   policy?: { supervisor_cooldown_seconds?: number };
+  projectDeferredCount?: number;
   providerError: ProviderErrorSignal | null;
   session: AgentSession | null;
   staleAfterSeconds?: number;
@@ -69,6 +73,8 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
     });
     return out;
   }
+  const outageCandidate = providerOutageCandidate(input);
+  if (outageCandidate) return [outageCandidate];
   const diagnosis = providerError?.diagnosis_code;
   const stopped = stoppedSession(session);
   if (stopped && !blocksStoppedRecovery(providerError)) {

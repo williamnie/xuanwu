@@ -20,6 +20,7 @@ import {
   type RecentSupervisorEvent,
   type SupervisorCandidate
 } from "./issueSupervisorContextSupport.ts";
+import { providerDeferredCount, providerDeferredWindowStart } from "./providerOutageDiagnosis.ts";
 
 export type IssueSupervisorContextOptions = {
   now?: Date;
@@ -74,9 +75,16 @@ export function buildIssueSupervisorRecoveryContext(
   );
   return {
     candidates: candidates({
+      events,
       history,
+      latestRun,
       now,
       policy,
+      projectDeferredCount: providerDeferredCount(db, {
+        projectID: issue.project_id,
+        provider: latestRun?.provider || project.provider,
+        since: providerDeferredWindowStart(now)
+      }),
       providerError,
       session,
       staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS

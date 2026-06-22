@@ -49,6 +49,7 @@ describe("PI issue supervisor recovery contract", () => {
       "provider_retry_after_waiting",
       "provider_retry_after_ready",
       "provider_transient_network_error",
+      "provider_runtime_unavailable",
       "transport_restart",
       "scheduler_retryable_error",
       "session_no_recent_progress",
