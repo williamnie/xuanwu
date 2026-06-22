@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { recoverInProgressIssues } from "./recovery.ts";
-import type { ExecutorProvider, ProviderRecoveryInput } from "../providers/types.ts";
+import type { ExecutorProvider, ProviderRecoveryInput, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
 
@@ -18,12 +18,27 @@ class RecoveringCodexProvider implements ExecutorProvider {
     throw new Error("run should not be called during recovery");
   }
 
-  async recover(input: ProviderRecoveryInput) {
+  async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
     return {
       runId: "codex:thread-recover:turn-recovered",
       session: { provider: "codex" as const, sessionId: input.session.sessionId, turnId: "turn-recovered" }
     };
+  }
+}
+
+class TransientRecoveryProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution", "resume_session"] as const;
+  readonly inputs: ProviderRecoveryInput[] = [];
+
+  async run(_input: ProviderRunInput): Promise<ProviderRunResult> {
+    throw new Error("run should not be called during recovery");
+  }
+
+  async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    throw new Error("Claude Code run timed out after 10000ms");
   }
 }
 
@@ -62,7 +77,7 @@ describe("Bun in-progress issue recovery", () => {
 
       const result = await recoverInProgressIssues({ database: db, providers: { codex: provider } });
 
-      expect(result).toEqual({ failed: 0, recovered: 1, requeued: 0 });
+      expect(result).toEqual({ deferred: 0, failed: 0, recovered: 1, requeued: 0 });
       expect(provider.inputs).toHaveLength(1);
       expect(provider.inputs[0]).toMatchObject({
         issueId,
@@ -102,7 +117,7 @@ describe("Bun in-progress issue recovery", () => {
 
       const issue = getIssue(db, issueId);
       const run = listIssueRuns(db, issueId).at(-1);
-      expect(result).toEqual({ failed: 1, recovered: 0, requeued: 0 });
+      expect(result).toEqual({ deferred: 0, failed: 1, recovered: 0, requeued: 0 });
       expect(issue).toMatchObject({
         status: "failed",
         error: "provider codex does not support recovery"
@@ -123,6 +138,92 @@ describe("Bun in-progress issue recovery", () => {
     }
   });
 
+  test("defers provider infra transient recovery failures to PI without closing the run", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new TransientRecoveryProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueId = insertIssue(db, {
+        codexThreadId: "thread-known",
+        projectId: "demo",
+        status: "in_progress",
+        title: "known session"
+      });
+      insertOpenRun(db, {
+        issueId,
+        provider: provider.id,
+        providerSessionId: "thread-known",
+        providerTurnId: "turn-known"
+      });
+
+      const result = await recoverInProgressIssues({ database: db, providers: { [provider.id]: provider } });
+
+      const issue = getIssue(db, issueId);
+      const run = listIssueRuns(db, issueId).at(-1);
+      expect(result).toEqual({ deferred: 1, failed: 0, recovered: 0, requeued: 0 });
+      expect(issue).toMatchObject({
+        status: "in_progress",
+        error: "Claude Code run timed out after 10000ms"
+      });
+      expect(run).toMatchObject({
+        status: "in_progress",
+        ended_at: "",
+        error: "Claude Code run timed out after 10000ms"
+      });
+      expect(listEventTypes(db)).toEqual([
+        "issue.recovery_started",
+        "issue.provider_deferred",
+        "issue.recovery_deferred"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps an already deferred startup failure in progress across recovery scans", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, { id: "demo", provider: "claude" });
+      const issueId = insertIssue(db, {
+        projectId: "demo",
+        status: "in_progress",
+        title: "startup timeout"
+      });
+      insertOpenRun(db, { issueId, provider: "claude" });
+      db.sqlite.run("update issues set error=? where id=?", [
+        "codex app-server request timed out after 10000ms: initialize",
+        issueId
+      ]);
+      db.sqlite.run(
+        `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+        [issueId, "issue.provider_deferred", JSON.stringify({
+          error: "codex app-server request timed out after 10000ms: initialize",
+          provider: "claude",
+          reason: "provider_infra_transient"
+        }), "2026-01-01T00:00:00Z"]
+      );
+
+      const result = await recoverInProgressIssues({ database: db, providers: {} });
+
+      expect(result).toEqual({ deferred: 1, failed: 0, recovered: 0, requeued: 0 });
+      expect(getIssue(db, issueId)).toMatchObject({
+        status: "in_progress",
+        error: "codex app-server request timed out after 10000ms: initialize"
+      });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        status: "in_progress",
+        ended_at: "",
+        error: ""
+      });
+      expect(listEventTypes(db)).toEqual([
+        "issue.provider_deferred",
+        "issue.recovery_deferred"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("requeues an in_progress claim that never created a provider session", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -134,7 +235,7 @@ describe("Bun in-progress issue recovery", () => {
 
       const issue = getIssue(db, issueId);
       const run = listIssueRuns(db, issueId).at(-1);
-      expect(result).toEqual({ failed: 0, recovered: 0, requeued: 1 });
+      expect(result).toEqual({ deferred: 0, failed: 0, recovered: 0, requeued: 1 });
       expect(issue).toMatchObject({ status: "todo", error: "" });
       expect(run).toMatchObject({
         status: "todo",

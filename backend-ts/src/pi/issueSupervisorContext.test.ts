@@ -278,6 +278,35 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("surfaces deferred provider infra failures as PI recovery candidates", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-deferred-provider-"));
+      insertIssue(db, { id: 405, projectID: "runner", title: "Deferred provider", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 405, id: "issue-405-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-405", turnID: "turn-405" });
+      insertEvent(db, { issueID: 405, type: "issue.provider_deferred", payload: {
+        error: "Claude Code run timed out after 10000ms",
+        provider: "claude",
+        reason: "provider_infra_transient"
+      }, createdAt: "2026-06-10T07:59:45Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 405, { now: NOW });
+
+      expect(context.provider_error).toMatchObject({
+        category: "network",
+        diagnosis_code: "provider_transient_network_error",
+        provider: "claude",
+        raw_summary: "Claude Code run timed out after 10000ms"
+      });
+      expect(context.candidates).toContainEqual(expect.objectContaining({
+        diagnosis_code: "provider_transient_network_error",
+        evidence_refs: ["provider_error"]
+      }));
+    } finally {
+      db.close();
+    }
+  });
+
   test("classifies active, ended, and unknown session/run states from agent_sessions and issue_runs", async () => {
     const db = await fixtureDb();
     try {

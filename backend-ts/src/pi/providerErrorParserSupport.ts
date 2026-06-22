@@ -62,7 +62,7 @@ export function statusCodeFromText(value: string): number | undefined {
 
 export function redactedProviderErrorSummary(texts: string[], statusCode?: number): string {
   const picked = texts.find((text) =>
-    /error|429|rate|retry|reconnecting|disconnect|unauthorized|permission/i.test(text));
+    /error|429|rate|retry|reconnecting|disconnect|unauthorized|permission|timeout|timed out|network|transport|deadline|eof/i.test(text));
   const fallback = statusCode?.toString() ?? "unknown provider error";
   return truncate(redactedSummary(picked || texts[0] || fallback));
 }

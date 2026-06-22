@@ -4,6 +4,11 @@ import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { failIssueExecution } from "./statusGate.ts";
+import {
+  deferIssueToPiAfterProviderFailure,
+  isProviderInfraTransientFailure,
+  recordIssueEvent
+} from "./providerFailure.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -15,12 +20,12 @@ export type RecoveryInput = {
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
-export type RecoveryResult = { failed: number; recovered: number; requeued: number };
+export type RecoveryResult = { deferred: number; failed: number; recovered: number; requeued: number };
 
 const STATUS_IN_PROGRESS = "in_progress";
 
 export async function recoverInProgressIssues(input: RecoveryInput): Promise<RecoveryResult> {
-  const result = { failed: 0, recovered: 0, requeued: 0 };
+  const result = { deferred: 0, failed: 0, recovered: 0, requeued: 0 };
   const issues = listIssues(input.database, { status: STATUS_IN_PROGRESS });
   for (const issue of issues) {
     const status = await recoverIssue(input, issue);
@@ -32,6 +37,10 @@ export async function recoverInProgressIssues(input: RecoveryInput): Promise<Rec
 async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<keyof RecoveryResult> {
   const session = recoverableSession(issue);
   if (!session) {
+    if (hasProviderDeferredFailure(input.database, issue)) {
+      recordExistingProviderDeferred(input.database, issue);
+      return "deferred";
+    }
     if (canRequeueUnstartedClaim(issue)) {
       requeueUnstartedClaim(input.database, issue);
       return "requeued";
@@ -56,6 +65,10 @@ async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<keyof R
     recordRecoveryEvent(input.database, issue.id, "issue.recovery_turn_started", recoveryPayload(run.session ?? session));
     return "recovered";
   } catch (error) {
+    if (isProviderInfraTransientFailure(error)) {
+      markRecoveryDeferred(input.database, issue.id, error, session.provider);
+      return "deferred";
+    }
     markRecoveryFailed(input.database, issue.id, error);
     return "failed";
   }
@@ -102,6 +115,27 @@ function canRequeueUnstartedClaim(issue: Issue): boolean {
     run.provider_session_id === "" && issue.codex_thread_id === "";
 }
 
+function hasProviderDeferredFailure(db: RunnerDatabase, issue: Issue): boolean {
+  if (isProviderInfraTransientFailure(issue.error)) return true;
+  const row = db.sqlite.query<{ count: number }, [number]>(
+    "select count(*) as count from issue_events where issue_id=? and type='issue.provider_deferred'"
+  ).get(issue.id);
+  return (row?.count ?? 0) > 0;
+}
+
+function recordExistingProviderDeferred(db: RunnerDatabase, issue: Issue): void {
+  recordIssueEvent(db, issue.id, "issue.recovery_deferred", {
+    error: redactSensitiveText(issue.error || "provider infrastructure transient failure already deferred"),
+    provider: recoveryProvider(issue),
+    reason: "provider_infra_transient"
+  });
+}
+
+function recoveryProvider(issue: Issue): ExecutorProviderId {
+  const provider = issue.latest_run?.provider;
+  return provider === "codex" || provider === "claude" || provider === "fake-execution-only" ? provider : "codex";
+}
+
 function requeueUnstartedClaim(db: RunnerDatabase, issue: Issue): void {
   enqueueIssue(db, issue.id);
   recordRecoveryEvent(db, issue.id, "issue.recovery_requeued", {
@@ -123,6 +157,20 @@ function markRecoveryFailed(db: RunnerDatabase, issueID: number, error: unknown)
   failIssueExecution(db, issueID, error);
   recordRecoveryEvent(db, issueID, "issue.recovery_failed", {
     error: redactSensitiveText(error instanceof Error ? error.message : String(error))
+  });
+}
+
+function markRecoveryDeferred(
+  db: RunnerDatabase,
+  issueID: number,
+  error: unknown,
+  provider: ExecutorProviderId
+): void {
+  deferIssueToPiAfterProviderFailure(db, issueID, error, provider);
+  recordIssueEvent(db, issueID, "issue.recovery_deferred", {
+    error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+    provider,
+    reason: "provider_infra_transient"
   });
 }
 

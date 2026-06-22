@@ -7,6 +7,7 @@ import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { failIssueExecution } from "./statusGate.ts";
+import { deferIssueToPiAfterProviderFailure, isProviderInfraTransientFailure } from "./providerFailure.ts";
 import { renderIssuePromptTemplate } from "./issuePromptTemplate.ts";
 import { issuePromptImages } from "./issuePromptImages.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
@@ -67,6 +68,12 @@ async function runClaimedIssue(
     });
   } catch (error) {
     if (issueAlreadyClosed(input.database, issue.id)) return { runId: "interrupted" };
+    if (isProviderInfraTransientFailure(error)) {
+      deferIssueToPiAfterProviderFailure(input.database, issue.id, error, provider.id);
+      const deferred = getIssue(input.database, issue.id);
+      if (deferred) publishIssueStatus(input, deferred);
+      return { runId: "provider_deferred" };
+    }
     failIssueExecution(input.database, issue.id, error, provider.id);
     const failed = getIssue(input.database, issue.id);
     if (failed) publishIssueStatus(input, failed);

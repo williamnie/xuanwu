@@ -7,7 +7,7 @@ import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
 import { startProjectLoop } from "./projectLoopManager.ts";
-import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
+import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
 
@@ -16,7 +16,7 @@ class FakeExecutionProvider implements ExecutorProvider {
   readonly capabilities = ["issue_execution"] as const;
   readonly inputs: ProviderRunInput[] = [];
 
-  async run(input: ProviderRunInput) {
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
     input.onEvent?.({
       provider: this.id,
@@ -32,9 +32,31 @@ class FakeExecutionProvider implements ExecutorProvider {
 }
 
 class FailingExecutionProvider extends FakeExecutionProvider {
-  async run(input: ProviderRunInput) {
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
     throw new Error("provider failed CODEX_API_KEY=fixture-secret");
+  }
+}
+
+class MessageFailingExecutionProvider extends FakeExecutionProvider {
+  constructor(private readonly message: string) {
+    super();
+  }
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    throw new Error(this.message);
+  }
+}
+
+class TransientInfraExecutionProvider implements ExecutorProvider {
+  readonly id = "claude" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    throw new Error("codex app-server request timed out after 10000ms: initialize");
   }
 }
 
@@ -84,7 +106,7 @@ describe("Bun project loop claim execution", () => {
         provider: "fake-execution-only",
         provider_session_id: `fake-session-${firstHigh}`,
         issue_id: firstHigh,
-        status: "completed"
+        status: "running"
       });
     } finally {
       db.close();
@@ -168,6 +190,58 @@ describe("Bun project loop claim execution", () => {
       expect(listIssueRuns(db, second)).toEqual([]);
     } finally {
       db.close();
+    }
+  });
+
+  test("auto-run defers provider infra transient failures and keeps later todos queued for PI", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new TransientInfraExecutionProvider();
+    try {
+      insertProject(db, { id: "infra-demo", provider: provider.id, autoRun: 1 });
+      const first = insertIssue(db, { projectId: "infra-demo", title: "first" });
+      const second = insertIssue(db, { projectId: "infra-demo", title: "second" });
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "infra-demo");
+      await waitFor(() => listEventTypes(db, first).includes("issue.provider_deferred"));
+      await Bun.sleep(20);
+
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+      expect(getIssue(db, first)).toMatchObject({
+        status: "in_progress",
+        error: "codex app-server request timed out after 10000ms: initialize"
+      });
+      expect(listIssueRuns(db, first).at(-1)).toMatchObject({
+        status: "in_progress",
+        ended_at: "",
+        error: "codex app-server request timed out after 10000ms: initialize"
+      });
+      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, second)).toEqual([]);
+      expect(listEventTypes(db, first)).toContain("issue.provider_deferred");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps auth and quota failures terminal even when wrapped in transport wording", async () => {
+    for (const [index, message] of [
+      "transport error: 401 unauthorized",
+      "network error: insufficient quota"
+    ].entries()) {
+      const db = await openFixtureDatabase();
+      const provider = new MessageFailingExecutionProvider(message);
+      try {
+        insertProject(db, { id: `terminal-demo-${index}`, provider: provider.id });
+        const issueId = insertIssue(db, { projectId: `terminal-demo-${index}`, title: "terminal provider failure" });
+
+        await runProjectLoopOnce({ database: db, projectId: `terminal-demo-${index}`, providers: { [provider.id]: provider } });
+
+        expect(getIssue(db, issueId)).toMatchObject({ status: "failed", error: message });
+        expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({ status: "failed", exit_reason: "failed" });
+        expect(listEventTypes(db, issueId)).not.toContain("issue.provider_deferred");
+      } finally {
+        db.close();
+      }
     }
   });
 
@@ -482,6 +556,12 @@ function closeClaimedIssue(db: RunnerDatabase, issueID: number): void {
     "2026-01-01T00:01:00Z",
     issueID
   ]);
+}
+
+function listEventTypes(db: RunnerDatabase, issueID: number): string[] {
+  return db.sqlite.query<{ type: string }, [number]>(
+    "select type from issue_events where issue_id=? order by id asc"
+  ).all(issueID).map((event) => event.type);
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {

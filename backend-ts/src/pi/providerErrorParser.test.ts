@@ -201,7 +201,7 @@ describe("provider error parser", () => {
     });
   });
 
-  test("classifies auth and permission failures as human-decision signals", () => {
+  test("classifies auth, permission, and quota failures as human-decision signals", () => {
     expect(parseProviderEventError({
       provider: "codex",
       type: "error",
@@ -217,6 +217,14 @@ describe("provider error parser", () => {
       error: "permission denied"
     }, { now: NOW })).toMatchObject({
       category: "permission",
+      diagnosis_code: "requires_human_decision"
+    });
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      error: "insufficient quota"
+    }, { now: NOW })).toMatchObject({
+      category: "quota",
       diagnosis_code: "requires_human_decision"
     });
   });
