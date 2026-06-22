@@ -156,6 +156,36 @@ describe("PI Guardian decision action outlet", () => {
     }
   });
 
+  test("routes provider runtime unavailable through gate as needs-user escalation", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      supervisorCandidateEvent(db, "supervisor-provider-outage", {
+        allowed_actions: ["session.resume_followup"],
+        budget_remaining: 0,
+        cooldown_until: "2026-06-18T00:10:00Z",
+        diagnosis_code: "provider_runtime_unavailable",
+        provider: "claude",
+        reason: "latest provider error has no recoverable provider session",
+        supervisor_mode: "autonomous"
+      }, 605);
+
+      runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });
+      runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:31Z") });
+      const actions = listPiActions(db, { issueId: 605 });
+      const payload = JSON.parse(actions[0]?.payload_json ?? "{}");
+
+      expect(actions).toHaveLength(1);
+      expect(actions[0]).toMatchObject({ action_type: "needs_user.escalate", gate_decision: "execute", status: "approved" });
+      expect(payload.message).toContain("provider：claude");
+      expect(payload.message).toContain("issue id：605");
+      expect(payload.message).toContain("诊断码：provider_runtime_unavailable");
+      expect(payload.message).toContain("错误摘要：latest provider error has no recoverable provider session");
+      expect(payload.message).toContain("请检查/重启 Codex app-server 或 Claude Code provider 后再 retry");
+    } finally {
+      db.close();
+    }
+  });
+
   test("lets recovery gate deny exhausted budget and snooze cooldown candidates", async () => {
     const db = await openFixtureDatabase();
     try {

@@ -73,4 +73,48 @@ describe("supervisor recovery action planner", () => {
       payload: expect.objectContaining({ issue_id: 504 })
     }));
   });
+
+  test("plans provider runtime unavailable as user escalation despite resume-only policy", () => {
+    const [candidate] = supervisorRecoveryActionCandidates({
+      eventID: "event-provider-outage",
+      issueID: 524,
+      payload: {
+        allowed_actions: ["session.resume_followup"],
+        budget_remaining: 0,
+        cooldown_until: "2026-06-22T08:45:00Z",
+        diagnosis_code: "provider_runtime_unavailable",
+        issue_status: "in_progress",
+        issue_updated_at: "2026-06-22T08:35:07Z",
+        provider: "claude",
+        ready: true,
+        reason: "latest provider error has no recoverable provider session",
+        run_id: "issue-524-attempt-1",
+        signal_type: "supervisor.candidate",
+        supervisor_mode: "autonomous"
+      },
+      projectID: "demo"
+    });
+
+    const gatePolicy = candidate?.gate_policy as Record<string, unknown>;
+    const payload = candidate?.payload as Record<string, unknown>;
+
+    expect(candidate).toMatchObject({
+      action_type: "needs_user.escalate",
+      gate_policy: expect.objectContaining({
+        hard_outage_escalation: true,
+        policy_override_reason: "provider_runtime_unavailable_requires_user_escalation"
+      })
+    });
+    expect(gatePolicy.allowed_actions).toEqual(["session.resume_followup", "needs_user.escalate"]);
+    expect(gatePolicy.authorizedActions).toContainEqual({
+      action_type: "needs_user.escalate",
+      issue_id: 524,
+      project_id: "demo"
+    });
+    expect(String(payload.message)).toContain("provider：claude");
+    expect(String(payload.message)).toContain("issue id：524");
+    expect(String(payload.message)).toContain("诊断码：provider_runtime_unavailable");
+    expect(String(payload.message)).toContain("错误摘要：latest provider error has no recoverable provider session");
+    expect(String(payload.message)).toContain("请检查/重启 Codex app-server 或 Claude Code provider 后再 retry");
+  });
 });
