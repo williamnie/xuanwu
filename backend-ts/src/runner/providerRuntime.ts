@@ -1,4 +1,4 @@
-import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
+import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { recordIssueLogEvent } from "../db/repositories/issueEvents.ts";
 import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -85,7 +85,7 @@ function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string
   if (!input.database || !result.session) return;
   persistRuntime({
     db: input.database, input, provider, session: result.session,
-    status: "completed", metadata: runtimeMetadata(input, { run_id: result.runId }),
+    status: resultSessionStatus(input.database, provider, result.session), metadata: runtimeMetadata(input, { run_id: result.runId }),
     issueRunId: activeRunID || openIssueRunID(input.database, input.issueId)
   });
 }
@@ -98,9 +98,25 @@ function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEv
   if (!event.session) return;
   persistRuntime({
     db: input.database, input, provider: event.session.provider, session: event.session,
-    status: event.status || "running", metadata: runtimeMetadata(input, { source: "provider_event" }),
+    status: eventSessionStatus(event), metadata: runtimeMetadata(input, { source: "provider_event" }),
     issueRunId: activeRunID
   });
+}
+
+function resultSessionStatus(db: RunnerDatabase, provider: string, session: SessionRef): string {
+  const sessionID = session.sessionId.trim();
+  if (sessionID === "") return "";
+  const existing = getAgentSession(db, `${provider}:${sessionID}`);
+  return existing?.status ? "" : "running";
+}
+
+function eventSessionStatus(event: ProviderEvent): string {
+  const method = event.raw?.method ?? "";
+  if (event.type === "turn_started" || method === "turn/started") return event.status || "running";
+  if (method === "thread/status/changed") return event.status || "";
+  if (method === "turn/completed") return event.status || "completed";
+  if (event.type === "error") return event.status || "failed";
+  return "";
 }
 
 function publishIssueLog(

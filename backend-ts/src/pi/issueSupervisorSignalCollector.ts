@@ -51,6 +51,7 @@ export function supervisorCandidateReady(
   if (candidate.diagnosis_code === "provider_retry_after_waiting") return false;
   if (candidate.diagnosis_code === "provider_retry_after_ready") return true;
   if (candidate.exhausted || isAutomaticRecoveryBlockedDiagnosis(candidate.diagnosis_code)) return true;
+  if (candidate.diagnosis_code === "session_no_recent_progress" && stoppedContextSession(context)) return true;
   if (isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return staleGapSeconds(context) >= staleAfterSeconds(options);
   return false;
 }
@@ -154,6 +155,12 @@ function staleDiagnosticSignal(context: IssueSupervisorRecoveryContext): Heartbe
     status: clean(context.session.status),
     updated_at: clean(context.session.updated_at)
   };
+}
+
+
+function stoppedContextSession(context: IssueSupervisorRecoveryContext): boolean {
+  const statuses = [clean(context.session.raw_status), clean(context.session.status)];
+  return statuses.some((status) => ["idle", "stopped", "completed", "done", "failed", "error"].includes(status.toLowerCase()));
 }
 
 function staleAfterSeconds(options: Pick<SupervisorSignalCollectorOptions, "staleAfterSeconds">): number {

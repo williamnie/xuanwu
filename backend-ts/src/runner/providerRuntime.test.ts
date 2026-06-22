@@ -34,6 +34,39 @@ class FakeExecutionProvider implements ExecutorProvider {
   }
 }
 
+
+class IdleStatusProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution"] as const;
+
+  async run(input: ProviderRunInput) {
+    input.onEvent?.({
+      provider: this.id,
+      raw: { method: "turn/started" },
+      session: { provider: this.id, sessionId: "thread-idle", turnId: "turn-idle" },
+      status: "inProgress",
+      type: "text"
+    });
+    input.onEvent?.({
+      provider: this.id,
+      raw: { method: "thread/status/changed" },
+      session: { provider: this.id, sessionId: "thread-idle" },
+      status: "idle",
+      type: "raw"
+    });
+    input.onEvent?.({
+      provider: this.id,
+      raw: { method: "thread/tokenUsage/updated" },
+      session: { provider: this.id, sessionId: "thread-idle", turnId: "turn-idle" },
+      type: "raw"
+    });
+    return {
+      runId: "codex:thread-idle:turn-idle",
+      session: { provider: this.id, sessionId: "thread-idle", turnId: "turn-idle" }
+    };
+  }
+}
+
 class ClosingClaudeProvider implements ExecutorProvider {
   readonly id = "claude" as const;
   readonly capabilities = ["issue_execution"] as const;
@@ -166,6 +199,36 @@ describe("executor provider runtime seam", () => {
         issue_id: issueId,
         type: "issue.log",
         payload: "{\"type\":\"provider.message\",\"provider\":\"fake-execution-only\",\"text\":\"fake provider log\"}"
+      }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("persists Codex thread idle status without raw telemetry flipping it back to running", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+
+      await runIssueWithProvider(new IdleStatusProvider(), {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "issue prompt"
+      });
+
+      expect(getAgentSession(db, "codex:thread-idle")).toMatchObject({
+        issue_id: issueId,
+        provider: "codex",
+        provider_session_id: "thread-idle",
+        status: "idle"
+      });
+      expect(listIssueRuns(db, issueId)).toMatchObject([{
+        provider: "codex",
+        provider_session_id: "thread-idle",
+        provider_turn_id: "turn-idle"
       }]);
     } finally {
       db.close();

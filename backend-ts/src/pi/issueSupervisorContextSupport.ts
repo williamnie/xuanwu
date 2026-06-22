@@ -70,8 +70,12 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
     return out;
   }
   const diagnosis = providerError?.diagnosis_code;
+  const stopped = stoppedSession(session);
+  if (stopped && !blocksStoppedRecovery(providerError)) {
+    out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session is idle while issue run remains open" });
+  }
   if (diagnosis) out.push(providerErrorCandidate(input, providerError, diagnosis));
-  if (!diagnosis && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
+  if (!diagnosis && !stopped && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session has no recent updates" });
   }
   return out;
@@ -289,16 +293,37 @@ function supervisorSessionStatus(input: {
   if (!session && !run) return "unknown";
   if (run?.ended_at) return "ended";
   if (!session) return run?.ended_at === "" ? "unknown" : "ended";
+  if (stoppedSession(session) && run?.ended_at === "") return normalizedStoppedStatus(session.status);
   if (staleGap >= staleAfterSeconds && run?.ended_at === "") return "disconnected";
   return activeStatus(session.status) ? "active" : "unknown";
 }
 
 function staleSession(session: AgentSession | null, now: Date, staleAfterSeconds: number): boolean {
-  return session ? ageSeconds(session.updated_at, now) >= staleAfterSeconds : false;
+  if (!session) return false;
+  return stoppedSession(session) || ageSeconds(session.updated_at, now) >= staleAfterSeconds;
 }
 
 function activeStatus(value: string): boolean {
   return ["running", "inprogress", "started", "active"].includes(value.trim().toLowerCase());
+}
+
+function stoppedSession(session: AgentSession | null): boolean {
+  return session ? stoppedStatus(session.status) : false;
+}
+
+function blocksStoppedRecovery(providerError: ProviderErrorSignal | null): boolean {
+  return ["auth", "permission", "quota"].includes(clean(providerError?.category));
+}
+
+function stoppedStatus(value: string): boolean {
+  return ["idle", "stopped", "completed", "done", "failed", "error"].includes(value.trim().toLowerCase());
+}
+
+function normalizedStoppedStatus(value: string): string {
+  const status = value.trim().toLowerCase();
+  if (status === "completed" || status === "done") return "idle";
+  if (status === "failed" || status === "error") return "failed";
+  return status || "idle";
 }
 
 function consecutiveNoProgress(events: IssueSupervisorEvent[]): number {

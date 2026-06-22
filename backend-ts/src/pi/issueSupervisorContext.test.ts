@@ -258,6 +258,26 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("treats an idle session with an open issue run as an immediate recovery candidate", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-idle-session-"));
+      insertIssue(db, { id: 404, projectID: "runner", title: "Idle issue", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 404, id: "issue-404-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-404", turnID: "turn-404" });
+      insertSession(db, { issueID: 404, projectID: "runner", sessionID: "thread-404", status: "idle", updatedAt: "2026-06-10T07:59:30Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 404, { now: NOW, staleAfterSeconds: 300 });
+
+      expect(context.session).toMatchObject({ raw_status: "idle", status: "idle", stale_gap_seconds: 30 });
+      expect(context.candidates).toContainEqual(expect.objectContaining({
+        diagnosis_code: "session_no_recent_progress",
+        reason: "session is idle while issue run remains open"
+      }));
+    } finally {
+      db.close();
+    }
+  });
+
   test("classifies active, ended, and unknown session/run states from agent_sessions and issue_runs", async () => {
     const db = await fixtureDb();
     try {

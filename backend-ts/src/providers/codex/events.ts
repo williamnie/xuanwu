@@ -46,6 +46,9 @@ function applyFields(event: ProviderEvent, method: string, raw: Record<string, u
     case "turn/completed":
       applyTurnCompletedFields(event, raw);
       return;
+    case "thread/status/changed":
+      event.status = threadLifecycleStatus(raw);
+      return;
     case "error":
     case "protocol/error":
     case "process/stderr":
@@ -100,6 +103,12 @@ function applyItemLifecycleFields(event: ProviderEvent, method: string, raw: Rec
       event.text = method === "item/completed" ? patchText(item) : "";
       return;
   }
+}
+
+
+function threadLifecycleStatus(raw: Record<string, unknown>): string {
+  const status = recordField(raw, "status");
+  return stringField(status, "type") || stringField(raw, "status");
 }
 
 function applyTurnCompletedFields(event: ProviderEvent, raw: Record<string, unknown>): void {

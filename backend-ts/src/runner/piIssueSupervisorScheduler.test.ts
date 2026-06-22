@@ -195,6 +195,34 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
+  test("signals an idle executor session immediately instead of waiting for stale timeout", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-idle-project-"));
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["session.resume_followup"],
+        project_id: "demo",
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, { issueID: 505, projectID: "demo", sessionUpdatedAt: "2026-06-10T07:59:30Z", threadID: "thread-505", turnID: "turn-505" });
+      db.sqlite.run("update agent_sessions set status='idle' where session_key='codex:thread-505'");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+      const [event] = listPiGuardianEvents(db, { projectId: "demo" });
+
+      expect(result).toMatchObject({ decisions: 0, failed: 0, scanned: 1, signaled: 1, skipped: 1 });
+      expect(event).toMatchObject({ event_type: "guardian.supervisor.candidate", issue_id: 505 });
+      expect(JSON.parse(event?.normalized_payload_json ?? "{}")).toMatchObject({
+        diagnosis_code: "session_no_recent_progress",
+        ready: true,
+        session_status: "idle",
+        stale_gap_seconds: 30
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not mark a normally active executor session as stale", async () => {
     const db = await fixtureDb();
     try {
