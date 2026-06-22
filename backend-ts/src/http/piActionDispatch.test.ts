@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createPiAction, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
+import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
 
@@ -225,6 +227,57 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(listIssueRuns(db, 307).at(-1)).toEqual(beforeRun);
       expect(listIssueEvents(db, 307).map((event) => event.type)).toEqual(["issue.supervisor_decision"]);
     } finally {
+      db.close();
+    }
+  });
+
+  test("needs_user.escalate writes a redacted comment notification and app event once", async () => {
+    const db = await fixtureDb();
+    const bus = new EventBus();
+    const events: unknown[] = [];
+    const stop = bus.observe((event) => events.push(event));
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 421, projectID: "demo", status: "in_progress" });
+      const action = createPiAction(db, {
+        action_type: "needs_user.escalate",
+        id: "needs-user-action",
+        issue_id: 421,
+        payload_json: JSON.stringify({
+          diagnosis_code: "provider_auth_failed",
+          issue_id: 421,
+          message: "Codex auth failed TOKEN=secret-value\n    at leak (/Users/xiaobei/private/app.ts:1)",
+          next_step: "Refresh provider credentials and retry issue #421.",
+          provider: "codex"
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await dispatchPiAction({ bus, database: db }, action);
+      await dispatchPiAction({ bus, database: db }, action);
+
+      const comments = listIssueEvents(db, 421).filter((item) => item.type === "issue.comment");
+      const notifications = listNotifications(db, { projectID: "demo", unreadOnly: true });
+      const text = JSON.stringify({ comments, events, notifications });
+      expect(comments).toHaveLength(1);
+      expect(JSON.parse(comments[0]?.payload ?? "{}")).toMatchObject({
+        author: "agent",
+        body: expect.stringContaining("Provider：codex")
+      });
+      expect(notifications).toMatchObject([
+        expect.objectContaining({ event: "pi.needs_user", issue_id: 421, read_at: "" })
+      ]);
+      expect(events).toMatchObject([
+        expect.objectContaining({ type: "pi.needs_user", issueId: 421, projectId: "demo" })
+      ]);
+      expect(text).toContain("provider_auth_failed");
+      expect(text).toContain("Refresh provider credentials");
+      expect(text).not.toContain("secret-value");
+      expect(text).not.toContain("/Users/xiaobei");
+      expect(text).not.toContain("at leak");
+    } finally {
+      stop();
       db.close();
     }
   });

@@ -12,6 +12,7 @@ import {
 import { recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 
 export type PiGuardianActionDispatchInput = {
+  bus?: PiActionDispatchContext["bus"];
   database: RunnerDatabase;
   limit?: number;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
@@ -25,7 +26,7 @@ export type PiGuardianActionDispatchResult = {
 };
 
 const DEFAULT_LIMIT = 20;
-const EXECUTABLE_ACTIONS = new Set(["issue.retry", "issue.retry_after", "session.resume_followup"]);
+const EXECUTABLE_ACTIONS = new Set(["issue.retry", "issue.retry_after", "needs_user.escalate", "session.resume_followup"]);
 
 export async function dispatchApprovedGuardianActions(
   input: PiGuardianActionDispatchInput
@@ -71,7 +72,7 @@ function ready(action: PiAction): boolean {
 }
 
 function dispatchContext(input: PiGuardianActionDispatchInput): PiActionDispatchContext {
-  return { database: input.database, providers: input.providers };
+  return { bus: input.bus, database: input.database, providers: input.providers };
 }
 
 function boundedLimit(value: number): number {

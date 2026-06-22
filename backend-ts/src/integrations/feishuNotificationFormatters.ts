@@ -1,10 +1,8 @@
 import type { Issue } from "../db/repositories/issues.ts";
 import type { PiMemoryItem } from "../db/repositories/pi.ts";
 import { containsSensitiveMemoryContent } from "../pi/memoryPolicy.ts";
-import { redactSensitiveText } from "../util/redact.ts";
+import { redactedUserVisibleText } from "../util/redact.ts";
 
-const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
-const STACK_LINE_PATTERN = /^\s*at\s+\S+/;
 const SUMMARY_LIMIT = 180;
 
 export function formatIssueStatusNotification(issue: Issue): string {
@@ -47,6 +45,27 @@ export function formatPiActionPendingNotification(input: { actionID: string; act
   ].join("\n");
 }
 
+export function formatPiNeedsUserNotification(input: {
+  diagnosis: string;
+  issueID?: number;
+  message: string;
+  nextStep: string;
+  provider: string;
+}): string {
+  const issue = input.issueID ? `issue #${input.issueID}` : "当前任务";
+  const provider = safeSummary(input.provider || "unknown", 80);
+  const diagnosis = safeSummary(input.diagnosis || "needs_user", 100);
+  const message = safeSummary(input.message || "PI 判断当前无法继续自动恢复。", SUMMARY_LIMIT);
+  const nextStep = safeSummary(input.nextStep || "请查看 Runner issue 并补充授权、凭证或下一步处理方式。", SUMMARY_LIMIT);
+  return [
+    `Pi：${issue} 需要用户介入。`,
+    `Provider：${provider}`,
+    `诊断：${diagnosis}`,
+    `摘要：${message}`,
+    `下一步：${nextStep}`
+  ].join("\n");
+}
+
 function startText(issueID: number, title: string, status: string): string {
   return [
     `Pi：issue #${issueID} ${status}：${title}`,
@@ -83,13 +102,7 @@ function memoryContent(item: PiMemoryItem): string {
 }
 
 function safeSummary(value: unknown, maxRunes: number): string {
-  const safe = redactSensitiveText(cleanString(value))
-    .split(/\r?\n/)
-    .filter((line) => !STACK_LINE_PATTERN.test(line))
-    .join(" ")
-    .replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]")
-    .replace(/\s+/g, " ")
-    .trim();
+  const safe = redactedUserVisibleText(cleanString(value));
   const runes = [...safe];
   return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
 }

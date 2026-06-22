@@ -25,7 +25,8 @@ import { redactSensitiveText } from "../util/redact.ts";
 import {
   formatApprovalNotification,
   formatMemoryCandidateNotification,
-  formatPiActionPendingNotification
+  formatPiActionPendingNotification,
+  formatPiNeedsUserNotification
 } from "./feishuNotificationFormatters.ts";
 import {
   alreadyQueuedFeishuNotification,
@@ -43,6 +44,7 @@ import {
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
 const MEMORY_NOTIFY_TYPE = "feishu_memory_candidate_notification";
 const PI_ACTION_NOTIFY_TYPE = "feishu_pi_action_pending_notification";
+const PI_NEEDS_USER_NOTIFY_TYPE = "feishu_pi_needs_user_notification";
 
 export {
   getPiApprovalRequest,
@@ -80,6 +82,10 @@ export function attachFeishuNotificationObservers(input: {
         const result = queueFeishuPiActionPendingNotification(input.database, event);
         dispatchIfQueued(input, result);
       }
+      if (event.type === "pi.needs_user") {
+        const result = queueFeishuPiNeedsUserNotification(input.database, event);
+        dispatchIfQueued(input, result);
+      }
       if (event.type === "codex.event" && event.method === "approval/requested") {
         const result = queueFeishuApprovalNotification(input.database, event, {
           config: input.config,
@@ -104,6 +110,31 @@ function dispatchIfQueued(input: {
   if (!result.queued || !input.config) return;
   const sender = input.sender ?? createFeishuMessageClient({ config: input.config });
   void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
+}
+
+export function queueFeishuPiNeedsUserNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+  const payload = parseObject(event.payload);
+  const issueID = event.issueId ?? positiveID(payload.issue_id);
+  const notifyID = safeText(payload.action_id) || needsUserNotifyID(event, payload);
+  if (notifyID === "") return { queued: false, reason: "missing_needs_user_id" };
+  if (alreadyQueuedFeishuNotification(db, PI_NEEDS_USER_NOTIFY_TYPE, notifyID)) return { queued: false, reason: "duplicate" };
+  const issue = issueID > 0 ? getIssue(db, issueID) : null;
+  const target = issue ? feishuTargetForIssue(db, issue.id) : null;
+  const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
+  const finalTarget = target ?? fallback;
+  if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
+  createFeishuNotificationDraft(db, issue ?? { id: issueID, project_id: safeText(event.projectId) }, finalTarget, {
+    content: formatPiNeedsUserNotification({
+      diagnosis: safeText(payload.diagnosis) || safeText(payload.reason),
+      issueID: issueID || undefined,
+      message: safeText(payload.message) || safeText(event.text),
+      nextStep: safeText(payload.next_step) || safeText(payload.nextStep),
+      provider: safeText(payload.provider)
+    }),
+    notifyID,
+    type: PI_NEEDS_USER_NOTIFY_TYPE
+  });
+  return { queued: true, reason: "queued" };
 }
 
 export function queueFeishuMemoryCandidateNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
@@ -214,6 +245,21 @@ function isRunnerChatEnqueueAction(db: RunnerDatabase, payload: Record<string, u
 function isRunnerChatSource(value: unknown): boolean {
   const source = safeText(value);
   return source === "feishu_runner_chat" || source === "runner_chat";
+}
+
+function positiveID(value: unknown): number {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
+  const parsed = Number.parseInt(safeText(value), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function needsUserNotifyID(event: AppEvent, payload: Record<string, unknown>): string {
+  return [
+    "needs_user",
+    safeText(event.projectId) || safeText(payload.project_id),
+    String(event.issueId ?? positiveID(payload.issue_id)),
+    safeText(payload.reason) || safeText(payload.diagnosis)
+  ].join(":");
 }
 
 function issueForApproval(db: RunnerDatabase, event: AppEvent): Issue | null {

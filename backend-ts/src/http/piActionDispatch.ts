@@ -18,6 +18,7 @@ import type { EventBus } from "../events/bus.ts";
 import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } from "../providers/types.ts";
 import { dispatchSupervisorPiAction } from "./piSupervisorActionDispatch.ts";
 import { isRunnerChatSource } from "../pi/runnerChatAuthorization.ts";
+import { dispatchNeedsUserEscalation } from "../notifications/piNeedsUserAction.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -53,10 +54,7 @@ export async function dispatchPiAction(
     case "agent.workflow_request":
       return createWorkflowIssue(context, action, payload);
     case "needs_user.escalate":
-      return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), {
-        author: "agent",
-        body: cleanString(payload.body) || cleanString(payload.message)
-      });
+      return dispatchNeedsUserEscalation(context, action, payload);
     case "issue.retry":
     case "issue.retry_after":
     case "issue.supervisor_decision":

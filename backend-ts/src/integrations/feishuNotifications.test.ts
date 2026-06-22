@@ -12,7 +12,7 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "../http/server.ts";
 import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
-import { queueFeishuIssueStatusNotification } from "./feishuNotifications.ts";
+import { queueFeishuIssueStatusNotification, queueFeishuPiNeedsUserNotification } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];
 const BASE_URL = "http://127.0.0.1:3008";
@@ -126,6 +126,65 @@ describe("Feishu notification queue", () => {
         text: "Pi：issue #1 已完成：Feishu task\n验证状态：已标记完成，未附加验证摘要。"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("queues one Feishu needs-user draft for a linked issue and dedupes repeats", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = linkedFeishuIssue(db);
+      const event = {
+        issueId: issueID,
+        payload: JSON.stringify({
+          action_id: "needs-user-action",
+          diagnosis: "provider_auth_failed",
+          message: "TOKEN=secret failed at /Users/xiaobei/app.ts\n    at leak (/tmp/stack.js:1)",
+          next_step: "Refresh provider credentials and retry.",
+          provider: "codex"
+        }),
+        projectId: "demo",
+        type: "pi.needs_user"
+      };
+
+      const first = queueFeishuPiNeedsUserNotification(db, event);
+      const second = queueFeishuPiNeedsUserNotification(db, event);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      const text = JSON.stringify(outbox);
+
+      expect(first).toMatchObject({ queued: true, reason: "queued" });
+      expect(second).toMatchObject({ queued: false, reason: "duplicate" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        content: expect.stringContaining("issue #1 需要用户介入"),
+        issue_id: issueID,
+        target_chat_id: "oc_group"
+      });
+      expect(text).toContain("provider_auth_failed");
+      expect(text).toContain("Refresh provider credentials");
+      expect(text).not.toContain("secret");
+      expect(text).not.toContain("/Users/xiaobei");
+      expect(text).not.toContain("at leak");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("skips Feishu needs-user notification without a linked target", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issue = createIssue(db, { project_id: "demo", title: "Unlinked task", status: "in_progress" });
+
+      const result = queueFeishuPiNeedsUserNotification(db, {
+        issueId: issue.id,
+        payload: JSON.stringify({ action_id: "needs-user-unlinked", message: "Needs user" }),
+        projectId: "demo",
+        type: "pi.needs_user"
+      });
+
+      expect(result).toMatchObject({ queued: false, reason: "missing_feishu_target" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
     } finally {
       db.close();
     }

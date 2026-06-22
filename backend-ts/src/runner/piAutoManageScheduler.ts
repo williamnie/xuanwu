@@ -145,6 +145,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const guardianActionDispatch = await dispatchApprovedGuardianActions({
+    bus: input.bus,
     database: input.database,
     providers: input.providers
   });

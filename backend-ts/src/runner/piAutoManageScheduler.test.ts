@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
+import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
+import { listNotifications } from "../db/repositories/notifications.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 
@@ -288,6 +290,52 @@ describe("PI auto-manage scheduler", () => {
         status: "completed"
       });
       expect(listIssueSupervisorEvents(db, { issueId: 519 }).map((event) => event.event_type)).toContain("result");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("executes approved Guardian needs-user escalation during schedule layer cycle", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "demo", 0);
+      db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
+        values (611, 'demo', 'Needs user issue', 'in_progress', ?, ?)`,
+      ["2026-06-22T08:00:00Z", "2026-06-22T08:35:07Z"]);
+      createPiAction(db, {
+        action_type: "needs_user.escalate",
+        gate_decision: "execute",
+        id: "guardian-needs-user",
+        issue_id: 611,
+        payload_json: JSON.stringify({
+          diagnosis_code: "provider_auth_failed",
+          issue_id: 611,
+          message: "Provider unavailable",
+          next_step: "Refresh provider credentials.",
+          provider: "codex"
+        }),
+        project_id: "demo",
+        source: "pi_guardian_orchestrator",
+        status: "approved"
+      });
+
+      const result = await runScheduleLayerCycle({
+        database: db,
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false,
+        watchdogNow: NOW
+      });
+
+      expect(result.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(listPiActions(db, { issueId: 611 })[0]).toMatchObject({
+        action_type: "needs_user.escalate",
+        status: "completed"
+      });
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toMatchObject([
+        expect.objectContaining({ event: "pi.needs_user", issue_id: 611 })
+      ]);
+      expect(listIssueEvents(db, 611).filter((event) => event.type === "issue.comment")).toHaveLength(1);
     } finally {
       db.close();
     }

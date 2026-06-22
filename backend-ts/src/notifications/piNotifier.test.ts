@@ -3,9 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listNotifications } from "../db/repositories/notifications.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ProjectFinding } from "../pi/projectFindings.ts";
-import { publishNeedsUserFindingNotifications } from "./piNotifier.ts";
+import { publishNeedsUserFindingNotifications, publishPiNeedsUserNotification } from "./piNotifier.ts";
 
 const tempRoots: string[] = [];
 
@@ -106,6 +107,56 @@ describe("PI needs-user notification engine", () => {
         { event: "pi.needs_user", issue_id: 7, project_id: "demo", read_at: "" }
       ]);
     } finally {
+      database.close();
+    }
+  });
+
+  test("dedupes action needs-user notifications by action id", async () => {
+    const database = await openFixtureDatabase();
+    const bus = new EventBus();
+    const events: unknown[] = [];
+    const stop = bus.observe((event) => events.push(event));
+    try {
+      insertProject(database, "demo");
+      insertIssue(database, 7, "demo");
+      const input = {
+        actionID: "needs-user-action",
+        bus,
+        database,
+        diagnosis: "provider_auth_failed",
+        issue: { id: 7, project_id: "demo", status: "failed", title: "Needs user" },
+        message: "Provider failed TOKEN=secret at /Users/secret/log.ts\n    at leak (/tmp/stack.js:1)",
+        nextStep: "Refresh provider credentials and retry.",
+        project: { id: "demo", name: "Demo" },
+        provider: "codex"
+      };
+
+      const first = publishPiNeedsUserNotification({ ...input, now: new Date("2026-01-01T00:00:00Z") });
+      const duplicate = publishPiNeedsUserNotification({ ...input, now: new Date("2026-01-01T00:10:00Z") });
+      const nextAction = publishPiNeedsUserNotification({
+        ...input,
+        actionID: "needs-user-action-2",
+        now: new Date("2026-01-01T00:11:00Z")
+      });
+      const text = JSON.stringify({ events, first, rows: listNotifications(database, { unreadOnly: true }) });
+
+      expect(first).toMatchObject({
+        action_id: "needs-user-action",
+        event: "pi.needs_user",
+        issue_id: 7,
+        provider: "codex",
+        reason: "provider_auth_failed"
+      });
+      expect(duplicate).toBeNull();
+      expect(nextAction).toMatchObject({ action_id: "needs-user-action-2" });
+      expect(events).toHaveLength(2);
+      expect(listNotifications(database, { unreadOnly: true })).toHaveLength(2);
+      expect(text).toContain("Refresh provider credentials");
+      expect(text).not.toContain("secret");
+      expect(text).not.toContain("/Users/secret");
+      expect(text).not.toContain("at leak");
+    } finally {
+      stop();
       database.close();
     }
   });
