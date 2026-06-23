@@ -180,7 +180,7 @@ describe("Bun in-progress issue recovery", () => {
     }
   });
 
-  test("keeps an already deferred startup failure in progress across recovery scans", async () => {
+  test("requeues an already deferred startup failure that never created a provider session", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, { id: "demo", provider: "claude" });
@@ -205,19 +205,22 @@ describe("Bun in-progress issue recovery", () => {
 
       const result = await recoverInProgressIssues({ database: db, providers: {} });
 
-      expect(result).toEqual({ deferred: 1, failed: 0, recovered: 0, requeued: 0 });
-      expect(getIssue(db, issueId)).toMatchObject({
-        status: "in_progress",
-        error: "codex app-server request timed out after 10000ms: initialize"
-      });
-      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
-        status: "in_progress",
-        ended_at: "",
-        error: ""
+      const issue = getIssue(db, issueId);
+      const run = listIssueRuns(db, issueId).at(-1);
+      expect(result).toEqual({ deferred: 0, failed: 0, recovered: 0, requeued: 1 });
+      expect(issue).toMatchObject({ status: "todo", error: "" });
+      expect(run).toMatchObject({
+        status: "todo",
+        ended_at: expect.stringMatching(/Z$/),
+        error: "",
+        exit_reason: "status_changed",
+        provider_session_id: "",
+        provider_turn_id: ""
       });
       expect(listEventTypes(db)).toEqual([
         "issue.provider_deferred",
-        "issue.recovery_deferred"
+        "issue.status_changed",
+        "issue.recovery_requeued"
       ]);
     } finally {
       db.close();

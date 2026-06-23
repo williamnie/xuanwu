@@ -24,6 +24,11 @@ describe("PI issue supervisor actions", () => {
     const provider = new SupervisorProvider();
     try {
       insertProject(db, "demo");
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["session.resume_followup"],
+        project_id: "demo",
+        supervisor_mode: "propose_only"
+      });
       insertIssueRunSession(db, { issueID: 305, projectID: "demo", sessionID: "thread-305", turnID: "turn-old" });
 
       const result = await applyIssueSupervisorDecisionActions({

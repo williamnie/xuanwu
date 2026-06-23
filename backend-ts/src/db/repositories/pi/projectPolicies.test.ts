@@ -34,7 +34,7 @@ describe("project PI policy repository", () => {
         allowed_actions_json: "[]",
         allowed_mcp_capabilities_json: "[]",
         allowed_skill_intents_json: "[]",
-        allowed_supervisor_actions_json: "[\"session.resume_followup\"]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
         default_mode: "manual",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,

@@ -223,22 +223,22 @@ describe("PI Command Center API", () => {
           },
           supervisor: {
             not_all_issues: true,
-            reason: expect.stringContaining("watchdog"),
+            reason: expect.stringContaining("自动恢复"),
             targets: [expect.objectContaining({
-              allowed_actions: [],
-              recovery_state: "watchdog",
-              state_text: expect.stringContaining("watchdog"),
-              supervisor_mode: "watchdog"
+              allowed_actions: ["session.resume_followup", "issue.retry_after", "issue.retry", "needs_user.escalate"],
+              recovery_state: "auto_recoverable",
+              state_text: "可自动恢复 allowlist 中的动作",
+              supervisor_mode: "autonomous"
             })]
           }
         }
       });
       expect(body.supervisor).toMatchObject({
         policy: {
-          automatic_projects: 0,
+          automatic_projects: 1,
           needs_approval_projects: 0,
           targets: [expect.objectContaining({
-            recovery_state: "watchdog"
+            recovery_state: "auto_recoverable"
           })]
         }
       });

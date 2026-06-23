@@ -37,15 +37,18 @@ export const issueSupervisorRecoveryMigration: SqlMigration = {
   sql: "",
   apply(sqlite) {
     sqlite.run(EVENT_TABLE_SQL);
-    addPolicyColumn(sqlite, "allowed_supervisor_actions_json", "text not null default '[\"session.resume_followup\"]'");
+    addPolicyColumn(sqlite, "allowed_supervisor_actions_json", `text not null default '${DEFAULT_SUPERVISOR_ACTIONS_JSON}'`);
     addPolicyColumn(sqlite, "supervisor_mode", "text not null default 'autonomous'");
     addPolicyColumn(sqlite, "supervisor_cooldown_seconds", "integer not null default 300");
     addPolicyColumn(sqlite, "supervisor_max_recoveries_per_issue", "integer not null default 2");
     addPolicyColumn(sqlite, "supervisor_max_recoveries_per_project_per_hour", "integer not null default 10");
     addPolicyColumn(sqlite, "supervisor_rate_limit_wait_policy", "text not null default 'respect_retry_after'");
-    upgradeLegacySupervisorDefaults(sqlite);
+    upgradeSupervisorDefaults(sqlite);
   }
 };
+
+const DEFAULT_SUPERVISOR_ACTIONS_JSON =
+  '["session.resume_followup","issue.retry_after","issue.retry","needs_user.escalate"]';
 
 function addPolicyColumn(sqlite: SQLiteDatabase, name: string, definition: string): void {
   if (tableColumns(sqlite, "project_pi_policies").has(name)) return;
@@ -56,9 +59,11 @@ function tableColumns(sqlite: SQLiteDatabase, table: string): Set<string> {
   return new Set(sqlite.query<{ name: string }, []>(`pragma table_info(${table})`).all().map((row) => row.name));
 }
 
-function upgradeLegacySupervisorDefaults(sqlite: SQLiteDatabase): void {
+function upgradeSupervisorDefaults(sqlite: SQLiteDatabase): void {
   sqlite.run(`update project_pi_policies
-    set allowed_supervisor_actions_json='["session.resume_followup"]',
+    set allowed_supervisor_actions_json=?,
       supervisor_mode='autonomous'
-    where supervisor_mode='watchdog' and allowed_supervisor_actions_json='[]'`);
+    where supervisor_mode in ('off', 'watchdog')
+      or allowed_supervisor_actions_json in ('[]', '["session.resume_followup"]')`,
+    [DEFAULT_SUPERVISOR_ACTIONS_JSON]);
 }

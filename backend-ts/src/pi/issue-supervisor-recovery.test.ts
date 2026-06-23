@@ -137,7 +137,7 @@ describe("PI issue supervisor recovery contract", () => {
     const db = await openFixtureDatabase();
     try {
       expect(readProjectPiPolicy(db, "demo")).toMatchObject({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\"]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
@@ -227,7 +227,7 @@ describe("PI issue supervisor recovery contract", () => {
     }
   });
 
-  test("upgrades legacy watchdog-only supervisor defaults without overriding explicit opt-out", async () => {
+  test("upgrades existing supervisor policies to default autonomous recovery", async () => {
     const db = await openFixtureDatabase();
     try {
       db.sqlite.run(`insert into project_pi_policies
@@ -256,12 +256,12 @@ describe("PI issue supervisor recovery contract", () => {
       issueSupervisorRecoveryMigration.apply?.(db.sqlite);
 
       expect(readProjectPiPolicy(db, "legacy-default")).toMatchObject({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\"]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
         supervisor_mode: "autonomous"
       });
       expect(readProjectPiPolicy(db, "explicit-off")).toMatchObject({
-        allowed_supervisor_actions_json: "[]",
-        supervisor_mode: "off"
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
+        supervisor_mode: "autonomous"
       });
     } finally {
       db.close();
@@ -303,7 +303,7 @@ describe("PI issue supervisor recovery contract", () => {
           supervisor_rate_limit_wait_policy
         from project_pi_policies where project_id='legacy-demo'
       `).get()).toEqual({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\"]",
+        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,

@@ -37,13 +37,13 @@ export async function recoverInProgressIssues(input: RecoveryInput): Promise<Rec
 async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<keyof RecoveryResult> {
   const session = recoverableSession(issue);
   if (!session) {
-    if (hasProviderDeferredFailure(input.database, issue)) {
-      recordExistingProviderDeferred(input.database, issue);
-      return "deferred";
-    }
     if (canRequeueUnstartedClaim(issue)) {
       requeueUnstartedClaim(input.database, issue);
       return "requeued";
+    }
+    if (hasProviderDeferredFailure(input.database, issue)) {
+      recordExistingProviderDeferred(input.database, issue);
+      return "deferred";
     }
     markRecoveryFailed(input.database, issue.id, "missing provider_session_id; issue marked failed after restart");
     return "failed";

@@ -55,7 +55,12 @@ const TIMEOUT_ACTIONS = new Set(["escalate", "request_verifier"]);
 const DEFAULT_RETRY: ProjectPiRetryPolicy = { enabled: false, max_attempts: 0, backoff_minutes: [] };
 const DEFAULT_CONCURRENCY: ProjectPiConcurrencyPolicy = { max_parallel_issues: 1, max_parallel_pi_cycles: 1 };
 const DEFAULT_VERIFICATION: ProjectPiVerificationPolicy = { pending_timeout_minutes: 24 * 60, on_timeout: "escalate", evidence_required: true };
-const DEFAULT_SUPERVISOR_ACTIONS = ["session.resume_followup"];
+const DEFAULT_SUPERVISOR_ACTIONS = [
+  "session.resume_followup",
+  "issue.retry_after",
+  "issue.retry",
+  "needs_user.escalate"
+];
 const ACTION_ID_RE = /^[a-z0-9_.:-]+$/;
 const MAX_ACTION_ID_LENGTH = 128;
 
