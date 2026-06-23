@@ -362,8 +362,6 @@ export const api = {
     body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
   }),
 
-  getPiCommandCenter: () => request('/api/pi/command-center'),
-
   getPiSkills: () => request('/api/pi/skills'),
 
   getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities'),
