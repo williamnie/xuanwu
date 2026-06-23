@@ -16,7 +16,7 @@ PI Agent 应成为真正的 issue supervisor：不仅创建/拆解/排队 issue�
 - 读取 issue、run、session、recent events、provider error、usage/rate-limit、workspace 状态摘要。
 - 由 PI 根据上下文生成恢复策略和恢复消息，不写死“继续”。
 - 支持等待到 provider 建议的恢复时间后再行动，例如 429 `retry_after` / reset time。
-- 所有 PI 干预都有 policy、cooldown、retry budget、audit trail 和 Command Center 可见性。
+- 所有 PI 干预都有 policy、cooldown、retry budget、audit trail，并在 issue detail / Feishu IM 审批链路中可追踪。
 - 避免自动撞墙：同一 issue/session 短时间反复失败时转 `needs_user` 或 `blocked`。
 
 非目标：
@@ -309,6 +309,9 @@ PI 可用工具：
 
 显示：
 
+- 审批主路径：Feishu IM interactive card；issue detail 保留 provider approval / supervisor state 的备份可视入口。
+- Settings 只保留 runtime doctor、PI Agent、PI Memory 与 Feishu 设置；Guardian alert 统一走全局 banner。
+
 - Supervisor diagnosis
 - Last provider error
 - Retry-after countdown
@@ -316,7 +319,7 @@ PI 可用工具：
 - PI decision rationale
 - Executed recovery message
 
-### 8.2 Command Center / heartbeat timeline
+### 8.2 Issue detail / heartbeat timeline
 
 新增 timeline stage：
 
@@ -411,7 +414,7 @@ Night summary/report 增加：
 ### P5 UI / Reports
 
 - Issue detail supervisor panel。
-- Command Center timeline stages。
+- Issue detail heartbeat timeline stages。
 - reports/notifications 汇总。
 
 ### P6 Hardening
@@ -474,7 +477,7 @@ curl -fsS -X PATCH "http://${CODEX_RUNNER_ADDR}/api/projects/<project-id>/pi-pol
   -d '{"supervisor_mode":"propose_only","allowed_supervisor_actions":[]}'
 ```
 
-如需停止整个 PI project loop，使用已有 project PI control API / Command Center pause；不要直接改 SQLite。
+如需停止整个 PI project loop，使用已有 project PI control API；审批与人工介入主路径是 Feishu IM，issue detail 作为备份入口，不要直接改 SQLite。
 
 ### 12.4 排查
 

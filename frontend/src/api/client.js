@@ -447,31 +447,6 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({}),
   }),
-
-  getProjectPiSettings: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`),
-
-  updateProjectPiSettings: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-settings`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  }),
-
-  getProjectPiPolicy: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi-policy`),
-
-  updateProjectPiPolicy: (id, updates) => request(`/api/projects/${encodeURIComponent(id)}/pi-policy`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  }),
-
-  pauseProjectPiAutonomousMode: (id, reason = 'paused from command center') => request(`/api/projects/${encodeURIComponent(id)}/pi/pause`, {
-    method: 'POST',
-    body: JSON.stringify({ reason }),
-  }),
-
-  resumeProjectPiAutonomousMode: (id) => request(`/api/projects/${encodeURIComponent(id)}/pi/resume`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-
   getPiDelegations: ({ projectId = '', status = '' } = {}) => {
     const params = new URLSearchParams();
     if (projectId) params.append('project_id', projectId);
