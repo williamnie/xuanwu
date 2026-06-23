@@ -2,7 +2,6 @@ import {
   CalendarClock,
   ChevronLeft,
   BotMessageSquare,
-  Command,
   FolderGit2,
   Layers,
   ListTodo,
@@ -122,16 +121,6 @@ export default function AppSidebar({
       )}
 
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <button
-          className={`nav-item nav-item-secondary ${currentPage === 'pi-command-center' ? 'active' : ''}`}
-          onClick={() => navigateTo('pi-command-center')}
-          title="PI 诊断与高级设置"
-          type="button"
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Command size={16} /> PI 诊断
-          </span>
-        </button>
         <div
           className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
           style={{ paddingLeft: '8px', cursor: 'pointer' }}

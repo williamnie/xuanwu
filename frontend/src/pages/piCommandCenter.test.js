@@ -14,17 +14,16 @@ const reportsSource = readFileSync(new URL('./PiReportsPanel.jsx', import.meta.u
 const guardianPreferencesSource = readFileSync(new URL('./PiGuardianPreferencesPanel.jsx', import.meta.url), 'utf8');
 const sessionsClientCss = readFileSync(new URL('./sessions/SessionsClient.css', import.meta.url), 'utf8');
 
-test('PI diagnostics page remains routed but is downgraded in navigation', () => {
-  assert.ok(existsSync(pageUrl), 'PiCommandCenter.jsx should exist');
-  assert.match(appSource, /import PiCommandCenter from '\.\/pages\/PiCommandCenter'/);
-  assert.match(appSource, /currentPage === 'pi-command-center'/);
-  assert.match(sidebarSource, /pi-command-center/);
-  assert.match(sidebarSource, /PI 诊断/);
-  assert.match(sidebarSource, /nav-item-secondary/);
+test('PI diagnostics top-level entry is removed from App and Sidebar', () => {
+  assert.ok(existsSync(pageUrl), 'PiCommandCenter.jsx should not be deleted by entry cleanup');
+  assert.doesNotMatch(appSource, /import PiCommandCenter from '\.\/pages\/PiCommandCenter'/);
+  assert.doesNotMatch(appSource, /currentPage === 'pi-command-center'/);
+  assert.doesNotMatch(appSource, /<PiCommandCenter/);
+  assert.doesNotMatch(sidebarSource, /pi-command-center/);
+  assert.doesNotMatch(sidebarSource, /PI 诊断/);
+  assert.match(sidebarSource, /currentPage === 'settings'/);
   assert.doesNotMatch(sidebarSource, /PI 控制台/);
   assert.doesNotMatch(sidebarSource, /Command Center/);
-  assert.ok(sidebarSource.indexOf("currentPage === 'issues'") < sidebarSource.indexOf("currentPage === 'pi-command-center'"));
-  assert.ok(sidebarSource.indexOf("currentPage === 'pi-command-center'") < sidebarSource.indexOf("currentPage === 'settings'"));
 });
 
 test('PI Command Center renders Chinese status cards with loading and error states', () => {

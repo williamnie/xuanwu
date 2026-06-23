@@ -8,7 +8,6 @@ import Issues from './pages/Issues';
 import IssueDetail from './pages/IssueDetail';
 import Sessions from './pages/Sessions';
 import PiChat from './pages/PiChat';
-import PiCommandCenter from './pages/PiCommandCenter';
 import Cron from './pages/Cron';
 import Settings from './pages/Settings';
 import AppSidebar from './components/AppSidebar';
@@ -294,8 +293,6 @@ export default function App() {
             />
           ) : currentPage === 'pi-chat' ? (
             <PiChat navigateTo={navigateTo} />
-          ) : currentPage === 'pi-command-center' ? (
-            <PiCommandCenter />
           ) : currentPage === 'projects' ? (
             <Projects />
           ) : currentPage === 'cron' ? (
