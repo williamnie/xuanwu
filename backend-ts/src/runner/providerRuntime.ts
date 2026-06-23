@@ -5,6 +5,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
+import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
@@ -95,11 +96,20 @@ function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEv
   const persisted = recordIssueLogEvent(input.database, input.issueId, event);
   syncProviderApprovalRequest(input, event, activeRunID);
   publishIssueLog(input, event, persisted);
-  if (!event.session) return;
-  persistRuntime({
-    db: input.database, input, provider: event.session.provider, session: event.session,
-    status: eventSessionStatus(event), metadata: runtimeMetadata(input, { source: "provider_event" }),
-    issueRunId: activeRunID
+  if (event.session) {
+    persistRuntime({
+      db: input.database, input, provider: event.session.provider, session: event.session,
+      status: eventSessionStatus(event), metadata: runtimeMetadata(input, { source: "provider_event" }),
+      issueRunId: activeRunID
+    });
+  }
+  signalProviderTerminalEvent({
+    activeRunID,
+    database: input.database,
+    event,
+    issueEventID: persisted.id,
+    issueID: input.issueId,
+    projectID: input.projectId
   });
 }
 

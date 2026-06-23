@@ -24,6 +24,10 @@ import {
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
+import {
+  signalOpenRunTerminalProviderErrors,
+  type ProviderTerminalBackfillSummary
+} from "./providerTerminalSignals.ts";
 
 export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: string };
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
@@ -36,6 +40,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   guardianActionDispatch: PiGuardianActionDispatchResult;
   missedIntentSweep: GuardianMissedIntentSweepResult;
   guardianDecisions: GuardianDecisionOrchestratorSummary;
+  providerTerminalSignals: ProviderTerminalBackfillSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
   watchdog: PiGuardianWatchdogSummary;
 };
@@ -143,6 +148,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     runProjectCycle: input.runProjectCycle
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
+  const providerTerminalSignals = signalOpenRunTerminalProviderErrors(input.database);
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const guardianActionDispatch = await dispatchApprovedGuardianActions({
     bus: input.bus,
@@ -167,6 +173,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     guardianActionDispatch,
     guardianDecisions,
     missedIntentSweep,
+    providerTerminalSignals,
     supervisor,
     watchdog
   };

@@ -70,6 +70,30 @@ describe("provider error parser", () => {
     });
   });
 
+  test("classifies Codex serverOverloaded capacity errors as transient rate limits", () => {
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "error",
+      status: "failed",
+      error: "Selected model is at capacity. Please try a different model.",
+      raw: {
+        method: "error",
+        payload: JSON.stringify({
+          error: {
+            codexErrorInfo: "serverOverloaded",
+            message: "Selected model is at capacity. Please try a different model."
+          },
+          willRetry: false
+        })
+      }
+    }, { now: NOW })).toMatchObject({
+      category: "rate_limit",
+      diagnosis_code: "provider_rate_limited",
+      provider: "codex",
+      raw_summary: "Selected model is at capacity. Please try a different model."
+    });
+  });
+
   test("classifies 429 without retry-after as rate limited but leaves wait window to policy cooldown", () => {
     expect(parseProviderEventError({
       provider: "codex",

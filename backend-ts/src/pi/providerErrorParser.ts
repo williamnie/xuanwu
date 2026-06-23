@@ -295,7 +295,7 @@ function classify(state: ParseState): ProviderErrorCategory {
 }
 
 function hasRateLimitText(value: string): boolean {
-  return /rate limit|too many requests|quota temporarily unavailable/.test(value);
+  return /rate limit|too many requests|quota temporarily unavailable|at capacity|server ?overloaded|serveroverloaded|overloaded/.test(value);
 }
 
 function diagnosisCode(category: ProviderErrorCategory, state: ParseState): PiSupervisorDiagnosisCode | undefined {
