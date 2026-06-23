@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   updatePiGuardianAlert,
+  getPiRunGroup,
   type PiGuardianAlert
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
@@ -15,7 +16,7 @@ import {
   FeishuClientError,
   type FeishuMessageClient
 } from "./feishuClient.ts";
-import { feishuTargetForIssue } from "./feishuNotificationTargets.ts";
+import { feishuTargetForConversation, feishuTargetForIssue } from "./feishuNotificationTargets.ts";
 
 export type PiGuardianDirectFeishuOptions = {
   config: FeishuConnectorConfig;
@@ -61,12 +62,20 @@ function resolveTarget(
     const issueTarget = feishuTargetForIssue(db, alert.issue_id);
     if (issueTarget?.chatID) return { receiveId: issueTarget.chatID, receiveIdType: "chat_id" };
   }
+  const conversationTarget = runGroupConversationTarget(db, alert);
+  if (conversationTarget) return conversationTarget;
   const mapping = config.projectMappings.find((item) => item.projectId === alert.project_id);
   if (mapping?.chatId) return { receiveId: mapping.chatId, receiveIdType: "chat_id" };
   if (mapping?.userId) return { receiveId: mapping.userId, receiveIdType: userReceiveType(mapping.userId) };
   if (config.defaultChatId) return { receiveId: config.defaultChatId, receiveIdType: "chat_id" };
   if (config.defaultUserId) return { receiveId: config.defaultUserId, receiveIdType: userReceiveType(config.defaultUserId) };
   return null;
+}
+
+function runGroupConversationTarget(db: RunnerDatabase, alert: PiGuardianAlert): SendTarget | null {
+  const conversationID = getPiRunGroup(db, alert.run_group_id)?.origin_conversation_id ?? "";
+  const target = feishuTargetForConversation(db, conversationID);
+  return target?.chatID ? { receiveId: target.chatID, receiveIdType: "chat_id" } : null;
 }
 
 function recordFailure(

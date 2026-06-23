@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { getPiGuardianAlert, upsertPiGuardianAlert } from "../db/repositories/pi.ts";
+import { createPiRunGroup, getPiGuardianAlert, upsertPiGuardianAlert } from "../db/repositories/pi.ts";
 import { buildFeishuConnectorConfig } from "./feishu.ts";
 import type { FeishuTextMessageInput, FeishuTextMessageResult } from "./feishuClient.ts";
 import { sendDirectFeishuGuardianAlert } from "./feishuGuardianAlerts.ts";
@@ -135,6 +135,39 @@ describe("PI Guardian direct Feishu alert target routing", () => {
     }
   });
 
+  test("uses run group conversation target before project and default targets", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianSender("om_group_reply");
+    try {
+      insertProject(db, "demo");
+      createPiRunGroup(db, {
+        expected_issue_count: 1,
+        id: "group-conversation",
+        origin_conversation_id: "feishu-chat-oc_conversation-20260623",
+        project_id: "demo"
+      });
+      const alert = upsertPiGuardianAlert(db, alertInput({
+        id: "alert-conversation",
+        project_id: "demo",
+        run_group_id: "group-conversation"
+      }));
+
+      await sendDirectFeishuGuardianAlert(db, alert, {
+        config: feishuConfig({
+          feishuAllowedChatIds: "oc_default,oc_project,oc_conversation",
+          feishuDefaultChatId: "oc_default",
+          feishuProjectMappings: "chat:oc_project=demo"
+        }),
+        now: NOW,
+        sender
+      });
+
+      expect(sender.calls).toMatchObject([{ receiveId: "oc_conversation", receiveIdType: "chat_id" }]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps UI-only fallback and records clear error when target is missing", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_unexpected");
@@ -168,6 +201,7 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 
 function alertInput(input: {
   alert_type?: string; id: string; issue_id?: number; message?: string; project_id: string;
+  run_group_id?: string;
 }) {
   return {
     alert_type: input.alert_type ?? "pi_runtime_down",
@@ -175,6 +209,7 @@ function alertInput(input: {
     issue_id: input.issue_id,
     message: input.message ?? "PI runtime unavailable",
     project_id: input.project_id,
+    run_group_id: input.run_group_id,
     watchdog_seen_at: NOW_TEXT
   };
 }

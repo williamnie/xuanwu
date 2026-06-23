@@ -63,6 +63,18 @@ test('Guardian alert display maps missed digest pending to actionable Chinese co
   assert.doesNotMatch(visibleText, /missed_digest_pending|digest_pipeline_unavailable|project -/);
 });
 
+test('Guardian alert display renders empty project as system scope', () => {
+  const display = buildGuardianAlertDisplay({
+    alert_type: 'outbox_stalled',
+    message: 'outbox stalled',
+    project_id: '',
+    severity: 'urgent',
+  });
+
+  assert.match(display.meta, /范围：系统级/);
+  assert.doesNotMatch(display.meta, /project -|项目 -/);
+});
+
 test('Guardian alert display covers common outage types without leaking internal enums', () => {
   const alertTypes = [
     'digest_flush_stalled',
