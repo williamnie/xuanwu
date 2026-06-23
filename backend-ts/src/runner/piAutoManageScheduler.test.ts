@@ -3,11 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
+import { runProjectLoopOnce } from "./projectLoop.ts";
 
 class FakePiCycleRunner {
   active = 0;
@@ -341,6 +343,35 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("escalates a deferred provider initialize outage without claiming later todos", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new InitializeTimeoutProvider();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProviderOutageRegressionProject(db);
+
+      await runProjectLoopOnce({
+        database: db,
+        projectId: "demo",
+        providers: { claude: provider }
+      });
+
+      expectDeferredOutageClaim(db, provider);
+
+      const result = await runOutageScheduleClosure(db, runner);
+
+      expect(result.first.supervisor).toMatchObject({ signaled: 1 });
+      expect(result.first.guardianDecisions).toMatchObject({ created: 1 });
+      expect(result.second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(runner.calls).toEqual([]);
+      expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
+
+      expectProviderOutageNeedsUserClosure(db, 701);
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not run delegation heartbeats while project heartbeat is paused", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
@@ -393,11 +424,27 @@ function insertAgent(db: DB, id: string): void {
 }
 
 function insertProject(db: DB, id: string, autoRun: number): void {
+  insertProjectFixture(db, { autoRun, id, provider: "codex" });
+}
+
+function insertProjectFixture(db: DB, input: { autoRun: number; id: string; provider: string }): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, auto_run, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, autoRun, autoRun, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [input.id, input.id, `/tmp/${input.id}`, input.provider, input.autoRun, input.autoRun,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+function insertProviderOutageRegressionProject(db: DB): void {
+  insertProjectFixture(db, { autoRun: 1, id: "demo", provider: "claude" });
+  insertTodoIssue(db, 701, "Provider outage first", "2026-06-22T08:00:00Z");
+  insertTodoIssue(db, 702, "Ordinary follow-up", "2026-06-22T08:01:00Z");
+}
+
+function insertTodoIssue(db: DB, id: number, title: string, createdAt: string): void {
+  db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
+    values (?, 'demo', ?, 'todo', ?, ?)`, [id, title, createdAt, createdAt]);
 }
 
 function insertSettings(db: DB, projectID: string, autoManage: number, maxActions: number, agentID = "pi-default"): void {
@@ -410,6 +457,57 @@ function insertSettings(db: DB, projectID: string, autoManage: number, maxAction
 }
 
 const NOW = new Date("2026-06-22T08:40:00Z");
+
+async function runOutageScheduleClosure(db: DB, runner: FakePiCycleRunner) {
+  const first = await runScheduleLayerCycle({
+    database: db,
+    runProjectCycle: runner.run.bind(runner),
+    watchdogNow: NOW
+  });
+  db.sqlite.run("update pi_guardian_decisions set cooldown_until='' where project_id='demo'");
+  const second = await runScheduleLayerCycle({
+    database: db,
+    runProjectCycle: runner.run.bind(runner),
+    runSupervisor: false,
+    watchdogNow: new Date(NOW.getTime() + 31_000)
+  });
+  return { first, second };
+}
+
+function expectDeferredOutageClaim(db: DB, provider: InitializeTimeoutProvider): void {
+  expect(provider.inputs.map((input) => input.issueId)).toEqual([701]);
+  expect(getIssue(db, 701)).toMatchObject({ status: "in_progress" });
+  expect(listIssueRuns(db, 701).at(-1)).toMatchObject({ ended_at: "", provider: "claude", status: "in_progress" });
+  expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
+  expect(listIssueRuns(db, 702)).toEqual([]);
+  expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.provider_deferred");
+}
+
+function expectProviderOutageNeedsUserClosure(db: DB, issueID: number): void {
+  const action = firstProviderOutageAction(db, issueID);
+  const notification = firstUnreadNeedsUserNotification(db, issueID);
+  const payload = JSON.parse(notification.payload) as Record<string, unknown>;
+  const serializedNotification = JSON.stringify({ message: notification.message, payload });
+  expect(action).toMatchObject({ action_type: "needs_user.escalate", gate_decision: "execute", status: "completed" });
+  expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({ diagnosis_code: "provider_runtime_unavailable" });
+  expect(payload.provider).toBe("claude");
+  expect(String(payload.next_step)).toContain("重启");
+  expect(notification.message).toContain("claude");
+  expect(notification.message).toContain("重启");
+  expect(serializedNotification).not.toContain("sk-live-secret");
+  expect(serializedNotification).not.toContain("/Users/xiaobei/private");
+}
+
+function firstProviderOutageAction(db: DB, issueID: number) {
+  const [action] = listPiActions(db, { issueId: issueID });
+  return action;
+}
+
+function firstUnreadNeedsUserNotification(db: DB, issueID: number) {
+  const [notification] = listNotifications(db, { projectID: "demo", unreadOnly: true });
+  expect(notification).toMatchObject({ event: "pi.needs_user", issue_id: issueID });
+  return notification;
+}
 
 function insertIssueRunSession(db: DB, issueID: number): void {
   db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
@@ -434,6 +532,19 @@ class ResumeProvider implements ExecutorProvider {
   async sendSessionMessage(input: SessionMessageInput) {
     this.calls.push({ prompt: input.prompt || "", sessionId: input.sessionId });
     return { provider: "codex" as const, provider_session_id: input.sessionId, sessionId: input.sessionId, turn_id: "turn-followup" };
+  }
+}
+
+class InitializeTimeoutProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution"] as const;
+  readonly id = "claude" as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput) {
+    this.inputs.push(input);
+    throw new Error(
+      "Claude Code run timed out after 10000ms: initialize cwd=/Users/xiaobei/private token=sk-live-secret"
+    );
   }
 }
 

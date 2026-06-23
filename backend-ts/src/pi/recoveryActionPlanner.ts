@@ -54,7 +54,8 @@ function actionPayload(
   const base = preconditionPayload(input, fallback);
   if (actionType === NEEDS_USER_ESCALATE) return {
     ...base,
-    message: needsUserMessage(input, fallback, failureClass)
+    message: needsUserMessage(input, fallback, failureClass),
+    next_step: needsUserNextStep(input.payload, failureClass)
   };
   if (actionType === "issue.retry_after") return {
     ...base,
@@ -113,6 +114,7 @@ function preconditionPayload(input: RecoveryActionPlanInput, fallback: string): 
     expected_session_turn_id: clean(input.payload.session_turn_id || input.payload.provider_turn_id),
     expected_session_updated_at: clean(input.payload.session_updated_at || input.payload.expected_session_updated_at),
     issue_id: input.issueID,
+    provider: clean(input.payload.provider),
     reason: reasonText(input.payload, fallback)
   });
 }
@@ -195,7 +197,17 @@ function providerOutageMessage(input: RecoveryActionPlanInput, fallback: string)
   return "PI 判断 executor provider 当前不可用，无法继续自动恢复。" +
     `provider：${providerName(input.payload)}；issue id：${input.issueID}；` +
     `诊断码：${clean(input.payload.diagnosis_code)}；错误摘要：${errorSummary(input.payload, fallback)}。` +
-    "请检查/重启 Codex app-server 或 Claude Code provider 后再 retry。";
+    providerOutageNextStep();
+}
+
+function needsUserNextStep(payload: Record<string, unknown>, failureClass: RecoveryFailureClass): string {
+  if (clean(payload.diagnosis_code) === PROVIDER_RUNTIME_UNAVAILABLE) return providerOutageNextStep();
+  if (failureClass === "exhausted") return "请检查 issue 状态、补充必要上下文或修复 provider 后再 retry。";
+  return "";
+}
+
+function providerOutageNextStep(): string {
+  return "请检查/重启 Codex app-server 或 Claude Code provider 后再 retry。";
 }
 
 function exhaustedRecoveryMessage(input: RecoveryActionPlanInput, fallback: string): string {

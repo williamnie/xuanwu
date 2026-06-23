@@ -116,5 +116,7 @@ describe("supervisor recovery action planner", () => {
     expect(String(payload.message)).toContain("诊断码：provider_runtime_unavailable");
     expect(String(payload.message)).toContain("错误摘要：latest provider error has no recoverable provider session");
     expect(String(payload.message)).toContain("请检查/重启 Codex app-server 或 Claude Code provider 后再 retry");
+    expect(payload.next_step).toBe("请检查/重启 Codex app-server 或 Claude Code provider 后再 retry。");
+    expect(payload.provider).toBe("claude");
   });
 });
