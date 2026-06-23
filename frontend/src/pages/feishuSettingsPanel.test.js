@@ -16,6 +16,8 @@ test('Settings exposes a Feishu bot configuration panel backed by integration se
   assert.match(panelSource, /Verification Token/);
   assert.match(panelSource, /Encrypt Key/);
   assert.match(panelSource, /Allowed Chat IDs/);
+  assert.match(panelSource, /Default Chat ID/);
+  assert.match(panelSource, /Default User ID/);
   assert.match(panelSource, /Project Mappings/);
   assert.match(panelSource, /api\.getFeishuSettings/);
   assert.match(panelSource, /api\.updateFeishuSettings/);

@@ -19,6 +19,8 @@ export type FeishuConnectorConfig = {
   allowedUserIds: string[];
   appId: string;
   appSecret: string;
+  defaultChatId: string;
+  defaultUserId: string;
   encryptKey: string;
   projectMappings: FeishuProjectMapping[];
   receiveMode: FeishuReceiveMode;
@@ -30,6 +32,8 @@ export type FeishuConnectorOverrides = {
   feishuAllowedUserIds?: string | string[];
   feishuAppId?: string;
   feishuAppSecret?: string;
+  feishuDefaultChatId?: string;
+  feishuDefaultUserId?: string;
   feishuEncryptKey?: string;
   feishuProjectMappings?: string | FeishuProjectMapping[];
   feishuReceiveMode?: string;
@@ -41,6 +45,8 @@ export type FeishuEnvInput = {
   FEISHU_ALLOWED_USER_IDS?: string;
   FEISHU_APP_ID?: string;
   FEISHU_APP_SECRET?: string;
+  FEISHU_DEFAULT_CHAT_ID?: string;
+  FEISHU_DEFAULT_USER_ID?: string;
   FEISHU_ENCRYPT_KEY?: string;
   FEISHU_PROJECT_MAPPINGS?: string;
   FEISHU_RECEIVE_MODE?: string;

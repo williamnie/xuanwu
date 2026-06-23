@@ -23,6 +23,8 @@ type LocalFeishuSettings = {
   allowedUserIds: string[];
   appId: string;
   appSecret: string;
+  defaultChatId: string;
+  defaultUserId: string;
   encryptKey: string;
   projectMappings: string;
   receiveMode: FeishuReceiveMode;
@@ -58,6 +60,8 @@ function publicFeishuSettings(config: FeishuConnectorConfig, path: string): Reco
     app_id: config.appId,
     app_secret_configured: config.appSecret !== "",
     callback_path: "/api/integrations/feishu/events",
+    default_chat_id: config.defaultChatId,
+    default_user_id: config.defaultUserId,
     enabled: status.enabled,
     encrypt_key_configured: config.encryptKey !== "",
     missing_required: status.missing_required,
@@ -76,6 +80,8 @@ function normalizeFeishuSettings(body: Record<string, unknown>, current: LocalFe
     allowedUserIds: listField(body, "allowed_user_ids", current.allowedUserIds),
     appId: stringField(body, "app_id", current.appId),
     appSecret: secretField(body, "app_secret", current.appSecret),
+    defaultChatId: stringField(body, "default_chat_id", current.defaultChatId),
+    defaultUserId: stringField(body, "default_user_id", current.defaultUserId),
     encryptKey: secretField(body, "encrypt_key", current.encryptKey),
     projectMappings: stringField(body, "project_mappings", current.projectMappings),
     receiveMode: receiveModeField(body, current.receiveMode),
@@ -89,6 +95,8 @@ function localSettingsFromConfig(config: FeishuConnectorConfig): LocalFeishuSett
     allowedUserIds: config.allowedUserIds,
     appId: config.appId,
     appSecret: config.appSecret,
+    defaultChatId: config.defaultChatId,
+    defaultUserId: config.defaultUserId,
     encryptKey: config.encryptKey,
     projectMappings: formatProjectMappings(config.projectMappings),
     receiveMode: config.receiveMode,

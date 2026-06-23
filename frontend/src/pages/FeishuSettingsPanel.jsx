@@ -7,6 +7,8 @@ const DEFAULT_FORM = {
   allowed_chat_ids: '',
   allowed_user_ids: '',
   app_id: '',
+  default_chat_id: '',
+  default_user_id: '',
   app_secret: '',
   encrypt_key: '',
   project_mappings: '',
@@ -88,6 +90,8 @@ function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit
         <SecretField configured={remote?.encrypt_key_configured} label="Encrypt Key" optional value={form.encrypt_key} onChange={(value) => updateField('encrypt_key', value)} />
         <TextField label="Allowed Chat IDs" value={form.allowed_chat_ids} onChange={(value) => updateField('allowed_chat_ids', value)} placeholder="oc_xxx, oc_yyy" />
         <TextField label="Allowed User IDs" value={form.allowed_user_ids} onChange={(value) => updateField('allowed_user_ids', value)} placeholder="ou_xxx, ou_yyy" />
+        <TextField label="Default Chat ID" value={form.default_chat_id} onChange={(value) => updateField('default_chat_id', value)} placeholder="oc_xxx" />
+        <TextField label="Default User ID" value={form.default_user_id} onChange={(value) => updateField('default_user_id', value)} placeholder="ou_xxx" />
       </div>
       <TextAreaField label="Project Mappings" value={form.project_mappings} onChange={(value) => updateField('project_mappings', value)} placeholder="chat:oc_xxx=codex-runner,user:ou_xxx=codex-runner" />
       <Footer remote={remote} saving={saving} />
@@ -197,6 +201,8 @@ function formFromRemote(data) {
     allowed_chat_ids: (data?.allowed_chat_ids || []).join(', '),
     allowed_user_ids: (data?.allowed_user_ids || []).join(', '),
     app_id: data?.app_id || '',
+    default_chat_id: data?.default_chat_id || '',
+    default_user_id: data?.default_user_id || '',
     project_mappings: data?.project_mappings || '',
     receive_mode: data?.receive_mode || 'websocket',
   };

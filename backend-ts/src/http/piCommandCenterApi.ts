@@ -193,6 +193,8 @@ function integrationSummary(context: PiCommandCenterContext) {
     allowedUserIds: [],
     appId: "",
     appSecret: "",
+    defaultChatId: "",
+    defaultUserId: "",
     encryptKey: "",
     projectMappings: [],
     receiveMode: "websocket",

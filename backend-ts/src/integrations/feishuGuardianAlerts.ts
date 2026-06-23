@@ -63,6 +63,8 @@ function resolveTarget(
   const mapping = config.projectMappings.find((item) => item.projectId === alert.project_id);
   if (mapping?.chatId) return { receiveId: mapping.chatId, receiveIdType: "chat_id" };
   if (mapping?.userId) return { receiveId: mapping.userId, receiveIdType: userReceiveType(mapping.userId) };
+  if (config.defaultChatId) return { receiveId: config.defaultChatId, receiveIdType: "chat_id" };
+  if (config.defaultUserId) return { receiveId: config.defaultUserId, receiveIdType: userReceiveType(config.defaultUserId) };
   return null;
 }
 

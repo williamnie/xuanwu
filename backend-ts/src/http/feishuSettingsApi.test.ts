@@ -34,6 +34,8 @@ describe("Feishu connector settings API", () => {
       expect(await empty.json()).toMatchObject({
         app_id: "",
         app_secret_configured: false,
+        default_chat_id: "",
+        default_user_id: "",
         enabled: false,
         verification_token_configured: false
       });
@@ -43,6 +45,8 @@ describe("Feishu connector settings API", () => {
         allowed_user_ids: ["ou_1"],
         app_id: "cli_app_id",
         app_secret: "app-secret-value",
+        default_chat_id: "oc_default",
+        default_user_id: "ou_default",
         encrypt_key: "encrypt-secret-value",
         project_mappings: "chat:oc_a=demo,user:ou_1=mobile",
         receive_mode: "websocket",
@@ -56,6 +60,8 @@ describe("Feishu connector settings API", () => {
         allowed_user_ids: ["ou_1"],
         app_id: "cli_app_id",
         app_secret_configured: true,
+        default_chat_id: "oc_default",
+        default_user_id: "ou_default",
         encrypt_key_configured: true,
         enabled: true,
         project_mappings: "chat:oc_a=demo,user:ou_1=mobile",
@@ -73,6 +79,8 @@ describe("Feishu connector settings API", () => {
         allowedUserIds: ["ou_1"],
         appId: "cli_app_id",
         appSecret: "app-secret-value",
+        defaultChatId: "oc_default",
+        defaultUserId: "ou_default",
         encryptKey: "encrypt-secret-value",
         projectMappings: "chat:oc_a=demo,user:ou_1=mobile",
         receiveMode: "websocket",

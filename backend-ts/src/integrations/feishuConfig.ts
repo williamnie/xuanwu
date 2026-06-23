@@ -19,6 +19,8 @@ export function buildFeishuConnectorConfig(input: FeishuConfigInput = {}): Feish
     allowedUserIds: splitList(firstDefined(values.feishuAllowedUserIds, values.allowedUserIds, values.FEISHU_ALLOWED_USER_IDS)),
     appId: firstString(values.feishuAppId, values.appId, values.FEISHU_APP_ID),
     appSecret: firstString(values.feishuAppSecret, values.appSecret, values.FEISHU_APP_SECRET),
+    defaultChatId: firstString(values.feishuDefaultChatId, values.defaultChatId, values.FEISHU_DEFAULT_CHAT_ID),
+    defaultUserId: firstString(values.feishuDefaultUserId, values.defaultUserId, values.FEISHU_DEFAULT_USER_ID),
     encryptKey: firstString(values.feishuEncryptKey, values.encryptKey, values.FEISHU_ENCRYPT_KEY),
     projectMappings: parseProjectMappings(firstDefined(values.feishuProjectMappings, values.projectMappings, values.FEISHU_PROJECT_MAPPINGS)),
     receiveMode: parseReceiveMode(firstDefined(values.feishuReceiveMode, values.receiveMode, values.FEISHU_RECEIVE_MODE)),
@@ -95,7 +97,8 @@ function secretStatus(config: FeishuConnectorConfig): Record<string, { configure
 
 function hasAnyConfig(config: FeishuConnectorConfig): boolean {
   return [config.appId, config.appSecret, config.verificationToken, config.encryptKey].some((value) => value !== "") ||
-    config.allowedChatIds.length > 0 || config.allowedUserIds.length > 0 || config.projectMappings.length > 0 ||
+    config.allowedChatIds.length > 0 || config.allowedUserIds.length > 0 ||
+    config.defaultChatId !== "" || config.defaultUserId !== "" || config.projectMappings.length > 0 ||
     config.receiveMode !== DEFAULT_RECEIVE_MODE;
 }
 

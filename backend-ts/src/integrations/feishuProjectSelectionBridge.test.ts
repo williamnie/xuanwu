@@ -25,7 +25,7 @@ describe("Feishu project selection bridge helper", () => {
 
     const result = await maybeSendFeishuProjectSelection({
       clock: { now: () => new Date("2026-06-13T01:02:03Z") },
-      config: () => ({ allowedChatIds: [], allowedUserIds: [], appId: "", appSecret: "", encryptKey: "", projectMappings: [], receiveMode: "websocket", verificationToken: "" }),
+      config: () => ({ allowedChatIds: [], allowedUserIds: [], appId: "", appSecret: "", defaultChatId: "", defaultUserId: "", encryptKey: "", projectMappings: [], receiveMode: "websocket", verificationToken: "" }),
       database,
       runConversation: async () => ({ text: "unused" }),
       sender: {
@@ -55,7 +55,7 @@ describe("Feishu project selection bridge helper", () => {
 
     const result = await maybeSendFeishuProjectSelection({
       clock: { now: () => new Date("2026-06-13T01:02:03Z") },
-      config: () => ({ allowedChatIds: [], allowedUserIds: [], appId: "", appSecret: "", encryptKey: "", projectMappings: [], receiveMode: "websocket", verificationToken: "" }),
+      config: () => ({ allowedChatIds: [], allowedUserIds: [], appId: "", appSecret: "", defaultChatId: "", defaultUserId: "", encryptKey: "", projectMappings: [], receiveMode: "websocket", verificationToken: "" }),
       database,
       runConversation: async () => ({ text: "unused" }),
       sender: {
