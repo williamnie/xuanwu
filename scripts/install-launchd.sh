@@ -102,8 +102,11 @@ if [ -z "$CODEX_CMD" ]; then
   exit 1
 fi
 
-npm --prefix "$ROOT_DIR/frontend" run build
+APP_VERSION="$("$ROOT_DIR/scripts/resolve-version.sh")"
+echo "[launchd] version: $APP_VERSION"
+env VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
 CODEX_RUNNER_CODESIGN_IDENTIFIER="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-$LABEL}" \
+CODEX_RUNNER_VERSION="$APP_VERSION" \
   "$ROOT_DIR/backend-ts/scripts/build-binary.sh"
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
 stage_launchd_binary

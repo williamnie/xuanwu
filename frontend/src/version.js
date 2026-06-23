@@ -1,9 +1,12 @@
-export const FALLBACK_APP_VERSION = '0.0.0-dev';
+/* global __CODEX_RUNNER_APP_VERSION__ */
+
+export const FALLBACK_APP_VERSION = 'unknown';
 const BAD_STAMP_STATUSES = new Set(['runtime_stamp_missing', 'dist_stamp_missing', 'dist_stamp_error', 'mismatch']);
 
-export function resolveAppVersion(rawVersion) {
+export function resolveAppVersion(rawVersion, fallbackVersion = FALLBACK_APP_VERSION) {
   const value = typeof rawVersion === 'string' ? rawVersion.trim() : '';
-  return value || FALLBACK_APP_VERSION;
+  const fallback = typeof fallbackVersion === 'string' ? fallbackVersion.trim() : '';
+  return value || fallback || FALLBACK_APP_VERSION;
 }
 
 export function buildVersionSummary(frontendVersion, status = {}) {
@@ -28,7 +31,7 @@ function versionWarnings(frontendVersion, backendVersion, stampStatus) {
     warnings.push(`Frontend ${frontendVersion} 与 Backend ${backendVersion} 不一致`);
   }
   if (frontendVersion === FALLBACK_APP_VERSION || backendVersion === FALLBACK_APP_VERSION) {
-    warnings.push('检测到开发默认版本 0.0.0-dev，请确认是否已重新 build/deploy');
+    warnings.push('未检测到可用版本，请确认 build 注入或 git 信息是否可用');
   }
   if (BAD_STAMP_STATUSES.has(stampStatus)) {
     warnings.push(`Build stamp 状态异常: ${stampStatus}`);
@@ -36,4 +39,8 @@ function versionWarnings(frontendVersion, backendVersion, stampStatus) {
   return warnings;
 }
 
-export const APP_VERSION = resolveAppVersion(import.meta.env?.VITE_APP_VERSION);
+const INJECTED_APP_VERSION = typeof __CODEX_RUNNER_APP_VERSION__ === 'string'
+  ? __CODEX_RUNNER_APP_VERSION__
+  : '';
+
+export const APP_VERSION = resolveAppVersion(import.meta.env?.VITE_APP_VERSION, INJECTED_APP_VERSION);

@@ -52,12 +52,12 @@ describe("Bun system status endpoints", () => {
       expect(response.status).toBe(200);
       expect(body.service.alive).toBe(true);
       expect(body.service.runtime).toBe("bun");
-      expect(body.service.version).toBe("0.0.0-dev");
+      expect(body.service.version).not.toBe("0.0.0-dev");
       expect(body.service.build).toMatchObject({
         artifact: "codex-issue-runner",
         bun_version: Bun.version,
         stamp: "",
-        version: "0.0.0-dev"
+        version: body.service.version
       });
       expect(body.db.ok).toBe(true);
       expect(body.auth.enabled).toBe(true);

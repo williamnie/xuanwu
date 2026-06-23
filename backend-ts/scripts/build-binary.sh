@@ -48,19 +48,7 @@ sign_binary_if_possible() {
 }
 
 resolve_version() {
-  if [ -n "${CODEX_RUNNER_VERSION:-}" ]; then
-    printf '%s' "$CODEX_RUNNER_VERSION"
-    return
-  fi
-  if command -v git >/dev/null 2>&1; then
-    local tag
-    tag="$(git -C "$ROOT_DIR" describe --tags --exact-match HEAD 2>/dev/null || true)"
-    if [ -n "$tag" ]; then
-      printf '%s' "$tag"
-      return
-    fi
-  fi
-  printf '0.0.0-dev'
+  "$ROOT_DIR/scripts/resolve-version.sh"
 }
 
 normalize_output_path() {

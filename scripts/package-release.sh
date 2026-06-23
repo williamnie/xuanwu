@@ -19,13 +19,7 @@ log() { printf '[release] %s\n' "$*"; }
 fail() { printf '[release] ERROR: %s\n' "$*" >&2; exit 1; }
 
 resolve_app_version() {
-  if [ -n "${CODEX_RUNNER_VERSION:-}" ]; then
-    printf '%s' "$CODEX_RUNNER_VERSION"
-  elif [ -n "${GITHUB_REF_NAME:-}" ]; then
-    printf '%s' "$GITHUB_REF_NAME"
-  else
-    printf '0.0.0-dev'
-  fi
+  "$ROOT_DIR/scripts/resolve-version.sh"
 }
 
 resolve_build_stamp() {

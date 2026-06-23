@@ -1,4 +1,7 @@
-const DEFAULT_VERSION = "0.0.0-dev";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const DEFAULT_VERSION = "unknown";
 const ARTIFACT_NAME = "codex-issue-runner";
 
 export type BunBuildInfo = {
@@ -13,8 +16,12 @@ export function bunBuildInfo(): BunBuildInfo {
     artifact: ARTIFACT_NAME,
     bun_version: Bun.version,
     stamp: clean(process.env.CODEX_RUNNER_BUILD_STAMP) ?? "",
-    version: clean(process.env.CODEX_RUNNER_BUILD_VERSION) ?? DEFAULT_VERSION
+    version: resolveBuildVersion()
   };
+}
+
+export function resolveBuildVersion(): string {
+  return clean(process.env.CODEX_RUNNER_BUILD_VERSION) ?? gitDescribeVersion() ?? DEFAULT_VERSION;
 }
 
 export function formatBunVersion(): string {
@@ -26,4 +33,14 @@ export function formatBunVersion(): string {
 function clean(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed === "" ? undefined : trimmed;
+}
+
+function gitDescribeVersion(): string | undefined {
+  const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const result = Bun.spawnSync(["git", "-C", rootDir, "describe", "--tags", "--dirty", "--always"], {
+    stderr: "pipe",
+    stdout: "pipe"
+  });
+  if (result.exitCode !== 0) return undefined;
+  return clean(new TextDecoder().decode(result.stdout));
 }
