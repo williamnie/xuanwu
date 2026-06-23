@@ -6,11 +6,15 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import {
   createPiNotificationIntent,
+  getPiGuardianAlert,
   listPiGuardianAlerts,
   listPiGuardianDecisions,
   listPiNotificationIntents,
   upsertPiGuardianAlert
 } from "../db/repositories/pi.ts";
+import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
+import type { FeishuTextMessageInput, FeishuTextMessageResult } from "../integrations/feishuClient.ts";
+import { sendMissedDigestPendingFeishuFallback } from "./guardianMissedDigestFallback.ts";
 import { runGuardianMissedIntentSweepOnce } from "./guardianMissedIntentSweep.ts";
 import type { PiGuardianWatchdogComponent } from "./guardianWatchdog.ts";
 import type { PiGuardianWatchdogSummary } from "./guardianWatchdog.ts";
@@ -106,6 +110,90 @@ describe("PI Guardian missed intent sweep", () => {
       db.close();
     }
   });
+
+  test("returns pending alert ids for direct Feishu fallback and respects retry gate", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianSender([{ messageId: "om_missed_digest_1" }]);
+    try {
+      insertProject(db, "demo");
+      insertOutageAlert(db, "outbox_stalled");
+      insertMissedIntent(db, "intent-pending-direct", { issueID: 905, kind: "issue_done", state: "ready" });
+
+      const first = runGuardianMissedIntentSweepOnce(db, {
+        now: NOW,
+        watchdog: unavailableDigestWatchdog()
+      });
+      await sendMissedDigestPendingFeishuFallback(db, first.pendingAlertIds, {
+        config: defaultFeishuConfig(),
+        now: new Date(NOW),
+        sender
+      });
+      const alert = getPiGuardianAlert(db, first.pendingAlertIds[0] ?? "");
+
+      expect(first.pendingAlertIds).toHaveLength(1);
+      expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
+      expect(sender.calls[0]?.text).toContain("通知摘要待处理");
+      expect(sender.calls[0]?.text).toContain("请查看 PI Guardian");
+      expect(sender.calls[0]?.text).not.toContain("missed_digest_pending");
+      expect(sender.calls[0]?.text).not.toContain("digest_pipeline_unavailable");
+      expect(alert).toMatchObject({
+        direct_feishu_message_id: "om_missed_digest_1",
+        direct_feishu_state: "sent",
+        next_retry_at: "2026-06-19T00:25:00Z",
+        retry_count: 0,
+        status: "open",
+        ui_visible: 1
+      });
+
+      const repeat = runGuardianMissedIntentSweepOnce(db, {
+        now: "2026-06-19T00:11:00Z",
+        watchdog: unavailableDigestWatchdog()
+      });
+      await sendMissedDigestPendingFeishuFallback(db, repeat.pendingAlertIds, {
+        config: defaultFeishuConfig(),
+        now: new Date("2026-06-19T00:11:00Z"),
+        sender
+      });
+
+      expect(repeat.pendingAlertIds).toEqual(first.pendingAlertIds);
+      expect(sender.calls).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("records retry state when missed digest direct Feishu fallback fails", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianSender([new Error("temporary Feishu outage")]);
+    try {
+      insertProject(db, "demo");
+      insertOutageAlert(db, "outbox_stalled");
+      insertMissedIntent(db, "intent-pending-failed", { issueID: 906, kind: "issue_done", state: "ready" });
+
+      const result = runGuardianMissedIntentSweepOnce(db, {
+        now: NOW,
+        watchdog: unavailableDigestWatchdog()
+      });
+      await sendMissedDigestPendingFeishuFallback(db, result.pendingAlertIds, {
+        config: defaultFeishuConfig(),
+        now: new Date(NOW),
+        sender
+      });
+      const alert = getPiGuardianAlert(db, result.pendingAlertIds[0] ?? "");
+
+      expect(sender.calls).toHaveLength(1);
+      expect(alert).toMatchObject({
+        direct_feishu_state: "retry",
+        next_retry_at: "2026-06-19T00:25:00Z",
+        retry_count: 1,
+        status: "open",
+        ui_visible: 1
+      });
+      expect(alert?.direct_feishu_error).toContain("temporary Feishu outage");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -170,4 +258,39 @@ function recoveredWatchdog(component: PiGuardianWatchdogComponent): PiGuardianWa
     errors: 0,
     scanned: 1
   };
+}
+
+function unavailableDigestWatchdog(): PiGuardianWatchdogSummary {
+  return {
+    alerts: 0,
+    checks: [
+      { component: "outbox", ok: true },
+      { component: "digest", ok: false }
+    ],
+    errors: 0,
+    scanned: 2
+  };
+}
+
+function defaultFeishuConfig() {
+  return buildFeishuConnectorConfig({
+    feishuAllowedChatIds: "oc_default",
+    feishuAppId: "cli_app_id",
+    feishuAppSecret: "app-secret-value",
+    feishuDefaultChatId: "oc_default"
+  });
+}
+
+class FakeGuardianSender {
+  calls: FeishuTextMessageInput[] = [];
+
+  constructor(private readonly outcomes: Array<FeishuTextMessageResult | Error>) {}
+
+  async sendTextMessage(input: FeishuTextMessageInput): Promise<FeishuTextMessageResult> {
+    this.calls.push(input);
+    const next = this.outcomes.shift();
+    if (next instanceof Error) throw next;
+    if (!next) throw new Error("unexpected fake missed digest Feishu send");
+    return next;
+  }
 }

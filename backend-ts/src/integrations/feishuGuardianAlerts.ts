@@ -19,6 +19,7 @@ import { feishuTargetForIssue } from "./feishuNotificationTargets.ts";
 
 export type PiGuardianDirectFeishuOptions = {
   config: FeishuConnectorConfig;
+  formatText?: (alert: PiGuardianAlert) => string;
   now?: Date;
   sender?: FeishuMessageClient;
 };
@@ -40,7 +41,7 @@ export async function sendDirectFeishuGuardianAlert(
   }
   try {
     const sender = options.sender ?? createFeishuMessageClient({ config: options.config });
-    const sent = await sender.sendTextMessage({ ...target, text: directText(alert) });
+    const sent = await sender.sendTextMessage({ ...target, text: alertText(alert, options) });
     updatePiGuardianAlert(db, alert.id, sentGuardianAlertRetryPatch({
       alert,
       messageId: sent.messageId,
@@ -101,6 +102,10 @@ function targetAllowed(config: FeishuConnectorConfig, target: SendTarget): boole
     return allowed(config.allowedUserIds, target.receiveId);
   }
   return true;
+}
+
+function alertText(alert: PiGuardianAlert, options: PiGuardianDirectFeishuOptions): string {
+  return options.formatText?.(alert) ?? directText(alert);
 }
 
 function allowed(values: string[], value: string): boolean {

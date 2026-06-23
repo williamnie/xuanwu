@@ -3,8 +3,11 @@ import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
+import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
+import type { FeishuMessageClient } from "../integrations/feishuClient.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
+import { sendMissedDigestPendingFeishuFallback } from "../pi/guardianMissedDigestFallback.ts";
 import {
   runGuardianMissedIntentSweepOnce,
   type GuardianMissedIntentSweepResult
@@ -50,6 +53,7 @@ export type PiAutoManageCycleInput = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  guardianDirectFeishuSender?: FeishuMessageClient;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
@@ -156,12 +160,13 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     providers: input.providers
   });
   const digestFlush = runDigestFlushSchedulerOnce(input.database);
+  const directFeishu = guardianDirectFeishuOptions(input);
   const watchdog = await runPiGuardianWatchdogOnce(input.database, {
-    directFeishu: input.config ? { config: input.config.integrations.feishu } : undefined,
+    directFeishu,
     now: input.watchdogNow,
     staleAfterMs: input.watchdogStaleAfterMs
   });
-  const missedIntentSweep = runGuardianMissedIntentSweepOnce(input.database, { watchdog });
+  const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);
   return {
@@ -215,4 +220,28 @@ function defaultClock<Timer>(): PiAutoManageSchedulerClock<Timer> {
     clearTimeout: (timer) => clearTimeout(timer as Timer & ReturnType<typeof setTimeout>),
     setTimeout: (callback, delayMs) => setTimeout(callback, delayMs) as Timer
   };
+}
+
+async function runMissedIntentSweepWithFallback(
+  input: PiAutoManageCycleInput,
+  watchdog: PiGuardianWatchdogSummary,
+  directFeishu: PiGuardianDirectFeishuOptions | undefined
+): Promise<GuardianMissedIntentSweepResult> {
+  const result = runGuardianMissedIntentSweepOnce(input.database, { now: input.watchdogNow, watchdog });
+  await sendMissedDigestPendingFeishuFallback(input.database, result.pendingAlertIds, directFeishu);
+  return result;
+}
+
+function guardianDirectFeishuOptions(input: PiAutoManageCycleInput): PiGuardianDirectFeishuOptions | undefined {
+  if (!input.config) return undefined;
+  return {
+    config: input.config.integrations.feishu,
+    now: optionalDate(input.watchdogNow),
+    sender: input.guardianDirectFeishuSender
+  };
+}
+
+function optionalDate(value: Date | string | undefined): Date | undefined {
+  if (value instanceof Date) return value;
+  return typeof value === "string" && value.trim() !== "" ? new Date(value) : undefined;
 }

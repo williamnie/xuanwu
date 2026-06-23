@@ -33,6 +33,7 @@ export type GuardianMissedIntentSweepResult = {
   missedIntents: number;
   openAlerts: number;
   pending: number;
+  pendingAlertIds: string[];
   scannedAlerts: number;
   skipped: number;
   summaries: number;
@@ -80,7 +81,8 @@ export function runGuardianMissedIntentSweepOnce(
       continue;
     }
     if (!digestAvailable) {
-      markMissedDigestPending(db, window, "digest_pipeline_unavailable");
+      const alert = markMissedDigestPending(db, window, "digest_pipeline_unavailable");
+      result.pendingAlertIds.push(alert.id);
       result.pending += 1;
       result.skipped += 1;
       continue;
@@ -114,14 +116,16 @@ function writeMissedDigest(context: SweepContext, input: MissedDigestInput): voi
     });
     if (!existing) result.summaries += 1;
     if (targetMissing(target)) {
-      markMissedDigestPending(db, window, "missing_digest_target");
+      const alert = markMissedDigestPending(db, window, "missing_digest_target");
+      result.pendingAlertIds.push(alert.id);
       result.pending += 1;
     } else {
       markMissedIntentsCovered(db, intents);
     }
   } catch (error) {
     result.errors += 1;
-    markMissedDigestPending(db, window, safeError(error));
+    const alert = markMissedDigestPending(db, window, safeError(error));
+    result.pendingAlertIds.push(alert.id);
     result.pending += 1;
   }
 }
@@ -190,8 +194,8 @@ function markMissedDigestPending(
   db: RunnerDatabase,
   window: GuardianMissedOutageWindow,
   reason: string
-): void {
-  upsertPiGuardianAlert(db, {
+): PiGuardianAlert {
+  return upsertPiGuardianAlert(db, {
     alert_type: "missed_digest_pending",
     evidence_json: { ...missedAlertEvidence(window), reason: redactSensitiveText(reason) },
     message: `missed digest pending for project ${window.projectID || "-"}: ${reason}`,
@@ -294,5 +298,15 @@ function safeError(error: unknown): string {
 }
 
 function emptyResult(): GuardianMissedIntentSweepResult {
-  return { errors: 0, missedIntents: 0, openAlerts: 0, pending: 0, scannedAlerts: 0, skipped: 0, summaries: 0, windows: 0 };
+  return {
+    errors: 0,
+    missedIntents: 0,
+    openAlerts: 0,
+    pending: 0,
+    pendingAlertIds: [],
+    scannedAlerts: 0,
+    skipped: 0,
+    summaries: 0,
+    windows: 0
+  };
 }
