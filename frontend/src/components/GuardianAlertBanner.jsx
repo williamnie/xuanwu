@@ -7,16 +7,7 @@ import {
   useDataStore,
 } from '../store/dataStore';
 import { RECONCILE_INTERVAL_MS } from '../utils/stateGuards';
-
-const ALERT_TYPE_LABELS = {
-  approval_fast_path_error: 'Approval fast-path error',
-  coordinator_stalled: 'Coordinator stalled',
-  digest_flush_stalled: 'Digest flush stalled',
-  guardian_inbox_stalled: 'Guardian inbox stalled',
-  outbox_stalled: 'Outbox stalled',
-  pi_runtime_down: 'PI runtime down',
-  scheduler_watchdog_stale: 'Scheduler watchdog stale',
-};
+import { buildGuardianAlertDisplay } from './guardianAlertDisplay';
 
 export default function GuardianAlertBanner() {
   const alerts = useDataStore(selectGuardianAlerts);
@@ -66,13 +57,13 @@ export default function GuardianAlertBanner() {
   if (visibleAlerts.length === 0 && !watchdogStale && !status.error && !ackError) return null;
 
   return (
-    <section className="guardian-alert-stack" aria-label="Guardian system alerts" aria-live="polite">
+    <section className="guardian-alert-stack" aria-label="Guardian 系统告警" aria-live="polite">
       {watchdogStale ? <WatchdogStaleBanner loading={status.loading} onRefresh={handleRefresh} watchdog={watchdog} /> : null}
       {visibleAlerts.map((alert) => (
         <GuardianAlertItem alert={alert} acking={ackingId === alert.id} key={alert.id} onAck={handleAck} />
       ))}
       {status.error ? <GuardianStatusError error={status.error} loading={status.loading} onRefresh={handleRefresh} /> : null}
-      {ackError ? <p className="guardian-alert-inline-error" role="alert">Ack 失败：{ackError}</p> : null}
+      {ackError ? <p className="guardian-alert-inline-error" role="alert">确认失败：{ackError}</p> : null}
     </section>
   );
 }
@@ -100,39 +91,40 @@ function useGuardianStatus() {
 
 function GuardianAlertItem({ alert, acking, onAck }) {
   const urgent = alert.severity === 'urgent';
+  const display = buildGuardianAlertDisplay(alert);
   return (
     <article className={`guardian-alert-banner ${urgent ? 'urgent' : 'watch'}`}>
       <div className="guardian-alert-icon"><ShieldAlert size={18} /></div>
       <div className="guardian-alert-body">
         <div className="guardian-alert-title-row">
-          <strong>{alertTitle(alert)}</strong>
-          <span className={`guardian-alert-severity ${urgent ? 'urgent' : ''}`}>{alert.severity || 'watch'}</span>
+          <strong>{display.title}</strong>
+          <span className={`guardian-alert-severity ${urgent ? 'urgent' : ''}`}>{display.severityLabel}</span>
         </div>
-        <p>{alert.message || 'Guardian watchdog reported an open system alert.'}</p>
-        <small>{alertMeta(alert)}</small>
+        <p>{display.message}</p>
+        <small>{display.meta}</small>
       </div>
       <button className="guardian-alert-action" disabled={acking} onClick={() => onAck(alert.id)} type="button">
         {acking ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
-        Ack
+        已知晓
       </button>
     </article>
   );
 }
 
 function WatchdogStaleBanner({ loading, onRefresh, watchdog }) {
-  const staleAfter = watchdog?.stale_after ? `stale_after ${formatDate(watchdog.stale_after)}` : 'stale_after unknown';
-  const lastSeen = watchdog?.last_seen ? `last_seen ${formatDate(watchdog.last_seen)}` : 'last_seen missing';
+  const staleAfter = watchdog?.stale_after ? `过期阈值 ${formatDate(watchdog.stale_after)}` : '过期阈值未知';
+  const lastSeen = watchdog?.last_seen ? `最近心跳 ${formatDate(watchdog.last_seen)}` : '最近心跳缺失';
   return (
     <article className="guardian-alert-banner stale">
       <div className="guardian-alert-icon"><TimerReset size={18} /></div>
       <div className="guardian-alert-body">
-        <div className="guardian-alert-title-row"><strong>Guardian watchdog stale</strong></div>
-        <p>Watchdog liveness 已过期，Runner UI 是当前主带外通道。</p>
+        <div className="guardian-alert-title-row"><strong>Guardian 心跳已超时</strong></div>
+        <p>Guardian 心跳已超过预期，自动告警可能延迟。请刷新状态；如持续出现，请检查 scheduler/watchdog 进程。</p>
         <small>{lastSeen} · {staleAfter}</small>
       </div>
       <button className="guardian-alert-action" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw className={loading ? 'animate-spin' : ''} size={14} />
-        Refresh
+        刷新
       </button>
     </article>
   );
@@ -143,13 +135,13 @@ function GuardianStatusError({ error, loading, onRefresh }) {
     <article className="guardian-alert-banner degraded">
       <div className="guardian-alert-icon"><WifiOff size={18} /></div>
       <div className="guardian-alert-body">
-        <div className="guardian-alert-title-row"><strong>Guardian status unavailable</strong></div>
-        <p>无法读取 Guardian system status；页面保持可用，请检查后端连接或 500 错误。</p>
+        <div className="guardian-alert-title-row"><strong>无法读取 Guardian 状态</strong></div>
+        <p>页面保持可用，但告警状态可能不是最新。请检查后端连接或服务错误后重试。</p>
         <small>{error}</small>
       </div>
       <button className="guardian-alert-action" disabled={loading} onClick={onRefresh} type="button">
         <RefreshCw className={loading ? 'animate-spin' : ''} size={14} />
-        Retry
+        重试
       </button>
     </article>
   );
@@ -164,19 +156,6 @@ function visibleOpenAlerts(alerts, ackedIds) {
 
 function alertRank(alert) {
   return alert?.severity === 'urgent' ? 0 : 1;
-}
-
-function alertTitle(alert) {
-  return ALERT_TYPE_LABELS[alert.alert_type] || alert.alert_type || 'Guardian alert';
-}
-
-function alertMeta(alert) {
-  const parts = [
-    alert.project_id ? `project ${alert.project_id}` : '',
-    alert.issue_id ? `issue #${alert.issue_id}` : '',
-    alert.watchdog_seen_at ? `seen ${formatDate(alert.watchdog_seen_at)}` : '',
-  ].filter(Boolean);
-  return parts.join(' · ') || 'Guardian system alert';
 }
 
 function formatDate(value) {
