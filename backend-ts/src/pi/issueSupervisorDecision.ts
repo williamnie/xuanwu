@@ -45,6 +45,8 @@ const SUPERVISOR_TOOL_NAMES = [
   "ls"
 ];
 
+const HARD_OUTAGE_DIAGNOSES = new Set(["provider_runtime_unavailable", "session_recovery_exhausted", "recovery_budget_exhausted"]);
+
 export async function runPiSupervisorDecision(
   input: PiSupervisorDecisionRuntimeInput
 ): Promise<PiSupervisorDecisionRuntimeResult> {
@@ -90,10 +92,13 @@ function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date): str
     "Schema fields: decision, confidence, rationale, recovery_message, wait_until, risk_level, evidence_refs, expected_outcome, fallback_if_no_progress.",
     "Allowed decisions: wait, resume_session, steer_running_turn, retry_issue, needs_user, blocked, noop.",
     "Boundary constraints:",
+    "- PI owns issue lifecycle; Codex/Claude are executor workers in a generic worker/provider model.",
     "- Check current issue/session/project state before recommending recovery.",
     "- Avoid duplicate operations and repeated recovery loops.",
     "- Respect provider retry-after windows; do not resume before a future wait_until.",
     "- 401/auth/permission/quota/business failures require needs_user or blocked, not automatic resume.",
+    "- For provider_runtime_unavailable, repeated provider initialize timeout, missing provider session, session_recovery_exhausted, or recovery_budget_exhausted, choose needs_user or blocked.",
+    "- In hard outage cases, recovery_message must explain user-facing next steps to repair/restart the worker/provider runtime or retry later; do not tell the worker to simply continue.",
     "- Do not bypass executor completion contract: executor must still verify, commit if required, and update issue final status.",
     "- Generate recovery_message from this context; do not use a fixed generic 'continue' template.",
     `Current time: ${now.toISOString()}`,
@@ -160,8 +165,9 @@ function semanticDecisionError(
   now: Date
 ): string {
   const decisionType = cleanString(decision.decision);
-  if (deterministicNeedsUser(context) && !["needs_user", "blocked"].includes(decisionType)) {
-    return "supervisor decision attempted automatic recovery for a deterministic needs_context diagnosis or human-only provider failure";
+  const blockedReason = deterministicNeedsUserReason(context);
+  if (blockedReason && !["needs_user", "blocked"].includes(decisionType)) {
+    return blockedReason;
   }
   if (futureRetryAfter(context, now) && !["wait", "needs_user", "blocked", "noop"].includes(decisionType)) {
     return "supervisor decision ignored a future provider retry-after window";
@@ -256,9 +262,27 @@ function providerCategory(context: IssueSupervisorRecoveryContext): string {
   return cleanString(context.provider_error?.category);
 }
 
-function deterministicNeedsUser(context: IssueSupervisorRecoveryContext): boolean {
-  return isAutomaticRecoveryBlockedDiagnosis(primaryDiagnosis(context)) ||
-    ["auth", "permission", "quota", "business_failure"].includes(providerCategory(context));
+function deterministicNeedsUserReason(context: IssueSupervisorRecoveryContext): string {
+  const hardOutage = hardOutageDiagnosis(context);
+  if (hardOutage) {
+    return `supervisor decision attempted automatic recovery for provider runtime unavailable or exhausted recovery diagnosis (${hardOutage}); PI must choose needs_user or blocked`;
+  }
+  if (isAutomaticRecoveryBlockedDiagnosis(primaryDiagnosis(context)) ||
+    ["auth", "permission", "quota", "business_failure"].includes(providerCategory(context))) {
+    return "supervisor decision attempted automatic recovery for a deterministic needs_context diagnosis or human-only provider failure";
+  }
+  return "";
+}
+
+function hardOutageDiagnosis(context: IssueSupervisorRecoveryContext): string {
+  return allDiagnosisCodes(context).find((code) => HARD_OUTAGE_DIAGNOSES.has(code)) ?? "";
+}
+
+function allDiagnosisCodes(context: IssueSupervisorRecoveryContext): string[] {
+  return [
+    ...context.candidates.map((candidate) => cleanString(candidate.diagnosis_code)),
+    cleanString(context.provider_error?.diagnosis_code)
+  ].filter((code) => code !== "");
 }
 
 function futureRetryAfter(context: IssueSupervisorRecoveryContext, now: Date): boolean {

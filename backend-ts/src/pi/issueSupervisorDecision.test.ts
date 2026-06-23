@@ -9,6 +9,7 @@ import {
   cleanupDecisionFixtures,
   insertIssueFixture,
   openDecisionFixture,
+  providerRuntimeUnavailableContext,
   rateLimitContext,
   streamDisconnectContext
 } from "./issueSupervisorDecisionTestSupport.ts";
@@ -181,6 +182,81 @@ describe("PI supervisor decision runtime", () => {
       expect(result.valid).toBe(true);
       expect(result.decision.decision).toBe("needs_user");
       expect(result.decision.decision).not.toBe("resume_session");
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
+
+  test("rejects automatic recovery for provider runtime unavailable hard outage", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-provider-outage-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    try {
+      faux.setResponses([fauxAssistantMessage(JSON.stringify({
+        confidence: "medium",
+        decision: "resume_session",
+        evidence_refs: ["provider_error", "latest_run", "session"],
+        expected_outcome: "incorrectly asks the unavailable Claude worker to continue",
+        fallback_if_no_progress: "needs_user",
+        rationale: "mistakenly treats initialize timeout without session as recoverable",
+        recovery_message: "Continue the session.",
+        risk_level: "medium"
+      }))]);
+
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: providerRuntimeUnavailableContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.decision.decision).toBe("needs_user");
+      expect(result.error).toContain("provider runtime unavailable");
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
+
+  test("accepts user-facing hard outage needs_user or blocked decisions", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-provider-outage-blocked-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    let promptText = "";
+    try {
+      faux.setResponses(["needs_user", "blocked"].map((decision) => (context) => {
+        promptText = JSON.stringify(context);
+        return fauxAssistantMessage(JSON.stringify({
+          confidence: "high",
+          decision,
+          evidence_refs: ["provider_error", "latest_run", "session"],
+          expected_outcome: "the user repairs the unavailable worker runtime before PI retries execution",
+          fallback_if_no_progress: "blocked",
+          rationale: "provider initialize timed out and no provider session exists for automatic recovery",
+          recovery_message: "PI detected the Claude worker runtime is unavailable for issue #526. Please restart or repair the provider runtime, then retry the issue.",
+          risk_level: "medium"
+        }));
+      }));
+
+      for (const decision of ["needs_user", "blocked"]) {
+        const result = await runPiSupervisorDecision({
+          agent: fixture.agent,
+          context: providerRuntimeUnavailableContext(),
+          database: fixture.db,
+          now: NOW,
+          project: fixture.project
+        });
+        expect(result.valid).toBe(true);
+        expect(result.decision.decision).toBe(decision);
+      }
+      const supervisorPrompt = JSON.parse(promptText).messages[0].content[0].text as string;
+      expect(supervisorPrompt).toContain("PI owns issue lifecycle");
+      expect(supervisorPrompt).toContain("generic worker/provider model");
+      expect(supervisorPrompt).toContain("executor workers");
+      expect(supervisorPrompt).toContain("Codex/Claude");
+      expect(supervisorPrompt).toContain("provider_runtime_unavailable");
+      expect(supervisorPrompt).not.toContain("Codex is the only provider");
     } finally {
       faux.unregister();
       fixture.db.close();

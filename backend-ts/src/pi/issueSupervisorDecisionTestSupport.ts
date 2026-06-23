@@ -91,6 +91,39 @@ export function authContext(): IssueSupervisorRecoveryContext {
   };
 }
 
+export function providerRuntimeUnavailableContext(): IssueSupervisorRecoveryContext {
+  return {
+    ...streamDisconnectContext(),
+    candidates: [{
+      diagnosis_code: "executor_stream_disconnected",
+      evidence_refs: ["provider_error"],
+      reason: "stream disconnected before completion"
+    }, {
+      diagnosis_code: "provider_runtime_unavailable",
+      evidence_refs: ["provider_error", "latest_run", "session"],
+      reason: "latest provider error has no recoverable provider session"
+    }],
+    issue: { attempt_count: 1, id: 526, status: "in_progress", title: "Provider runtime unavailable" },
+    latest_run: {
+      ended_at: "", id: "issue-526-attempt-1", provider: "claude",
+      provider_session_id: "", provider_turn_id: "", started_at: "2026-06-10T07:50:00Z", status: "in_progress"
+    },
+    policy: { allowed_actions: ["session.resume_followup"], budget_remaining: 1 },
+    project: { auto_run: true, cwd: "/tmp/demo", id: "demo", provider: "claude" },
+    provider_error: {
+      category: "network",
+      diagnosis_code: "provider_transient_network_error",
+      provider: "claude",
+      raw_summary: "Claude Code run timed out after 10000ms: initialize"
+    },
+    recovery_history: { attempts_24h: 1, budget_remaining: 1, last_outcome: "deferred" },
+    session: {
+      provider: "claude", provider_session_id: "", provider_turn_id: "",
+      raw_status: "", run_state: "open", status: "unknown"
+    }
+  };
+}
+
 export function businessFailureContext(): IssueSupervisorRecoveryContext {
   return {
     ...streamDisconnectContext(),
