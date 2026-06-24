@@ -6,6 +6,9 @@ import { buildFeishuConnectorConfig } from "./feishu.ts";
 import { createFeishuReceiverManager, type FeishuWsFactory } from "./feishuReceiver.ts";
 import { listExternalEvents } from "../db/repositories/externalEvents.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { createPiAction, getPiAction } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 
 const tempRoots: string[] = [];
@@ -109,6 +112,41 @@ describe("Feishu WebSocket receiver", () => {
     expect(manager.status()).toMatchObject({ connected: true, state: "connected" });
     database.close();
   });
+
+  test("resolves PI action card actions from long connection callbacks", async () => {
+    const { database, factory, messages } = await receiverFixture();
+    insertProject(database);
+    const issue = createIssue(database, { project_id: "demo", status: "triage", title: "PI action target" });
+    createPiAction(database, {
+      action_type: "issue.comment",
+      gate_decision: "ask",
+      id: "pi-action-ws-1",
+      issue_id: issue.id,
+      payload_json: JSON.stringify({ body: "Approved from websocket", issue_id: issue.id }),
+      project_id: "demo",
+      requires_confirmation: 1,
+      risk_level: "medium",
+      status: "pending"
+    });
+    const manager = createFeishuReceiverManager({ database, wsFactory: factory });
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_ALLOWED_USER_IDS: "ou_user_1",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+
+    await manager.restart(config);
+    const response = await messages.emit(piActionCardEvent("pi-action-ws-1", "approve"));
+
+    expect(response).toMatchObject({ ok: true, status: "completed" });
+    expect(getPiAction(database, "pi-action-ws-1")).toMatchObject({
+      approved_by: "feishu:ou_user_1",
+      status: "completed"
+    });
+    expect(listIssueEvents(database, issue.id).map((event) => event.type)).toContain("issue.comment");
+    database.close();
+  });
 });
 
 async function receiverFixture(): Promise<{
@@ -119,7 +157,7 @@ async function receiverFixture(): Promise<{
   const root = await mkdtemp(join(tmpdir(), "codex-runner-feishu-ws-"));
   tempRoots.push(root);
   const database = await openDatabase({ stateDir: join(root, "state") });
-  const messages = { emit: async (_event: unknown) => undefined as void };
+  const messages = { emit: async (_event: unknown) => undefined as unknown };
   const factory = Object.assign(((input) => {
     messages.emit = (event: unknown) => isCardAction(event) ? input.onCardAction(event) : input.onMessage(event);
     return {
@@ -186,4 +224,42 @@ function projectSelectionActionEvent(): Record<string, unknown> {
     },
     schema: "2.0"
   };
+}
+
+function piActionCardEvent(actionID: string, decision: string): Record<string, unknown> {
+  return {
+    event: {
+      action: {
+        value: {
+          action: "pi_action_resolve",
+          decision,
+          pi_action_id: actionID
+        }
+      },
+      context: {
+        open_chat_id: "oc_group",
+        open_message_id: "om_pi_action_ws_1"
+      },
+      operator: {
+        operator_id: {
+          open_id: "ou_open_1",
+          user_id: "ou_user_1"
+        }
+      }
+    },
+    header: {
+      event_id: "evt_pi_action_ws_1",
+      event_type: "card.action.trigger"
+    },
+    schema: "2.0"
+  };
+}
+
+function insertProject(database: RunnerDatabase): void {
+  database.sqlite.run(
+    `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ["demo", "Demo", "/tmp/demo", "codex", '{"capabilities":["issue_execution"]}', 1,
+      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
 }

@@ -6,6 +6,11 @@ import type { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { projectSelectionCallbackAcceptedBody } from "./feishuCardCallbackResponse.ts";
 import { ingestFeishuMessageEvent, publishFeishuAudit, rawPayloadRef } from "./feishuIngest.ts";
 import { normalizeFeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
+import { normalizeFeishuApprovalAction } from "./feishuApprovalCards.ts";
+import { resolvePiApprovalRequestFromFeishu } from "./feishuApprovalRequests.ts";
+import { normalizeFeishuPiActionCardAction } from "./feishuPiActionCards.ts";
+import { resolvePiActionFromFeishu } from "./feishuPiActionResolve.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 
 export type FeishuReceiverStatus = {
   connected: boolean;
@@ -36,6 +41,7 @@ type FeishuReceiverManagerOptions = {
   agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   bus?: EventBus;
   database: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   wsFactory?: FeishuWsFactory;
 };
 
@@ -109,14 +115,24 @@ export function createFeishuReceiverManager(options: FeishuReceiverManagerOption
   async function ingestCardAction(event: unknown, config: FeishuConnectorConfig): Promise<unknown> {
     status = { ...status, last_event_at: new Date().toISOString() };
     const rawRef = rawPayloadRef(event);
+    const approvalAction = normalizeFeishuApprovalAction(event);
+    if (approvalAction) {
+      if (!cardActionAllowed(config, approvalAction)) return publishRejectedCardAction(config, rawRef, "approval_callback_forbidden");
+      return resolvePiApprovalRequestFromFeishu(options.database, { ...approvalAction, providers: options.providers });
+    }
+    const piAction = normalizeFeishuPiActionCardAction(event);
+    if (piAction) {
+      if (!cardActionAllowed(config, piAction)) return publishRejectedCardAction(config, rawRef, "pi_action_callback_forbidden");
+      return resolvePiActionFromFeishu(receiverContext(config), piAction);
+    }
     const projectAction = normalizeFeishuProjectSelectionAction(event);
-    if (!projectAction) return publishRejectedCardAction(config, rawRef);
+    if (!projectAction) return publishRejectedCardAction(config, rawRef, "unsupported_card_action");
     await options.agentBridge?.handleProjectSelectionAction(projectAction);
     return projectSelectionCallbackAcceptedBody();
   }
 
   function receiverContext(config: FeishuConnectorConfig) {
-    return { bus: options.bus, config, database: options.database };
+    return { bus: options.bus, config, database: options.database, providers: options.providers };
   }
 
   function connect(): void {
@@ -175,14 +191,32 @@ function shouldStart(config: FeishuConnectorConfig): boolean {
   return config.receiveMode === "websocket" && feishuConnectorStatus(config).enabled === true;
 }
 
-function publishRejectedCardAction(config: FeishuConnectorConfig, rawRef: string): void {
+function publishRejectedCardAction(config: FeishuConnectorConfig, rawRef: string, reason: string): void {
   publishFeishuAudit({ config }, {
     connector: "feishu",
     outcome: "rejected",
     raw_payload_ref: rawRef,
-    reason: "unsupported_card_action",
+    reason,
     transport: "websocket"
   });
+}
+
+function cardActionAllowed(
+  config: FeishuConnectorConfig,
+  action: { chatID?: string; userID?: string; userOpenID?: string }
+): boolean {
+  if (!targetAllowed(config.allowedChatIds, cleanString(action.chatID))) return false;
+  if (!targetAllowed(config.allowedUserIds, cleanString(action.userID)) &&
+    !targetAllowed(config.allowedUserIds, cleanString(action.userOpenID))) return false;
+  return true;
+}
+
+function targetAllowed(allowlist: string[], value: string): boolean {
+  return allowlist.length === 0 || (value !== "" && allowlist.includes(value));
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function normalizeState(

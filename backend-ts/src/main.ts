@@ -46,7 +46,7 @@ const feishuBridge = createFeishuAgentBridge({
     return { conversationId: result.conversation_id, projectId, text: result.text };
   }
 });
-const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, bus, database });
+const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, bus, database, providers });
 const server = await startServer(config, {
   bus,
   database,

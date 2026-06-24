@@ -41,7 +41,7 @@ export function formatPiActionPendingNotification(input: { actionID: string; act
   return [
     `Pi：${issue} 需要用户确认才能继续。`,
     `待确认动作：${actionType}（${actionID}）`,
-    "下一步：请在 Runner issue/PI 审批入口确认、拒绝或要求修改。"
+    "下一步：可直接在本 Feishu 卡片批准、拒绝、要求修改或暂缓；Runner issue/后端 API 仍作为备用入口。"
   ].join("\n");
 }
 

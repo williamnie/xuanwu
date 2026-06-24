@@ -28,6 +28,7 @@ import {
   formatPiActionPendingNotification,
   formatPiNeedsUserNotification
 } from "./feishuNotificationFormatters.ts";
+import { piActionApprovalActionID } from "./feishuPiActionCards.ts";
 import {
   alreadyQueuedFeishuNotification,
   createFeishuNotificationDraft
@@ -165,6 +166,7 @@ export function queueFeishuPiActionPendingNotification(db: RunnerDatabase, event
   const finalTarget = target ?? fallback;
   if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
   createFeishuNotificationDraft(db, issue ?? { id: event.issueId ?? 0, project_id: safeText(event.projectId) }, finalTarget, {
+    approvalActionID: piActionApprovalActionID(actionID),
     content: formatPiActionPendingNotification({
       actionID,
       actionType: safeText(payload.action_type),

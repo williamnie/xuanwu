@@ -7,8 +7,12 @@ import {
   markSyncOutboxRetry,
   markSyncOutboxSent
 } from "../db/repositories/imReplyOutboxDispatch.ts";
-import { getPiApprovalRequest } from "../db/repositories/pi.ts";
+import { getPiAction, getPiApprovalRequest } from "../db/repositories/pi.ts";
 import { buildFeishuApprovalCard } from "../integrations/feishuApprovalCards.ts";
+import {
+  buildFeishuPiActionCard,
+  piActionIDFromApprovalActionID
+} from "../integrations/feishuPiActionCards.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FeishuClientError, type FeishuMessageClient } from "../integrations/feishuClient.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -71,6 +75,17 @@ async function sendFeishuMessage(
 ): Promise<{ messageId: string }> {
   const target = sendTarget(outbox);
   const approvalID = approvalRequestID(outbox);
+  const piActionID = piActionIDFromApprovalActionID(approvalID);
+  if (piActionID !== "" && options.sender.sendInteractiveCard) {
+    return await options.sender.sendInteractiveCard({
+      ...target,
+      card: buildFeishuPiActionCard({
+        actionID: piActionID,
+        issueID: outbox.issue_id,
+        text: outbox.content
+      })
+    });
+  }
   const approval = approvalID ? getPiApprovalRequest(options.database, approvalID) : null;
   if (approval && options.sender.sendInteractiveCard) {
     return await options.sender.sendInteractiveCard({
@@ -121,7 +136,11 @@ function preflightPolicy(db: RunnerDatabase, outbox: SyncOutboxRecord, config: F
   if (outbox.content.trim() === "") return "outbox content is empty";
   if (outbox.risk !== "low") return `outbox risk is not allowed: ${outbox.risk}`;
   const approval = approvalRequestID(outbox);
-  if (approval !== "" && !getPiApprovalRequest(db, approval)) return "approval request is missing";
+  const piActionID = piActionIDFromApprovalActionID(approval);
+  if (piActionID !== "" && !getPiAction(db, piActionID)) return "PI action is missing";
+  if (approval !== "" && piActionIDFromApprovalActionID(approval) === "" && !getPiApprovalRequest(db, approval)) {
+    return "approval request is missing";
+  }
   const target = sendTarget(outbox);
   if (target.receiveId === "") return "outbox receive id is empty";
   if (!targetAllowed(config, target)) return `${target.receiveIdType.replace("_id", "")} is not allowed: ${target.receiveId}`;

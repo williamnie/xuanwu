@@ -13,6 +13,8 @@ import { normalizeFeishuMessageEvent } from "../integrations/feishu.ts";
 import { normalizeFeishuProjectSelectionAction } from "../integrations/feishuProjectSelection.ts";
 import { normalizeFeishuApprovalAction } from "../integrations/feishuApprovalCards.ts";
 import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
+import { normalizeFeishuPiActionCardAction } from "../integrations/feishuPiActionCards.ts";
+import { resolvePiActionFromFeishu } from "../integrations/feishuPiActionResolve.ts";
 import { projectSelectionCallbackAcceptedBody } from "../integrations/feishuCardCallbackResponse.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
@@ -67,6 +69,18 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
       return json(result, { status: 202 });
     } catch (error) {
       return reject(context, "approval_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
+    }
+  }
+  const piAction = normalizeFeishuPiActionCardAction(parsed.body);
+  if (piAction) {
+    if (!context.database) return json({ ok: false, reason: "database_unavailable" }, { status: 503 });
+    if (!approvalActionAllowed(context.config, piAction)) {
+      return reject(context, "pi_action_callback_forbidden", rawRef, 403, parsed.encrypted, "feishu approval callback is not allowed");
+    }
+    try {
+      return json(await resolvePiActionFromFeishu({ ...context, database: context.database }, piAction), { status: 202 });
+    } catch (error) {
+      return reject(context, "pi_action_callback_failed", rawRef, 409, parsed.encrypted, safeError(error));
     }
   }
   const projectAction = normalizeFeishuProjectSelectionAction(parsed.body);
