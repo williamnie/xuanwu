@@ -102,7 +102,8 @@ function lifecyclePayload(issue: Issue): Record<string, string | number> {
 }
 
 function lifecycleSeverity(status: string): string {
-  if (status === "failed" || status === "pending_verification") return "watch";
+  if (status === "failed") return "needs_user";
+  if (status === "pending_verification") return "watch";
   return "info";
 }
 

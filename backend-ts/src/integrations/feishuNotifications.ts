@@ -65,6 +65,7 @@ export function attachFeishuNotificationObservers(input: {
     try {
       if ((event.type === "issue.status_changed" || event.type === "issue.created") && event.issueId) {
         const result = queueFeishuIssueStatusNotification(input.database, event.issueId, {
+          config: input.config,
           eventType: event.type,
           suppressDirectStart: shouldSuppressLifecycleStartNotification(input.database, event.issueId)
         });
@@ -74,6 +75,7 @@ export function attachFeishuNotificationObservers(input: {
       }
       if (isPiIssueStartEvent(input.database, event)) {
         const result = queueFeishuIssueStatusNotification(input.database, event.issueId ?? 0, {
+          config: input.config,
           conversationId: event.conversationId
         });
         dispatchIfQueued(input, result);

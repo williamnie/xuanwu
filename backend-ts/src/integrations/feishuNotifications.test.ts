@@ -131,6 +131,41 @@ describe("Feishu notification queue", () => {
     }
   });
 
+  test("router dispatches unlinked failed issue notifications to the default Feishu target", async () => {
+    const db = await fixtureDatabase();
+    const bus = new EventBus();
+    const sender = new FakeFeishuSender();
+    const config = buildConfig({
+      feishuAppId: "cli_app_id",
+      feishuAppSecret: "app-secret-value",
+      feishuDefaultChatId: "oc_default"
+    });
+    try {
+      const issue = createIssue(db, { project_id: "demo", title: "Needs human", status: "todo" });
+      const router = createDefaultRouter({ bus, config, database: db, feishuSender: sender });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issue.id}`, {
+        body: JSON.stringify({ error: "backend contract missing", status: "failed" }),
+        headers: { "content-type": "application/json" },
+        method: "PATCH"
+      }));
+      await until(() => sender.calls.length > 0);
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+
+      expect(response.status).toBe(200);
+      expect(sender.calls).toEqual([{
+        receiveId: "oc_default",
+        receiveIdType: "chat_id",
+        text: "Pi：issue #1 执行失败/阻塞：Needs human\n" +
+          "错误摘要：backend contract missing\n" +
+          "下一步：请查看 Runner issue #1 的日志，补充授权/信息后 retry 或重新排队。"
+      }]);
+      expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("queues one Feishu needs-user draft for a linked issue and dedupes repeats", async () => {
     const db = await fixtureDatabase();
     try {

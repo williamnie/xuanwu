@@ -8,6 +8,7 @@ import {
   listPiNotificationIntents,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
+import type { FeishuConnectorConfig } from "./feishu.ts";
 import { formatRunGroupDigest } from "../pi/digestFormatter.ts";
 import { ingestIssueLifecycleEvent } from "../pi/guardianEventIngest.ts";
 import {
@@ -24,6 +25,7 @@ import {
   createFeishuNotificationDraft
 } from "./feishuNotificationDrafts.ts";
 import {
+  feishuFallbackTargetForProject,
   feishuTargetForConversation,
   feishuTargetForIssue
 } from "./feishuNotificationTargets.ts";
@@ -39,7 +41,12 @@ const DEFAULT_DIGEST_LIMIT = 20;
 export function queueFeishuIssueStatusNotification(
   db: RunnerDatabase,
   issueID: number,
-  options: { conversationId?: string; eventType?: string; suppressDirectStart?: boolean } = {}
+  options: {
+    config?: FeishuConnectorConfig;
+    conversationId?: string;
+    eventType?: string;
+    suppressDirectStart?: boolean;
+  } = {}
 ): QueueResult {
   const issue = getIssue(db, issueID);
   if (!issue) return { queued: false, reason: "issue_not_found" };
@@ -52,10 +59,11 @@ export function queueFeishuIssueStatusNotification(
     issue,
     runGroupID
   });
-  const target = lifecycleTarget(db, issue.id, conversationID, event.run_group_id);
-  if (!target && issueCompletionWatchOwnsTargetForIssue(db, issue.id)) {
+  const linkedTarget = linkedLifecycleTarget(db, issue.id, conversationID, event.run_group_id);
+  if (!linkedTarget && issueCompletionWatchOwnsTargetForIssue(db, issue.id)) {
     return { queued: false, reason: "issue_completion_watch_owns_target" };
   }
+  const target = linkedTarget ?? fallbackLifecycleTarget(issue, options.config);
   const intentResult = createLifecycleIntent(db, issue, event, target);
   if (intentResult.decision === "suppress") {
     return { queued: false, reason: "run_group_lifecycle_suppressed" };
@@ -109,7 +117,7 @@ function createLifecycleIntent(
   });
 }
 
-function lifecycleTarget(
+function linkedLifecycleTarget(
   db: RunnerDatabase,
   issueID: number,
   conversationID: string | undefined,
@@ -119,6 +127,11 @@ function lifecycleTarget(
     feishuTargetForConversation(db, conversationID ?? "") ??
     feishuTargetForConversation(db, getPiRunGroup(db, runGroupID)?.origin_conversation_id ?? "") ??
     feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID));
+}
+
+function fallbackLifecycleTarget(issue: Issue, config: FeishuConnectorConfig | undefined) {
+  if (issue.status !== "failed") return null;
+  return feishuFallbackTargetForProject(config, issue.project_id);
 }
 
 function legacyEnqueueConversationID(db: RunnerDatabase, issueID: number): string {

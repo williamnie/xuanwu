@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listExternalLinksByIssue } from "../db/repositories/externalLinks.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import type { FeishuConnectorConfig } from "./feishuTypes.ts";
 
 export type FeishuTarget = { chatID: string; eventID: number; messageID: string; threadID: string };
 
@@ -20,6 +21,17 @@ export function feishuTargetForConversation(db: RunnerDatabase, conversationID: 
   const link = latestFeishuConversationLink(db, conversation);
   if (link) return feishuTargetFromLink(db, link, conversation);
   const chatID = chatIDFromConversation(conversation);
+  return chatID === "" ? null : { chatID, eventID: 0, messageID: "", threadID: "" };
+}
+
+export function feishuFallbackTargetForProject(
+  config: FeishuConnectorConfig | undefined,
+  projectID: string
+): FeishuTarget | null {
+  if (!config) return null;
+  const mapping = config.projectMappings.find((item) => item.projectId === projectID);
+  const chatID = safeText(mapping?.chatId) || safeText(mapping?.userId) ||
+    safeText(config.defaultChatId) || safeText(config.defaultUserId);
   return chatID === "" ? null : { chatID, eventID: 0, messageID: "", threadID: "" };
 }
 

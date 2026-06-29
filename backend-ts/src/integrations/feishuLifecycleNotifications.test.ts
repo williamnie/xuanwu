@@ -11,6 +11,7 @@ import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { createPiAction, listPiGuardianEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { createBatchRunGroup, updateRunGroupEnqueueResult } from "../pi/runGroupService.ts";
+import { buildFeishuConnectorConfig } from "./feishu.ts";
 import { queueFeishuIssueStatusNotification } from "./feishuLifecycleNotifications.ts";
 
 const tempRoots: string[] = [];
@@ -120,6 +121,40 @@ describe("Feishu lifecycle notification intents", () => {
           state: "suppressed"
         })
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("unlinked failed issues fall back to Feishu default target without enabling done spam", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const config = buildFeishuConnectorConfig({ defaultChatId: "oc_default" });
+      const failedIssue = createIssue(db, { project_id: "demo", title: "Needs human", status: "todo" });
+      const doneIssue = createIssue(db, { project_id: "demo", title: "Ordinary done", status: "done" });
+      updateIssue(db, failedIssue.id, { error: "backend contract missing", status: "failed" });
+
+      const failed = queueFeishuIssueStatusNotification(db, failedIssue.id, { config });
+      const done = queueFeishuIssueStatusNotification(db, doneIssue.id, { config });
+      const intents = listPiNotificationIntents(db, { issueId: failedIssue.id });
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+
+      expect(failed).toMatchObject({ queued: true, reason: "queued" });
+      expect(done).toMatchObject({ queued: false, reason: "missing_feishu_link" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        issue_id: failedIssue.id,
+        target_chat_id: "oc_default"
+      });
+      expect(outbox[0]?.content).toContain("执行失败/阻塞");
+      expect(intents).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          decision: "send_now",
+          kind: "issue_failed",
+          severity: "needs_user",
+          state: "sent"
+        })
+      ]));
     } finally {
       db.close();
     }
