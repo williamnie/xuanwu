@@ -5,17 +5,20 @@ import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
 
 const STATUS_TODO = "todo";
+const STATUS_IN_PROGRESS = "in_progress";
 const STATUS_CANCELLED = "cancelled";
 
 export type IssueActionOptions = { serviceTier?: string; serviceTierProvided?: boolean };
 
 export function enqueueIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
   const issue = mustGetRunnableIssue(db, id);
+  if (isIssueActivelyRunning(db, issue)) return issue;
   return queueIssue(db, issue, options);
 }
 
 export function retryIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
   const issue = mustGetRunnableIssue(db, id);
+  if (isIssueActivelyRunning(db, issue)) return issue;
   return queueIssue(db, issue, options);
 }
 
@@ -52,6 +55,10 @@ function hasOpenIssueRun(db: RunnerDatabase, issueID: number): boolean {
     "select count(*) as count from issue_runs where issue_id=? and ended_at=''"
   ).get(issueID);
   return (row?.count ?? 0) > 0;
+}
+
+function isIssueActivelyRunning(db: RunnerDatabase, issue: Issue): boolean {
+  return issue.status === STATUS_IN_PROGRESS && hasOpenIssueRun(db, issue.id);
 }
 
 function queueIssue(db: RunnerDatabase, issue: Issue, options: IssueActionOptions): Issue {

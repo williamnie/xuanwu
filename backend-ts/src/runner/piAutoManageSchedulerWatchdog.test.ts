@@ -7,6 +7,7 @@ import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import {
   createPiNotificationIntent,
   getPiGuardianWatchdogStatus,
+  listPiGuardianAlerts,
   listPiNotificationIntents,
   upsertPiGuardianAlert
 } from "../db/repositories/pi.ts";
@@ -72,11 +73,16 @@ describe("PI auto-manage scheduler watchdog integration", () => {
       expect(result.missedIntentSweep).toMatchObject({ summaries: 1, windows: 1 });
       expect(result.digestNotifications).toMatchObject({ queued: 1 });
       expect(digests).toMatchObject([{ flush_reason: "recovery", state: "sent" }]);
+      expect(listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "open" })).toHaveLength(0);
+      expect(listPiGuardianAlerts(db, { alertType: "outbox_stalled", status: "resolved" })).toMatchObject([
+        expect.objectContaining({ message: "outbox recovered", watchdog_seen_at: "2026-06-19T00:10:00Z" })
+      ]);
       expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);
     } finally {
       db.close();
     }
   });
+
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {

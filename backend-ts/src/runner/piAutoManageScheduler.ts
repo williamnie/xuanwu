@@ -24,6 +24,7 @@ import {
   runPiGuardianWatchdogOnce,
   type PiGuardianWatchdogSummary
 } from "../pi/guardianWatchdog.ts";
+import { resolveRecoveredAlerts } from "../pi/guardianWatchdogMaintenance.ts";
 import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
@@ -167,6 +168,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     staleAfterMs: input.watchdogStaleAfterMs
   });
   const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
+  resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);
   return {
@@ -244,4 +246,10 @@ function guardianDirectFeishuOptions(input: PiAutoManageCycleInput): PiGuardianD
 function optionalDate(value: Date | string | undefined): Date | undefined {
   if (value instanceof Date) return value;
   return typeof value === "string" && value.trim() !== "" ? new Date(value) : undefined;
+}
+
+function cycleNowText(value: Date | string | undefined): string {
+  if (value instanceof Date) return value.toISOString().replace(/\.\d{3}Z$/, "Z");
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }

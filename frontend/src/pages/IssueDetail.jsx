@@ -73,6 +73,13 @@ function parseEventPayload(event) {
   }
 }
 
+function issueStatusFromEvent(event) {
+  const directStatus = typeof event?.status === 'string' ? event.status : '';
+  if (directStatus) return directStatus;
+  const payload = parseEventPayload(event);
+  return typeof payload.status === 'string' ? payload.status : '';
+}
+
 function legacyAgentEventType(method) {
   if (method === 'item/agentMessage/delta') return 'agent.message.delta';
   if (method === 'item/commandExecution/outputDelta') return 'agent.command.output_delta';
@@ -317,8 +324,11 @@ export default function IssueDetail({ issueId, navigateTo }) {
       // 如果收到的事件是关于当前这一条 issue 的，动态更新
       if (Number(data.issueId) === Number(issueId)) {
         updateDetailState(draft => {
-          if (data.type === 'issue.status_changed' && draft.issue && draft.issue.status !== data.status) {
-            draft.issue.status = data.status;
+          if (data.type === 'issue.status_changed' && draft.issue) {
+            const nextStatus = issueStatusFromEvent(data);
+            if (nextStatus && draft.issue.status !== nextStatus) {
+              draft.issue.status = nextStatus;
+            }
           }
 
           if (data.type === 'issue.notification_failed' && draft.issue) {
@@ -623,7 +633,7 @@ ${error}` : error;
 
       // 1. 系统状态变更
       if (event.type === 'issue.status_changed') {
-        const status = event.status || payload.status || 'unknown';
+        const status = issueStatusFromEvent(event) || 'unknown';
         const reason = payload.reason ? `（原因：${interruptReasonLabel(payload.reason)}）` : '';
         return (
           <div key={event.id || idx} className="terminal-line header">
@@ -911,7 +921,7 @@ ${error}` : error;
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>当前状态:</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{issue.status.toUpperCase()}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{String(issue.status || 'unknown').toUpperCase()}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>

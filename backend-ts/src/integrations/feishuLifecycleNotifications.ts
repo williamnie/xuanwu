@@ -63,7 +63,10 @@ export function queueFeishuIssueStatusNotification(
     suppressLifecycleIntent(db, intentResult.intent, "runner_chat_start_summarized_by_pi");
     return { queued: false, reason: "runner_chat_start_summarized_by_pi" };
   }
-  if (!target) return { queued: false, reason: "missing_feishu_link" };
+  if (!target) {
+    suppressLifecycleIntent(db, intentResult.intent, "missing_feishu_link");
+    return { queued: false, reason: "missing_feishu_link" };
+  }
   return queueLegacyFeishuDraft(db, issue, target, intentResult);
 }
 

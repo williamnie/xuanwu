@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   getPiGuardianWatchdogStatus,
   listPiGuardianAlerts,
+  listPiNotificationIntents,
   upsertPiGuardianWatchdogStatus
 } from "../db/repositories/pi.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
@@ -345,6 +346,72 @@ describe("PI Guardian watchdog detector", () => {
     }
   });
 
+  test("ignores unroutable lifecycle intents when checking coordinator stalls", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      insertUnroutableLifecycleIntent(db, "intent-start", 501, "issue_start");
+      insertUnroutableLifecycleIntent(db, "intent-done", 502, "issue_done");
+
+      const result = await runPiGuardianWatchdogOnce(db, {
+        now: NOW,
+        staleAfterMs: STALE_MS
+      });
+      const coordinator = result.checks.find((check) => check.component === "coordinator");
+
+      expect(coordinator).toMatchObject({ ok: true });
+      expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })).toHaveLength(0);
+      expect(listPiNotificationIntents(db, { projectId: "demo" })).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          decision: "suppress",
+          error: "missing_feishu_link",
+          id: "intent-start",
+          state: "suppressed"
+        }),
+        expect.objectContaining({
+          decision: "suppress",
+          error: "missing_feishu_link",
+          id: "intent-done",
+          state: "suppressed"
+        })
+      ]));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps recovered coordinator alert open for the scheduler missed-intent sweep", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      insertStaleNotificationIntent(db);
+      await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
+      const alert = listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })[0];
+      if (!alert) throw new Error("expected coordinator alert");
+      db.sqlite.run("update pi_notification_intents set state='suppressed', updated_at=? where id='intent-stale'", [
+        "2026-06-19T01:01:00Z"
+      ]);
+
+      const result = await runPiGuardianWatchdogOnce(db, {
+        now: new Date("2026-06-19T01:05:00Z"),
+        staleAfterMs: STALE_MS
+      });
+
+      expect(result.checks.find((check) => check.component === "coordinator")).toMatchObject({ ok: true });
+      expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "open" })).toMatchObject([
+        expect.objectContaining({
+          id: alert.id,
+          message: "coordinator stalled: 1 stale item(s)",
+          status: "open",
+          watchdog_seen_at: "2026-06-19T01:00:00Z"
+        })
+      ]);
+      expect(listPiGuardianAlerts(db, { alertType: "coordinator_stalled", status: "resolved" })).toHaveLength(0);
+    } finally {
+      db.close();
+    }
+  });
+
   test("detects coordinator digest approval scheduler and inbox issues", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -481,9 +548,23 @@ function insertStuckOutbox(db: RunnerDatabase, createdAt: string): void {
 function insertStaleNotificationIntent(db: RunnerDatabase): void {
   db.sqlite.run(
     `insert into pi_notification_intents
-     (id, idempotency_key, project_id, kind, state, created_at, updated_at)
-     values ('intent-stale', 'intent-stale-key', 'demo', 'issue_done', 'ready', ?, ?)`,
+     (id, idempotency_key, project_id, target_channel, kind, state, created_at, updated_at)
+     values ('intent-stale', 'intent-stale-key', 'demo', 'feishu', 'issue_done', 'ready', ?, ?)`,
     ["2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
+  );
+}
+
+function insertUnroutableLifecycleIntent(db: RunnerDatabase, id: string, issueID: number, kind: string): void {
+  db.sqlite.run(
+    `insert into issues (id, project_id, title, status, created_at, updated_at)
+     values (?, 'demo', ?, 'todo', ?, ?)`,
+    [issueID, `Issue ${issueID}`, "2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
+  );
+  db.sqlite.run(
+    `insert into pi_notification_intents
+     (id, idempotency_key, project_id, issue_id, kind, state, decision, created_at, updated_at)
+     values (?, ?, 'demo', ?, ?, 'ready', 'send_now', ?, ?)`,
+    [id, `${id}-key`, issueID, kind, "2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
   );
 }
 

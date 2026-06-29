@@ -1,0 +1,434 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2800" height="1650" viewBox="0 0 2800 1650">
+<defs>
+  <style>
+    :root { --font-display: 'DIN Alternate', 'Hiragino Sans GB', 'PingFang SC', 'Arial Unicode MS', sans-serif; --font-body: 'Hiragino Sans GB', 'PingFang SC', 'Arial Unicode MS', sans-serif; --font-mono: 'SF Mono', 'Menlo', 'PT Mono', monospace; }
+    .micro { letter-spacing: 6px; }
+    .title { letter-spacing: 1.5px; }
+    .card text { paint-order: stroke; stroke: rgba(4,16,33,0.14); stroke-width: 1px; }
+  </style>
+  <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#020816"/>
+    <stop offset="45%" stop-color="#07172f"/>
+    <stop offset="100%" stop-color="#030714"/>
+  </linearGradient>
+  <radialGradient id="halo1" cx="18%" cy="8%" r="58%"><stop offset="0%" stop-color="#0a78ff" stop-opacity="0.45"/><stop offset="100%" stop-color="#0a78ff" stop-opacity="0"/></radialGradient>
+  <radialGradient id="halo2" cx="88%" cy="18%" r="58%"><stop offset="0%" stop-color="#ff2fb3" stop-opacity="0.25"/><stop offset="100%" stop-color="#ff2fb3" stop-opacity="0"/></radialGradient>
+  <linearGradient id="cyanGrad" x1="0" x2="1"><stop offset="0" stop-color="#00f5ff"/><stop offset="1" stop-color="#2f80ff"/></linearGradient>
+  <linearGradient id="blueGrad" x1="0" x2="1"><stop offset="0" stop-color="#3c8bff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+  <linearGradient id="greenGrad" x1="0" x2="1"><stop offset="0" stop-color="#39ff88"/><stop offset="1" stop-color="#00d4a6"/></linearGradient>
+  <linearGradient id="magentaGrad" x1="0" x2="1"><stop offset="0" stop-color="#ff2fb3"/><stop offset="1" stop-color="#a855ff"/></linearGradient>
+  <linearGradient id="yellowGrad" x1="0" x2="1"><stop offset="0" stop-color="#ffd84a"/><stop offset="1" stop-color="#ff9f1a"/></linearGradient>
+  <linearGradient id="purpleGrad" x1="0" x2="1"><stop offset="0" stop-color="#a855ff"/><stop offset="1" stop-color="#3c8bff"/></linearGradient>
+  <linearGradient id="orangeGrad" x1="0" x2="1"><stop offset="0" stop-color="#ff9f1a"/><stop offset="1" stop-color="#ff3d71"/></linearGradient>
+  <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="9" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000" flood-opacity="0.42"/></filter>
+  <filter id="textGlow" x="-20%" y="-80%" width="140%" height="260%"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="grid" width="52" height="52" patternUnits="userSpaceOnUse"><path d="M 52 0 L 0 0 0 52" fill="none" stroke="#1c3e65" stroke-opacity="0.22" stroke-width="1"/></pattern>
+  <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12" fill="none" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+
+<rect width="2800" height="1650" fill="url(#bgGrad)"/>
+<rect width="2800" height="1650" fill="url(#halo1)"/>
+<rect width="2800" height="1650" fill="url(#halo2)"/>
+<rect x="0" y="0" width="2800" height="1650" fill="url(#grid)" opacity="0.48"/>
+<path d="M-120 1260 C 560 1120, 970 1420, 1580 1260 S 2390 1010, 2960 1180" stroke="#00e5ff" stroke-opacity="0.08" stroke-width="90" fill="none"/>
+<path d="M-60 1050 C 650 900, 1010 1040, 1500 930 S 2280 770, 2880 860" stroke="#ff2fb3" stroke-opacity="0.06" stroke-width="80" fill="none"/>
+
+<rect x="80" y="48" width="2640" height="38" rx="0" fill="#031528" fill-opacity="0.62" stroke="#00e5ff" stroke-width="1" />
+<text x="110" y="74" fill="#00e5ff" font-size="20" font-weight="700" font-family="var(--font-mono)" text-anchor="start" opacity="1" class="micro">● SYS::ONLINE   //   codex-issue-runner · local AI engineering ops architecture</text>
+<text x="2700" y="74" fill="#39ff88" font-size="20" font-weight="700" font-family="var(--font-mono)" text-anchor="end" opacity="1" class="micro">BUILD 2026.06.22</text>
+<g transform="translate(110,112)"><rect x="0" y="0" width="112" height="112" rx="28" fill="#07172e" stroke="#00e5ff" stroke-width="4" filter="url(#softGlow)"/><path d="M30 37 L56 56 L30 75" fill="none" stroke="#00e5ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M62 76 L86 76" stroke="#39ff88" stroke-width="8" stroke-linecap="round"/></g>
+<text x="250" y="166" fill="#00e5ff" font-size="66" font-weight="900" font-family="Arial Black, Hiragino Sans GB, PingFang SC, sans-serif" text-anchor="start" opacity="0.28" class="title">CODEX ISSUE RUNNER</text>
+<text x="250" y="162" fill="#edf7ff" font-size="66" font-weight="900" font-family="Arial Black, Hiragino Sans GB, PingFang SC, sans-serif" text-anchor="start" opacity="1" class="title">CODEX ISSUE RUNNER</text>
+<text x="252" y="214" fill="#00e5ff" font-size="28" font-weight="800" font-family="var(--font-mono)" text-anchor="start" opacity="1" class="micro">LOCAL AI ENGINEERING OPS CONTROL PLANE</text>
+<text x="252" y="260" fill="#9fb6d8" font-size="26" font-weight="520" font-family="var(--font-body)" text-anchor="start" opacity="1" >自托管 Issue 执行平台  ·  Codex Provider Sessions  ·  PI Guardian  ·  Feishu 审批通知  ·  Verification Gate</text>
+<g><rect x="250" y="282" width="412" height="44" rx="22" fill="#06162b" stroke="#00e5ff" stroke-opacity="0.72"/><circle cx="274" cy="304" r="7" fill="#00e5ff"/><text x="294" y="312" fill="#edf7ff" font-size="20" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Bun API Server</text></g>
+<g><rect x="684" y="282" width="646" height="44" rx="22" fill="#06162b" stroke="#3c8bff" stroke-opacity="0.72"/><circle cx="708" cy="304" r="7" fill="#3c8bff"/><text x="728" y="312" fill="#edf7ff" font-size="20" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >SQLite Persistent State</text></g>
+<g><rect x="1352" y="282" width="464" height="44" rx="22" fill="#06162b" stroke="#a855ff" stroke-opacity="0.72"/><circle cx="1376" cy="304" r="7" fill="#a855ff"/><text x="1396" y="312" fill="#edf7ff" font-size="20" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Codex app-server</text></g>
+<g><rect x="1838" y="282" width="490" height="44" rx="22" fill="#06162b" stroke="#ff2fb3" stroke-opacity="0.72"/><circle cx="1862" cy="304" r="7" fill="#ff2fb3"/><text x="1882" y="312" fill="#edf7ff" font-size="20" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Feishu IM / Cards</text></g>
+<g><rect x="2350" y="282" width="438" height="44" rx="22" fill="#06162b" stroke="#39ff88" stroke-opacity="0.72"/><circle cx="2374" cy="304" r="7" fill="#39ff88"/><text x="2394" y="312" fill="#edf7ff" font-size="20" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Local-first Ops</text></g>
+<g class="card">
+<rect x="70" y="335" width="320" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#00e5ff" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="115" cy="383" r="25" fill="url(#cyanGrad)" filter="url(#softGlow)"/>
+<text x="115" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >1</text>
+<text x="152" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >INPUT SURFACES</text>
+<text x="152" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >需求入口 / 人机界面</text>
+<line x1="94" y1="443" x2="366" y2="443" stroke="#00e5ff" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="94" y="467" width="272" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="94" y="467" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="116" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Web Dashboard</text>
+      <text x="116" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >项目、Issue、Session 看板</text>
+    </g>
+
+    <g>
+      <rect x="94" y="559" width="272" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="94" y="559" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="116" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >CLI + Codex Skill</text>
+      <text x="116" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >创建 / 查询 / 重试 / 完成</text>
+    </g>
+
+    <g>
+      <rect x="94" y="651" width="272" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="94" y="651" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="116" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Feishu IM</text>
+      <text x="116" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >群聊指令、卡片审批、通知</text>
+    </g>
+
+    <g>
+      <rect x="94" y="743" width="272" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="94" y="743" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="116" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Cron / External Events</text>
+      <text x="116" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >定时 triage 与外部事件接入</text>
+    </g>
+
+    <g>
+      <rect x="94" y="835" width="272" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="94" y="835" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="116" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Provider Sessions</text>
+      <text x="116" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >手动会话与 issue 执行共用追踪</text>
+    </g>
+</g>
+<g class="card">
+<rect x="414" y="335" width="340" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#3c8bff" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="459" cy="383" r="25" fill="url(#blueGrad)" filter="url(#softGlow)"/>
+<text x="459" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >2</text>
+<text x="496" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >RUNNER CORE</text>
+<text x="496" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >Bun API + SQLite</text>
+<line x1="438" y1="443" x2="730" y2="443" stroke="#3c8bff" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="438" y="467" width="292" height="74" rx="16" fill="#07172c" stroke="#3c8bff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="438" y="467" width="4" height="74" rx="2" fill="#3c8bff" opacity="0.9"/>
+      <text x="460" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Projects / Issues API</text>
+      <text x="460" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >自建队列、状态机与写接口</text>
+    </g>
+
+    <g>
+      <rect x="438" y="559" width="292" height="74" rx="16" fill="#07172c" stroke="#3c8bff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="438" y="559" width="4" height="74" rx="2" fill="#3c8bff" opacity="0.9"/>
+      <text x="460" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Auto-run Loops</text>
+      <text x="460" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >todo claim、并发控制、hold</text>
+    </g>
+
+    <g>
+      <rect x="438" y="651" width="292" height="74" rx="16" fill="#07172c" stroke="#3c8bff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="438" y="651" width="4" height="74" rx="2" fill="#3c8bff" opacity="0.9"/>
+      <text x="460" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >SQLite runner.db</text>
+      <text x="460" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >持久化项目 / runs / events</text>
+    </g>
+
+    <g>
+      <rect x="438" y="743" width="292" height="74" rx="16" fill="#07172c" stroke="#3c8bff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="438" y="743" width="4" height="74" rx="2" fill="#3c8bff" opacity="0.9"/>
+      <text x="460" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Global SSE</text>
+      <text x="460" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >/api/events 实时推送</text>
+    </g>
+
+    <g>
+      <rect x="438" y="835" width="292" height="74" rx="16" fill="#07172c" stroke="#3c8bff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="438" y="835" width="4" height="74" rx="2" fill="#3c8bff" opacity="0.9"/>
+      <text x="460" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Auth + Origin Guard</text>
+      <text x="460" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >Bearer token 与本机 origin 边界</text>
+    </g>
+</g>
+<g class="card">
+<rect x="778" y="335" width="390" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#a855ff" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="823" cy="383" r="25" fill="url(#purpleGrad)" filter="url(#softGlow)"/>
+<text x="823" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >3</text>
+<text x="860" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >CODEX PROVIDER</text>
+<text x="860" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >app-server stdio JSON-RPC</text>
+<line x1="802" y1="443" x2="1144" y2="443" stroke="#a855ff" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="802" y="467" width="342" height="74" rx="16" fill="#07172c" stroke="#a855ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="802" y="467" width="4" height="74" rx="2" fill="#a855ff" opacity="0.9"/>
+      <text x="824" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Lazy Runtime</text>
+      <text x="824" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >按需启动 codex app-server</text>
+    </g>
+
+    <g>
+      <rect x="802" y="559" width="342" height="74" rx="16" fill="#07172c" stroke="#a855ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="802" y="559" width="4" height="74" rx="2" fill="#a855ff" opacity="0.9"/>
+      <text x="824" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Thread / Turn</text>
+      <text x="824" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >thread/start · turn/start · resume</text>
+    </g>
+
+    <g>
+      <rect x="802" y="651" width="342" height="74" rx="16" fill="#07172c" stroke="#a855ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="802" y="651" width="4" height="74" rx="2" fill="#a855ff" opacity="0.9"/>
+      <text x="824" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Approvals / Interrupt</text>
+      <text x="824" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >权限请求、人工审批、中断</text>
+    </g>
+
+    <g>
+      <rect x="802" y="743" width="342" height="74" rx="16" fill="#07172c" stroke="#a855ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="802" y="743" width="4" height="74" rx="2" fill="#a855ff" opacity="0.9"/>
+      <text x="824" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Runtime Settings</text>
+      <text x="824" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >model / reasoning / sandbox 记录</text>
+    </g>
+
+    <g>
+      <rect x="802" y="835" width="342" height="74" rx="16" fill="#07172c" stroke="#a855ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="802" y="835" width="4" height="74" rx="2" fill="#a855ff" opacity="0.9"/>
+      <text x="824" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Session Transcript</text>
+      <text x="824" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >会话、命令、事件可回放</text>
+    </g>
+</g>
+<g class="card">
+<rect x="1192" y="335" width="350" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#39ff88" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="1237" cy="383" r="25" fill="url(#greenGrad)" filter="url(#softGlow)"/>
+<text x="1237" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >4</text>
+<text x="1274" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >EXECUTION LOOP</text>
+<text x="1274" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >执行、验证与交付</text>
+<line x1="1216" y1="443" x2="1518" y2="443" stroke="#39ff88" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="1216" y="467" width="302" height="74" rx="16" fill="#07172c" stroke="#39ff88" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1216" y="467" width="4" height="74" rx="2" fill="#39ff88" opacity="0.9"/>
+      <text x="1238" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Per-issue Session</text>
+      <text x="1238" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >每个 issue 绑定独立上下文</text>
+    </g>
+
+    <g>
+      <rect x="1216" y="559" width="302" height="74" rx="16" fill="#07172c" stroke="#39ff88" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1216" y="559" width="4" height="74" rx="2" fill="#39ff88" opacity="0.9"/>
+      <text x="1238" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Workspace Scoped</text>
+      <text x="1238" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >按项目 cwd 执行，隔离上下文</text>
+    </g>
+
+    <g>
+      <rect x="1216" y="651" width="302" height="74" rx="16" fill="#07172c" stroke="#39ff88" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1216" y="651" width="4" height="74" rx="2" fill="#39ff88" opacity="0.9"/>
+      <text x="1238" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Logs + Artifacts</text>
+      <text x="1238" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >stdout、事件、引用与产物</text>
+    </g>
+
+    <g>
+      <rect x="1216" y="743" width="302" height="74" rx="16" fill="#07172c" stroke="#39ff88" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1216" y="743" width="4" height="74" rx="2" fill="#39ff88" opacity="0.9"/>
+      <text x="1238" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Verification Gate</text>
+      <text x="1238" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >验证证据不足不算 done</text>
+    </g>
+
+    <g>
+      <rect x="1216" y="835" width="302" height="74" rx="16" fill="#07172c" stroke="#39ff88" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1216" y="835" width="4" height="74" rx="2" fill="#39ff88" opacity="0.9"/>
+      <text x="1238" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Explicit Update</text>
+      <text x="1238" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >agent 通过 CLI/API 回写状态</text>
+    </g>
+</g>
+<g class="card">
+<rect x="1566" y="335" width="360" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#ff2fb3" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="1611" cy="383" r="25" fill="url(#magentaGrad)" filter="url(#softGlow)"/>
+<text x="1611" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >5</text>
+<text x="1648" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >PI CONTROL PLANE</text>
+<text x="1648" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >个人工程助理控制台</text>
+<line x1="1590" y1="443" x2="1902" y2="443" stroke="#ff2fb3" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="1590" y="467" width="312" height="74" rx="16" fill="#07172c" stroke="#ff2fb3" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1590" y="467" width="4" height="74" rx="2" fill="#ff2fb3" opacity="0.9"/>
+      <text x="1612" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Chat Orchestration</text>
+      <text x="1612" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >Feishu / Web 对话式调度</text>
+    </g>
+
+    <g>
+      <rect x="1590" y="559" width="312" height="74" rx="16" fill="#07172c" stroke="#ff2fb3" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1590" y="559" width="4" height="74" rx="2" fill="#ff2fb3" opacity="0.9"/>
+      <text x="1612" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Policy Editor</text>
+      <text x="1612" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >项目策略、权限、预算配置</text>
+    </g>
+
+    <g>
+      <rect x="1590" y="651" width="312" height="74" rx="16" fill="#07172c" stroke="#ff2fb3" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1590" y="651" width="4" height="74" rx="2" fill="#ff2fb3" opacity="0.9"/>
+      <text x="1612" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Memory + Skills</text>
+      <text x="1612" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >项目记忆、skill、MCP 工具</text>
+    </g>
+
+    <g>
+      <rect x="1590" y="743" width="312" height="74" rx="16" fill="#07172c" stroke="#ff2fb3" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1590" y="743" width="4" height="74" rx="2" fill="#ff2fb3" opacity="0.9"/>
+      <text x="1612" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Delegations + Reports</text>
+      <text x="1612" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >委派、报告、运行摘要</text>
+    </g>
+
+    <g>
+      <rect x="1590" y="835" width="312" height="74" rx="16" fill="#07172c" stroke="#ff2fb3" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1590" y="835" width="4" height="74" rx="2" fill="#ff2fb3" opacity="0.9"/>
+      <text x="1612" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Provider Settings</text>
+      <text x="1612" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >Codex / Claude 等运行配置</text>
+    </g>
+</g>
+<g class="card">
+<rect x="1950" y="335" width="360" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#ff9f1a" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="1995" cy="383" r="25" fill="url(#orangeGrad)" filter="url(#softGlow)"/>
+<text x="1995" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >6</text>
+<text x="2032" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >GUARDIAN LAYER</text>
+<text x="2032" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >守护、恢复、通知</text>
+<line x1="1974" y1="443" x2="2286" y2="443" stroke="#ff9f1a" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="1974" y="467" width="312" height="74" rx="16" fill="#07172c" stroke="#ff9f1a" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1974" y="467" width="4" height="74" rx="2" fill="#ff9f1a" opacity="0.9"/>
+      <text x="1996" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Supervisor</text>
+      <text x="1996" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >卡住 / 无进展 / 异常诊断</text>
+    </g>
+
+    <g>
+      <rect x="1974" y="559" width="312" height="74" rx="16" fill="#07172c" stroke="#ff9f1a" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1974" y="559" width="4" height="74" rx="2" fill="#ff9f1a" opacity="0.9"/>
+      <text x="1996" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Watchdog</text>
+      <text x="1996" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >长时间挂起与失败巡检</text>
+    </g>
+
+    <g>
+      <rect x="1974" y="651" width="312" height="74" rx="16" fill="#07172c" stroke="#ff9f1a" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1974" y="651" width="4" height="74" rx="2" fill="#ff9f1a" opacity="0.9"/>
+      <text x="1996" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Recovery Planner</text>
+      <text x="1996" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >重试、恢复预算、退避策略</text>
+    </g>
+
+    <g>
+      <rect x="1974" y="743" width="312" height="74" rx="16" fill="#07172c" stroke="#ff9f1a" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1974" y="743" width="4" height="74" rx="2" fill="#ff9f1a" opacity="0.9"/>
+      <text x="1996" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Digest Routing</text>
+      <text x="1996" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >quiet / digest / urgent 分流</text>
+    </g>
+
+    <g>
+      <rect x="1974" y="835" width="312" height="74" rx="16" fill="#07172c" stroke="#ff9f1a" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="1974" y="835" width="4" height="74" rx="2" fill="#ff9f1a" opacity="0.9"/>
+      <text x="1996" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Feishu Outbox</text>
+      <text x="1996" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >通知草稿、审批卡片、回执</text>
+    </g>
+</g>
+<g class="card">
+<rect x="2334" y="335" width="396" height="570" rx="26" fill="#07172e" fill-opacity="0.88" stroke="#00e5ff" stroke-width="2" filter="url(#cardShadow)"/>
+<circle cx="2379" cy="383" r="25" fill="url(#cyanGrad)" filter="url(#softGlow)"/>
+<text x="2379" y="392" fill="#ffffff" font-size="26" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >7</text>
+<text x="2416" y="385" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-display)" text-anchor="start" opacity="1" >OPERATOR SURFACES</text>
+<text x="2416" y="417" fill="#9fb6d8" font-size="18" font-weight="500" font-family="var(--font-body)" text-anchor="start" opacity="1" >运维与可观测入口</text>
+<line x1="2358" y1="443" x2="2706" y2="443" stroke="#00e5ff" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 9"/>
+
+    <g>
+      <rect x="2358" y="467" width="348" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="2358" y="467" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="2380" y="501" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >/health</text>
+      <text x="2380" y="533" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >免鉴权健康检查</text>
+    </g>
+
+    <g>
+      <rect x="2358" y="559" width="348" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="2358" y="559" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="2380" y="593" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >/api/system/status</text>
+      <text x="2380" y="625" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >DB / runner / provider 摘要</text>
+    </g>
+
+    <g>
+      <rect x="2358" y="651" width="348" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="2358" y="651" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="2380" y="685" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >/api/system/doctor</text>
+      <text x="2380" y="717" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >运行时 doctor / 诊断</text>
+    </g>
+
+    <g>
+      <rect x="2358" y="743" width="348" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="2358" y="743" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="2380" y="777" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >Dashboard / Sessions</text>
+      <text x="2380" y="809" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >用量、会话、命令、审批</text>
+    </g>
+
+    <g>
+      <rect x="2358" y="835" width="348" height="74" rx="16" fill="#07172c" stroke="#00e5ff" stroke-opacity="0.34" stroke-width="1.6"/>
+      <rect x="2358" y="835" width="4" height="74" rx="2" fill="#00e5ff" opacity="0.9"/>
+      <text x="2380" y="869" fill="#edf7ff" font-size="24" font-weight="700" font-family="var(--font-body)" text-anchor="start" opacity="1" >redeploy.sh + launchd</text>
+      <text x="2380" y="901" fill="#9fb6d8" font-size="18" font-weight="420" font-family="var(--font-body)" text-anchor="start" opacity="1" >本机后台服务与验活脚本</text>
+    </g>
+</g>
+<path d="M392 610 L430 610" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#softGlow)" opacity="0.92"/>
+<path d="M756 610 L794 610" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#softGlow)" opacity="0.92"/>
+<path d="M1170 610 L1208 610" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#softGlow)" opacity="0.92"/>
+<path d="M1544 610 L1582 610" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#softGlow)" opacity="0.92"/>
+<path d="M1928 610 L1966 610" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#softGlow)" opacity="0.92"/>
+<path d="M2312 610 L2350 610" stroke="#00e5ff" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#softGlow)" opacity="0.92"/>
+<line x1="180" y1="950" x2="2620" y2="950" stroke="#00e5ff" stroke-width="3" stroke-dasharray="10 14" stroke-opacity="0.55"/>
+<circle cx="230" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="230" y1="905" x2="230" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<circle cx="584" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="584" y1="905" x2="584" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<circle cx="973" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="973" y1="905" x2="973" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<circle cx="1368" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="1368" y1="905" x2="1368" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<circle cx="1746" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="1746" y1="905" x2="1746" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<circle cx="2130" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="2130" y1="905" x2="2130" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<circle cx="2530" cy="950" r="9" fill="#00e5ff" filter="url(#softGlow)"/>
+<line x1="2530" y1="905" x2="2530" y2="950" stroke="#00e5ff" stroke-width="3" stroke-opacity="0.48"/>
+<text x="1400.0" y="940" fill="#00e5ff" font-size="28" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" class="micro">STATE · CONTROL · VISIBILITY</text>
+<rect x="120" y="990" width="2560" height="245" rx="28" fill="#07172e" fill-opacity="0.76" stroke="#00e5ff" stroke-width="2" stroke-dasharray="10 12"/>
+<text x="1400.0" y="1039" fill="#00e5ff" font-size="31" font-weight="850" font-family="var(--font-display)" text-anchor="middle" opacity="1" class="micro">PERSISTENT CONTROL LAYER / 状态、审计与可恢复性</text>
+<g><rect x="185" y="1080" width="440" height="112" rx="18" fill="#051226" stroke="#3c8bff" stroke-opacity="0.42"/>
+<rect x="209" y="1111" width="52" height="52" rx="12" fill="#3c8bff" fill-opacity="0.15" stroke="#3c8bff" stroke-width="2"/>
+<path d="M223 1128 H247 M223 1143 H247 M223 1158 H247" stroke="#3c8bff" stroke-width="4" stroke-linecap="round"/>
+<text x="281" y="1128" fill="#edf7ff" font-size="27" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >runner.db</text>
+<text x="281" y="1164" fill="#9fb6d8" font-size="19" font-weight="450" font-family="var(--font-mono)" text-anchor="start" opacity="1" >projects · issues · runs · sessions</text>
+</g>
+<g><rect x="685" y="1080" width="440" height="112" rx="18" fill="#051226" stroke="#00e5ff" stroke-opacity="0.42"/>
+<rect x="709" y="1111" width="52" height="52" rx="12" fill="#00e5ff" fill-opacity="0.15" stroke="#00e5ff" stroke-width="2"/>
+<path d="M723 1128 H747 M723 1143 H747 M723 1158 H747" stroke="#00e5ff" stroke-width="4" stroke-linecap="round"/>
+<text x="781" y="1128" fill="#edf7ff" font-size="27" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Event Stream</text>
+<text x="781" y="1164" fill="#9fb6d8" font-size="19" font-weight="450" font-family="var(--font-mono)" text-anchor="start" opacity="1" >issue_events · SSE · audit trail</text>
+</g>
+<g><rect x="1185" y="1080" width="440" height="112" rx="18" fill="#051226" stroke="#ff2fb3" stroke-opacity="0.42"/>
+<rect x="1209" y="1111" width="52" height="52" rx="12" fill="#ff2fb3" fill-opacity="0.15" stroke="#ff2fb3" stroke-width="2"/>
+<path d="M1223 1128 H1247 M1223 1143 H1247 M1223 1158 H1247" stroke="#ff2fb3" stroke-width="4" stroke-linecap="round"/>
+<text x="1281" y="1128" fill="#edf7ff" font-size="27" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Policy State</text>
+<text x="1281" y="1164" fill="#9fb6d8" font-size="19" font-weight="450" font-family="var(--font-mono)" text-anchor="start" opacity="1" >PI policy · approval · recovery budget</text>
+</g>
+<g><rect x="1685" y="1080" width="440" height="112" rx="18" fill="#051226" stroke="#ff9f1a" stroke-opacity="0.42"/>
+<rect x="1709" y="1111" width="52" height="52" rx="12" fill="#ff9f1a" fill-opacity="0.15" stroke="#ff9f1a" stroke-width="2"/>
+<path d="M1723 1128 H1747 M1723 1143 H1747 M1723 1158 H1747" stroke="#ff9f1a" stroke-width="4" stroke-linecap="round"/>
+<text x="1781" y="1128" fill="#edf7ff" font-size="27" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Notification Intent</text>
+<text x="1781" y="1164" fill="#9fb6d8" font-size="19" font-weight="450" font-family="var(--font-mono)" text-anchor="start" opacity="1" >digest · lifecycle · Feishu outbox</text>
+</g>
+<g><rect x="2185" y="1080" width="440" height="112" rx="18" fill="#051226" stroke="#39ff88" stroke-opacity="0.42"/>
+<rect x="2209" y="1111" width="52" height="52" rx="12" fill="#39ff88" fill-opacity="0.15" stroke="#39ff88" stroke-width="2"/>
+<path d="M2223 1128 H2247 M2223 1143 H2247 M2223 1158 H2247" stroke="#39ff88" stroke-width="4" stroke-linecap="round"/>
+<text x="2281" y="1128" fill="#edf7ff" font-size="27" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Usage + Logs</text>
+<text x="2281" y="1164" fill="#9fb6d8" font-size="19" font-weight="450" font-family="var(--font-mono)" text-anchor="start" opacity="1" >token usage · launchd logs · doctor</text>
+</g>
+<rect x="120" y="1288" width="2560" height="250" rx="28" fill="#071326" fill-opacity="0.88" stroke="#27476d" stroke-width="2" />
+<text x="1400.0" y="1335" fill="#3c8bff" font-size="32" font-weight="850" font-family="var(--font-display)" text-anchor="middle" opacity="1" class="micro">BUILT FOR TRUST, RECOVERY AND HUMAN CONTROL</text>
+<circle cx="193" cy="1423" r="35" fill="#06162b" stroke="#00e5ff" stroke-width="2.4"/>
+<text x="193" y="1436" fill="#00e5ff" font-size="34" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >⌂</text>
+<text x="247" y="1412" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Local-first</text>
+<text x="247" y="1451" fill="#9fb6d8" font-size="21" font-weight="450" font-family="var(--font-body)" text-anchor="start" opacity="1" >自托管、本机 / 局域网优先</text>
+<line x1="638" y1="1368" x2="638" y2="1496" stroke="#375778" stroke-opacity="0.65"/>
+<circle cx="698" cy="1423" r="35" fill="#06162b" stroke="#3c8bff" stroke-width="2.4"/>
+<text x="698" y="1436" fill="#3c8bff" font-size="34" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >◆</text>
+<text x="752" y="1412" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Persistent</text>
+<text x="752" y="1451" fill="#9fb6d8" font-size="21" font-weight="450" font-family="var(--font-body)" text-anchor="start" opacity="1" >重启后仍能恢复状态与审计</text>
+<line x1="1143" y1="1368" x2="1143" y2="1496" stroke="#375778" stroke-opacity="0.65"/>
+<circle cx="1203" cy="1423" r="35" fill="#06162b" stroke="#39ff88" stroke-width="2.4"/>
+<text x="1203" y="1436" fill="#39ff88" font-size="34" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >✓</text>
+<text x="1257" y="1412" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Human Gate</text>
+<text x="1257" y="1451" fill="#9fb6d8" font-size="21" font-weight="450" font-family="var(--font-body)" text-anchor="start" opacity="1" >高风险动作可审批、可拒绝</text>
+<line x1="1648" y1="1368" x2="1648" y2="1496" stroke="#375778" stroke-opacity="0.65"/>
+<circle cx="1708" cy="1423" r="35" fill="#06162b" stroke="#ff2fb3" stroke-width="2.4"/>
+<text x="1708" y="1436" fill="#ff2fb3" font-size="34" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >↔</text>
+<text x="1762" y="1412" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Agent Boundaries</text>
+<text x="1762" y="1451" fill="#9fb6d8" font-size="21" font-weight="450" font-family="var(--font-body)" text-anchor="start" opacity="1" >agent 不直接碰 DB，只走 API/CLI</text>
+<line x1="2153" y1="1368" x2="2153" y2="1496" stroke="#375778" stroke-opacity="0.65"/>
+<circle cx="2213" cy="1423" r="35" fill="#06162b" stroke="#ff9f1a" stroke-width="2.4"/>
+<text x="2213" y="1436" fill="#ff9f1a" font-size="34" font-weight="800" font-family="var(--font-mono)" text-anchor="middle" opacity="1" >◎</text>
+<text x="2267" y="1412" fill="#edf7ff" font-size="29" font-weight="800" font-family="var(--font-body)" text-anchor="start" opacity="1" >Evidence-driven</text>
+<text x="2267" y="1451" fill="#9fb6d8" font-size="21" font-weight="450" font-family="var(--font-body)" text-anchor="start" opacity="1" >完成前要求验证与明确状态回写</text>
+<line x1="120" y1="1576" x2="2680" y2="1576" stroke="#00e5ff" stroke-opacity="0.5"/>
+<text x="120" y="1613" fill="#00e5ff" font-size="21" font-weight="800" font-family="var(--font-mono)" text-anchor="start" opacity="1" class="micro">codex-issue-runner // Web · CLI · Feishu · Sessions · PI Guardian · Verification</text>
+<text x="2680" y="1613" fill="#9fb6d8" font-size="21" font-weight="600" font-family="var(--font-mono)" text-anchor="end" opacity="1" >self-hosted engineering agent runtime</text>
+</svg>

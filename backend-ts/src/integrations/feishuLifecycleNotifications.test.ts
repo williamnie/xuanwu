@@ -88,6 +88,43 @@ describe("Feishu lifecycle notification intents", () => {
     }
   });
 
+  test("legacy no-target lifecycle notifications are suppressed instead of left ready", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const startIssue = createIssue(db, { project_id: "demo", title: "Unlinked PI task", status: "todo" });
+      const doneIssue = createIssue(db, { project_id: "demo", title: "Unlinked PI done", status: "done" });
+
+      const start = queueFeishuIssueStatusNotification(db, startIssue.id);
+      const done = queueFeishuIssueStatusNotification(db, doneIssue.id);
+      const startIntents = listPiNotificationIntents(db, { issueId: startIssue.id });
+      const doneIntents = listPiNotificationIntents(db, { issueId: doneIssue.id });
+
+      expect(start).toMatchObject({ queued: false, reason: "missing_feishu_link" });
+      expect(done).toMatchObject({ queued: false, reason: "missing_feishu_link" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+      expect(startIntents).toMatchObject([
+        expect.objectContaining({
+          decision: "suppress",
+          error: "missing_feishu_link",
+          issue_id: startIssue.id,
+          kind: "issue_start",
+          state: "suppressed"
+        })
+      ]);
+      expect(doneIntents).toMatchObject([
+        expect.objectContaining({
+          decision: "suppress",
+          error: "missing_feishu_link",
+          issue_id: doneIssue.id,
+          kind: "issue_done",
+          state: "suppressed"
+        })
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("legacy no-run-group terminal notification falls back to enqueue action conversation", async () => {
     const db = await fixtureDatabase();
     try {

@@ -15,6 +15,16 @@ function runIssueLogAgentPayload(payload) {
   return context.result;
 }
 
+function runIssueStatusFromEvent(event) {
+  const start = source.indexOf('function parseEventPayload');
+  const end = source.indexOf('\nfunction legacyAgentEventType', start);
+  assert.notEqual(start, -1, 'missing parseEventPayload');
+  assert.notEqual(end, -1, 'missing legacyAgentEventType boundary');
+  const context = { event, result: null };
+  vm.runInNewContext(`${source.slice(start, end)}\nresult = issueStatusFromEvent(event);`, context);
+  return context.result;
+}
+
 test('terminal issue logs prefer raw method mapping over generic persisted type', () => {
   const agent = runIssueLogAgentPayload({
     type: 'text',
@@ -23,4 +33,14 @@ test('terminal issue logs prefer raw method mapping over generic persisted type'
   });
 
   assert.equal(agent.type, 'agent.message.delta');
+});
+
+test('issue detail reads status_changed status from SSE payload JSON', () => {
+  const status = runIssueStatusFromEvent({
+    issueId: 7,
+    payload: '{"status":"done"}',
+    type: 'issue.status_changed',
+  });
+
+  assert.equal(status, 'done');
 });

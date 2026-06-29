@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getPiGuardianWatchdogStatus, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
+import { ROUTABLE_INTENT_SQL, suppressUnroutableLifecycleIntents } from "./guardianWatchdogMaintenance.ts";
 import { writeGuardianWatchdogAlerts, type WatchdogAlertWriteResult } from "./guardianWatchdogAlerts.ts";
 
 export type PiGuardianWatchdogComponent =
@@ -61,6 +62,7 @@ export async function runPiGuardianWatchdogOnce(
   const probes = input.checks ?? DEFAULT_CHECKS;
   const summary: PiGuardianWatchdogSummary = { alerts: 0, checks: [], errors: 0, scanned: 0 };
   const errors: string[] = [];
+  suppressUnroutableLifecycleIntents(db);
   for (const probe of probes) {
     summary.scanned += 1;
     const result = await runProbe(db, probe, context, input.directFeishu);
@@ -150,7 +152,7 @@ function coordinatorChecks(context: PiGuardianWatchdogContext): PiGuardianWatchd
   return staleIntentChecks(context, {
     alertType: "coordinator_stalled",
     component: "coordinator",
-    where: "kind<>'digest' and state in ('pending','ready')"
+    where: `kind<>'digest' and state in ('pending','ready') and (${ROUTABLE_INTENT_SQL})`
   });
 }
 function outboxChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck[] {
@@ -272,17 +274,13 @@ function alert(component: PiGuardianWatchdogComponent, alertType: string, input:
   return { ...input, alert_type: alertType, component, ok: false, severity: "urgent" };
 }
 
-function ok(component: PiGuardianWatchdogComponent): PiGuardianWatchdogCheck {
-  return { component, ok: true };
-}
+function ok(component: PiGuardianWatchdogComponent): PiGuardianWatchdogCheck { return { component, ok: true }; }
 
 function asArray(value: PiGuardianWatchdogCheck | PiGuardianWatchdogCheck[]): PiGuardianWatchdogCheck[] {
   return Array.isArray(value) ? value : [value];
 }
 
-function safeError(error: unknown): string {
-  return redactAuditText(error instanceof Error ? error.message : String(error));
-}
+function safeError(error: unknown): string { return redactAuditText(error instanceof Error ? error.message : String(error)); }
 
 function iso(value: Date): string {
   return value.toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -292,6 +290,4 @@ function positiveLimit(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? Math.min(value, 100) : DEFAULT_LIMIT;
 }
 
-function positiveMs(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
-}
+function positiveMs(value: unknown, fallback: number): number { return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback; }
