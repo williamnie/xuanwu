@@ -30,7 +30,8 @@ const REPAIRABLE_MIGRATION_IDS = new Set([
   "025_feishu_conversation_state",
   "026_feishu_project_selection",
   "027_pi_approval_requests",
-  "028_pi_guardian_runtime"
+  "028_pi_guardian_runtime",
+  "029_pi_issue_completion_watches"
 ]);
 
 const MIGRATIONS_TABLE_SQL = `

@@ -26,6 +26,7 @@ import { feishuConversationStateMigration } from "./025_feishu_conversation_stat
 import { feishuProjectSelectionMigration } from "./026_feishu_project_selection.ts";
 import { piApprovalRequestsMigration } from "./027_pi_approval_requests.ts";
 import { piGuardianRuntimeMigration } from "./028_pi_guardian_runtime.ts";
+import { piIssueCompletionWatchesMigration } from "./029_pi_issue_completion_watches.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -55,5 +56,6 @@ export const migrations = [
   feishuConversationStateMigration,
   feishuProjectSelectionMigration,
   piApprovalRequestsMigration,
-  piGuardianRuntimeMigration
+  piGuardianRuntimeMigration,
+  piIssueCompletionWatchesMigration
 ];

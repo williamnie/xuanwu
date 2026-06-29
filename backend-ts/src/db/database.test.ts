@@ -75,6 +75,8 @@ describe("Bun SQLite database connection", () => {
         "pi_heartbeat_controls",
         "pi_heartbeat_events",
         "pi_heartbeat_runs",
+        "pi_issue_completion_watch_items",
+        "pi_issue_completion_watches",
         "pi_memory_items",
         "pi_notification_intents",
         "pi_notification_preferences",
@@ -150,7 +152,8 @@ describe("Bun SQLite database connection", () => {
         { id: "025_feishu_conversation_state" },
         { id: "026_feishu_project_selection" },
         { id: "027_pi_approval_requests" },
-        { id: "028_pi_guardian_runtime" }
+        { id: "028_pi_guardian_runtime" },
+        { id: "029_pi_issue_completion_watches" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -205,6 +208,8 @@ describe("Bun SQLite database connection", () => {
         "ux_pi_recovery_attempts_key"
       ]));
       expect(indexNames(connection, "pi_run_group_items")).toContain("idx_pi_run_group_items_status");
+      expect(indexNames(connection, "pi_issue_completion_watches")).toContain("ux_pi_issue_completion_watches_active_key");
+      expect(indexNames(connection, "pi_issue_completion_watch_items")).toContain("idx_pi_issue_completion_watch_items_issue");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
@@ -303,6 +308,18 @@ describe("Bun SQLite database connection", () => {
         flush_reason: "''",
         flush_sequence: "0",
         state: "'pending'"
+      });
+      expect(columnDefaults(connection, "pi_issue_completion_watches")).toMatchObject({
+        completed_at: "''",
+        condition: "'{}'",
+        error: "''",
+        notified_at: "''",
+        status: "'active'"
+      });
+      expect(columnDefaults(connection, "pi_issue_completion_watch_items")).toMatchObject({
+        initial_status: "''",
+        last_status: "''",
+        terminal_at: "''"
       });
       expect(columnDefaults(connection, "pi_recovery_attempts")).toMatchObject({
         after_snapshot_json: "'{}'",
@@ -441,7 +458,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 28 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 29 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
