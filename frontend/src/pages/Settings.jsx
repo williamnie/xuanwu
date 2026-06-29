@@ -9,6 +9,7 @@ import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
+import RunnerSettingsPanel from './RunnerSettingsPanel';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
 import { APP_VERSION, buildVersionSummary } from '../version';
@@ -23,6 +24,7 @@ export default function Settings() {
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '24px' }}>
         <RuntimeStatusPanel />
+        <RunnerSettingsPanel />
         <ProviderAvailabilityPanel />
         <PiAgentSettingsPanel />
         <PiMemoryPanel />
@@ -189,7 +191,7 @@ function RuntimeStatusBody({ status, loading }) {
     ['DB', status.db?.ok ? 'ok' : status.db?.error || 'error', status.db?.ok],
     ['Codex command', status.codex?.command_ok ? status.config?.codex_cmd : status.codex?.command_error || 'missing', status.codex?.command_ok],
     ['Auth enabled', status.config?.auth_enabled ? 'enabled' : 'disabled', !status.config?.auth_enabled],
-    ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress`, true],
+    ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress / max ${status.runner?.max_parallel_projects || 1}`, true],
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

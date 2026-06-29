@@ -204,6 +204,13 @@ export const api = {
 
   getSystemStatus: () => request('/api/system/status'),
 
+  getRunnerSettings: () => request('/api/runner/settings'),
+
+  updateRunnerSettings: (settings) => request('/api/runner/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  }),
+
   getRuntimeDoctor: () => request('/api/system/doctor'),
 
   getRuntimeLogs: (lines = 120) => request(`/api/system/logs?lines=${encodeURIComponent(lines)}`),

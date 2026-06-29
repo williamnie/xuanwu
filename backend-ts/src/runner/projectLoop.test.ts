@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
-import { startProjectLoop } from "./projectLoopManager.ts";
+import { isProjectLoopActive, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
@@ -67,6 +67,7 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 }
 
 afterEach(async () => {
+  setProjectLoopMaxParallelProjects(1);
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -129,7 +130,27 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("does not claim another todo while any executor run is still open", async () => {
+  test("does not claim another todo for the same project while an executor run is still open", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const running = insertIssue(db, { projectId: "demo", title: "running", status: "in_progress" });
+      const waiting = insertIssue(db, { projectId: "demo", title: "waiting" });
+      insertOpenRun(db, running);
+
+      const result = await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      expect(result).toEqual({ claimed: false });
+      expect(provider.inputs).toEqual([]);
+      expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, waiting)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("claims a different project while an unrelated project run is open", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
@@ -141,10 +162,9 @@ describe("Bun project loop claim execution", () => {
 
       const result = await runProjectLoopOnce({ database: db, projectId: "other", providers: { [provider.id]: provider } });
 
-      expect(result).toEqual({ claimed: false });
-      expect(provider.inputs).toEqual([]);
-      expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, waiting)).toEqual([]);
+      expect(result).toMatchObject({ claimed: true });
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([waiting]);
+      expect(getIssue(db, waiting)).toMatchObject({ status: "in_progress", attempt_count: 1 });
     } finally {
       db.close();
     }
@@ -160,7 +180,7 @@ describe("Bun project loop claim execution", () => {
 
       startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "serial-demo");
       await waitFor(() => provider.inputs.length === 1);
-      await Bun.sleep(20);
+      await waitFor(() => !isProjectLoopActive("serial-demo"));
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
       expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
@@ -171,6 +191,28 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("auto-run can start different projects up to the global concurrency limit", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      setProjectLoopMaxParallelProjects(2);
+      insertProject(db, { id: "project-a", provider: provider.id, autoRun: 1 });
+      insertProject(db, { id: "project-b", provider: provider.id, autoRun: 1 });
+      const first = insertIssue(db, { projectId: "project-a", title: "first" });
+      const second = insertIssue(db, { projectId: "project-b", title: "second" });
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "project-a");
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "project-b");
+      await waitFor(() => provider.inputs.length === 2);
+      await waitFor(() => !isProjectLoopActive("project-a") && !isProjectLoopActive("project-b"));
+
+      expect(provider.inputs.map((input) => input.issueId).sort((a, b) => a - b)).toEqual([first, second]);
+      expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+      expect(getIssue(db, second)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    } finally {
+      db.close();
+    }
+  });
 
   test("auto-run stops after provider startup failure and leaves remaining todos queued", async () => {
     const db = await openFixtureDatabase();
@@ -182,7 +224,7 @@ describe("Bun project loop claim execution", () => {
 
       startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "failure-demo");
       await waitFor(() => getIssue(db, first)?.status === "failed");
-      await Bun.sleep(20);
+      await waitFor(() => !isProjectLoopActive("failure-demo"));
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
       expect(getIssue(db, first)).toMatchObject({ status: "failed", attempt_count: 1 });
@@ -203,7 +245,7 @@ describe("Bun project loop claim execution", () => {
 
       startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "infra-demo");
       await waitFor(() => listEventTypes(db, first).includes("issue.provider_deferred"));
-      await Bun.sleep(20);
+      await waitFor(() => !isProjectLoopActive("infra-demo"));
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
       expect(getIssue(db, first)).toMatchObject({
@@ -254,6 +296,7 @@ describe("Bun project loop claim execution", () => {
 
       startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "manual-demo", { forceOnce: true });
       await waitFor(() => provider.inputs.length === 1);
+      await waitFor(() => !isProjectLoopActive("manual-demo"));
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([issueId]);
       expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress", attempt_count: 1 });
@@ -458,7 +501,7 @@ describe("Bun project loop claim execution", () => {
   });
 });
 
-type ProjectFixture = { autoRun?: number; id: string; provider: string; serviceTier?: string };
+type ProjectFixture = { autoRun?: number; cwd?: string; id: string; provider: string; serviceTier?: string };
 
 type IssueFixture = {
   agentProfileId?: string;
@@ -477,7 +520,7 @@ function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, auto_run, default_service_tier, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [project.id, project.id, `/tmp/${project.id}`, project.provider, project.autoRun ?? 0,
+    [project.id, project.id, project.cwd ?? `/tmp/${project.id}`, project.provider, project.autoRun ?? 0,
       project.serviceTier ?? "",
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );

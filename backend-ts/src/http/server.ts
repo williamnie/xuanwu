@@ -16,11 +16,13 @@ import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
+import { registerRunnerSettingsRoutes } from "./runnerSettingsApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
 import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
 import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
+import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 
@@ -40,6 +42,7 @@ type DefaultRouterOptions = {
 };
 
 export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
+  if (runtime.config) setProjectLoopMaxParallelProjects(runtime.config.runner.maxParallelProjects);
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
@@ -63,6 +66,12 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       config: runtime.config,
       database: runtime.database,
       onConfigChanged: runtime.onFeishuConfigChanged
+    });
+    registerRunnerSettingsRoutes(router, {
+      bus,
+      config: runtime.config,
+      database: runtime.database,
+      providers: runtime.providers
     });
     registerExternalEventRoutes(router, { database: runtime.database });
     registerImReplyOutboxRoutes(router, {

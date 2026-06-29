@@ -8,6 +8,7 @@ const STATUS_IN_PROGRESS = "in_progress";
 
 type ClaimedIssueRow = { id: number };
 type CountRow = { count: number };
+type ProjectCwdRow = { cwd: string };
 
 export function claimNextIssue(db: RunnerDatabase, projectID: string): Issue | null {
   const cleanProjectID = projectID.trim();
@@ -18,11 +19,39 @@ export function claimNextIssue(db: RunnerDatabase, projectID: string): Issue | n
 }
 
 export function hasActiveExecutorWork(db: RunnerDatabase): boolean {
+  return countActiveExecutorWork(db) > 0;
+}
+
+export function countActiveExecutorWork(db: RunnerDatabase): number {
   return countRows(db, `
-    select count(*) as count from issues where status=?
-      union all
-    select count(*) as count from issue_runs where ended_at=''
-  `, [STATUS_IN_PROGRESS]) > 0;
+    select count(distinct i.id) as count
+    from issues i
+    left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+    where i.status=? or ir.id is not null
+  `, [STATUS_IN_PROGRESS]);
+}
+
+export function hasActiveExecutorWorkForProject(db: RunnerDatabase, projectID: string): boolean {
+  return countActiveExecutorWorkForProject(db, projectID) > 0;
+}
+
+export function countActiveExecutorWorkForProject(db: RunnerDatabase, projectID: string): number {
+  const lock = parsedProjectExecutionLockKey(db, projectID);
+  if (lock.kind === "cwd") {
+    return countRows(db, `
+      select count(distinct i.id) as count
+      from issues i
+      join projects p on p.id=i.project_id
+      left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+      where trim(p.cwd)=? and (i.status=? or ir.id is not null)
+    `, [lock.value, STATUS_IN_PROGRESS]);
+  }
+  return countRows(db, `
+    select count(distinct i.id) as count
+    from issues i
+    left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+    where i.project_id=? and (i.status=? or ir.id is not null)
+  `, [lock.value, STATUS_IN_PROGRESS]);
 }
 
 export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
@@ -33,7 +62,7 @@ export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
 }
 
 function claimNextIssueID(db: RunnerDatabase, projectID: string): number {
-  if (hasActiveExecutorWork(db)) return 0;
+  if (hasActiveExecutorWorkForProject(db, projectID)) return 0;
   const row = nextIssueRow(db, projectID);
   if (!row) return 0;
   const timestamp = issueTimestamp();
@@ -43,6 +72,23 @@ function claimNextIssueID(db: RunnerDatabase, projectID: string): number {
   createIssueRun(db, row.id);
   recordClaimEvent(db, row.id, timestamp);
   return row.id;
+}
+
+export function projectExecutionLockKey(db: RunnerDatabase, projectID: string): string {
+  const cleanProjectID = projectID.trim();
+  const cwd = db.sqlite.query<ProjectCwdRow, [string]>(
+    "select cwd from projects where id=?"
+  ).get(cleanProjectID)?.cwd.trim() ?? "";
+  return cwd === "" ? `project:${cleanProjectID}` : `cwd:${cwd}`;
+}
+
+function parsedProjectExecutionLockKey(db: RunnerDatabase, projectID: string): { kind: "cwd" | "project"; value: string } {
+  const key = projectExecutionLockKey(db, projectID);
+  const separator = key.indexOf(":");
+  return {
+    kind: key.startsWith("cwd:") ? "cwd" : "project",
+    value: key.slice(separator + 1)
+  };
 }
 
 function nextIssueRow(db: RunnerDatabase, projectID: string): ClaimedIssueRow | null {

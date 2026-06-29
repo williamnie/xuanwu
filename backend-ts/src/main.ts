@@ -14,7 +14,7 @@ import { sweepActivePiIssueCompletionWatches } from "./pi/issueCompletionWatchEv
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
-import { startProjectLoop } from "./runner/projectLoopManager.ts";
+import { setProjectLoopMaxParallelProjects, startProjectLoop } from "./runner/projectLoopManager.ts";
 import { recoverInProgressIssues } from "./runner/recovery.ts";
 import { redactSensitiveText } from "./util/redact.ts";
 
@@ -33,6 +33,7 @@ const config = loadConfig(args);
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 const bus = new EventBus();
 const providers = executorProviders(config, bus);
+setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
 const feishuBridge = createFeishuAgentBridge({
   config: () => config.integrations.feishu,
   database,

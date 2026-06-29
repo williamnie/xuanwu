@@ -6,7 +6,7 @@ import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
-import { runningProjectLoopCount } from "../runner/projectLoopManager.ts";
+import { projectLoopMaxParallelProjects, runningProjectLoopCount } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 type SystemStatusContext = {
@@ -88,6 +88,7 @@ function configStatus(context: SystemStatusContext): Record<string, unknown> {
     db_path: summarizeRuntimePath(context.database.path, context.config.stateDir),
     auth_enabled: context.authEnabled,
     origin_policy: "local_only",
+    max_parallel_projects: context.config.runner.maxParallelProjects,
     web_mode: context.config.webDir.trim() === "" ? "api_only" : "external",
     web_dir: summarizeRuntimePath(context.config.webDir, context.config.stateDir)
   };
@@ -270,6 +271,7 @@ function runnerStatus(database: RunnerDatabase): Record<string, number> {
   return {
     auto_run_projects: countRows(database, "select count(*) as count from projects where auto_run=1"),
     running_loops: runningProjectLoopCount(),
+    max_parallel_projects: projectLoopMaxParallelProjects(),
     held_projects: countRows(database, "select count(*) as count from project_holds"),
     in_progress_issues: countRows(database, "select count(*) as count from issues where status='in_progress'"),
     running_issues: countRows(database, "select count(*) as count from issue_runs where ended_at=''"),

@@ -33,6 +33,7 @@ describe("Bun backend config", () => {
         codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
         claude: { command: "claude", cwd: "", env: {}, model: "", timeoutMs: 1_800_000 }
       },
+      runner: { maxParallelProjects: 1 },
       integrations: {
         feishu: {
           allowedChatIds: [],
@@ -126,6 +127,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.codexCwd]: "/tmp/project",
       [ENV_KEYS.codexEnv]: "CODEX_HOME=/tmp/codex, SAFE_VALUE=ok, CODEX_API_KEY=secret",
       [ENV_KEYS.codexTimeoutMs]: "1234",
+      [ENV_KEYS.runnerMaxParallelProjects]: "3",
       [ENV_KEYS.claudeCommand]: "/opt/bin/claude",
       [ENV_KEYS.claudeCwd]: "/tmp/claude-project",
       [ENV_KEYS.claudeEnv]: "ANTHROPIC_API_KEY=anthropic-secret,SAFE_CLAUDE=ok",
@@ -166,6 +168,7 @@ describe("Bun backend config", () => {
           timeoutMs: 2345
         }
       },
+      runner: { maxParallelProjects: 3 },
       integrations: {
         feishu: {
           allowedChatIds: ["oc_a", "oc_b"],
@@ -198,6 +201,7 @@ describe("Bun backend config", () => {
       "--codex-cwd=/tmp/cli-project",
       "--codex-env", "CODEX_HOME=/tmp/cli-codex",
       "--codex-timeout-ms", "5678",
+      "--max-parallel-projects", "4",
       "--claude-cmd", "cli-claude",
       "--claude-cwd=/tmp/cli-claude-project",
       "--claude-env", "ANTHROPIC_API_KEY=cli-secret",
@@ -228,6 +232,7 @@ describe("Bun backend config", () => {
           timeoutMs: 6789
         }
       },
+      runner: { maxParallelProjects: 4 },
       integrations: {
         feishu: {
           allowedChatIds: [],

@@ -6,6 +6,7 @@ export const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
 
 export type RunnerLocalSettings = {
   integrations?: { feishu?: Record<string, unknown> };
+  runner?: { maxParallelProjects?: number };
 };
 
 export function localSettingsPath(stateDir: string): string {
@@ -49,11 +50,21 @@ function normalizeLocalSettings(value: unknown): RunnerLocalSettings {
   const raw = recordValue(value);
   const integrations = recordValue(raw.integrations);
   const feishu = recordValue(integrations.feishu);
-  return Object.keys(feishu).length === 0 ? {} : { integrations: { feishu } };
+  return {
+    ...(Object.keys(feishu).length === 0 ? {} : { integrations: { feishu } }),
+    ...normalizedRunnerSettings(raw.runner)
+  };
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function normalizedRunnerSettings(value: unknown): Pick<RunnerLocalSettings, "runner"> {
+  const raw = recordValue(value);
+  const maxParallelProjects = Number(raw.maxParallelProjects);
+  if (!Number.isInteger(maxParallelProjects) || maxParallelProjects <= 0) return {};
+  return { runner: { maxParallelProjects } };
 }
 
 function isMissingFileError(error: unknown): boolean {

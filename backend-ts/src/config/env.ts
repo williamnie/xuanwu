@@ -16,6 +16,7 @@ export const ENV_KEYS = {
   codexCwd: "CODEX_RUNNER_CODEX_CWD",
   codexEnv: "CODEX_RUNNER_CODEX_ENV",
   codexTimeoutMs: "CODEX_RUNNER_CODEX_TIMEOUT_MS",
+  runnerMaxParallelProjects: "CODEX_RUNNER_MAX_PARALLEL_PROJECTS",
   claudeCommand: "CODEX_RUNNER_CLAUDE_CMD",
   claudeCwd: "CODEX_RUNNER_CLAUDE_CWD",
   claudeEnv: "CODEX_RUNNER_CLAUDE_ENV",
@@ -34,7 +35,11 @@ export const ENV_KEYS = {
 } as const;
 
 type Env = Record<string, string | undefined>;
-type ConfigOverrides = Omit<Partial<RunnerConfig>, "integrations"> & ProviderRuntimeOverrides & FeishuConnectorOverrides & { integrations?: { feishu?: FeishuConfigInput } };
+type ConfigOverrides = Omit<Partial<RunnerConfig>, "integrations" | "runner"> & ProviderRuntimeOverrides & FeishuConnectorOverrides & {
+  integrations?: { feishu?: FeishuConfigInput };
+  runner?: { maxParallelProjects?: unknown };
+  runnerMaxParallelProjects?: number | string;
+};
 type ConfigKey = keyof typeof ENV_KEYS;
 
 export type ProviderRuntimeConfig = {
@@ -43,6 +48,10 @@ export type ProviderRuntimeConfig = {
   env: Record<string, string>;
   model?: string;
   timeoutMs: number;
+};
+
+export type RunnerConcurrencyConfig = {
+  maxParallelProjects: number;
 };
 
 export type RunnerConfig = {
@@ -54,6 +63,7 @@ export type RunnerConfig = {
   codexSessionsDir: string;
   webDir: string;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
+  runner: RunnerConcurrencyConfig;
   integrations: { feishu: FeishuConnectorConfig };
 };
 
@@ -69,6 +79,7 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--codex-cwd": "codexCwd",
   "--codex-env": "codexEnv",
   "--codex-timeout-ms": "codexTimeoutMs",
+  "--max-parallel-projects": "runnerMaxParallelProjects",
   "--claude-cmd": "claudeCommand",
   "--claude-cwd": "claudeCwd",
   "--claude-env": "claudeEnv",
@@ -83,6 +94,7 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
   const localOverrides = readLocalSettingsSync(buildRunnerPaths(baseOverrides).stateDir);
   return buildConfig({
     ...baseOverrides,
+    runner: { maxParallelProjects: localOverrides.runner?.maxParallelProjects ?? baseOverrides.runnerMaxParallelProjects },
     integrations: { feishu: localOverrides.integrations?.feishu ?? {} }
   });
 }
@@ -99,6 +111,9 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
       codex: buildCodexRuntimeConfig(overrides),
       claude: buildClaudeRuntimeConfig(overrides)
     },
+    runner: buildRunnerConcurrencyConfig(overrides.runner ?? {
+      maxParallelProjects: overrides.runnerMaxParallelProjects
+    }),
     integrations: {
       feishu: buildFeishuConnectorConfig(effectiveFeishuInput(overrides))
     }
@@ -134,6 +149,7 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     codexCwd: cleanValue(env[ENV_KEYS.codexCwd]),
     codexEnv: cleanValue(env[ENV_KEYS.codexEnv]),
     codexTimeoutMs: cleanValue(env[ENV_KEYS.codexTimeoutMs]),
+    runnerMaxParallelProjects: cleanValue(env[ENV_KEYS.runnerMaxParallelProjects]),
     claudeCommand: cleanValue(env[ENV_KEYS.claudeCommand]),
     claudeCwd: cleanValue(env[ENV_KEYS.claudeCwd]),
     claudeEnv: cleanValue(env[ENV_KEYS.claudeEnv]),
@@ -197,6 +213,8 @@ type ProviderRuntimeOverrides = {
 const DEFAULT_CODEX_COMMAND = "codex app-server --listen stdio://";
 const DEFAULT_CLAUDE_COMMAND = "claude";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
+export const DEFAULT_MAX_PARALLEL_PROJECTS = 1;
+export const MAX_PARALLEL_PROJECTS_LIMIT = 8;
 
 function buildCodexRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
   const config = buildProviderRuntimeConfig({
@@ -219,6 +237,12 @@ function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): Provider
       timeoutMs: overrides.claudeTimeoutMs
     }),
     model: cleanValue(overrides.claudeModel) ?? ""
+  };
+}
+
+export function buildRunnerConcurrencyConfig(input: { maxParallelProjects?: unknown } = {}): RunnerConcurrencyConfig {
+  return {
+    maxParallelProjects: normalizeMaxParallelProjects(input.maxParallelProjects, DEFAULT_MAX_PARALLEL_PROJECTS)
   };
 }
 
@@ -271,6 +295,20 @@ function parsePositiveInteger(value: number | string | undefined, fallback: numb
   if (text === undefined) return fallback;
   const parsed = Number(text);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function normalizeMaxParallelProjects(value: unknown, fallback: number): number {
+  const parsed = parsePositiveIntegerValue(value);
+  if (parsed === undefined) return fallback;
+  return Math.min(parsed, MAX_PARALLEL_PROJECTS_LIMIT);
+}
+
+function parsePositiveIntegerValue(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  const text = cleanValue(typeof value === "string" ? value : undefined);
+  if (text === undefined) return undefined;
+  const parsed = Number(text);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function defaultCodexSessionsDir(): string {
