@@ -78,6 +78,7 @@ import './sessions/SessionsClient.css';
 const PAGE_SIZE = 50;
 const SESSION_DETAIL_REFRESH_DELAY_MS = 250;
 const SESSION_DETAIL_RECONCILE_INTERVAL_MS = 30_000;
+const SESSION_LIST_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
 const DEFAULT_SESSION_PROVIDER = 'codex';
 const EMPTY_CAPABILITIES = { skills: [], plugins: [] };
@@ -365,19 +366,26 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     refreshData(['projects']);
   }, [refreshData]);
 
-  const loadFirstPage = useCallback(async () => {
-    setLoading(true);
+  const loadFirstPage = useCallback(async ({
+    silent = false,
+    preserveLoaded = false,
+    reportErrors = true,
+  } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const result = await api.getSessions({ limit: PAGE_SIZE });
       const data = result.data || [];
-      setSessions(data);
-      setCursor(result.nextCursor || '');
+      const nextCursor = result.nextCursor || '';
+      setSessions((current) => (
+        preserveLoaded && nextCursor ? mergeRefreshedSessions(current, data) : data
+      ));
+      setCursor(nextCursor);
       setSelectedId((current) => current || (autoSelectFirstSessionRef.current ? data[0]?.id || '' : ''));
       autoSelectFirstSessionRef.current = false;
     } catch (err) {
-      toast.error(err.message || '加载 provider sessions 失败');
+      if (reportErrors) toast.error(err.message || '加载 provider sessions 失败');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -490,6 +498,15 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     return () => window.clearInterval(interval);
   }, [loadSelected, selectedId]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => loadFirstPage({
+      silent: true,
+      preserveLoaded: true,
+      reportErrors: false,
+    }), SESSION_LIST_RECONCILE_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [loadFirstPage]);
+
   useEffect(() => { loadModels(); }, [loadModels]);
   useEffect(() => {
     setMessageSettings(messageSettingsForRuntimeKey(selectedSessionRuntimeKey, selectedSessionProject));
@@ -497,7 +514,11 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
 
   const scheduleListRefresh = useCallback(() => {
     window.clearTimeout(listRefreshTimer.current);
-    listRefreshTimer.current = window.setTimeout(loadFirstPage, SESSION_LIST_REFRESH_DELAY_MS);
+    listRefreshTimer.current = window.setTimeout(() => loadFirstPage({
+      silent: true,
+      preserveLoaded: true,
+      reportErrors: false,
+    }), SESSION_LIST_REFRESH_DELAY_MS);
   }, [loadFirstPage]);
 
   const scheduleSelectedRefresh = useCallback((threadId) => {
@@ -1374,6 +1395,14 @@ function SessionListFilterTabs({ value, onChange }) {
 function mergeSessions(prev, next) {
   const seen = new Set(prev.map((item) => item.id));
   return [...prev, ...next.filter((item) => !seen.has(item.id))];
+}
+
+function mergeRefreshedSessions(current, refreshed) {
+  const refreshedIds = new Set(refreshed.map((item) => item.id));
+  return [
+    ...refreshed,
+    ...current.filter((item) => !refreshedIds.has(item.id)),
+  ];
 }
 
 function isSessionRunning(session) {

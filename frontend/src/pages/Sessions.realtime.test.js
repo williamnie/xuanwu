@@ -12,3 +12,11 @@ test('session detail keeps a low-frequency reconcile timer while selected', () =
   );
   assert.match(sessionsSource, /window\.clearInterval\(interval\)/);
 });
+
+test('session list keeps a low-frequency reconcile timer while page stays open', () => {
+  assert.match(sessionsSource, /SESSION_LIST_RECONCILE_INTERVAL_MS\s*=\s*30_000/);
+  assert.match(
+    sessionsSource,
+    /setInterval\(\(\)\s*=>\s*loadFirstPage\(\{\s*silent:\s*true,\s*preserveLoaded:\s*true,\s*reportErrors:\s*false,?\s*\}\),\s*SESSION_LIST_RECONCILE_INTERVAL_MS\)/,
+  );
+});
