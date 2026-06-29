@@ -18,6 +18,24 @@
    - 当 direct Feishu 没有可用目标、飞书发送失败或超过重试上限时，保持 UI banner 可见。
    - UI 文案必须是中文、人能理解、可行动，不直接暴露内部 enum。
 
+
+## Completion watch 与 lifecycle notification 边界
+
+Completion watch 是用户显式要求“这些 issue 都结束后提醒我”的后台提醒能力，不等同于普通 issue lifecycle notification：
+
+- 创建 watch 时必须保存显式 target（Feishu `chat_id` / `message_id` / `thread_id` 或等价目标），这是后续通知的唯一目标来源。
+- watched issue 进入 `done` / `failed` / `cancelled` / `pending_verification` 等终态后，watch evaluator 只生成 `kind=issue_completion_watch_satisfied` 的单条汇总 intent。
+- completion watch 出站仍走普通 `pi_notification_intents -> im_reply_drafts/sync_outbox`，但 target 来自 watch 本身，不再解析 watched issue 的 Feishu external link。
+- 因此 watched issue 没有 Feishu link 时，不应产生 `missing_feishu_link`，也不应静默丢通知；缺少显式 watch target 时才记录 `missing_feishu_target`，并在 watch/API/status 中可见。
+- 普通 lifecycle notification 仍按 issue/run group/conversation preference 与 issue Feishu link 处理，两者不要互相兜底或混用去重键。
+
+管理与回归入口：
+
+- `GET /api/pi/issue-completion-watches?status=active`：查看 active/recent watches。
+- `GET /api/pi/issue-completion-watches/<watch-id>`：查看 watch detail、items、notification intent 与 outbox status。
+- `POST /api/pi/issue-completion-watches/<watch-id>/cancel`：取消 active watch。
+- `scripts/completion-watch-smoke.mjs`：本地 fake Feishu conversation/event 端到端 smoke，断言两个 watched issues 汇总成一条 outbox。
+
 ## Direct Feishu 目标优先级
 
 Guardian direct fallback 的目标选择固定为：

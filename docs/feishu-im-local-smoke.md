@@ -74,7 +74,40 @@ bun test src/http/feishuInboxApi.test.ts src/http/imReplyOutboxApi.test.ts src/i
 - issue 创建后生成 `im_reply_drafts`；approve 后进入 `sync_outbox`。
 - 测试输出不包含 `app_secret`、`encrypt_key`、verification token 或本地临时路径。
 
-## 4. 手动半真实 smoke（默认不外发）
+
+## 4. 完成提醒本地 smoke（无真实飞书配置）
+
+完成提醒（completion watch）使用创建提醒时的显式 Feishu target：`target_chat_id` / `target_message_id` / `target_thread_id`。它不依赖被 watch 的 issue 自身是否存在 Feishu link，因此不会再因 watched issue 缺少 external link 走到 `missing_feishu_link` 并静默丢通知。
+
+可复制的本地端到端 smoke：
+
+```bash
+scripts/completion-watch-smoke.mjs
+```
+
+该脚本会在临时数据库中创建 fake Feishu conversation/event，通过自然语言完成提醒命令创建一个 watch，模拟两个 watched issues 先后进入 `done` / `failed`，并断言 `sync_outbox` 只产生一条汇总通知。输出包含 `watch_id`、`watched_issue_ids`、fake conversation id 与 outbox 状态，不会触发真实飞书发送。
+
+最小管理 API：
+
+```bash
+# list active/recent watches
+curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+  "http://127.0.0.1:3008/api/pi/issue-completion-watches?status=active"
+
+# read watch detail, watched items and notification/outbox status
+curl -fsS -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+  "http://127.0.0.1:3008/api/pi/issue-completion-watches/<watch-id>"
+
+# cancel active watch
+curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"manual cancellation"}' \
+  "http://127.0.0.1:3008/api/pi/issue-completion-watches/<watch-id>/cancel"
+```
+
+`/api/system/status` 的 `pi_guardian.completion_watch` 暴露关键运维计数：`active_watches`、`satisfied_pending_notification`、`failed_notification`。
+
+## 5. 手动半真实 smoke（默认不外发）
 
 以下命令从仓库根目录运行。只检查本地 env 是否足够，不访问外网：
 
@@ -107,7 +140,7 @@ scripts/feishu-smoke.mjs --mode challenge --url https://<public-host>/api/integr
 
 脚本会脱敏输出；不要把 `FEISHU_APP_SECRET`、`FEISHU_ENCRYPT_KEY`、`FEISHU_VERIFICATION_TOKEN` 写进命令参数。
 
-## 5. IM 对话回复与 reply draft / outbox
+## 6. IM 对话回复与 reply draft / outbox
 
 长连接收到可信普通消息后，runner 会把消息送进 Runner/PI conversation，并把返回文本发回原 chat。
 
@@ -136,7 +169,7 @@ curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
 
 如果只想本地观察 issue 写回，不要执行 approve/dispatch；如果不想真实收发 IM，关闭飞书应用事件订阅或清空 App Secret。
 
-## 6. 常见排障
+## 7. 常见排障
 
 - 长连接没连上：先看 `system status` 中 `connectors[].runtime.state/last_error`；通常是 App ID/App Secret、应用权限或事件订阅模式问题。
 - HTTP callback URL verification 失败：先看 `system status` 中 `connectors=feishu:<state>`；`misconfigured` 通常是 callback 模式缺 token/secret。

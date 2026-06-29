@@ -29,6 +29,7 @@ import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
 import { registerPiHeartbeatRoutes } from "./piHeartbeatApi.ts";
 import { registerPiHeartbeatTimelineRoutes } from "./piHeartbeatTimelineApi.ts";
 import { registerPiGuardianRoutes } from "./piGuardianApi.ts";
+import { registerPiIssueCompletionWatchRoutes } from "./piIssueCompletionWatchesApi.ts";
 import { registerPiGuardianAlertRoutes } from "./piGuardianAlertsApi.ts";
 import { registerPiReportRoutes } from "./piReportsApi.ts";
 import { registerPiSkillRoutes } from "./piSkillsApi.ts";
@@ -66,6 +67,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiProviderSettingsRoutes(router, context);
   registerPiProjectControlRoutes(router, context);
   registerPiGuardianRoutes(router, context);
+  registerPiIssueCompletionWatchRoutes(router, context);
   registerPiGuardianAlertRoutes(router, context);
   registerPiHeartbeatRoutes(router, context);
   registerPiHeartbeatTimelineRoutes(router, context);

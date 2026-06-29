@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
+import { getPiGuardianWatchdogStatus, piIssueCompletionWatchCounts } from "../db/repositories/pi.ts";
 
 export const PI_GUARDIAN_WATCHDOG_STALE_AFTER_MS = 120_000;
 
@@ -10,6 +10,7 @@ export function buildPiGuardianSystemStatus(
   const status = getPiGuardianWatchdogStatus(database);
   const lastSeen = status?.last_seen_at ?? "";
   return {
+    completion_watch: piIssueCompletionWatchCounts(database),
     watchdog: {
       is_stale: isWatchdogStale(lastSeen, now),
       last_seen: lastSeen,
