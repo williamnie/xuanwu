@@ -10,6 +10,7 @@ import type { FeishuConnectorConfig } from "./integrations/feishu.ts";
 import { createFeishuAgentBridge } from "./integrations/feishuAgentBridge.ts";
 import { createFeishuReceiverManager } from "./integrations/feishuReceiver.ts";
 import { runPiConversationPrompt } from "./http/piConversationApi.ts";
+import { sweepActivePiIssueCompletionWatches } from "./pi/issueCompletionWatchEvaluator.ts";
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
@@ -88,6 +89,11 @@ async function startAutoRunLoops(
   await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
   });
+  try {
+    sweepActivePiIssueCompletionWatches(database);
+  } catch (error) {
+    console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
+  }
   const projects = database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();

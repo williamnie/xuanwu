@@ -3,6 +3,7 @@ import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { listExternalLinksByIssue } from "../db/repositories/externalLinks.ts";
 import {
   getPiRunGroup,
+  issueCompletionWatchOwnsTargetForIssue,
   listPiActions,
   listPiNotificationIntents,
   type PiNotificationIntent
@@ -52,6 +53,9 @@ export function queueFeishuIssueStatusNotification(
     runGroupID
   });
   const target = lifecycleTarget(db, issue.id, conversationID, event.run_group_id);
+  if (!target && issueCompletionWatchOwnsTargetForIssue(db, issue.id)) {
+    return { queued: false, reason: "issue_completion_watch_owns_target" };
+  }
   const intentResult = createLifecycleIntent(db, issue, event, target);
   if (intentResult.decision === "suppress") {
     return { queued: false, reason: "run_group_lifecycle_suppressed" };

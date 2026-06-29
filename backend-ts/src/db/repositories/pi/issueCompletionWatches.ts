@@ -84,6 +84,15 @@ export function listActivePiIssueCompletionWatches(db: RunnerDatabase): PiIssueC
   ).all().map(mapWatch).map((watch) => withItems(db, watch));
 }
 
+export function issueCompletionWatchOwnsTargetForIssue(db: RunnerDatabase, issueID: number): boolean {
+  const row = db.sqlite.query<{ count: number }, [number]>(
+    `select count(*) as count from ${ITEM_TABLE} item
+     join ${WATCH_TABLE} watch on watch.id=item.watch_id
+     where item.issue_id=? and watch.status in ('active', 'satisfied') and watch.target_chat_id<>''`
+  ).get(issueID);
+  return (row?.count ?? 0) > 0;
+}
+
 export function updatePiIssueCompletionWatchItemStatus(
   db: RunnerDatabase,
   watchID: string,

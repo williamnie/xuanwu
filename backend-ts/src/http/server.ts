@@ -7,6 +7,7 @@ import { applyLocalCors, withCors } from "./cors.ts";
 import { registerEventRoutes } from "./events.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import { attachFeishuNotificationObservers } from "../integrations/feishuNotifications.ts";
+import { attachPiIssueCompletionWatchObserver } from "../pi/issueCompletionWatchEvaluator.ts";
 import { json } from "./errors.ts";
 import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
@@ -57,6 +58,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       database: runtime.database,
       sender: runtime.feishuSender
     });
+    attachPiIssueCompletionWatchObserver({ bus, database: runtime.database });
     registerFeishuSettingsRoutes(router, {
       config: runtime.config,
       database: runtime.database,
