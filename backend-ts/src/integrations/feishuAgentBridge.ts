@@ -19,6 +19,7 @@ import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishu
 import { applyFeishuMemoryCommand } from "./feishuMemoryCommands.ts";
 import { appendFeishuMemoryCandidateNotice, snapshotFeishuMemoryCandidates } from "./feishuMemoryCandidateNotice.ts";
 import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
+import { applyFeishuCompletionWatchCommand } from "./feishuCompletionWatchCommand.ts";
 import { applyFeishuNotificationPreferenceCommand } from "./feishuNotificationPreferenceBridge.ts";
 import { buildFeishuReviewCommandPrompt, normalizeFeishuReviewReply, parseFeishuReviewCommand } from "./feishuReviewCommand.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
@@ -132,6 +133,16 @@ async function handledNonMemoryReply(
   if (projectSwitch.status !== "none") return sendReply(options, input, projectSwitch.text, {
     conversationId: route.conversationId, projectId: projectSwitch.projectId, text: projectSwitch.text
   }, projectSwitch.reason);
+  const completionWatch = applyFeishuCompletionWatchCommand(options.database, {
+    event: input.event,
+    projectContext,
+    route,
+    sourceEventId: String(input.ingest.event_id || input.event.dedupe_key),
+    text: route.prompt || input.event.text
+  });
+  if (completionWatch.handled) return sendReply(options, input, completionWatch.text, {
+    conversationId: route.conversationId, projectId: completionWatch.projectId, text: completionWatch.text
+  }, completionWatch.reason);
   const issueClarification = issueCommandClarification(input, route, projectContext);
   if (issueClarification) return sendReply(options, input, issueClarification.text, {
     conversationId: route.conversationId, projectId: "", text: issueClarification.text
