@@ -94,6 +94,8 @@ describe("PI runtime prompt", () => {
       expect(prompt).toContain("issue_enqueue_next_triage");
       expect(prompt).toContain("继续做下一个");
       expect(prompt).toContain("issue_enqueue_batch_triage");
+      expect(prompt).toContain("issue_completion_watch_create");
+      expect(prompt).toContain("only after the tool succeeds may you say you will notify them");
       expect(prompt).toContain("#387-#391");
       expect(prompt).toContain("issue_ids");
       expect(prompt).toContain("完成所有");

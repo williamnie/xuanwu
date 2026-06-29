@@ -19,6 +19,12 @@ import { isExecutorProviderId, type ExecutorProvider, type ExecutorProviderId } 
 import { dispatchSupervisorPiAction } from "./piSupervisorActionDispatch.ts";
 import { isRunnerChatSource } from "../pi/runnerChatAuthorization.ts";
 import { dispatchNeedsUserEscalation } from "../notifications/piNeedsUserAction.ts";
+import {
+  cancelIssueCompletionWatchAction,
+  createIssueCompletionWatchAction,
+  type IssueCompletionWatchCancelInput,
+  type IssueCompletionWatchCreateInput
+} from "../pi/issueCompletionWatchActions.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -45,6 +51,10 @@ export async function dispatchPiAction(
       return enqueueIssueAndStartAutoRun(context, action, positivePayloadID(payload, "issue_id"));
     case "issue.schedule_enqueue":
       return createIssueEnqueueCron(context.database, payload);
+    case "issue_completion_watch.create":
+      return createIssueCompletionWatchAction(context.database, payload as IssueCompletionWatchCreateInput);
+    case "issue_completion_watch.cancel":
+      return cancelIssueCompletionWatchAction(context.database, payload as IssueCompletionWatchCancelInput);
     case "issue.comment":
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), payload);
     case "issue.state_repair":

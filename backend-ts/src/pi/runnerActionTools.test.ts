@@ -34,12 +34,36 @@ describe("PI runner action tools", () => {
     const issueList = toolByName(tools, "issue_list");
     const issueStatus = toolByName(tools, "issue_status_summary");
     const issueExecution = toolByName(tools, "issue_execution_status");
+    const watchCreate = toolByName(tools, "issue_completion_watch_create");
+    const watchList = toolByName(tools, "issue_completion_watch_list");
+    const watchCancel = toolByName(tools, "issue_completion_watch_cancel");
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([...PI_RUNNER_ACTION_TOOL_NAMES].sort());
     expect(validateArgs(issueList, { limit: 3, status: "todo" })).toEqual({ limit: 3, status: "todo" });
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(watchCreate, {
+      issue_ids: [7, 8],
+      note: "提醒我",
+      project_id: "demo",
+      target_channel: "feishu",
+      target_chat_id: "oc_group"
+    })).toEqual({
+      issue_ids: [7, 8],
+      note: "提醒我",
+      project_id: "demo",
+      target_channel: "feishu",
+      target_chat_id: "oc_group"
+    });
+    expect(validateArgs(watchList, { project_id: "demo", status: "active" })).toEqual({
+      project_id: "demo",
+      status: "active"
+    });
+    expect(validateArgs(watchCancel, { reason: "done", watch_id: "watch-1" })).toEqual({
+      reason: "done",
+      watch_id: "watch-1"
+    });
     expect(validateArgs(batchTriage, { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }))
       .toEqual({ issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" });
     expect(validateArgs(nextTriage, { project_id: "demo" })).toEqual({ project_id: "demo" });
@@ -100,6 +124,14 @@ describe("PI runner action tools", () => {
     await issueRead.execute("tool-1", { id: 7 }, undefined, undefined, {} as never);
     await issueStatus.execute("tool-status", { status: "todo" }, undefined, undefined, {} as never);
     await issueExecution.execute("tool-execution", { id: 7 }, undefined, undefined, {} as never);
+    await watchCreate.execute("tool-watch-create", {
+      issue_ids: [7, 8],
+      note: "提醒我",
+      project_id: "demo",
+      target_channel: "feishu"
+    }, undefined, undefined, {} as never);
+    await watchList.execute("tool-watch-list", { project_id: "demo", status: "active" }, undefined, undefined, {} as never);
+    await watchCancel.execute("tool-watch-cancel", { reason: "user_cancel", watch_id: "watch-1" }, undefined, undefined, {} as never);
     await batchTriage.execute("tool-batch-triage", {
       issue_ids: [387, 388],
       project_id: "demo",
@@ -128,6 +160,9 @@ describe("PI runner action tools", () => {
       ["readIssue", { id: 7 }],
       ["issueStatusSummary", { status: "todo" }],
       ["issueExecutionStatus", { id: 7 }],
+      ["createIssueCompletionWatch", { issue_ids: [7, 8], note: "提醒我", project_id: "demo", target_channel: "feishu" }],
+      ["listIssueCompletionWatches", { project_id: "demo", status: "active" }],
+      ["cancelIssueCompletionWatch", { reason: "user_cancel", watch_id: "watch-1" }],
       ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
       ["diagnoseIssueState", { project_id: "demo" }],
@@ -1013,6 +1048,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     commentIssue: record("commentIssue"),
     assignExecutorProfileProposal: record("assignExecutorProfileProposal"),
     createExecutorIssueProposal: record("createExecutorIssueProposal"),
+    createIssueCompletionWatch: record("createIssueCompletionWatch"),
     createIssueProposal: record("createIssueProposal"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
     createReportWorkflow: record("createReportWorkflow"),
@@ -1024,7 +1060,9 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     enqueueBatchTriageIssues: record("enqueueBatchTriageIssues"),
     enqueueNextTriageIssue: record("enqueueNextTriageIssue"),
     enqueueIssueProposal: record("enqueueIssueProposal"),
+    cancelIssueCompletionWatch: record("cancelIssueCompletionWatch"),
     listIssues: record("listIssues"),
+    listIssueCompletionWatches: record("listIssueCompletionWatches"),
     listMcpRegistry: record("listMcpRegistry"),
     listMcpResources: record("listMcpResources"),
     listProjects: record("listProjects"),

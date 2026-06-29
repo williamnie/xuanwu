@@ -78,6 +78,7 @@ export const PI_SAFE_ACTION_TYPES = [
   "agent.profile_recommend",
   "issue.comment", "issue.execution_status", "issue.list", "issue.read", "issue.retry_after", "issue.state_diagnose",
   "issue.status_summary",
+  "issue_completion_watch.list",
   "issue.supervisor_decision", "project.list", "project.status",
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
@@ -88,6 +89,7 @@ export const PI_SAFE_ACTION_TYPES = [
 export const PI_READ_ONLY_ACTION_TYPES = [
   "agent.profile_recommend",
   "issue.execution_status", "issue.list", "issue.read", "issue.state_diagnose", "issue.status_summary",
+  "issue_completion_watch.list",
   "project.list", "project.status",
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary",
@@ -99,6 +101,7 @@ export const PI_READ_ONLY_ACTION_TYPES = [
 const SAFE_ACTIONS = new Set(PI_SAFE_ACTION_TYPES);
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
+  "issue_completion_watch.create", "issue_completion_watch.cancel",
   "issue.retry", "issue.state_repair", "needs_user.escalate",
   "session.resume_followup"
 ]);

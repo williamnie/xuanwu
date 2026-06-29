@@ -33,6 +33,16 @@ import {
   type IssueProposalContextFields
 } from "./issueProposalContext.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
+import {
+  cancelIssueCompletionWatchAction,
+  createIssueCompletionWatchAction,
+  listIssueCompletionWatchesAction,
+  watchProjectID,
+  watchProjectIDForCancel,
+  type IssueCompletionWatchCancelInput,
+  type IssueCompletionWatchCreateInput,
+  type IssueCompletionWatchListInput
+} from "./issueCompletionWatchActions.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -46,6 +56,9 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   auditSkillIntents(input: SkillIntentAuditInput): unknown;
   enqueueBatchTriageIssues(input: BatchTriageIssueInput): unknown;
   enqueueNextTriageIssue(input: NextTriageIssueInput): unknown;
+  createIssueCompletionWatch(input: IssueCompletionWatchCreateInput): unknown;
+  listIssueCompletionWatches(input: IssueCompletionWatchListInput): unknown;
+  cancelIssueCompletionWatch(input: IssueCompletionWatchCancelInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
   issueExecutionStatus(input: IssueExecutionStatusInput): unknown;
   issueStatusSummary(input: IssueStatusSummaryInput): unknown;
@@ -134,6 +147,9 @@ export function createPiRunnerActions(
     },
     enqueueBatchTriageIssues: (input) => createBatchTriageEnqueueAction(db, context, input),
     enqueueNextTriageIssue: (input) => createNextTriageEnqueueAction(db, context, input),
+    createIssueCompletionWatch: (input) => createCompletionWatch(db, context, input),
+    listIssueCompletionWatches: (input) => safeListCompletionWatches(db, context, input),
+    cancelIssueCompletionWatch: (input) => cancelCompletionWatch(db, context, input),
     scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
     issueExecutionStatus: (input) => safeIssueExecutionStatus(db, context, input),
     issueStatusSummary: (input) => safeIssueStatusSummary(db, context, input),
@@ -151,6 +167,50 @@ export function createPiRunnerActions(
     readIssue: (input) => safeReadIssue(db, context, input),
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
+}
+
+function createCompletionWatch(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueCompletionWatchCreateInput
+) {
+  const projectID = watchProjectID(db, input);
+  const actionContext = scopedRunnerChatActionContext(context, "issue_completion_watch.create", { projectID });
+  return createPendingPiAction(db, actionContext, {
+    actionType: "issue_completion_watch.create",
+    payload: cleanObjectPayload({ ...input, project_id: projectID }),
+    projectID,
+    rationale: input.note
+  }, () => createIssueCompletionWatchAction(db, { ...input, project_id: projectID }));
+}
+
+function safeListCompletionWatches(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueCompletionWatchListInput
+) {
+  const projectID = cleanString(input.project_id) || (context.project?.id ?? "");
+  return executeSafePiAction(db, context, {
+    actionType: "issue_completion_watch.list",
+    payload: cleanObjectPayload({ ...input, project_id: projectID }),
+    projectID,
+    execute: () => listIssueCompletionWatchesAction(db, { ...input, project_id: projectID })
+  });
+}
+
+function cancelCompletionWatch(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueCompletionWatchCancelInput
+) {
+  const projectID = watchProjectIDForCancel(db, input.watch_id);
+  const actionContext = scopedRunnerChatActionContext(context, "issue_completion_watch.cancel", { projectID });
+  return createPendingPiAction(db, actionContext, {
+    actionType: "issue_completion_watch.cancel",
+    payload: cleanObjectPayload({ reason: input.reason, watch_id: input.watch_id }),
+    projectID,
+    rationale: input.reason
+  }, () => cancelIssueCompletionWatchAction(db, input));
 }
 
 function actionContextForProposal(

@@ -23,6 +23,9 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "issue_enqueue_proposal",
   "issue_enqueue_next_triage",
   "issue_schedule_enqueue",
+  "issue_completion_watch_create",
+  "issue_completion_watch_list",
+  "issue_completion_watch_cancel",
   "repo_search",
   "repo_read_excerpt",
   "repo_tree",
@@ -201,8 +204,39 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         next_run_at: requiredText,
         rationale: optionalString,
         timezone: optionalString
-      }, objectOptions), actions.scheduleIssueEnqueue)
+      }, objectOptions), actions.scheduleIssueEnqueue),
+    completionWatchCreateTool(actions),
+    actionTool("issue_completion_watch_list", "Issue Completion Watch List",
+      "Read active or selected persistent issue completion watches. Use watch_id to inspect one watch.",
+      Type.Object({
+        limit: Type.Optional(positiveNumber),
+        project_id: optionalString,
+        status: optionalString,
+        watch_id: optionalString
+      }, objectOptions), actions.listIssueCompletionWatches),
+    actionTool("issue_completion_watch_cancel", "Issue Completion Watch Cancel",
+      "Cancel one active persistent issue completion watch.",
+      Type.Object({ reason: optionalString, watch_id: requiredText }, objectOptions), actions.cancelIssueCompletionWatch)
   ];
+}
+
+function completionWatchCreateTool(actions: PiRunnerActionLayer): ToolDefinition {
+  return actionTool("issue_completion_watch_create", "Issue Completion Watch Create",
+    "Create a persistent watch that will notify the target channel after all watched issues reach a terminal status.",
+    Type.Object({
+      condition: Type.Optional(Type.Any()),
+      issue_ids: Type.Array(positiveID),
+      note: optionalString,
+      origin_conversation_id: optionalString,
+      project_id: optionalString,
+      requested_by: optionalString,
+      source_event_id: optionalString,
+      source_message_id: optionalString,
+      target_channel: optionalString,
+      target_chat_id: optionalString,
+      target_message_id: optionalString,
+      target_thread_id: optionalString
+    }, objectOptions), actions.createIssueCompletionWatch);
 }
 
 function issueStateDiagnoseTool(actions: PiRunnerActionLayer): ToolDefinition {

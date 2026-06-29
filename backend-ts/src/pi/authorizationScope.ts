@@ -89,7 +89,8 @@ function matchRunnerScope(
 }
 
 function runnerIssueAction(actionType: string): boolean {
-  return actionType.startsWith("issue.") || actionType === "project.status" || actionType === "project.list";
+  return actionType.startsWith("issue.") || actionType.startsWith("issue_completion_watch.") ||
+    actionType === "project.status" || actionType === "project.list";
 }
 
 function matchProject(expected: string, actual: unknown): PiAuthorizationScopeMatch {

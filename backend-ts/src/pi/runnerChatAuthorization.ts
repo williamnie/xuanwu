@@ -4,7 +4,9 @@ const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue.create",
   "issue.enqueue",
   "issue.schedule_enqueue",
-  "issue.state_repair"
+  "issue.state_repair",
+  "issue_completion_watch.create",
+  "issue_completion_watch.cancel"
 ]);
 
 export function scopedRunnerChatActionContext<T extends PiActionContext>(

@@ -7,7 +7,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
-import { createPiAction, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
+import { createPiAction, getPiIssueCompletionWatch, listIssueSupervisorEvents } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
@@ -85,6 +85,61 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(getIssue(db, 386)).toMatchObject({ status: "todo" });
       expect(kickedProjects).toEqual(["manual-demo"]);
       expect(provider.inputs).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("issue completion watch create/cancel dispatch persists watch rows after approval", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssue(db, { issueID: 547, projectID: "demo", status: "todo" });
+      const createAction = createPiAction(db, {
+        action_type: "issue_completion_watch.create",
+        id: "watch-create-action",
+        payload_json: JSON.stringify({
+          issue_ids: [547],
+          project_id: "demo",
+          source_event_id: "event-547",
+          target_channel: "feishu",
+          target_chat_id: "oc_group"
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      const created = await dispatchPiAction({ database: db }, createAction) as { watch_id?: string };
+      const watchID = created.watch_id ?? "";
+
+      expect(created).toMatchObject({
+        already_satisfied: false,
+        target_channel: "feishu",
+        watched_issues: [expect.objectContaining({ id: 547, status: "todo" })]
+      });
+      expect(getPiIssueCompletionWatch(db, watchID)).toMatchObject({
+        status: "active",
+        target_chat_id: "oc_group",
+        items: [expect.objectContaining({ issue_id: 547 })]
+      });
+
+      const cancelAction = createPiAction(db, {
+        action_type: "issue_completion_watch.cancel",
+        id: "watch-cancel-action",
+        payload_json: JSON.stringify({ reason: "user_cancel", watch_id: watchID }),
+        project_id: "demo",
+        status: "approved"
+      });
+      const cancelled = await dispatchPiAction({ database: db }, cancelAction);
+
+      expect(cancelled).toMatchObject({
+        current_status: "cancelled",
+        watch_id: watchID
+      });
+      expect(getPiIssueCompletionWatch(db, watchID)).toMatchObject({
+        error: "user_cancel",
+        status: "cancelled"
+      });
     } finally {
       db.close();
     }

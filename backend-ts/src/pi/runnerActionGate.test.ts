@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { getPiAction, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
+import { getPiAction, getPiIssueCompletionWatch, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { createPiRunnerActions } from "./runnerActions.ts";
 
@@ -136,6 +136,86 @@ describe("PI runner action gate", () => {
       });
       expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
       expect(kicked).toEqual([fixture.project.id]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("completion watch create/cancel follow delegated, attended, and read-only gate semantics", async () => {
+    const fixture = await openFixture();
+    try {
+      const issueID = insertIssue(fixture.db, { projectID: fixture.project.id, status: "todo", title: "Watch me" });
+      const attended = createPiRunnerActions(fixture.db, { project: fixture.project })
+        .createIssueCompletionWatch({ issue_ids: [issueID], target_channel: "feishu" }) as {
+          action_id: string; decision: string; status: string;
+        };
+
+      expect(attended).toMatchObject({ decision: "ask", status: "pending" });
+      expect(listPiActions(fixture.db, { status: "pending" })).toContainEqual(expect.objectContaining({
+        action_type: "issue_completion_watch.create",
+        risk_level: "medium"
+      }));
+
+      const delegated = createPiRunnerActions(fixture.db, {
+        source: "feishu_runner_chat"
+      }).createIssueCompletionWatch({
+        issue_ids: [issueID],
+        source_event_id: "event-1",
+        target_channel: "feishu",
+        target_chat_id: "oc_group"
+      }) as {
+        result?: { watch_id?: string };
+        status: string;
+      };
+      const watchID = delegated.result?.watch_id ?? "";
+
+      expect(delegated).toMatchObject({
+        decision: "execute",
+        result: {
+          already_satisfied: false,
+          target_channel: "feishu",
+          watched_issues: [{ id: issueID, title: "Watch me" }]
+        },
+        status: "completed"
+      });
+      expect(getPiIssueCompletionWatch(fixture.db, watchID)).toMatchObject({
+        status: "active",
+        target_chat_id: "oc_group",
+        items: [expect.objectContaining({ issue_id: issueID })]
+      });
+
+      const readOnly = createPiRunnerActions(fixture.db, {
+        authorization: {
+          allowed_actions: ["issue.enqueue"],
+          authorizedActions: [{ action_type: "issue.enqueue", issue_id: issueID, project_id: fixture.project.id }],
+          mode: "delegated",
+          scope: { project_id: fixture.project.id }
+        },
+        project: fixture.project
+      }).listIssueCompletionWatches({ project_id: fixture.project.id }) as { status?: string; items?: unknown[] };
+
+      expect(readOnly).toMatchObject({ count: 1, items: [expect.objectContaining({ watch_id: watchID })] });
+      expect(readOnly.status).toBeUndefined();
+
+      const cancelled = createPiRunnerActions(fixture.db, {
+        source: "feishu_runner_chat"
+      }).cancelIssueCompletionWatch({ reason: "user_cancel", watch_id: watchID }) as {
+        result?: { current_status?: string; watch_id?: string };
+        status: string;
+      };
+
+      expect(cancelled).toMatchObject({
+        decision: "execute",
+        result: { current_status: "cancelled", watch_id: watchID },
+        status: "completed"
+      });
+      expect(getPiIssueCompletionWatch(fixture.db, watchID)).toMatchObject({
+        error: "user_cancel",
+        status: "cancelled"
+      });
+      expect(() => createPiRunnerActions(fixture.db, { project: fixture.project })
+        .createIssueCompletionWatch({ issue_ids: [], project_id: fixture.project.id }))
+        .toThrow("issue_ids is required");
     } finally {
       await fixture.close();
     }

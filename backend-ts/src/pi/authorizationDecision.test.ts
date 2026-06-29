@@ -31,6 +31,13 @@ describe("PI authorization decision", () => {
     expect(decidePiAuthorization({ ...BASE, action_type: "issue.enqueue", requires_confirmation: true, risk_level: "medium" }, {
       mode: "attended"
     })).toMatchObject({ decision: "ask" });
+    expect(decidePiAuthorization({
+      ...BASE,
+      action_type: "issue_completion_watch.create",
+      payload: { issue_ids: [7] },
+      requires_confirmation: true,
+      risk_level: "medium"
+    }, { mode: "attended" })).toMatchObject({ decision: "ask" });
     expect(decidePiAuthorization({ ...BASE, action_type: "session.steer", requires_confirmation: true, risk_level: "high" }, {
       mode: "attended"
     })).toMatchObject({ decision: "ask" });
@@ -54,6 +61,27 @@ describe("PI authorization decision", () => {
       scope: { project_id: "demo" }
     })).toMatchObject({ decision: "deny" });
     expect(decidePiAuthorization({ ...BASE, action_type: "sdk.read" }, {
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
+    expect(decidePiAuthorization({
+      ...BASE,
+      action_type: "issue_completion_watch.list",
+      requires_confirmation: false,
+      risk_level: "low"
+    }, {
+      allowed_actions: ["issue.enqueue"],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
+    expect(decidePiAuthorization({
+      ...BASE,
+      action_type: "issue_completion_watch.cancel",
+      payload: { watch_id: "watch-1" },
+      requires_confirmation: true,
+      risk_level: "medium"
+    }, {
+      authorizedActions: [{ action_type: "issue_completion_watch.cancel", project_id: "demo" }],
       mode: "delegated",
       scope: { project_id: "demo" }
     })).toMatchObject({ decision: "execute" });
