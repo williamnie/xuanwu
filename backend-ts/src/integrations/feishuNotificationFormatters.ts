@@ -4,6 +4,7 @@ import { containsSensitiveMemoryContent } from "../pi/memoryPolicy.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 
 const SUMMARY_LIMIT = 180;
+const WATCH_ISSUE_LIMIT = 20;
 
 export function formatIssueStatusNotification(issue: Issue): string {
   const title = safeSummary(issue.title || "任务", 80);
@@ -66,6 +67,19 @@ export function formatPiNeedsUserNotification(input: {
   ].join("\n");
 }
 
+export function formatIssueCompletionWatchNotification(payload: Record<string, unknown>): string {
+  const stats = record(payload.stats);
+  const issues = watchIssues(payload.issues);
+  const total = numberField(stats.total) || issues.length;
+  return [
+    `Pi：你关注的 ${total} 个 issue 已结束`,
+    watchStatsLine(stats),
+    "列表：",
+    ...watchIssueLines(issues),
+    `下一步：${watchNextStep(stats)}`
+  ].join("\n");
+}
+
 function startText(issueID: number, title: string, status: string): string {
   return [
     `Pi：issue #${issueID} ${status}：${title}`,
@@ -101,10 +115,54 @@ function memoryContent(item: PiMemoryItem): string {
   return safeSummary(item.content, 90);
 }
 
+function watchStatsLine(stats: Record<string, unknown>): string {
+  return [
+    `done：${numberField(stats.done)}`,
+    `failed：${numberField(stats.failed)}`,
+    `cancelled：${numberField(stats.cancelled)}`,
+    `pending_verification：${numberField(stats.pending_verification)}`
+  ].join(" / ");
+}
+
+function watchIssueLines(issues: Array<Record<string, unknown>>): string[] {
+  if (issues.length === 0) return ["- （无 issue 明细）"];
+  return issues.slice(0, WATCH_ISSUE_LIMIT).map((issue) => {
+    const id = numberField(issue.id);
+    const title = safeSummary(textField(issue.title) || "未命名 issue", 80);
+    const status = safeSummary(textField(issue.status) || "unknown", 40);
+    return `- #${id} ${title} — ${status}`;
+  });
+}
+
+function watchNextStep(stats: Record<string, unknown>): string {
+  if (numberField(stats.failed) + numberField(stats.cancelled) > 0) {
+    return "存在 failed/cancelled，请先处理失败或取消项，再决定是否继续测试。";
+  }
+  return "全部 done/pending_verification，可以开始测试。";
+}
+
 function safeSummary(value: unknown, maxRunes: number): string {
   const safe = redactedUserVisibleText(cleanString(value));
   const runes = [...safe];
   return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
+}
+
+function watchIssues(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.map(record).filter((item) => numberField(item.id) > 0) : [];
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function numberField(value: unknown): number {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+  const parsed = Number.parseInt(cleanString(value), 10);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function textField(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function shortID(id: string): string {

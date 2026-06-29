@@ -52,13 +52,13 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
     providers: runtime.providers
   });
   if (runtime.database) {
+    attachPiIssueCompletionWatchObserver({ bus, database: runtime.database });
     attachFeishuNotificationObservers({
       bus,
       config: runtime.config?.integrations.feishu,
       database: runtime.database,
       sender: runtime.feishuSender
     });
-    attachPiIssueCompletionWatchObserver({ bus, database: runtime.database });
     registerFeishuSettingsRoutes(router, {
       config: runtime.config,
       database: runtime.database,

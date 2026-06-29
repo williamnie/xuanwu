@@ -100,9 +100,10 @@ describe("PI issue completion watch evaluator", () => {
       expect(watchIntents[0]).toMatchObject({
         decision: "send_now",
         error: "",
-        state: "ready",
+        state: "sent",
         target_chat_id: "oc_watch"
       });
+      expect(watchIntents[0]?.sent_outbox_id).toBeGreaterThan(0);
       expect(payload).toMatchObject({
         issues: expect.arrayContaining([
           expect.objectContaining({ id: first.id, status: "done" }),

@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
+import { queueReadyFeishuCompletionWatchNotifications } from "../integrations/feishuCompletionWatchNotifications.ts";
 import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
 import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
 import type { FeishuMessageClient } from "../integrations/feishuClient.ts";
@@ -41,6 +42,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
+  completionWatchNotifications: { failed: number; queued: number; scanned: number; skipped: number };
   guardianActionDispatch: PiGuardianActionDispatchResult;
   missedIntentSweep: GuardianMissedIntentSweepResult;
   guardianDecisions: GuardianDecisionOrchestratorSummary;
@@ -170,6 +172,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
   resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
+  const completionWatchNotifications = queueReadyFeishuCompletionWatchNotifications(input.database);
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
@@ -177,6 +180,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
     digestFlush,
     digestNotifications,
+    completionWatchNotifications,
     guardianActionDispatch,
     guardianDecisions,
     missedIntentSweep,
