@@ -86,7 +86,8 @@ describe("Bun system status endpoints", () => {
         env_keys: [],
         secrets: { api_key: { configured: false } },
         settings_mode: "env_or_codex_config",
-        timeout_ms: 1_800_000
+        timeout_ms: 1_800_000,
+        effective_rpc_timeout_ms: 90_000
       });
       expect(claude).toMatchObject({
         id: "claude",

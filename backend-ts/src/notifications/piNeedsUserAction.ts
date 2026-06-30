@@ -3,6 +3,7 @@ import { createIssueComment, listIssueEvents } from "../db/repositories/issueEve
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { publishPiNeedsUserNotification } from "./piNotifier.ts";
@@ -32,14 +33,15 @@ export function dispatchNeedsUserEscalation(
     provider: cleanString(payload.provider)
   });
   const body = published?.message ?? needsUserCommentBody(action, issue, payload);
+  const released = releaseNeedsUserSlot(context.database, issue, payload);
   if (hasNeedsUserComment(context.database, issueID, action.id)) {
-    return { comment: null, notification: published, skipped_comment: "duplicate" };
+    return { comment: null, notification: published, released, skipped_comment: "duplicate" };
   }
   const comment = createIssueComment(context.database, issueID, {
     author: "agent",
     body: `${body}\nAction：${redactActionID(action.id)}`
   });
-  return { comment, notification: published };
+  return { comment, notification: published, released };
 }
 
 function requireIssue(db: RunnerDatabase, issueID: number): Issue {
@@ -61,6 +63,25 @@ function needsUserCommentBody(action: PiAction, issue: Issue, payload: Record<st
     `诊断：${diagnosis}`,
     `摘要：${message}`,
     `下一步：${nextStep}`
+  ].filter(Boolean).join("\n");
+}
+
+function releaseNeedsUserSlot(db: RunnerDatabase, issue: Issue, payload: Record<string, unknown>): Issue | null {
+  if (issue.status !== "in_progress") return null;
+  return updateIssue(db, issue.id, {
+    error: needsUserIssueError(payload),
+    status: "failed"
+  });
+}
+
+function needsUserIssueError(payload: Record<string, unknown>): string {
+  const diagnosis = redactCommentText(payload.diagnosis_code) || redactCommentText(payload.reason) || "needs_user";
+  const message = redactCommentText(payload.message) || redactCommentText(payload.body) || "PI 判断当前无法继续自动恢复。";
+  const nextStep = redactCommentText(payload.next_step) || redactCommentText(payload.nextStep);
+  return [
+    `needs_user: ${diagnosis}`,
+    message,
+    nextStep ? `下一步：${nextStep}` : ""
   ].filter(Boolean).join("\n");
 }
 

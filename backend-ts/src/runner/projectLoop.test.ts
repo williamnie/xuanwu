@@ -214,6 +214,34 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("rekicks an already queued project after global executor capacity is released", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "busy", provider: provider.id, autoRun: 1 });
+      insertProject(db, { id: "waiting", provider: provider.id, autoRun: 1 });
+      const busy = insertIssue(db, { projectId: "busy", title: "busy", status: "in_progress" });
+      const waiting = insertIssue(db, { projectId: "waiting", title: "waiting" });
+      insertOpenRun(db, busy);
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "waiting");
+      await Bun.sleep(20);
+      expect(provider.inputs).toHaveLength(0);
+      expect(isProjectLoopActive("waiting")).toBe(true);
+      expect(getIssue(db, waiting)).toMatchObject({ status: "todo", attempt_count: 0 });
+
+      closeClaimedIssue(db, busy);
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "waiting");
+      await waitFor(() => provider.inputs.length === 1);
+      await waitFor(() => !isProjectLoopActive("waiting"));
+
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([waiting]);
+      expect(getIssue(db, waiting)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
   test("auto-run stops after provider startup failure and leaves remaining todos queued", async () => {
     const db = await openFixtureDatabase();
     const provider = new FailingExecutionProvider();

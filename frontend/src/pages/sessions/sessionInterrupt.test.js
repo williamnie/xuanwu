@@ -12,12 +12,14 @@ import {
 test('interrupt request notice keeps linked issue pending until terminal event', () => {
   const notice = interruptRequestNotice('codex:thread-1', {
     interrupted: true,
-    issue: { id: 76, status: 'cancelled' },
+    issue: { id: 76, status: 'in_progress' },
   });
 
   assert.equal(notice.status, 'pending');
   assert.equal(isInterruptPendingForSession(notice, 'codex:thread-1'), true);
   assert.match(notice.text, /Issue #76/);
+  assert.match(notice.text, /状态保持 in_progress/);
+  assert.doesNotMatch(notice.text, /已进入|回收/);
 });
 
 test('interrupt completion notice distinguishes completed cancelled and error events', () => {

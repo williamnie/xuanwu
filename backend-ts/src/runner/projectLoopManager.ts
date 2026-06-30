@@ -35,7 +35,10 @@ export function startProjectLoop(
   const id = projectID.trim();
   if (id === "") return;
   if (options.forceOnce === true) forcedProjects.add(id);
-  if (activeLoops.has(id)) return;
+  if (activeLoops.has(id)) {
+    startQueuedWorkers(runtime);
+    return;
+  }
   activeLoops.add(id);
   enqueueProject(id);
   startQueuedWorkers(runtime);

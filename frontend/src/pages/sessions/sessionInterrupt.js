@@ -17,7 +17,7 @@ export function interruptRequestNotice(sessionId, result = {}) {
     };
   }
   const issue = result.issue;
-  const issueText = issue?.id ? `，关联 Issue #${issue.id} 已进入 ${issue.status || 'cancelled'} 回收` : '';
+  const issueText = issue?.id ? `，关联 Issue #${issue.id} 状态保持 ${issue.status || '原状态'}` : '';
   return {
     sessionId,
     status: INTERRUPT_STATUS_PENDING,

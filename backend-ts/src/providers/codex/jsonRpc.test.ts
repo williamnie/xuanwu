@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CodexStdioJsonRpcTransport, runCodexTransportInitializeSmoke } from "./jsonRpc.ts";
+import { codexAppServerRpcTimeoutMs, CodexStdioJsonRpcTransport, runCodexTransportInitializeSmoke } from "./jsonRpc.ts";
 import type { ProviderEvent } from "../types.ts";
 import type { CodexJsonRpcProcess, CodexJsonRpcProcessFactory } from "./jsonRpc.ts";
 
@@ -77,6 +77,13 @@ const config = {
 };
 
 describe("Codex stdio JSON-RPC transport", () => {
+  test("uses a 90 second app-server RPC cap while preserving shorter overrides", () => {
+    expect(codexAppServerRpcTimeoutMs(1_800_000)).toBe(90_000);
+    expect(codexAppServerRpcTimeoutMs(90_000)).toBe(90_000);
+    expect(codexAppServerRpcTimeoutMs(60_000)).toBe(60_000);
+    expect(codexAppServerRpcTimeoutMs(1)).toBe(1);
+  });
+
   test("runs an initialize smoke request over fake stdio", async () => {
     let spawnedCommand: string[] = [];
     const factory: CodexJsonRpcProcessFactory = ({ command }) => {

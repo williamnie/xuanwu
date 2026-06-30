@@ -44,7 +44,7 @@ export type CodexTransportOptions = {
 
 const MAX_STDERR_LINES = 50;
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
-const MAX_RPC_REQUEST_TIMEOUT_MS = 10_000;
+export const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
 
 export class CodexStdioJsonRpcTransport {
   private nextId = 0;
@@ -229,7 +229,7 @@ export class CodexStdioJsonRpcTransport {
   }
 
   private requestTimeoutMs(): number {
-    return Math.min(Math.max(1, this.config.timeoutMs), MAX_RPC_REQUEST_TIMEOUT_MS);
+    return codexAppServerRpcTimeoutMs(this.config.timeoutMs);
   }
 
   private timeoutRequest(id: number, method: string): void {
@@ -253,6 +253,10 @@ export class CodexStdioJsonRpcTransport {
 
 function clearPendingTimeout(request: PendingRequest | undefined): void {
   if (request?.timeout) clearTimeout(request.timeout);
+}
+
+export function codexAppServerRpcTimeoutMs(configuredTimeoutMs: number): number {
+  return Math.min(Math.max(1, configuredTimeoutMs), CODEX_APP_SERVER_RPC_TIMEOUT_MS);
 }
 
 export async function runCodexTransportInitializeSmoke(

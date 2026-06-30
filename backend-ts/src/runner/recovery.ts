@@ -1,6 +1,6 @@
 import { getProject } from "../db/repositories/projects.ts";
 import { listIssues } from "../db/repositories/issues.ts";
-import { enqueueIssue } from "../db/repositories/issueActions.ts";
+import { requeueUnstartedIssueClaim } from "../db/repositories/issueActions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { failIssueExecution } from "./statusGate.ts";
@@ -137,7 +137,7 @@ function recoveryProvider(issue: Issue): ExecutorProviderId {
 }
 
 function requeueUnstartedClaim(db: RunnerDatabase, issue: Issue): void {
-  enqueueIssue(db, issue.id);
+  requeueUnstartedIssueClaim(db, issue.id);
   recordRecoveryEvent(db, issue.id, "issue.recovery_requeued", {
     reason: "missing provider_session_id after restart; requeued unstarted claim"
   });

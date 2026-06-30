@@ -22,6 +22,16 @@ export function retryIssue(db: RunnerDatabase, id: number, options: IssueActionO
   return queueIssue(db, issue, options);
 }
 
+export function forceRetryIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
+  return queueIssue(db, mustGetRunnableIssue(db, id), options);
+}
+
+export function requeueUnstartedIssueClaim(db: RunnerDatabase, id: number): Issue {
+  const issue = mustGetRunnableIssue(db, id);
+  if (!hasUnstartedOpenRun(db, issue.id)) return issue;
+  return queueIssue(db, issue, {});
+}
+
 export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_cancel"): Issue {
   const issue = mustGetIssue(db, id);
   const timestamp = issueTimestamp();
@@ -53,6 +63,14 @@ export function deleteIssue(db: RunnerDatabase, id: number): void {
 function hasOpenIssueRun(db: RunnerDatabase, issueID: number): boolean {
   const row = db.sqlite.query<{ count: number }, [number]>(
     "select count(*) as count from issue_runs where issue_id=? and ended_at=''"
+  ).get(issueID);
+  return (row?.count ?? 0) > 0;
+}
+
+function hasUnstartedOpenRun(db: RunnerDatabase, issueID: number): boolean {
+  const row = db.sqlite.query<{ count: number }, [number]>(
+    `select count(*) as count from issue_runs
+     where issue_id=? and ended_at='' and provider_session_id='' and provider_turn_id=''`
   ).get(issueID);
   return (row?.count ?? 0) > 0;
 }

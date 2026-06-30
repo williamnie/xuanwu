@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
@@ -10,6 +11,7 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
+import { isProjectLoopActive } from "./projectLoopManager.ts";
 
 class FakePiCycleRunner {
   active = 0;
@@ -343,6 +345,61 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
+  test("always-on issue watchdog starts stale todo issues without PI auto-manage settings", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new WatchdogSessionProvider();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "demo", 1);
+      insertTodoIssue(db, 801, "Stale todo", "2026-06-22T08:00:00Z");
+
+      const result = await runScheduleLayerCycle({
+        database: db,
+        providers: { codex: provider },
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false,
+        watchdogNow: NOW
+      });
+
+      expect(result.issueWatchdog).toMatchObject({ candidates: 1, escalated: 0, kicked: 1 });
+      expect(runner.calls).toEqual([]);
+      await waitUntil(() => provider.inputs.length === 1);
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([801]);
+      expect(getIssue(db, 801)).toMatchObject({ attempt_count: 1, status: "in_progress" });
+      expect(getAgentSession(db, "codex:thread-801")).toMatchObject({ issue_id: 801, status: "running" });
+      await waitUntil(() => !isProjectLoopActive("demo"));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("always-on issue watchdog re-kicks stale todos that remain sessionless after a kick", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new WatchdogSessionProvider();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "demo", 1);
+      insertTodoIssue(db, 802, "Still stale todo", "2026-06-22T08:00:00Z");
+      insertIssueWatchdogKick(db, 802, "2026-06-22T08:10:00Z");
+
+      const result = await runScheduleLayerCycle({
+        database: db,
+        providers: { codex: provider },
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false,
+        watchdogNow: NOW
+      });
+
+      expect(result.issueWatchdog).toMatchObject({ candidates: 1, escalated: 0, kicked: 1 });
+      await waitUntil(() => provider.inputs.length === 1);
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([802]);
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
+      await waitUntil(() => !isProjectLoopActive("demo"));
+    } finally {
+      db.close();
+    }
+  });
+
   test("escalates a deferred provider initialize outage without claiming later todos", async () => {
     const db = await openFixtureDatabase();
     const provider = new InitializeTimeoutProvider();
@@ -447,6 +504,13 @@ function insertTodoIssue(db: DB, id: number, title: string, createdAt: string): 
     values (?, 'demo', ?, 'todo', ?, ?)`, [id, title, createdAt, createdAt]);
 }
 
+function insertIssueWatchdogKick(db: DB, issueID: number, createdAt: string): void {
+  db.sqlite.run(
+    `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
+    [issueID, "issue.watchdog_kicked", JSON.stringify({ reason: "test" }), createdAt]
+  );
+}
+
 function insertSettings(db: DB, projectID: string, autoManage: number, maxActions: number, agentID = "pi-default"): void {
   db.sqlite.run(
     `insert into project_pi_settings
@@ -545,6 +609,20 @@ class InitializeTimeoutProvider implements ExecutorProvider {
     throw new Error(
       "Claude Code run timed out after 10000ms: initialize cwd=/Users/xiaobei/private token=sk-live-secret"
     );
+  }
+}
+
+class WatchdogSessionProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution"] as const;
+  readonly id = "codex" as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput) {
+    this.inputs.push(input);
+    return {
+      runId: `run-${input.issueId}`,
+      session: { provider: this.id, sessionId: `thread-${input.issueId}`, turnId: `turn-${input.issueId}` }
+    };
   }
 }
 

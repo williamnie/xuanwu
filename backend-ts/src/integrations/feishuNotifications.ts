@@ -34,6 +34,7 @@ import {
   createFeishuNotificationDraft
 } from "./feishuNotificationDrafts.ts";
 import {
+  feishuFallbackTargetForProject,
   feishuTargetForConversation,
   feishuTargetForIssue
 } from "./feishuNotificationTargets.ts";
@@ -89,7 +90,7 @@ export function attachFeishuNotificationObservers(input: {
         dispatchIfQueued(input, result);
       }
       if (event.type === "pi.needs_user") {
-        const result = queueFeishuPiNeedsUserNotification(input.database, event);
+        const result = queueFeishuPiNeedsUserNotification(input.database, event, { config: input.config });
         dispatchIfQueued(input, result);
       }
       if (event.type === "codex.event" && event.method === "approval/requested") {
@@ -128,7 +129,11 @@ function dispatchIfNotificationsQueued(input: {
   void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
 }
 
-export function queueFeishuPiNeedsUserNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+export function queueFeishuPiNeedsUserNotification(
+  db: RunnerDatabase,
+  event: AppEvent,
+  options: { config?: FeishuConnectorConfig } = {}
+): QueueResult {
   const payload = parseObject(event.payload);
   const issueID = event.issueId ?? positiveID(payload.issue_id);
   const notifyID = safeText(payload.action_id) || needsUserNotifyID(event, payload);
@@ -137,9 +142,11 @@ export function queueFeishuPiNeedsUserNotification(db: RunnerDatabase, event: Ap
   const issue = issueID > 0 ? getIssue(db, issueID) : null;
   const target = issue ? feishuTargetForIssue(db, issue.id) : null;
   const fallback = feishuTargetForConversation(db, safeText(event.conversationId));
-  const finalTarget = target ?? fallback;
+  const projectID = issue?.project_id ?? safeText(event.projectId);
+  const projectFallback = feishuFallbackTargetForProject(options.config, projectID);
+  const finalTarget = target ?? fallback ?? projectFallback;
   if (!finalTarget) return { queued: false, reason: "missing_feishu_target" };
-  createFeishuNotificationDraft(db, issue ?? { id: issueID, project_id: safeText(event.projectId) }, finalTarget, {
+  createFeishuNotificationDraft(db, issue ?? { id: issueID, project_id: projectID }, finalTarget, {
     content: formatPiNeedsUserNotification({
       diagnosis: safeText(payload.diagnosis) || safeText(payload.reason),
       issueID: issueID || undefined,

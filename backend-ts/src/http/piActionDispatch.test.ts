@@ -11,6 +11,7 @@ import { createPiAction, getPiIssueCompletionWatch, listIssueSupervisorEvents } 
 import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
+import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
 
 const tempRoots: string[] = [];
 const NO_AUTO_RUN_SETTLE_MS = 25;
@@ -54,6 +55,7 @@ describe("PI action dispatcher supervisor actions", () => {
 
       expect(provider.inputs[0]).toMatchObject({ issueId: 410, projectId: "auto-demo" });
       expect(getIssue(db, 410)).toMatchObject({ status: "in_progress" });
+      await waitUntil(() => !isProjectLoopActive("auto-demo"));
     } finally {
       db.close();
     }
@@ -293,7 +295,7 @@ describe("PI action dispatcher supervisor actions", () => {
     const stop = bus.observe((event) => events.push(event));
     try {
       insertProject(db, "demo");
-      insertIssue(db, { issueID: 421, projectID: "demo", status: "in_progress" });
+      insertIssueRunSession(db, { issueID: 421, projectID: "demo", sessionID: "thread-421", turnID: "turn-421" });
       const action = createPiAction(db, {
         action_type: "needs_user.escalate",
         id: "needs-user-action",
@@ -323,6 +325,12 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(notifications).toMatchObject([
         expect.objectContaining({ event: "pi.needs_user", issue_id: 421, read_at: "" })
       ]);
+      expect(getIssue(db, 421)).toMatchObject({ status: "failed" });
+      expect(listIssueRuns(db, 421).at(-1)).toMatchObject({
+        ended_at: expect.stringMatching(/Z$/),
+        exit_reason: "failed",
+        status: "failed"
+      });
       expect(events).toMatchObject([
         expect.objectContaining({ type: "pi.needs_user", issueId: 421, projectId: "demo" })
       ]);
@@ -435,4 +443,12 @@ class SupervisorProvider implements ExecutorProvider {
       turn_id: "turn-followup"
     };
   }
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let index = 0; index < 30; index += 1) {
+    if (predicate()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition timed out");
 }

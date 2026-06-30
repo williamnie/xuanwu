@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
-import { retryIssue } from "../db/repositories/issueActions.ts";
+import { forceRetryIssue } from "../db/repositories/issueActions.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
@@ -92,7 +92,7 @@ function retryIssueNow(
     status: "executing"
   });
   try {
-    const issue = retryIssue(context.database, issueID);
+    const issue = forceRetryIssue(context.database, issueID);
     updatePiRecoveryAttemptStatus(context.database, attempt.id, {
       after_snapshot_json: issueRecoverySnapshot(context.database, issueID, payload),
       progress_detected: 1,

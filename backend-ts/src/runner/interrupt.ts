@@ -43,7 +43,7 @@ export async function interruptSession(
   const linked = linkedRunningIssue(db, session.sessionId);
   if (linked) {
     await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, runtime);
-    return { interrupted: true, issue: cancelIssue(db, linked.id, SESSION_INTERRUPT_REASON) };
+    return { interrupted: true };
   }
   if (!session.turnId) return { interrupted: false };
   await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);

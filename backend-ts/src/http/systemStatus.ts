@@ -6,6 +6,7 @@ import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorCapability } from "../providers/types.ts";
+import { codexAppServerRpcTimeoutMs } from "../providers/codex/jsonRpc.ts";
 import { projectLoopMaxParallelProjects, runningProjectLoopCount } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
@@ -186,7 +187,8 @@ function providerEntry(input: {
     env_keys: diagnosticEnvKeys(input.config.env),
     secrets: { api_key: { configured: hasConfiguredApiKey(input.config.env, input.id) } },
     settings_mode: input.settingsMode,
-    timeout_ms: input.config.timeoutMs
+    timeout_ms: input.config.timeoutMs,
+    ...(input.id === "codex" ? { effective_rpc_timeout_ms: codexAppServerRpcTimeoutMs(input.config.timeoutMs) } : {})
   };
 }
 

@@ -33,6 +33,10 @@ import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
 } from "./providerTerminalSignals.ts";
+import {
+  runAutoRunIssueWatchdogOnce,
+  type IssueWatchdogSummary
+} from "./issueWatchdog.ts";
 
 export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: string };
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
@@ -48,6 +52,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   guardianDecisions: GuardianDecisionOrchestratorSummary;
   providerTerminalSignals: ProviderTerminalBackfillSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
+  issueWatchdog: IssueWatchdogSummary;
   watchdog: PiGuardianWatchdogSummary;
 };
 
@@ -173,6 +178,13 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const completionWatchNotifications = queueReadyFeishuCompletionWatchNotifications(input.database);
+  const issueWatchdog = await runAutoRunIssueWatchdogOnce({
+    bus: input.bus,
+    database: input.database,
+    now: input.watchdogNow,
+    providers: input.providers,
+    staleAfterMs: input.watchdogStaleAfterMs
+  });
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
@@ -183,6 +195,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     completionWatchNotifications,
     guardianActionDispatch,
     guardianDecisions,
+    issueWatchdog,
     missedIntentSweep,
     providerTerminalSignals,
     supervisor,

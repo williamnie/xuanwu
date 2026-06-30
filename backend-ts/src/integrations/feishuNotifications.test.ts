@@ -224,6 +224,32 @@ describe("Feishu notification queue", () => {
       db.close();
     }
   });
+
+  test("unlinked Feishu needs-user notifications fall back to the default target", async () => {
+    const db = await fixtureDatabase();
+    const config = buildConfig({ feishuDefaultChatId: "oc_default" });
+    try {
+      const issue = createIssue(db, { project_id: "demo", title: "Unlinked task", status: "in_progress" });
+
+      const result = queueFeishuPiNeedsUserNotification(db, {
+        issueId: issue.id,
+        payload: JSON.stringify({ action_id: "needs-user-default", message: "Needs user" }),
+        projectId: "demo",
+        type: "pi.needs_user"
+      }, { config: config.integrations.feishu });
+
+      const outbox = listSyncOutbox(db, { source: "feishu" });
+      expect(result).toMatchObject({ queued: true, reason: "queued" });
+      expect(outbox).toHaveLength(1);
+      expect(outbox[0]).toMatchObject({
+        content: expect.stringContaining("issue #1 需要用户介入"),
+        issue_id: issue.id,
+        target_chat_id: "oc_default"
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function fixtureDatabase(): Promise<RunnerDatabase> {
