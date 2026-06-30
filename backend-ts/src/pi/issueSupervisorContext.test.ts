@@ -177,6 +177,32 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("does not escalate an active Codex turn for an intermediate failed command", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-active-command-failed-"));
+      insertIssue(db, { id: 556, projectID: "runner", title: "Verification evidence", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 556, id: "issue-556-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-556", turnID: "turn-556" });
+      insertSession(db, { issueID: 556, projectID: "runner", sessionID: "thread-556", status: "running", updatedAt: "2026-06-10T07:59:45Z" });
+      insertEvent(db, { issueID: 556, type: "issue.log", payload: {
+        command: "/bin/zsh -lc \"cd backend-ts && bun test src/pi/verificationEvidence.test.ts\"",
+        provider: "codex",
+        raw_method: "item/completed",
+        status: "failed",
+        text: "! command failed: /bin/zsh -lc \"cd backend-ts && bun test src/pi/verificationEvidence.test.ts\"",
+        type: "tool"
+      }, createdAt: "2026-06-10T07:59:40Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 556, { now: NOW });
+
+      expect(context.session).toMatchObject({ run_state: "open", status: "active" });
+      expect(context.provider_error).toBeNull();
+      expect(context.candidates).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("marks exhausted candidate after two recoveries without meaningful progress", async () => {
     const db = await fixtureDb();
     try {

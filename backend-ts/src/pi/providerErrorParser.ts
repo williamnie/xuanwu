@@ -140,12 +140,17 @@ function shouldInspectIssueEventPayload(record: Record<string, unknown>): boolea
   const status = cleanLower(record.status);
   const rawMethod = cleanLower(record.raw_method);
   if (type === "error") return true;
+  if (nonTerminalWorkItemIssueEvent(type, rawMethod)) return false;
   if (rawMethod === "turn/completed" && status !== "" && status !== "completed") return true;
   if (status === "failed" || status === "error") return true;
   if (status === "completed") return false;
   if (hasStructuredProviderError(record)) return true;
   const rawPayload = parseJsonMaybe(record.raw_payload);
   return hasStructuredProviderError(asRecord(rawPayload));
+}
+
+function nonTerminalWorkItemIssueEvent(type: string, rawMethod: string): boolean {
+  return type === "tool" || rawMethod.startsWith("item/");
 }
 
 function hasStructuredProviderError(record: Record<string, unknown>): boolean {
@@ -204,10 +209,17 @@ function collectProviderEvent(event: Partial<ProviderEvent> | undefined, state: 
 
 function shouldInspectProviderEvent(event: Partial<ProviderEvent>): boolean {
   const status = cleanLower(event.status);
-  if (cleanLower(event.type) === "error") return true;
+  const type = cleanLower(event.type);
+  const method = cleanLower(event.raw?.method);
+  if (type === "error") return true;
+  if (nonTerminalWorkItemProviderEvent(type, method)) return false;
   if (status === "completed") return false;
-  if (cleanLower(event.raw?.method) === "turn/completed" && status !== "") return true;
+  if (method === "turn/completed" && status !== "") return true;
   return status === "failed" || status === "error";
+}
+
+function nonTerminalWorkItemProviderEvent(type: string, method: string): boolean {
+  return type === "tool" || method.startsWith("item/");
 }
 
 type CollectValueInput = { depth?: number; key?: string; state: ParseState; value: unknown };

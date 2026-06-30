@@ -162,6 +162,31 @@ describe("provider error parser", () => {
     });
   });
 
+  test("ignores failed command lifecycle events while the Codex turn can continue", () => {
+    const issueLogPayload = {
+      command: "/bin/zsh -lc \"cd backend-ts && bun test src/pi/verificationEvidence.test.ts\"",
+      provider: "codex",
+      raw_method: "item/completed",
+      status: "failed",
+      text: "! command failed: /bin/zsh -lc \"cd backend-ts && bun test src/pi/verificationEvidence.test.ts\"",
+      type: "tool"
+    };
+
+    expect(parseIssueEventProviderError(issueLogPayload, { now: NOW })).toMatchObject({
+      category: "unknown"
+    });
+    expect(parseProviderEventError({
+      provider: "codex",
+      type: "tool",
+      command: issueLogPayload.command,
+      raw: { method: "item/completed", payload: issueLogPayload },
+      status: "failed",
+      text: issueLogPayload.text
+    }, { now: NOW })).toMatchObject({
+      category: "unknown"
+    });
+  });
+
   test("keeps structured terminal provider failures eligible for incidents", () => {
     expect(parseIssueEventProviderError({
       error: "API returned 401 unauthorized",
