@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
+import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -432,7 +433,7 @@ describe("Bun projects/issues read API", () => {
 
       expect(created.status).toBe(201);
       const body = await created.json() as Record<string, unknown>;
-      await waitFor(() => provider.inputs.length === 1);
+      await waitForProviderStart(provider);
       const row = database.sqlite.query<Record<string, unknown>, [number]>(
         `select i.status, r.provider_session_id, r.provider_turn_id
          from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
@@ -477,8 +478,10 @@ describe("Bun projects/issues read API", () => {
         template_id: "runner-template",
         prompt_template: "cwd={{project.cwd}}\ntitle={{issue.title}}\nbody={{issue.description}}\nprio={{issue.priority}}"
       });
-      await waitFor(() => provider.inputs.length === 1);
-      expect(provider.inputs[0]?.prompt).toBe("cwd=/tmp/demo\ntitle=模板执行\nbody=按模板发给 runner\nprio=2");
+      await waitForProviderStart(provider);
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("cwd=/tmp/demo\ntitle=模板执行\nbody=按模板发给 runner\nprio=2");
+      expect(prompt).toContain("## Goal Contract");
     } finally {
       database.close();
     }
@@ -495,7 +498,7 @@ describe("Bun projects/issues read API", () => {
       const enqueued = await router.handle(new Request(`${BASE_URL}/api/issues/${issueId}/enqueue`, { method: "POST" }));
 
       expect(enqueued.status).toBe(200);
-      await waitFor(() => provider.inputs.length === 1);
+      await waitForProviderStart(provider);
       const row = database.sqlite.query<Record<string, unknown>, [number]>(
         `select i.status, r.provider_session_id, r.provider_turn_id
          from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
@@ -526,7 +529,7 @@ describe("Bun projects/issues read API", () => {
 
       expect(enqueued.status).toBe(200);
       expect(await enqueued.json()).toMatchObject({ id: issueId, service_tier: "priority", status: "todo" });
-      await waitFor(() => provider.inputs.length === 1);
+      await waitForProviderStart(provider);
       expect(provider.inputs[0]).toMatchObject({
         issueId,
         serviceTier: "priority",
@@ -552,7 +555,7 @@ describe("Bun projects/issues read API", () => {
       }));
 
       expect(patched.status).toBe(200);
-      await waitFor(() => provider.inputs.length === 1);
+      await waitForProviderStart(provider);
       const row = database.sqlite.query<Record<string, unknown>, [number]>(
         `select i.status, r.provider_session_id, r.provider_turn_id
          from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
@@ -583,7 +586,7 @@ describe("Bun projects/issues read API", () => {
 
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({ id: issueId, status: "todo" });
-      await waitFor(() => provider.inputs.length === 1);
+      await waitForProviderStart(provider);
       const row = database.sqlite.query<Record<string, unknown>, [number]>(
         `select i.status, i.attempt_count, r.provider_session_id, r.provider_turn_id
          from issues i join issue_runs r on r.issue_id=i.id where i.id=?`
@@ -678,6 +681,11 @@ class FakeExecutionProvider implements ExecutorProvider {
       session: { provider: this.id, sessionId: `fake-session-${input.issueId}`, turnId: `fake-turn-${input.issueId}` }
     };
   }
+}
+
+async function waitForProviderStart(provider: FakeExecutionProvider): Promise<void> {
+  await waitFor(() => provider.inputs.length === 1);
+  await waitFor(() => !isProjectLoopActive("demo"));
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {

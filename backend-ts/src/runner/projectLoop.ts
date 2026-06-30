@@ -147,7 +147,59 @@ function buildIssuePrompt(project: Project, issue: Issue): string {
 }
 
 function withRunnerContext(project: Project, issue: Issue, prompt: string): string {
-  return withMcpRequirementContext(project, issue, withSkillIntentContext(project, issue, prompt));
+  return withMcpRequirementContext(project, issue, withSkillIntentContext(project, issue, withGoalContract(issue, prompt)));
+}
+
+type GoalContractSection = {
+  aliases: RegExp[];
+  text: string;
+};
+
+function withGoalContract(issue: Issue, prompt: string): string {
+  const base = prompt.trim();
+  if (hasGoalContractHeading(base, [/^(goal contract|目标契约|终态契约)$/i])) return base;
+  const sections = goalContractSections(issue).filter((section) => !hasGoalContractHeading(base, section.aliases));
+  if (sections.length === 0) return base;
+  const contract = ["", "## Goal Contract", ...sections.map((section) => section.text)].join("\n");
+  return `${base}${contract}`.trim();
+}
+
+function goalContractSections(issue: Issue): GoalContractSection[] {
+  const target = issue.title.trim() ? ` for "${issue.title.trim()}"` : ` for issue #${issue.id}`;
+  return [
+    {
+      aliases: [/^(target outcome|outcome|goal|goals|objective|目标|终态|期望结果)$/i],
+      text: `- Target outcome: Deliver the requested end state${target}; treat the issue description/template above as the source of truth.`
+    },
+    {
+      aliases: [/^(required evidence|evidence|verification|validation|acceptance criteria|验收标准|验证|证据|最小验证)$/i],
+      text: "- Required evidence: Before marking complete, run the smallest directly relevant verification and report commands, pass/fail result, and decisive evidence; explicitly write back the final status/outcome."
+    },
+    {
+      aliases: [/^(constraints?|non-?goals?|constraints?\s*\/\s*non-?goals?|scope|out of scope|范围|约束|非目标|全局约束)$/i],
+      text: "- Constraints / non-goals: Stay within this issue's stated scope and non-goals; do not change public schemas/contracts, shared state machines, provider adapters, root config, or unrelated files unless the user explicitly expands scope."
+    },
+    {
+      aliases: [/^(stop policy|stop policy\s*\/\s*escalation|escalation|stop conditions?|blocked|blockers|停机策略|停止策略|升级|阻塞)$/i],
+      text: "- Stop policy / escalation: Do not retry unboundedly; stop and report if the same failure repeats, required evidence cannot be produced, scope must expand, or schema/public-contract/shared-runtime changes are needed."
+    }
+  ];
+}
+
+function hasGoalContractHeading(prompt: string, aliases: RegExp[]): boolean {
+  return prompt.split(/\r?\n/).some((line) => {
+    const heading = normalizePromptHeading(line);
+    return heading !== "" && aliases.some((alias) => alias.test(heading));
+  });
+}
+
+function normalizePromptHeading(line: string): string {
+  return line.trim()
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^[-*]\s+/, "")
+    .replace(/^\d+[.)]\s+/, "")
+    .replace(/[:：]\s*$/, "")
+    .trim();
 }
 
 function withSkillIntentContext(project: Project, issue: Issue, prompt: string): string {

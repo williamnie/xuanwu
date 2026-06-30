@@ -90,7 +90,8 @@ describe("Bun project loop claim execution", () => {
       if (!result.claimed) throw new Error("expected claim");
       expect(result.issue.id).toBe(firstHigh);
       expect(provider.inputs).toHaveLength(1);
-      expect(provider.inputs[0]).toMatchObject({ issueId: firstHigh, projectId: "demo", prompt: "first high" });
+      expect(provider.inputs[0]).toMatchObject({ issueId: firstHigh, projectId: "demo" });
+      expect(provider.inputs[0]?.prompt).toContain("first high");
       expect(getIssue(db, firstHigh)).toMatchObject({ status: "in_progress", attempt_count: 1 });
       expect(getIssue(db, laterHigh)).toMatchObject({ status: "todo" });
       expect(getIssue(db, low)).toMatchObject({ status: "todo" });
@@ -109,6 +110,66 @@ describe("Bun project loop claim execution", () => {
         issue_id: firstHigh,
         status: "running"
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("injects a minimal goal contract into default issue prompts", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      insertIssue(db, {
+        description: "Add the focused runner prompt guidance.",
+        projectId: "demo",
+        title: "prompt contract"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("Add the focused runner prompt guidance.");
+      expect(prompt).toContain("## Goal Contract");
+      expect(prompt).toContain("- Target outcome:");
+      expect(prompt).toContain("- Required evidence:");
+      expect(prompt).toContain("run the smallest directly relevant verification");
+      expect(prompt).toContain("explicitly write back the final status/outcome");
+      expect(prompt).toContain("- Constraints / non-goals:");
+      expect(prompt).toContain("- Stop policy / escalation:");
+      expect(prompt).toContain("same failure repeats");
+      expect(prompt).toContain("schema/public-contract/shared-runtime changes");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not duplicate existing goal contract headings", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      insertIssue(db, {
+        description: [
+          "## Target outcome",
+          "Keep the existing target text.",
+          "## Required evidence",
+          "Use the issue-specific verification.",
+          "## Constraints / non-goals",
+          "Stay inside this issue.",
+          "## Stop policy / escalation",
+          "Report blockers."
+        ].join("\n"),
+        projectId: "demo",
+        title: "custom contract"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("## Target outcome");
+      expect(prompt).not.toContain("## Goal Contract");
+      expect(prompt).not.toContain("Deliver the requested end state");
     } finally {
       db.close();
     }
