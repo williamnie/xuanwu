@@ -345,6 +345,83 @@ describe("PI action dispatcher supervisor actions", () => {
     }
   });
 
+  test("guardian needs_user skips stale issue preconditions without notifying", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 422, projectID: "demo", sessionID: "thread-422", turnID: "turn-422" });
+      const action = createPiAction(db, {
+        action_type: "needs_user.escalate",
+        id: "needs-user-stale-action",
+        issue_id: 422,
+        payload_json: JSON.stringify({
+          diagnosis_code: "requires_human_decision",
+          expected_issue_updated_at: "2026-06-10T06:59:00Z",
+          issue_id: 422,
+          message: "stale escalation",
+          provider: "codex"
+        }),
+        project_id: "demo",
+        source: "pi_guardian_orchestrator",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db }, action)).resolves.toMatchObject({
+        reason: "issue_changed",
+        skipped: true
+      });
+
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
+      expect(listIssueEvents(db, 422).filter((item) => item.type === "issue.comment")).toEqual([]);
+      expect(getIssue(db, 422)).toMatchObject({ status: "in_progress" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("guardian needs_user waits while the executor session is still active", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 423, projectID: "demo", sessionID: "thread-423", turnID: "turn-423" });
+      const now = new Date().toISOString();
+      db.sqlite.run("update agent_sessions set updated_at=? where session_key=?", [now, "codex:thread-423"]);
+      const action = createPiAction(db, {
+        action_type: "needs_user.escalate",
+        id: "needs-user-active-session-action",
+        issue_id: 423,
+        payload_json: JSON.stringify({
+          diagnosis_code: "requires_human_decision",
+          expected_issue_status: "in_progress",
+          expected_issue_updated_at: "2026-06-10T07:00:00Z",
+          expected_provider_session_id: "thread-423",
+          expected_provider_turn_id: "turn-423",
+          expected_run_id: "issue-423-attempt-1",
+          expected_run_status: "in_progress",
+          expected_session_status: "running",
+          expected_session_turn_id: "turn-423",
+          expected_session_updated_at: now,
+          issue_id: 423,
+          message: "active session escalation",
+          provider: "codex"
+        }),
+        project_id: "demo",
+        source: "pi_guardian_orchestrator",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db }, action)).resolves.toMatchObject({
+        reason: "recent_session_activity",
+        skipped: true
+      });
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
+      expect(listIssueEvents(db, 423).filter((item) => item.type === "issue.comment")).toEqual([]);
+      expect(getIssue(db, 423)).toMatchObject({ status: "in_progress" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("resume follow-up refuses stale issue/run/session preconditions", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();

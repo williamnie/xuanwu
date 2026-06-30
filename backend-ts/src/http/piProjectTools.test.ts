@@ -63,7 +63,8 @@ describe("PI project tools", () => {
 
       expect(runtime.session.getActiveToolNames().sort()).toEqual([
         "agent_profile_recommend", "executor_issue_create_proposal", "executor_profile_assign_proposal",
-        "find", "grep", "issue_comment", "issue_create_proposal", "issue_enqueue_batch_triage",
+        "find", "grep", "issue_comment", "issue_completion_watch_cancel", "issue_completion_watch_create",
+        "issue_completion_watch_list", "issue_create_proposal", "issue_enqueue_batch_triage",
         "issue_enqueue_next_triage", "issue_enqueue_proposal",
         "issue_execution_status", "issue_list", "issue_read", "issue_schedule_enqueue",
         "issue_state_diagnose", "issue_state_repair_proposal", "issue_status_summary",

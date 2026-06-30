@@ -73,7 +73,7 @@ async function runWorker(runtime: ProjectLoopRuntime, project: RunnableProject):
   } finally {
     activeLockKeys.delete(project.lockKey);
     workerCount = Math.max(0, workerCount - 1);
-    startQueuedWorkers(runtime);
+    startQueuedWorkers(runtime, project.id);
   }
 }
 
@@ -128,7 +128,15 @@ function requeueProjectsWithTodo(db: RunnerDatabase): void {
   }
 }
 
-function startQueuedWorkers(runtime: ProjectLoopRuntime): void {
+function startQueuedWorkers(runtime: ProjectLoopRuntime, errorProjectID = "project-loop"): void {
+  try {
+    drainQueuedWorkers(runtime);
+  } catch (error) {
+    runtime.onError?.(error, errorProjectID);
+  }
+}
+
+function drainQueuedWorkers(runtime: ProjectLoopRuntime): void {
   while (canStartWorker(runtime.database)) {
     const project = nextRunnableProject(runtime);
     if (!project) return;

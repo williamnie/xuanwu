@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { getIssue, type Issue } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
@@ -19,7 +20,11 @@ export function dispatchNeedsUserEscalation(
   payload: Record<string, unknown>
 ): unknown {
   const issueID = positivePayloadID(payload, "issue_id");
-  const issue = requireIssue(context.database, issueID);
+  const preflight = needsUserPreflight(context.database, action, payload, issueID);
+  if (preflight.skip) {
+    return { comment: null, notification: null, released: null, skipped: true, reason: preflight.reason };
+  }
+  const issue = preflight.issue;
   const project = getProject(context.database, issue.project_id);
   const published = publishPiNeedsUserNotification({
     actionID: action.id,
@@ -44,10 +49,91 @@ export function dispatchNeedsUserEscalation(
   return { comment, notification: published, released };
 }
 
-function requireIssue(db: RunnerDatabase, issueID: number): Issue {
+type NeedsUserPreflight =
+  | { issue: Issue; skip: false }
+  | { reason: string; skip: true };
+
+const RECENT_SESSION_ACTIVITY_GRACE_MS = 5 * 60 * 1000;
+
+function needsUserPreflight(
+  db: RunnerDatabase,
+  action: PiAction,
+  payload: Record<string, unknown>,
+  issueID: number
+): NeedsUserPreflight {
   const issue = getIssue(db, issueID);
   if (!issue) throw new Error("issue not found");
-  return issue;
+  if (!guardianAction(action, payload)) return { issue, skip: false };
+  const run = latestIssueRun(db, issueID);
+  const session = expectedSession(db, payload, run);
+  const changed = changedPrecondition(issue, run, session, payload);
+  if (changed !== "") return { reason: changed, skip: true };
+  if (recentSessionActivity(session?.updated_at, payload, new Date())) {
+    return { reason: "recent_session_activity", skip: true };
+  }
+  return { issue, skip: false };
+}
+
+function guardianAction(action: PiAction, payload: Record<string, unknown>): boolean {
+  return action.source === "pi_guardian_orchestrator" || cleanString(payload.guardian_decision_id) !== "" ||
+    cleanString(payload.decision_id).startsWith("guardian:");
+}
+
+function latestIssueRun(db: RunnerDatabase, issueID: number): IssueRun | undefined {
+  return listIssueRuns(db, issueID).at(-1);
+}
+
+function expectedSession(db: RunnerDatabase, payload: Record<string, unknown>, run: IssueRun | undefined) {
+  const provider = cleanString(payload.provider) || cleanString(run?.provider) || "codex";
+  const sessionID = cleanString(payload.expected_provider_session_id) || cleanString(payload.provider_session_id) ||
+    cleanString(run?.provider_session_id);
+  return sessionID === "" ? null : getAgentSession(db, `${provider}:${sessionID}`);
+}
+
+function changedPrecondition(
+  issue: Issue,
+  run: IssueRun | undefined,
+  session: ReturnType<typeof getAgentSession>,
+  payload: Record<string, unknown>
+): string {
+  if (expectedChanged(payload.expected_issue_updated_at, issue.updated_at) ||
+    expectedChanged(payload.expected_issue_status, issue.status)) return "issue_changed";
+  if (expectedChanged(payload.expected_run_id, run?.id ?? "") ||
+    expectedChanged(payload.expected_provider_session_id, run?.provider_session_id ?? "") ||
+    expectedChanged(payload.expected_provider_turn_id, run?.provider_turn_id ?? "") ||
+    expectedChanged(payload.expected_run_status, run?.status ?? "") ||
+    expectedChanged(payload.expected_run_ended_at, run?.ended_at ?? "")) return "run_changed";
+  if (expectedChanged(payload.expected_session_updated_at, session?.updated_at ?? "") ||
+    expectedChanged(payload.expected_session_status, session?.status ?? "") ||
+    expectedChanged(payload.expected_session_turn_id, rawRefTurnID(session?.raw_ref))) return "session_changed";
+  return "";
+}
+
+function expectedChanged(expected: unknown, actual: string): boolean {
+  const text = cleanString(expected);
+  return text !== "" && text !== actual;
+}
+
+function recentSessionActivity(updatedAt: string | undefined, payload: Record<string, unknown>, now: Date): boolean {
+  const expected = cleanString(payload.expected_session_updated_at);
+  if (expected === "") return false;
+  const updated = Date.parse(cleanString(updatedAt));
+  if (!Number.isFinite(updated)) return false;
+  if (!expectedChanged(expected, cleanString(updatedAt))) {
+    return now.getTime() - updated <= RECENT_SESSION_ACTIVITY_GRACE_MS;
+  }
+  const observed = Date.parse(expected);
+  return Number.isFinite(updated) && Number.isFinite(observed) &&
+    updated > observed && updated - observed <= RECENT_SESSION_ACTIVITY_GRACE_MS;
+}
+
+function rawRefTurnID(rawRef: string | undefined): string {
+  if (!rawRef) return "";
+  try {
+    return cleanString((JSON.parse(rawRef) as Record<string, unknown>).provider_turn_id);
+  } catch {
+    return "";
+  }
 }
 
 function needsUserCommentBody(action: PiAction, issue: Issue, payload: Record<string, unknown>): string {

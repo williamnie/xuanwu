@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("Bun issue action API", () => {
-  test("enqueue moves triage, todo, and in_progress issues to todo", async () => {
+  test("enqueue queues idle issues and leaves actively running issues in progress", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -33,11 +33,11 @@ describe("Bun issue action API", () => {
         const response = await issueAction(database, issueId, "enqueue");
         const body = await response.json() as Record<string, unknown>;
 
+        const expectedStatus = status === "in_progress" ? "in_progress" : "todo";
         expect(response.status).toBe(200);
-        expect(body).toMatchObject({ id: issueId, status: "todo", error: "" });
+        expect(body).toMatchObject({ id: issueId, status: expectedStatus, error: "" });
       }
       expect(listEvents(database).map((event) => event.type)).toEqual([
-        "issue.status_changed",
         "issue.status_changed",
         "issue.status_changed"
       ]);
