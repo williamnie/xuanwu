@@ -34,10 +34,11 @@ export function textFromUserContent(content) {
 
 export function displayUserText(text) {
   const normalized = String(text || '').replace(/\r\n?/g, '\n');
-  const trimmedStart = normalized.trimStart();
-  const match = trimmedStart.match(/^Files mentioned by the user:\s*\n[\s\S]*?\nMy request for Codex:\s*/i);
+  const match = normalized.match(/(?:^|\n)\s*#{0,6}\s*Files mentioned by the user:\s*\n[\s\S]*?\n\s*#{0,6}\s*My request for Codex:\s*/i);
   if (!match) return normalized;
-  return trimmedStart.slice(match[0].length).trimStart();
+  const before = normalized.slice(0, match.index).trimEnd();
+  const after = normalized.slice(match.index + match[0].length).trimStart();
+  return [before, after].filter(Boolean).join('\n\n');
 }
 
 export function latestUserTurn(session) {

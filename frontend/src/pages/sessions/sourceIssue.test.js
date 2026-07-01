@@ -71,3 +71,20 @@ test('hides Codex attachment envelope from displayed user text', () => {
     `这种是不是也要优化下，跟整体的风格不相符了\n\n![uploaded image](${imagePath})`,
   );
 });
+
+test('hides markdown-heading Codex attachment envelope from displayed user text', () => {
+  const imagePath = '/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/codex-clipboard-257e2d96-1dc0-4847-8a02-c90e77cf10ae.png';
+  const text = [
+    '# Files mentioned by the user:',
+    '',
+    `## codex-clipboard-257e2d96-1dc0-4847-8a02-c90e77cf10ae.png: ${imagePath}`,
+    '',
+    '## My request for Codex:',
+    '在渲染codex session中这种带图片的消息时会失败，排查下，',
+  ].join('\n');
+
+  assert.equal(
+    textFromUserContent([{ type: 'input_text', text }, { type: 'localImage', path: imagePath }]),
+    `在渲染codex session中这种带图片的消息时会失败，排查下，\n\n![uploaded image](${imagePath})`,
+  );
+});
