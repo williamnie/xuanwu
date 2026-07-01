@@ -10,6 +10,7 @@ import {
   Sun,
   LayoutDashboard,
 } from 'lucide-react';
+import BrandMark from './BrandMark';
 import { APP_VERSION } from '../version';
 import {
   selectBackendOnline,
@@ -33,32 +34,15 @@ export default function AppSidebar({
 }) {
   return (
     <aside className="sidebar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 8px', marginBottom: '24px', position: 'relative' }}>
-        <div style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '0.85rem',
-          fontWeight: 700
-        }}>
-          XB
-        </div>
-        <div className="logo-text">
-          <h2 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-            xiaobei
-          </h2>
+      <div className="sidebar-brand-row">
+        <div className="sidebar-brand-main">
+          <BrandMark className="sidebar-brand" />
           <ApiStatus />
         </div>
         <button
           className="sidebar-collapse-btn"
           onClick={toggleSidebar}
           title="收起菜单"
-          style={{ marginLeft: 'auto' }}
         >
           <ChevronLeft size={16} />
         </button>
@@ -161,8 +145,8 @@ function ApiStatus() {
   const backendOnline = useDataStore(selectBackendOnline);
 
   return (
-    <span style={{ fontSize: '0.62rem', color: backendOnline ? '#10b981' : '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: backendOnline ? '#10b981' : '#ef4444' }}></span>
+    <span className={`api-status ${backendOnline ? '' : 'offline'}`}>
+      <span className="api-status-dot" />
       {backendOnline ? 'LOCAL API • ONLINE' : 'LOCAL API • OFFLINE'}
     </span>
   );

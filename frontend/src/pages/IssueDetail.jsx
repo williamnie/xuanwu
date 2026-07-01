@@ -847,7 +847,7 @@ ${error}` : error;
               onScroll={updateTerminalFollowState}
             >
               <div className="terminal-line info" style={{ borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '12px' }}>
-                🚀 CODEX ISSUE LOOP RUNNER DAEMON [ONLINE]
+                🐢 XUANWU AGENT GUARDIAN [ONLINE]
                 <br />
                 -------------------------------------------------
                 <br />

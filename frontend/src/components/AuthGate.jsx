@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { setAuthToken } from '../api/authToken';
+import { BRAND } from '../brand';
+import BrandMark from './BrandMark';
 
 export default function AuthGate({ onUnlock }) {
   const [token, setToken] = useState('');
@@ -26,10 +28,13 @@ export default function AuthGate({ onUnlock }) {
   return (
     <div className="auth-gate">
       <form className="glass-card auth-card" onSubmit={submitToken}>
-        <div>
-          <div className="auth-eyebrow">Remote access token</div>
-          <h1 className="auth-title">Codex Issue Runner</h1>
-          <p className="auth-copy">请输入访问 token。后续 API 请求会自动携带该 token。</p>
+        <div className="auth-brand-panel">
+          <BrandMark className="auth-brand" />
+          <div>
+            <div className="auth-eyebrow">Remote access token</div>
+            <h1 className="auth-title">{BRAND.hanzi} {BRAND.name}</h1>
+            <p className="auth-copy">请输入访问 token。后续 API 请求会自动携带该 token。</p>
+          </div>
         </div>
         <div className="form-group" style={{ marginBottom: 0 }}>
           <label htmlFor="runner-auth-token">Token</label>

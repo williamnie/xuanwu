@@ -16,9 +16,14 @@
   --text-secondary: #334155;
   --text-muted: #64748b;
   
-  --primary: #0ea5e9; /* Sky blue matching the design */
-  --primary-glow: rgba(14, 165, 233, 0.15);
-  --primary-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+  --brand-ink: #12312d;
+  --brand-jade: #0f766e;
+  --brand-mint: #5eead4;
+  --brand-north: #0f172a;
+  --brand-shell: #d7f4df;
+  --primary: #0f766e;
+  --primary-glow: rgba(15, 118, 110, 0.15);
+  --primary-gradient: linear-gradient(135deg, #0f766e 0%, #0e7490 52%, #1d4ed8 100%);
   
   --success: #10b981;
   --success-glow: rgba(16, 185, 129, 0.15);
@@ -64,9 +69,14 @@
   --text-secondary: #cbd5e1;
   --text-muted: #64748b;
   
-  --primary: #38bdf8;
-  --primary-glow: rgba(56, 189, 248, 0.2);
-  --primary-gradient: linear-gradient(135deg, #38bdf8 0%, #4f46e5 100%);
+  --brand-ink: #dffdf2;
+  --brand-jade: #5eead4;
+  --brand-mint: #a7f3d0;
+  --brand-north: #020617;
+  --brand-shell: #113c3a;
+  --primary: #5eead4;
+  --primary-glow: rgba(94, 234, 212, 0.2);
+  --primary-gradient: linear-gradient(135deg, #5eead4 0%, #38bdf8 48%, #818cf8 100%);
   
   --success: #34d399;
   --success-glow: rgba(52, 211, 153, 0.2);
@@ -162,6 +172,151 @@ body {
   z-index: 100;
   overflow-y: auto;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-brand-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+  min-width: 0;
+  padding: 2px 0 0;
+}
+
+.sidebar-brand-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.brand-lockup {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand-mark-icon {
+  align-items: center;
+  background:
+    radial-gradient(circle at 30% 22%, rgba(167, 243, 208, 0.92), transparent 34%),
+    linear-gradient(145deg, var(--brand-jade), #0f172a 94%);
+  border: 1px solid color-mix(in srgb, var(--brand-mint) 44%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 118, 110, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  display: inline-flex;
+  flex: 0 0 38px;
+  height: 38px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: 38px;
+}
+
+.brand-mark-icon::after {
+  background: linear-gradient(140deg, transparent 35%, rgba(255, 255, 255, 0.2) 50%, transparent 65%);
+  content: '';
+  inset: 0;
+  position: absolute;
+}
+
+.xuanwu-logo {
+  display: block;
+  height: 100%;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.xuanwu-shield {
+  fill: rgba(2, 6, 23, 0.18);
+  stroke: rgba(255, 255, 255, 0.64);
+  stroke-width: 2;
+}
+
+.xuanwu-shell {
+  fill: var(--brand-shell);
+  stroke: var(--brand-north);
+  stroke-width: 2.2;
+}
+
+.xuanwu-head,
+.xuanwu-limb,
+.xuanwu-snake {
+  fill: none;
+  stroke: var(--brand-north);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.xuanwu-snake {
+  stroke: color-mix(in srgb, var(--brand-north) 82%, var(--brand-mint));
+}
+
+.xuanwu-plate {
+  fill: none;
+  stroke: color-mix(in srgb, var(--brand-north) 68%, var(--brand-jade));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.xuanwu-eye {
+  fill: var(--brand-north);
+}
+
+.brand-wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-wordmark strong {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.brand-wordmark span {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.api-status {
+  align-items: center;
+  color: var(--success);
+  display: flex;
+  font-size: 0.62rem;
+  font-weight: 800;
+  gap: 5px;
+  letter-spacing: 0.06em;
+  padding-left: 48px;
+  text-transform: uppercase;
+}
+
+.api-status.offline {
+  color: var(--error);
+}
+
+.api-status-dot {
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 13%, transparent);
+  height: 6px;
+  width: 6px;
 }
 
 /* Sidebar 折叠样式与过渡效果 */
@@ -645,18 +800,54 @@ body {
 }
 
 .auth-gate {
-  min-height: 100vh;
-  display: flex;
   align-items: center;
+  background:
+    radial-gradient(circle at 20% 12%, color-mix(in srgb, var(--brand-mint) 26%, transparent), transparent 34%),
+    radial-gradient(circle at 78% 82%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 32%),
+    var(--bg-primary);
+  display: flex;
   justify-content: center;
+  min-height: 100vh;
   padding: 24px;
 }
 
 .auth-card {
-  width: min(420px, 100%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 94%, var(--brand-mint)), var(--bg-card));
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14), var(--shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow: hidden;
+  position: relative;
+  width: min(440px, 100%);
+}
+
+.auth-card::before {
+  background: var(--primary-gradient);
+  content: '';
+  height: 4px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.auth-brand-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth-brand .brand-mark-icon {
+  flex-basis: 46px;
+  height: 46px;
+  width: 46px;
+}
+
+.auth-brand .brand-wordmark strong {
+  font-size: 1.16rem;
 }
 
 .auth-eyebrow {
@@ -1025,7 +1216,9 @@ input:checked + .slider:before {
 
 @media (max-width: 768px) {
   .sidebar { width: 60px; padding: 16px 8px; }
-  .sidebar .logo-text, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar, .sidebar .sidebar-version { display: none; }
+  .sidebar .brand-wordmark, .sidebar .api-status, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar, .sidebar .sidebar-version { display: none; }
+  .sidebar-brand-row { justify-content: center; margin-bottom: 18px; }
+  .brand-mark-icon { flex-basis: 36px; height: 36px; width: 36px; }
   .main-content { margin-left: 60px; padding: 16px; }
   :root { --sidebar-width: 60px; }
 }
