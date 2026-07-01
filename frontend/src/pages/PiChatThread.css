@@ -274,3 +274,161 @@
   background: #202026;
   border-color: rgba(255, 255, 255, 0.03);
 }
+
+/* DEEIX-inspired Runner chat thread */
+.pi-chat-main-header {
+  background: transparent;
+  border-bottom: 0;
+  margin: 16px auto 0;
+  max-width: min(980px, calc(100% - 48px));
+  padding: 0;
+  position: relative;
+  width: 100%;
+  z-index: 2;
+}
+
+.pi-chat-main-header div {
+  gap: 5px;
+}
+
+.pi-chat-main-header span,
+.pi-chat-main-header small {
+  color: rgba(53, 50, 44, 0.52);
+}
+
+[data-theme="dark"] .pi-chat-main-header span,
+[data-theme="dark"] .pi-chat-main-header small {
+  color: rgba(240, 238, 231, 0.46);
+}
+
+.pi-chat-main-header strong {
+  color: #35322c;
+  font-size: 1.08rem;
+  font-weight: 720;
+  letter-spacing: -0.035em;
+}
+
+[data-theme="dark"] .pi-chat-main-header strong {
+  color: #f0eee7;
+}
+
+.pi-chat-thread {
+  padding: 44px clamp(18px, 6vw, 88px) 24px;
+  scrollbar-gutter: stable;
+}
+
+.pi-chat-thread-content {
+  gap: 28px;
+  margin: 0 auto;
+  max-width: 980px;
+}
+
+.pi-chat-bubble {
+  border-radius: 18px;
+}
+
+.pi-chat-bubble.assistant {
+  max-width: min(100%, 900px);
+  padding-left: 0;
+}
+
+.pi-chat-bubble.user {
+  background: #f0ece4;
+  border-color: rgba(15, 23, 42, 0.035);
+  box-shadow: none;
+  color: #36332d;
+}
+
+[data-theme="dark"] .pi-chat-bubble.user {
+  background: #292925;
+  border-color: rgba(255, 255, 255, 0.045);
+  color: #f2f0ea;
+}
+
+.pi-chat-bubble-role {
+  color: rgba(53, 50, 44, 0.52);
+  letter-spacing: 0.12em;
+}
+
+[data-theme="dark"] .pi-chat-bubble-role {
+  color: rgba(240, 238, 231, 0.45);
+}
+
+.pi-chat-markdown {
+  color: #37342e;
+  font-size: 0.94rem;
+  line-height: 1.68;
+}
+
+[data-theme="dark"] .pi-chat-markdown {
+  color: #f0eee7;
+}
+
+.pi-chat-thinking {
+  margin: 0 auto;
+  max-width: 980px;
+}
+
+.pi-chat-scroll-bottom-button {
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(15, 23, 42, 0.07);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  color: #3a3730;
+}
+
+[data-theme="dark"] .pi-chat-scroll-bottom-button {
+  background: rgba(48, 48, 44, 0.88);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  color: #f0eee7;
+}
+
+.pi-chat-composer {
+  border-top: 0;
+  padding: 12px clamp(18px, 6vw, 88px) 26px;
+}
+
+.pi-chat-composer .session-composer {
+  margin: 0 auto;
+  max-width: 900px;
+  padding: 0;
+}
+
+.pi-chat-composer .prompt-editor-shell.composer {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 23, 42, 0.065);
+  border-radius: 28px;
+  box-shadow:
+    0 24px 64px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+[data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
+  background: rgba(48, 48, 44, 0.88);
+  border-color: rgba(255, 255, 255, 0.075);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.34),
+    0 1px 0 rgba(255, 255, 255, 0.035) inset;
+}
+
+.pi-chat-runtime-pill {
+  background: rgba(255, 255, 255, 0.48);
+  border-color: rgba(15, 23, 42, 0.06);
+  color: #47433b;
+}
+
+.pi-chat-runtime-pill:first-child {
+  background: rgba(15, 23, 42, 0.07);
+  color: #2e2b26;
+}
+
+[data-theme="dark"] .pi-chat-runtime-pill {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #e7e2d7;
+}
+
+[data-theme="dark"] .pi-chat-runtime-pill:first-child {
+  background: rgba(255, 255, 255, 0.09);
+  color: #f0eee7;
+}

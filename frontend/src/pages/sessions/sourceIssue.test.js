@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildSessionIssuePayload } from './sourceIssue.js';
+import { buildSessionIssuePayload, textFromUserContent } from './sourceIssue.js';
 
 const project = { id: 'demo', name: 'Demo', cwd: '/repo/demo' };
 
@@ -51,4 +51,23 @@ test('uses the latest user turn as recent context when no text is selected', () 
   assert.equal(payload.source_excerpt, '最近用户上下文：诊断按钮没有反馈。');
   assert.match(payload.description, /## 最近上下文摘要/);
   assert.match(payload.description, /最近用户上下文：诊断按钮没有反馈。/);
+});
+
+test('hides Codex attachment envelope from displayed user text', () => {
+  const imagePath = '/var/folders/d5/p8s9_bt93jqgdgy9pd0_vg940000gn/T/codex-clipboard-8fb83bb2-1ec5-4ee6-abf1-d4d193173e9c.png';
+  const text = [
+    'Files mentioned by the user:',
+    '',
+    'codex-clipboard-8fb83bb2-1ec5-4ee6-abf1-d4d193173e9c.png:',
+    imagePath,
+    '',
+    'My request for Codex:',
+    '',
+    '这种是不是也要优化下，跟整体的风格不相符了',
+  ].join('\n');
+
+  assert.equal(
+    textFromUserContent([{ type: 'input_text', text }, { type: 'localImage', path: imagePath }]),
+    `这种是不是也要优化下，跟整体的风格不相符了\n\n![uploaded image](${imagePath})`,
+  );
 });

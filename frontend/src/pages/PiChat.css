@@ -24,3 +24,62 @@
   flex-direction: column;
   min-height: 0;
 }
+
+/* DEEIX-inspired Runner chat shell */
+.pi-chat-page {
+  background:
+    radial-gradient(circle at 78% 8%, rgba(14, 165, 233, 0.055), transparent 30%),
+    radial-gradient(circle at 28% 92%, rgba(16, 185, 129, 0.04), transparent 28%),
+    #fbfaf6;
+  color: #35322c;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .pi-chat-page {
+  background:
+    radial-gradient(circle at 78% 8%, rgba(56, 189, 248, 0.08), transparent 30%),
+    radial-gradient(circle at 28% 92%, rgba(16, 185, 129, 0.06), transparent 28%),
+    #1d1d1b;
+  color: #f0eee7;
+}
+
+.pi-chat-shell {
+  background: transparent;
+  gap: 0;
+  grid-template-columns: minmax(270px, 316px) minmax(0, 1fr);
+}
+
+.pi-chat-main.glass-card,
+.pi-chat-sidebar.glass-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.pi-chat-main {
+  background: transparent;
+  position: relative;
+}
+
+.pi-chat-main::before {
+  background: linear-gradient(180deg, rgba(251, 250, 246, 0.92), rgba(251, 250, 246, 0));
+  content: "";
+  height: 92px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 1;
+}
+
+[data-theme="dark"] .pi-chat-main::before {
+  background: linear-gradient(180deg, rgba(29, 29, 27, 0.94), rgba(29, 29, 27, 0));
+}
+
+@media (max-width: 960px) {
+  .pi-chat-shell {
+    grid-template-columns: 1fr;
+  }
+}

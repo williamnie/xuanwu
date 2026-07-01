@@ -379,3 +379,72 @@
   }
 
 }
+
+/* Chat workspace composer polish shared by Sessions and Runner chat */
+.client-chat-composer-section .session-composer,
+.pi-chat-composer .session-composer {
+  background: transparent;
+  border-top: 0;
+  box-shadow: none;
+}
+
+.client-chat-composer-section .prompt-editor-content.composer,
+.pi-chat-composer .prompt-editor-content.composer,
+.new-session-composer-wrapper .prompt-editor-content.composer {
+  color: #35322c;
+  font-size: 0.96rem;
+  line-height: 1.58;
+  padding: 18px 24px 8px;
+}
+
+[data-theme="dark"] .client-chat-composer-section .prompt-editor-content.composer,
+[data-theme="dark"] .pi-chat-composer .prompt-editor-content.composer,
+[data-theme="dark"] .new-session-composer-wrapper .prompt-editor-content.composer {
+  color: #f0eee7;
+}
+
+.client-chat-composer-section .prompt-composer-footer,
+.pi-chat-composer .prompt-composer-footer,
+.new-session-composer-wrapper .prompt-composer-footer {
+  padding: 8px 14px 14px 16px;
+}
+
+.client-chat-composer-section .session-composer-select,
+.pi-chat-composer .session-composer-select,
+.new-session-composer-wrapper .composer-embedded-select {
+  border-radius: 999px;
+}
+
+.client-chat-composer-section .session-composer-circle,
+.pi-chat-composer .session-composer-circle,
+.composer-circle-submit {
+  background: #2f2c26;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .client-chat-composer-section .session-composer-circle,
+[data-theme="dark"] .pi-chat-composer .session-composer-circle,
+[data-theme="dark"] .composer-circle-submit {
+  background: #f0eee7;
+  color: #1d1d1b;
+}
+
+.client-chat-composer-section .session-composer-select.permission,
+.pi-chat-composer .session-composer-select.permission,
+.client-chat-composer-section .session-composer-select:hover,
+.pi-chat-composer .session-composer-select:hover,
+.client-chat-composer-section .session-composer-select:focus-within,
+.pi-chat-composer .session-composer-select:focus-within {
+  background: rgba(15, 23, 42, 0.055);
+  color: #35322c;
+}
+
+[data-theme="dark"] .client-chat-composer-section .session-composer-select.permission,
+[data-theme="dark"] .pi-chat-composer .session-composer-select.permission,
+[data-theme="dark"] .client-chat-composer-section .session-composer-select:hover,
+[data-theme="dark"] .pi-chat-composer .session-composer-select:hover,
+[data-theme="dark"] .client-chat-composer-section .session-composer-select:focus-within,
+[data-theme="dark"] .pi-chat-composer .session-composer-select:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0eee7;
+}

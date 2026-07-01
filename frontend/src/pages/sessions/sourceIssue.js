@@ -25,11 +25,19 @@ export function buildSessionIssuePayload(session, project, options = {}) {
 export function textFromUserContent(content) {
   if (!Array.isArray(content)) return '';
   return content.map((item) => {
-    if (item.type === 'text' || item.type === 'input_text') return item.text || '';
+    if (item.type === 'text' || item.type === 'input_text') return displayUserText(item.text || '');
     if (item.type === 'localImage') return localImagePathToAttachmentMarkdown(item.path);
     if (item.type === 'image' || item.type === 'input_image') return `![image](${item.url || item.image_url || ''})`;
     return '';
   }).filter(Boolean).join('\n\n');
+}
+
+export function displayUserText(text) {
+  const normalized = String(text || '').replace(/\r\n?/g, '\n');
+  const trimmedStart = normalized.trimStart();
+  const match = trimmedStart.match(/^Files mentioned by the user:\s*\n[\s\S]*?\nMy request for Codex:\s*/i);
+  if (!match) return normalized;
+  return trimmedStart.slice(match[0].length).trimStart();
 }
 
 export function latestUserTurn(session) {

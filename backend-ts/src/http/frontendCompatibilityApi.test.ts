@@ -199,6 +199,25 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
+  test("serves Codex clipboard session images through a restricted proxy", async () => {
+    const { cwd, database } = await openFixtureDatabase();
+    const tempRoot = await tempDir("codex-runner-bun-session-image-");
+    const imagePath = join(tempRoot, "codex-clipboard-test.png");
+    await writeFile(imagePath, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64"));
+    try {
+      const router = createDefaultRouter({ database });
+      const image = await rawRequest(router, `/api/session-images?path=${encodeURIComponent(imagePath)}`, "GET");
+      const rejected = await rawRequest(router, `/api/session-images?path=${encodeURIComponent(join(cwd, "src.txt"))}`, "GET");
+
+      expect(image.status).toBe(200);
+      expect(image.headers.get("content-type")).toContain("image/png");
+      expect(await image.arrayBuffer()).toHaveProperty("byteLength", 68);
+      expect(rejected.status).toBe(400);
+    } finally {
+      database.close();
+    }
+  });
+
   test("downgrades compatibility approval session resolve to turn scope", async () => {
     const { database } = await openFixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];

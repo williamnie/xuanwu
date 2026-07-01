@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, extname, isAbsolute, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createAgentProfile, deleteAgentProfile, updateAgentProfile } from "../db/repositories/agentProfiles.ts";
 import { createCronTask, deleteCronTask, updateCronTask } from "../db/repositories/cronTaskWrites.ts";
@@ -23,7 +26,7 @@ import { searchProjectReferences } from "./projectReferences.ts";
 import { syncCodexProjects } from "./projectSync.ts";
 import type { Router } from "./router.ts";
 
-export type FrontendCompatContext = { bus?: EventBus; database: RunnerDatabase; providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>> };
+export type FrontendCompatContext = { bus?: EventBus; codexSessionsDir?: string; database: RunnerDatabase; providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>> };
 type CommandPayload = { args?: Record<string, unknown>; name?: string; target?: { id?: string; type?: string }; type?: string };
 
 const loopStates = new Map<string, string>();
@@ -82,6 +85,7 @@ function registerUtilityRoutes(router: Router, context: FrontendCompatContext): 
 function registerUploadRoutes(router: Router, context: FrontendCompatContext): void {
   router.post("/api/uploads/images", async (request) => asyncResponse(async () => createImageUpload(context.database, stateDir(context.database), await uploadFile(request)), 201));
   router.get("/api/uploads/:id/content", (request) => uploadContentResponse(context.database, uploadID(request)));
+  router.get("/api/session-images", (request) => sessionImageResponse(context, request));
 }
 
 function registerAdvisoryIssueRoutes(router: Router, context: FrontendCompatContext): void {
@@ -207,6 +211,61 @@ function httpError(error: unknown): HttpError {
 function uploadContentResponse(db: RunnerDatabase, id: string): Response {
   const upload = mustGetUpload(db, id);
   return new Response(readFileSync(upload.storage_path), { headers: { "content-type": upload.mime_type } });
+}
+
+function sessionImageResponse(context: FrontendCompatContext, request: Request): Response {
+  const path = sessionImagePath(context, new URL(request.url).searchParams.get("path") ?? "");
+  return new Response(readFileSync(path), {
+    headers: {
+      "cache-control": "private, max-age=3600",
+      "content-type": imageMimeType(path)
+    }
+  });
+}
+
+function sessionImagePath(context: FrontendCompatContext, rawPath: string): string {
+  const path = cleanLocalImagePath(rawPath);
+  if (path === "" || !isAbsolute(path)) throw new HttpError(400, "session image path 不合法");
+  if (!existsSync(path)) throw new HttpError(404, "session image 不存在");
+  const real = realpathSync(path);
+  if (!statSync(real).isFile() || !isAllowedImage(real)) throw new HttpError(400, "session image path 不合法");
+  if (isPathInside(real, context.codexSessionsDir) || isCodexClipboardTempImage(real)) return real;
+  throw new HttpError(400, "session image path 不允许访问");
+}
+
+function cleanLocalImagePath(value: string): string {
+  const raw = value.trim();
+  if (!raw.startsWith("file://")) return raw;
+  try { return fileURLToPath(raw); } catch { return ""; }
+}
+
+function isCodexClipboardTempImage(path: string): boolean {
+  return isPathInside(path, tmpdir()) && /^codex-clipboard-[^/\\]+\.(png|jpe?g|webp|gif)$/i.test(basename(path));
+}
+
+function isPathInside(path: string, root: string | undefined): boolean {
+  const realRoot = safeRealpath(root);
+  if (realRoot === "") return false;
+  const child = relative(realRoot, path);
+  return child === "" || (child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child));
+}
+
+function safeRealpath(path: string | undefined): string {
+  const cleanPath = cleanString(path);
+  if (cleanPath === "" || !existsSync(cleanPath)) return "";
+  return realpathSync(cleanPath);
+}
+
+function isAllowedImage(path: string): boolean {
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extname(path).toLowerCase());
+}
+
+function imageMimeType(path: string): string {
+  const ext = extname(path).toLowerCase();
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  return "image/png";
 }
 
 function defaultModels(): Record<string, unknown> { return { data: [{ id: "codex-default", model: "codex-default", displayName: "Codex Default", isDefault: true, hidden: false, defaultReasoningEffort: "", supportedReasoningEfforts: [] }] }; }
