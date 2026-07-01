@@ -7,6 +7,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
+import { composePiNeedsUserMessage } from "./piNeedsUserMessageComposer.ts";
 import { publishPiNeedsUserNotification } from "./piNotifier.ts";
 
 export type PiNeedsUserActionContext = {
@@ -26,18 +27,32 @@ export function dispatchNeedsUserEscalation(
   }
   const issue = preflight.issue;
   const project = getProject(context.database, issue.project_id);
+  const provider = cleanString(payload.provider) || cleanString(preflight.run?.provider);
+  const diagnosis = cleanString(payload.diagnosis_code) || cleanString(payload.reason) || action.rationale;
+  const rawMessage = cleanString(payload.body) || cleanString(payload.message);
+  const nextStep = cleanString(payload.next_step) || cleanString(payload.nextStep);
+  const userFacingMessage = composePiNeedsUserMessage({
+    diagnosis,
+    issue,
+    message: rawMessage,
+    nextStep,
+    provider,
+    run: preflight.run,
+    session: preflight.session
+  });
   const published = publishPiNeedsUserNotification({
     actionID: action.id,
     bus: context.bus,
     database: context.database,
-    diagnosis: cleanString(payload.diagnosis_code) || cleanString(payload.reason) || action.rationale,
+    diagnosis,
     issue,
-    message: cleanString(payload.body) || cleanString(payload.message),
-    nextStep: cleanString(payload.next_step) || cleanString(payload.nextStep),
+    message: rawMessage,
+    nextStep,
     project: { id: issue.project_id, name: project?.name ?? issue.project_id },
-    provider: cleanString(payload.provider)
+    provider,
+    userFacingMessage
   });
-  const body = published?.message ?? needsUserCommentBody(action, issue, payload);
+  const body = published?.message ?? (userFacingMessage || needsUserCommentBody(action, issue, payload));
   const released = releaseNeedsUserSlot(context.database, issue, payload);
   if (hasNeedsUserComment(context.database, issueID, action.id)) {
     return { comment: null, notification: published, released, skipped_comment: "duplicate" };
@@ -50,7 +65,7 @@ export function dispatchNeedsUserEscalation(
 }
 
 type NeedsUserPreflight =
-  | { issue: Issue; skip: false }
+  | { issue: Issue; run: IssueRun | undefined; session: ReturnType<typeof getAgentSession>; skip: false }
   | { reason: string; skip: true };
 
 const RECENT_SESSION_ACTIVITY_GRACE_MS = 5 * 60 * 1000;
@@ -63,15 +78,15 @@ function needsUserPreflight(
 ): NeedsUserPreflight {
   const issue = getIssue(db, issueID);
   if (!issue) throw new Error("issue not found");
-  if (!guardianAction(action, payload)) return { issue, skip: false };
   const run = latestIssueRun(db, issueID);
   const session = expectedSession(db, payload, run);
+  if (!guardianAction(action, payload)) return { issue, run, session, skip: false };
   const changed = changedPrecondition(issue, run, session, payload);
   if (changed !== "") return { reason: changed, skip: true };
   if (recentSessionActivity(session?.updated_at, payload, new Date())) {
     return { reason: "recent_session_activity", skip: true };
   }
-  return { issue, skip: false };
+  return { issue, run, session, skip: false };
 }
 
 function guardianAction(action: PiAction, payload: Record<string, unknown>): boolean {

@@ -177,7 +177,12 @@ describe("Feishu notification queue", () => {
           diagnosis: "provider_auth_failed",
           message: "TOKEN=secret failed at /Users/xiaobei/app.ts\n    at leak (/tmp/stack.js:1)",
           next_step: "Refresh provider credentials and retry.",
-          provider: "codex"
+          provider: "codex",
+          user_facing_message: [
+            "我检查了 issue #1 的真实执行状态，确认现在需要你介入。",
+            "当前状态：issue=failed；run=failed，已结束；executor session=stopped。",
+            "我暂时没有继续自动重试：重试不会刷新授权状态。"
+          ].join("\n")
         }),
         projectId: "demo",
         type: "pi.needs_user"
@@ -192,12 +197,13 @@ describe("Feishu notification queue", () => {
       expect(second).toMatchObject({ queued: false, reason: "duplicate" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({
-        content: expect.stringContaining("issue #1 需要用户介入"),
+        content: expect.stringContaining("我检查了 issue #1 的真实执行状态"),
         issue_id: issueID,
         target_chat_id: "oc_group"
       });
-      expect(text).toContain("provider_auth_failed");
-      expect(text).toContain("Refresh provider credentials");
+      expect(text).toContain("我暂时没有继续自动重试");
+      expect(text).not.toContain("Provider：");
+      expect(text).not.toContain("诊断：");
       expect(text).not.toContain("secret");
       expect(text).not.toContain("/Users/xiaobei");
       expect(text).not.toContain("at leak");

@@ -52,7 +52,10 @@ export function formatPiNeedsUserNotification(input: {
   message: string;
   nextStep: string;
   provider: string;
+  userFacingMessage?: string;
 }): string {
+  const composed = safeMultiline(input.userFacingMessage, 900);
+  if (composed !== "") return composed;
   const issue = input.issueID ? `issue #${input.issueID}` : "当前任务";
   const provider = safeSummary(input.provider || "unknown", 80);
   const diagnosis = safeSummary(input.diagnosis || "needs_user", 100);
@@ -143,6 +146,15 @@ function watchNextStep(stats: Record<string, unknown>): string {
 
 function safeSummary(value: unknown, maxRunes: number): string {
   const safe = redactedUserVisibleText(cleanString(value));
+  const runes = [...safe];
+  return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
+}
+
+function safeMultiline(value: unknown, maxRunes: number): string {
+  const lines = cleanString(value).split(/\r?\n/)
+    .map((line) => redactedUserVisibleText(line))
+    .filter(Boolean);
+  const safe = lines.join("\n");
   const runes = [...safe];
   return runes.length <= maxRunes ? safe : `${runes.slice(0, maxRunes - 1).join("")}…`;
 }

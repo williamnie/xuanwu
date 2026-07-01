@@ -152,7 +152,8 @@ export function queueFeishuPiNeedsUserNotification(
       issueID: issueID || undefined,
       message: safeText(payload.message) || safeText(event.text),
       nextStep: safeText(payload.next_step) || safeText(payload.nextStep),
-      provider: safeText(payload.provider)
+      provider: safeText(payload.provider),
+      userFacingMessage: safeText(payload.user_facing_message)
     }),
     notifyID,
     type: PI_NEEDS_USER_NOTIFY_TYPE

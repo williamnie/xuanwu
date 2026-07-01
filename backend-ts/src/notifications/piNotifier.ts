@@ -6,6 +6,7 @@ import { redactedUserVisibleText } from "../util/redact.ts";
 
 export type PiNeedsUserNotificationPayload = {
   action_id?: string;
+  composer?: string;
   diagnosis?: string;
   event: "pi.needs_user";
   issue_id: number;
@@ -18,6 +19,7 @@ export type PiNeedsUserNotificationPayload = {
   reason: string;
   status: string;
   title: string;
+  user_facing_message?: string;
 };
 
 export type PublishPiNeedsUserNotificationInput = {
@@ -31,6 +33,7 @@ export type PublishPiNeedsUserNotificationInput = {
   now?: Date;
   project: { id: string; name: string };
   provider?: string;
+  userFacingMessage?: string;
 };
 
 export type PublishNeedsUserFindingNotificationsInput = {
@@ -79,12 +82,15 @@ function actionNotificationPayload(
   const diagnosis = redactNotificationText(input.diagnosis ?? "") || "needs_user";
   const nextStep = redactNotificationText(input.nextStep ?? "") || "请查看 Runner issue 并补充授权、凭证或下一步处理方式。";
   const provider = redactNotificationText(input.provider) || "unknown";
+  const userFacingMessage = redactNotificationMultiline(input.userFacingMessage);
+  const message = userFacingMessage || actionMessage(input.issue.id, provider, diagnosis, input.message, nextStep);
   return compactPayload({
     action_id: actionID || undefined,
+    composer: userFacingMessage ? "pi_needs_user_v1" : undefined,
     diagnosis,
     event: NEEDS_USER_EVENT,
     issue_id: input.issue.id,
-    message: actionMessage(input.issue.id, provider, diagnosis, input.message, nextStep),
+    message,
     next_step: nextStep,
     occurred_at: occurredAt,
     project_id: redactNotificationText(input.issue.project_id || input.project.id),
@@ -92,7 +98,8 @@ function actionNotificationPayload(
     provider,
     reason: diagnosis,
     status: redactNotificationText(input.issue.status),
-    title: redactNotificationText(input.issue.title)
+    title: redactNotificationText(input.issue.title),
+    user_facing_message: userFacingMessage || undefined
   });
 }
 
@@ -165,6 +172,15 @@ function recordNotification(
 
 function redactNotificationText(value: unknown): string {
   return redactedUserVisibleText(typeof value === "string" ? value : "");
+}
+
+function redactNotificationMultiline(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.split(/\r?\n/)
+    .map((line) => redactedUserVisibleText(line))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 function existingNeedsUserActionNotification(db: RunnerDatabase, issueID: number, actionID: string): boolean {

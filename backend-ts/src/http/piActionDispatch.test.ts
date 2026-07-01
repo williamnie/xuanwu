@@ -320,11 +320,20 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(comments).toHaveLength(1);
       expect(JSON.parse(comments[0]?.payload ?? "{}")).toMatchObject({
         author: "agent",
-        body: expect.stringContaining("Provider：codex")
+        body: expect.stringContaining("我检查了 issue #421")
       });
       expect(notifications).toMatchObject([
-        expect.objectContaining({ event: "pi.needs_user", issue_id: 421, read_at: "" })
+        expect.objectContaining({
+          event: "pi.needs_user",
+          issue_id: 421,
+          message: expect.stringContaining("我暂时没有继续自动重试"),
+          read_at: ""
+        })
       ]);
+      expect(JSON.parse(String((events[0] as { payload?: string } | undefined)?.payload ?? "{}"))).toMatchObject({
+        composer: "pi_needs_user_v1",
+        user_facing_message: expect.stringContaining("当前状态：issue=in_progress")
+      });
       expect(getIssue(db, 421)).toMatchObject({ status: "failed" });
       expect(listIssueRuns(db, 421).at(-1)).toMatchObject({
         ended_at: expect.stringMatching(/Z$/),
@@ -334,7 +343,7 @@ describe("PI action dispatcher supervisor actions", () => {
       expect(events).toMatchObject([
         expect.objectContaining({ type: "pi.needs_user", issueId: 421, projectId: "demo" })
       ]);
-      expect(text).toContain("provider_auth_failed");
+      expect(text).toContain("provider 授权或账号状态需要确认");
       expect(text).toContain("Refresh provider credentials");
       expect(text).not.toContain("secret-value");
       expect(text).not.toContain("/Users/xiaobei");
