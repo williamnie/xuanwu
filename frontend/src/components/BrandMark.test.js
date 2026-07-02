@@ -13,7 +13,8 @@ test('Xuanwu brand constants and logo are available to app chrome', () => {
   assert.match(brandConstants, /name:\s*'Xuanwu'/);
   assert.match(brandConstants, /hanzi:\s*'玄武'/);
   assert.match(brandSource, /function XuanwuLogo/);
-  assert.match(brandSource, /turtle-logo-/);
+  assert.match(brandSource, /turtle-logo-img/);
+  assert.match(brandSource, /turtleAssetForState/);
   assert.match(brandSource, /data-brand-state/);
 });
 
@@ -29,8 +30,9 @@ test('sidebar and auth gate use Xuanwu brand instead of hardcoded xiaobei badge'
 test('brand visual system includes Xuanwu CSS and favicon title metadata', () => {
   assert.match(cssSource, /--brand-jade/);
   assert.match(cssSource, /\.brand-mark-icon/);
-  assert.match(cssSource, /\.turtle-shell/);
+  assert.match(cssSource, /\.turtle-logo-img/);
+  assert.match(cssSource, /background:\s*transparent/);
   assert.match(cssSource, /data-brand-state="running"/);
-  assert.match(indexHtml, /xuanwu-mark\.svg/);
+  assert.match(indexHtml, /brand-turtles\/turtle-idle\.png/);
   assert.match(indexHtml, /Xuanwu · Agent Guardian/);
 });

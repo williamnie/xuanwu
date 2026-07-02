@@ -200,26 +200,16 @@ body {
 
 .brand-mark-icon {
   align-items: center;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(167, 243, 208, 0.92), transparent 34%),
-    linear-gradient(145deg, var(--brand-jade), #0f172a 94%);
-  border: 1px solid color-mix(in srgb, var(--brand-mint) 44%, transparent);
-  border-radius: 14px;
-  box-shadow: 0 12px 28px rgba(15, 118, 110, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   display: inline-flex;
-  flex: 0 0 38px;
-  height: 38px;
+  flex: 0 0 46px;
+  height: 46px;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
-  width: 38px;
-}
-
-.brand-mark-icon::after {
-  background: linear-gradient(140deg, transparent 35%, rgba(255, 255, 255, 0.2) 50%, transparent 65%);
-  content: '';
-  inset: 0;
-  position: absolute;
+  width: 46px;
 }
 
 .xuanwu-logo,
@@ -231,126 +221,34 @@ body {
   z-index: 1;
 }
 
-.brand-lockup[data-brand-state="running"] .brand-mark-icon {
-  background:
-    radial-gradient(circle at 74% 26%, rgba(236, 253, 245, 0.9), transparent 28%),
-    linear-gradient(145deg, #a7f3d0, #0e7490 88%);
+.turtle-logo-img {
+  filter: drop-shadow(0 7px 7px rgba(15, 118, 110, 0.18));
+  object-fit: contain;
+  user-select: none;
 }
 
-.brand-lockup[data-brand-state="guarding"] .brand-mark-icon {
-  background:
-    radial-gradient(circle at 48% 10%, rgba(254, 249, 195, 0.92), transparent 30%),
-    linear-gradient(145deg, #84cc16, #166534 88%);
+.brand-lockup[data-brand-state="running"] .turtle-logo-img {
+  transform: scale(1.08);
 }
 
-.brand-lockup[data-brand-state="monitor"] .brand-mark-icon {
-  background:
-    radial-gradient(circle at 30% 18%, rgba(207, 250, 254, 0.9), transparent 30%),
-    linear-gradient(145deg, #67e8f9, #0f766e 88%);
+.brand-lockup[data-brand-state="speed"] .turtle-logo-img {
+  transform: scale(1.12) translateX(1px);
 }
 
-.brand-lockup[data-brand-state="sleeping"] .brand-mark-icon {
-  background:
-    radial-gradient(circle at 72% 22%, rgba(254, 243, 199, 0.88), transparent 18%),
-    linear-gradient(145deg, #99f6e4, #0f172a 92%);
+.brand-lockup[data-brand-state="guarding"] .turtle-logo-img {
+  transform: scale(1.08);
 }
 
-.brand-lockup[data-brand-state="offline"] .brand-mark-icon {
-  background:
-    radial-gradient(circle at 28% 18%, rgba(248, 250, 252, 0.72), transparent 30%),
-    linear-gradient(145deg, #cbd5e1, #475569 90%);
-  box-shadow: 0 12px 28px rgba(71, 85, 105, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+.brand-lockup[data-brand-state="monitor"] .turtle-logo-img {
+  transform: scale(1.06);
 }
 
-.turtle-glow {
-  fill: rgba(255, 255, 255, 0.2);
+.brand-lockup[data-brand-state="sleeping"] .turtle-logo-img {
+  transform: scale(1.08);
 }
 
-.turtle-ground {
-  fill: none;
-  opacity: 0.34;
-  stroke: rgba(2, 6, 23, 0.24);
-  stroke-linecap: round;
-  stroke-width: 2;
-}
-
-.turtle-body,
-.turtle-shell,
-.turtle-shield-shell {
-  stroke: var(--brand-north);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.turtle-body {
-  fill: #baf7d0;
-  stroke-width: 2.5;
-}
-
-.turtle-shell,
-.turtle-shield-shell {
-  fill: var(--brand-shell);
-  stroke-width: 2.3;
-}
-
-.turtle-eye {
-  fill: var(--brand-north);
-}
-
-.turtle-limb,
-.turtle-plate,
-.turtle-antenna,
-.turtle-smile,
-.turtle-speed,
-.turtle-sleep-eye {
-  fill: none;
-  stroke: var(--brand-north);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.turtle-limb,
-.turtle-antenna,
-.turtle-speed {
-  stroke-width: 2.7;
-}
-
-.turtle-plate {
-  stroke: color-mix(in srgb, var(--brand-north) 62%, var(--brand-jade));
-  stroke-width: 1.7;
-}
-
-.turtle-smile,
-.turtle-sleep-eye {
-  stroke-width: 2;
-}
-
-.turtle-signal,
-.turtle-shield-line {
-  stroke: color-mix(in srgb, var(--brand-jade) 76%, var(--brand-north));
-}
-
-.turtle-speed {
-  opacity: 0.72;
-}
-
-.turtle-moon,
-.turtle-star {
-  fill: #fef3c7;
-}
-
-.turtle-moon-cut {
-  fill: #0f172a;
-}
-
-.turtle-offline .turtle-shell {
-  fill: #e2e8f0;
-  stroke: #334155;
-}
-
-.turtle-offline .turtle-limb,
-.turtle-offline .turtle-plate {
-  stroke: #334155;
+.brand-lockup[data-brand-state="offline"] .turtle-logo-img {
+  filter: grayscale(1) opacity(0.72) drop-shadow(0 5px 6px rgba(71, 85, 105, 0.14));
 }
 
 .brand-wordmark {

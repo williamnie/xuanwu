@@ -2,6 +2,7 @@ export const BRAND_STATES = Object.freeze({
   idle: 'idle',
   monitor: 'monitor',
   running: 'running',
+  speed: 'speed',
   guarding: 'guarding',
   sleeping: 'sleeping',
   offline: 'offline',
@@ -29,6 +30,7 @@ export function resolveRunnerBrandState({
 
   const activeIssues = safeItems(issues).filter(isActiveIssue);
   if (activeIssues.some(isGuardingIssue)) return BRAND_STATES.guarding;
+  if (activeIssues.length > 1) return BRAND_STATES.speed;
   if (activeIssues.length > 0) return BRAND_STATES.running;
 
   if (isNightTime(now)) return BRAND_STATES.sleeping;
