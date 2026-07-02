@@ -949,11 +949,19 @@
   border-radius: 999px;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.055);
   margin: 16px auto 0;
-  max-width: min(1000px, calc(100% - 48px));
+  max-width: min(1400px, calc(100% - 48px));
   padding: 8px 10px 8px 14px;
   position: relative;
-  width: min(1000px, calc(100% - 48px));
+  width: min(1400px, calc(100% - 48px));
   z-index: 2;
+}
+
+.client-chat-area .session-runtime-meta {
+  flex: 1 1 auto;
+}
+
+.client-chat-area .session-runtime-actions {
+  justify-content: flex-end;
 }
 
 [data-theme="dark"] .client-chat-area .session-runtime-header {

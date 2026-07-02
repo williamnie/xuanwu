@@ -72,6 +72,10 @@ import {
   isInterruptPendingForSession,
   isSessionStopEvent,
 } from './sessions/sessionInterrupt';
+import {
+  createOptimisticSessionUserMessage,
+  reconcileOptimisticSessionUserMessages,
+} from './sessions/sessionOptimisticMessages';
 import './sessions/Sessions.css';
 import './sessions/SessionsClient.css';
 
@@ -237,6 +241,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const [followRunningTurn, setFollowRunningTurn] = useState(true);
   const [interruptState, setInterruptState] = useState(null);
   const [messageQueue, setMessageQueue] = useState(readQueuedSessionMessages);
+  const [optimisticUserMessages, setOptimisticUserMessages] = useState([]);
   const [approvalQueue, setApprovalQueue] = useState([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [savingProjectOrder, setSavingProjectOrder] = useState(false);
@@ -638,18 +643,45 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
   };
 
-  const startSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
-    await api.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
-      model: settings.model,
-      reasoning_effort: settings.reasoningEffort,
-      service_tier: settings.serviceTier,
-      approval_policy: settings.approvalPolicy,
-      sandbox: settings.sandbox,
-    }, references));
-    setSessionRunning(true);
-    setSessions((prev) => setSessionRunningInList(prev, sessionId, true));
-    setLiveEvents([]);
+  const addOptimisticUserMessage = useCallback((sessionId, promptText, id = queuedMessageId()) => {
+    const message = createOptimisticSessionUserMessage({
+      id,
+      sessionId,
+      prompt: promptText,
+      session: selectedSession?.id === sessionId ? selectedSession : null,
+    });
+    if (!message) return null;
+    setOptimisticUserMessages((current) => [...current, message]);
+    return message;
+  }, [selectedSession]);
+
+  const removeOptimisticUserMessage = useCallback((id) => {
+    if (!id) return;
+    setOptimisticUserMessages((current) => current.filter((message) => message.id !== id));
   }, []);
+
+  useEffect(() => {
+    setOptimisticUserMessages((current) => reconcileOptimisticSessionUserMessages(current, selectedSession));
+  }, [selectedSession]);
+
+  const startSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
+    const optimisticMessage = addOptimisticUserMessage(sessionId, promptText);
+    try {
+      await api.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
+        model: settings.model,
+        reasoning_effort: settings.reasoningEffort,
+        service_tier: settings.serviceTier,
+        approval_policy: settings.approvalPolicy,
+        sandbox: settings.sandbox,
+      }, references));
+      setSessionRunning(true);
+      setSessions((prev) => setSessionRunningInList(prev, sessionId, true));
+      setLiveEvents([]);
+    } catch (err) {
+      removeOptimisticUserMessage(optimisticMessage?.id);
+      throw err;
+    }
+  }, [addOptimisticUserMessage, removeOptimisticUserMessage]);
 
   const steerSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
     await api.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
@@ -701,6 +733,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       return;
     }
     if (shouldGuide) {
+      const optimisticMessage = addOptimisticUserMessage(selectedId, promptText);
       setSending(true);
       try {
         await steerSessionMessage(selectedId, promptText, messageSettings, messageReferences);
@@ -708,6 +741,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
         setMessageReferences([]);
         toast.info('已引导当前响应。');
       } catch (err) {
+        removeOptimisticUserMessage(optimisticMessage?.id);
         toast.error(err.message || '引导当前响应失败');
       } finally {
         setSending(false);
@@ -857,6 +891,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
         sandbox: sessionSettings.sandbox,
       }, promptReferences));
       const newSessionId = sessionIDFromCreateResult(result);
+      addOptimisticUserMessage(newSessionId, prompt.trim());
       setSelectedId(newSessionId);
       setSessionRunning(Boolean(result.turn_id));
       setSessions((prev) => setSessionRunningInList(prev, newSessionId, Boolean(result.turn_id)));
@@ -951,6 +986,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
                   project={selectedSessionProject}
                   liveEvents={liveEvents}
                   running={sessionRunning}
+                  optimisticUserMessages={optimisticUserMessages}
                   pendingApproval={hasApprovalForSession(approvalQueue, selectedId)}
                   navigateTo={navigateTo}
                 />
@@ -1542,8 +1578,12 @@ function filesFromFileChangeTool(tool) {
   return parseDiff(tool.text || '');
 }
 
-function SessionDetail({ session, project, liveEvents, running, pendingApproval, navigateTo }) {
+function SessionDetail({ session, project, liveEvents, optimisticUserMessages, running, pendingApproval, navigateTo }) {
   const turns = useMemo(() => session?.turns || [], [session?.turns]);
+  const localUserMessages = useMemo(
+    () => optimisticUserMessages.filter((message) => message.sessionId === session?.id),
+    [optimisticUserMessages, session?.id],
+  );
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
@@ -1552,6 +1592,7 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
   const autoScrollWatchKey = [
     session?.updatedAt || '',
     turns.length,
+    localUserMessages.map((message) => `${message.id}:${message.prompt}`).join('|'),
     liveEvents.length,
     lastLiveEvent?.method || lastLiveEvent?.agent_event_type || '',
     lastLiveEvent?.payload || lastLiveEvent?.text || lastLiveEvent?.error || '',
@@ -1595,23 +1636,27 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
   return (
     <div className="session-detail-body">
       <div className="session-runtime-header">
-        <span>Provider: {provider}</span>
-        <code>{providerSessionId}</code>
-        <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
-        <div className="session-export-actions">
-          <button type="button" onClick={copyResumeCommand} title="Codex 专用：复制 codex resume 命令">
-            复制 resume 命令
-          </button>
-          <button type="button" onClick={downloadMarkdown}>下载 Markdown</button>
+        <div className="session-runtime-meta">
+          <span>Provider: {provider}</span>
+          <code title={providerSessionId}>{providerSessionId}</code>
         </div>
-        <CreateSessionIssueButton session={session} project={project} navigateTo={navigateTo} />
-        <SessionInfoPopover
-          session={session}
-          provider={provider}
-          sessionId={providerSessionId}
-          model={model}
-          navigateTo={navigateTo}
-        />
+        <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
+        <div className="session-runtime-actions">
+          <div className="session-export-actions">
+            <button type="button" onClick={copyResumeCommand} title="Codex 专用：复制 codex resume 命令">
+              复制 resume 命令
+            </button>
+            <button type="button" onClick={downloadMarkdown}>下载 Markdown</button>
+          </div>
+          <CreateSessionIssueButton session={session} project={project} navigateTo={navigateTo} />
+          <SessionInfoPopover
+            session={session}
+            provider={provider}
+            sessionId={providerSessionId}
+            model={model}
+            navigateTo={navigateTo}
+          />
+        </div>
       </div>
       <SessionCommandReplay history={session?.command_history || []} navigateTo={navigateTo} />
       <div className="session-transcript" ref={scrollRef} onScroll={handleScroll}>
@@ -1622,6 +1667,9 @@ function SessionDetail({ session, project, liveEvents, running, pendingApproval,
               turn={turn}
               turnIndex={index}
             />
+          ))}
+          {localUserMessages.map((message) => (
+            <OptimisticUserMessageBubble key={message.id} message={message} />
           ))}
           {showLiveTurn && (
             <LiveTurnItem
@@ -1974,6 +2022,14 @@ function UserMessageBubble({ item }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function OptimisticUserMessageBubble({ message }) {
+  return (
+    <UserMessageBubble
+      item={{ type: 'userMessage', content: [{ type: 'input_text', text: message.prompt }] }}
+    />
   );
 }
 
