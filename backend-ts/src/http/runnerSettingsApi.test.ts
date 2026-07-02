@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { ExecutorProvider } from "../providers/types.ts";
 import { projectLoopMaxParallelProjects, setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -63,6 +64,48 @@ describe("Runner settings API", () => {
       database.close();
     }
   });
+
+  test("saves Codex server selection and restarts idle Codex transport", async () => {
+    const database = await openFixtureDatabase();
+    let stopped = 0;
+    try {
+      const config = buildConfig({ dbPath: database.path, stateDir: dirname(database.path) });
+      const router = createDefaultRouter({
+        config,
+        database,
+        providers: { codex: fakeCodexProvider(async () => { stopped += 1; }) }
+      });
+
+      const saved = await request(router, {
+        codex_app_command: "/Applications/Codex.app/Contents/Resources/codex",
+        codex_cli_command: "codex",
+        codex_server_mode: "app",
+        max_parallel_projects: 2
+      });
+
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toMatchObject({
+        codex_app_command: "/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+        codex_cli_command: "codex app-server --listen stdio://",
+        codex_effective_command: "/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+        codex_server_mode: "app",
+        runtime_apply: { codexTransport: "restarted" }
+      });
+      expect(stopped).toBe(1);
+      expect(config.codexServer.mode).toBe("app");
+      expect(config.providers.codex?.command).toBe("/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://");
+      expect(config.providers.codex?.env).toMatchObject({ BROWSER_USE_AVAILABLE_BACKENDS: "chrome,iab" });
+
+      const raw = JSON.parse(await readFile(localSettingsPath(database), "utf8"));
+      expect(raw.providers.codex).toEqual({
+        appCommand: "/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+        cliCommand: "codex app-server --listen stdio://",
+        serverMode: "app"
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function request(router: ReturnType<typeof createDefaultRouter>, body: Record<string, unknown>) {
@@ -75,4 +118,13 @@ function request(router: ReturnType<typeof createDefaultRouter>, body: Record<st
 
 function localSettingsPath(database: RunnerDatabase): string {
   return join(dirname(database.path), "runner-settings.local.json");
+}
+
+function fakeCodexProvider(stop: () => Promise<void>): ExecutorProvider {
+  return {
+    capabilities: ["issue_execution"],
+    id: "codex",
+    run: async () => ({ runId: "codex:fake" }),
+    stop
+  };
 }

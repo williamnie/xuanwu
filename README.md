@@ -80,6 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 export CODEX_RUNNER_ADDR=0.0.0.0:3008
 export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
 export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
+export CODEX_RUNNER_CODEX_SERVER_MODE=cli  # cli 或 app；也可在 Settings 页面切换
 export CODEX_RUNNER_AUTH_TOKEN=your_custom_token  # 自定义 API 访问令牌（可选）
 curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
 ```
@@ -138,9 +139,19 @@ Token:  默认在服务首次启动时自动生成并写入 state/auth_token 文
 CODEX_RUNNER_ADDR=0.0.0.0:3008 \
 CODEX_RUNNER_DB=/absolute/path/runner.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
+CODEX_RUNNER_CODEX_SERVER_MODE=cli \
 CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
 ./deploy.sh
 ```
+
+## 首次使用启动器与 Codex Server 选择
+
+Dashboard 的 Settings → Runtime 里有 “首次使用启动器” 和 “Codex server 接入方式”：
+
+- `cli`：默认模式，Runner 独立拉起 `codex app-server --listen stdio://`，适合稳定后台自动执行。
+- `app`：使用 Codex App bundled server command 和 App/Chrome 集成环境，适合需要 Codex App / Chrome 能力的任务。
+
+选择是显式的，不做智能 fallback；如果选择 `app` 后 Codex App 或对应集成不可用，新 issue/session 会按当前配置失败。切换设置会保存到 `runner-settings.local.json`，空闲时立即重启 Codex transport；有运行中的 issue/session 时只保存配置，不迁移当前 session，等运行结束后再保存一次或重启服务即可让新任务使用新 server。
 
 ### 本地 / 远程安全建议
 

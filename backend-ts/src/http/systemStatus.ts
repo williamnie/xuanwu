@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import { basename, delimiter, isAbsolute, join, relative } from "node:path";
 import { bunBuildInfo } from "../buildInfo.ts";
 import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
+import { codexAppIntegrationStatus } from "../config/codexServer.ts";
 import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -89,6 +90,7 @@ function configStatus(context: SystemStatusContext): Record<string, unknown> {
     db_path: summarizeRuntimePath(context.database.path, context.config.stateDir),
     auth_enabled: context.authEnabled,
     origin_policy: "local_only",
+    codex_server_mode: context.config.codexServer.mode,
     max_parallel_projects: context.config.runner.maxParallelProjects,
     web_mode: context.config.webDir.trim() === "" ? "api_only" : "external",
     web_dir: summarizeRuntimePath(context.config.webDir, context.config.stateDir)
@@ -110,9 +112,14 @@ function codexStatus(config: RunnerConfig): Record<string, unknown> {
   const codex = config.providers.codex;
   const command = redactSensitiveText(codex?.command ?? "");
   const capabilities = codexCapabilities();
+  const app = codexAppIntegrationStatus(config.codexServer.appCommand);
   return {
     command,
     command_ok: command.trim() !== "",
+    server_mode: config.codexServer.mode,
+    cli_command: redactSensitiveText(config.codexServer.cliCommand),
+    app_command: redactSensitiveText(config.codexServer.appCommand),
+    app,
     capability_summary: capabilities.join(","),
     capabilities,
     app_server: "not_checked",
@@ -144,7 +151,7 @@ export function providerStatus(config: RunnerConfig): Array<{
     config: codex,
     id: "codex",
     label: "Codex",
-    settingsMode: "env_or_codex_config"
+    settingsMode: `runner_settings:${config.codexServer.mode}`
   }));
   const claude = config.providers.claude;
   if (claude) out.push(providerEntry({

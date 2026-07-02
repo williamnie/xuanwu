@@ -27,6 +27,12 @@ describe("Bun backend config", () => {
       dbPath: "data-bun/runner.db",
       authToken: "",
       authTokenFile: "data-bun/auth_token",
+      codexServer: {
+        appCommand: expect.any(String),
+        appEnv: {},
+        cliCommand: "codex app-server --listen stdio://",
+        mode: "cli"
+      },
       codexSessionsDir: `${Bun.env.HOME}/.codex/sessions`,
       webDir: "",
       providers: {
@@ -114,6 +120,54 @@ describe("Bun backend config", () => {
     });
   });
 
+  test("loads Codex server selection from local settings", async () => {
+    const stateDir = await tempStateDir();
+    await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
+      providers: {
+        codex: {
+          appCommand: "/Applications/Codex.app/Contents/Resources/codex",
+          cliCommand: "local-codex",
+          serverMode: "app"
+        }
+      }
+    }), "utf8");
+
+    const config = loadConfig([], {
+      [ENV_KEYS.stateDir]: stateDir,
+      [ENV_KEYS.codexCommand]: "env-codex"
+    });
+
+    expect(config.codexServer).toMatchObject({
+      appCommand: "/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+      cliCommand: "local-codex app-server --listen stdio://",
+      mode: "app"
+    });
+    expect(config.providers.codex).toMatchObject({
+      command: "/Applications/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+      env: expect.objectContaining({ BROWSER_USE_AVAILABLE_BACKENDS: "chrome,iab" })
+    });
+  });
+
+  test("selects Codex App server mode from environment", () => {
+    const config = loadConfig([], {
+      [ENV_KEYS.codexServerMode]: "app",
+      [ENV_KEYS.codexAppCommand]: "/opt/Codex.app/Contents/Resources/codex",
+      [ENV_KEYS.codexEnv]: "SAFE_VALUE=ok"
+    });
+
+    expect(config.codexServer).toMatchObject({
+      appCommand: "/opt/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+      mode: "app"
+    });
+    expect(config.providers.codex).toMatchObject({
+      command: "/opt/Codex.app/Contents/Resources/codex app-server --listen stdio://",
+      env: expect.objectContaining({
+        BROWSER_USE_AVAILABLE_BACKENDS: "chrome,iab",
+        SAFE_VALUE: "ok"
+      })
+    });
+  });
+
   test("reads runtime environment overrides including provider settings", () => {
     const config = loadConfig([], {
       [ENV_KEYS.addr]: "127.0.0.1:3999",
@@ -151,6 +205,12 @@ describe("Bun backend config", () => {
       dbPath: "/tmp/runner-bun.db",
       authToken: "env-token",
       authTokenFile: "/tmp/token-bun",
+      codexServer: {
+        appCommand: expect.any(String),
+        appEnv: {},
+        cliCommand: "/opt/bin/codex app-server --listen stdio://",
+        mode: "cli"
+      },
       codexSessionsDir: "/tmp/codex-sessions",
       webDir: "/tmp/frontend-dist",
       providers: {
@@ -215,6 +275,12 @@ describe("Bun backend config", () => {
       dbPath: "/tmp/cli.db",
       authToken: "cli-token",
       authTokenFile: "/tmp/cli-token",
+      codexServer: {
+        appCommand: expect.any(String),
+        appEnv: {},
+        cliCommand: "cli-codex app-server --listen stdio://",
+        mode: "cli"
+      },
       codexSessionsDir: "/tmp/cli-sessions",
       webDir: "/tmp/cli-web",
       providers: {

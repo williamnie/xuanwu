@@ -15,6 +15,8 @@ AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
+CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
+CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
 
 usage() {
   cat <<'HELP'
@@ -29,6 +31,8 @@ Useful environment variables:
   CODEX_RUNNER_INSTALL_DIR=~/.local/bin Binary install directory
   CODEX_RUNNER_STATE_DIR=~/.local/state/codex-issue-runner
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
+  CODEX_RUNNER_CODEX_SERVER_MODE=cli|app Codex server backend
+  CODEX_RUNNER_CODEX_APP_CMD=/path/to/app/codex Codex App bundled server command
   CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
   CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
 HELP
@@ -171,6 +175,10 @@ $(auth_token_file_macos_args)
     <string>$(xml_escape "$PATH_VALUE")</string>
     <key>PI_PACKAGE_DIR</key>
     <string>$(xml_escape "$STATE_DIR/pi-coding-agent")</string>
+    <key>CODEX_RUNNER_CODEX_SERVER_MODE</key>
+    <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
+    <key>CODEX_RUNNER_CODEX_APP_CMD</key>
+    <string>$(xml_escape "$CODEX_APP_CMD")</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
@@ -243,6 +251,8 @@ WorkingDirectory=$STATE_DIR
 Environment=HOME=$HOME
 Environment=PATH=$PATH_VALUE
 Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
+Environment="CODEX_RUNNER_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
+Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
 ExecStart=$BIN_PATH serve --addr $ADDR --state-dir $STATE_DIR --db $DB_PATH --web-dir $STATE_DIR/web --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2

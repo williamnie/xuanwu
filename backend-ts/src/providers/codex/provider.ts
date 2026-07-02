@@ -39,6 +39,7 @@ type CodexIssueAdapter = {
 export type CodexEventHandler = (event: ProviderEvent) => void;
 export type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
 export type CodexAppEventSink = (event: AppEvent) => void;
+type CodexRuntimeControl = { stop(): Promise<void> };
 
 class CodexEventHub implements CodexEventSource {
   readonly handlers = new Set<CodexEventHandler>();
@@ -59,7 +60,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
   constructor(
     private readonly adapter: CodexIssueAdapter,
     private readonly developerInstructions = DEFAULT_DEVELOPER_INSTRUCTIONS,
-    private readonly eventSource?: CodexEventSource
+    private readonly eventSource?: CodexEventSource,
+    private readonly runtimeControl?: CodexRuntimeControl
   ) {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
@@ -164,6 +166,10 @@ export class CodexExecutorProvider implements ExecutorProvider {
     await this.adapter.interruptTurn(threadID, turnID);
   }
 
+  async stop(): Promise<void> {
+    await this.runtimeControl?.stop();
+  }
+
   private async nameThread(threadID: string, issueID: number): Promise<void> {
     if (threadID === "") return;
     await this.adapter.setThreadName(threadID, `Issue #${issueID}`);
@@ -194,7 +200,7 @@ export function createCodexExecutorProvider(
     onDiagnostic: publish,
     onEvent: publish
   });
-  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events);
+  return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport);
 }
 
 export function codexProviderAppEvent(event: ProviderEvent): AppEvent {

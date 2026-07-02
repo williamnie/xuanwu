@@ -114,6 +114,7 @@ export interface ExecutorProvider {
   sendSessionMessage?(input: SessionMessageInput): Promise<SessionMessageResult>;
   listModels?(): Promise<unknown>;
   resolveApproval?(requestId: string, decision: ApprovalDecision): Promise<void>;
+  stop?(): Promise<void>;
 }
 
 export function isExecutorProviderId(value: string): value is ExecutorProviderId {

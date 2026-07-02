@@ -85,7 +85,7 @@ describe("Bun system status endpoints", () => {
         cwd_configured: false,
         env_keys: [],
         secrets: { api_key: { configured: false } },
-        settings_mode: "env_or_codex_config",
+        settings_mode: "runner_settings:cli",
         timeout_ms: 1_800_000,
         effective_rpc_timeout_ms: 90_000
       });

@@ -18,6 +18,8 @@ PI_PACKAGE_ASSET_DIR="${CODEX_RUNNER_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-c
 PHOTON_WASM_SOURCE="${CODEX_RUNNER_PHOTON_WASM_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
+CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
+CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 DOMAIN="gui/$(id -u)"
@@ -148,6 +150,10 @@ cat > "$PLIST" <<PLIST
     <string>$(xml_escape "$PATH_VALUE")</string>
     <key>PI_PACKAGE_DIR</key>
     <string>$(xml_escape "$PI_PACKAGE_ASSET_DIR")</string>
+    <key>CODEX_RUNNER_CODEX_SERVER_MODE</key>
+    <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
+    <key>CODEX_RUNNER_CODEX_APP_CMD</key>
+    <string>$(xml_escape "$CODEX_APP_CMD")</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

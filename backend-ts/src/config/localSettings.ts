@@ -6,6 +6,13 @@ export const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
 
 export type RunnerLocalSettings = {
   integrations?: { feishu?: Record<string, unknown> };
+  providers?: {
+    codex?: {
+      appCommand?: string;
+      cliCommand?: string;
+      serverMode?: "cli" | "app";
+    };
+  };
   runner?: { maxParallelProjects?: number };
 };
 
@@ -52,6 +59,7 @@ function normalizeLocalSettings(value: unknown): RunnerLocalSettings {
   const feishu = recordValue(integrations.feishu);
   return {
     ...(Object.keys(feishu).length === 0 ? {} : { integrations: { feishu } }),
+    ...normalizedProviderSettings(raw.providers),
     ...normalizedRunnerSettings(raw.runner)
   };
 }
@@ -65,6 +73,28 @@ function normalizedRunnerSettings(value: unknown): Pick<RunnerLocalSettings, "ru
   const maxParallelProjects = Number(raw.maxParallelProjects);
   if (!Number.isInteger(maxParallelProjects) || maxParallelProjects <= 0) return {};
   return { runner: { maxParallelProjects } };
+}
+
+function normalizedProviderSettings(value: unknown): Pick<RunnerLocalSettings, "providers"> {
+  const raw = recordValue(value);
+  const codex = normalizedCodexSettings(raw.codex);
+  return Object.keys(codex).length === 0 ? {} : { providers: { codex } };
+}
+
+function normalizedCodexSettings(value: unknown): NonNullable<RunnerLocalSettings["providers"]>["codex"] {
+  const raw = recordValue(value);
+  const serverMode = raw.serverMode === "app" ? "app" : raw.serverMode === "cli" ? "cli" : undefined;
+  const cliCommand = stringValue(raw.cliCommand);
+  const appCommand = stringValue(raw.appCommand);
+  return {
+    ...(serverMode ? { serverMode } : {}),
+    ...(cliCommand ? { cliCommand } : {}),
+    ...(appCommand ? { appCommand } : {})
+  };
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function isMissingFileError(error: unknown): boolean {

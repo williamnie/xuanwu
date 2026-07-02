@@ -1,5 +1,12 @@
 import { DEFAULT_ADDR, buildRunnerPaths } from "./paths.ts";
 import { readLocalSettingsSync } from "./localSettings.ts";
+import {
+  defaultCodexAppCommand,
+  defaultCodexAppEnv,
+  defaultCodexCliCommand,
+  normalizeCodexServerMode,
+  type CodexServerMode
+} from "./codexServer.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
@@ -12,7 +19,9 @@ export const ENV_KEYS = {
   authTokenFile: "CODEX_RUNNER_AUTH_TOKEN_FILE",
   codexSessionsDir: "CODEX_RUNNER_CODEX_SESSIONS_DIR",
   webDir: "CODEX_RUNNER_WEB_DIR",
+  codexServerMode: "CODEX_RUNNER_CODEX_SERVER_MODE",
   codexCommand: "CODEX_RUNNER_CODEX_CMD",
+  codexAppCommand: "CODEX_RUNNER_CODEX_APP_CMD",
   codexCwd: "CODEX_RUNNER_CODEX_CWD",
   codexEnv: "CODEX_RUNNER_CODEX_ENV",
   codexTimeoutMs: "CODEX_RUNNER_CODEX_TIMEOUT_MS",
@@ -50,6 +59,13 @@ export type ProviderRuntimeConfig = {
   timeoutMs: number;
 };
 
+export type CodexServerConfig = {
+  appCommand: string;
+  appEnv: Record<string, string>;
+  cliCommand: string;
+  mode: CodexServerMode;
+};
+
 export type RunnerConcurrencyConfig = {
   maxParallelProjects: number;
 };
@@ -62,6 +78,7 @@ export type RunnerConfig = {
   authTokenFile: string;
   codexSessionsDir: string;
   webDir: string;
+  codexServer: CodexServerConfig;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
   runner: RunnerConcurrencyConfig;
   integrations: { feishu: FeishuConnectorConfig };
@@ -75,7 +92,9 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--auth-token-file": "authTokenFile",
   "--codex-sessions-dir": "codexSessionsDir",
   "--web-dir": "webDir",
+  "--codex-server-mode": "codexServerMode",
   "--codex-cmd": "codexCommand",
+  "--codex-app-cmd": "codexAppCommand",
   "--codex-cwd": "codexCwd",
   "--codex-env": "codexEnv",
   "--codex-timeout-ms": "codexTimeoutMs",
@@ -92,8 +111,12 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
   const cliOverrides = parseCliOverrides(stripCommand(argv));
   const baseOverrides = { ...envOverrides, ...cliOverrides };
   const localOverrides = readLocalSettingsSync(buildRunnerPaths(baseOverrides).stateDir);
+  const localCodex = localOverrides.providers?.codex ?? {};
   return buildConfig({
     ...baseOverrides,
+    codexServerMode: localCodex.serverMode ?? baseOverrides.codexServerMode,
+    codexCommand: localCodex.cliCommand ?? baseOverrides.codexCommand,
+    codexAppCommand: localCodex.appCommand ?? baseOverrides.codexAppCommand,
     runner: { maxParallelProjects: localOverrides.runner?.maxParallelProjects ?? baseOverrides.runnerMaxParallelProjects },
     integrations: { feishu: localOverrides.integrations?.feishu ?? {} }
   });
@@ -101,14 +124,16 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
 
 export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
   const paths = buildRunnerPaths(overrides);
+  const codexServer = buildCodexServerConfig(overrides);
   return {
     addr: cleanValue(overrides.addr) ?? DEFAULT_ADDR,
     authToken: cleanValue(overrides.authToken) ?? "",
     codexSessionsDir: cleanValue(overrides.codexSessionsDir) ?? defaultCodexSessionsDir(),
     webDir: cleanValue(overrides.webDir) ?? "",
     ...paths,
+    codexServer,
     providers: {
-      codex: buildCodexRuntimeConfig(overrides),
+      codex: buildCodexRuntimeConfig(overrides, codexServer),
       claude: buildClaudeRuntimeConfig(overrides)
     },
     runner: buildRunnerConcurrencyConfig(overrides.runner ?? {
@@ -145,7 +170,9 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     authTokenFile: cleanValue(env[ENV_KEYS.authTokenFile]),
     codexSessionsDir: cleanValue(env[ENV_KEYS.codexSessionsDir]),
     webDir: cleanValue(env[ENV_KEYS.webDir]),
+    codexServerMode: cleanValue(env[ENV_KEYS.codexServerMode]),
     codexCommand: cleanValue(env[ENV_KEYS.codexCommand]),
+    codexAppCommand: cleanValue(env[ENV_KEYS.codexAppCommand]),
     codexCwd: cleanValue(env[ENV_KEYS.codexCwd]),
     codexEnv: cleanValue(env[ENV_KEYS.codexEnv]),
     codexTimeoutMs: cleanValue(env[ENV_KEYS.codexTimeoutMs]),
@@ -203,28 +230,50 @@ type ProviderRuntimeOverrides = {
   claudeEnv?: string;
   claudeModel?: string;
   claudeTimeoutMs?: number | string;
+  codexAppCommand?: string;
   codexCommand?: string;
   codexCwd?: string;
   codexEnv?: string;
+  codexServerMode?: string;
   codexSessionsDir?: string;
   codexTimeoutMs?: number | string;
 };
 
-const DEFAULT_CODEX_COMMAND = "codex app-server --listen stdio://";
 const DEFAULT_CLAUDE_COMMAND = "claude";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_MAX_PARALLEL_PROJECTS = 1;
 export const MAX_PARALLEL_PROJECTS_LIMIT = 8;
 
-function buildCodexRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
+export function buildCodexServerConfig(overrides: ProviderRuntimeOverrides): CodexServerConfig {
+  const mode = normalizeCodexServerMode(overrides.codexServerMode);
+  const cliCommand = normalizeCodexCommand(cleanValue(overrides.codexCommand) ?? defaultCodexCliCommand());
+  const appCommand = normalizeCodexCommand(cleanValue(overrides.codexAppCommand) ?? defaultCodexAppCommand());
+  return {
+    appCommand,
+    appEnv: mode === "app" ? defaultCodexAppEnv(appCommand) : {},
+    cliCommand,
+    mode
+  };
+}
+
+export function buildCodexRuntimeConfig(
+  overrides: ProviderRuntimeOverrides,
+  server = buildCodexServerConfig(overrides)
+): ProviderRuntimeConfig {
+  const providerEnv = parseEnvOverrides(cleanValue(overrides.codexEnv) ?? "");
+  const command = server.mode === "app" ? server.appCommand : server.cliCommand;
   const config = buildProviderRuntimeConfig({
-    command: overrides.codexCommand,
+    command,
     cwd: overrides.codexCwd,
-    defaultCommand: DEFAULT_CODEX_COMMAND,
-    env: overrides.codexEnv,
+    defaultCommand: server.cliCommand,
+    env: "",
     timeoutMs: overrides.codexTimeoutMs
   });
-  return { ...config, command: normalizeCodexCommand(config.command) };
+  return {
+    ...config,
+    command: normalizeCodexCommand(config.command),
+    env: server.mode === "app" ? { ...server.appEnv, ...providerEnv } : providerEnv
+  };
 }
 
 function buildClaudeRuntimeConfig(overrides: ProviderRuntimeOverrides): ProviderRuntimeConfig {
@@ -261,7 +310,7 @@ function buildProviderRuntimeConfig(input: {
   };
 }
 
-function normalizeCodexCommand(command: string): string {
+export function normalizeCodexCommand(command: string): string {
   const parts = splitCommand(command);
   return parts.includes("app-server") ? command : `${command} app-server --listen stdio://`;
 }
