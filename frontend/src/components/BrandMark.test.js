@@ -13,12 +13,14 @@ test('Xuanwu brand constants and logo are available to app chrome', () => {
   assert.match(brandConstants, /name:\s*'Xuanwu'/);
   assert.match(brandConstants, /hanzi:\s*'玄武'/);
   assert.match(brandSource, /function XuanwuLogo/);
-  assert.match(brandSource, /xuanwu-shell/);
+  assert.match(brandSource, /turtle-logo-/);
+  assert.match(brandSource, /data-brand-state/);
 });
 
 test('sidebar and auth gate use Xuanwu brand instead of hardcoded xiaobei badge', () => {
   assert.match(sidebarSource, /import BrandMark from '\.\/BrandMark'/);
-  assert.match(sidebarSource, /<BrandMark className="sidebar-brand" \/>/);
+  assert.match(sidebarSource, /<BrandMark className="sidebar-brand" state=\{brandState\} \/>/);
+  assert.match(sidebarSource, /useDynamicFavicon\(brandState\)/);
   assert.doesNotMatch(sidebarSource, /\bXB\b|xiaobei/);
   assert.match(authSource, /BRAND\.hanzi/);
   assert.match(authSource, /BRAND\.name/);
@@ -27,7 +29,8 @@ test('sidebar and auth gate use Xuanwu brand instead of hardcoded xiaobei badge'
 test('brand visual system includes Xuanwu CSS and favicon title metadata', () => {
   assert.match(cssSource, /--brand-jade/);
   assert.match(cssSource, /\.brand-mark-icon/);
-  assert.match(cssSource, /\.xuanwu-shield/);
+  assert.match(cssSource, /\.turtle-shell/);
+  assert.match(cssSource, /data-brand-state="running"/);
   assert.match(indexHtml, /xuanwu-mark\.svg/);
   assert.match(indexHtml, /Xuanwu · Agent Guardian/);
 });

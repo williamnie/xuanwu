@@ -11,6 +11,8 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 import BrandMark from './BrandMark';
+import { useDynamicFavicon } from './brandFavicon.js';
+import { useRunnerBrandState } from './useRunnerBrandState.js';
 import { APP_VERSION } from '../version';
 import {
   selectBackendOnline,
@@ -32,11 +34,14 @@ export default function AppSidebar({
   toggleTheme,
   toggleSidebar,
 }) {
+  const brandState = useRunnerBrandState();
+  useDynamicFavicon(brandState);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-brand-row">
         <div className="sidebar-brand-main">
-          <BrandMark className="sidebar-brand" />
+          <BrandMark className="sidebar-brand" state={brandState} />
           <ApiStatus />
         </div>
         <button
