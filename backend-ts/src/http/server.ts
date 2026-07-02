@@ -22,6 +22,7 @@ import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
 import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
 import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
+import { registerSystemRestartRoute } from "./systemRestartApi.ts";
 import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
@@ -39,6 +40,8 @@ type DefaultRouterOptions = {
   feishuAgentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   feishuSender?: FeishuMessageSender;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  restartDelayMs?: number;
+  restartProcess?: () => void;
 };
 
 export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
@@ -46,6 +49,11 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const router = createRouter();
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
+  registerSystemRestartRoute(router, {
+    providers: runtime.providers,
+    restartDelayMs: runtime.restartDelayMs,
+    restartProcess: runtime.restartProcess
+  });
   registerEventRoutes(router, { bus });
   registerFeishuEventRoutes(router, {
     agentBridge: runtime.feishuAgentBridge,
