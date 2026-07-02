@@ -819,7 +819,7 @@ PI 需要通知用户：
 - batch 完成。
 - 最终验收。
 
-通知渠道复用现有 notification settings，新增 event types：
+通知渠道走现有 IM/SSE 路由，新增 event types：
 
 ```text
 pi.needs_user

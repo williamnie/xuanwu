@@ -104,7 +104,7 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
-  test("covers project loop, profile, template, cron, notification and reference endpoints", async () => {
+  test("covers project loop, profile, template, cron and reference endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database });
@@ -129,7 +129,6 @@ describe("Bun frontend API compatibility", () => {
       const heartbeatCron = await requestJSON(router, "/api/cron-tasks", "POST", { action: "run_heartbeat", project_id: "demo", mode: "once", next_run_at: "2999-01-02T00:00:00Z" }, 201);
       const pausedCron = await requestJSON(router, `/api/cron-tasks/${cron.id}`, "PATCH", { status: "paused" });
       const deletedCron = await rawRequest(router, `/api/cron-tasks/${cron.id}`, "DELETE");
-      const settings = await requestJSON(router, "/api/notifications/settings", "PATCH", { events: ["done"], active_start: "09:00", active_end: "18:30" });
       const capabilities = await requestJSON(router, "/api/capabilities", "GET");
 
       expect(project).toMatchObject({ id: "demo", cwd });
@@ -152,7 +151,6 @@ describe("Bun frontend API compatibility", () => {
       expect(heartbeatCron).toMatchObject({ action: "run_heartbeat", project_id: "demo", status: "active" });
       expect(pausedCron).toMatchObject({ id: cron.id, status: "paused" });
       expect(deletedCron.status).toBe(204);
-      expect(settings).toMatchObject({ events: ["done"], active_start: "09:00", active_end: "18:30" });
       expect(Array.isArray(capabilities.skills)).toBe(true);
       expect(Array.isArray(capabilities.plugins)).toBe(true);
       const runnerSkill = (capabilities.skills as Array<Record<string, unknown>>).find((item) => item.id === "codex-issue-runner");

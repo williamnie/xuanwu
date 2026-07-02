@@ -10,7 +10,7 @@
 - `FEISHU_APP_SECRET`
 - `FEISHU_VERIFICATION_TOKEN`
 - `FEISHU_ENCRYPT_KEY`（可选，启用飞书事件加密时需要）
-- `FEISHU_RECEIVE_MODE`：默认 `websocket`；只有兼容旧 Webhook 时才设为 `callback`。
+- `FEISHU_RECEIVE_MODE`：默认 `websocket`；只有兼容 HTTP request_url 模式时才设为 `callback`。
 - `FEISHU_ALLOWED_CHAT_IDS` / `FEISHU_ALLOWED_USER_IDS`：逗号或分号分隔 allowlist。
 - `FEISHU_PROJECT_MAPPINGS`：例如 `chat:oc_x=codex-issue-runner,user:ou_x=ops-runner`。
 

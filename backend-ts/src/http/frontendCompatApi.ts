@@ -10,7 +10,6 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueTemplate, deleteIssueTemplate, getIssueTemplate, updateIssueTemplate } from "../db/repositories/issueTemplates.ts";
-import { getNotificationSettings, saveNotificationSettings } from "../db/repositories/notificationSettings.ts";
 import { listNotifications, markNotificationRead } from "../db/repositories/notifications.ts";
 import { clearProjectHold, deleteProject, reorderProjects } from "../db/repositories/projectsExtra.ts";
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
@@ -73,8 +72,6 @@ function registerCronRoutes(router: Router, context: FrontendCompatContext): voi
 function registerUtilityRoutes(router: Router, context: FrontendCompatContext): void {
   router.get("/api/notifications", (request) => json(listNotifications(context.database, notificationFilter(request))));
   router.post("/api/notifications/:id/read", (request) => writeResponse(() => markNotificationRead(context.database, notificationID(request))));
-  router.get("/api/notifications/settings", () => json(getNotificationSettings(context.database)));
-  router.patch("/api/notifications/settings", async (request) => json(saveNotificationSettings(context.database, await objectBody(request))));
   router.get("/api/capabilities", () => json({ skills: listSkillRegistry(), plugins: [] }));
   router.get("/api/codex/models", async () => asyncResponse(async () => await context.providers?.codex?.listModels?.() ?? defaultModels()));
   router.post("/api/codex/approvals/:id/resolve", async (request) => asyncResponse(async () => resolveApproval(context, approvalID(request), await objectBody(request))));

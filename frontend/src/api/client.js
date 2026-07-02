@@ -225,13 +225,6 @@ export const api = {
     body: JSON.stringify({}),
   }),
 
-  getNotificationSettings: () => request('/api/notifications/settings'),
-
-  updateNotificationSettings: (settings) => request('/api/notifications/settings', {
-    method: 'PATCH',
-    body: JSON.stringify(settings),
-  }),
-
   getFeishuSettings: () => request('/api/integrations/feishu/settings'),
 
   updateFeishuSettings: (settings) => request('/api/integrations/feishu/settings', {

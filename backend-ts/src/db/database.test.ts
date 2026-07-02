@@ -153,7 +153,8 @@ describe("Bun SQLite database connection", () => {
         { id: "026_feishu_project_selection" },
         { id: "027_pi_approval_requests" },
         { id: "028_pi_guardian_runtime" },
-        { id: "029_pi_issue_completion_watches" }
+        { id: "029_pi_issue_completion_watches" },
+        { id: "030_remove_legacy_notification_settings" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -379,6 +380,33 @@ describe("Bun SQLite database connection", () => {
     }
   });
 
+  test("removes legacy notification settings when cleanup migration is pending", async () => {
+    const root = await tempPath("codex-runner-bun-legacy-notification-settings-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.close();
+
+    const raw = new Database(join(stateDir, "runner.db"));
+    try {
+      raw.run("delete from schema_migrations where id='030_remove_legacy_notification_settings'");
+      raw.run("insert into app_preferences (key, value, updated_at) values (?, ?, ?)", [
+        "notifications.settings",
+        "{\"events\":[\"done\"]}",
+        "2026-07-02T00:00:00Z"
+      ]);
+    } finally {
+      raw.close();
+    }
+
+    const migrated = await openDatabase({ stateDir });
+    try {
+      expect(migrated.sqlite.query("select value from app_preferences where key='notifications.settings'").get()).toBeNull();
+      expect(migrated.sqlite.query("select count(*) as count from schema_migrations where id='030_remove_legacy_notification_settings'").get()).toEqual({ count: 1 });
+    } finally {
+      migrated.close();
+    }
+  });
+
   test("repairs older approval request tables after the migration row exists", async () => {
     const root = await tempPath("codex-runner-bun-approval-drift-");
     const stateDir = join(root, "state");
@@ -458,7 +486,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 29 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 30 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

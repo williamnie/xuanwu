@@ -4,7 +4,6 @@ import CronTasksPanel from '../components/CronTasksPanel';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import IssueTemplatesPanel from './IssueTemplatesPanel';
-import NotificationSettingsPanel from './NotificationSettingsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
@@ -30,7 +29,6 @@ export default function Settings() {
         <PiMemoryPanel />
         <RestartPanel />
         <FeishuSettingsPanel />
-        <NotificationSettingsPanel />
         <CronTasksPanel />
         <IssueTemplatesPanel />
       </div>

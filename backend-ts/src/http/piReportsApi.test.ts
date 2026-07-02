@@ -106,7 +106,7 @@ describe("PI reports API", () => {
         total_tokens: 15
       });
       expect(body.provider_health).toMatchObject({ warnings: [] });
-      expect(body.notification.channels).toMatchObject({ mobile: false, sse: true, webhook: false });
+      expect(body.notification.channels).toEqual({ mobile: false, sse: true });
       expect(body.supervisor_summary).toMatchObject({
         exhausted_recoveries: 1,
         needs_user_escalations: 1,

@@ -129,7 +129,7 @@ function parseProjectMapping(item: string): FeishuProjectMapping | null {
 
 function parseReceiveMode(value: unknown): "websocket" | "callback" {
   const text = cleanString(value).toLowerCase().replaceAll("-", "_");
-  if (text === "callback" || text === "webhook" || text === "request_url") return "callback";
+  if (text === "callback" || text === "request_url") return "callback";
   if (text === "ws" || text === "websocket" || text === "long_connection" || text === "longconnection") return "websocket";
   return DEFAULT_RECEIVE_MODE;
 }

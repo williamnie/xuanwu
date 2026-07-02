@@ -1,6 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
-import { getNotificationSettings } from "../db/repositories/notificationSettings.ts";
 import {
   createPiReportRecord,
   getPiDelegation,
@@ -99,7 +98,7 @@ function assembleReport(db: RunnerDatabase, input: {
     heartbeat_ids: heartbeatIDs,
     issue_categories: nightSummary.issue_categories,
     issue_ids: issueIDs,
-    notification: notificationPlan(db, input.project?.id ?? ""),
+    notification: notificationPlan(input.project?.id ?? ""),
     project_id: input.project?.id ?? "",
     project_name: safeText(input.project?.name ?? "All projects"),
     provider_health: providerHealth,
@@ -231,13 +230,11 @@ async function usageSummary(input: PiReportInput, projectID: string): Promise<Re
   return buildUsageCostSummary({ codexSessionsDir: input.codexSessionsDir, database: input.database, projectID });
 }
 
-function notificationPlan(db: RunnerDatabase, projectID: string): Record<string, unknown> {
-  const settings = getNotificationSettings(db);
+function notificationPlan(projectID: string): Record<string, unknown> {
   return {
-    channels: { mobile: false, sse: true, webhook: settings.webhook_url !== "" },
+    channels: { mobile: false, sse: true },
     event: "pi.report.generated",
-    project_id: projectID,
-    webhook_reserved: true
+    project_id: projectID
   };
 }
 
