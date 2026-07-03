@@ -145,6 +145,12 @@ export function shouldRenderLiveTurn(liveEvents, running) {
   return Boolean(running || hasLiveError(liveEvents) || hasPendingApproval(liveEvents));
 }
 
+export function shouldShowLiveActivityBanner(parsed) {
+  if (!parsed) return false;
+  if (parsed.errorText || parsed.approvalPending) return true;
+  return parsed.activity !== 'thinking';
+}
+
 export function parseLiveSessionEvents(liveEvents, persistedTurns = []) {
   let agentMessageText = '';
   let reasoningText = '';

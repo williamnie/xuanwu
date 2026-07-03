@@ -5,6 +5,7 @@ import {
   isRenderableToolItem,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
+  shouldShowLiveActivityBanner,
   toolDisplayForItem,
 } from './sessionTranscriptItems.js';
 
@@ -96,6 +97,7 @@ test('turn start renders a live thinking placeholder before assistant text', () 
   assert.equal(parsed.agentMessageText, '');
   assert.equal(parsed.tools.length, 0);
   assert.equal(shouldRenderLiveTurn([{ method: 'turn/started' }], true), true);
+  assert.equal(shouldShowLiveActivityBanner(parsed), false);
 });
 
 test('live stream parser keeps command output delta readable without started item', () => {
@@ -104,6 +106,7 @@ test('live stream parser keeps command output delta readable without started ite
   ]);
 
   assert.equal(parsed.activity, 'command');
+  assert.equal(shouldShowLiveActivityBanner(parsed), true);
   assert.equal(parsed.tools.length, 1);
   assert.equal(parsed.tools[0].type, 'commandExecution');
   assert.equal(parsed.tools[0].text, 'PASS\n');
@@ -145,6 +148,7 @@ test('live stream parser exposes pending approval events', () => {
 
   assert.equal(parsed.activity, 'approval');
   assert.equal(parsed.approvalPending, true);
+  assert.equal(shouldShowLiveActivityBanner(parsed), true);
   assert.equal(parsed.tools.length, 1);
   assert.equal(toolDisplayForItem(parsed.tools[0]).title, '等待审批');
   assert.match(toolDisplayForItem(parsed.tools[0]).body, /npm test/);

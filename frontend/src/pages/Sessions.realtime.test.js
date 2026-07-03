@@ -20,3 +20,12 @@ test('session list keeps a low-frequency reconcile timer while page stays open',
     /setInterval\(\(\)\s*=>\s*loadFirstPage\(\{\s*silent:\s*true,\s*preserveLoaded:\s*true,\s*reportErrors:\s*false,?\s*\}\),\s*SESSION_LIST_RECONCILE_INTERVAL_MS\)/,
   );
 });
+
+test('live thinking state avoids duplicate thinking labels', () => {
+  assert.match(sessionsSource, /const showActivityBanner = shouldShowLiveActivityBanner\(parsed\);/);
+  assert.match(sessionsSource, /\{showActivityBanner && \(\s*<LiveActivityBanner/);
+  assert.doesNotMatch(
+    sessionsSource,
+    /<div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking\.\.\.<\/span><\/div>\s*<div className="chat-bubble-body thinking-placeholder">/,
+  );
+});

@@ -51,6 +51,7 @@ import {
   isRenderableToolItem,
   parseLiveSessionEvents,
   shouldRenderLiveTurn,
+  shouldShowLiveActivityBanner,
   toolDisplayForItem,
 } from './sessions/sessionTranscriptItems';
 import { buildSessionComposerSuggestions } from './sessions/sessionComposerAssist';
@@ -1818,7 +1819,7 @@ function InfoRow({ label, value }) {
 
 function RuntimeStatusPill({ running, pendingApproval }) {
   const status = pendingApproval ? 'approval' : running ? 'running' : 'idle';
-  const label = pendingApproval ? '等待审批' : running ? 'Agent 正在运行 · 正在思考' : '空闲';
+  const label = pendingApproval ? '等待审批' : running ? 'Agent 正在运行' : '空闲';
   return (
     <span className={`runtime-status-pill ${status}`}>
       <span className="runtime-status-dot" />
@@ -2070,10 +2071,13 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
 
   const { tools, agentMessageText, agentMessageDeduped, reasoningText, errorText, approvalPending, activity } = parsed;
   const showThinking = !agentMessageDeduped && !agentMessageText && !errorText;
+  const showActivityBanner = shouldShowLiveActivityBanner(parsed);
 
   return (
     <div className="turn-container active-live">
-      <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} />
+      {showActivityBanner && (
+        <LiveActivityBanner activity={activity} approvalPending={approvalPending} errorText={errorText} />
+      )}
       {tools.length > 0 && (
         <ToolsCollapsible
           tools={tools}
@@ -2092,7 +2096,7 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
         <div className="chat-bubble-container agent streaming">
           <div className="chat-bubble-avatar agent-logo live-pulse">A</div>
           <div className="chat-bubble-content">
-            <div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking...</span></div>
+            <div className="chat-bubble-sender">Agent</div>
             <div className="chat-bubble-body thinking-placeholder">
               <span>正在思考中</span>
               <span className="typing-dots"><i></i><i></i><i></i></span>
@@ -2105,7 +2109,7 @@ function LiveTurnItem({ liveEvents, persistedTurns }) {
         <div className="chat-bubble-container agent streaming">
           <div className="chat-bubble-avatar agent-logo live-pulse">A</div>
           <div className="chat-bubble-content">
-            <div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking...</span></div>
+            <div className="chat-bubble-sender">Agent <span className="streaming-badge">Streaming...</span></div>
             <div className="chat-bubble-body">
               <MarkdownText text={agentMessageText} />
             </div>
@@ -2136,7 +2140,7 @@ function liveActivityLabel(activity) {
     case 'file-change':
       return 'Codex is working · 正在整理文件改动';
     default:
-      return 'Agent is running · 正在思考';
+      return 'Agent is running';
   }
 }
 
