@@ -64,6 +64,7 @@ import {
   sessionPayloadWithReferences,
 } from './sessions/sessionReferences';
 import { buildSessionIssuePayload, textFromUserContent } from './sessions/sourceIssue';
+import { codexAppThreadUrl } from './sessions/codexAppLink.js';
 import { buildSessionResumeCommand, markdownFilenameForSession, sessionToMarkdown } from './sessions/sessionMarkdownExport.js';
 import {
   interruptCompletionNotice,
@@ -1587,6 +1588,7 @@ function SessionDetail({ session, project, liveEvents, optimisticUserMessages, r
   const showLiveTurn = shouldRenderLiveTurn(liveEvents, running);
   const provider = providerLabel(session?.provider);
   const providerSessionId = session?.provider_session_id || session?.sessionId || session?.id || '';
+  const codexAppUrl = useMemo(() => codexAppThreadUrl(session), [session]);
   const model = session?.model || '';
   const lastLiveEvent = liveEvents[liveEvents.length - 1];
   const autoScrollWatchKey = [
@@ -1633,6 +1635,15 @@ function SessionDetail({ session, project, liveEvents, optimisticUserMessages, r
     }
   }, [project, running, session]);
 
+  const openCodexApp = useCallback(() => {
+    if (!codexAppUrl) {
+      toast.warning('当前 Session 没有可用于 Codex App 的 thread id');
+      return;
+    }
+    window.location.href = codexAppUrl;
+    toast.info('已请求在 Codex App 中打开当前 Session');
+  }, [codexAppUrl]);
+
   return (
     <div className="session-detail-body">
       <div className="session-runtime-header">
@@ -1643,6 +1654,12 @@ function SessionDetail({ session, project, liveEvents, optimisticUserMessages, r
         <RuntimeStatusPill running={running} pendingApproval={pendingApproval} />
         <div className="session-runtime-actions">
           <div className="session-export-actions">
+            {codexAppUrl ? (
+              <button type="button" onClick={openCodexApp} title="在 Codex App 中打开当前 Session">
+                <ExternalLink size={12} />
+                在 Codex App 打开
+              </button>
+            ) : null}
             <button type="button" onClick={copyResumeCommand} title="Codex 专用：复制 codex resume 命令">
               复制 resume 命令
             </button>

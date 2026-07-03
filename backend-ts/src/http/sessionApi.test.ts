@@ -185,6 +185,77 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("read session detail reconciles a stale running Codex session index", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    provider.readSessionResult = {
+      ...sessionSummary("thread-idle"),
+      status: { type: "idle" },
+      turns: [{ id: "turn-idle", status: "completed" }]
+    };
+    try {
+      upsertAgentSession(database, {
+        provider: "codex",
+        provider_session_id: "thread-idle",
+        status: "running"
+      });
+
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-idle`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: "codex:thread-idle",
+        provider_session_id: "thread-idle",
+        status: { type: "idle" }
+      });
+      expect(getAgentSession(database, "codex:thread-idle")).toMatchObject({
+        provider_session_id: "thread-idle",
+        status: "idle"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("list sessions reconciles stale running Codex session indexes", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    provider.listResult = {
+      data: [{
+        ...sessionSummary("thread-idle"),
+        status: { type: "idle" }
+      }],
+      nextCursor: ""
+    };
+    try {
+      upsertAgentSession(database, {
+        provider: "codex",
+        provider_session_id: "thread-idle",
+        project_id: "demo",
+        status: "running"
+      });
+
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/sessions?limit=20`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        data: [{ id: "codex:thread-idle", status: { type: "idle" } }]
+      });
+      expect(getAgentSession(database, "codex:thread-idle")).toMatchObject({
+        project_id: "demo",
+        status: "idle"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("persists a created Codex session even before a provider turn id exists", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();
@@ -279,6 +350,7 @@ class SessionsProvider implements ExecutorProvider {
   readonly calls: Array<[string, Record<string, unknown>]> = [];
   readonly interrupts: Array<{ sessionId: string; turnId: string }> = [];
   createResult: SessionCreateFixture | null = null;
+  listResult: { data: Array<Record<string, unknown>>; nextCursor: string } | null = null;
   readSessionError: Error | null = null;
   readSessionResult: Record<string, unknown> | null = null;
 
@@ -292,6 +364,7 @@ class SessionsProvider implements ExecutorProvider {
 
   async listSessions(input: { cursor?: string; limit?: number }) {
     this.calls.push(["listSessions", compact(input)]);
+    if (this.listResult) return this.listResult;
     return { data: [sessionSummary("thread-new")], nextCursor: "" };
   }
 

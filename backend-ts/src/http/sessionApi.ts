@@ -8,6 +8,7 @@ import type { ExecutorProvider, ExecutorProviderId, SessionCreateInput, SessionM
 import { runtimeRawRef, runtimeSettingsFromAgentSession, withSessionRuntimeSettings } from "./sessionRuntimeSettings.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { reconcileCodexSessionIndex, reconcileCodexSessionIndexes } from "./sessionIndexReconciler.ts";
 
 export type SessionApiContext = {
   bus?: EventBus;
@@ -40,6 +41,7 @@ async function listSessions(context: SessionApiContext, request: Request) {
   if (indexed) return indexed;
   const result = await codexProvider(context).listSessions?.(sessionListInput(request));
   if (!result) throw new Error('provider "codex" 不支持 capability "sessions"');
+  reconcileCodexSessionIndexes(context.database, result.data);
   return result;
 }
 
@@ -57,6 +59,7 @@ async function readSession(context: SessionApiContext, rawSessionID: string) {
   const sessionId = parseSessionID(rawSessionID);
   const result = await readProviderSession(context, sessionId);
   if (!result) throw new Error('provider "codex" 不支持 capability "resume_session"');
+  reconcileCodexSessionIndex(context.database, sessionId, result);
   return await withSessionRuntimeSettings(context.database, sessionId, result);
 }
 
