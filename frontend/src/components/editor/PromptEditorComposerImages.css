@@ -1,0 +1,71 @@
+.prompt-image-attachment-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 0 2px;
+}
+
+.prompt-image-attachment-card {
+  position: relative;
+  width: 112px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.prompt-image-attachment-card img {
+  display: block;
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+  background: #f8fafc;
+}
+
+.prompt-image-attachment-name {
+  padding: 6px 9px 7px;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 520;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-image-attachment-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 23px;
+  height: 23px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+.prompt-image-attachment-remove:hover {
+  background: #fff;
+  color: #0f172a;
+}
+
+[data-theme="dark"] .prompt-image-attachment-card {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: #111827;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .prompt-image-attachment-name {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .prompt-image-attachment-remove {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+}

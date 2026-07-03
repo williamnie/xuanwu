@@ -1,22 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent } from '@tiptap/react';
 import { ImagePlus, Plus } from 'lucide-react';
 import { api } from '../../api/client';
-import { getPromptEditorExtensions } from './promptEditorCore';
-import { handlePromptEditorSubmitKey } from './promptEditorKeyHandling';
-import {
-  detectPromptSuggestionContext,
-  filterPromptSuggestionItems,
-  insertPromptSuggestion,
-  removePromptSuggestionTrigger,
-  nextPromptSuggestionIndex,
-  promptSuggestionKeyAction,
-  samePromptSuggestionContext,
-} from './promptEditorSuggestions';
+import { filterPromptSuggestionItems } from './promptEditorSuggestions';
 import { message } from '../../store/toastStore';
 import './PromptEditor.css';
+import PromptEditorComposerImages from './PromptEditorComposerImages';
 import PromptEditorReferences from './PromptEditorReferences';
 import PromptEditorToolbar from './PromptEditorToolbar';
+import PromptSuggestionMenu from './PromptSuggestionMenu';
+import { applyPromptSuggestion, updatePromptSuggestionMenu, usePromptEditor } from './usePromptEditor';
+import {
+  createComposerImageAttachment,
+  serializeComposerPrompt,
+  splitComposerImageAttachments,
+} from './composerImageAttachments';
 import './PromptEditorSuggestions.css';
 import './PromptEditorReferences.css';
 
@@ -42,8 +40,15 @@ export default function PromptEditor({
   const attachReferenceRef = useRef(onAttachReference);
   const selectCommandRef = useRef(onSelectCommand);
   const suggestionMenuRef = useRef(null);
+  const valueRef = useRef(value || '');
   const [uploading, setUploading] = useState(false);
   const [suggestionMenu, setSuggestionMenuState] = useState(null);
+  const isComposer = variant === 'composer';
+  const composerImageState = useMemo(
+    () => (isComposer ? splitComposerImageAttachments(value) : { attachments: [], text: value || '' }),
+    [isComposer, value],
+  );
+  const editorValue = isComposer ? composerImageState.text : value;
 
   const setSuggestionMenu = useCallback((nextMenu) => {
     setSuggestionMenuState((current) => {
@@ -52,19 +57,34 @@ export default function PromptEditor({
       return resolved;
     });
   }, []);
+  const emitChange = useCallback((nextValue) => {
+    valueRef.current = nextValue || '';
+    onChange(nextValue);
+  }, [onChange]);
+  const handleEditorChange = useCallback((nextText) => {
+    if (!isComposer) {
+      emitChange(nextText);
+      return;
+    }
+    const current = splitComposerImageAttachments(valueRef.current);
+    emitChange(serializeComposerPrompt(current.attachments, nextText));
+  }, [emitChange, isComposer]);
 
-  const editor = usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, {
+  const editor = usePromptEditor(editorValue, handleEditorChange, placeholder, uploadFiles, submitKeyRef, {
     suggestionsRef,
     attachReferenceRef,
     selectCommandRef,
     suggestionMenuRef,
     setSuggestionMenu,
   });
-  const isComposer = variant === 'composer';
 
   useLayoutEffect(() => {
     submitKeyRef.current = onSubmitKey;
   }, [onSubmitKey]);
+
+  useLayoutEffect(() => {
+    valueRef.current = value || '';
+  }, [value]);
 
   useLayoutEffect(() => {
     suggestionsRef.current = Array.isArray(suggestions) ? suggestions : [];
@@ -102,12 +122,26 @@ export default function PromptEditor({
     if (!images.length || !editor) return;
     setUploading(true);
     try {
+      const nextAttachments = [];
       for (const image of images) {
         const upload = await api.uploadImage(image);
-        editor.chain().focus().setImage({
-          src: `attachment://${upload.id}`,
-          alt: upload.original_name || image.name,
-        }).run();
+        if (isComposer) {
+          nextAttachments.push(createComposerImageAttachment(upload, image));
+        } else {
+          editor.chain().focus().setImage({
+            src: `attachment://${upload.id}`,
+            alt: upload.original_name || image.name,
+          }).run();
+        }
+      }
+      if (isComposer && nextAttachments.length > 0) {
+        const current = splitComposerImageAttachments(valueRef.current);
+        const currentText = editor.getMarkdown();
+        emitChange(serializeComposerPrompt(
+          [...current.attachments, ...nextAttachments.filter(Boolean)],
+          currentText,
+        ));
+        editor.chain().focus().run();
       }
     } catch (err) {
       message.error(`图片上传失败：${err.message || '网络异常'}`);
@@ -119,6 +153,16 @@ export default function PromptEditor({
   if (!editor) {
     return <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''}`} style={{ minHeight }} />;
   }
+
+  const removeComposerImage = (index) => {
+    const current = splitComposerImageAttachments(valueRef.current);
+    const currentText = editor.getMarkdown();
+    emitChange(serializeComposerPrompt(
+      current.attachments.filter((_item, itemIndex) => itemIndex !== index),
+      currentText,
+    ));
+    editor.chain().focus().run();
+  };
 
   const editorShell = (
     <div className={`prompt-editor-shell ${isComposer ? 'composer' : ''} ${editor.isFocused ? 'focused' : ''}`}>
@@ -172,6 +216,10 @@ export default function PromptEditor({
 
   return (
     <div className="prompt-editor-composer-stack">
+      <PromptEditorComposerImages
+        attachments={composerImageState.attachments}
+        onRemove={removeComposerImage}
+      />
       <PromptEditorReferences
         details={referenceDetails}
         onRemove={onRemoveReference}
@@ -179,125 +227,4 @@ export default function PromptEditor({
       {editorShell}
     </div>
   );
-}
-
-function usePromptEditor(value, onChange, placeholder, uploadFiles, submitKeyRef, suggestionState) {
-  const editor = useEditor({
-    extensions: getPromptEditorExtensions(placeholder),
-    content: '',
-    immediatelyRender: false,
-    editorProps: {
-      handleKeyDown: (_view, event) => handlePromptEditorKeyDown(event, submitKeyRef.current, suggestionState),
-      handlePaste: (_view, event) => handleImageFiles(event.clipboardData?.files, uploadFiles),
-      handleDrop: (_view, event) => handleImageFiles(event.dataTransfer?.files, uploadFiles),
-      attributes: { 'aria-label': placeholder || 'Markdown editor' },
-    },
-    onUpdate: ({ editor: current }) => {
-      onChange(current.getMarkdown());
-      updatePromptSuggestionMenu(current, suggestionState);
-    },
-    onSelectionUpdate: ({ editor: current }) => updatePromptSuggestionMenu(current, suggestionState),
-    onBlur: () => window.setTimeout(() => suggestionState.setSuggestionMenu(null), 120),
-  });
-
-  useEffect(() => {
-    if (!editor) return;
-    const current = editor.getMarkdown();
-    const next = value || '';
-    if (current !== next) {
-      editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false });
-    }
-  }, [editor, value]);
-
-  return editor;
-}
-
-
-function handlePromptEditorKeyDown(event, onSubmitKey, suggestionState) {
-  const menu = suggestionState.suggestionMenuRef.current;
-  const items = filterPromptSuggestionItems(suggestionState.suggestionsRef.current, menu?.context);
-  if (menu && items.length > 0) {
-    const action = promptSuggestionKeyAction(event);
-    if (!action) return handlePromptEditorSubmitKey(event, onSubmitKey);
-    event.preventDefault();
-    if (action === 'next') setPromptSuggestionIndex(suggestionState, 1, items.length);
-    if (action === 'previous') setPromptSuggestionIndex(suggestionState, -1, items.length);
-    if (action === 'close') suggestionState.setSuggestionMenu(null);
-    if (action === 'pick') {
-      applyPromptSuggestion(menu.editor, menu.context, items[Math.min(menu.activeIndex, items.length - 1)], {
-        attachReference: suggestionState.attachReferenceRef.current,
-        selectCommand: suggestionState.selectCommandRef.current,
-      });
-      suggestionState.setSuggestionMenu(null);
-    }
-    return true;
-  }
-  return handlePromptEditorSubmitKey(event, onSubmitKey);
-}
-
-function updatePromptSuggestionMenu(editor, suggestionState) {
-  const context = detectPromptSuggestionContext(editor);
-  if (!context) {
-    if (suggestionState.suggestionMenuRef.current) suggestionState.setSuggestionMenu(null);
-    return;
-  }
-  const items = filterPromptSuggestionItems(suggestionState.suggestionsRef.current, context);
-  if (items.length === 0) {
-    if (suggestionState.suggestionMenuRef.current) suggestionState.setSuggestionMenu(null);
-    return;
-  }
-  if (samePromptSuggestionContext(suggestionState.suggestionMenuRef.current?.context, context)) return;
-  suggestionState.setSuggestionMenu({ context, activeIndex: 0, editor });
-}
-
-function applyPromptSuggestion(editor, context, item, { attachReference, selectCommand } = {}) {
-  if (item?.command && selectCommand) {
-    removePromptSuggestionTrigger(editor, context);
-    selectCommand(item.command);
-    return true;
-  }
-  if (item?.reference && attachReference) {
-    removePromptSuggestionTrigger(editor, context);
-    attachReference(item.reference);
-    return true;
-  }
-  return insertPromptSuggestion(editor, context, item);
-}
-
-function setPromptSuggestionIndex(suggestionState, delta, count) {
-  suggestionState.setSuggestionMenu((current) => current && ({
-    ...current,
-    activeIndex: nextPromptSuggestionIndex(current.activeIndex, delta, count),
-  }));
-}
-
-function PromptSuggestionMenu({ items, activeIndex, onPick }) {
-  return (
-    <div className="prompt-suggestion-menu" role="listbox" aria-label="输入建议">
-      {items.map((item, index) => (
-        <button
-          key={item.id || `${item.trigger}-${item.label}`}
-          type="button"
-          className={`prompt-suggestion-item ${index === activeIndex ? 'active' : ''}`}
-          role="option"
-          aria-selected={index === activeIndex}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            onPick(item);
-          }}
-        >
-          <span className="prompt-suggestion-label">{item.label}</span>
-          {item.description && <span className="prompt-suggestion-description">{item.description}</span>}
-        </button>
-      ))}
-      <div className="prompt-suggestion-hint">↑↓ 选择 · Enter 插入 · Esc 关闭</div>
-    </div>
-  );
-}
-
-function handleImageFiles(files, uploadFiles) {
-  const images = Array.from(files || []).filter(file => file.type.startsWith('image/'));
-  if (!images.length) return false;
-  uploadFiles(images);
-  return true;
 }
