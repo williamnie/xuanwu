@@ -7,7 +7,7 @@ import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
-import type { FeishuTextMessageInput } from "./feishuClient.ts";
+import type { FeishuReactionInput, FeishuTextMessageInput } from "./feishuClient.ts";
 
 const tempRoots: string[] = [];
 
@@ -19,6 +19,86 @@ afterEach(async () => {
 });
 
 describe("Feishu agent bridge", () => {
+  test("adds a quick Feishu reaction before running the PI conversation", async () => {
+    const database = await openFixtureDatabase();
+    const actions: string[] = [];
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("hi", "om_agent_ack_reaction");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async () => {
+        actions.push("run");
+        return { text: "我收到了。" };
+      },
+      sender: {
+        addMessageReaction: async (input: FeishuReactionInput) => {
+          actions.push(`reaction:${input.messageId}:${input.emojiType}`);
+          return { reactionId: "mr_ack_1" };
+        },
+        sendTextMessage: async () => {
+          actions.push("reply");
+          return { messageId: "om_reply_ack_reaction" };
+        }
+      }
+    });
+
+    const result = await bridge.handle({ event, ingest });
+    const replay = await bridge.handle({ event, ingest });
+
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(replay).toEqual({ reason: "duplicate_reply", replied: false });
+    expect(actions).toEqual(["reaction:om_agent_ack_reaction:OK", "run", "reply"]);
+    database.close();
+  });
+
+  test("continues replying when the quick Feishu reaction fails", async () => {
+    const database = await openFixtureDatabase();
+    const sent: FeishuTextMessageInput[] = [];
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (value?: unknown) => { warnings.push(String(value)); };
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("hi", "om_agent_ack_reaction_error");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async () => ({ text: "reaction 挂了也继续回复" }),
+      sender: {
+        addMessageReaction: async () => {
+          throw new Error("reaction permission denied FEISHU_APP_SECRET=app-secret-value");
+        },
+        sendTextMessage: async (input) => {
+          sent.push(input);
+          return { messageId: "om_reply_ack_reaction_error" };
+        }
+      }
+    });
+
+    try {
+      const result = await bridge.handle({ event, ingest });
+      expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+      expect(sent).toHaveLength(1);
+      expect(warnings[0]).toContain("feishu_ack_reaction");
+      expect(warnings[0]).not.toContain("app-secret-value");
+    } finally {
+      console.warn = originalWarn;
+      database.close();
+    }
+  });
+
   test("sends trusted task messages with project mapping to Runner agent and replies in chat", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];

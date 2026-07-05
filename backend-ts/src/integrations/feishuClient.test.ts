@@ -59,6 +59,35 @@ describe("Feishu message client", () => {
     });
   });
 
+  test("adds a message reaction with Feishu emoji type", async () => {
+    const calls: Array<{ body: string; url: string }> = [];
+    const client = createFeishuMessageClient({
+      config: config(),
+      fetch: async (input, init) => {
+        calls.push({ body: String(init?.body ?? ""), url: String(input) });
+        if (String(input).includes("tenant_access_token")) {
+          return jsonResponse({ code: 0, expire: 7200, tenant_access_token: "tenant-token-1" });
+        }
+        expect(init?.headers).toMatchObject({ Authorization: "Bearer tenant-token-1" });
+        return jsonResponse({ code: 0, data: { reaction_id: "mr_ack_1" } });
+      }
+    });
+
+    const result = await client.addMessageReaction?.({
+      emojiType: "OK",
+      messageId: "om_user_message_1"
+    });
+
+    expect(result).toEqual({ reactionId: "mr_ack_1" });
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+      "https://open.feishu.cn/open-apis/im/v1/messages/om_user_message_1/reactions"
+    ]);
+    expect(JSON.parse(calls[1].body)).toEqual({
+      reaction_type: { emoji_type: "OK" }
+    });
+  });
+
   test("classifies permission failures without leaking app secret", async () => {
     const client = createFeishuMessageClient({
       config: config(),

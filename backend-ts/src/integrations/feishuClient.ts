@@ -4,8 +4,11 @@ import { redactSensitiveText } from "../util/redact.ts";
 export type FeishuReceiveIdType = "chat_id" | "email" | "open_id" | "union_id" | "user_id";
 export type FeishuTextMessageInput = { receiveId: string; receiveIdType: FeishuReceiveIdType | string; text: string };
 export type FeishuInteractiveCardInput = { card: Record<string, unknown>; receiveId: string; receiveIdType: FeishuReceiveIdType | string };
+export type FeishuReactionInput = { emojiType: string; messageId: string };
+export type FeishuReactionResult = { reactionId: string };
 export type FeishuTextMessageResult = { messageId: string };
 export type FeishuMessageClient = {
+  addMessageReaction?(input: FeishuReactionInput): Promise<FeishuReactionResult>;
   sendInteractiveCard?(input: FeishuInteractiveCardInput): Promise<FeishuTextMessageResult>;
   sendTextMessage(input: FeishuTextMessageInput): Promise<FeishuTextMessageResult>;
 };
@@ -56,6 +59,18 @@ class DefaultFeishuMessageClient implements FeishuMessageClient {
 
   async sendInteractiveCard(input: FeishuInteractiveCardInput): Promise<FeishuTextMessageResult> {
     return this.sendMessage(input, "interactive", JSON.stringify(input.card));
+  }
+
+  async addMessageReaction(input: FeishuReactionInput): Promise<FeishuReactionResult> {
+    const messageId = requireText(input.messageId, "messageId");
+    const emojiType = requireText(input.emojiType, "emojiType");
+    const token = await this.tenantAccessToken();
+    const response = await this.postJson(`/open-apis/im/v1/messages/${encodeURIComponent(messageId)}/reactions`, {
+      reaction_type: { emoji_type: emojiType }
+    }, { Authorization: `Bearer ${token}` });
+    const reactionId = cleanString(objectBody(response.body.data).reaction_id ?? response.body.reaction_id);
+    if (reactionId === "") throw new FeishuClientError("Feishu reaction response missing reaction_id", { kind: "temporary", status: response.status });
+    return { reactionId };
   }
 
   private async sendMessage(

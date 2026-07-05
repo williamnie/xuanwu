@@ -2,7 +2,7 @@
 
 本文用于把真实飞书应用事件接到本地 `codex-issue-runner`，并验证这条链路：
 
-`Feishu long connection → message event → external_events inbox → PI attention decision → Runner/PI conversation → Feishu reply`
+`Feishu long connection → message event → external_events inbox → PI attention decision → OK reaction → Runner/PI conversation → Feishu reply`
 
 ## 1. 创建飞书应用
 
@@ -17,6 +17,7 @@
 5. 权限建议最小化：
    - 接收消息事件：按飞书后台提示开通接收 IM 消息相关权限。
    - 发送回复：开通发送消息相关权限。
+   - 快速回执表情：开通添加消息表情回复相关权限，用于 PI 收到消息后先在原消息上点一个 `OK` reaction。
    - 不需要通讯录/文件内容读取权限；附件当前只记录 metadata。
 
 > 注意：HTTP callback endpoint 仍保留为兼容模式，不走 runner bearer token；回调鉴权依赖 verification token 与可选签名/加密。其它 `/api/*` 仍需要 runner token。

@@ -45,6 +45,7 @@ export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ing
 export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 
 const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply";
+const ACK_REACTION_EMOJI_TYPE = "OK";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
 const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请先发送 `/p <项目名>` 切换项目，或在消息里带上项目名后再发。";
@@ -81,6 +82,7 @@ async function handleFeishuAgentMessageOnce(
   input: FeishuBridgeHandleInput
 ): Promise<FeishuBridgeHandleResult> {
   if (alreadyReplied(options.database, input.event)) return { reason: "duplicate_reply", replied: false };
+  await sendAckReaction(options, input);
   const route = conversationRoute(options, input);
   const projectContext = projectContextForRoute(options, input, route);
   const handled = await handledReply(options, input, route, projectContext);
@@ -227,6 +229,26 @@ async function runnerReply(
 
 function messageSender(options: FeishuAgentBridgeOptions): FeishuMessageClient {
   return options.sender ?? createFeishuMessageClient({ config: options.config() });
+}
+
+async function sendAckReaction(
+  options: FeishuAgentBridgeOptions,
+  input: FeishuBridgeHandleInput
+): Promise<void> {
+  const sender = messageSender(options);
+  if (!sender.addMessageReaction) return;
+  try {
+    await sender.addMessageReaction({
+      emojiType: ACK_REACTION_EMOJI_TYPE,
+      messageId: input.event.message_id
+    });
+  } catch (error) {
+    console.warn(JSON.stringify({
+      action: "feishu_ack_reaction",
+      error: safeError(error),
+      ok: false
+    }));
+  }
 }
 
 function replyPolicy(input: FeishuBridgeHandleInput): string {
