@@ -12,7 +12,8 @@ export const DEFAULT_PI_AGENT_FORM = {
   instructions: '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
-  thinkingLevel: 'medium'
+  thinkingLevel: 'medium',
+  userAgent: ''
 };
 
 export function usePiAgentSettingsState() {
@@ -20,6 +21,8 @@ export function usePiAgentSettingsState() {
   const [providers, setProviders] = useState([]);
   const [form, setForm] = useState(DEFAULT_PI_AGENT_FORM);
   const [loading, setLoading] = useState(true);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthStatus, setOauthStatus] = useState(null);
   const [promptSummary, setPromptSummary] = useState(null);
   const [promptSummaryLoading, setPromptSummaryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -28,20 +31,26 @@ export function usePiAgentSettingsState() {
     [form.modelProvider, providers]
   );
 
-  const loadSettings = () => loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary);
+  const loadSettings = () => {
+    loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary);
+    loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
+  };
+  const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   const loadPromptSummary = () => loadPiPromptSummary(form.agentId, setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
     if (key === 'agentId' || key === 'instructions') setPromptSummary(null);
     setForm((current) => ({ ...current, [key]: value }));
   };
   const handleSave = () => savePiSettings({ agents, form, setAgents, setForm, setPromptSummary, setProviders, setSaving });
+  const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
+  const logoutPiCodexOAuth = () => logoutPiOAuth(setOauthBusy, setOauthStatus);
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  return { form, loading, promptSummary, promptSummaryLoading, providers, saving, selectedProvider,
-    handleSave, loadPromptSummary, loadSettings, updateField };
+  return { form, loading, oauthBusy, oauthStatus, promptSummary, promptSummaryLoading, providers, saving, selectedProvider,
+    handleSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, startPiCodexOAuthLogin, updateField };
 }
 
 function loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary) {
@@ -57,6 +66,60 @@ function loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptS
     })
     .catch((err) => message.error(err.message || '读取 Runner 设置失败'))
     .finally(() => setLoading(false));
+}
+
+async function loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy) {
+  setOauthBusy(true);
+  try {
+    setOauthStatus(await api.getPiCodexOAuthStatus());
+  } catch (err) {
+    message.error(err.message || '读取 Codex OAuth 状态失败');
+  } finally {
+    setOauthBusy(false);
+  }
+}
+
+async function startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus) {
+  setOauthBusy(true);
+  try {
+    const result = await api.startPiCodexOAuthLogin();
+    setOauthStatus(result);
+    applyCodexOAuthPreset(setForm);
+    openOAuthUrl(result.auth_url);
+    message.success('已启动 Codex OAuth 登录，表单已切到 openai-codex，请授权后保存设置');
+  } catch (err) {
+    message.error(err.message || '启动 Codex OAuth 登录失败');
+  } finally {
+    setOauthBusy(false);
+  }
+}
+
+function applyCodexOAuthPreset(setForm) {
+  setForm((current) => ({
+    ...current,
+    api: 'openai-codex-responses',
+    apiKey: '',
+    baseUrl: '',
+    modelId: current.modelId || 'gpt-5.4',
+    modelProvider: 'openai-codex'
+  }));
+}
+
+async function logoutPiOAuth(setOauthBusy, setOauthStatus) {
+  setOauthBusy(true);
+  try {
+    setOauthStatus(await api.logoutPiCodexOAuth());
+    message.success('已退出 PI Codex OAuth');
+  } catch (err) {
+    message.error(err.message || '退出 PI Codex OAuth 失败');
+  } finally {
+    setOauthBusy(false);
+  }
+}
+
+function openOAuthUrl(url) {
+  if (!url || typeof window === 'undefined') return;
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLoading) {
@@ -111,7 +174,8 @@ function providerPayload(form) {
     api: form.api.trim(),
     api_key: form.apiKey.trim(),
     base_url: form.baseUrl.trim(),
-    models: form.modelId.trim()
+    models: form.modelId.trim(),
+    user_agent: form.userAgent.trim()
   };
 }
 
@@ -142,6 +206,7 @@ function formFromState(agents, providers) {
     instructions: agent.instructions || DEFAULT_PI_AGENT_FORM.instructions,
     modelId: agent.model_id || provider?.models?.[0] || DEFAULT_PI_AGENT_FORM.modelId,
     modelProvider: agent.model_provider || DEFAULT_PI_AGENT_FORM.modelProvider,
-    thinkingLevel: agent.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel
+    thinkingLevel: agent.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel,
+    userAgent: provider?.user_agent || ''
   };
 }

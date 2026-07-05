@@ -132,6 +132,42 @@ describe("Bun PI provider settings API", () => {
       database.close();
     }
   });
+
+  test("persists provider user agent as request header without dropping existing headers", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      await writeSeedModels(database, {
+        providers: {
+          openai: {
+            api: "openai-responses",
+            apiKey: "old-key",
+            headers: { "X-Trace": "keep" },
+            modelOverrides: { "gpt-5.4": {} }
+          }
+        }
+      });
+
+      const saved = await request(router, "/api/pi/provider-settings/openai", {
+        api: "openai-responses",
+        models: "gpt-5.4",
+        user_agent: "CodexIssueRunner/1.0 PI"
+      });
+
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toMatchObject({
+        id: "openai",
+        user_agent: "CodexIssueRunner/1.0 PI"
+      });
+      const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
+      expect(raw.providers.openai.headers).toEqual({
+        "X-Trace": "keep",
+        "User-Agent": "CodexIssueRunner/1.0 PI"
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function request(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {

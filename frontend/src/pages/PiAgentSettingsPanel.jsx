@@ -21,6 +21,7 @@ function PiSettingsForm({ state }) {
     <>
       <PiSettingsGrid form={state.form} updateField={state.updateField} />
       <ProviderCredentialFields state={state} />
+      <CodexOAuthPanel state={state} />
       <AgentEnableField form={state.form} updateField={state.updateField} />
       <SaveRow onSave={state.handleSave} saving={state.saving} />
       <ProviderSummary providers={state.providers} />
@@ -80,7 +81,7 @@ function ApiTypeField({ form, updateField }) {
   return (
     <Field label="Runner API Type">
       <select className="form-control" value={form.api} onChange={(event) => updateField('api', event.target.value)}>
-        {['openai-responses', 'openai-completions', 'anthropic', 'google'].map((api) => <option key={api} value={api}>{api}</option>)}
+        {['openai-responses', 'openai-codex-responses', 'openai-completions', 'anthropic', 'google'].map((api) => <option key={api} value={api}>{api}</option>)}
       </select>
     </Field>
   );
@@ -101,6 +102,7 @@ function ProviderCredentialFields({ state }) {
   return (
     <>
       <TextField form={state.form} label="API Path / Base URL" name="baseUrl" placeholder="https://api.openai.com/v1 或自定义兼容代理地址" updateField={state.updateField} />
+      <TextField form={state.form} label="User-Agent" name="userAgent" placeholder="例如 CodexIssueRunner/1.0 PI" updateField={state.updateField} />
       <Field label={`API Key${configured ? '（已配置；留空保留旧 key）' : ''}`}>
         <input
           className="form-control"
@@ -115,6 +117,50 @@ function ProviderCredentialFields({ state }) {
       </Field>
       <PromptSummaryDebug state={state} />
     </>
+  );
+}
+
+function CodexOAuthPanel({ state }) {
+  const status = state.oauthStatus;
+  return (
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', display: 'grid', gap: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>Codex OAuth（实验）</strong>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: '3px 0 0' }}>
+            PI 会使用自己的 OAuth 存储；登录会把表单切到 openai-codex preset，但不会读取或导入 Codex token。
+          </p>
+        </div>
+        <OAuthButtons state={state} />
+      </div>
+      <OAuthStatusLine status={status} />
+    </div>
+  );
+}
+
+function OAuthButtons({ state }) {
+  return (
+    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <button className="btn btn-secondary" onClick={state.loadOAuthStatus} disabled={state.oauthBusy} type="button">
+        {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />} 刷新 OAuth
+      </button>
+      <button className="btn btn-secondary" onClick={state.startPiCodexOAuthLogin} disabled={state.oauthBusy} type="button">
+        <KeyRound size={14} /> 登录 Codex OAuth
+      </button>
+      <button className="btn btn-secondary" onClick={state.logoutPiCodexOAuth} disabled={state.oauthBusy || !state.oauthStatus?.pi_oauth?.configured} type="button">
+        退出 PI OAuth
+      </button>
+    </div>
+  );
+}
+
+function OAuthStatusLine({ status }) {
+  return (
+    <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'grid', gap: '4px' }}>
+      <span>PI OAuth：{status?.pi_oauth?.configured ? '已配置' : '未配置'} · {status?.pi_oauth?.status || 'idle'}</span>
+      <span>本机 Codex 登录：{status?.codex_login?.configured ? '已检测到' : '未检测到'} · {status?.codex_login?.storage || 'file'}</span>
+      {status?.auth_url && <span style={{ color: 'var(--text-muted)' }}>授权页已打开；如果被浏览器拦截，可以重新点击登录。</span>}
+    </div>
   );
 }
 

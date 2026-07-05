@@ -26,6 +26,7 @@ import { registerSessionRoutes } from "./sessionApi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiRoutes } from "./piApi.ts";
+import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import { registerPiSupervisorRoutes } from "./piSupervisorApi.ts";
 import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { registerUsageRoutes } from "./usageApi.ts";
@@ -37,6 +38,7 @@ type ReadApiContext = {
   config?: RunnerConfig;
   database: RunnerDatabase;
   interruptTimeoutMs?: number;
+  piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 

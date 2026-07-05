@@ -15,6 +15,7 @@ import { registerFeishuSettingsRoutes } from "./feishuSettingsApi.ts";
 import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
 import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
+import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
 import { registerRunnerSettingsRoutes } from "./runnerSettingsApi.ts";
 import { createRouter, type Router } from "./router.ts";
@@ -39,6 +40,7 @@ type DefaultRouterOptions = {
   onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
   feishuAgentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   feishuSender?: FeishuMessageSender;
+  piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
@@ -93,6 +95,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       config: runtime.config,
       database: runtime.database,
       interruptTimeoutMs: runtime.interruptTimeoutMs,
+      piOpenAICodexOAuthLogin: runtime.piOpenAICodexOAuthLogin,
       providers: runtime.providers
     });
   }

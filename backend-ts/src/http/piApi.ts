@@ -23,6 +23,7 @@ import { registerPiDelegationRoutes } from "./piDelegationsApi.ts";
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { registerPiMaintenanceRoutes } from "./piMaintenanceApi.ts";
 import { registerPiMcpRegistryRoutes } from "./piMcpRegistryApi.ts";
+import { registerPiOAuthRoutes, type PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import { registerPiProjectPolicyRoutes } from "./piProjectPolicyApi.ts";
 import { registerPiProviderSettingsRoutes } from "./piProviderSettingsApi.ts";
 import { registerPiProjectControlRoutes } from "./piProjectControlApi.ts";
@@ -41,6 +42,7 @@ type PiApiContext = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
@@ -63,6 +65,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiMaintenanceRoutes(router, context);
   registerPiMemoryRoutes(router, context);
   registerPiMcpRegistryRoutes(router);
+  registerPiOAuthRoutes(router, context);
   registerPiProjectPolicyRoutes(router, context);
   registerPiProviderSettingsRoutes(router, context);
   registerPiProjectControlRoutes(router, context);

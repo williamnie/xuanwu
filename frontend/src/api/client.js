@@ -340,6 +340,18 @@ export const api = {
     body: JSON.stringify(settings),
   }),
 
+  getPiCodexOAuthStatus: () => request('/api/pi/oauth/openai-codex/status'),
+
+  startPiCodexOAuthLogin: () => request('/api/pi/oauth/openai-codex/login', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  logoutPiCodexOAuth: () => request('/api/pi/oauth/openai-codex/logout', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getPiConversations: ({ projectId = '', status = '' } = {}) => {
     const params = new URLSearchParams();
     if (projectId) params.append('project_id', projectId);

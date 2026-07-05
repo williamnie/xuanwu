@@ -27,6 +27,7 @@ type ProviderConfig = {
   api?: string;
   apiKey?: string;
   baseUrl?: string;
+  headers?: Record<string, string>;
   models?: ProviderModelConfig[];
   modelOverrides?: Record<string, ProviderModelOverrideConfig>;
   [key: string]: unknown;
@@ -37,6 +38,7 @@ type PublicProviderSettings = {
   base_url: string;
   id: string;
   models: string[];
+  user_agent: string;
 };
 
 export function registerPiProviderSettingsRoutes(
@@ -94,6 +96,7 @@ function normalizeModelsConfig(value: unknown): ModelsConfig {
       api: cleanString(provider.api),
       apiKey: cleanString(provider.apiKey),
       baseUrl: cleanString(provider.baseUrl),
+      headers: isStringRecord(provider.headers) ? provider.headers : undefined,
       models: normalizeModels(provider.models, id),
       modelOverrides: normalizeModelOverrides(provider.modelOverrides)
     };
@@ -116,6 +119,7 @@ function normalizeProviderConfig(
     api,
     apiKey: cleanString(body.api_key) || cleanString(body.apiKey) || current.apiKey || "",
     baseUrl: cleanString(body.base_url) || cleanString(body.baseUrl) || current.baseUrl || "",
+    headers: nextHeaders(current.headers, body),
     models: selection.models,
     modelOverrides: selection.modelOverrides
   };
@@ -212,8 +216,26 @@ function publicProviderSettings([id, provider]: [string, ProviderConfig]): Publi
     api: provider.api ?? "",
     api_key_configured: cleanString(provider.apiKey) !== "",
     base_url: provider.baseUrl ?? "",
-    models: publicModelIDs(provider)
+    models: publicModelIDs(provider),
+    user_agent: userAgentFromHeaders(provider.headers)
   };
+}
+
+function nextHeaders(current: Record<string, string> | undefined, body: Record<string, unknown>): Record<string, string> | undefined {
+  const headers = { ...(current ?? {}) };
+  if (!hasOwn(body, "user_agent") && !hasOwn(body, "userAgent")) return emptyAsUndefined(headers);
+  const userAgent = cleanString(body.user_agent) || cleanString(body.userAgent);
+  if (userAgent === "") delete headers["User-Agent"];
+  else headers["User-Agent"] = userAgent;
+  return emptyAsUndefined(headers);
+}
+
+function emptyAsUndefined(value: Record<string, string>): Record<string, string> | undefined {
+  return Object.keys(value).length === 0 ? undefined : value;
+}
+
+function userAgentFromHeaders(headers: Record<string, string> | undefined): string {
+  return cleanString(headers?.["User-Agent"]);
 }
 
 async function parseObjectBody(request: Request): Promise<Record<string, unknown>> {
