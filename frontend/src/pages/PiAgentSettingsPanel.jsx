@@ -128,7 +128,7 @@ function CodexOAuthPanel({ state }) {
         <div>
           <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>Codex OAuth（实验）</strong>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: '3px 0 0' }}>
-            PI 会使用自己的 OAuth 存储；登录会把表单切到 openai-codex preset，但不会读取或导入 Codex token。
+            点击后只生成登录地址；你可以复制到已登录 ChatGPT 的浏览器打开。Runner 不读取或导入 Codex token。
           </p>
         </div>
         <OAuthButtons state={state} />
@@ -145,7 +145,13 @@ function OAuthButtons({ state }) {
         {state.oauthBusy ? <Loader2 size={14} className="spin-animation" /> : <RefreshCw size={14} />} 刷新 OAuth
       </button>
       <button className="btn btn-secondary" onClick={state.startPiCodexOAuthLogin} disabled={state.oauthBusy} type="button">
-        <KeyRound size={14} /> 登录 Codex OAuth
+        <KeyRound size={14} /> 生成登录地址
+      </button>
+      <button className="btn btn-secondary" onClick={state.copyPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">
+        复制登录地址
+      </button>
+      <button className="btn btn-secondary" onClick={state.openPiCodexOAuthUrl} disabled={!state.oauthStatus?.auth_url} type="button">
+        在默认浏览器打开
       </button>
       <button className="btn btn-secondary" onClick={state.logoutPiCodexOAuth} disabled={state.oauthBusy || !state.oauthStatus?.pi_oauth?.configured} type="button">
         退出 PI OAuth
@@ -159,7 +165,7 @@ function OAuthStatusLine({ status }) {
     <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'grid', gap: '4px' }}>
       <span>PI OAuth：{status?.pi_oauth?.configured ? '已配置' : '未配置'} · {status?.pi_oauth?.status || 'idle'}</span>
       <span>本机 Codex 登录：{status?.codex_login?.configured ? '已检测到' : '未检测到'} · {status?.codex_login?.storage || 'file'}</span>
-      {status?.auth_url && <span style={{ color: 'var(--text-muted)' }}>授权页已打开；如果被浏览器拦截，可以重新点击登录。</span>}
+      {status?.auth_url && <code style={{ color: 'var(--text-muted)', wordBreak: 'break-all' }}>{status.auth_url}</code>}
     </div>
   );
 }

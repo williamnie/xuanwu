@@ -59,10 +59,13 @@ describe("Bun PI OAuth API", () => {
   test("starts OpenAI Codex OAuth login and stores returned PI credentials", async () => {
     const database = await openFixtureDatabase();
     try {
+      let finishLogin: ((value: void) => void) | undefined;
+      const loginGate = new Promise<void>((resolve) => { finishLogin = resolve; });
       const router = createDefaultRouter({
         database,
         piOpenAICodexOAuthLogin: async (callbacks) => {
           callbacks.onAuth({ url: "https://auth.example/login", instructions: "sign in" });
+          await loginGate;
           return { access: "new-access", refresh: "new-refresh", expires: 123456, accountId: "acct-new" };
         }
       });
@@ -71,6 +74,9 @@ describe("Bun PI OAuth API", () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ status: "pending", auth_url: "https://auth.example/login" });
+      const pending = await router.handle(new Request(`${BASE_URL}/api/pi/oauth/openai-codex/status`));
+      expect(await pending.json()).toMatchObject({ status: "pending", auth_url: "https://auth.example/login" });
+      finishLogin?.();
       await waitForStoredAuth(database);
       const raw = JSON.parse(await readFile(piAuthPath(database), "utf8"));
       expect(raw["openai-codex"]).toMatchObject({ type: "oauth", accountId: "acct-new" });

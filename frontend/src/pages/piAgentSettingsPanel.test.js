@@ -19,8 +19,12 @@ test('PI Agent Settings exposes runtime prompt summary debug without secret echo
 
 test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () => {
   assert.match(panelSource, /Codex OAuth/);
+  assert.match(panelSource, /复制登录地址/);
+  assert.match(panelSource, /state\.oauthStatus\?\.auth_url/);
   assert.match(panelSource, /openai-codex-responses/);
   assert.match(panelSource, /startPiCodexOAuthLogin/);
+  assert.match(stateSource, /copyPiCodexOAuthUrl/);
+  assert.doesNotMatch(stateSource, /openOAuthUrl\\(result\\.auth_url\\)/);
   assert.match(panelSource, /User-Agent/);
   assert.match(stateSource, /getPiCodexOAuthStatus/);
   assert.match(stateSource, /startPiCodexOAuthLogin/);

@@ -43,6 +43,8 @@ export function usePiAgentSettingsState() {
   };
   const handleSave = () => savePiSettings({ agents, form, setAgents, setForm, setPromptSummary, setProviders, setSaving });
   const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
+  const copyPiCodexOAuthUrl = () => copyOAuthUrl(oauthStatus?.auth_url);
+  const openPiCodexOAuthUrl = () => openOAuthUrl(oauthStatus?.auth_url);
   const logoutPiCodexOAuth = () => logoutPiOAuth(setOauthBusy, setOauthStatus);
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export function usePiAgentSettingsState() {
   }, []);
 
   return { form, loading, oauthBusy, oauthStatus, promptSummary, promptSummaryLoading, providers, saving, selectedProvider,
-    handleSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, startPiCodexOAuthLogin, updateField };
+    copyPiCodexOAuthUrl, handleSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, startPiCodexOAuthLogin, updateField };
 }
 
 function loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary) {
@@ -85,12 +87,24 @@ async function startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus) {
     const result = await api.startPiCodexOAuthLogin();
     setOauthStatus(result);
     applyCodexOAuthPreset(setForm);
-    openOAuthUrl(result.auth_url);
-    message.success('已启动 Codex OAuth 登录，表单已切到 openai-codex，请授权后保存设置');
+    message.success('已生成 Codex OAuth 登录地址，请复制到已登录 ChatGPT 的浏览器打开');
   } catch (err) {
     message.error(err.message || '启动 Codex OAuth 登录失败');
   } finally {
     setOauthBusy(false);
+  }
+}
+
+async function copyOAuthUrl(url) {
+  if (!url) return message.error('当前没有可复制的 OAuth 登录地址');
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    return message.error('当前浏览器不支持直接复制，请手动选中登录地址复制');
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    message.success('已复制 OAuth 登录地址');
+  } catch (err) {
+    message.error(err.message || '复制 OAuth 登录地址失败');
   }
 }
 

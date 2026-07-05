@@ -86,11 +86,14 @@ function oauthStatus(db: RunnerDatabase) {
   const authPath = piAuthPath(db);
   const authStorage = AuthStorage.create(authPath);
   const piStatus = authStorage.getAuthStatus(OPENAI_CODEX_PROVIDER);
-  return {
+  const state = loginStates.get(authPath);
+  const base = {
     provider: OPENAI_CODEX_PROVIDER,
-    pi_oauth: { configured: piStatus.configured, source: piStatus.source ?? "none", status: loginStates.get(authPath)?.status ?? "idle" },
+    pi_oauth: { configured: piStatus.configured, source: piStatus.source ?? "none", status: state?.status ?? "idle" },
     codex_login: codexLoginStatus()
   };
+  if (!state) return base;
+  return { ...base, auth_url: state.authUrl ?? "", instructions: state.instructions ?? "", status: state.status };
 }
 
 function loginResponse(db: RunnerDatabase, state: LoginState) {
