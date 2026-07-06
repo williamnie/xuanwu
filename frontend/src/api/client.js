@@ -285,6 +285,24 @@ export const api = {
 
   getPiAttentionRawEvent: (id) => request(`/api/pi/attention-inbox/raw-events/${encodeURIComponent(id)}`),
 
+  getPiActionProposals: ({ sourceItemId = '', status = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (sourceItemId) params.append('source_item_id', sourceItemId);
+    if (status) params.append('status', status);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/action-proposals${query}`);
+  },
+
+  approvePiActionProposal: (id, payload = {}) => request(`/api/pi/action-proposals/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
+  rejectPiActionProposal: (id, payload = {}) => request(`/api/pi/action-proposals/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   getRunnerSettings: () => request('/api/runner/settings'),
 
   updateRunnerSettings: (settings) => request('/api/runner/settings', {

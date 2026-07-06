@@ -66,6 +66,26 @@ export default function AttentionInbox() {
       setBusy('');
     }
   };
+  const resolveProposal = async (proposal, action, payload) => {
+    if (!selectedItem) return;
+    setBusy(`${action}-${proposal.id}`);
+    try {
+      await payload();
+      await refreshItems();
+      setDetail(await loadDetail(selectedItem.id));
+      message.success(action === 'approve' ? 'Proposal 已批准并执行' : 'Proposal 已拒绝');
+    } catch (err) {
+      message.error(err.message || 'Proposal 操作失败');
+    } finally {
+      setBusy('');
+    }
+  };
+  const approveProposal = (proposal, edits) => resolveProposal(proposal, 'approve', () => (
+    api.approvePiActionProposal(proposal.id, { action_edits: edits, actor: 'user' })
+  ));
+  const rejectProposal = (proposal) => resolveProposal(proposal, 'reject', () => (
+    api.rejectPiActionProposal(proposal.id, { actor: 'user', reason: 'Rejected from Attention Inbox' })
+  ));
 
   return (
     <div className="attention-inbox-page">
@@ -103,6 +123,12 @@ export default function AttentionInbox() {
                 <button disabled={!!busy} onClick={() => runAction('ignore', api.ignorePiAttentionItem)}><Archive size={14} /> Ignore</button>
               </div>
               <IntentPanel item={detail?.item || selectedItem} />
+              <ProposalPanel
+                busy={busy}
+                onApprove={approveProposal}
+                onReject={rejectProposal}
+                proposals={detail?.proposals || []}
+              />
               <EvidencePanel detail={detail} />
             </>
           )}
@@ -115,12 +141,14 @@ export default function AttentionInbox() {
 async function loadDetail(id) {
   const item = await api.getPiAttentionItem(id);
   const eventIds = rawEventIds(item);
-  const [bundle, intakeRun, rawEvents] = await Promise.all([
+  const sourceItemId = `attention_inbox_item:${item.id}`;
+  const [bundle, intakeRun, proposals, rawEvents] = await Promise.all([
     api.getPiAttentionContextBundle(item.bundle_id),
     api.getPiAttentionIntakeRun(item.intake_run_id),
+    api.getPiActionProposals({ sourceItemId }),
     Promise.all(eventIds.map((eventId) => api.getPiAttentionRawEvent(eventId))),
   ]);
-  return { bundle, intakeRun, item, rawEvents };
+  return { bundle, intakeRun, item, proposals: proposals || [], rawEvents };
 }
 
 function rawEventIds(item) {
@@ -167,6 +195,77 @@ function IntentPanel({ item }) {
   );
 }
 
+function ProposalPanel({ busy, onApprove, onReject, proposals }) {
+  if (!proposals.length) {
+    return <section className="attention-card"><p className="muted">Action proposal: not created yet.</p></section>;
+  }
+  return (
+    <section className="attention-card proposal-card">
+      <h3>Action proposal</h3>
+      {proposals.map((proposal) => (
+        <ProposalItem
+          busy={busy}
+          key={proposal.id}
+          onApprove={onApprove}
+          onReject={onReject}
+          proposal={proposal}
+        />
+      ))}
+    </section>
+  );
+}
+
+function ProposalItem({ busy, onApprove, onReject, proposal }) {
+  const [drafts, setDrafts] = useState(() => draftMap(proposal));
+  useEffect(() => setDrafts(draftMap(proposal)), [proposal]);
+  const pending = proposal.status === 'proposed';
+  const edits = () => Object.fromEntries(Object.entries(drafts).map(([id, draftText]) => [id, { payload: { draft: draftText } }]));
+  return (
+    <div className="proposal-item">
+      <div className="proposal-head">
+        <div>
+          <strong>{proposal.summary}</strong>
+          <p className="muted">Skill run: {proposal.skill_run_id} · confidence {Math.round((proposal.confidence || 0) * 100)}%</p>
+        </div>
+        <span className={`status-pill ${proposal.status}`}>{proposal.status}</span>
+      </div>
+      <EvidenceRefs refs={proposal.evidence_refs || []} />
+      <div className="proposal-actions-list">
+        {(proposal.actions || []).map((action) => (
+          <ProposalAction
+            action={action}
+            draftText={drafts[action.id] || ''}
+            key={action.id}
+            onDraftChange={(value) => setDrafts((current) => ({ ...current, [action.id]: value }))}
+          />
+        ))}
+      </div>
+      <div className="attention-actions">
+        <button disabled={!pending || !!busy} onClick={() => onApprove(proposal, edits())}>Approve & execute</button>
+        <button disabled={!pending || !!busy} onClick={() => onReject(proposal)}>Reject</button>
+      </div>
+    </div>
+  );
+}
+
+function ProposalAction({ action, draftText, onDraftChange }) {
+  return (
+    <div className="proposal-action-row">
+      <div>
+        <strong>{action.type}</strong>
+        <p className="muted">Risk: {action.risk} · approval: {action.requires_approval ? 'required' : 'not required'} · status: {action.execution_status || 'queued after approval'}</p>
+        {action.summary ? <p>{action.summary}</p> : null}
+      </div>
+      {action.type === 'message.reply_draft' ? (
+        <label className="proposal-draft-field">
+          <span>Reply draft</span>
+          <textarea value={draftText} onChange={(event) => onDraftChange(event.target.value)} />
+        </label>
+      ) : <pre>{JSON.stringify(action.payload || {}, null, 2)}</pre>}
+    </div>
+  );
+}
+
 function EvidencePanel({ detail }) {
   if (!detail) return <section className="attention-card"><p className="muted">证据加载中…</p></section>;
   return (
@@ -183,6 +282,12 @@ function EvidencePanel({ detail }) {
       {detail.rawEvents.map((event) => <RawEventDetails key={event.id} event={event} />)}
     </section>
   );
+}
+
+function draftMap(proposal) {
+  return Object.fromEntries((proposal.actions || [])
+    .filter((action) => action.type === 'message.reply_draft')
+    .map((action) => [action.id, action.payload?.draft || action.payload?.content || '']));
 }
 
 function RawEventDetails({ event }) {

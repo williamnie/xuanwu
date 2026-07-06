@@ -118,6 +118,22 @@ export function rejectActionProposal(
   return updateProposalDecision(db, id, "rejected", cleanString(actor) || "user", "decided_by", reason);
 }
 
+export function updateActionProposalActions(
+  db: RunnerDatabase,
+  id: string,
+  actions: ActionProposalAction[]
+): ActionProposalRecord {
+  const current = requireActionProposal(db, id);
+  const normalized = normalizeActionProposalActions(actions, {
+    evidenceRefs: current.evidence_refs,
+    targetHints: current.target_hints
+  });
+  db.sqlite.run(`update ${TABLE} set actions_json=?, updated_at=? where id=?`, [
+    JSON.stringify(normalized), new Date().toISOString(), current.id
+  ]);
+  return requireActionProposal(db, current.id);
+}
+
 function normalizeCreate(input: ActionProposalInput, timestamp: Date): ActionProposalRecord {
   const evidenceRefs = stringList(input.evidence_refs);
   const targetHints = objectArray(input.target_hints);

@@ -13,10 +13,14 @@ export type ActionProposalRisk = "low" | "medium" | "high";
 export type ActionProposalAction = {
   confidence: number;
   evidence_refs: string[];
+  error?: string;
+  execution_status?: string;
   id: string;
   payload: JsonObject;
+  pi_action_id?: string;
   rationale: string;
   requires_approval: boolean;
+  result?: JsonObject;
   risk: ActionProposalRisk;
   summary: string;
   target_hints: JsonObject[];
@@ -63,10 +67,14 @@ function normalizeAction(
   return {
     confidence: normalizedConfidence(input.confidence),
     evidence_refs: defaultedStrings(input.evidence_refs, defaults.evidenceRefs),
+    error: optionalString(input.error),
+    execution_status: optionalString(input.execution_status),
     id: cleanString(input.id) || `action-${index + 1}-${safeID(type)}`,
     payload,
+    pi_action_id: optionalString(input.pi_action_id),
     rationale: cleanString(input.rationale),
     requires_approval: Boolean(input.requires_approval),
+    result: optionalObject(input.result),
     risk: actionRisk(input.risk),
     summary: cleanString(input.summary),
     target_hints: defaultedObjects(input.target_hints, defaults.targetHints),
@@ -117,6 +125,16 @@ function actionRisk(value: unknown): ActionProposalRisk {
 
 function requireText(value: unknown, message: string): void {
   if (cleanString(value) === "") throw new Error(message);
+}
+
+function optionalString(value: unknown): string | undefined {
+  const text = cleanString(value);
+  return text === "" ? undefined : text;
+}
+
+function optionalObject(value: unknown): JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as JsonObject;
 }
 
 function requireAnyText(payload: JsonObject, keys: string[], message: string): void {

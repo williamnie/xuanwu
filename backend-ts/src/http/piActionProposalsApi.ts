@@ -1,15 +1,23 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
-  approveActionProposal,
   createActionProposal,
   getActionProposal,
   listActionProposals,
   rejectActionProposal
 } from "../db/repositories/pi.ts";
+import type { EventBus } from "../events/bus.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import { approveAndExecuteActionProposal } from "./piActionProposalExecution.ts";
+import type { ProjectLoopStarter } from "./piActionDispatch.ts";
 import type { Router } from "./router.ts";
 
-type PiActionProposalContext = { database: RunnerDatabase };
+type PiActionProposalContext = {
+  bus?: EventBus;
+  database: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  startProjectLoop?: ProjectLoopStarter;
+};
 type JsonObject = Record<string, unknown>;
 
 export function registerPiActionProposalRoutes(router: Router, context: PiActionProposalContext): void {
@@ -45,7 +53,11 @@ async function approveProposalResponse(context: PiActionProposalContext, request
   const body = await objectBody(request);
   const id = proposalID(request);
   requireProposal(context, id);
-  return writeResponse(() => approveActionProposal(context.database, id, cleanString(body.actor)));
+  return writeAsyncResponse(() => approveAndExecuteActionProposal(context, {
+    actionEdits: actionEdits(body.action_edits ?? body.actionEdits),
+    actor: cleanString(body.actor),
+    proposalID: id
+  }));
 }
 
 async function rejectProposalResponse(context: PiActionProposalContext, request: Request): Promise<Response> {
@@ -64,6 +76,16 @@ function writeResponse(create: () => unknown, status = 200): Response {
   try {
     return json(create(), { status });
   } catch (error) {
+    if (error instanceof Error) throw new HttpError(400, error.message);
+    throw error;
+  }
+}
+
+async function writeAsyncResponse(create: () => Promise<unknown>, status = 200): Promise<Response> {
+  try {
+    return json(await create(), { status });
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
     if (error instanceof Error) throw new HttpError(400, error.message);
     throw error;
   }
@@ -108,4 +130,10 @@ function cleanParam(value: string | null): string {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function actionEdits(value: unknown): Record<string, { payload?: JsonObject }> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, { payload?: JsonObject }>
+    : {};
 }

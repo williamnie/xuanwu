@@ -180,6 +180,59 @@
   margin: 0;
 }
 
+.proposal-card {
+  gap: 14px;
+}
+
+.proposal-item,
+.proposal-action-row {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.proposal-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.proposal-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.proposal-action-row pre,
+.proposal-draft-field textarea {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.proposal-draft-field {
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.proposal-draft-field textarea {
+  color: var(--text-primary);
+  min-height: 92px;
+  resize: vertical;
+}
+
 .attention-chip.strong {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   border-color: color-mix(in srgb, var(--primary) 28%, transparent);

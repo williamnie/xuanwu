@@ -3,6 +3,8 @@ import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSes
 import { enqueueIssue } from "../db/repositories/issueActions.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createIssueComment } from "../db/repositories/issueEvents.ts";
+import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { applyIssueStateRepair } from "../pi/issueStateManager.ts";
 import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agentOrchestration.ts";
@@ -46,9 +48,18 @@ export async function dispatchPiAction(
   const payload = parsePayload(action);
   switch (action.action_type) {
     case "issue.create":
-      return createIssue(context.database, payload);
+      return createIssue(context.database, issueCreatePayload(payload));
     case "issue.enqueue":
       return enqueueIssueAndStartAutoRun(context, action, positivePayloadID(payload, "issue_id"));
+    case "issue.status_lookup":
+      return lookupIssueStatus(context.database, payload);
+    case "message.reply_draft":
+      return createImReplyDraft(context.database, replyDraftPayload(payload, action));
+    case "message.reply_send":
+      return approveImReplyDraft(context.database, createImReplyDraft(
+        context.database,
+        replyDraftPayload(payload, action)
+      ).id);
     case "issue.schedule_enqueue":
       return createIssueEnqueueCron(context.database, payload);
     case "issue_completion_watch.create":
@@ -79,6 +90,41 @@ export async function dispatchPiAction(
 
 function actionPayload(action: PiAction, payload: Record<string, unknown>): Record<string, unknown> {
   return { ...payload, action_id: action.id, decision_id: action.guardian_decision_id, idempotency_key: action.idempotency_key };
+}
+
+function issueCreatePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const description = cleanString(payload.description) || cleanString(payload.body);
+  return { ...payload, description, status: cleanString(payload.status) || "triage" };
+}
+
+function lookupIssueStatus(db: RunnerDatabase, payload: Record<string, unknown>): Record<string, unknown> {
+  const issueID = positiveInputID(payload.issue_id);
+  if (issueID) return { item: getIssue(db, issueID) };
+  const projectID = cleanString(payload.project_id);
+  const status = cleanString(payload.status);
+  const query = cleanString(payload.query).toLowerCase();
+  const items = listIssues(db, { projectId: projectID, status })
+    .filter((issue) => query === "" || issue.title.toLowerCase().includes(query) ||
+      issue.description.toLowerCase().includes(query))
+    .slice(0, 10);
+  return { items, query };
+}
+
+function replyDraftPayload(actionPayload: Record<string, unknown>, action: PiAction): Record<string, unknown> {
+  const text = cleanString(actionPayload.content) || cleanString(actionPayload.draft) ||
+    cleanString(actionPayload.text) || cleanString(actionPayload.message);
+  return {
+    approval_action_id: action.id,
+    content: text,
+    created_by: cleanString(actionPayload.created_by) || "pi_action",
+    external_event_id: positiveInputID(actionPayload.external_event_id) || 0,
+    issue_id: positiveInputID(actionPayload.issue_id) || action.issue_id || 0,
+    risk: cleanString(actionPayload.risk) || action.risk_level,
+    source: cleanString(actionPayload.source) || action.source,
+    target_chat_id: cleanString(actionPayload.target_chat_id),
+    target_message_id: cleanString(actionPayload.target_message_id),
+    target_thread_id: cleanString(actionPayload.target_thread_id)
+  };
 }
 
 function createWorkflowIssue(

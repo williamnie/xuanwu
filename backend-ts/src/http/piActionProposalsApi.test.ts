@@ -6,6 +6,10 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
+import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { listImReplyDrafts, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
+import { getPiAction, listPiActions } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -130,6 +134,123 @@ describe("PI action proposals API", () => {
       db.close();
     }
   });
+
+  test("approving a proposal executes issue/status/reply actions and blocks reply_send without source policy", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      seedProject(db, "demo");
+      const itemID = seedBugReport(db);
+      const router = createDefaultRouter({ database: db });
+
+      const proposal = await jsonRequest(router, "/api/pi/action-proposals", {
+        body: JSON.stringify({
+          actions: [
+            action("issue.create", {
+              body: "登录页 500，需要排查并回写结论。",
+              title: "登录页 500"
+            }, "medium", true),
+            action("issue.status_lookup", { query: "登录页 500" }, "low", false),
+            action("message.reply_draft", {
+              draft: "旧草稿",
+              source: "fixture-im"
+            }, "low", false),
+            action("message.reply_send", {
+              source: "fixture-im",
+              text: "不要自动发送"
+            }, "low", true)
+          ],
+          confidence: 0.91,
+          evidence_refs: [`external_event:${itemID}`],
+          skill_run_id: "domain-run-execute",
+          source_item_ids: [`attention_inbox_item:${itemID}`],
+          summary: "需要创建 issue、查询状态并准备回复。",
+          target_hints: [{ confidence: 0.9, id: "demo", kind: "project" }]
+        }),
+        method: "POST"
+      });
+
+      const approved = await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
+        body: JSON.stringify({
+          action_edits: {
+            [proposal.actions[2].id]: { payload: { draft: "编辑后的草稿" } }
+          },
+          actor: "tester"
+        }),
+        method: "POST"
+      });
+
+      const created = listIssues(db, { projectId: "demo" }).find((issue) => issue.title === "登录页 500");
+      const actions = listPiActions(db);
+      expect(approved).toMatchObject({ approved_by: "tester", status: "approved" });
+      expect(approved.actions.map((item: { execution_status?: string; type: string }) => [item.type, item.execution_status]))
+        .toEqual([
+          ["issue.create", "completed"],
+          ["issue.status_lookup", "completed"],
+          ["message.reply_draft", "completed"],
+          ["message.reply_send", "denied"]
+        ]);
+      expect(created).toMatchObject({
+        description: expect.stringContaining("登录页 500，需要排查"),
+        source_turn_id: `attention_inbox_item:${itemID}`,
+        status: "triage"
+      });
+      expect(listImReplyDrafts(db, { source: "fixture-im" })).toMatchObject([
+        expect.objectContaining({ content: "编辑后的草稿", status: "pending" })
+      ]);
+      expect(listSyncOutbox(db, { source: "fixture-im" })).toEqual([]);
+      expect(getPiAction(db, approved.actions[3].pi_action_id)).toMatchObject({ status: "denied" });
+      expect(actions.map((item) => item.action_type).sort()).toEqual([
+        "issue.create",
+        "issue.status_lookup",
+        "message.reply_draft",
+        "message.reply_send"
+      ]);
+      expect((await jsonRequest(router, `/api/pi/attention-inbox/items/${itemID}`)).status).toBe("actioned");
+      expect(getIssue(db, created?.id ?? 0)?.source_excerpt).toContain(proposal.id);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("approved reply_send queues outbox only when auto reply policy is enabled", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const eventID = seedReplyEvent(db);
+      const router = createDefaultRouter({ database: db });
+      const proposal = await jsonRequest(router, "/api/pi/action-proposals", {
+        body: JSON.stringify({
+          actions: [
+            action("message.reply_send", {
+              reply_policy: { auto_reply_enabled: true },
+              source: "fixture-im",
+              text: "可以发送"
+            }, "low", true)
+          ],
+          evidence_refs: [`external_event:${eventID}`],
+          skill_run_id: "domain-run-send",
+          source_item_ids: ["attention_inbox_item:999"],
+          summary: "允许自动回复的低风险发送。",
+          target_hints: []
+        }),
+        method: "POST"
+      });
+
+      const approved = await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
+        body: JSON.stringify({ actor: "tester" }),
+        method: "POST"
+      });
+
+      expect(approved.actions[0]).toMatchObject({ execution_status: "completed", type: "message.reply_send" });
+      expect(listImReplyDrafts(db, { source: "fixture-im" })).toMatchObject([
+        expect.objectContaining({ content: "可以发送", status: "approved" })
+      ]);
+      expect(listSyncOutbox(db, { source: "fixture-im" })).toMatchObject([
+        expect.objectContaining({ content: "可以发送", status: "pending" })
+      ]);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -180,6 +301,69 @@ function seedStatusQuestion(db: RunnerDatabase): number {
 
 function action(type: string, payload: Record<string, unknown>, risk: string, requiresApproval: boolean) {
   return { confidence: 0.7, payload, requires_approval: requiresApproval, risk, type };
+}
+
+function seedProject(db: RunnerDatabase, id: string): void {
+  db.sqlite.run(
+    `insert into projects (id, name, cwd, provider, created_at, updated_at)
+      values (?, ?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, "codex", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+  expect(getProject(db, id)).not.toBeNull();
+}
+
+function seedBugReport(db: RunnerDatabase): number {
+  const event = createExternalEvent(db, {
+    actor: "alice",
+    content: "登录页 500，需要创建 issue 并回复。",
+    external_id: "bug-1",
+    normalized_message: { chat_id: "oc_bug_chat", message_id: "om_bug_1" },
+    occurred_at: "2026-07-06T03:01:00Z",
+    provider: "fixture-provider",
+    received_at: "2026-07-06T03:01:01Z",
+    source: "fixture-im"
+  });
+  const bundle = createContextBundle(db, {
+    context: [],
+    created_by: "automation",
+    event_refs: [event.id],
+    reason: "fixture_action_execution",
+    source: "fixture-im",
+    trigger: "continuous",
+    window: { from: "2026-07-06T03:01:00Z", to: "2026-07-06T03:01:00Z" }
+  });
+  const run = createIntakeRun(db, {
+    bundle_id: bundle.id,
+    schema_output: { items: [{ title: "登录页 500" }], ignored: [] },
+    skill_id: "pi.llm_intake.v1",
+    status: "succeeded"
+  });
+  return createAttentionInboxItem(db, {
+    bundle_id: bundle.id,
+    confidence: 0.93,
+    evidence_refs: [`external_event:${event.id}`],
+    intake_run_id: run.id,
+    primary_intent: "bug_report",
+    secondary_intents: ["reply_needed"],
+    source: "fixture-im",
+    suggested_actions: ["create_issue_proposal", "reply_draft"],
+    summary: "登录页 500，需要创建 issue 并回复。",
+    target_hints: [{ confidence: 0.9, id: "demo", kind: "project" }],
+    title: "登录页 500"
+  }).id;
+}
+
+function seedReplyEvent(db: RunnerDatabase): number {
+  return createExternalEvent(db, {
+    actor: "bob",
+    content: "请同步状态",
+    external_id: "reply-1",
+    normalized_message: { chat_id: "oc_reply_chat", message_id: "om_reply_1" },
+    occurred_at: "2026-07-06T04:01:00Z",
+    provider: "fixture-provider",
+    received_at: "2026-07-06T04:01:01Z",
+    source: "fixture-im"
+  }).id;
 }
 
 async function jsonRequest(router: ReturnType<typeof createDefaultRouter>, path: string, init: RequestInit = {}) {
