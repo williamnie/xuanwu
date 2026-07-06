@@ -78,8 +78,54 @@ describe("PI Attention Inbox API", () => {
       expect(retry.run).toMatchObject({ bundle_id: fixture.bundle.id, status: "running" });
 
       const proposal = await jsonRequest(router, `/api/pi/attention-inbox/items/${fixture.itemID}/domain-skill`, { method: "POST" });
+      const payload = JSON.parse(proposal.action.payload_json);
       expect(proposal.item.status).toBe("proposal_created");
       expect(proposal.action).toMatchObject({ action_type: "attention_inbox.domain_skill", status: "proposal" });
+      expect(payload.action_proposals).toEqual([
+        expect.objectContaining({ requires_approval: true, type: "issue.create" })
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("domain skill fixture maps status questions, bug reports, and noise to action proposals", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const fixture = seedInboxFixture(db);
+      const router = createDefaultRouter({ database: db });
+      const status = createAttentionItem(db, fixture, {
+        primary_intent: "status_question",
+        secondary_intents: ["reply_needed"],
+        suggested_actions: ["status_lookup", "reply_draft"],
+        summary: "老板 @ 我问登录页 500 什么时候修好。",
+        title: "老板追问登录页 500 修复状态"
+      });
+      const noise = createAttentionItem(db, fixture, {
+        primary_intent: "other",
+        suggested_actions: ["no_action"],
+        summary: "普通闲聊表情，无需处理。",
+        title: "普通闲聊"
+      });
+
+      const statusProposal = await domainSkillPayload(router, status.id);
+      expect(statusProposal.action_proposals.map((item: { type: string }) => item.type)).toEqual([
+        "issue.status_lookup",
+        "message.reply_draft"
+      ]);
+      expect(statusProposal.action_proposals.every((item: { payload?: unknown }) => isJsonObject(item.payload))).toBe(true);
+
+      const bugProposal = await domainSkillPayload(router, fixture.itemID);
+      expect(bugProposal.action_proposals).toEqual([
+        expect.objectContaining({ requires_approval: true, type: "issue.create" })
+      ]);
+
+      const noiseProposal = await domainSkillPayload(router, noise.id);
+      expect(noiseProposal.action_proposals).toEqual([
+        expect.objectContaining({ requires_approval: false, type: "no_action" })
+      ]);
+      expect(noiseProposal.action_proposals.map((item: { type: string }) => item.type)).not.toContain("issue.create");
+      expect(noiseProposal.action_proposals.map((item: { type: string }) => item.type)).not.toContain("message.reply_draft");
     } finally {
       db.close();
     }
@@ -128,6 +174,33 @@ function seedInboxFixture(db: RunnerDatabase) {
   return { bundle, eventID: event.id, itemID: item.id, runID: run.id };
 }
 
+function createAttentionItem(
+  db: RunnerDatabase,
+  fixture: ReturnType<typeof seedInboxFixture>,
+  overrides: {
+    primary_intent: string;
+    secondary_intents?: string[];
+    suggested_actions: string[];
+    summary: string;
+    title: string;
+  }
+) {
+  return createAttentionInboxItem(db, {
+    bundle_id: fixture.bundle.id,
+    confidence: 0.86,
+    evidence_refs: [`external_event:${fixture.eventID}`],
+    intake_run_id: fixture.runID,
+    primary_intent: overrides.primary_intent,
+    schema_item: { fixture: "domain-skill" },
+    secondary_intents: overrides.secondary_intents ?? [],
+    source: "fixture-im",
+    suggested_actions: overrides.suggested_actions,
+    summary: overrides.summary,
+    target_hints: [{ confidence: 0.8, id: "demo-project", kind: "project", reason: "chat context" }],
+    title: overrides.title
+  }, new Date("2026-07-06T02:05:00Z"));
+}
+
 function bundleInput(eventID: number) {
   return {
     context: [{
@@ -155,8 +228,17 @@ async function jsonRequest(router: ReturnType<typeof createDefaultRouter>, path:
   return response.json();
 }
 
+async function domainSkillPayload(router: ReturnType<typeof createDefaultRouter>, itemID: number) {
+  const proposal = await jsonRequest(router, `/api/pi/attention-inbox/items/${itemID}/domain-skill`, { method: "POST" });
+  return JSON.parse(proposal.action.payload_json);
+}
+
 async function textRequest(router: ReturnType<typeof createDefaultRouter>, path: string) {
   const response = await router.handle(new Request(`${BASE_URL}${path}`));
   expect(response.status).toBe(200);
   return response.text();
+}
+
+function isJsonObject(value: unknown): boolean {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

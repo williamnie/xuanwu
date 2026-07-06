@@ -3,8 +3,8 @@
   "kind": "domain",
   "input_object": "inbox_item",
   "output_objects": ["action_proposals"],
-  "required_tools": ["issue.create", "message.reply_draft"],
-  "primary_intents": ["bug_report", "status_question", "other"],
+  "required_tools": ["issue.create", "issue.status_lookup", "message.reply_draft"],
+  "primary_intents": ["bug_report", "status_question", "reply_needed", "monitor_thread", "other"],
   "intent_tags": ["proposal-only", "approval-gated"],
   "input_schema": {
     "type": "object",
@@ -12,7 +12,35 @@
   },
   "output_schema": {
     "type": "object",
-    "required": ["action_proposals"]
+    "required": ["action_proposals"],
+    "properties": {
+      "action_proposals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["type", "payload", "risk", "requires_approval", "evidence_refs"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "issue.create",
+                "message.reply_draft",
+                "issue.status_lookup",
+                "ask_user",
+                "watch_thread",
+                "memory.create",
+                "reminder.create",
+                "no_action"
+              ]
+            },
+            "payload": { "type": "object" },
+            "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+            "requires_approval": { "type": "boolean" },
+            "evidence_refs": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
   },
   "permissions": {
     "max_tool_permission": "write"

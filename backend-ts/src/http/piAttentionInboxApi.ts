@@ -13,6 +13,7 @@ import {
   type IntakeRunRecord
 } from "../db/repositories/intakeRuns.ts";
 import { createPiAction, createPiActionEvent } from "../db/repositories/pi.ts";
+import { runFixtureDomainSkill } from "../pi/domainSkillFixture.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -121,11 +122,16 @@ function reintakeInboxItem(context: AttentionInboxContext, request: Request): Re
 
 function domainSkillProposal(context: AttentionInboxContext, request: Request): Response {
   const item = requireInboxItem(context, request);
-  const action = createPiAction(context.database, domainSkillAction(item));
+  const output = runFixtureDomainSkill(item);
+  const action = createPiAction(context.database, domainSkillAction(item, output));
   createPiActionEvent(context.database, {
     action_id: action.id,
     event_type: "attention_inbox.domain_skill_requested",
-    payload_json: JSON.stringify({ item_id: item.id, primary_intent: item.primary_intent })
+    payload_json: JSON.stringify({
+      action_count: output.action_proposals.length,
+      item_id: item.id,
+      primary_intent: item.primary_intent
+    })
   });
   const updated = updateAttentionInboxItemStatus(context.database, item.id, "proposal_created");
   return json({ action, item: updated, proposal_status: "created" }, { status: 202 });
@@ -202,12 +208,13 @@ function compactIntakeRun(run: IntakeRunRecord): JsonObject {
   };
 }
 
-function domainSkillAction(item: AttentionInboxItemRecord): JsonObject {
+function domainSkillAction(item: AttentionInboxItemRecord, output: ReturnType<typeof runFixtureDomainSkill>): JsonObject {
   return {
     action_type: "attention_inbox.domain_skill",
     id: `attention-inbox-item-${item.id}-domain-skill`,
     idempotency_key: `attention-inbox-item:${item.id}:domain-skill`,
     payload_json: JSON.stringify({
+      ...output,
       evidence_refs: item.evidence_refs,
       item_id: item.id,
       primary_intent: item.primary_intent,

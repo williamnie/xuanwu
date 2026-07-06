@@ -47,6 +47,7 @@ describe("PI skill registry", () => {
       availableTools: [
         { name: "source.fetch_context", permission: "read" },
         { name: "issue.create", permission: "write" },
+        { name: "issue.status_lookup", permission: "read" },
         { name: "message.reply_draft", permission: "read" }
       ],
       roots: [{ label: "fixture", path: FIXTURE_SKILLS }]
@@ -70,8 +71,8 @@ describe("PI skill registry", () => {
       input_object: "inbox_item",
       kind: "domain",
       output_objects: ["action_proposals"],
-      primary_intents: ["bug_report", "status_question", "other"],
-      required_tools: ["issue.create", "message.reply_draft"],
+      primary_intents: ["bug_report", "status_question", "reply_needed", "monitor_thread", "other"],
+      required_tools: ["issue.create", "issue.status_lookup", "message.reply_draft"],
       runtime_manifest_path: "fixture:fixture-domain/manifest.json"
     });
   });
