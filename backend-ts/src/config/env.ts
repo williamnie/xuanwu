@@ -1,3 +1,4 @@
+import { delimiter } from "node:path";
 import { DEFAULT_ADDR, buildRunnerPaths } from "./paths.ts";
 import { readLocalSettingsSync } from "./localSettings.ts";
 import {
@@ -26,6 +27,7 @@ export const ENV_KEYS = {
   codexEnv: "CODEX_RUNNER_CODEX_ENV",
   codexTimeoutMs: "CODEX_RUNNER_CODEX_TIMEOUT_MS",
   runnerMaxParallelProjects: "CODEX_RUNNER_MAX_PARALLEL_PROJECTS",
+  cliConnectorDirs: "CODEX_RUNNER_CLI_CONNECTOR_DIRS",
   claudeCommand: "CODEX_RUNNER_CLAUDE_CMD",
   claudeCwd: "CODEX_RUNNER_CLAUDE_CWD",
   claudeEnv: "CODEX_RUNNER_CLAUDE_ENV",
@@ -44,7 +46,12 @@ export const ENV_KEYS = {
 } as const;
 
 type Env = Record<string, string | undefined>;
-type ConfigOverrides = Omit<Partial<RunnerConfig>, "integrations" | "runner"> & ProviderRuntimeOverrides & FeishuConnectorOverrides & {
+type ConfigOverrides =
+  Omit<Partial<RunnerConfig>, "cliConnectors" | "integrations" | "runner"> &
+  ProviderRuntimeOverrides &
+  FeishuConnectorOverrides & {
+  cliConnectorDirs?: string | string[];
+  cliConnectors?: { manifestDirs?: string | string[] };
   integrations?: { feishu?: FeishuConfigInput };
   runner?: { maxParallelProjects?: unknown };
   runnerMaxParallelProjects?: number | string;
@@ -70,6 +77,10 @@ export type RunnerConcurrencyConfig = {
   maxParallelProjects: number;
 };
 
+export type CliConnectorConfig = {
+  manifestDirs: string[];
+};
+
 export type RunnerConfig = {
   addr: string;
   stateDir: string;
@@ -78,6 +89,7 @@ export type RunnerConfig = {
   authTokenFile: string;
   codexSessionsDir: string;
   webDir: string;
+  cliConnectors: CliConnectorConfig;
   codexServer: CodexServerConfig;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
   runner: RunnerConcurrencyConfig;
@@ -99,6 +111,7 @@ const FLAG_KEYS: Record<string, ConfigKey> = {
   "--codex-env": "codexEnv",
   "--codex-timeout-ms": "codexTimeoutMs",
   "--max-parallel-projects": "runnerMaxParallelProjects",
+  "--cli-connector-dirs": "cliConnectorDirs",
   "--claude-cmd": "claudeCommand",
   "--claude-cwd": "claudeCwd",
   "--claude-env": "claudeEnv",
@@ -132,6 +145,7 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
     webDir: cleanValue(overrides.webDir) ?? "",
     ...paths,
     codexServer,
+    cliConnectors: buildCliConnectorConfig(overrides),
     providers: {
       codex: buildCodexRuntimeConfig(overrides, codexServer),
       claude: buildClaudeRuntimeConfig(overrides)
@@ -143,6 +157,20 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
       feishu: buildFeishuConnectorConfig(effectiveFeishuInput(overrides))
     }
   };
+}
+
+function buildCliConnectorConfig(overrides: ConfigOverrides): CliConnectorConfig {
+  const configured = overrides.cliConnectors?.manifestDirs ?? overrides.cliConnectorDirs;
+  return { manifestDirs: parsePathList(configured) };
+}
+
+function parsePathList(value: string | string[] | undefined): string[] {
+  const parts = Array.isArray(value) ? value : String(value ?? "").split(new RegExp(`[,${escapeRegExp(delimiter)}]`));
+  return [...new Set(parts.map((item) => item.trim()).filter(Boolean))];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function effectiveFeishuInput(overrides: ConfigOverrides): FeishuConfigInput {
@@ -179,6 +207,7 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     runnerMaxParallelProjects: cleanValue(env[ENV_KEYS.runnerMaxParallelProjects]),
     claudeCommand: cleanValue(env[ENV_KEYS.claudeCommand]),
     claudeCwd: cleanValue(env[ENV_KEYS.claudeCwd]),
+    cliConnectorDirs: cleanValue(env[ENV_KEYS.cliConnectorDirs]),
     claudeEnv: cleanValue(env[ENV_KEYS.claudeEnv]),
     claudeModel: cleanValue(env[ENV_KEYS.claudeModel]),
     claudeTimeoutMs: cleanValue(env[ENV_KEYS.claudeTimeoutMs]),

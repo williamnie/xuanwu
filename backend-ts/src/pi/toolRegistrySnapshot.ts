@@ -4,6 +4,7 @@ import {
   listStoredToolProviders
 } from "../db/repositories/toolRegistry.ts";
 import { listBuiltinAssistantTools, listBuiltinToolProviders } from "./builtinToolRegistry.ts";
+import { loadCliConnectorRegistry } from "./cliConnectorProvider.ts";
 import { assistantToolKey, type AssistantTool, type ToolProvider } from "./toolProviderEnvelope.ts";
 
 export type AssistantToolRegistrySnapshot = {
@@ -11,10 +12,19 @@ export type AssistantToolRegistrySnapshot = {
   tools: AssistantTool[];
 };
 
-export function loadAssistantToolRegistrySnapshot(db: RunnerDatabase): AssistantToolRegistrySnapshot {
+export type AssistantToolRegistrySnapshotOptions = {
+  cliConnectorDirs?: string[];
+  env?: Record<string, string | undefined>;
+};
+
+export function loadAssistantToolRegistrySnapshot(
+  db: RunnerDatabase,
+  options: AssistantToolRegistrySnapshotOptions = {}
+): AssistantToolRegistrySnapshot {
+  const cli = loadCliConnectorRegistry({ env: options.env, manifestDirs: options.cliConnectorDirs ?? [] });
   return {
-    providers: mergeProviders([...listBuiltinToolProviders(), ...listStoredToolProviders(db)]),
-    tools: mergeTools([...listBuiltinAssistantTools(), ...listStoredAssistantTools(db)])
+    providers: mergeProviders([...listBuiltinToolProviders(), ...listStoredToolProviders(db), ...cli.providers]),
+    tools: mergeTools([...listBuiltinAssistantTools(), ...listStoredAssistantTools(db), ...cli.tools])
   };
 }
 

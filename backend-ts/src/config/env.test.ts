@@ -35,6 +35,7 @@ describe("Bun backend config", () => {
       },
       codexSessionsDir: `${Bun.env.HOME}/.codex/sessions`,
       webDir: "",
+      cliConnectors: { manifestDirs: [] },
       providers: {
         codex: { command: "codex app-server --listen stdio://", cwd: "", env: {}, timeoutMs: 1_800_000 },
         claude: { command: "claude", cwd: "", env: {}, model: "", timeoutMs: 1_800_000 }
@@ -182,6 +183,7 @@ describe("Bun backend config", () => {
       [ENV_KEYS.codexEnv]: "CODEX_HOME=/tmp/codex, SAFE_VALUE=ok, CODEX_API_KEY=secret",
       [ENV_KEYS.codexTimeoutMs]: "1234",
       [ENV_KEYS.runnerMaxParallelProjects]: "3",
+      [ENV_KEYS.cliConnectorDirs]: "/tmp/connectors-a,/tmp/connectors-b",
       [ENV_KEYS.claudeCommand]: "/opt/bin/claude",
       [ENV_KEYS.claudeCwd]: "/tmp/claude-project",
       [ENV_KEYS.claudeEnv]: "ANTHROPIC_API_KEY=anthropic-secret,SAFE_CLAUDE=ok",
@@ -213,6 +215,7 @@ describe("Bun backend config", () => {
       },
       codexSessionsDir: "/tmp/codex-sessions",
       webDir: "/tmp/frontend-dist",
+      cliConnectors: { manifestDirs: ["/tmp/connectors-a", "/tmp/connectors-b"] },
       providers: {
         codex: {
           command: "/opt/bin/codex app-server --listen stdio://",
@@ -262,6 +265,7 @@ describe("Bun backend config", () => {
       "--codex-env", "CODEX_HOME=/tmp/cli-codex",
       "--codex-timeout-ms", "5678",
       "--max-parallel-projects", "4",
+      "--cli-connector-dirs", "/tmp/cli-connectors",
       "--claude-cmd", "cli-claude",
       "--claude-cwd=/tmp/cli-claude-project",
       "--claude-env", "ANTHROPIC_API_KEY=cli-secret",
@@ -283,6 +287,7 @@ describe("Bun backend config", () => {
       },
       codexSessionsDir: "/tmp/cli-sessions",
       webDir: "/tmp/cli-web",
+      cliConnectors: { manifestDirs: ["/tmp/cli-connectors"] },
       providers: {
         codex: {
           command: "cli-codex app-server --listen stdio://",

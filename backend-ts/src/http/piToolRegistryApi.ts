@@ -1,31 +1,51 @@
+import type { RunnerConfig } from "../config/env.ts";
 import { getStoredAssistantTool } from "../db/repositories/toolRegistry.ts";
+import { callCliConnectorTool } from "../pi/cliConnectorToolCall.ts";
 import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
-import type { AssistantTool, ToolProvider } from "../pi/toolProviderEnvelope.ts";
-import { HttpError, json } from "./errors.ts";
+import { isToolPermission, type AssistantTool, type ToolPermission, type ToolProvider } from "../pi/toolProviderEnvelope.ts";
+import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 
-type ToolRegistryContext = { database: RunnerDatabase };
+type ToolRegistryContext = { config?: RunnerConfig; database: RunnerDatabase };
 
 export function registerPiToolRegistryRoutes(router: Router, context: ToolRegistryContext): void {
-  router.get("/api/pi/tool-providers", () => json({ providers: publicProviders(context.database) }));
-  router.get("/api/pi/tools", () => json({ tools: publicTools(context.database) }));
-  router.get("/api/pi/tools/:id", (request) => toolResponse(context.database, request));
+  router.get("/api/pi/tool-providers", () => json({ providers: publicProviders(context) }));
+  router.get("/api/pi/tools", () => json({ tools: publicTools(context) }));
+  router.post("/api/pi/tools/:id/call", (request) => callToolResponse(context, request));
+  router.get("/api/pi/tools/:id", (request) => toolResponse(context, request));
 }
 
-function toolResponse(db: RunnerDatabase, request: Request): Response {
-  const snapshot = registrySnapshot(db);
-  const tool = findTool(db, snapshot.tools, request);
+async function callToolResponse(context: ToolRegistryContext, request: Request): Promise<Response> {
+  const parsed = parseToolRef(request);
+  if (!parsed.providerID) throw new HttpError(400, "CLI tool 调用需使用 provider:name");
+  const body = objectBody(await parseJsonBody(request));
+  const result = await callCliConnectorTool({
+    auditContext: auditContext(body),
+    db: context.database,
+    input: objectInput(body.input),
+    invocationID: stringInput(body.invocation_id),
+    manifestDirs: cliConnectorDirs(context),
+    maxPermission: permissionInput(body.max_permission ?? body.permission),
+    providerID: parsed.providerID,
+    toolName: parsed.name
+  }).catch((error) => cliToolError(error));
+  return json({ result }, { status: result.status === "denied" ? 403 : 200 });
+}
+
+function toolResponse(context: ToolRegistryContext, request: Request): Response {
+  const snapshot = registrySnapshot(context);
+  const tool = findTool(context.database, snapshot.tools, request);
   if (!tool) throw new HttpError(404, `tool 不存在: ${toolID(request)}`);
   return json({ tool: publicTool(tool, providerByID(snapshot.providers).get(tool.provider_id)) });
 }
 
-function publicProviders(db: RunnerDatabase): unknown[] {
-  return registrySnapshot(db).providers.map((provider) => redactSecrets(provider));
+function publicProviders(context: ToolRegistryContext): unknown[] {
+  return registrySnapshot(context).providers.map((provider) => redactSecrets(provider));
 }
 
-function publicTools(db: RunnerDatabase): unknown[] {
-  const snapshot = registrySnapshot(db);
+function publicTools(context: ToolRegistryContext): unknown[] {
+  const snapshot = registrySnapshot(context);
   const providers = providerByID(snapshot.providers);
   return snapshot.tools.map((tool) => publicTool(tool, providers.get(tool.provider_id)));
 }
@@ -42,8 +62,8 @@ function publicTool(tool: AssistantTool, provider?: ToolProvider): unknown {
   });
 }
 
-function registrySnapshot(db: RunnerDatabase): { providers: ToolProvider[]; tools: AssistantTool[] } {
-  return loadAssistantToolRegistrySnapshot(db);
+function registrySnapshot(context: ToolRegistryContext): { providers: ToolProvider[]; tools: AssistantTool[] } {
+  return loadAssistantToolRegistrySnapshot(context.database, { cliConnectorDirs: cliConnectorDirs(context) });
 }
 
 function findTool(db: RunnerDatabase, tools: AssistantTool[], request: Request): AssistantTool | undefined {
@@ -77,6 +97,51 @@ function providerByID(providers: ToolProvider[]): Map<string, ToolProvider> {
 
 function providerSummary(provider: ToolProvider): Record<string, unknown> {
   return { id: provider.id, kind: provider.kind, name: provider.name, status: provider.status ?? "enabled" };
+}
+
+function auditContext(body: Record<string, unknown>) {
+  const raw = objectInput(body.audit_context ?? body.context);
+  return {
+    conversationID: stringInput(raw.conversation_id ?? raw.conversationID),
+    delegationID: stringInput(raw.delegation_id ?? raw.delegationID),
+    heartbeatID: stringInput(raw.heartbeat_id ?? raw.heartbeatID),
+    issueID: numberInput(raw.issue_id ?? raw.issueID),
+    projectID: stringInput(raw.project_id ?? raw.projectID),
+    source: stringInput(raw.source) || "cli_connector_api"
+  };
+}
+
+function cliConnectorDirs(context: ToolRegistryContext): string[] {
+  return context.config?.cliConnectors.manifestDirs ?? [];
+}
+
+function permissionInput(value: unknown): ToolPermission {
+  return isToolPermission(value) ? value : "read";
+}
+
+function objectBody(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) throw new HttpError(400, "request body must be an object");
+  return value;
+}
+
+function objectInput(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function stringInput(value: unknown): string | undefined {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text === "" ? undefined : text;
+}
+
+function numberInput(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function cliToolError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.startsWith("CLI tool not found:")) throw new HttpError(404, message);
+  throw error;
 }
 
 function redactSecrets(value: unknown, path: string[] = []): unknown {
