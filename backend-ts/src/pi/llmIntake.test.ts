@@ -7,6 +7,7 @@ import type { ContextBundleTrigger } from "../db/repositories/contextBundles.ts"
 import { createContextBundle, type ContextBundleRecord } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { getIntakeRun, listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
+import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import { readSkillRegistry } from "../skills/registry.ts";
 import { runIntakeSkill, runLlmIntake, type LlmIntakeRequest } from "./llmIntake.ts";
 
@@ -34,6 +35,20 @@ describe("LLM intake runs", () => {
     const db = await openFixtureDatabase();
     try {
       const fixture = createAttachmentBundle(db);
+      createPiMemoryItem(db, {
+        content: "Fixture source maps login screenshots to demo project candidates.",
+        id: "fixture-source-memory",
+        kind: "source_context",
+        scope: "source",
+        scope_id: "fixture-im"
+      });
+      createPiMemoryItem(db, {
+        content: "Demo project login failures should preserve screenshot evidence.",
+        id: "fixture-project-memory",
+        kind: "project_policy",
+        scope: "project",
+        scope_id: "demo"
+      });
       const skill = readSkillRegistry({
         availableTools: [{ name: "source.fetch_context", permission: "read" }],
         roots: [{ label: "fixture", path: FIXTURE_SKILLS }]
@@ -58,6 +73,13 @@ describe("LLM intake runs", () => {
           vision_summary: "login page screenshot with red 500 error"
         })]
       });
+      expect(captured?.input.context_retrieval.memory_items.map((item) => item.id)).toEqual([
+        "fixture-source-memory",
+        "fixture-project-memory"
+      ]);
+      expect(captured?.prompt).toContain("context_retrieval");
+      expect(captured?.prompt).toContain("Fixture source maps login screenshots");
+      expect(captured?.prompt).toContain("pi_memory_items/fixture-source-memory");
       expect(captured?.prompt).toContain("raw_event_summaries");
       expect(captured?.prompt).toContain("500 Internal Server Error");
       expect(captured?.prompt).toContain("login page screenshot with red 500 error");
@@ -332,6 +354,7 @@ function createAttachmentBundle(db: RunnerDatabase): { bundle: ContextBundleReco
       event_refs: [row.id],
       reason: "fixture_intake_attachment",
       source: "fixture-im",
+      source_query: { project_id: "demo" },
       token_budget: 1200,
       trigger: "continuous",
       window: { from: created, to: created }

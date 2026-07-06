@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { buildPiMemoryPromptContext } from "./memoryContext.ts";
+import { buildPiMemoryPromptContext, retrievePiMemoryContext } from "./memoryContext.ts";
 
 const tempRoots: string[] = [];
 
@@ -95,6 +95,94 @@ describe("PI memory prompt context", () => {
       expect(context).toContain("Project scoped policy");
       expect(context).not.toContain("Global fallback");
       expect(context.indexOf("pi_memory_items/issue")).toBeLessThan(context.indexOf("pi_memory_items/project"));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retrieves source, skill, inbox and project memories with provenance", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertMemory(db, {
+        content: "Source default project is demo when confidence is high",
+        id: "source-memory",
+        kind: "source_project_hint",
+        scope: "source",
+        scopeID: "fixture-im"
+      });
+      insertMemory(db, {
+        content: "Domain skill should ask before creating issues for ambiguous projects",
+        id: "skill-memory",
+        kind: "skill_policy",
+        scope: "skill",
+        scopeID: "fixture-domain"
+      });
+      insertMemory(db, {
+        content: "Inbox item already has a screenshot summary",
+        id: "inbox-memory",
+        kind: "inbox_summary",
+        scope: "inbox",
+        scopeID: "42"
+      });
+      insertMemory(db, {
+        content: "Project scoped fallback",
+        id: "project-memory",
+        kind: "project_policy",
+        scope: "project",
+        scopeID: "demo"
+      });
+
+      const result = retrievePiMemoryContext(db, {
+        inboxItemID: 42,
+        limit: 4,
+        projectID: "demo",
+        skillID: "fixture-domain",
+        sourceID: "fixture-im",
+        tokenBudget: 1000
+      });
+
+      expect(result.memory_items.map((item) => item.id)).toEqual([
+        "inbox-memory", "source-memory", "skill-memory", "project-memory"
+      ]);
+      expect(result.memory_items[0]).toMatchObject({
+        reference: "pi_memory_items/inbox-memory",
+        retrieval_scope: "inbox:42",
+        source_id: "policy-doc",
+        source_path: "pi_memory_items/inbox-memory"
+      });
+      expect(result.retrieval_scopes).toEqual([
+        "inbox:42", "source:fixture-im", "skill:fixture-domain", "project:demo", "global:runner"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stably truncates memory retrieval by token budget", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertMemory(db, {
+        content: `Long memory ${"x".repeat(500)}`,
+        id: "long-memory",
+        kind: "project_policy",
+        scope: "project",
+        scopeID: "demo"
+      });
+      insertMemory(db, {
+        content: "Should be outside the budget",
+        id: "second-memory",
+        kind: "project_policy",
+        scope: "project",
+        scopeID: "demo"
+      });
+
+      const result = retrievePiMemoryContext(db, { projectID: "demo", tokenBudget: 80 });
+
+      expect(result.memory_items).toHaveLength(1);
+      expect(result.memory_items[0]).toMatchObject({ id: "long-memory", truncated: true });
+      expect(result.memory_items[0].content).toContain("…");
+      expect(result.limits).toMatchObject({ token_budget: 80, truncated: true });
+      expect(result.limits.token_estimate).toBeLessThanOrEqual(80);
     } finally {
       db.close();
     }

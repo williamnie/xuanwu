@@ -49,6 +49,7 @@ export function runFixtureDomainSkill(item: AttentionInboxItemRecord, skillID = 
 }
 
 function actionInputsForItem(item: AttentionInboxItemRecord): Omit<DomainSkillActionProposal, "id">[] {
+  if (["bug_report", "create_task"].includes(item.primary_intent) && ambiguousProject(item)) return [askUser(item)];
   if (item.primary_intent === "status_question") return [statusLookup(item), replyDraft(item, STATUS_DRAFT)];
   if (item.primary_intent === "bug_report") return [issueCreate(item)];
   if (item.primary_intent === "reply_needed") return [replyDraft(item, REPLY_DRAFT)];
@@ -158,4 +159,17 @@ function hasSuggestedAction(item: AttentionInboxItemRecord, actionName: string):
 function shouldWatch(item: AttentionInboxItemRecord): boolean {
   return item.primary_intent === "monitor_thread" || item.primary_intent === "follow_up" ||
     hasSuggestedAction(item, "watch_thread") || hasSuggestedAction(item, "continue_observing");
+}
+
+function ambiguousProject(item: AttentionInboxItemRecord): boolean {
+  const hints = item.target_hints.filter((hint) => hint.kind === "project" && cleanString(hint.id) !== "");
+  return hints.length !== 1 || confidence(hints[0].confidence) < 0.8;
+}
+
+function confidence(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

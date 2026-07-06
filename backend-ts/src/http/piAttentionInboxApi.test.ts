@@ -107,6 +107,13 @@ describe("PI Attention Inbox API", () => {
         summary: "普通闲聊表情，无需处理。",
         title: "普通闲聊"
       });
+      const ambiguousBug = createAttentionItem(db, fixture, {
+        primary_intent: "bug_report",
+        suggested_actions: ["issue.create"],
+        summary: "需要建 issue 但项目映射置信度低。",
+        target_hints: [{ confidence: 0.45, id: "demo-project", kind: "project", reason: "weak source hint" }],
+        title: "低置信项目 bug"
+      });
 
       const statusProposal = await domainSkillPayload(router, status.id);
       expect(statusProposal.action_proposals.map((item: { type: string }) => item.type)).toEqual([
@@ -126,6 +133,12 @@ describe("PI Attention Inbox API", () => {
       ]);
       expect(noiseProposal.action_proposals.map((item: { type: string }) => item.type)).not.toContain("issue.create");
       expect(noiseProposal.action_proposals.map((item: { type: string }) => item.type)).not.toContain("message.reply_draft");
+
+      const ambiguousProposal = await domainSkillPayload(router, ambiguousBug.id);
+      expect(ambiguousProposal.action_proposals).toEqual([
+        expect.objectContaining({ requires_approval: false, type: "ask_user" })
+      ]);
+      expect(ambiguousProposal.action_proposals.map((item: { type: string }) => item.type)).not.toContain("issue.create");
     } finally {
       db.close();
     }
@@ -182,6 +195,7 @@ function createAttentionItem(
     secondary_intents?: string[];
     suggested_actions: string[];
     summary: string;
+    target_hints?: Array<Record<string, unknown>>;
     title: string;
   }
 ) {
@@ -196,7 +210,7 @@ function createAttentionItem(
     source: "fixture-im",
     suggested_actions: overrides.suggested_actions,
     summary: overrides.summary,
-    target_hints: [{ confidence: 0.8, id: "demo-project", kind: "project", reason: "chat context" }],
+    target_hints: overrides.target_hints ?? [{ confidence: 0.8, id: "demo-project", kind: "project", reason: "chat context" }],
     title: overrides.title
   }, new Date("2026-07-06T02:05:00Z"));
 }

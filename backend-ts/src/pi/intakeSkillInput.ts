@@ -1,6 +1,7 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ContextBundleRecord } from "../db/repositories/contextBundles.ts";
 import { getExternalEvent, type ExternalEventAttachment, type ExternalEventRecord } from "../db/repositories/externalEvents.ts";
+import { retrievePiMemoryContext, type PiMemoryRetrievalResult } from "./memoryContext.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -28,6 +29,7 @@ export type IntakeSkillEventInput = {
 };
 
 export type IntakeSkillInput = {
+  context_retrieval: PiMemoryRetrievalResult;
   context_bundle: {
     attachment_refs: string[];
     created_by: string;
@@ -46,6 +48,12 @@ export type IntakeSkillInput = {
 export function buildIntakeSkillInput(db: RunnerDatabase, bundle: ContextBundleRecord): IntakeSkillInput {
   const events = bundle.event_refs.map((id) => eventInput(db, bundle, id)).filter(Boolean) as IntakeSkillEventInput[];
   return {
+    context_retrieval: retrievePiMemoryContext(db, {
+      limit: 8,
+      projectID: projectIDFromBundle(bundle),
+      sourceID: bundle.source,
+      tokenBudget: 700
+    }),
     context_bundle: {
       attachment_refs: bundle.attachment_refs,
       created_by: bundle.created_by,
@@ -70,6 +78,7 @@ export function buildIntakeSkillPrompt(input: JsonObject): string {
     "Use top-level keys inbox_items and ignored_groups.",
     "Do not request external writes or execute actions; only identify intake results.",
     "Use raw_event_summaries and attachment OCR/vision summaries as evidence.",
+    "Use context_retrieval.memory_items only as traceable, scoped memory hints; keep evidence_refs tied to source events.",
     "Do not assume access to raw payloads, attachment files, or hidden source content.",
     JSON.stringify(input, null, 2)
   ].join("\n");
@@ -150,6 +159,11 @@ function rawEventSummary(event: ExternalEventRecord, fallback: string | undefine
   };
 }
 
+function projectIDFromBundle(bundle: ContextBundleRecord): string {
+  const query = bundle.source_query;
+  return firstText(query.project_id, query.projectId, objectValue(query.manual_trigger).project_id);
+}
+
 function attachmentRefsForEvent(event: ExternalEventRecord): string[] {
   return event.attachments.map((_, index) => `external_event:${event.id}#attachment:${index}`);
 }
@@ -160,4 +174,15 @@ function sourceRef(event: ExternalEventRecord): string {
 
 function contentSummary(event: ExternalEventRecord): string {
   return event.content.replace(/\s+/g, " ").trim();
+}
+
+function objectValue(value: unknown): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
+}
+
+function firstText(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
+  }
+  return "";
 }

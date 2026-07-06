@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
+import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -179,7 +180,17 @@ describe("PI skill metadata API", () => {
       const domainRuns = await jsonRequest(router, "/api/pi/skills/domain-runs?skill_id=fixture-domain");
       expect(domainRuns).toEqual([expect.objectContaining({
         proposal_action_id: domainRun.action.id,
-        schema_output: expect.objectContaining({ action_proposals: expect.any(Array) })
+        schema_output: expect.objectContaining({
+          action_proposals: expect.any(Array),
+          context_retrieval: expect.objectContaining({
+            memory_items: [
+              expect.objectContaining({ id: "skill-api-inbox-memory", source_path: "pi_memory_items/skill-api-inbox-memory" }),
+              expect.objectContaining({ id: "skill-api-source-memory" }),
+              expect.objectContaining({ id: "skill-api-skill-memory" }),
+              expect.objectContaining({ id: "skill-api-project-memory" })
+            ]
+          })
+        })
       })]);
     } finally {
       fixture.db.close();
@@ -293,9 +304,28 @@ function seedSkillRunFixture(db: RunnerDatabase): { bundleID: number; failedRunI
     source: "fixture-im",
     suggested_actions: ["triage_attention_item"],
     summary: "用户反馈登录页 500。",
+    target_hints: [{ confidence: 0.9, id: "demo", kind: "project", reason: "fixture" }],
     title: "登录页 500"
   });
+  seedMemory(db, item.id);
   return { bundleID: bundle.id, failedRunID: failed.id, itemID: item.id };
+}
+
+function seedMemory(db: RunnerDatabase, inboxItemID: number): void {
+  for (const item of [
+    ["skill-api-inbox-memory", "inbox", String(inboxItemID), "Inbox memory injected into domain skill."],
+    ["skill-api-source-memory", "source", "fixture-im", "Source memory injected into skill runs."],
+    ["skill-api-skill-memory", "skill", "fixture-domain", "Skill memory injected by skill id."],
+    ["skill-api-project-memory", "project", "demo", "Project memory injected from target hints."]
+  ] as const) {
+    createPiMemoryItem(db, {
+      content: item[3],
+      id: item[0],
+      kind: "fixture_memory",
+      scope: item[1],
+      scope_id: item[2]
+    });
+  }
 }
 
 async function jsonRequest(router: ReturnType<typeof createDefaultRouter>, path: string, init: RequestInit = {}) {

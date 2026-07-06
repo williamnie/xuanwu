@@ -42,7 +42,8 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     buildPiMemoryPromptContext(db, {
       conversationID: input.conversationID,
       issueID: input.issueID,
-      projectID: promptProject?.id
+      projectID: promptProject?.id,
+      sourceID: input.source || input.sourceTurn?.source
     })
   ].join("\n");
 }

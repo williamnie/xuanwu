@@ -234,6 +234,7 @@ function attachmentKinds(
 function manualTriggerMetadata(input: ManualContextIntakeInput, prompt: string): JsonObject {
   return cleanObject({
     conversation_id: cleanString(input.conversation_id),
+    project_id: cleanString(input.project_id),
     source: cleanString(input.source_turn_source),
     source_turn_id: cleanString(input.source_turn_id),
     user_prompt: prompt
