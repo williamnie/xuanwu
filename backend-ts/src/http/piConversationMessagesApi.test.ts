@@ -1,16 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssues } from "../db/repositories/issues.ts";
-import { listPiActions } from "../db/repositories/pi.ts";
+import { getPiConversation, listPiActions } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
 import { runPiConversationPrompt } from "./piConversationApi.ts";
 import { createDefaultRouter } from "./server.ts";
+import { getAgentSession } from "../db/repositories/agentSessions.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -228,7 +229,7 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
-  test("Feishu issue-id prompt rebinds a global conversation and executes enqueue", async () => {
+  test("Feishu issue-id prompt targets a project without rebinding the IM conversation", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-feishu-issue-run-api", provider: "pi-feishu-issue-run" });
     const provider = new FakeExecutorProvider();
@@ -252,14 +253,18 @@ describe("Bun PI conversation message API", () => {
 
       const result = await runPiConversationPrompt({ database, providers: { codex: provider } }, {
         conversationId: "feishu-global-before-issue",
-        projectId: "demo",
         prompt: "开始 #386",
+        targetProjectId: "demo",
         title: "Feishu"
       });
       await until(() => provider.calls.length > 0);
 
       const actions = listPiActions(database);
+      const conversation = getPiConversation(database, "feishu-global-before-issue");
+      const sessionHeader = conversation ? readSessionHeader(conversation.session_file) : {};
       expect(result).toMatchObject({ conversation_id: "feishu-global-before-issue", text: "已开始 #386。" });
+      expect(conversation).toMatchObject({ project_id: "" });
+      expect(sessionHeader.cwd).not.toBe("/tmp/demo");
       expect(actions.filter((action) => action.status === "pending")).toEqual([]);
       expect(actions).toMatchObject([{
         action_type: "issue.enqueue",
@@ -272,6 +277,61 @@ describe("Bun PI conversation message API", () => {
         { id: 386, project_id: "demo", status: "in_progress" }
       ]);
       expect(provider.calls).toMatchObject([{ issueId: 386, projectId: "demo" }]);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("Feishu IM one-shot project target scopes issue tools without switching runtime cwd", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-target-api", provider: "pi-feishu-target" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_status_summary", {}, { id: "issue-status-demo" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("demo 当前有 1 个 triage issue。")
+      ]);
+      insertProject(database, "codex-issue-runner");
+      insertProject(database, "demo");
+      insertProject(database, "other");
+      insertIssue(database, { id: 700, projectID: "demo", title: "Demo issue" });
+      insertIssue(database, { id: 701, projectID: "other", title: "Other issue" });
+      insertFauxAgent(database, "pi-feishu-target");
+      writeFauxModelsConfig(database, "pi-feishu-target");
+      await request(createDefaultRouter({ database }), "/api/pi/conversations", {
+        id: "feishu-im-target-project",
+        pi_agent_id: "pi-faux",
+        project_id: "codex-issue-runner",
+        title: "Feishu"
+      });
+
+      const result = await runPiConversationPrompt({ database }, {
+        clearProjectId: true,
+        conversationId: "feishu-im-target-project",
+        prompt: "demo 当前还有多少 issue",
+        targetProjectId: "demo",
+        title: "Feishu"
+      });
+
+      const action = listPiActions(database).find((item) => item.action_type === "issue.status_summary");
+      const conversation = getPiConversation(database, "feishu-im-target-project");
+      const agentSession = getAgentSession(database, "pi-sdk:feishu-im-target-project");
+      const sessionHeader = conversation ? readSessionHeader(conversation.session_file) : {};
+      expect(result).toMatchObject({
+        conversation_id: "feishu-im-target-project",
+        text: "demo 当前有 1 个 triage issue。"
+      });
+      expect(conversation).toMatchObject({ project_id: "" });
+      expect(agentSession).toMatchObject({ project_id: "" });
+      expect(sessionHeader.cwd).not.toBe("/tmp/demo");
+      expect(sessionHeader.cwd).not.toBe("/tmp/codex-issue-runner");
+      expect(action).toMatchObject({
+        action_type: "issue.status_summary",
+        project_id: "demo",
+        status: "completed"
+      });
     } finally {
       faux.unregister();
       database.close();
@@ -501,6 +561,12 @@ function sessionMessage(id: string, role: string, text: string): Record<string, 
     timestamp: "2026-01-01T00:00:00Z",
     message: { role, content: [{ type: "text", text }] }
   };
+}
+
+function readSessionHeader(path: string): Record<string, unknown> {
+  const firstLine = readFileSync(path, "utf8").split("\n")[0] ?? "{}";
+  const value = JSON.parse(firstLine);
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 async function until(check: () => boolean): Promise<void> {

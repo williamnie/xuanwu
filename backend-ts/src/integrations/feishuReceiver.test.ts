@@ -39,7 +39,7 @@ describe("Feishu WebSocket receiver", () => {
     expect(events[0]).toMatchObject({
       content: "@PI hello from ws",
       dedupe_key: "feishu:message:om_ws_1",
-      project_id: "demo",
+      project_id: "",
       source: "feishu"
     });
     expect(factory.starts).toBe(1);

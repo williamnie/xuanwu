@@ -99,7 +99,7 @@ describe("Feishu agent bridge", () => {
     }
   });
 
-  test("sends trusted task messages with project mapping to Runner agent and replies in chat", async () => {
+  test("does not treat Feishu project mapping as an IM conversation project", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
     const prompts: string[] = [];
@@ -125,14 +125,53 @@ describe("Feishu agent bridge", () => {
       } }
     });
 
-    await bridge.handle({ event, ingest });
+    const result = await bridge.handle({ event, ingest });
 
-    expect(prompts).toEqual(["@PI 帮我修复这个 bug"]);
+    expect(result).toEqual({ reason: "project_clarification_sent", replied: true });
+    expect(prompts).toEqual([]);
     expect(sent).toEqual([{
       receiveId: "oc_group",
       receiveIdType: "chat_id",
-      text: "hello from runner"
+      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请在消息里带上项目名或 issue id 后再发。"
     }]);
+    database.close();
+  });
+
+  test("asks for a one-shot project target instead of assuming codex-issue-runner from generic issue wording", async () => {
+    const database = await openFixtureDatabase();
+    insertProject(database, "codex-issue-runner", "Codex Issue Runner");
+    insertProject(database, "movo-mobile", "movo-mobile");
+    const sent: FeishuTextMessageInput[] = [];
+    const calls: Array<{ projectId: string; prompt: string }> = [];
+    const config = buildFeishuConnectorConfig({
+      FEISHU_ALLOWED_CHAT_IDS: "oc_group",
+      FEISHU_APP_ID: "cli_app_id",
+      FEISHU_APP_SECRET: "app-secret-value"
+    });
+    const raw = messageEvent("开始所有issue", "om_agent_all_issues_no_current_project");
+    const event = normalizeFeishuMessageEvent(raw);
+    const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
+    const bridge = createFeishuAgentBridge({
+      config: () => config,
+      database,
+      runConversation: async ({ projectId, prompt }) => {
+        calls.push({ projectId, prompt });
+        return { text: "should not run before one-shot target selection" };
+      },
+      sender: { sendTextMessage: async (input) => {
+        sent.push(input);
+        return { messageId: "om_reply_all_issues_project_target" };
+      } }
+    });
+
+    const result = await bridge.handle({ event, ingest });
+
+    expect(result).toEqual({ reason: "project_selection_sent", replied: true });
+    expect(calls).toEqual([]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.text).toContain("请选择本次操作的 Runner 项目");
+    expect(sent[0]?.text).toContain("codex-issue-runner");
+    expect(sent[0]?.text).toContain("movo-mobile");
     database.close();
   });
 
@@ -216,8 +255,8 @@ describe("Feishu agent bridge", () => {
     const prompts: string[] = [];
     createPiMemoryItem(database, {
       id: "12345678-1111-4111-8111-123456789abc",
-      scope: "project",
-      scope_id: "demo",
+      scope: "global",
+      scope_id: "",
       kind: "preference",
       content: "Prefer compact memory review",
       source_type: "pi.conversation",
@@ -287,7 +326,7 @@ describe("Feishu agent bridge", () => {
     expect(sent).toEqual([{
       receiveId: "oc_group",
       receiveIdType: "chat_id",
-      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请先发送 `/p <项目名>` 切换项目，或在消息里带上项目名后再发。"
+      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请在消息里带上项目名或 issue id 后再发。"
     }]);
     database.close();
   });
@@ -375,13 +414,14 @@ describe("Feishu agent bridge", () => {
   test("reports Runner errors as a natural Feishu reply", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
+    insertProject(database, "demo", "Demo");
     const config = buildFeishuConnectorConfig({
       FEISHU_ALLOWED_CHAT_IDS: "oc_group",
       FEISHU_PROJECT_MAPPINGS: "chat:oc_group=demo",
       FEISHU_APP_ID: "cli_app_id",
       FEISHU_APP_SECRET: "app-secret-value"
     });
-    const raw = messageEvent("@PI 帮我修复登录 bug", "om_agent_runner_error");
+    const raw = messageEvent("@PI 帮我修复 demo 登录 bug", "om_agent_runner_error");
     const event = normalizeFeishuMessageEvent(raw);
     const ingest = ingestFeishuMessageEvent(raw, { config, database }, { transport: "websocket" });
     const bridge = createFeishuAgentBridge({
@@ -429,4 +469,11 @@ function messageEvent(text: string, messageId = "om_agent_1"): Record<string, un
       tenant_key: "tenant_a"
     }
   };
+}
+
+function insertProject(db: RunnerDatabase, id: string, name: string): void {
+  db.sqlite.run(
+    `insert into projects (id, name, cwd, created_at, updated_at) values (?, ?, ?, ?, ?)`,
+    [id, name, `/tmp/${id}`, "2026-06-13T00:00:00Z", "2026-06-13T00:00:00Z"]
+  );
 }

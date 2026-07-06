@@ -34,18 +34,18 @@ describe("Feishu agent bridge project switch command", () => {
     ]);
   });
 
-  test("switches active project without running PI and uses it for the next message", async () => {
+  test("recognizes project hints without saving an IM current project", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
-    const calls: Array<{ conversationId?: string; projectId: string; prompt: string }> = [];
+    const calls: Array<{ conversationId?: string; projectId: string; prompt: string; targetProjectId?: string }> = [];
     const config = configFixture();
     insertProject(database, "codex-issue-runner", "Codex Issue Runner");
     const bridge = createFeishuAgentBridge({
       clock: fixedClock(),
       config: () => config,
       database,
-      runConversation: async ({ conversationId, projectId, prompt }) => {
-        calls.push({ conversationId, projectId, prompt });
+      runConversation: async ({ conversationId, projectId, prompt, targetProjectId }) => {
+        calls.push({ conversationId, projectId, prompt, targetProjectId });
         return { conversationId, projectId, text: "runner reply" };
       },
       sender: { sendTextMessage: async (input) => {
@@ -58,18 +58,13 @@ describe("Feishu agent bridge project switch command", () => {
     const next = await bridge.handle(normalizeEvent("开始做吧", "om_project_next", config, database));
 
     expect(switched).toEqual({ reason: "project_switch_sent", replied: true });
-    expect(next).toEqual({ reason: "agent_reply_sent", replied: true });
-    expect(calls).toEqual([{
-      conversationId: "feishu-chat-oc_group-20260613",
-      projectId: "codex-issue-runner",
-      prompt: "开始做吧"
-    }]);
+    expect(next).toEqual({ reason: "project_selection_sent", replied: true });
+    expect(calls).toEqual([]);
     expect(sent.map((item) => item.text)).toEqual([
-      "已切到 codex-issue-runner。之后“开始做吧/下一个 issue”会默认使用这个项目。",
-      "runner reply"
+      "已识别 codex-issue-runner。IM 通道不会保存当前项目；请把项目名或 issue id 写在具体请求里。",
+      "请选择本次操作的 Runner 项目：codex-issue-runner。也可以重新发送并在消息里带上项目名或 issue id。"
     ]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613"))
-      .toMatchObject({ active_project_id: "codex-issue-runner", active_project_source: "user_switch" });
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();
     database.close();
   });
 
@@ -109,8 +104,8 @@ describe("Feishu agent bridge project switch command", () => {
     const sent: FeishuTextMessageInput[] = [];
     const calls: string[] = [];
     const config = configFixture();
-    insertProject(database, "runner-api", "Runner API");
-    insertProject(database, "runner-web", "Runner Web");
+    insertProject(database, "runner-api", "Runner");
+    insertProject(database, "runner-web", "Runner");
     const bridge = createFeishuAgentBridge({
       clock: fixedClock(),
       config: () => config,
@@ -125,7 +120,7 @@ describe("Feishu agent bridge project switch command", () => {
       } }
     });
 
-    const result = await bridge.handle(normalizeEvent("切到 runner", "om_project_ambiguous", config, database));
+    const result = await bridge.handle(normalizeEvent("切到 Runner", "om_project_ambiguous", config, database));
 
     expect(result).toEqual({ reason: "project_switch_ambiguous", replied: true });
     expect(calls).toEqual([]);
@@ -138,15 +133,15 @@ describe("Feishu agent bridge project switch command", () => {
 
   test("keeps /new precedence when project switch text appears inside the new prompt", async () => {
     const database = await openFixtureDatabase();
-    const calls: Array<{ conversationId?: string; projectId: string; prompt: string }> = [];
+    const calls: Array<{ conversationId?: string; projectId: string; prompt: string; targetProjectId?: string }> = [];
     const config = configFixture();
     insertProject(database, "codex-issue-runner", "Codex Issue Runner");
     const bridge = createFeishuAgentBridge({
       clock: fixedClock(),
       config: () => config,
       database,
-      runConversation: async ({ conversationId, projectId, prompt }) => {
-        calls.push({ conversationId, projectId, prompt });
+      runConversation: async ({ conversationId, projectId, prompt, targetProjectId }) => {
+        calls.push({ conversationId, projectId, prompt, targetProjectId });
         return { conversationId, projectId, text: "runner reply" };
       },
       sender: { sendTextMessage: async () => ({ messageId: "om_reply_new_with_project" }) }
@@ -156,8 +151,9 @@ describe("Feishu agent bridge project switch command", () => {
 
     expect(calls).toEqual([{
       conversationId: "feishu-chat-oc_group-20260613-n1",
-      projectId: "codex-issue-runner",
-      prompt: "/p codex-issue-runner"
+      projectId: "",
+      prompt: "/p codex-issue-runner",
+      targetProjectId: "codex-issue-runner"
     }]);
     expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613"))
       .toMatchObject({ active_project_id: "", epoch: 1 });

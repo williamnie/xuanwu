@@ -28,6 +28,7 @@ import { piApprovalRequestsMigration } from "./027_pi_approval_requests.ts";
 import { piGuardianRuntimeMigration } from "./028_pi_guardian_runtime.ts";
 import { piIssueCompletionWatchesMigration } from "./029_pi_issue_completion_watches.ts";
 import { removeLegacyNotificationSettingsMigration } from "./030_remove_legacy_notification_settings.ts";
+import { clearFeishuPiConversationProjectsMigration } from "./031_clear_feishu_pi_conversation_projects.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -59,5 +60,6 @@ export const migrations = [
   piApprovalRequestsMigration,
   piGuardianRuntimeMigration,
   piIssueCompletionWatchesMigration,
-  removeLegacyNotificationSettingsMigration
+  removeLegacyNotificationSettingsMigration,
+  clearFeishuPiConversationProjectsMigration
 ];

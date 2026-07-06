@@ -51,7 +51,7 @@ describe("Feishu /review command", () => {
     expect(calls[0]).toMatchObject({
       conversationId: "feishu-chat-oc_group-20260614-n1",
       intent: "review",
-      projectId: "demo"
+      projectId: ""
     });
     expect(calls[0]?.prompt).toContain("Feishu /review command");
     expect(calls[0]?.prompt).toContain("Do not create or enqueue runner issues");

@@ -18,10 +18,10 @@ afterEach(async () => {
 });
 
 describe("Feishu agent bridge /issue command", () => {
-  test("sends mapped /issue commands to PI with an explicit issue workflow intent", async () => {
+  test("does not use Feishu mapping as the /issue Runner project", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
-    const calls: Array<{ projectId: string; prompt: string }> = [];
+    const calls: Array<{ projectId: string; prompt: string; targetProjectId?: string }> = [];
     const config = buildFeishuConnectorConfig({
       FEISHU_ALLOWED_CHAT_IDS: "oc_group",
       FEISHU_PROJECT_MAPPINGS: "chat:oc_group=demo",
@@ -32,8 +32,8 @@ describe("Feishu agent bridge /issue command", () => {
     const bridge = createFeishuAgentBridge({
       config: () => config,
       database,
-      runConversation: async ({ projectId, prompt }) => {
-        calls.push({ projectId, prompt });
+      runConversation: async ({ projectId, prompt, targetProjectId }) => {
+        calls.push({ projectId, prompt, targetProjectId });
         return { projectId, text: "已创建 runner issue #42（demo），executor session 已启动。查看：Runner issue #42。" };
       },
       sender: { sendTextMessage: async (input) => {
@@ -49,22 +49,17 @@ describe("Feishu agent bridge /issue command", () => {
       database
     ));
 
-    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({ projectId: "demo" });
-    expect(calls[0]?.prompt).toContain("Feishu /issue command");
-    expect(calls[0]?.prompt).toContain("issue_create_proposal");
-    expect(calls[0]?.prompt).toContain("issue_enqueue_proposal");
-    expect(calls[0]?.prompt).toContain("Task: 在 codex-issue-runner 修复飞书上下文爆炸");
+    expect(result).toEqual({ reason: "project_clarification_sent", replied: true });
+    expect(calls).toEqual([]);
     expect(sent.map((item) => item.text)).toEqual([
-      "已创建 runner issue #42（demo），executor session 已启动。查看：Runner issue #42。"
+      "这是哪个项目？你可以直接回复项目名，或把项目名带在任务里。"
     ]);
     database.close();
   });
 
   test("resolves a project named in the /issue command when chat mapping is absent", async () => {
     const database = await openFixtureDatabase();
-    const calls: Array<{ projectId: string; prompt: string }> = [];
+    const calls: Array<{ projectId: string; prompt: string; targetProjectId?: string }> = [];
     const config = buildFeishuConnectorConfig({
       FEISHU_ALLOWED_CHAT_IDS: "oc_group",
       FEISHU_APP_ID: "cli_app_id",
@@ -74,9 +69,9 @@ describe("Feishu agent bridge /issue command", () => {
     const bridge = createFeishuAgentBridge({
       config: () => config,
       database,
-      runConversation: async ({ projectId, prompt }) => {
-        calls.push({ projectId, prompt });
-        return { projectId, text: "已创建 runner issue #44（codex-issue-runner），executor session 已启动。" };
+      runConversation: async ({ projectId, prompt, targetProjectId }) => {
+        calls.push({ projectId, prompt, targetProjectId });
+        return { projectId, targetProjectId, text: "已创建 runner issue #44（codex-issue-runner），executor session 已启动。" };
       },
       sender: { sendTextMessage: async () => ({ messageId: "om_reply_issue_explicit_project" }) }
     });
@@ -90,7 +85,8 @@ describe("Feishu agent bridge /issue command", () => {
 
     expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
     expect(calls).toMatchObject([{
-      projectId: "codex-issue-runner",
+      projectId: "",
+      targetProjectId: "codex-issue-runner",
       prompt: expect.stringContaining("Task: 在 codex-issue-runner 修复飞书上下文爆炸")
     }]);
     database.close();
@@ -163,7 +159,7 @@ describe("Feishu agent bridge /issue command", () => {
     const replay = await bridge.handle(input);
 
     expect(replay).toEqual({ reason: "duplicate_reply", replied: false });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(0);
     expect(sent).toHaveLength(1);
     database.close();
   });

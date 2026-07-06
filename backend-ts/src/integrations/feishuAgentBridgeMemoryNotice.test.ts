@@ -81,8 +81,8 @@ describe("Feishu agent bridge memory candidate notices", () => {
         runConversation: async ({ conversationId }) => {
           createPiMemoryItem(fixture.db, {
             id: "22345678-2222-4222-8222-123456789abc",
-            scope: "project",
-            scope_id: "demo",
+            scope: "conversation",
+            scope_id: conversationId,
             kind: "project_policy",
             content: "提交前必须全量回归",
             source_type: "pi.conversation",

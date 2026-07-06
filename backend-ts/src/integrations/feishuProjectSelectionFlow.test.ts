@@ -19,11 +19,11 @@ afterEach(async () => {
 });
 
 describe("Feishu project selection flow", () => {
-  test("asks with a card, then selection saves active project and continues once", async () => {
+  test("asks with a card, then selection continues once with a one-shot project target", async () => {
     const database = await openFixtureDatabase();
     const sentCards: Record<string, unknown>[] = [];
     const sentTexts: string[] = [];
-    const calls: Array<{ conversationId: string; projectId: string; prompt: string }> = [];
+    const calls: Array<{ conversationId: string; projectId: string; prompt: string; targetProjectId?: string }> = [];
     const config = configFixture();
     insertProject(database, "codex-issue-runner", "Codex Issue Runner");
     insertProject(database, "demo", "Demo Project");
@@ -31,8 +31,8 @@ describe("Feishu project selection flow", () => {
       clock: fixedClock(),
       config: () => config,
       database,
-      runConversation: async ({ conversationId, projectId, prompt }) => {
-        calls.push({ conversationId, projectId, prompt });
+      runConversation: async ({ conversationId, projectId, prompt, targetProjectId }) => {
+        calls.push({ conversationId, projectId, prompt, targetProjectId });
         return { conversationId, projectId, text: "runner continued" };
       },
       sender: {
@@ -72,12 +72,12 @@ describe("Feishu project selection flow", () => {
     expect(duplicate).toEqual({ reason: "project_selection_already_consumed", replied: false });
     expect(calls).toEqual([{
       conversationId: "feishu-chat-oc_group-20260613",
-      projectId: "demo",
-      prompt: "开始做吧"
+      projectId: "",
+      prompt: "开始做吧",
+      targetProjectId: "demo"
     }]);
-    expect(sentTexts).toEqual(["已切到 demo，我会继续处理刚才这句。", "runner continued"]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613"))
-      .toMatchObject({ active_project_id: "demo", active_project_source: "card_select" });
+    expect(sentTexts).toEqual(["已选择 demo，我会用它处理刚才这句。", "runner continued"]);
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();
     database.close();
   });
 

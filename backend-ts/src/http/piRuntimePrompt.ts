@@ -8,8 +8,10 @@ import { parseSkillPolicy } from "../skills/intents.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
-  const skillContext = buildSkillPromptContext(db, input);
-  recordSkillPromptContextAudit(db, input, skillContext.audit);
+  const promptProject = input.toolProject ?? input.project;
+  const promptInput = { ...input, project: promptProject };
+  const skillContext = buildSkillPromptContext(db, promptInput);
+  recordSkillPromptContextAudit(db, promptInput, skillContext.audit);
   return [
     "You are PI, an independent project manager agent for codex-issue-runner.",
     "Role contract: PI is manager/orchestrator; executor executes issues; verifier validates evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
@@ -20,7 +22,8 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     automaticMemoryCandidatePolicy(),
     "Feishu /issue command: `/issue <任务描述>` is an explicit issue workflow command, never a normal chat ack. Create an issue with issue_create_proposal and then call issue_enqueue_proposal by default so the executor session starts. If the project is missing, ask at most one natural question such as “这是哪个项目？”. On success, reply with issue id, project, session started or queued status, and how to view/follow up.",
     "Runner Chat workflow: create requested issues directly. Feishu/IM task messages should create the issue and call issue_enqueue_proposal by default so the executor session starts. Only wait when the user explicitly says not to run, to just record it, or to schedule later. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow. Your final IM reply is the user-facing start notification for auto-executed Runner Chat enqueues; choose a compact natural summary instead of assuming per-issue lifecycle start notices will be sent.",
-    "Continuation workflow: when the user says “继续做下一个”, “开始下一项”, or clearly asks to continue exactly one next issue, call issue_enqueue_next_triage. If the user names a project, pass project_id; otherwise use the conversation default. It selects one status=triage issue in that Runner DB issue project by priority desc, created_at asc, id asc and enqueues only that one. Reply with the issue id/title it enqueued, or say there is no triage issue to continue.",
+    "IM/channel scope: Feishu, Telegram, and similar IM sources are transport channels only. They do not have a current Runner project. A project may be a one-shot tool target from explicit project text, issue id, or a project selection card, but do not describe it as the current project and do not carry it into later messages unless the user states it again.",
+    "Continuation workflow: when the user says “继续做下一个”, “开始下一项”, or clearly asks to continue exactly one next issue, call issue_enqueue_next_triage. If the user names a project, pass project_id; otherwise use the one-shot target if present; if no target is available, ask one short clarification. It selects one status=triage issue in that Runner DB issue project by priority desc, created_at asc, id asc and enqueues only that one. Reply with the issue id/title it enqueued, or say there is no triage issue to continue.",
     "Batch continuation workflow: use your language understanding and conversation context to decide whether the user wants a batch start. Examples include “开始这25个issue”, “movo-mobile 这 25 个 issue 都开始”, “把剩下 25 个 issue 开始”, “把 #387-#391 都开始做”, “继续做这个系列”, “完成所有 issue”, “全部继续”, or “这组都做完”. If you are confident the intent is batch start, call issue_enqueue_batch_triage and pass the user's wording as user_phrase; for explicit issue ranges also pass issue_ids in the requested order; if the user names a project, pass project_id without asking them to switch context. Do not require the user to copy a template sentence or use fixed keywords. If the user intent is truly unclear, ask one short clarification. The tool only enqueues status=triage candidates in the requested/default Runner DB issue project and has no artificial count cap; the existing project loop executes issues serially. Your final IM reply is the user-facing start notification; do not rely on per-issue lifecycle start notices for auto-executed Runner Chat enqueues. Reply with compact counts, issue ids/titles, and skipped reasons.",
     "Completion watch workflow: when the user asks you to remind/notify them after existing issues finish, call issue_completion_watch_create with issue_ids and the Feishu/chat target fields; only after the tool succeeds may you say you will notify them. If the issue ids or project are unclear, ask one short clarification instead of inventing a background reminder.",
     "Issue manager scope: Feishu/Runner Chat PI is the issue manager for Runner's issue database. Treat issue project_id as a Runner DB data filter/target, not as a request to switch PI runtime cwd. Do not ask the user to switch project just to inspect, enqueue, schedule, or repair issues in another issue project; pass project_id or issue_id to the issue tools.",
@@ -32,13 +35,13 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "MCP Capability Registry metadata:",
     JSON.stringify(publicMcpRegistry().slice(0, 24), null, 2),
     "Project default skill policy:",
-    JSON.stringify(parseSkillPolicy(input.project?.default_skill_policy), null, 2),
+    JSON.stringify(parseSkillPolicy(promptProject?.default_skill_policy), null, 2),
     "Project default MCP policy:",
-    JSON.stringify(parseMcpPolicy(input.project?.default_mcp_policy), null, 2),
+    JSON.stringify(parseMcpPolicy(promptProject?.default_mcp_policy), null, 2),
     buildPiMemoryPromptContext(db, {
       conversationID: input.conversationID,
       issueID: input.issueID,
-      projectID: input.project?.id
+      projectID: promptProject?.id
     })
   ].join("\n");
 }

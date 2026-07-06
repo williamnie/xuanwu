@@ -158,13 +158,13 @@ describe("Feishu IM connector contract", () => {
       thread_id: "om_parent_1",
       timestamp: "2026-06-12T06:02:47.890Z"
     });
-    expect(projectIDForFeishuMessage(config, event)).toBe("codex-runner");
+    expect(projectIDForFeishuMessage(config, event)).toBe("");
     expect(feishuExternalEventInput(event, { projectId: projectIDForFeishuMessage(config, event) })).toMatchObject({
       actor: "feishu:user:ou_user_1",
       content: "@PI 帮我实现这个折叠面板功能",
       dedupe_key: "feishu:message:om_message_1",
       external_id: "om_message_1",
-      project_hint: "codex-runner",
+      project_hint: "",
       raw_payload_ref: "sha256:raw-event",
       received_at: "2026-06-12T06:02:47.890Z",
       source: "feishu",

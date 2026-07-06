@@ -28,6 +28,7 @@ export type RuntimeSessionInput = {
   project?: Project;
   sessionFile?: string;
   source?: string;
+  toolProject?: Project;
 };
 
 export const PI_RUNNER_CHAT_ACTIONS = [
@@ -79,6 +80,7 @@ export async function createOrRestorePiRuntime(
 
 export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeSessionInput) {
   const context = runtimeContext(db, input.project);
+  const toolProject = input.toolProject ?? input.project;
   const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot(context.cwd));
   const paths = piRuntimePaths(db);
   await mkdir(dirname(paths.authPath), { recursive: true });
@@ -102,7 +104,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       settingsManager: sdk.pi.SettingsManager.create(context.cwd, paths.agentDir),
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
       tools: [...PI_ALLOWED_TOOLS],
-      customTools: createPiProjectTools(db, input.project, {
+      customTools: createPiProjectTools(db, toolProject, {
         authorization: input.authorization,
         bus: input.bus,
         conversationID: input.conversationID,
@@ -118,7 +120,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       conversationID: input.conversationID,
       delegationID: input.delegationID,
       heartbeatID: input.heartbeatID,
-      projectID: input.project?.id
+      projectID: toolProject?.id ?? input.project?.id
     });
     if (input.agent.name !== "") session.setSessionName(input.agent.name);
     return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, cleanupSdkAudit) };

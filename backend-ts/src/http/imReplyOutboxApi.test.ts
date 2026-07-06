@@ -24,7 +24,7 @@ describe("IM reply drafts and sync outbox", () => {
     try {
       const inbox = await postFeishu(handle, messageEvent({ threadId: "omt_thread_1" }));
       const inboxBody = await inbox.json() as Record<string, unknown>;
-      const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+      const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
       const body = await response.json() as Record<string, unknown>;
       const drafts = await getReplyDrafts(handle, "source=feishu");
 
@@ -129,7 +129,7 @@ async function createDraftFromMessage(
 ): Promise<Record<string, unknown>> {
   const inbox = await postFeishu(handle, messageEvent(input));
   const inboxBody = await inbox.json() as Record<string, unknown>;
-  await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+  await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
   const drafts = await getReplyDrafts(handle, "status=pending");
   return drafts.find((item) => item.target_message_id === (input.messageId ?? "om_message_1")) ?? {};
 }
@@ -172,9 +172,13 @@ async function postFeishu(handle: (request: Request) => Promise<Response>, body:
   }));
 }
 
-async function createIssueFromExternalEvent(handle: (request: Request) => Promise<Response>, id: number): Promise<Response> {
+async function createIssueFromExternalEvent(
+  handle: (request: Request) => Promise<Response>,
+  id: number,
+  body: Record<string, unknown> = {}
+): Promise<Response> {
   return handle(new Request(`${BASE_URL}/api/external-events/${id}/create-issue`, {
-    body: JSON.stringify({}),
+    body: JSON.stringify(body),
     headers: { "content-type": "application/json" },
     method: "POST"
   }));

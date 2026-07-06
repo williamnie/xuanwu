@@ -34,7 +34,7 @@ export function buildFeishuReviewCommandPrompt(
     "Do not call issue_create_proposal, issue_enqueue_proposal, issue_schedule_enqueue, issue_enqueue_next_triage, or issue_enqueue_batch_triage.",
     "Do not expose local filesystem paths, tokens, credentials, or internal exception stacks; redact them if present.",
     `Active conversation: ${safeText(input.conversationId, 120)}`,
-    `Current project: ${safeText(cleanString(input.projectId) || "(unresolved)", 120)}`,
+    `One-shot target project hint: ${safeText(cleanString(input.projectId) || "(unresolved)", 120)}`,
     "Recent transcript:",
     transcriptBlock(db, input.conversationId)
   ].join("\n");

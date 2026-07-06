@@ -7,7 +7,6 @@ import { decidePiAttention, type PiAttentionDecision } from "../pi/attentionRout
 import {
   feishuExternalEventInput,
   normalizeFeishuMessageEvent,
-  projectIDForFeishuMessage,
   type FeishuConnectorConfig,
   type FeishuNormalizedMessageEvent
 } from "./feishu.ts";
@@ -118,7 +117,6 @@ function saveInboxEvent(
 }
 
 function attentionDecision(context: FeishuIngestContext, event: FeishuNormalizedMessageEvent): PiAttentionDecision {
-  const fallbackProject = projectIDForFeishuMessage(context.config, event);
   const decision = decidePiAttention({
     message: {
       attachments: event.attachments,
@@ -132,7 +130,7 @@ function attentionDecision(context: FeishuIngestContext, event: FeishuNormalized
     policy: context.config,
     projects: context.database ? listProjects(context.database).map((item) => ({ id: item.id, name: item.name })) : []
   });
-  return decision.project_id === "" && fallbackProject !== "" ? { ...decision, project_id: fallbackProject } : decision;
+  return decision;
 }
 
 function inboxStatus(current: unknown, attention: PiAttentionDecision): string {

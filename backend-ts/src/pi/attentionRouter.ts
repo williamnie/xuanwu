@@ -168,10 +168,7 @@ function resolveProject(
   policy: PiAttentionPolicy = {},
   projects: PiAttentionProject[]
 ): ProjectMatch {
-  const chat = policy.projectMappings?.find((item) => clean(item.chatId) === message.chat_id);
-  if (chat) return projectMatch(chat.projectId, "chat_mapping");
-  const user = policy.projectMappings?.find((item) => userMatches(item.userId, message));
-  if (user) return projectMatch(user.projectId, "user_mapping");
+  void policy;
   const explicit = projects.find((project) => projectMentioned(message.text, project));
   return explicit ? projectMatch(explicit.id, "explicit_project") : { projectId: "", source: "none" };
 }
@@ -206,11 +203,6 @@ function addSignal(
 
 function matchesAllowedUser(allowed: string[] | undefined, message: Required<PiAttentionMessage>): boolean {
   return includesClean(allowed, message.sender_id) || includesClean(allowed, message.sender_open_id);
-}
-
-function userMatches(userId: string | undefined, message: Required<PiAttentionMessage>): boolean {
-  const id = clean(userId);
-  return id !== "" && (id === message.sender_id || id === message.sender_open_id);
 }
 
 function projectMentioned(text: string, project: PiAttentionProject): boolean {

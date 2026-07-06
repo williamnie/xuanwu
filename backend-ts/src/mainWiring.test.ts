@@ -11,7 +11,7 @@ describe("server entrypoint wiring", () => {
   test("uses a stable Feishu chat/thread conversation id instead of per-message ids", () => {
     const source = readFileSync(join(import.meta.dir, "main.ts"), "utf8");
 
-    expect(source).toContain("runConversation: async ({ conversationId, event, intent, projectId, prompt })");
+    expect(source).toContain("runConversation: async ({ conversationId, event, intent, projectId, prompt, targetProjectId })");
     expect(source).toContain("conversationId,");
     expect(source).toContain("intent,");
     expect(source).not.toContain("feishuConversationID");

@@ -42,10 +42,12 @@ type PiConversationContext = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 export type PiConversationPromptInput = {
+  clearProjectId?: boolean;
   conversationId?: string;
   intent?: string;
   projectId?: string;
   prompt: string;
+  targetProjectId?: string;
   title?: string;
 };
 
@@ -140,10 +142,11 @@ async function sendPiConversationMessage(
   const prompt = cleanString(body.prompt || body.message || body.content);
   if (prompt === "") throw new HttpError(400, "prompt is required");
   const intent = cleanString(body.intent);
+  const targetProjectId = cleanString(body.target_project_id ?? body.targetProjectId);
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
-  const runtime = await openConversationRuntime(context, titledConversation, intent);
+  const runtime = await openConversationRuntime(context, titledConversation, intent, targetProjectId);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
@@ -182,11 +185,36 @@ export async function runPiConversationPrompt(
       project_id: projectID,
       title: cleanString(input.title) || "Feishu"
     });
+  } else if (input.clearProjectId && projectID === "" && existing.project_id !== "") {
+    await resetConversationProjectRuntime(context, existing);
   } else if (projectID !== "" && existing.project_id !== projectID) {
     optionalConversationProject(context.database, projectID);
     updatePiConversation(context.database, existing.id, { project_id: projectID });
   }
-  return sendPiConversationMessage(context, id, { intent: input.intent, prompt: input.prompt });
+  return sendPiConversationMessage(context, id, {
+    intent: input.intent,
+    prompt: input.prompt,
+    target_project_id: input.targetProjectId
+  });
+}
+
+async function resetConversationProjectRuntime(
+  context: PiConversationContext,
+  conversation: PiConversation
+): Promise<PiConversation> {
+  const runtime = await createOrRestorePiRuntime(context.database, {
+    agent: requireConversationAgent(context.database, conversation),
+    bus: context.bus,
+    conversationID: conversation.id
+  });
+  const reset = updatePiConversation(context.database, conversation.id, {
+    pi_session_id: runtime.piSessionId,
+    project_id: "",
+    session_file: runtime.sessionFile
+  });
+  persistPiSessionIndex(context.database, reset);
+  clearPiSessionProjectIndex(context.database, reset.pi_session_id);
+  return reset;
 }
 
 function ensureConversationTitle(
@@ -263,19 +291,30 @@ function persistPiSessionIndex(
   });
 }
 
+function clearPiSessionProjectIndex(db: RunnerDatabase, providerSessionID: string): void {
+  const sessionID = cleanString(providerSessionID);
+  if (sessionID === "") return;
+  db.sqlite.run(
+    "update agent_sessions set project_id='' where provider=? and provider_session_id=?",
+    [PI_SESSION_PROVIDER, sessionID]
+  );
+}
+
 async function openConversationRuntime(
   context: PiConversationContext,
   conversation: PiConversation,
-  intent = ""
+  intent = "",
+  targetProjectId = ""
 ) {
   const project = conversation.project_id === ""
     ? undefined
     : requireConversationProject(context.database, conversation);
+  const toolProject = optionalConversationProject(context.database, cleanString(targetProjectId)) ?? project;
   const agent = requireConversationAgent(context.database, conversation);
   const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: review ? reviewConversationAuthorization() : project ? runnerChatAuthorization(project) : undefined,
+    authorization: review ? reviewConversationAuthorization() : toolProject ? runnerChatAuthorization(toolProject) : undefined,
     bus: context.bus,
     conversationID: conversation.id,
     onIssueEnqueued: (projectID) => startProjectLoop({
@@ -285,6 +324,7 @@ async function openConversationRuntime(
     }, projectID, { forceOnce: true }),
     project,
     sessionFile: conversation.session_file,
+    toolProject,
     source: review ? reviewConversationSource(conversation) : runnerChatSource(conversation)
   });
 }

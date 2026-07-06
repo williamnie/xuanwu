@@ -37,8 +37,9 @@ export function normalizeFeishuMessageEvent(raw: unknown, options: NormalizeOpti
 }
 
 export function projectIDForFeishuMessage(config: FeishuConnectorConfig, event: FeishuNormalizedMessageEvent): string {
-  return config.projectMappings.find((item) => item.chatId === event.chat_id)?.projectId ??
-    config.projectMappings.find((item) => item.userId === event.sender.id || item.userId === event.sender.open_id)?.projectId ?? "";
+  void config;
+  void event;
+  return "";
 }
 
 export function feishuExternalEventInput(

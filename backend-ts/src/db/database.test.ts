@@ -154,7 +154,8 @@ describe("Bun SQLite database connection", () => {
         { id: "027_pi_approval_requests" },
         { id: "028_pi_guardian_runtime" },
         { id: "029_pi_issue_completion_watches" },
-        { id: "030_remove_legacy_notification_settings" }
+        { id: "030_remove_legacy_notification_settings" },
+        { id: "031_clear_feishu_pi_conversation_projects" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -407,6 +408,72 @@ describe("Bun SQLite database connection", () => {
     }
   });
 
+  test("clears stale Feishu PI conversation project bindings when cleanup migration is pending", async () => {
+    const root = await tempPath("codex-runner-bun-feishu-pi-project-cleanup-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.close();
+
+    const raw = new Database(join(stateDir, "runner.db"));
+    try {
+      raw.run("delete from schema_migrations where id='031_clear_feishu_pi_conversation_projects'");
+      raw.run(`insert into pi_agents
+        (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?)`, [
+        "pi-faux", "PI Faux", "test", "faux-1", "off", 1,
+        "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+      ]);
+      raw.run(`insert into pi_conversations
+        (id, project_id, pi_agent_id, title, status, session_file, pi_session_id, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        "feishu-chat-oc_fixture-20260705", "codex-issue-runner", "pi-faux",
+        "Feishu · oc_fixture", "active", "/tmp/feishu.jsonl", "feishu-chat-oc_fixture-20260705",
+        "2026-07-05T00:00:00Z", "2026-07-05T00:00:00Z"
+      ]);
+      raw.run(`insert into pi_conversations
+        (id, project_id, pi_agent_id, title, status, session_file, pi_session_id, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        "runner-chat", "demo", "pi-faux", "Runner", "active", "/tmp/runner.jsonl",
+        "runner-chat", "2026-07-05T00:00:00Z", "2026-07-05T00:00:00Z"
+      ]);
+      raw.run(`insert into agent_sessions
+        (session_key, provider, provider_session_id, agent_role, project_id, issue_id,
+         title, preview, status, raw_ref, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        "pi-sdk:feishu-chat-oc_fixture-20260705", "pi-sdk", "feishu-chat-oc_fixture-20260705",
+        "pi_manager", "codex-issue-runner", 0, "Feishu · oc_fixture", "", "active",
+        "{\"conversation_id\":\"feishu-chat-oc_fixture-20260705\"}",
+        "2026-07-05T00:00:00Z", "2026-07-05T00:00:00Z"
+      ]);
+      raw.run(`insert into agent_sessions
+        (session_key, provider, provider_session_id, agent_role, project_id, issue_id,
+         title, preview, status, raw_ref, created_at, updated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        "pi-sdk:runner-chat", "pi-sdk", "runner-chat", "pi_manager", "demo", 0,
+        "Runner", "", "active", "{\"conversation_id\":\"runner-chat\"}",
+        "2026-07-05T00:00:00Z", "2026-07-05T00:00:00Z"
+      ]);
+    } finally {
+      raw.close();
+    }
+
+    const migrated = await openDatabase({ stateDir });
+    try {
+      expect(migrated.sqlite.query("select project_id from pi_conversations where id='feishu-chat-oc_fixture-20260705'").get())
+        .toEqual({ project_id: "" });
+      expect(migrated.sqlite.query("select project_id from agent_sessions where session_key='pi-sdk:feishu-chat-oc_fixture-20260705'").get())
+        .toEqual({ project_id: "" });
+      expect(migrated.sqlite.query("select project_id from pi_conversations where id='runner-chat'").get())
+        .toEqual({ project_id: "demo" });
+      expect(migrated.sqlite.query("select project_id from agent_sessions where session_key='pi-sdk:runner-chat'").get())
+        .toEqual({ project_id: "demo" });
+      expect(migrated.sqlite.query("select count(*) as count from schema_migrations where id='031_clear_feishu_pi_conversation_projects'").get())
+        .toEqual({ count: 1 });
+    } finally {
+      migrated.close();
+    }
+  });
+
   test("repairs older approval request tables after the migration row exists", async () => {
     const root = await tempPath("codex-runner-bun-approval-drift-");
     const stateDir = join(root, "state");
@@ -486,7 +553,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 30 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 31 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

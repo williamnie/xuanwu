@@ -57,7 +57,22 @@ describe("Feishu PI project context resolver", () => {
     });
   });
 
-  test("uses conversation active project for ambiguous task text", () => {
+  test("does not resolve generic issue wording as the codex-issue-runner project", () => {
+    const result = resolveFeishuProjectContext({
+      projects: PROJECTS,
+      text: "开始所有issue"
+    });
+
+    expect(result).toMatchObject({
+      confidence: "none",
+      projectId: "",
+      reason: "no_project_context",
+      source: "none",
+      status: "missing"
+    });
+  });
+
+  test("does not treat conversation active project as IM project context", () => {
     const result = resolveFeishuProjectContext({
       activeProject: {
         active_project_id: "codex-issue-runner",
@@ -68,11 +83,11 @@ describe("Feishu PI project context resolver", () => {
     });
 
     expect(result).toMatchObject({
-      confidence: "medium",
-      projectId: "codex-issue-runner",
-      reason: "conversation_active_project",
-      source: "user_switch",
-      status: "resolved"
+      confidence: "none",
+      projectId: "",
+      reason: "no_project_context",
+      source: "none",
+      status: "missing"
     });
   });
 
@@ -91,7 +106,7 @@ describe("Feishu PI project context resolver", () => {
     });
   });
 
-  test("uses project mapping only as the lowest-priority fallback", () => {
+  test("does not treat Feishu channel mapping as IM project context", () => {
     const result = resolveFeishuProjectContext({
       mappings: [{ chatId: "oc_group", projectId: "demo" }],
       message: { chatId: "oc_group" },
@@ -100,19 +115,19 @@ describe("Feishu PI project context resolver", () => {
     });
 
     expect(result).toMatchObject({
-      confidence: "low",
-      projectId: "demo",
-      reason: "mapping_default",
-      source: "mapping_default",
-      status: "resolved"
+      confidence: "none",
+      projectId: "",
+      reason: "no_project_context",
+      source: "none",
+      status: "missing"
     });
   });
 
   test("returns ambiguous when project text matches multiple projects", () => {
     const result = resolveFeishuProjectContext({
       projects: [
-        { id: "runner-api", name: "Runner API" },
-        { id: "runner-web", name: "Runner Web" }
+        { id: "runner-api", name: "Runner" },
+        { id: "runner-web", name: "Runner" }
       ],
       text: "切到 Runner"
     });
@@ -155,10 +170,10 @@ describe("Feishu PI project context resolver", () => {
         scopeKey: "feishu-chat-oc_group-20260613",
         text: "开始做吧"
       })).toMatchObject({
-        projectId: "demo",
-        reason: "conversation_active_project",
-        source: "user_switch",
-        status: "resolved"
+        projectId: "",
+        reason: "no_project_context",
+        source: "none",
+        status: "missing"
       });
     } finally {
       db.close();

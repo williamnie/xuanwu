@@ -32,7 +32,7 @@ export function buildFeishuProjectSelectionCard(input: FeishuProjectSelectionCar
         tag: "action",
         actions: buttons
       },
-      markdown("项目不在列表里也可以继续发送 `/p project` 切换。")
+      markdown("项目不在列表里也可以重新发送请求，并在消息里带上项目名或 issue id。")
     ],
     header: {
       template: "blue",

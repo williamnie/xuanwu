@@ -28,15 +28,15 @@ describe("Feishu external event inbox", () => {
       const inboxBody = await inbox.json() as Record<string, unknown>;
       const eventID = Number(inboxBody.event_id);
       expect(inbox.status).toBe(202);
-      expect(inboxBody).toMatchObject({ ok: true, normalized_summary: { project_id: "demo" } });
+      expect(inboxBody).toMatchObject({ ok: true, normalized_summary: { project_id: "" } });
 
       const inboxEvent = await getExternalEvent(handle, eventID);
-      expect(inboxEvent).toMatchObject({ project_id: "demo", source: "feishu", status: "mapped" });
+      expect(inboxEvent).toMatchObject({ project_id: "", source: "feishu", status: "needs_project" });
       expect(inboxEvent.summary).toMatchObject({
-        attention_decision: { decision: "propose_issue", should_create_issue_proposal: true }
+        attention_decision: { decision: "ask_clarification", should_create_issue_proposal: false }
       });
 
-      const proposal = await createIssueFromExternalEvent(handle, eventID);
+      const proposal = await createIssueFromExternalEvent(handle, eventID, { project_id: "demo" });
       const proposalBody = await proposal.json() as Record<string, unknown>;
       expect(proposal.status).toBe(201);
       expect(proposalBody).toMatchObject({ created: true });
@@ -90,20 +90,20 @@ describe("Feishu external event inbox", () => {
         dedupe_key: "feishu:message:om_message_1",
         external_id: "om_message_1",
         normalized_message: { text: "@PI implement it" },
-        project_id: "demo",
+        project_id: "",
         source: "feishu",
-        status: "mapped"
+        status: "needs_project"
       });
       expect(events[0].raw_payload_ref).toMatch(/^sha256:/);
       expect(events[0].summary).toMatchObject({
         attention_decision: {
-          decision: "propose_issue",
-          project_id: "demo",
-          reason: "task_signal_with_project"
+          decision: "ask_clarification",
+          project_id: "",
+          reason: "needs_project"
         },
         chat_id: "oc_group",
         message_id: "om_message_1",
-        project_id: "demo",
+        project_id: "",
         text_length: 16
       });
       expect(detail).toEqual(events[0]);
@@ -145,7 +145,7 @@ describe("Feishu external event inbox", () => {
       expect(response.status).toBe(202);
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
-        project_id: "demo",
+        project_id: "",
         status: "ignored",
         summary: {
           attention_decision: {
@@ -189,7 +189,7 @@ describe("Feishu external event inbox", () => {
       }));
       const inboxBody = await inbox.json() as Record<string, unknown>;
 
-      const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+      const response = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
       const body = await response.json() as Record<string, unknown>;
       const issue = await getIssue(handle, Number(body.issue_id));
       const link = database.sqlite.query<Record<string, unknown>, []>(
@@ -229,8 +229,8 @@ describe("Feishu external event inbox", () => {
       const inbox = await postFeishu(handle, messageEvent());
       const inboxBody = await inbox.json() as Record<string, unknown>;
 
-      const first = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
-      const duplicate = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id));
+      const first = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
+      const duplicate = await createIssueFromExternalEvent(handle, Number(inboxBody.event_id), { project_id: "demo" });
       const firstBody = await first.json() as Record<string, unknown>;
       const duplicateBody = await duplicate.json() as Record<string, unknown>;
 
@@ -306,9 +306,13 @@ async function postFeishu(handle: (request: Request) => Promise<Response>, body:
   }));
 }
 
-async function createIssueFromExternalEvent(handle: (request: Request) => Promise<Response>, id: number): Promise<Response> {
+async function createIssueFromExternalEvent(
+  handle: (request: Request) => Promise<Response>,
+  id: number,
+  body: Record<string, unknown> = {}
+): Promise<Response> {
   return handle(new Request(`${BASE_URL}/api/external-events/${id}/create-issue`, {
-    body: JSON.stringify({}),
+    body: JSON.stringify(body),
     headers: { "content-type": "application/json" },
     method: "POST"
   }));

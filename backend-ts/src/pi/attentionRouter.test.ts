@@ -29,7 +29,7 @@ describe("PI attention router v0", () => {
     ]);
   });
 
-  test("proposes an issue for bot-mentioned feature requests with a mapped project", () => {
+  test("does not treat chat mappings as Runner project context", () => {
     const decision = decidePiAttention({
       message: MESSAGE,
       policy: { projectMappings: [{ chatId: "oc_group", projectId: "demo" }] },
@@ -37,18 +37,17 @@ describe("PI attention router v0", () => {
     });
 
     expect(decision).toMatchObject({
-      decision: "propose_issue",
-      needs_project: false,
-      project_id: "demo",
-      project_source: "chat_mapping",
-      reason: "task_signal_with_project",
-      should_create_issue_proposal: true
+      decision: "ask_clarification",
+      needs_project: true,
+      project_id: "",
+      project_source: "none",
+      reason: "needs_project",
+      should_create_issue_proposal: false
     });
     expect(decision.evidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "mention", reason: "bot_mentioned" }),
       expect.objectContaining({ kind: "keyword", value: "帮我" }),
-      expect.objectContaining({ kind: "keyword", value: "实现" }),
-      expect.objectContaining({ kind: "project", value: "demo" })
+      expect.objectContaining({ kind: "keyword", value: "实现" })
     ]));
   });
 
@@ -63,11 +62,11 @@ describe("PI attention router v0", () => {
     });
 
     expect(decision).toMatchObject({
-      decision: "propose_issue",
-      needs_project: false,
-      project_id: "demo",
-      reason: "task_signal_with_project",
-      should_create_issue_proposal: true
+      decision: "ask_clarification",
+      needs_project: true,
+      project_id: "",
+      reason: "needs_project",
+      should_create_issue_proposal: false
     });
     expect(decision.signals).toEqual(expect.arrayContaining(["allowed_chat", "slash_issue_command"]));
   });
@@ -87,9 +86,9 @@ describe("PI attention router v0", () => {
     });
 
     expect(decision).toMatchObject({
-      decision: "propose_issue",
-      project_id: "demo",
-      reason: "task_signal_with_project"
+      decision: "ask_clarification",
+      project_id: "",
+      reason: "needs_project"
     });
     expect(decision.signals).toEqual(expect.arrayContaining([
       "allowed_chat",
@@ -99,7 +98,7 @@ describe("PI attention router v0", () => {
     ]));
   });
 
-  test("routes trusted user mapping even outside an allowed chat", () => {
+  test("trusted user mappings do not imply a Runner project", () => {
     const decision = decidePiAttention({
       message: { ...MESSAGE, chat_id: "oc_other", mentions: [], text: "帮我修复报错" },
       policy: {
@@ -110,10 +109,10 @@ describe("PI attention router v0", () => {
     });
 
     expect(decision).toMatchObject({
-      decision: "propose_issue",
-      project_id: "demo",
-      project_source: "user_mapping",
-      reason: "task_signal_with_project"
+      decision: "ask_clarification",
+      project_id: "",
+      project_source: "none",
+      reason: "needs_project"
     });
     expect(decision.signals).toContain("allowed_user");
   });
@@ -182,7 +181,7 @@ describe("PI attention router v0", () => {
     expect(decision).toMatchObject({
       decision: "inbox_only",
       needs_project: false,
-      project_id: "demo",
+      project_id: "",
       reason: "trusted_source_without_task_signal",
       should_create_issue_proposal: false
     });

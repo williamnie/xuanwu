@@ -1,5 +1,4 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { setFeishuConversationActiveProject } from "../db/repositories/feishuConversationState.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import { resolveFeishuProjectContext } from "./feishuProjectContext.ts";
 import type { FeishuConversationRoute } from "./feishuConversationRouting.ts";
@@ -32,12 +31,6 @@ export function applyFeishuProjectSwitchCommand(
     text: target
   });
   if (context.status === "resolved") {
-    setFeishuConversationActiveProject(db, {
-      activeConversationId: input.route.conversationId,
-      activeProjectId: context.projectId,
-      scopeKey: input.route.scopeKey,
-      source: "user_switch"
-    }, input.timestamp);
     return switchResult("resolved", context.projectId, context.candidates, "project_switch_sent", switchConfirmText(context.projectId), target);
   }
   if (context.status === "ambiguous") {
@@ -56,7 +49,7 @@ export function parseFeishuProjectSwitchTarget(text: string): string {
 }
 
 function switchConfirmText(projectId: string): string {
-  return `已切到 ${projectId}。之后“开始做吧/下一个 issue”会默认使用这个项目。`;
+  return `已识别 ${projectId}。IM 通道不会保存当前项目；请把项目名或 issue id 写在具体请求里。`;
 }
 
 function switchMissingText(target: string): string {

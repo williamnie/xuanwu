@@ -1,12 +1,11 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getFeishuConversationState } from "../db/repositories/feishuConversationState.ts";
-import type { FeishuActiveProjectSource } from "../db/repositories/feishuConversationState.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import type { FeishuProjectMapping } from "./feishu.ts";
 
 export type FeishuProjectContextStatus = "resolved" | "ambiguous" | "missing";
-export type FeishuProjectContextSource = FeishuActiveProjectSource | "none";
+export type FeishuProjectContextSource =
+  "issue_ref" | "explicit_project" | "user_switch" | "card_select" | "mapping_default" | "none";
 export type FeishuProjectContextConfidence = "high" | "medium" | "low" | "none";
 export type FeishuProjectContextIssue = { id: number; project_id: string };
 export type FeishuProjectContextProject = { id: string; name?: string };
@@ -49,12 +48,6 @@ export function resolveFeishuProjectContext(input: FeishuProjectContextInput): F
   const explicit = explicitProject(input.text, input.projects ?? []);
   if (explicit.status !== "missing") return explicit;
 
-  const active = activeProject(input.activeProject, input.projects ?? []);
-  if (active) return active;
-
-  const mapping = mappingDefault(input.message, input.mappings ?? []);
-  if (mapping) return resolved(mapping, "mapping_default", "low", "mapping_default");
-
   return missing("no_project_context");
 }
 
@@ -64,22 +57,9 @@ export function resolveFeishuProjectContextFromDatabase(
 ): FeishuProjectContextResult {
   return resolveFeishuProjectContext({
     ...input,
-    activeProject: activeProjectFromDatabase(db, input.scopeKey),
     issues: issuesFromDatabase(db, input.text),
     projects: listProjects(db).map((project) => ({ id: project.id, name: project.name }))
   });
-}
-
-function activeProjectFromDatabase(
-  db: RunnerDatabase,
-  scopeKey: string | undefined
-): FeishuProjectContextActiveProject | null {
-  const state = getFeishuConversationState(db, clean(scopeKey));
-  if (!state || state.active_project_id === "") return null;
-  return {
-    active_project_id: state.active_project_id,
-    active_project_source: state.active_project_source
-  };
 }
 
 function issuesFromDatabase(
@@ -115,31 +95,6 @@ function explicitProject(
   return ambiguous(matches.map((match) => match.id), "explicit_project", "ambiguous_explicit_project");
 }
 
-function activeProject(
-  active: FeishuProjectContextActiveProject | null | undefined,
-  projects: FeishuProjectContextProject[]
-): FeishuProjectContextResult | null {
-  const projectID = clean(active?.active_project_id);
-  if (projectID === "") return null;
-  if (projects.length > 0 && !projects.some((project) => project.id === projectID)) return null;
-  const source = activeProjectSource(active?.active_project_source);
-  return resolved(projectID, source, "medium", "conversation_active_project");
-}
-
-function mappingDefault(
-  message: FeishuProjectContextMessage | undefined,
-  mappings: FeishuProjectMapping[]
-): string {
-  const chatID = clean(message?.chatId);
-  const senderID = clean(message?.senderId);
-  const senderOpenID = clean(message?.senderOpenId);
-  return clean(mappings.find((mapping) => clean(mapping.chatId) === chatID)?.projectId) ||
-    clean(mappings.find((mapping) => {
-      const userID = clean(mapping.userId);
-      return userID !== "" && (userID === senderID || userID === senderOpenID);
-    })?.projectId);
-}
-
 function bestProjectMatches(
   text: string,
   projects: FeishuProjectContextProject[]
@@ -161,10 +116,7 @@ function projectMatches(
 
 function projectTokens(project: FeishuProjectContextProject): string[] {
   const values = [project.id, project.name].map(clean).filter(Boolean);
-  return [...new Set(values.flatMap((value) => [
-    normalizeForMatch(value),
-    ...value.split(/[\s_-]+/).map(normalizeForMatch).filter((token) => token.length >= 3)
-  ]).filter(Boolean))];
+  return [...new Set(values.map(normalizeForMatch).filter(Boolean))];
 }
 
 function issueRefs(text: string): number[] {
@@ -183,16 +135,6 @@ function uniqueMatches(matches: ProjectMatch[]): ProjectMatch[] {
     seen.add(match.id);
     return true;
   });
-}
-
-function activeProjectSource(value: unknown): FeishuActiveProjectSource {
-  const source = clean(value);
-  if (
-    source === "explicit_project" || source === "issue_ref" ||
-    source === "user_switch" || source === "card_select" ||
-    source === "mapping_default"
-  ) return source;
-  return "user_switch";
 }
 
 function resolved(

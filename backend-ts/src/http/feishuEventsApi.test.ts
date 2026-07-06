@@ -66,7 +66,7 @@ describe("Feishu events endpoint", () => {
           attachment_count: 0,
           chat_id: "oc_group",
           message_id: "om_message_1",
-          project_id: "demo",
+          project_id: "",
           sender_type: "user",
           text_length: 16
         },
@@ -104,7 +104,7 @@ describe("Feishu events endpoint", () => {
       expect(response.status).toBe(202);
       expect(bridgeCalls).toEqual([{
         messageId: "om_message_1",
-        projectId: "demo",
+        projectId: "",
         text: "@PI implement it"
       }]);
     } finally {

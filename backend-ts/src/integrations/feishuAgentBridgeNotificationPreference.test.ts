@@ -67,7 +67,7 @@ describe("Feishu agent bridge notification preference command", () => {
       effective_after_sequence: anchor.sequence_id,
       expires_at: "2026-06-18T02:00:00Z",
       mode: "quiet",
-      project_id: "demo",
+      project_id: "",
       source_message_id: "om_notify_pref"
     }]);
     expect(sent.map((item) => item.text)).toEqual([

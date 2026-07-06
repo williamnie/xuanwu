@@ -1,5 +1,4 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { setFeishuConversationActiveProject } from "../db/repositories/feishuConversationState.ts";
 import {
   consumeFeishuPendingProjectSelection,
   createFeishuPendingProjectSelection,
@@ -68,8 +67,7 @@ export async function handleFeishuProjectSelectionAction(
   if (consumed.status !== "consumed" || !consumed.selection) {
     return { reason: `project_selection_${consumed.status}`, replied: false };
   }
-  saveActiveProject(options.database, consumed.selection, action.project_id, now);
-  await sendActionText(options, action.chat_id, `已切到 ${action.project_id}，我会继续处理刚才这句。`);
+  await sendActionText(options, action.chat_id, `已选择 ${action.project_id}，我会用它处理刚才这句。`);
   return continuePendingPrompt(options, consumed.selection, action.project_id);
 }
 
@@ -80,7 +78,7 @@ function shouldAskProjectSelection(
   prompt: string
 ): boolean {
   if (!options.runConversation || context.status === "resolved") return false;
-  if (decision === "ask_clarification") return true;
+  if (decision === "ask_clarification" || decision === "propose_issue") return true;
   return decision === "inbox_only" && isContinuationPrompt(prompt);
 }
 
@@ -153,7 +151,8 @@ async function continuePendingPrompt(
     const runner = await options.runConversation({
       conversationId: selection.conversation_id,
       event: pendingEvent(selection),
-      projectId,
+      projectId: "",
+      targetProjectId: projectId,
       prompt: selection.original_prompt
     });
     if (cleanString(runner.text) !== "") await sendActionText(options, selection.chat_id, runner.text);
@@ -168,7 +167,7 @@ async function savedOnly(
   chatId: string,
   projectId: string
 ): Promise<FeishuBridgeHandleResult> {
-  await sendActionText(options, chatId, `已切到 ${projectId}。你可以继续说“开始做吧”。`);
+  await sendActionText(options, chatId, `已选择 ${projectId}。请把项目名或 issue id 写在具体请求里。`);
   return { reason: "project_selection_saved", replied: true };
 }
 
@@ -178,22 +177,8 @@ async function continueFailure(
   projectId: string,
   error: unknown
 ): Promise<FeishuBridgeHandleResult> {
-  await sendActionText(options, chatId, `已切到 ${projectId}，但继续处理刚才请求时出错：${safeError(error)}。你可以稍后重试。`);
+  await sendActionText(options, chatId, `已选择 ${projectId}，但继续处理刚才请求时出错：${safeError(error)}。你可以稍后重试。`);
   return { reason: "project_selection_continue_failed", replied: true };
-}
-
-function saveActiveProject(
-  db: RunnerDatabase,
-  selection: FeishuPendingProjectSelection,
-  projectId: string,
-  now: Date
-): void {
-  setFeishuConversationActiveProject(db, {
-    activeConversationId: selection.conversation_id,
-    activeProjectId: projectId,
-    scopeKey: selection.scope_key,
-    source: "card_select"
-  }, now);
 }
 
 async function sendActionText(
@@ -225,7 +210,7 @@ function pendingEvent(selection: FeishuPendingProjectSelection): FeishuNormalize
 
 function fallbackSelectionText(candidates: Array<{ id: string }>): string {
   const ids = candidates.map((project) => project.id).join("、");
-  return `我收到任务了，但还不知道要交给哪个 Runner 项目。请选择：${ids}，或发送 /p <项目名>。`;
+  return `请选择本次操作的 Runner 项目：${ids}。也可以重新发送并在消息里带上项目名或 issue id。`;
 }
 
 function messageSender(options: FeishuProjectSelectionBridgeOptions): FeishuMessageClient {
