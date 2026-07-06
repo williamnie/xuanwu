@@ -50,6 +50,36 @@ describe("PI skill metadata API", () => {
     }
   });
 
+  test("lists intake and domain manifest fields with loader diagnostics", async () => {
+    const fixture = await openFixture();
+    await writeManifestSkill(fixture.root, "fixture-intake", intakeManifest({ required_tools: ["read"] }));
+    await writeManifestSkill(fixture.root, "fixture-domain", domainManifest({ required_tools: ["missing.tool"] }));
+    Bun.env.CODEX_HOME = fixture.root;
+    try {
+      const router = createDefaultRouter({ database: fixture.db });
+      const listed = await router.handle(new Request(`${BASE_URL}/api/pi/skills`));
+
+      expect(listed.status).toBe(200);
+      const body = await listed.json() as Record<string, any>;
+      const byID = new Map(body.skills.map((skill: Record<string, unknown>) => [skill.id, skill]));
+      expect(byID.get("fixture-intake")).toMatchObject({
+        input_object: "context_bundle",
+        kind: "intake",
+        output_objects: ["inbox_items", "ignored_groups"]
+      });
+      expect(byID.get("fixture-domain")).toMatchObject({
+        input_object: "inbox_item",
+        kind: "domain",
+        output_objects: ["action_proposals"]
+      });
+      expect(body.diagnostics).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "missing_tool", source_path: "codex-home:fixture-domain/manifest.json" })
+      ]));
+    } finally {
+      fixture.db.close();
+    }
+  });
+
   test("returns clear 404 for missing skills and has no skill execution route", async () => {
     const fixture = await openFixture();
     await writeSkill(fixture.root, "local-fixture", "Use when local fixture metadata should be visible.");
@@ -85,4 +115,39 @@ async function writeBadSkill(root: string, id: string): Promise<void> {
   const dir = join(root, "skills", id);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "SKILL.md"), "# Missing front matter");
+}
+
+async function writeManifestSkill(root: string, id: string, manifest: Record<string, unknown>): Promise<void> {
+  await writeSkill(root, id, `Use when ${id} fixture metadata should be visible.`);
+  await writeFile(join(root, "skills", id, "manifest.json"), JSON.stringify(manifest, null, 2));
+}
+
+function intakeManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    input_object: "context_bundle",
+    input_schema: { type: "object" },
+    kind: "intake",
+    manifest_version: "pi-skill.v0",
+    output_objects: ["inbox_items", "ignored_groups"],
+    output_schema: { type: "object" },
+    permissions: { max_tool_permission: "read" },
+    primary_intents: ["bug_report", "other"],
+    required_tools: [],
+    ...overrides
+  };
+}
+
+function domainManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    input_object: "inbox_item",
+    input_schema: { type: "object" },
+    kind: "domain",
+    manifest_version: "pi-skill.v0",
+    output_objects: ["action_proposals"],
+    output_schema: { type: "object" },
+    permissions: { max_tool_permission: "write" },
+    primary_intents: ["status_question", "other"],
+    required_tools: [],
+    ...overrides
+  };
 }

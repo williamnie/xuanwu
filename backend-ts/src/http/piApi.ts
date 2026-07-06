@@ -77,7 +77,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiHeartbeatRoutes(router, context);
   registerPiHeartbeatTimelineRoutes(router, context);
   registerPiReportRoutes(router, context);
-  registerPiSkillRoutes(router);
+  registerPiSkillRoutes(router, context);
   registerPiToolRegistryRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));

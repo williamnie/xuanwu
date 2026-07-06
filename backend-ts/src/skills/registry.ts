@@ -2,8 +2,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { emptyRuntime, readSkillRuntimeManifest, type SkillRegistryTool, type SkillRuntimeMetadata } from "./runtimeManifest.ts";
 
-export type SkillMetadata = {
+export type SkillMetadata = SkillRuntimeMetadata & {
   allowed_roles: string[];
   description: string;
   id: string;
@@ -15,7 +16,15 @@ export type SkillMetadata = {
 };
 
 export type SkillRegistryDiagnostic = {
-  code: "missing_description" | "missing_front_matter" | "read_error" | "root_missing" | "root_not_directory";
+  code:
+    | "manifest_invalid"
+    | "missing_description"
+    | "missing_front_matter"
+    | "missing_tool"
+    | "permission_conflict"
+    | "read_error"
+    | "root_missing"
+    | "root_not_directory";
   message: string;
   severity: "warning";
   source_path: string;
@@ -23,7 +32,7 @@ export type SkillRegistryDiagnostic = {
 
 export type SkillRegistry = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
 export type SkillRegistryRoot = { label?: string; path: string; prefix?: string };
-export type SkillRegistryOptions = { roots?: SkillRegistryRoot[] };
+export type SkillRegistryOptions = { availableTools?: SkillRegistryTool[]; roots?: SkillRegistryRoot[] };
 export type SkillRecommendationInput = { description?: string; title?: string };
 export type SkillRecommendation = SkillMetadata & { reason: string; score: number };
 
@@ -39,7 +48,7 @@ export function readSkillRegistry(options: SkillRegistryOptions = {}): SkillRegi
   const found = new Map<string, SkillMetadata>();
   for (const root of registryRoots(options)) {
     for (const file of findSkillFiles(root, 0, diagnostics)) {
-      const skill = readSkillFile(file, root, diagnostics);
+      const skill = readSkillFile(file, root, options, diagnostics);
       if (skill && !found.has(skill.id)) found.set(skill.id, skill);
       if (found.size >= MAX_SKILLS) return { diagnostics, items: sortedSkills([...found.values()]) };
     }
@@ -89,7 +98,12 @@ function findSkillFiles(root: SkillRegistryRoot, depth: number, diagnostics: Ski
   ));
 }
 
-function readSkillFile(path: string, root: SkillRegistryRoot, diagnostics: SkillRegistryDiagnostic[]): SkillMetadata | null {
+function readSkillFile(
+  path: string,
+  root: SkillRegistryRoot,
+  options: SkillRegistryOptions,
+  diagnostics: SkillRegistryDiagnostic[]
+): SkillMetadata | null {
   const text = safeReadFile(path, root, diagnostics);
   if (text === undefined) return null;
   if (!hasFrontMatter(text)) return badSkill(root, path, diagnostics, "missing_front_matter", "SKILL.md missing front matter");
@@ -106,8 +120,23 @@ function readSkillFile(path: string, root: SkillRegistryRoot, diagnostics: Skill
     risk_level: riskLevel(`${name} ${description}`),
     source_path: publicPath(path, root),
     summary: description,
+    ...runtimeManifest(path, root, options, diagnostics),
     trigger_rules: description || `Use when ${name} is requested.`
   };
+}
+
+function runtimeManifest(
+  path: string,
+  root: SkillRegistryRoot,
+  options: SkillRegistryOptions,
+  diagnostics: SkillRegistryDiagnostic[]
+): SkillRuntimeMetadata {
+  if (root.prefix) return emptyRuntime();
+  return readSkillRuntimeManifest({
+    availableTools: options.availableTools,
+    manifestPath: join(dirname(path), "manifest.json"),
+    publicPath: (file) => publicPath(file, root)
+  }, diagnostics);
 }
 
 function hasFrontMatter(text: string): boolean {

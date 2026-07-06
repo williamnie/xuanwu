@@ -1,0 +1,20 @@
+{
+  "manifest_version": "pi-skill.v0",
+  "kind": "domain",
+  "input_object": "inbox_item",
+  "output_objects": ["action_proposals"],
+  "required_tools": ["issue.create", "message.reply_draft"],
+  "primary_intents": ["bug_report", "status_question", "other"],
+  "intent_tags": ["proposal-only", "approval-gated"],
+  "input_schema": {
+    "type": "object",
+    "required": ["inbox_item"]
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["action_proposals"]
+  },
+  "permissions": {
+    "max_tool_permission": "write"
+  }
+}

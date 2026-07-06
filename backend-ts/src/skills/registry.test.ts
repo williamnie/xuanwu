@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getSkillMetadata, listSkillRegistry, readSkillRegistry, recommendSkillIntents } from "./registry.ts";
 
+const FIXTURE_SKILLS = join(import.meta.dir, "../../../docs/fixtures/pi-skills");
 const tempRoots: string[] = [];
 
 afterEach(async () => {
@@ -39,6 +40,69 @@ describe("PI skill registry", () => {
     expect(skill?.source_path).not.toContain(root);
     expect(JSON.stringify(registry)).not.toContain(root);
     expect(skillPath).toContain("SKILL.md");
+  });
+
+  test("loads intake and domain runtime manifests from fixture skills", () => {
+    const registry = readSkillRegistry({
+      availableTools: [
+        { name: "source.fetch_context", permission: "read" },
+        { name: "issue.create", permission: "write" },
+        { name: "message.reply_draft", permission: "read" }
+      ],
+      roots: [{ label: "fixture", path: FIXTURE_SKILLS }]
+    });
+
+    const byID = new Map(registry.items.map((skill) => [skill.id, skill]));
+
+    expect(registry.diagnostics).toEqual([]);
+    expect(byID.get("fixture-intake")).toMatchObject({
+      id: "fixture-intake",
+      input_object: "context_bundle",
+      intent_tags: ["llm-first", "multi-source"],
+      kind: "intake",
+      output_objects: ["inbox_items", "ignored_groups"],
+      primary_intents: ["bug_report", "reply_needed", "other"],
+      required_tools: ["source.fetch_context"],
+      runtime_manifest_path: "fixture:fixture-intake/manifest.json"
+    });
+    expect(byID.get("fixture-domain")).toMatchObject({
+      id: "fixture-domain",
+      input_object: "inbox_item",
+      kind: "domain",
+      output_objects: ["action_proposals"],
+      primary_intents: ["bug_report", "status_question", "other"],
+      required_tools: ["issue.create", "message.reply_draft"],
+      runtime_manifest_path: "fixture:fixture-domain/manifest.json"
+    });
+  });
+
+  test("diagnoses invalid manifests, missing tools, and permission conflicts without blocking registry load", async () => {
+    const root = await fixtureRoot();
+    await writeManifestSkill(root, "healthy", intakeManifest({ required_tools: ["available.read"] }));
+    await writeManifestSkill(root, "bad-schema", { ...intakeManifest(), input_schema: [] });
+    await writeManifestSkill(root, "needs-tool", intakeManifest({ required_tools: ["missing.tool"] }));
+    await writeManifestSkill(root, "conflict", intakeManifest({
+      permissions: { max_tool_permission: "read" },
+      required_tools: ["write.tool"]
+    }));
+
+    const registry = readSkillRegistry({
+      availableTools: [
+        { name: "available.read", permission: "read" },
+        { name: "write.tool", permission: "write" }
+      ],
+      roots: [{ label: "fixture", path: join(root, "skills") }]
+    });
+
+    expect(registry.items.map((item) => item.id)).toEqual(["bad-schema", "conflict", "healthy", "needs-tool"]);
+    expect(registry.items.find((item) => item.id === "bad-schema")).not.toHaveProperty("kind");
+    expect(registry.items.find((item) => item.id === "healthy")).toMatchObject({ kind: "intake" });
+    expect(registry.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "manifest_invalid", source_path: "fixture:bad-schema/manifest.json" }),
+      expect.objectContaining({ code: "missing_tool", source_path: "fixture:needs-tool/manifest.json" }),
+      expect.objectContaining({ code: "permission_conflict", source_path: "fixture:conflict/manifest.json" })
+    ]));
+    expect(JSON.stringify(registry)).not.toContain(root);
   });
 
   test("recommends skill intents from issue text", async () => {
@@ -120,4 +184,27 @@ async function writeSkill(root: string, id: string, frontMatter: { description: 
     "# Skill body"
   ].join("\n"));
   return path;
+}
+
+async function writeManifestSkill(root: string, id: string, manifest: Record<string, unknown>): Promise<void> {
+  await writeSkill(root, id, {
+    description: `Use when ${id} fixture metadata should be visible.`,
+    name: id
+  });
+  await writeFile(join(root, "skills", id, "manifest.json"), JSON.stringify(manifest, null, 2));
+}
+
+function intakeManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    input_object: "context_bundle",
+    input_schema: { type: "object" },
+    kind: "intake",
+    manifest_version: "pi-skill.v0",
+    output_objects: ["inbox_items", "ignored_groups"],
+    output_schema: { type: "object" },
+    permissions: { max_tool_permission: "write" },
+    primary_intents: ["bug_report", "other"],
+    required_tools: [],
+    ...overrides
+  };
 }
