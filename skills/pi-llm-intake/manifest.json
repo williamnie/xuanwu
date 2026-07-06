@@ -1,0 +1,27 @@
+{
+  "manifest_version": "pi-skill.v0",
+  "kind": "intake",
+  "input_object": "context_bundle",
+  "output_objects": ["inbox_items", "ignored_groups"],
+  "required_tools": [],
+  "primary_intents": ["bug_report", "status_question", "reply_needed", "decision_needed", "summarize_request", "create_task", "monitor_thread", "customer_feedback", "support_request", "other"],
+  "intent_tags": ["llm-first", "multi-source", "schema-output"],
+  "input_schema": {
+    "type": "object",
+    "required": ["context_bundle"],
+    "properties": {
+      "context_bundle": { "type": "object" }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["inbox_items", "ignored_groups"],
+    "properties": {
+      "inbox_items": { "type": "array", "items": { "type": "object" } },
+      "ignored_groups": { "type": "array", "items": { "type": "object" } }
+    }
+  },
+  "permissions": {
+    "max_tool_permission": "read"
+  }
+}

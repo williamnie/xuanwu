@@ -9,6 +9,7 @@ import {
   type AttentionInboxItemRecord,
   type IntakeRunRecord
 } from "../db/repositories/intakeRuns.ts";
+import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { assertIntakeSourcePolicy, type IntakeSourcePolicy } from "./intakeSourcePolicy.ts";
 import { buildIntakeSkillInput, buildIntakeSkillPrompt, type IntakeSkillInput } from "./intakeSkillInput.ts";
 
@@ -136,7 +137,7 @@ export async function runIntakeSkill(
       schema: LLM_INTAKE_OUTPUT_SCHEMA as JsonObject, skill, skillId: skill.id
     })));
   } catch (error) {
-    updateIntakeRun(db, run.id, { error: errorMessage(error), status: "failed" });
+    updateIntakeRun(db, run.id, { error: redactAuditText(errorMessage(error)), status: "failed" });
     throw error;
   }
 }

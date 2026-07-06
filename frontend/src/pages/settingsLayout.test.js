@@ -7,6 +7,7 @@ const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.ur
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url), 'utf8');
 const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsPanel.jsx', import.meta.url), 'utf8');
+const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 
@@ -51,4 +52,15 @@ test('Connectors tab shows read-only connector diagnostics from API', () => {
   assert.match(connectorDiagnosticsSource, /api\.getPiConnectors\(\)/);
   assert.match(connectorDiagnosticsSource, /Connector Diagnostics/);
   assert.doesNotMatch(connectorDiagnosticsSource, /window\.confirm|window\.alert/);
+});
+
+test('Skills tab shows intake and domain runtime history from API', () => {
+  assert.match(sectionsSource, /SkillsRuntimePanel/);
+  assert.match(apiSource, /getPiSkills/);
+  assert.match(apiSource, /getPiSkillIntakeRuns/);
+  assert.match(apiSource, /runPiSkillDomain/);
+  assert.match(skillsRuntimeSource, /入箱识别/);
+  assert.match(skillsRuntimeSource, /处理事项/);
+  assert.match(skillsRuntimeSource, /Run history/);
+  assert.doesNotMatch(skillsRuntimeSource, /window\.confirm|window\.alert/);
 });

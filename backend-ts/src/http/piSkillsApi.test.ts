@@ -3,6 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createContextBundle } from "../db/repositories/contextBundles.ts";
+import { createExternalEvent } from "../db/repositories/externalEvents.ts";
+import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -97,6 +100,61 @@ describe("PI skill metadata API", () => {
       fixture.db.close();
     }
   });
+
+  test("lists intake and domain runs, manual runs, links, and redacted failures", async () => {
+    const fixture = await openFixture();
+    await writeManifestSkill(fixture.root, "fixture-intake", intakeManifest());
+    await writeManifestSkill(fixture.root, "fixture-domain", domainManifest());
+    Bun.env.CODEX_HOME = fixture.root;
+    try {
+      const seed = seedSkillRunFixture(fixture.db);
+      const router = createDefaultRouter({ database: fixture.db });
+
+      const intakeRun = await jsonRequest(router, "/api/pi/skills/fixture-intake/intake-runs", {
+        body: JSON.stringify({ bundle_id: seed.bundleID }),
+        method: "POST"
+      });
+      expect(intakeRun.run).toMatchObject({
+        bundle_id: seed.bundleID,
+        input_object: "context_bundle",
+        links: { context_bundle: `/api/pi/attention-inbox/context-bundles/${seed.bundleID}` },
+        skill_id: "fixture-intake",
+        status: "running"
+      });
+
+      const domainRun = await jsonRequest(router, "/api/pi/skills/fixture-domain/domain-runs", {
+        body: JSON.stringify({ item_id: seed.itemID }),
+        method: "POST"
+      });
+      expect(domainRun.run).toMatchObject({
+        bundle_id: seed.bundleID,
+        input_object: "inbox_item",
+        item_id: seed.itemID,
+        links: {
+          context_bundle: `/api/pi/attention-inbox/context-bundles/${seed.bundleID}`,
+          inbox_item: `/api/pi/attention-inbox/items/${seed.itemID}`
+        },
+        skill_id: "fixture-domain",
+        status: "succeeded"
+      });
+
+      const intakeRunsText = await textRequest(router, "/api/pi/skills/intake-runs?status=failed");
+      expect(intakeRunsText).toContain("run_failed");
+      expect(intakeRunsText).not.toContain("fixture-secret");
+      expect(intakeRunsText).not.toContain("/Users/secret");
+      const intakeDetailText = await textRequest(router, `/api/pi/attention-inbox/intake-runs/${seed.failedRunID}`);
+      expect(intakeDetailText).not.toContain("fixture-secret");
+      expect(intakeDetailText).not.toContain("/Users/secret");
+
+      const domainRuns = await jsonRequest(router, "/api/pi/skills/domain-runs?skill_id=fixture-domain");
+      expect(domainRuns).toEqual([expect.objectContaining({
+        proposal_action_id: domainRun.action.id,
+        schema_output: expect.objectContaining({ action_proposals: expect.any(Array) })
+      })]);
+    } finally {
+      fixture.db.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {
@@ -150,4 +208,64 @@ function domainManifest(overrides: Record<string, unknown> = {}): Record<string,
     required_tools: [],
     ...overrides
   };
+}
+
+function seedSkillRunFixture(db: RunnerDatabase): { bundleID: number; failedRunID: number; itemID: number } {
+  const event = createExternalEvent(db, {
+    actor: "alice",
+    content: "登录页 500，需要处理",
+    external_id: "m1",
+    occurred_at: "2026-07-06T02:01:00Z",
+    provider: "fixture-provider",
+    raw_json: { secret: "raw-secret-not-in-run" },
+    received_at: "2026-07-06T02:01:01Z",
+    source: "fixture-im"
+  });
+  const bundle = createContextBundle(db, {
+    context: [{
+      actor: "alice",
+      attachment_refs: [],
+      event_ref: event.id,
+      occurred_at: event.occurred_at,
+      source_ref: "fixture-im:m1",
+      summary: "登录页 500，需要处理"
+    }],
+    created_by: "user",
+    event_refs: [event.id],
+    reason: "manual fixture",
+    source: "fixture-im",
+    trigger: "manual",
+    window: { from: event.occurred_at, to: event.occurred_at }
+  });
+  const failed = createIntakeRun(db, {
+    bundle_id: bundle.id,
+    error: "provider failed CODEX_API_KEY=fixture-secret at /Users/secret/run.log",
+    skill_id: "fixture-intake",
+    status: "failed"
+  });
+  const item = createAttentionInboxItem(db, {
+    bundle_id: bundle.id,
+    confidence: 0.9,
+    evidence_refs: [`external_event:${event.id}`],
+    intake_run_id: failed.id,
+    primary_intent: "bug_report",
+    source: "fixture-im",
+    suggested_actions: ["triage_attention_item"],
+    summary: "用户反馈登录页 500。",
+    title: "登录页 500"
+  });
+  return { bundleID: bundle.id, failedRunID: failed.id, itemID: item.id };
+}
+
+async function jsonRequest(router: ReturnType<typeof createDefaultRouter>, path: string, init: RequestInit = {}) {
+  const response = await router.handle(new Request(`${BASE_URL}${path}`, init));
+  expect(response.status).toBeGreaterThanOrEqual(200);
+  expect(response.status).toBeLessThan(300);
+  return response.json();
+}
+
+async function textRequest(router: ReturnType<typeof createDefaultRouter>, path: string) {
+  const response = await router.handle(new Request(`${BASE_URL}${path}`));
+  expect(response.status).toBe(200);
+  return response.text();
 }

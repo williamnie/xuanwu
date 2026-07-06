@@ -1,0 +1,42 @@
+{
+  "manifest_version": "pi-skill.v0",
+  "kind": "domain",
+  "input_object": "inbox_item",
+  "output_objects": ["action_proposals"],
+  "required_tools": ["issue_create_proposal", "issue_status_summary"],
+  "primary_intents": ["bug_report", "status_question", "reply_needed", "decision_needed", "summarize_request", "create_task", "monitor_thread", "customer_feedback", "support_request", "other"],
+  "intent_tags": ["proposal-only", "approval-gated", "connector-neutral"],
+  "input_schema": {
+    "type": "object",
+    "required": ["inbox_item"],
+    "properties": {
+      "inbox_item": { "type": "object" }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["action_proposals"],
+    "properties": {
+      "action_proposals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["type", "payload", "risk", "requires_approval", "evidence_refs"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["issue.create", "message.reply_draft", "issue.status_lookup", "ask_user", "watch_thread", "memory.create", "reminder.create", "no_action"]
+            },
+            "payload": { "type": "object" },
+            "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+            "requires_approval": { "type": "boolean" },
+            "evidence_refs": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "permissions": {
+    "max_tool_permission": "write"
+  }
+}

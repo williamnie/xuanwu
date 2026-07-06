@@ -12,8 +12,9 @@ import {
   type AttentionInboxItemStatus,
   type IntakeRunRecord
 } from "../db/repositories/intakeRuns.ts";
-import { createPiAction, createPiActionEvent } from "../db/repositories/pi.ts";
-import { runFixtureDomainSkill } from "../pi/domainSkillFixture.ts";
+import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
+import { publicIntakeRun } from "./piSkillRunViews.ts";
+import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -79,7 +80,7 @@ function intakeRunList(context: AttentionInboxContext, request: Request): unknow
 function intakeRunResponse(context: AttentionInboxContext, request: Request): Response {
   const run = getIntakeRun(context.database, pathID(request, "intake-runs"));
   if (!run) throw new HttpError(404, "intake run not found");
-  return json(run);
+  return json(publicIntakeRun(run));
 }
 
 function inboxItemList(context: AttentionInboxContext, request: Request): unknown[] {
@@ -122,19 +123,8 @@ function reintakeInboxItem(context: AttentionInboxContext, request: Request): Re
 
 function domainSkillProposal(context: AttentionInboxContext, request: Request): Response {
   const item = requireInboxItem(context, request);
-  const output = runFixtureDomainSkill(item);
-  const action = createPiAction(context.database, domainSkillAction(item, output));
-  createPiActionEvent(context.database, {
-    action_id: action.id,
-    event_type: "attention_inbox.domain_skill_requested",
-    payload_json: JSON.stringify({
-      action_count: output.action_proposals.length,
-      item_id: item.id,
-      primary_intent: item.primary_intent
-    })
-  });
-  const updated = updateAttentionInboxItemStatus(context.database, item.id, "proposal_created");
-  return json({ action, item: updated, proposal_status: "created" }, { status: 202 });
+  const result = runDomainSkillAndMarkProposal(context.database, item);
+  return json({ action: result.action, item: result.item, proposal_status: "created" }, { status: 202 });
 }
 
 function compactInboxItem(item: AttentionInboxItemRecord): JsonObject {
@@ -201,31 +191,10 @@ function compactIntakeRun(run: IntakeRunRecord): JsonObject {
     skill_id: run.skill_id,
     model: run.model,
     status: run.status,
-    error: run.error,
+    error: redactAuditText(run.error),
     ignored_count: run.ignored_groups.length,
     created_at: run.created_at,
     updated_at: run.updated_at
-  };
-}
-
-function domainSkillAction(item: AttentionInboxItemRecord, output: ReturnType<typeof runFixtureDomainSkill>): JsonObject {
-  return {
-    action_type: "attention_inbox.domain_skill",
-    id: `attention-inbox-item-${item.id}-domain-skill`,
-    idempotency_key: `attention-inbox-item:${item.id}:domain-skill`,
-    payload_json: JSON.stringify({
-      ...output,
-      evidence_refs: item.evidence_refs,
-      item_id: item.id,
-      primary_intent: item.primary_intent,
-      suggested_actions: item.suggested_actions,
-      title: item.title
-    }),
-    rationale: `Manual domain skill request for attention inbox item #${item.id}`,
-    requires_confirmation: 1,
-    risk_level: "low",
-    source: "attention_inbox",
-    status: "proposal"
   };
 }
 

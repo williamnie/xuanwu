@@ -206,6 +206,40 @@ export const api = {
 
   getPiConnectors: () => request('/api/pi/connectors'),
 
+  getPiSkills: () => request('/api/pi/skills'),
+
+  getPiSkill: (id) => request(`/api/pi/skills/${encodeURIComponent(id)}`),
+
+  getPiSkillIntakeRuns: ({ bundleId = '', skillId = '', status = '', limit = 50 } = {}) => {
+    const params = new URLSearchParams();
+    if (bundleId) params.append('bundle_id', String(bundleId));
+    if (skillId) params.append('skill_id', skillId);
+    if (status) params.append('status', status);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/skills/intake-runs${query}`);
+  },
+
+  getPiSkillDomainRuns: ({ itemId = '', skillId = '', status = '', limit = 50 } = {}) => {
+    const params = new URLSearchParams();
+    if (itemId) params.append('item_id', String(itemId));
+    if (skillId) params.append('skill_id', skillId);
+    if (status) params.append('status', status);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/skills/domain-runs${query}`);
+  },
+
+  runPiSkillIntake: (id, bundleId) => request(`/api/pi/skills/${encodeURIComponent(id)}/intake-runs`, {
+    method: 'POST',
+    body: JSON.stringify({ bundle_id: bundleId }),
+  }),
+
+  runPiSkillDomain: (id, itemId) => request(`/api/pi/skills/${encodeURIComponent(id)}/domain-runs`, {
+    method: 'POST',
+    body: JSON.stringify({ item_id: itemId }),
+  }),
+
   getPiAttentionItems: ({ status = '', source = '', limit = 100 } = {}) => {
     const params = new URLSearchParams();
     if (status) params.append('status', status);
@@ -238,6 +272,14 @@ export const api = {
   }),
 
   getPiAttentionContextBundle: (id) => request(`/api/pi/attention-inbox/context-bundles/${encodeURIComponent(id)}`),
+
+  getPiAttentionContextBundles: ({ source = '', limit = 100 } = {}) => {
+    const params = new URLSearchParams();
+    if (source) params.append('source', source);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/attention-inbox/context-bundles${query}`);
+  },
 
   getPiAttentionIntakeRun: (id) => request(`/api/pi/attention-inbox/intake-runs/${encodeURIComponent(id)}`),
 
@@ -407,8 +449,6 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
   }),
-
-  getPiSkills: () => request('/api/pi/skills'),
 
   getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities'),
 

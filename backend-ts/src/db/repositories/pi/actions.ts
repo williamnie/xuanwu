@@ -41,6 +41,7 @@ export type PiActionEventFilter = {
   actionId?: string;
   conversationId?: string;
   delegationId?: string;
+  eventType?: string;
   issueId?: number;
   projectId?: string;
 };
@@ -120,6 +121,7 @@ export function createPiActionEvent(db: RunnerDatabase, input: PiActionEventInpu
 export function listPiActionEvents(db: RunnerDatabase, filter: PiActionEventFilter = {}): PiActionEvent[] {
   return listRows(db, EVENT_TABLE, EVENT_COLUMNS, mapPiActionEvent, buildFilter([
     ["action_id=?", filter.actionId],
+    ["event_type=?", filter.eventType],
     ["project_id=?", filter.projectId],
     ["conversation_id=?", filter.conversationId],
     ["issue_id=?", filter.issueId],

@@ -5,6 +5,7 @@ import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
+import SkillsRuntimePanel from './SkillsRuntimePanel';
 import { AssistantOverviewPanel, SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
 
 export default function SettingsTabContent({ activeTab, RuntimeStatusPanel }) {
@@ -61,10 +62,11 @@ function SkillsSettingsTab() {
     <>
       <SettingsPlaceholderPanel
         eyebrow="Skills"
-        title="Skill registry placeholder"
-        description="Skills 后续会在同一个 PI Assistant 下声明 intake/domain 能力、所需工具与运行历史。"
-        items={['当前保留 issue template 管理。', '不新增 skill schema、运行器或权限模型。']}
+        title="Skill registry"
+        description="Skills 在同一个 PI Assistant 下声明 intake/domain 能力、所需工具、schema 与运行历史。"
+        items={['Intake skill 负责从 context bundle 识别入箱事项。', 'Domain skill 负责从 inbox item 生成 approval-gated action proposal。']}
       />
+      <SkillsRuntimePanel />
       <IssueTemplatesPanel />
     </>
   );

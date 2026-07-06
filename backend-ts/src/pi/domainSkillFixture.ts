@@ -28,20 +28,20 @@ export type DomainSkillOutput = {
   action_proposals: DomainSkillActionProposal[];
   item_id: number;
   primary_intent: string;
-  skill_id: "fixture-domain";
+  skill_id: string;
   summary: string;
 };
 
 const STATUS_DRAFT = "我先查一下相关 issue 状态，并以当前记录为准同步进展。";
 const REPLY_DRAFT = "已收到，我会基于当前上下文整理一个回复草稿，确认后再发送。";
 
-export function runFixtureDomainSkill(item: AttentionInboxItemRecord): DomainSkillOutput {
+export function runFixtureDomainSkill(item: AttentionInboxItemRecord, skillID = "fixture-domain"): DomainSkillOutput {
   const actionInputs = actionInputsForItem(item);
   return {
     action_proposals: actionInputs.map((input, index) => proposal(item, input, index)),
     item_id: item.id,
     primary_intent: item.primary_intent,
-    skill_id: "fixture-domain",
+    skill_id: skillID,
     summary: item.summary
   };
 }

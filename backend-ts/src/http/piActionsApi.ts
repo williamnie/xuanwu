@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
+  getPiAction,
   listPiActionEvents,
   listPiActions,
   type PiActionFilter
@@ -20,6 +21,7 @@ type PiActionsContext = {
 
 export function registerPiActionRoutes(router: Router, context: PiActionsContext): void {
   router.get("/api/pi/actions", (request) => json(listPiActions(context.database, piActionFilter(request))));
+  router.get("/api/pi/actions/:id", (request) => actionResponse(context, request));
   router.get("/api/pi/actions/:id/events", (request) => json(listPiActionEvents(context.database, { actionId: actionID(request) })));
   router.get("/api/pi/audit-events", (request) => json(listPiActionEvents(context.database, piActionEventFilter(request))));
   router.post("/api/pi/actions/:id/approve", async (request) => json(await approveAction(context, actionID(request))));
@@ -27,6 +29,12 @@ export function registerPiActionRoutes(router: Router, context: PiActionsContext
   router.post("/api/pi/actions/:id/request-changes", async (request) => json(await requestChangesAction(context, actionID(request), request)));
   router.post("/api/pi/actions/:id/snooze", async (request) => json(await snoozeAction(context, actionID(request), request)));
   router.post("/api/pi/actions/:id/execute", async (request) => json(await executeAction(context, actionID(request))));
+}
+
+function actionResponse(context: PiActionsContext, request: Request): Response {
+  const action = getPiAction(context.database, actionID(request));
+  if (!action) throw new HttpError(404, "PI action 不存在");
+  return json(action);
 }
 
 async function approveAction(context: PiActionsContext, id: string) {
@@ -75,6 +83,7 @@ function piActionEventFilter(request: Request) {
     actionId: cleanParam(params.get("action_id")),
     conversationId: cleanParam(params.get("conversation_id")),
     delegationId: cleanParam(params.get("delegation_id")),
+    eventType: cleanParam(params.get("event_type")),
     issueId: positiveID(params.get("issue_id")),
     projectId: cleanParam(params.get("project_id"))
   };

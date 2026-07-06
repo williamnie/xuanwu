@@ -1,0 +1,225 @@
+.skills-runtime-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.skills-runtime-head,
+.skills-runtime-title,
+.skills-run-controls,
+.skills-run-links {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.skills-runtime-head h2,
+.skills-runtime-title h3,
+.skills-run-history h4 {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.skills-runtime-head p,
+.skills-runtime-title p,
+.skills-runtime-error {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.skills-runtime-error {
+  color: var(--error);
+}
+
+.skills-runtime-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+}
+
+.skills-runtime-list,
+.skills-runtime-detail,
+.skills-run-row {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+}
+
+.skills-runtime-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.skills-runtime-list button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  text-align: left;
+}
+
+.skills-runtime-list button.active,
+.skills-runtime-list button:hover {
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border-color));
+}
+
+.skills-runtime-list small,
+.skills-chip-block > span,
+.skills-run-row small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.skills-runtime-detail,
+.skills-runtime-meta,
+.skills-run-history {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.skills-runtime-meta {
+  padding: 0;
+}
+
+.skills-kind,
+.skills-enabled,
+.skills-chip-block em {
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 820;
+  padding: 4px 8px;
+  width: fit-content;
+}
+
+.skills-kind.intake,
+.skills-enabled.ok {
+  color: var(--success);
+}
+
+.skills-kind.domain {
+  color: var(--primary);
+}
+
+.skills-enabled.warn {
+  color: var(--warning);
+}
+
+.skills-chip-block {
+  display: grid;
+  gap: 7px;
+}
+
+.skills-chip-block > div,
+.skills-run-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-start;
+}
+
+.skills-run-controls {
+  background: color-mix(in srgb, var(--primary) 5%, var(--bg-secondary));
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.skills-run-controls label {
+  color: var(--text-muted);
+  display: grid;
+  flex: 1;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.skills-run-controls input {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.skills-schema,
+.skills-run-row {
+  padding: 10px 12px;
+}
+
+.skills-schema summary,
+.skills-run-row summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.skills-schema pre {
+  background: var(--bg-card);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  margin: 10px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.skills-run-row summary {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.skills-run-links a {
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-top: 10px;
+}
+
+.skills-runtime-empty {
+  border: 1px dashed var(--border-color);
+  border-radius: 14px;
+  color: var(--text-muted);
+  padding: 18px;
+}
+
+.skills-runtime-empty.compact {
+  padding: 12px;
+}
+
+@media (max-width: 920px) {
+  .skills-runtime-grid,
+  .skills-run-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .skills-runtime-grid {
+    display: grid;
+  }
+
+  .skills-runtime-head,
+  .skills-runtime-title,
+  .skills-run-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
