@@ -237,6 +237,33 @@ describe("Bun PI settings API", () => {
     }
   });
 
+  test("recovers the default assistant for settings and chat when PI agents are empty", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      database.sqlite.run("delete from pi_agents");
+
+      const settingsAgents = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));
+      expect(settingsAgents.status).toBe(200);
+      expect((await settingsAgents.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["runner-default"]);
+
+      database.sqlite.run("delete from pi_agents");
+      const conversation = await request(router, "/api/pi/conversations", "POST", {
+        id: "empty-agents-chat",
+        title: "New conversation"
+      });
+
+      expect(conversation.status).toBe(201);
+      expect(await conversation.json()).toMatchObject({
+        id: "empty-agents-chat",
+        pi_agent_id: "runner-default",
+        status: "active"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("rejects project settings that would auto-use a disabled PI agent", async () => {
     const database = await openFixtureDatabase();
     try {
