@@ -32,6 +32,7 @@ import { clearFeishuPiConversationProjectsMigration } from "./031_clear_feishu_p
 import { assistantToolRegistryMigration } from "./032_assistant_tool_registry.ts";
 import { contextBundlesMigration } from "./033_context_bundles.ts";
 import { intakeRunsMigration } from "./034_intake_runs.ts";
+import { piAutomationsMigration } from "./035_pi_automations.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -67,5 +68,6 @@ export const migrations = [
   clearFeishuPiConversationProjectsMigration,
   assistantToolRegistryMigration,
   contextBundlesMigration,
-  intakeRunsMigration
+  intakeRunsMigration,
+  piAutomationsMigration
 ];
