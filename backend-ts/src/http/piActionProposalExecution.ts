@@ -10,7 +10,8 @@ import {
   type ActionProposalRecord,
   type PiAction
 } from "../db/repositories/pi.ts";
-import { createPendingPiAction } from "../pi/actionEngine.ts";
+import { createPendingPiAction, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { decideSourcePermission, type SourcePermissionDecision } from "../pi/sourcePermissionPolicy.ts";
 import { executeApprovedPiAction, resolvePiActionDecision, type PiActionDecisionContext } from "./piActionDecision.ts";
 import { HttpError } from "./errors.ts";
 
@@ -70,20 +71,22 @@ async function executeProposalAction(
   actor = "user"
 ): Promise<ExecutionSummary> {
   const payload = executablePayload(context.database, proposal, action);
+  const permission = sourcePermission(proposal, action, payload);
   const created = createPendingPiAction(context.database, {
     bus: context.bus,
     source: "action_proposal"
   }, {
     actionType: action.type,
-    authorization: authorizationFor(action, payload),
+    authorization: undefined,
     idempotencyKey: `action-proposal:${proposal.id}:${action.id}`,
     issueID: positiveID(payload.issue_id),
     payload,
     projectID: projectID(action, payload),
     rationale: action.rationale || proposal.summary,
-    riskOverride: { requiresConfirmation: action.requires_approval, riskLevel: action.risk }
+    riskOverride: { requiresConfirmation: requiresConfirmation(action, permission), riskLevel: action.risk }
   }) as { action_id?: string };
   const actionID = cleanString(created.action_id);
+  recordSourcePolicyDecision(context.database, getPiAction(context.database, actionID), permission);
   const final = await finishAction(context, actionID, cleanString(actor) || "user");
   return summaryFromAction(final);
 }
@@ -137,6 +140,14 @@ function replyPayload(
     external_event_id: positiveID(payload.external_event_id) || event?.id || 0,
     risk: action.risk,
     source: cleanString(payload.source) || event?.source || "action_proposal",
+    actor: cleanString(payload.actor) || firstString(
+      normalized.actor_id, normalized.actorId, normalized.sender_id,
+      normalized.senderId, normalized.user_id, normalized.userId, event?.actor
+    ),
+    target_person_id: cleanString(payload.target_person_id) || firstString(
+      normalized.person_id, normalized.personId, normalized.sender_id,
+      normalized.senderId, normalized.user_id, normalized.userId, event?.actor
+    ),
     target_chat_id: cleanString(payload.target_chat_id) || firstString(normalized.chat_id, normalized.chatId),
     target_message_id: cleanString(payload.target_message_id) || firstString(normalized.message_id, normalized.messageId, event?.external_id),
     target_thread_id: cleanString(payload.target_thread_id) || firstString(normalized.thread_id, normalized.threadId)
@@ -148,16 +159,52 @@ function withProjectHint(action: ActionProposalAction, payload: JsonObject): Jso
   return project === "" ? payload : { ...payload, project_id: project };
 }
 
-function authorizationFor(action: ActionProposalAction, payload: JsonObject) {
-  if (action.type !== "message.reply_send" || replySendAllowed(action, payload)) return undefined;
-  return { forbidden_actions: ["message.reply_send"] };
+function sourcePermission(
+  proposal: ActionProposalRecord,
+  action: ActionProposalAction,
+  payload: JsonObject
+): SourcePermissionDecision | undefined {
+  if (action.type !== "message.reply_send") return undefined;
+  return decideSourcePermission({
+    actionRisk: action.risk,
+    actionType: action.type,
+    actor: cleanString(payload.actor),
+    automation: cleanString(payload.automation_id ?? payload.automation),
+    chat: cleanString(payload.target_chat_id),
+    person: cleanString(payload.target_person_id),
+    replyPolicy: replyPolicyInput(payload),
+    skill: cleanString(payload.skill_id) || proposal.skill_run_id,
+    source: cleanString(payload.source),
+    sourcePolicy: objectValue(payload.source_policy),
+    tool: cleanString(payload.tool) || action.type
+  });
 }
 
-function replySendAllowed(action: ActionProposalAction, payload: JsonObject): boolean {
-  const sourcePolicy = objectValue(payload.source_policy);
-  const replyPolicy = objectValue(payload.reply_policy ?? sourcePolicy.reply_policy ?? payload.policy);
-  const enabled = payload.auto_reply_enabled === true || replyPolicy.auto_reply_enabled === true;
-  return enabled && action.risk === "low";
+function replyPolicyInput(payload: JsonObject): JsonObject {
+  const direct = objectValue(payload.reply_policy ?? payload.policy);
+  if (payload.auto_reply_enabled !== true) return direct;
+  return { ...direct, auto_reply_enabled: true };
+}
+
+function requiresConfirmation(
+  action: ActionProposalAction,
+  decision: SourcePermissionDecision | undefined
+): boolean {
+  return action.requires_approval || decision?.requiresApproval === true;
+}
+
+function recordSourcePolicyDecision(
+  db: RunnerDatabase,
+  action: PiAction | null,
+  decision: SourcePermissionDecision | undefined
+): void {
+  if (!action || !decision) return;
+  recordPiActionAuditEvent(db, action, "source_policy_decision", {
+    actor: "source_policy",
+    decision: decision.canAutoExecute ? "execute" : "ask",
+    payload: decision.audit,
+    reason: decision.reason
+  });
 }
 
 function summaryFromAction(action: PiAction): ExecutionSummary {

@@ -22,6 +22,7 @@ export type EventRouteStatus = "routed" | "skipped";
 
 export type EventRouterSourcePolicy = IntakeSourcePolicy & {
   action_mode?: ActionMode;
+  collect_raw_events?: boolean;
   issue_policy?: JsonObject;
   profile?: SourceProfile;
   reply_policy?: JsonObject;
@@ -51,9 +52,9 @@ export type DomainRouteResult = {
 
 const PROFILE_DEFAULTS: Record<SourceProfile, EventRouterSourcePolicy> = {
   company_chat: profilePolicy("company_chat", "mention_only", "draft_only", true, false),
-  personal_chat: profilePolicy("personal_chat", "mention_only", "auto_low_risk", false, true),
+  personal_chat: profilePolicy("personal_chat", "mention_only", "auto_low_risk", false, false),
   ops_chat: profilePolicy("ops_chat", "scheduled_llm_triage", "propose_actions", true, false),
-  private_dm: profilePolicy("private_dm", "mention_only", "auto_low_risk", false, true),
+  private_dm: profilePolicy("private_dm", "mention_only", "auto_low_risk", false, false),
   email: profilePolicy("email", "scheduled_llm_triage", "propose_actions", true, false),
   github: profilePolicy("github", "continuous_llm_triage", "propose_actions", false, false),
   custom: profilePolicy("custom", "manual_only", "observe_only", true, false)
@@ -76,6 +77,7 @@ export async function routeRawEventToIntake(
   const policy = resolveSourcePolicy(options.policy);
   const trigger = options.trigger ?? rawEventTrigger(event);
   const skillID = intakeSkillID(options);
+  if (policy.collect_raw_events === false) return skipped("raw_event", "collect_raw_events_disabled");
   if (!triggerAllowedByPolicy(policy, trigger)) return skipped("raw_event", `trigger_${trigger}_not_allowed`);
   if (!options.retry && rawEventAlreadyRouted(db, event, skillID)) return skipped("raw_event", "duplicate_raw_event");
   const input = buildContextBundleFromEvents(events, {
@@ -157,6 +159,7 @@ export function resolveSourcePolicy(input: EventRouterSourcePolicy = {}): EventR
     ...base,
     ...input,
     action_mode: actionMode(input.action_mode ?? base.action_mode),
+    collect_raw_events: input.collect_raw_events !== false,
     intake_mode: intakeMode(input.intake_mode ?? base.intake_mode),
     issue_policy: { ...base.issue_policy, ...objectValue(input.issue_policy) },
     profile,
@@ -241,6 +244,7 @@ function profilePolicy(
 ): EventRouterSourcePolicy {
   return {
     action_mode: actionModeValue,
+    collect_raw_events: true,
     intake_mode: intakeModeValue,
     issue_policy: { auto_create_triage_issue: false, auto_enqueue: false, require_project_confirmation: requireProject },
     profile,

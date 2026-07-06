@@ -33,7 +33,8 @@ describe("PI event router", () => {
     });
     expect(resolveSourcePolicy({ profile: "personal_chat" })).toMatchObject({
       action_mode: "auto_low_risk",
-      intake_mode: "mention_only"
+      intake_mode: "mention_only",
+      reply_policy: { auto_reply_enabled: false }
     });
     expect(resolveSourcePolicy({ profile: "ops_chat" })).toMatchObject({
       action_mode: "propose_actions",
@@ -41,8 +42,26 @@ describe("PI event router", () => {
     });
     expect(resolveSourcePolicy({ profile: "private_dm" })).toMatchObject({
       action_mode: "auto_low_risk",
-      intake_mode: "mention_only"
+      intake_mode: "mention_only",
+      reply_policy: { auto_reply_enabled: false }
     });
+  });
+
+  test("source policy can disable raw event collection before intake", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const model = countingIgnoredModel();
+      const mention = event(db, "m-disabled", "@PI 看一下");
+
+      const route = await routeRawEventToIntake(db, mention, [mention], model.run, {
+        policy: { collect_raw_events: false, profile: "company_chat" }
+      });
+
+      expect(route).toMatchObject({ reason: "collect_raw_events_disabled", status: "skipped" });
+      expect(model.calls()).toBe(0);
+    } finally {
+      db.close();
+    }
   });
 
   test("mention_only only routes mention reply and user-trigger bundles to intake", async () => {

@@ -8,7 +8,7 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listImReplyDrafts, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { getPiAction, listPiActions } from "../db/repositories/pi.ts";
+import { getPiAction, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -135,7 +135,7 @@ describe("PI action proposals API", () => {
     }
   });
 
-  test("approving a proposal executes issue/status/reply actions and blocks reply_send without source policy", async () => {
+  test("approving a proposal executes issue/status/reply actions and forces reply_send confirmation without auto policy", async () => {
     const db = await openFixtureDatabase();
     try {
       seedProject(db, "demo");
@@ -156,8 +156,8 @@ describe("PI action proposals API", () => {
             }, "low", false),
             action("message.reply_send", {
               source: "fixture-im",
-              text: "不要自动发送"
-            }, "low", true)
+              text: "确认后发送"
+            }, "low", false)
           ],
           confidence: 0.91,
           evidence_refs: [`external_event:${itemID}`],
@@ -187,18 +187,26 @@ describe("PI action proposals API", () => {
           ["issue.create", "completed"],
           ["issue.status_lookup", "completed"],
           ["message.reply_draft", "completed"],
-          ["message.reply_send", "denied"]
+          ["message.reply_send", "completed"]
         ]);
       expect(created).toMatchObject({
         description: expect.stringContaining("登录页 500，需要排查"),
         source_turn_id: `attention_inbox_item:${itemID}`,
         status: "triage"
       });
-      expect(listImReplyDrafts(db, { source: "fixture-im" })).toMatchObject([
-        expect.objectContaining({ content: "编辑后的草稿", status: "pending" })
+      expect(listImReplyDrafts(db, { source: "fixture-im" })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ content: "编辑后的草稿", status: "pending" }),
+        expect.objectContaining({ content: "确认后发送", status: "approved" })
+      ]));
+      expect(listSyncOutbox(db, { source: "fixture-im" })).toMatchObject([
+        expect.objectContaining({ content: "确认后发送", status: "pending" })
       ]);
-      expect(listSyncOutbox(db, { source: "fixture-im" })).toEqual([]);
-      expect(getPiAction(db, approved.actions[3].pi_action_id)).toMatchObject({ status: "denied" });
+      expect(getPiAction(db, approved.actions[3].pi_action_id)).toMatchObject({
+        gate_decision: "ask",
+        requires_confirmation: 1,
+        status: "completed"
+      });
+      expect(sourcePolicyReason(db, approved.actions[3].pi_action_id)).toBe("auto_reply_disabled");
       expect(actions.map((item) => item.action_type).sort()).toEqual([
         "issue.create",
         "issue.status_lookup",
@@ -221,10 +229,10 @@ describe("PI action proposals API", () => {
         body: JSON.stringify({
           actions: [
             action("message.reply_send", {
-              reply_policy: { auto_reply_enabled: true },
+              reply_policy: { allowed_chats: ["oc_reply_chat"], auto_reply_enabled: true },
               source: "fixture-im",
               text: "可以发送"
-            }, "low", true)
+            }, "low", false)
           ],
           evidence_refs: [`external_event:${eventID}`],
           skill_run_id: "domain-run-send",
@@ -241,6 +249,11 @@ describe("PI action proposals API", () => {
       });
 
       expect(approved.actions[0]).toMatchObject({ execution_status: "completed", type: "message.reply_send" });
+      expect(getPiAction(db, approved.actions[0].pi_action_id)).toMatchObject({
+        gate_decision: "execute",
+        requires_confirmation: 0
+      });
+      expect(sourcePolicyReason(db, approved.actions[0].pi_action_id)).toBe("low_risk_auto_reply_allowed");
       expect(listImReplyDrafts(db, { source: "fixture-im" })).toMatchObject([
         expect.objectContaining({ content: "可以发送", status: "approved" })
       ]);
@@ -364,6 +377,12 @@ function seedReplyEvent(db: RunnerDatabase): number {
     received_at: "2026-07-06T04:01:01Z",
     source: "fixture-im"
   }).id;
+}
+
+function sourcePolicyReason(db: RunnerDatabase, actionID: string): string {
+  const event = listPiActionEvents(db, { actionId: actionID })
+    .find((item) => item.event_type === "source_policy_decision");
+  return event?.reason ?? "";
 }
 
 async function jsonRequest(router: ReturnType<typeof createDefaultRouter>, path: string, init: RequestInit = {}) {
