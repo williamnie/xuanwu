@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
-import { createExternalEvent, getExternalEvent, listExternalEvents } from "./externalEvents.ts";
+import { createExternalEvent, getExternalEvent, listExternalEvents, upsertExternalEvent } from "./externalEvents.ts";
 
 const tempRoots: string[] = [];
 
@@ -112,6 +112,100 @@ describe("external event repository", () => {
         sameFirst.id,
         older.id
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("persists raw event fixtures and attachment metadata without secret values", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const text = createExternalEvent(db, {
+        content: "plain text message",
+        event_type: "message",
+        external_id: "msg-plain",
+        occurred_at: "2026-07-06T01:00:00Z",
+        provider: "fixture-provider",
+        raw_json: { message: { text: "plain text message" }, token: "secret-token" },
+        source: "fixture-im"
+      });
+      const mention = createExternalEvent(db, {
+        content: "@PI please check",
+        event_type: "message.mention",
+        external_id: "msg-mention",
+        occurred_at: "2026-07-06T01:01:00Z",
+        provider: "fixture-provider",
+        raw_json: { mentions: [{ id: "pi" }], text: "@PI please check" },
+        source: "fixture-im"
+      });
+      const attachment = createExternalEvent(db, {
+        attachments: [{
+          kind: "image",
+          mime: "image/png",
+          name: "screen.png",
+          remote_ref: "https://files.example/download/screen.png?token=secret-token",
+          vision_summary: "A failing login screenshot"
+        }],
+        event_type: "message.attachment",
+        external_id: "msg-attachment",
+        occurred_at: "2026-07-06T01:02:00Z",
+        provider: "fixture-provider",
+        raw_json: { attachments: [{ file_key: "file-1" }], access_token: "secret-token" },
+        source: "fixture-im"
+      });
+      const cli = createExternalEvent(db, {
+        content: "bun test failed",
+        event_type: "cli.output",
+        external_id: "cli-run-1",
+        occurred_at: "2026-07-06T01:03:00Z",
+        provider: "cli",
+        raw_json: { argv: ["bun", "test"], exit_code: 1, stderr: "expected 1 got 2" },
+        source: "local-cli"
+      });
+
+      expect([text, mention, attachment, cli].map((item) => item.event_type)).toEqual([
+        "message",
+        "message.mention",
+        "message.attachment",
+        "cli.output"
+      ]);
+      expect(attachment.content).toBe("[1 attachment metadata item(s)]");
+      expect(attachment.attachments).toEqual([{
+        kind: "image",
+        local_ref: "",
+        mime_type: "image/png",
+        name: "screen.png",
+        ocr_text: "",
+        remote_ref: "https://files.example/download/screen.png?token=%5Bredacted%5D",
+        vision_summary: "A failing login screenshot"
+      }]);
+      expect(text.raw_json).toMatchObject({ token: "[redacted]" });
+      expect(attachment.raw_json).toMatchObject({ access_token: "[redacted]" });
+      expect(JSON.stringify(listExternalEvents(db))).not.toContain("secret-token");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("upserts repeated source external_id without duplicating raw events", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const first = upsertExternalEvent(db, {
+        content: "first delivery",
+        event_type: "notification",
+        external_id: "notice-1",
+        source: "fixture-notify"
+      });
+      const replay = upsertExternalEvent(db, {
+        content: "replayed delivery",
+        event_type: "notification",
+        external_id: "notice-1",
+        source: "fixture-notify"
+      });
+
+      expect(replay.id).toBe(first.id);
+      expect(replay.content).toBe("first delivery");
+      expect(db.sqlite.query("select count(*) as count from external_events").get()).toEqual({ count: 1 });
     } finally {
       db.close();
     }

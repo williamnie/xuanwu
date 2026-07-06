@@ -1,19 +1,30 @@
 import type { RunnerDatabase } from "../database.ts";
+import { attachmentContent, normalizeAttachments, type ExternalEventAttachment, type ExternalEventAttachmentInput } from "./externalEventAttachments.ts";
+import { redactSecrets } from "./externalEventRedaction.ts";
 
 type SQLValue = number | string;
 type JsonObject = Record<string, unknown>;
-type ExternalEventStoredRecord = Omit<ExternalEventRecord, "id" | "normalized_message" | "summary">;
+type ExternalEventStoredRecord = Omit<ExternalEventRecord, "attachments" | "id" | "normalized_message" | "raw_json" | "summary">;
+
+export type { ExternalEventAttachment, ExternalEventAttachmentInput };
 
 export type ExternalEventRecord = {
   actor: string;
+  attachments: ExternalEventAttachment[];
+  attachments_json: string;
   content: string;
   dedupe_key: string;
+  event_type: string;
   external_id: string;
   id: number;
   normalized_message: JsonObject;
   normalized_message_json: string;
+  occurred_at: string;
   project_hint: string;
   project_id: string;
+  provider: string;
+  raw_json: JsonObject;
+  raw_json_text: string;
   raw_payload_ref: string;
   received_at: string;
   source: string;
@@ -23,7 +34,8 @@ export type ExternalEventRecord = {
   trust_level: string;
 };
 
-export type ExternalEventInput = Partial<Omit<ExternalEventRecord, "id">>;
+type BaseExternalEventInput = Partial<Omit<ExternalEventRecord, "attachments" | "id" | "normalized_message" | "raw_json" | "summary">>;
+export type ExternalEventInput = BaseExternalEventInput & { attachments?: ExternalEventAttachmentInput[]; normalized_message?: JsonObject; raw_json?: unknown; summary?: JsonObject };
 
 export type ExternalEventListFilter = {
   dedupeKey?: string;
@@ -31,9 +43,10 @@ export type ExternalEventListFilter = {
   source?: string;
 };
 
-const COLUMNS = `id, source, external_id, actor, project_hint, content,
-  trust_level, dedupe_key, raw_payload_ref, normalized_message_json,
-  project_id, status, summary_json, received_at`;
+const COLUMNS = `id, source, provider, external_id, event_type, occurred_at,
+  actor, project_hint, content, trust_level, dedupe_key, raw_payload_ref,
+  raw_json, attachments_json, normalized_message_json, project_id, status,
+  summary_json, received_at`;
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 500;
 
@@ -55,7 +68,7 @@ export function upsertExternalEvent(
   timestamp = new Date()
 ): ExternalEventRecord {
   const write = db.transaction(() => {
-    const existing = findExternalEventByDedupe(db, input.source, input.dedupe_key);
+    const existing = findExistingExternalEvent(db, input);
     return existing ?? createExternalEvent(db, input, timestamp);
   });
   return write.immediate();
@@ -94,18 +107,27 @@ export function listExternalEvents(
 }
 
 function normalizeCreate(input: ExternalEventInput, timestamp: Date): ExternalEventStoredRecord {
+  const source = cleanString(input.source);
+  const externalID = cleanString(input.external_id);
+  const receivedAt = cleanString(input.received_at) || timestamp.toISOString();
+  const attachments = normalizeAttachments(input.attachments);
   const record = {
-    source: cleanString(input.source),
-    external_id: cleanString(input.external_id),
+    source,
+    provider: cleanString(input.provider) || source,
+    external_id: externalID,
+    event_type: cleanString(input.event_type) || "message",
+    occurred_at: cleanString(input.occurred_at) || receivedAt,
     actor: cleanString(input.actor),
     project_hint: cleanString(input.project_hint),
     project_id: cleanString(input.project_id),
-    content: cleanString(input.content),
+    content: cleanString(input.content) || attachmentContent(attachments),
     trust_level: cleanString(input.trust_level) || "untrusted",
-    dedupe_key: cleanString(input.dedupe_key),
+    dedupe_key: cleanString(input.dedupe_key) || externalID,
     raw_payload_ref: cleanString(input.raw_payload_ref),
+    raw_json_text: evidenceJsonText(input.raw_json_text, input.raw_json),
+    attachments_json: JSON.stringify(attachments),
     normalized_message_json: jsonText(input.normalized_message_json, input.normalized_message),
-    received_at: cleanString(input.received_at) || timestamp.toISOString(),
+    received_at: receivedAt,
     status: cleanString(input.status) || "inbox",
     summary_json: jsonText(input.summary_json, input.summary)
   };
@@ -138,7 +160,10 @@ function mapExternalEvent(row: Record<string, unknown>): ExternalEventRecord {
   return {
     id: integerValue(row.id, "external_events.id"),
     source: requiredString(row.source, "external_events.source"),
+    provider: optionalString(row.provider) || requiredString(row.source, "external_events.source"),
     external_id: optionalString(row.external_id),
+    event_type: optionalString(row.event_type) || "message",
+    occurred_at: optionalString(row.occurred_at) || requiredString(row.received_at, "external_events.received_at"),
     actor: optionalString(row.actor),
     project_hint: optionalString(row.project_hint),
     project_id: optionalString(row.project_id),
@@ -146,6 +171,10 @@ function mapExternalEvent(row: Record<string, unknown>): ExternalEventRecord {
     trust_level: optionalString(row.trust_level) || "untrusted",
     dedupe_key: requiredString(row.dedupe_key, "external_events.dedupe_key"),
     raw_payload_ref: optionalString(row.raw_payload_ref),
+    raw_json_text: requiredJsonString(row.raw_json),
+    raw_json: jsonObject(row.raw_json),
+    attachments_json: requiredArrayString(row.attachments_json),
+    attachments: jsonAttachments(row.attachments_json),
     normalized_message_json: requiredJsonString(row.normalized_message_json),
     normalized_message: jsonObject(row.normalized_message_json),
     status: optionalString(row.status) || "inbox",
@@ -162,22 +191,45 @@ function requireFields(record: Record<string, string>, fields: string[]): void {
 }
 
 function insertColumns(): string {
-  return `source, external_id, actor, project_hint, content,
-    trust_level, dedupe_key, raw_payload_ref, normalized_message_json,
-    project_id, status, summary_json, received_at`;
+  return `source, provider, external_id, event_type, occurred_at, actor,
+    project_hint, content, trust_level, dedupe_key, raw_payload_ref,
+    raw_json, attachments_json, normalized_message_json, project_id, status,
+    summary_json, received_at`;
 }
 
 function insertPlaceholders(): string {
-  return "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
+  return "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
 }
 
 function insertValues(record: ExternalEventStoredRecord): SQLValue[] {
   return [
-    record.source, record.external_id, record.actor, record.project_hint,
-    record.content, record.trust_level, record.dedupe_key, record.raw_payload_ref,
-    record.normalized_message_json, record.project_id, record.status,
-    record.summary_json, record.received_at
+    record.source, record.provider, record.external_id, record.event_type,
+    record.occurred_at, record.actor, record.project_hint, record.content,
+    record.trust_level, record.dedupe_key, record.raw_payload_ref,
+    record.raw_json_text, record.attachments_json, record.normalized_message_json,
+    record.project_id, record.status, record.summary_json, record.received_at
   ];
+}
+
+function findExistingExternalEvent(db: RunnerDatabase, input: ExternalEventInput): ExternalEventRecord | null {
+  const source = cleanString(input.source);
+  const dedupeKey = cleanString(input.dedupe_key) || cleanString(input.external_id);
+  return findExternalEventByDedupe(db, source, dedupeKey)
+    ?? findExternalEventByExternalID(db, source, input.external_id);
+}
+
+function findExternalEventByExternalID(
+  db: RunnerDatabase,
+  source: unknown,
+  externalID: unknown
+): ExternalEventRecord | null {
+  const cleanSource = cleanString(source);
+  const cleanExternalID = cleanString(externalID);
+  if (cleanSource === "" || cleanExternalID === "") return null;
+  const row = db.sqlite.query<Record<string, unknown>, [string, string]>(
+    `select ${COLUMNS} from external_events where source=? and external_id=? order by received_at desc, id desc limit 1`
+  ).get(cleanSource, cleanExternalID);
+  return row ? mapExternalEvent(row) : null;
 }
 
 function lastInsertID(db: RunnerDatabase): number {
@@ -205,10 +257,21 @@ function requiredJsonString(value: unknown): string {
   return text === "" ? "{}" : text;
 }
 
+function requiredArrayString(value: unknown): string {
+  const text = optionalString(value);
+  return text === "" ? "[]" : text;
+}
+
 function jsonText(primary: unknown, fallback: unknown): string {
   if (typeof primary === "string" && primary.trim() !== "") return primary.trim();
   if (fallback && typeof fallback === "object" && !Array.isArray(fallback)) return JSON.stringify(fallback);
   return "{}";
+}
+
+function evidenceJsonText(primary: unknown, fallback: unknown): string {
+  if (typeof primary === "string" && primary.trim() !== "") return primary.trim();
+  if (fallback === undefined || fallback === null) return "{}";
+  return JSON.stringify(redactSecrets(fallback));
 }
 
 function jsonObject(value: unknown): JsonObject {
@@ -217,6 +280,15 @@ function jsonObject(value: unknown): JsonObject {
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as JsonObject : {};
   } catch {
     return {};
+  }
+}
+
+function jsonAttachments(value: unknown): ExternalEventAttachment[] {
+  try {
+    const parsed = JSON.parse(requiredArrayString(value));
+    return normalizeAttachments(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return [];
   }
 }
 

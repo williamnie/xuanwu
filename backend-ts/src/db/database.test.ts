@@ -193,6 +193,7 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_reports")).toContain("idx_pi_reports_delegation");
       expect(indexNames(connection, "issue_supervisor_events")).toContain("idx_issue_supervisor_events_issue");
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_source_dedupe");
+      expect(indexNames(connection, "external_events")).toContain("idx_external_events_source_external");
       expect(indexNames(connection, "external_events")).toContain("idx_external_events_received");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_external");
       expect(indexNames(connection, "pi_approval_requests")).toContain("idx_pi_approval_requests_issue");
@@ -249,10 +250,15 @@ describe("Bun SQLite database connection", () => {
       });
       expect(columnDefaults(connection, "external_events")).toMatchObject({
         actor: "''",
+        attachments_json: "'[]'",
+        event_type: "'message'",
         external_id: "''",
         normalized_message_json: "'{}'",
+        occurred_at: "''",
         project_id: "''",
         project_hint: "''",
+        provider: "''",
+        raw_json: "'{}'",
         raw_payload_ref: "''",
         status: "'inbox'",
         summary_json: "'{}'",

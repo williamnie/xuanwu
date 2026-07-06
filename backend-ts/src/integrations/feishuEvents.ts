@@ -49,12 +49,16 @@ export function feishuExternalEventInput(
   const projectId = cleanString(options.projectId);
   return {
     actor: feishuActor(event.sender),
+    attachments: event.attachments.map(feishuAttachmentRef),
     content: event.text || attachmentSummary(event.attachments),
     dedupe_key: event.dedupe_key,
+    event_type: event.mentions.length > 0 ? "message.mention" : "message",
     external_id: event.message_id,
     normalized_message: normalizedMessage(event),
+    occurred_at: event.timestamp,
     project_hint: projectId,
     project_id: projectId,
+    provider: "feishu",
     raw_payload_ref: event.raw_event_ref,
     received_at: event.timestamp,
     source: "feishu",
@@ -134,6 +138,21 @@ function normalizeAttachment(value: unknown): FeishuAttachment | null {
 
 function attachmentType(item: Record<string, unknown>): string {
   return cleanString(item.image_key) !== "" ? "image" : "file";
+}
+
+function feishuAttachmentRef(attachment: FeishuAttachment): Record<string, unknown> {
+  return {
+    kind: attachmentKind(attachment.type),
+    mime_type: attachment.mime_type,
+    name: attachment.name,
+    remote_ref: attachment.file_key
+  };
+}
+
+function attachmentKind(value: string): string {
+  const kind = cleanString(value);
+  if (["audio", "file", "image", "video"].includes(kind)) return kind;
+  return "file";
 }
 
 function messageContent(value: unknown): Record<string, unknown> {

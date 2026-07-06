@@ -50,7 +50,7 @@ export function ingestFeishuMessageEvent(
   const event = normalizeFeishuMessageEvent(raw, { rawEventRef: rawRef });
   const attention = attentionDecision(context, event);
   const summary = normalizedSummary(event, attention.project_id, attention);
-  const inboxEvent = saveInboxEvent(context, event, attention);
+  const inboxEvent = saveInboxEvent(context, event, attention, raw);
   publishAudit(context, {
     connector: "feishu",
     dedupe_key: event.dedupe_key,
@@ -105,12 +105,14 @@ function normalizedSummary(
 function saveInboxEvent(
   context: FeishuIngestContext,
   event: FeishuNormalizedMessageEvent,
-  attention: PiAttentionDecision
+  attention: PiAttentionDecision,
+  raw: unknown
 ) {
   if (!context.database) return null;
   const input = feishuExternalEventInput(event, { projectId: attention.project_id });
   return upsertExternalEvent(context.database, {
     ...input,
+    raw_json: raw,
     status: inboxStatus(input.status, attention),
     summary: { ...input.summary, attention_decision: attention }
   });
