@@ -5,7 +5,7 @@ import test from 'node:test';
 const source = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
 const panelSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
 
-test('Runner chat loader keeps a stable callback and loads projects for @ mentions', () => {
+test('PI Assistant chat loader keeps a stable callback and loads projects for @ mentions', () => {
   assert.match(source, /function usePiChatLoader\(setters\)/);
   assert.doesNotMatch(source, /useCallback\([\s\S]*\], \[[^\]]*state[^\]]*\]\)/);
   assert.doesNotMatch(source, /selectedProjectId/);
@@ -14,7 +14,7 @@ test('Runner chat loader keeps a stable callback and loads projects for @ mentio
   assert.match(source, /setProjects\(projectList \|\| \[\]\)/);
 });
 
-test('Runner chat sends PI prompt with project context instead of session runtime overrides', () => {
+test('PI Assistant chat sends PI prompt with project context instead of session runtime overrides', () => {
   assert.doesNotMatch(source, /defaultMessageSettings/);
   assert.doesNotMatch(source, /runnerMessageSettings/);
   assert.doesNotMatch(source, /approval_policy:\s*settings\.approvalPolicy/);
@@ -23,19 +23,19 @@ test('Runner chat sends PI prompt with project context instead of session runtim
 });
 
 
-test('Runner chat uses a failure fallback instead of empty-text wording', () => {
+test('PI Assistant chat uses a failure fallback instead of empty-text wording', () => {
   assert.match(source, /runnerReplyText\(result\)/);
   assert.match(source, /result\?\.status === 'failed'/);
-  assert.match(source, /Runner 执行失败，未返回错误详情/);
+  assert.match(source, /PI Assistant 执行失败，未返回错误详情/);
 });
 
-test('Runner chat switches conversations by loading persisted transcript detail', () => {
+test('PI Assistant chat switches conversations by loading persisted transcript detail', () => {
   assert.match(source, /api\.getPiConversation\(id\)/);
   assert.match(source, /setTranscript\(conversationTranscript\(detail\)\)/);
   assert.match(source, /function conversationTranscript\(detail\)/);
 });
 
-test('Runner chat tracks selected conversation and updates title from message result', () => {
+test('PI Assistant chat tracks selected conversation and updates title from message result', () => {
   assert.match(source, /const selectedConversation = useMemo/);
   assert.match(source, /selectedConversation,\s*selectedConversationId/);
   assert.match(source, /createConversation\('New conversation'/);
@@ -43,7 +43,7 @@ test('Runner chat tracks selected conversation and updates title from message re
   assert.doesNotMatch(source, /new Date\(\)\.toLocaleString/);
 });
 
-test('Runner chat uses the default PI agent without exposing an agent selector', () => {
+test('PI Assistant chat uses the default PI agent without exposing an agent selector', () => {
   assert.doesNotMatch(panelSource, /function AgentSelect/);
   assert.doesNotMatch(panelSource, /<select className="form-control" value=\{selected\}/);
   assert.doesNotMatch(panelSource, /Runner Agent/);
@@ -52,7 +52,7 @@ test('Runner chat uses the default PI agent without exposing an agent selector',
   assert.doesNotMatch(source, /ensureConversationInput/);
 });
 
-test('Runner chat can infer project from natural @project mention text', async () => {
+test('PI Assistant chat can infer project from natural @project mention text', async () => {
   const module = await import('./piChatProjectContext.js');
   const projects = [
     { id: 'codex-issue-runner', name: 'codex-issue-runner' },

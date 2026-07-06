@@ -9,8 +9,10 @@ import IssueDetail from './pages/IssueDetail';
 import Sessions from './pages/Sessions';
 import PiChat from './pages/PiChat';
 import AttentionInbox from './pages/AttentionInbox';
+import AssistantModulePage from './pages/AssistantModulePage';
 import Cron from './pages/Cron';
 import Settings from './pages/Settings';
+import { isAssistantModulePage } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
 import {
@@ -294,8 +296,10 @@ export default function App() {
             />
           ) : currentPage === 'pi-chat' ? (
             <PiChat navigateTo={navigateTo} />
-          ) : currentPage === 'attention-inbox' ? (
+          ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
             <AttentionInbox />
+          ) : isAssistantModulePage(currentPage) ? (
+            <AssistantModulePage page={currentPage} />
           ) : currentPage === 'projects' ? (
             <Projects />
           ) : currentPage === 'cron' ? (

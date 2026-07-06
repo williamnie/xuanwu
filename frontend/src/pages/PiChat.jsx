@@ -36,7 +36,7 @@ function PiChatSidebar({ navigateTo, state }) {
       />
       <AgentStatus agent={state.selectedAgent} />
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
-        <MessageSquarePlus size={15} /> 新建 Runner 会话
+        <MessageSquarePlus size={15} /> 新建 Assistant 会话
       </button>
       <ConversationList
         conversations={state.conversations}
@@ -53,12 +53,12 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
       <div className="pi-chat-sidebar-brand">
         <span className="pi-chat-sidebar-icon"><Bot size={16} /></span>
         <div>
-          <strong>Runner Brain</strong>
-          <span>Default PI runtime</span>
+          <strong>PI Assistant</strong>
+          <span>Single runtime</span>
         </div>
       </div>
       <div className="pi-chat-sidebar-actions">
-        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Runner 会话">
+        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Assistant 会话">
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
         <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="Assistant Settings">
@@ -90,7 +90,7 @@ function ChatHeader({ state }) {
   return (
     <header className="pi-chat-main-header">
       <div>
-        <span>Runner Brain</span>
+        <span>PI Assistant</span>
         <strong>{title}</strong>
       </div>
       <small>{count} message{count === 1 ? '' : 's'}</small>
@@ -102,7 +102,7 @@ function ConversationList({ conversations, onSelect, selectedId }) {
   return (
     <div className="pi-chat-conversation-list">
       <div className="pi-chat-sidebar-title">Conversations</div>
-      {conversations.length === 0 ? <div className="pi-chat-empty-mini">暂无 Runner 会话</div> : (
+      {conversations.length === 0 ? <div className="pi-chat-empty-mini">暂无 Assistant 会话</div> : (
         conversations.map((conversation) => (
           <button
             key={conversation.id}
@@ -143,7 +143,7 @@ function ChatThread({ navigateTo, state }) {
           {state.transcript.length === 0 ? (
             <EmptyChat navigateTo={navigateTo} hasRuntime={state.agents.length > 0} />
           ) : state.transcript.map((item) => <ChatBubble key={item.id} item={item} />)}
-          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Runner 正在思考...</div>}
+          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> PI Assistant 正在思考...</div>}
         </div>
       </div>
       {showScrollButton && (
@@ -173,7 +173,7 @@ function ChatComposer({ state }) {
         running={false}
         interruptState={null}
         selectedId={state.selectedConversationId || 'runner-draft'}
-        placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Runner Chat 输入体验..."
+        placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Assistant 输入体验..."
         onSubmit={state.handleSend}
         suggestions={buildPiChatProjectSuggestions(state.projects)}
         referenceDetails={buildPiChatReferenceDetails(state.references, state.projects)}
@@ -187,7 +187,7 @@ function ChatComposer({ state }) {
 }
 
 function AgentStatus({ agent }) {
-  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 Runner Brain</div>;
+  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 PI Assistant runtime</div>;
   return (
     <div className="pi-chat-agent-status">
       <Bot size={14} />
@@ -203,7 +203,7 @@ function LoadingState() {
   return (
     <div className="pi-chat-empty">
       <Loader2 className="spin-animation" size={22} />
-      正在读取 Runner 会话...
+      正在读取 Assistant 会话...
     </div>
   );
 }
@@ -212,7 +212,7 @@ function EmptyChat({ hasRuntime, navigateTo }) {
   return (
     <div className="pi-chat-empty">
       <Bot size={34} />
-      <strong>{hasRuntime ? '开始一次 Runner 对话' : '先配置 PI Assistant'}</strong>
+      <strong>{hasRuntime ? '开始一次 Assistant 对话' : '先配置 PI Assistant'}</strong>
       <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Assistant Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
       {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Assistant Settings</button>}
     </div>
@@ -222,7 +222,7 @@ function EmptyChat({ hasRuntime, navigateTo }) {
 function ChatBubble({ item }) {
   return (
     <article className={`pi-chat-bubble ${item.role}`}>
-      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? 'Runner' : item.role === 'error' ? 'Error' : 'You'}</div>
+      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? 'PI Assistant' : item.role === 'error' ? 'Error' : 'You'}</div>
       <MarkdownPreview text={item.text} className="pi-chat-markdown" />
       {item.meta?.pi_session_id && <div className="pi-chat-bubble-meta">session {shortId(item.meta.pi_session_id)}</div>}
     </article>

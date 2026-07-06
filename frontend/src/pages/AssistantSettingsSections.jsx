@@ -19,6 +19,7 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel }) {
       {activeTab === 'approvals' && <ApprovalsPlaceholder />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityPlaceholder />}
+      {activeTab === 'policies' && <PoliciesPlaceholder />}
     </>
   );
 }
@@ -95,4 +96,15 @@ function ApprovalsPlaceholder() {
 
 function ActivityPlaceholder() {
   return <SettingsPlaceholderPanel eyebrow="Activity" title="Activity timeline" description="预留 raw events、intake、skill run、proposal 与 tool call 的审计时间线入口。" />;
+}
+
+function PoliciesPlaceholder() {
+  return (
+    <SettingsPlaceholderPanel
+      eyebrow="Policies"
+      title="Source policies"
+      description="Policies 独立于 Settings，用于管理 source policy、自动回复、自动建 issue、自动 enqueue 等策略；本阶段只提供清晰入口与空态。"
+      items={['External reply 默认 opt-in，不自动外部写。', 'issue.create / issue.enqueue 策略后续按 source、project 与风险级别配置。']}
+    />
+  );
 }

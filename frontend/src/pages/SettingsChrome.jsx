@@ -5,7 +5,7 @@ import { message } from '../store/toastStore';
 
 const SETTINGS_TABS = [
   { id: 'assistant', label: 'Assistant' },
-  { id: 'runner-brain', label: 'Runner Brain' },
+  { id: 'runner-brain', label: 'Runtime' },
   { id: 'connectors', label: 'Connectors' },
   { id: 'skills', label: 'Skills' },
   { id: 'automations', label: 'Automations' },

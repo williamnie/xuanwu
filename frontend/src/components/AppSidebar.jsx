@@ -1,15 +1,22 @@
 import {
+  Activity,
   CalendarClock,
+  CheckCircle2,
   ChevronLeft,
-  BotMessageSquare,
+  Brain,
+  Compass,
   FolderGit2,
   Inbox,
   Layers,
   ListTodo,
+  Plug,
+  ScrollText,
   Moon,
   Settings,
+  ShieldCheck,
   Sun,
   LayoutDashboard,
+  Workflow,
 } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { useDynamicFavicon } from './brandFavicon.js';
@@ -22,6 +29,20 @@ import {
   selectProjects,
   useDataStore,
 } from '../store/dataStore';
+import { PI_ASSISTANT_MODULES } from '../pages/assistantModules';
+
+const ASSISTANT_ICONS = {
+  Overview: Compass,
+  Inbox,
+  Connectors: Plug,
+  Skills: Brain,
+  Automations: Workflow,
+  Approvals: CheckCircle2,
+  Memory: ScrollText,
+  Activity,
+  Policies: ShieldCheck,
+  Settings,
+};
 
 export default function AppSidebar({
   currentPage,
@@ -55,51 +76,42 @@ export default function AppSidebar({
       </div>
 
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <div className="sidebar-nav-group">
         <button className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <LayoutDashboard size={16} /> Dashboard
-          </span>
+          <NavIconLabel Icon={LayoutDashboard} label="Dashboard" />
         </button>
 
         <button className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Layers size={16} /> Sessions
-          </span>
-        </button>
-
-        <button className={`nav-item ${currentPage === 'pi-chat' ? 'active' : ''}`} onClick={() => navigateTo('pi-chat')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BotMessageSquare size={16} /> Runner
-          </span>
-        </button>
-
-        <button className={`nav-item ${currentPage === 'attention-inbox' ? 'active' : ''}`} onClick={() => navigateTo('attention-inbox')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Inbox size={16} /> Attention
-          </span>
+          <NavIconLabel Icon={Layers} label="Sessions" />
         </button>
 
         <button className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ListTodo size={16} /> Issues
-          </span>
+          <NavIconLabel Icon={ListTodo} label="Issues" />
           <IssueCountBadge active={currentPage === 'issues'} />
         </button>
 
         <button className={`nav-item ${currentPage === 'cron' ? 'active' : ''}`} onClick={() => navigateTo('cron')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CalendarClock size={16} /> Cron
-          </span>
+          <NavIconLabel Icon={CalendarClock} label="Cron" />
           <CronCountBadge active={currentPage === 'cron'} />
         </button>
 
         <button className={`nav-item ${currentPage === 'projects' ? 'active' : ''}`} onClick={() => navigateTo('projects')}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FolderGit2 size={16} /> Projects
-          </span>
+          <NavIconLabel Icon={FolderGit2} label="Projects" />
           <ProjectCountBadge active={currentPage === 'projects'} />
         </button>
+      </div>
+
+      <div className="sidebar-section-title">PI Assistant</div>
+      <div className="sidebar-nav-group pi-assistant-nav">
+        {PI_ASSISTANT_MODULES.map((module) => (
+          <button
+            className={`nav-item pi-assistant-item ${currentPage === module.page ? 'active' : ''}`}
+            key={module.page}
+            onClick={() => navigateTo(module.page)}
+          >
+            <NavIconLabel Icon={ASSISTANT_ICONS[module.label]} label={module.label} />
+          </button>
+        ))}
       </div>
 
       {currentPage === 'issues' && (
@@ -117,39 +129,25 @@ export default function AppSidebar({
       )}
 
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <div
-          className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
-          style={{ paddingLeft: '8px', cursor: 'pointer' }}
-          onClick={() => navigateTo('settings')}
+        <button
+          className="nav-item nav-item-secondary sidebar-theme-row"
+          onClick={toggleTheme}
+          type="button"
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Settings size={16} /> Assistant Settings
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleTheme();
-            }}
-            style={{
-              background: 'transparent',
-              border: '1px solid transparent',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-muted)'
-            }}
-            className="sidebar-theme-btn"
-            title="切换主题"
-          >
-            {theme === 'dark' ? <Sun size={14} color="#fbbf24" /> : <Moon size={14} color="var(--primary)" />}
-          </button>
-        </div>
+          <NavIconLabel Icon={theme === 'dark' ? Sun : Moon} label={theme === 'dark' ? 'Light theme' : 'Dark theme'} />
+        </button>
         <div className="sidebar-version">{APP_VERSION}</div>
       </div>
     </aside>
+  );
+}
+
+function NavIconLabel({ Icon, label }) {
+  return (
+    <span className="nav-item-main">
+      <Icon size={16} />
+      <span className="nav-label">{label}</span>
+    </span>
   );
 }
 

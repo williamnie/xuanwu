@@ -20,3 +20,9 @@ test('Attention Inbox shows approval UI for action proposals with editable reply
   assert.match(styleSource, /\.proposal-card/);
   assert.doesNotMatch(pageSource, /window\.confirm|window\.alert/);
 });
+
+test('Inbox shows a clear coming soon state when attention API is missing', () => {
+  assert.match(pageSource, /<h1>Inbox<\/h1>/);
+  assert.match(pageSource, /runtime 尚未启用 Inbox API/);
+  assert.match(pageSource, /Inbox API coming soon/);
+});

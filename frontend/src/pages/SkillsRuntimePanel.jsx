@@ -22,6 +22,7 @@ export default function SkillsRuntimePanel() {
     <section className="glass-card skills-runtime-panel">
       <PanelHeader loading={state.loading} onRefresh={() => loadAll(setState)} />
       {state.error && <div className="skills-runtime-error">{state.error}</div>}
+      {state.notice && <div className="skills-runtime-empty compact">{state.notice}</div>}
       <div className="skills-runtime-grid">
         <SkillList selectedId={selected?.id} skills={skills} onSelect={setSelectedId} />
         <SkillDetail form={form} runs={runsForSkill(state, selected)} selected={selected} setForm={setForm} onRun={runSelected} />
@@ -151,20 +152,41 @@ function SchemaBlock({ title, value }) {
 }
 
 function initialState() {
-  return { bundles: [], domainRuns: [], error: '', intakeRuns: [], items: [], loading: true, skills: [] };
+  return { bundles: [], domainRuns: [], error: '', intakeRuns: [], items: [], loading: true, notice: '', skills: [] };
 }
 
 function loadAll(setState) {
   setState((previous) => ({ ...previous, loading: true }));
   Promise.all([
     api.getPiSkills(),
-    api.getPiSkillIntakeRuns({ limit: 50 }),
-    api.getPiSkillDomainRuns({ limit: 50 }),
-    api.getPiAttentionContextBundles({ limit: 20 }),
-    api.getPiAttentionItems({ status: '', limit: 20 }),
+    optionalRuntimeList(() => api.getPiSkillIntakeRuns({ limit: 50 })),
+    optionalRuntimeList(() => api.getPiSkillDomainRuns({ limit: 50 })),
+    optionalRuntimeList(() => api.getPiAttentionContextBundles({ limit: 20 })),
+    optionalRuntimeList(() => api.getPiAttentionItems({ status: '', limit: 20 })),
   ]).then(([skills, intakeRuns, domainRuns, bundles, items]) => setState({
-    bundles, domainRuns, error: '', intakeRuns, items, loading: false, skills: skills.skills || []
+    bundles: bundles.value,
+    domainRuns: domainRuns.value,
+    error: '',
+    intakeRuns: intakeRuns.value,
+    items: items.value,
+    loading: false,
+    notice: runtimeNotice([intakeRuns, domainRuns, bundles, items]),
+    skills: skills.skills || []
   })).catch((error) => setState((previous) => ({ ...previous, error: error.message || '读取 skills runtime 失败', loading: false })));
+}
+
+async function optionalRuntimeList(read) {
+  try {
+    return { missing: false, value: await read() };
+  } catch (error) {
+    if (error.status === 404) return { missing: true, value: [] };
+    throw error;
+  }
+}
+
+function runtimeNotice(results) {
+  if (!results.some((result) => result.missing)) return '';
+  return '部分 Skills runtime history / Inbox API 尚未在当前 runtime 启用；这里先展示已可用的 skill manifest 与 coming soon 空态。';
 }
 
 function runtimeSkills(skills) {

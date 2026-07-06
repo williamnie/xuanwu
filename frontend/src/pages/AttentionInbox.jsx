@@ -21,6 +21,7 @@ export default function AttentionInbox() {
   const [selectedId, setSelectedId] = useState(0);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [unavailable, setUnavailable] = useState('');
   const [busy, setBusy] = useState('');
   const selectedItem = useMemo(() => items.find((item) => item.id === selectedId) || items[0] || null, [items, selectedId]);
 
@@ -30,10 +31,20 @@ export default function AttentionInbox() {
     api.getPiAttentionItems({ status, limit: 100 })
       .then((rows) => {
         if (cancelled) return;
+        setUnavailable('');
         setItems(rows || []);
         setSelectedId((current) => rows?.some((item) => item.id === current) ? current : rows?.[0]?.id || 0);
       })
-      .catch((err) => message.error(err.message || '加载 Attention Inbox 失败'))
+      .catch((err) => {
+        if (cancelled) return;
+        if (err.status === 404) {
+          setUnavailable('当前 runtime 尚未启用 Inbox API；这是 PI Assistant Inbox 的预留入口，升级后会显示 intake items。');
+          setItems([]);
+          setSelectedId(0);
+          return;
+        }
+        message.error(err.message || '加载 Inbox 失败');
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
   }, [status]);
@@ -92,7 +103,7 @@ export default function AttentionInbox() {
       <section className="attention-inbox-hero">
         <div>
           <p className="eyebrow">PI Assistant</p>
-          <h1>Attention Inbox</h1>
+          <h1>Inbox</h1>
           <p>处理事项视图：从 raw event、context bundle、intake run 追溯 PI 为什么认为它需要关注。</p>
         </div>
         <div className="attention-inbox-filter" aria-label="状态筛选">
@@ -107,13 +118,13 @@ export default function AttentionInbox() {
       <div className="attention-inbox-grid">
         <aside className="attention-inbox-list">
           <div className="attention-list-head"><Search size={15} /> Items · {items.length}</div>
-          {loading ? <EmptyState text="加载中…" /> : items.length === 0 ? <EmptyState text="当前筛选没有 item" /> : items.map((item) => (
+          {loading ? <EmptyState text="加载中…" /> : unavailable ? <EmptyState text={unavailable} /> : items.length === 0 ? <EmptyState text="当前筛选没有 item" /> : items.map((item) => (
             <ItemRow key={item.id} item={item} active={item.id === selectedItem?.id} onClick={() => setSelectedId(item.id)} />
           ))}
         </aside>
 
         <main className="attention-inbox-detail">
-          {!selectedItem ? <EmptyState text="选择一个 Inbox item 查看证据" /> : (
+          {unavailable ? <EmptyState text="Inbox API coming soon；不会创建 issue、enqueue 或外部回复。" /> : !selectedItem ? <EmptyState text="选择一个 Inbox item 查看证据" /> : (
             <>
               <DetailHeader item={selectedItem} />
               <div className="attention-actions">

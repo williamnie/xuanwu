@@ -376,6 +376,29 @@ body {
   align-items: center;
 }
 
+.sidebar-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pi-assistant-nav {
+  margin-bottom: 4px;
+}
+
+.nav-item-main {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Nav Buttons inside Sidebar */
 .nav-item {
   display: flex;
@@ -1201,6 +1224,8 @@ input:checked + .slider:before {
   .sidebar { width: 60px; padding: 16px 8px; }
   .sidebar .brand-wordmark, .sidebar .api-status, .sidebar .nav-label, .sidebar .sidebar-section-title, .sidebar .nav-badge, .sidebar .sidebar-progress, .sidebar .sub-filter-item, .sidebar .btn-new-issue-sidebar, .sidebar .sidebar-version { display: none; }
   .sidebar-brand-row { justify-content: center; margin-bottom: 18px; }
+  .nav-item { justify-content: center; padding: 10px 0; }
+  .nav-item-main { justify-content: center; }
   .brand-mark-icon { flex-basis: 36px; height: 36px; width: 36px; }
   .main-content { margin-left: 60px; padding: 16px; }
   :root { --sidebar-width: 60px; }

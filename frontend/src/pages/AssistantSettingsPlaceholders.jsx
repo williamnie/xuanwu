@@ -2,7 +2,7 @@ import { Bot, CircleDot, Compass } from 'lucide-react';
 
 export function AssistantOverviewPanel() {
   const items = [
-    '一个 PI Assistant 统一承载 Runner Brain、Connectors、Skills、Automations 与 Memory。',
+    '一个 PI Assistant 统一承载 Runtime、Connectors、Skills、Automations 与 Memory。',
     '当前先保留已有模型、thinking、instructions、OAuth 与 enabled 配置。',
     '后续能力只作为这个 Assistant 的能力区，不恢复多个独立 PI agent。'
   ];
@@ -18,7 +18,7 @@ export function AssistantOverviewPanel() {
         </div>
       </div>
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', lineHeight: 1.6, margin: 0 }}>
-        Assistant Settings 是唯一 PI Assistant 的设置中心：Runner Brain 负责当前 issue/session 编排；
+        Assistant Settings 是唯一 PI Assistant 的设置中心：Runtime 负责当前 issue/session 编排；
         Connectors、Skills、Automations、Approvals、Memory 与 Activity 会逐步挂到同一个 Assistant 下。
       </p>
       <BulletList items={items} />

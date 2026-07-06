@@ -34,7 +34,7 @@ function PanelHeader({ loading, onRefresh }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
       <div>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={18} color="var(--primary)" /> PI Assistant · Runner Brain
+          <Bot size={18} color="var(--primary)" /> PI Assistant · Runtime
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
           配置这个唯一 PI Assistant 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。
@@ -111,7 +111,7 @@ function ProviderCredentialFields({ state }) {
           placeholder={configured ? '已配置，输入新 key 可覆盖' : '输入 PI Assistant provider API key'}
         />
       </Field>
-      <Field label="Runner Brain Instructions">
+      <Field label="Runtime Instructions">
         <textarea className="form-control" rows={3} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
       <PromptSummaryDebug state={state} />

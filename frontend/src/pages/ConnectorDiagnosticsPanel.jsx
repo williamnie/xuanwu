@@ -5,7 +5,7 @@ import { api } from '../api/client';
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
 
 export default function ConnectorDiagnosticsPanel() {
-  const [state, setState] = useState({ data: null, error: '', loading: true });
+  const [state, setState] = useState({ data: null, error: '', loading: true, notice: '' });
 
   useEffect(() => { loadConnectors(setState); }, []);
 
@@ -14,7 +14,7 @@ export default function ConnectorDiagnosticsPanel() {
     <section className="glass-card" style={{ display: 'grid', gap: '16px' }}>
       <PanelHeader loading={state.loading} onRefresh={() => loadConnectors(setState)} />
       {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
-      {!state.error && <ConnectorBody connectors={connectors} loading={state.loading} />}
+      {!state.error && <ConnectorBody connectors={connectors} loading={state.loading} notice={state.notice} />}
     </section>
   );
 }
@@ -22,10 +22,12 @@ export default function ConnectorDiagnosticsPanel() {
 function loadConnectors(setState) {
   setState(previous => ({ ...previous, loading: true }));
   api.getPiConnectors()
-    .then(data => setState({ data, error: '', loading: false }))
+    .then(data => setState({ data, error: '', loading: false, notice: '' }))
     .catch(error => setState(previous => ({
       ...previous,
-      error: error.message || '读取 connector 诊断失败',
+      data: error.status === 404 ? { connectors: [] } : previous.data,
+      error: error.status === 404 ? '' : error.message || '读取 connector 诊断失败',
+      notice: error.status === 404 ? 'Connector API coming soon；当前 runtime 尚未启用 connector diagnostics。' : '',
       loading: false
     })));
 }
@@ -49,9 +51,12 @@ function PanelHeader({ loading, onRefresh }) {
   );
 }
 
-function ConnectorBody({ connectors, loading }) {
+function ConnectorBody({ connectors, loading, notice }) {
   if (loading && connectors.length === 0) {
     return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 connector 诊断...</div>;
+  }
+  if (notice) {
+    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>{notice}</div>;
   }
   if (connectors.length === 0) {
     return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无 connector manifest。</div>;

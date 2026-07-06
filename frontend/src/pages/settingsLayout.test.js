@@ -21,6 +21,7 @@ test('Settings groups panels behind Assistant Settings tabs and removes duplicat
   assert.match(sectionsSource, /activeTab === 'approvals'/);
   assert.match(sectionsSource, /activeTab === 'memory'/);
   assert.match(sectionsSource, /activeTab === 'activity'/);
+  assert.match(sectionsSource, /activeTab === 'policies'/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
 });
@@ -29,6 +30,7 @@ test('Assistant Settings IA reserves future capability placeholders', () => {
   assert.match(chromeSource, /Assistant Settings/);
   assert.match(chromeSource, /PI Assistant · Single Runtime/);
   assert.match(placeholderSource, /Single Assistant Runtime/);
+  assert.doesNotMatch(placeholderSource, /Runner Brain/);
   assert.match(placeholderSource, /不恢复多个独立 PI agent/);
   assert.match(sectionsSource, /Connectors/);
   assert.match(sectionsSource, /Skills/);
@@ -36,6 +38,25 @@ test('Assistant Settings IA reserves future capability placeholders', () => {
   assert.match(sectionsSource, /Approvals/);
   assert.match(sectionsSource, /Memory/);
   assert.match(sectionsSource, /Activity/);
+  assert.match(sectionsSource, /Policies/);
+  assert.doesNotMatch(chromeSource, /id: 'policies'/);
+});
+
+test('PI Assistant workbench exposes first-class module routes', () => {
+  const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
+  const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
+  const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
+  const modulePageSource = readFileSync(new URL('./AssistantModulePage.jsx', import.meta.url), 'utf8');
+
+  for (const route of ['pi-overview', 'pi-inbox', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies', 'settings']) {
+    assert.match(modulesSource, new RegExp(`page: '${route}'`));
+  }
+  assert.match(sidebarSource, /PI Assistant/);
+  assert.match(sidebarSource, /PI_ASSISTANT_MODULES\.map/);
+  assert.match(appSource, /currentPage === 'attention-inbox' \|\| currentPage === 'pi-inbox'/);
+  assert.match(appSource, /isAssistantModulePage\(currentPage\)/);
+  assert.match(modulePageSource, /PI Assistant Workbench/);
+  assert.doesNotMatch(sidebarSource, /> Runner</);
 });
 
 test('Settings restart action is a red in-page danger control', () => {
@@ -51,6 +72,7 @@ test('Connectors tab shows read-only connector diagnostics from API', () => {
   assert.match(apiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
   assert.match(connectorDiagnosticsSource, /api\.getPiConnectors\(\)/);
   assert.match(connectorDiagnosticsSource, /Connector Diagnostics/);
+  assert.match(connectorDiagnosticsSource, /Connector API coming soon/);
   assert.doesNotMatch(connectorDiagnosticsSource, /window\.confirm|window\.alert/);
 });
 
@@ -62,5 +84,7 @@ test('Skills tab shows intake and domain runtime history from API', () => {
   assert.match(skillsRuntimeSource, /入箱识别/);
   assert.match(skillsRuntimeSource, /处理事项/);
   assert.match(skillsRuntimeSource, /Run history/);
+  assert.match(skillsRuntimeSource, /optionalRuntimeList/);
+  assert.match(skillsRuntimeSource, /coming soon 空态/);
   assert.doesNotMatch(skillsRuntimeSource, /window\.confirm|window\.alert/);
 });

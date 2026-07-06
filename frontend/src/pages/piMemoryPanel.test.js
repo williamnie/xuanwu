@@ -31,7 +31,7 @@ test('PI memory panel exposes review, promotion, edit, disable, and delete contr
   assert.match(panelSource, /activeCount/);
   assert.match(panelSource, /candidateCount/);
   assert.match(panelSource, /recentCandidateSource/);
-  assert.match(panelSource, /Runner Chat \/ manager cycle \/ supervisor/);
+  assert.match(panelSource, /PI Assistant chat \/ manager cycle \/ supervisor/);
   assert.match(panelSource, /failure-pattern generator/);
   assert.match(panelSource, /memory_write_candidate/);
   assert.match(panelSource, /明确授权的低风险个人偏好可自动启用/);

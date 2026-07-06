@@ -11,12 +11,17 @@ export const DEFAULT_PI_AGENT_FORM = {
   apiKey: '',
   baseUrl: '',
   enabled: true,
-  instructions: '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+  instructions: '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
   thinkingLevel: 'medium',
   userAgent: ''
 };
+
+const LEGACY_PI_ASSISTANT_INSTRUCTIONS = new Set([
+  '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+  '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+]);
 
 export function usePiAgentSettingsState() {
   const [providers, setProviders] = useState([]);
@@ -217,12 +222,20 @@ function formFromState(agents, providers) {
     apiKey: '',
     baseUrl: provider?.base_url || '',
     enabled: agent.enabled === 1,
-    instructions: agent.instructions || DEFAULT_PI_AGENT_FORM.instructions,
+    instructions: normalizedInstructions(agent.instructions),
     modelId: agent.model_id || provider?.models?.[0] || DEFAULT_PI_AGENT_FORM.modelId,
     modelProvider: agent.model_provider || DEFAULT_PI_AGENT_FORM.modelProvider,
     thinkingLevel: agent.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel,
     userAgent: provider?.user_agent || ''
   };
+}
+
+function normalizedInstructions(instructions) {
+  const value = String(instructions || '').trim();
+  if (!value || LEGACY_PI_ASSISTANT_INSTRUCTIONS.has(value)) {
+    return DEFAULT_PI_AGENT_FORM.instructions;
+  }
+  return instructions;
 }
 
 function defaultAgentFromList(agents) {

@@ -36,11 +36,19 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
 
 test('PI Assistant settings no longer expose multi-agent creation controls', () => {
   assert.match(panelSource, /PI Assistant/);
-  assert.match(panelSource, /Runner Brain/);
+  assert.match(panelSource, /PI Assistant · Runtime/);
+  assert.doesNotMatch(panelSource, /Runner Brain/);
   assert.match(panelSource, /不会创建多个独立 agent/);
   assert.doesNotMatch(panelSource, /label="Agent ID"/);
   assert.doesNotMatch(panelSource, /Runner Agent Settings/);
   assert.doesNotMatch(stateSource, /api\.createPiAgent/);
   assert.doesNotMatch(clientSource, /createPiAgent:/);
   assert.match(stateSource, /api\.updatePiAgent\(DEFAULT_PI_AGENT_ID/);
+});
+
+test('PI Assistant settings normalizes legacy default runtime instructions', () => {
+  assert.match(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS/);
+  assert.match(stateSource, /normalizedInstructions\(agent\.instructions\)/);
+  assert.match(stateSource, /全局 PI Assistant runtime/);
+  assert.match(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS\.has\(value\)/);
 });
