@@ -77,6 +77,73 @@ describe("Bun PI memory API", () => {
     }
   });
 
+  test("supports typed manual memory with pin and forget aliases plus citation metadata", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+
+      const created = await request(router, "/api/pi/memory", "POST", {
+        id: "typed-memory",
+        memory_type: "project",
+        layer: "long_term",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_policy",
+        content: "Run focused verification before marking runner issues done",
+        source_type: "manual",
+        source_id: "settings-memory-form",
+        citation_type: "inbox",
+        citation_id: "inbox-599",
+        citation_label: "PI Assistant V2 P08.01",
+        citation_url: "https://example.invalid/inbox/599",
+        confidence: "high"
+      });
+      const pinned = await request(router, "/api/pi/memory/typed-memory/pin", "POST", {});
+      const updated = await request(router, "/api/pi/memory/typed-memory", "PATCH", {
+        memory_type: "skill",
+        layer: "working",
+        citation_label: "Skill digest review"
+      });
+      const beforeForget = buildPiMemoryPromptContext(database, { projectID: "demo" });
+      const forgot = await request(router, "/api/pi/memory/typed-memory/forget", "POST", {});
+      const listAfterForget = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=active`
+      ));
+      const afterForget = buildPiMemoryPromptContext(database, { projectID: "demo" });
+
+      expect(created.status).toBe(201);
+      expect(await created.json()).toMatchObject({
+        id: "typed-memory",
+        memory_type: "project",
+        layer: "long_term",
+        source_type: "manual",
+        source_id: "settings-memory-form",
+        citation_type: "inbox",
+        citation_id: "inbox-599",
+        citation_label: "PI Assistant V2 P08.01",
+        citation_url: "https://example.invalid/inbox/599"
+      });
+      expect(pinned.status).toBe(200);
+      expect(await pinned.json()).toMatchObject({ id: "typed-memory", pinned: 1 });
+      expect(updated.status).toBe(200);
+      expect(await updated.json()).toMatchObject({
+        id: "typed-memory",
+        memory_type: "skill",
+        layer: "working",
+        citation_label: "Skill digest review",
+        pinned: 1
+      });
+      expect(beforeForget).toContain("Run focused verification before marking runner issues done");
+      expect(forgot.status).toBe(200);
+      expect(await forgot.json()).toEqual({ forgotten: true });
+      expect(await listAfterForget.json()).toEqual([]);
+      expect(afterForget).not.toContain("Run focused verification before marking runner issues done");
+      expect(afterForget).not.toContain("typed-memory");
+    } finally {
+      database.close();
+    }
+  });
+
   test("promotes and disables memory candidates through explicit review actions", async () => {
     const database = await openFixtureDatabase();
     try {

@@ -12,8 +12,14 @@ export type PiMemoryPromptContextInput = {
 export type PiMemoryContextItem = {
   confidence: string;
   content: string;
+  citation_id: string;
+  citation_label: string;
+  citation_type: string;
+  citation_url: string;
   id: string;
   kind: string;
+  layer: string;
+  memory_type: string;
   pinned: number;
   reference: string;
   scope: string;
@@ -84,8 +90,14 @@ function contextItem(item: PiMemoryItem): PiMemoryContextItem {
   return {
     confidence: item.confidence,
     content: item.content,
+    citation_id: item.citation_id,
+    citation_label: item.citation_label,
+    citation_type: item.citation_type,
+    citation_url: item.citation_url,
     id: item.id,
     kind: item.kind,
+    layer: item.layer,
+    memory_type: item.memory_type,
     pinned: item.pinned,
     reference: memoryReference(item),
     scope: item.scope,
@@ -97,12 +109,18 @@ function contextItem(item: PiMemoryItem): PiMemoryContextItem {
 }
 
 function formatMemoryLine(item: PiMemoryContextItem): string {
-  return `- [${item.reference} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}] ${item.kind}: ${item.content}`;
+  return `- [${item.reference} | type=${item.memory_type} | layer=${item.layer} | ${item.scope}:${item.scope_id || "runner"} | ${sourceLabel(item)} | ${citationLabel(item)} | updated=${item.updated_at} | confidence=${item.confidence}] ${item.kind}: ${item.content}`;
 }
 
 function sourceLabel(item: PiMemoryContextItem): string {
   const source = [item.source_type, item.source_id].filter(Boolean).join(":");
   return `source=${source || "unknown"}`;
+}
+
+function citationLabel(item: PiMemoryContextItem): string {
+  const ref = [item.citation_type, item.citation_id].filter(Boolean).join(":");
+  const label = item.citation_label || item.citation_url;
+  return `citation=${[ref, label].filter(Boolean).join(" ") || "none"}`;
 }
 
 function memoryReference(item: PiMemoryItem): string {

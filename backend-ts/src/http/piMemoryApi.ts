@@ -21,6 +21,8 @@ export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext)
   router.post("/api/pi/memory/:id/approve", (request) => reviewMemoryResponse(context, request, 0));
   router.post("/api/pi/memory/:id/promote", (request) => reviewMemoryResponse(context, request, 0));
   router.post("/api/pi/memory/:id/disable", (request) => reviewMemoryResponse(context, request, 1));
+  router.post("/api/pi/memory/:id/pin", (request) => pinMemoryResponse(context, request));
+  router.post("/api/pi/memory/:id/forget", (request) => forgetMemoryResponse(context, request));
   router.patch("/api/pi/memory/:id", async (request) => patchMemoryResponse(context, request));
   router.delete("/api/pi/memory/:id", (request) => deleteMemoryResponse(context, request));
 }
@@ -47,6 +49,18 @@ function deleteMemoryResponse(context: PiMemoryContext, request: Request): Respo
   const id = memoryID(request);
   if (!getPiMemoryItem(context.database, id)) throw new HttpError(404, "资源不存在");
   return json({ deleted: deletePiMemoryItem(context.database, id) });
+}
+
+function forgetMemoryResponse(context: PiMemoryContext, request: Request): Response {
+  const id = memoryID(request);
+  if (!getPiMemoryItem(context.database, id)) throw new HttpError(404, "资源不存在");
+  return json({ forgotten: deletePiMemoryItem(context.database, id) });
+}
+
+function pinMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {
+  const id = memoryID(request);
+  if (!getPiMemoryItem(context.database, id)) throw new HttpError(404, "资源不存在");
+  return writeResponse(() => updatePiMemoryItem(context.database, id, { pinned: 1 }));
 }
 
 function reviewMemoryResponse(context: PiMemoryContext, request: Request, disabled: number): Promise<Response> {
@@ -98,7 +112,8 @@ function assertSafeContent(content: string): void {
 }
 
 const STRING_FIELDS = [
-  "id", "scope", "scope_id", "kind", "content", "source_type", "source_id", "confidence"
+  "id", "memory_type", "layer", "scope", "scope_id", "kind", "content", "source_type", "source_id",
+  "citation_type", "citation_id", "citation_label", "citation_url", "confidence"
 ] as const;
 const FLAG_FIELDS = ["pinned", "disabled"] as const;
 
@@ -107,6 +122,8 @@ function memoryFilter(request: Request): PiMemoryItemFilter {
   const statusDisabled = statusParam(params.get("status"));
   return {
     disabled: statusDisabled ?? disabledParam(params.get("disabled")),
+    layer: cleanString(params.get("layer")),
+    memoryType: cleanString(params.get("memory_type")),
     scope: cleanString(params.get("scope")),
     scopeId: cleanString(params.get("scope_id"))
   };

@@ -3,11 +3,23 @@ import { authHeader } from './authToken';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export const piMemoryApi = {
+  create: (memory) => request('/api/pi/memory', {
+    method: 'POST',
+    body: JSON.stringify(memory),
+  }),
   disable: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/disable`, {
     method: 'POST',
     body: JSON.stringify({}),
   }),
+  forget: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/forget`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
   list: (filter = {}) => request(`/api/pi/memory${query(filter)}`),
+  pin: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/pin`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
   promote: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/promote`, {
     method: 'POST',
     body: JSON.stringify({}),
@@ -39,6 +51,9 @@ function query(filter) {
   addParam(params, 'scope', filter.scope);
   addParam(params, 'scope_id', filter.scopeId);
   addParam(params, 'disabled', filter.disabled);
+  addParam(params, 'status', filter.status);
+  addParam(params, 'memory_type', filter.memoryType);
+  addParam(params, 'layer', filter.layer);
   const text = params.toString();
   return text ? `?${text}` : '';
 }

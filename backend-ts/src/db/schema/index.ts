@@ -35,6 +35,7 @@ import { intakeRunsMigration } from "./034_intake_runs.ts";
 import { piAutomationsMigration } from "./035_pi_automations.ts";
 import { piAutomationSchedulerMigration } from "./036_pi_automation_scheduler.ts";
 import { piActionProposalsMigration } from "./037_pi_action_proposals.ts";
+import { piMemoryStoreMetadataMigration } from "./038_pi_memory_store_metadata.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -73,5 +74,6 @@ export const migrations = [
   intakeRunsMigration,
   piAutomationsMigration,
   piAutomationSchedulerMigration,
-  piActionProposalsMigration
+  piActionProposalsMigration,
+  piMemoryStoreMetadataMigration
 ];

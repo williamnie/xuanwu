@@ -4,6 +4,7 @@ import {
   cleanString,
   deleteByID,
   getByID,
+  hasPatchValue,
   integerInput,
   integerValue,
   listRows,
@@ -18,32 +19,49 @@ import {
 export type PiMemoryItem = {
   id: string; scope: string; scope_id: string; kind: string; content: string;
   source_type: string; source_id: string; confidence: string; pinned: number;
-  disabled: number; created_at: string; updated_at: string;
+  disabled: number; memory_type: PiMemoryType; layer: PiMemoryLayer;
+  citation_type: string; citation_id: string; citation_label: string; citation_url: string;
+  created_at: string; updated_at: string;
 };
 
 export type PiMemoryItemInput = PatchInput<PiMemoryItem>;
-export type PiMemoryItemFilter = { disabled?: number; scope?: string; scopeId?: string };
+export type PiMemoryItemFilter = {
+  disabled?: number;
+  layer?: PiMemoryLayer | string;
+  memoryType?: PiMemoryType | string;
+  scope?: string;
+  scopeId?: string;
+};
+export type PiMemoryType = (typeof PI_MEMORY_TYPES)[number];
+export type PiMemoryLayer = (typeof PI_MEMORY_LAYERS)[number];
+
+export const PI_MEMORY_TYPES = ["user", "project", "inbox", "source", "skill"] as const;
+export const PI_MEMORY_LAYERS = ["ephemeral", "working", "long_term"] as const;
 
 const TABLE = "pi_memory_items";
 const COLUMNS = `id, scope, scope_id, kind, content, source_type, source_id,
-  confidence, pinned, disabled, created_at, updated_at`;
+  confidence, pinned, disabled, memory_type, layer, citation_type, citation_id,
+  citation_label, citation_url, created_at, updated_at`;
 const UPDATE_COLUMNS = [
   "scope", "scope_id", "kind", "content", "source_type", "source_id",
-  "confidence", "pinned", "disabled"
+  "confidence", "pinned", "disabled", "memory_type", "layer", "citation_type",
+  "citation_id", "citation_label", "citation_url"
 ] as const;
 
 export function createPiMemoryItem(db: RunnerDatabase, input: PiMemoryItemInput): PiMemoryItem {
   const record = normalizeCreate(input);
   requireCreateFields(record, ["id", "scope", "kind", "content"]);
   const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [record.id, record.scope, record.scope_id, record.kind, record.content, record.source_type,
-      record.source_id, record.confidence, record.pinned, record.disabled, timestamp, timestamp]);
+      record.source_id, record.confidence, record.pinned, record.disabled, record.memory_type,
+      record.layer, record.citation_type, record.citation_id, record.citation_label,
+      record.citation_url, timestamp, timestamp]);
   return mustGetPiMemoryItem(db, record.id);
 }
 
 export function updatePiMemoryItem(db: RunnerDatabase, id: string, input: PiMemoryItemInput): PiMemoryItem {
-  updateByID<PiMemoryItem>(db, TABLE, UPDATE_COLUMNS, id, input);
+  updateByID<PiMemoryItem>(db, TABLE, UPDATE_COLUMNS, id, normalizeUpdate(input));
   return mustGetPiMemoryItem(db, id);
 }
 
@@ -51,7 +69,9 @@ export function listPiMemoryItems(db: RunnerDatabase, filter: PiMemoryItemFilter
   return listRows(db, TABLE, COLUMNS, mapPiMemoryItem, buildFilter([
     ["scope=?", filter.scope],
     ["scope_id=?", filter.scopeId],
-    ["disabled=?", filter.disabled]
+    ["disabled=?", filter.disabled],
+    ["memory_type=?", filter.memoryType],
+    ["layer=?", filter.layer]
   ], "updated_at desc, id asc"));
 }
 
@@ -70,14 +90,31 @@ function mustGetPiMemoryItem(db: RunnerDatabase, id: string): PiMemoryItem {
 }
 
 function normalizeCreate(input: PiMemoryItemInput): PiMemoryItem {
+  const scope = cleanString(input.scope);
   return {
-    id: cleanString(input.id), scope: cleanString(input.scope), scope_id: cleanString(input.scope_id),
+    id: cleanString(input.id), scope, scope_id: cleanString(input.scope_id),
     kind: cleanString(input.kind), content: cleanString(input.content),
     source_type: cleanString(input.source_type), source_id: cleanString(input.source_id),
     confidence: cleanString(input.confidence) || "medium",
     pinned: integerInput(input.pinned), disabled: integerInput(input.disabled),
+    memory_type: normalizeMemoryType(input.memory_type, memoryTypeForScope(scope)),
+    layer: normalizeMemoryLayer(input.layer),
+    citation_type: cleanString(input.citation_type),
+    citation_id: cleanString(input.citation_id),
+    citation_label: cleanString(input.citation_label),
+    citation_url: cleanString(input.citation_url),
     created_at: "", updated_at: ""
   };
+}
+
+function normalizeUpdate(input: PiMemoryItemInput): PiMemoryItemInput {
+  const output = { ...input };
+  if (hasPatchValue(input, "memory_type")) output.memory_type = normalizeMemoryType(input.memory_type, "user");
+  if (hasPatchValue(input, "layer")) output.layer = normalizeMemoryLayer(input.layer);
+  for (const field of ["citation_type", "citation_id", "citation_label", "citation_url"] as const) {
+    if (hasPatchValue(input, field)) output[field] = cleanString(input[field]);
+  }
+  return output;
 }
 
 function mapPiMemoryItem(row: Record<string, unknown>): PiMemoryItem {
@@ -90,7 +127,43 @@ function mapPiMemoryItem(row: Record<string, unknown>): PiMemoryItem {
     confidence: requiredString(row.confidence, "pi_memory_items.confidence"),
     pinned: integerValue(row.pinned, "pi_memory_items.pinned"),
     disabled: integerValue(row.disabled, "pi_memory_items.disabled"),
+    memory_type: normalizeMemoryType(row.memory_type, "user"),
+    layer: normalizeMemoryLayer(row.layer),
+    citation_type: optionalString(row.citation_type),
+    citation_id: optionalString(row.citation_id),
+    citation_label: optionalString(row.citation_label),
+    citation_url: optionalString(row.citation_url),
     created_at: requiredString(row.created_at, "pi_memory_items.created_at"),
     updated_at: requiredString(row.updated_at, "pi_memory_items.updated_at")
   };
+}
+
+function normalizeMemoryType(value: unknown, fallback: PiMemoryType): PiMemoryType {
+  const text = cleanString(value);
+  if (text === "") return fallback;
+  if (isMemoryType(text)) return text;
+  throw new Error(`memory_type must be one of ${PI_MEMORY_TYPES.join(", ")}`);
+}
+
+function normalizeMemoryLayer(value: unknown): PiMemoryLayer {
+  const text = cleanString(value);
+  if (text === "") return "working";
+  if (isMemoryLayer(text)) return text;
+  throw new Error(`layer must be one of ${PI_MEMORY_LAYERS.join(", ")}`);
+}
+
+function isMemoryType(value: string): value is PiMemoryType {
+  return (PI_MEMORY_TYPES as readonly string[]).includes(value);
+}
+
+function isMemoryLayer(value: string): value is PiMemoryLayer {
+  return (PI_MEMORY_LAYERS as readonly string[]).includes(value);
+}
+
+function memoryTypeForScope(scope: string): PiMemoryType {
+  if (scope === "project") return "project";
+  if (scope === "inbox") return "inbox";
+  if (scope === "source") return "source";
+  if (scope === "skill") return "skill";
+  return "user";
 }
