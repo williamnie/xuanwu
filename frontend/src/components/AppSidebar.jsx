@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   BotMessageSquare,
   FolderGit2,
+  Inbox,
   Layers,
   ListTodo,
   Moon,
@@ -70,6 +71,12 @@ export default function AppSidebar({
         <button className={`nav-item ${currentPage === 'pi-chat' ? 'active' : ''}`} onClick={() => navigateTo('pi-chat')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <BotMessageSquare size={16} /> Runner
+          </span>
+        </button>
+
+        <button className={`nav-item ${currentPage === 'attention-inbox' ? 'active' : ''}`} onClick={() => navigateTo('attention-inbox')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Inbox size={16} /> Attention
           </span>
         </button>
 

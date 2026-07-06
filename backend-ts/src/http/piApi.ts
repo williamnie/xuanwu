@@ -16,6 +16,7 @@ import {
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { registerPiActionRoutes } from "./piActionsApi.ts";
+import { registerPiAttentionInboxRoutes } from "./piAttentionInboxApi.ts";
 import { registerPiApprovalRequestRoutes } from "./piApprovalRequestsApi.ts";
 import { registerPiConversationRoutes } from "./piConversationApi.ts";
 import { registerPiConnectorHealthRoutes } from "./piConnectorHealthApi.ts";
@@ -58,6 +59,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.get("/api/pi/agents/:id/runtime-prompt", (request) => piAgentPromptResponse(context, request));
   router.patch("/api/pi/agents/:id", (request) => patchPiAgentResponse(context, request));
   registerPiActionRoutes(router, context);
+  registerPiAttentionInboxRoutes(router, context);
   registerPiApprovalRequestRoutes(router, context);
   registerPiConnectorHealthRoutes(router, context);
   registerPiConversationRoutes(router, context);

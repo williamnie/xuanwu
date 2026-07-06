@@ -44,6 +44,7 @@ export type IntakeRunRecord = Required<IntakeRunInput> & {
 };
 
 export type IntakeRunPatch = Partial<Omit<IntakeRunInput, "bundle_id" | "skill_id">>;
+export type IntakeRunFilter = { bundleId?: number; limit?: number; status?: IntakeRunStatus };
 
 export type AttentionInboxItemInput = {
   actor_refs?: string[];
@@ -76,7 +77,8 @@ export type AttentionInboxItemRecord = Required<AttentionInboxItemInput> & {
   updated_at: string;
 };
 
-export type AttentionInboxItemFilter = { intakeRunId?: number; status?: string };
+export type AttentionInboxItemStatus = "new" | "triaged" | "proposal_created" | "actioned" | "ignored" | "failed";
+export type AttentionInboxItemFilter = { intakeRunId?: number; limit?: number; source?: string; status?: string };
 
 const RUN_COLUMNS = `id, bundle_id, skill_id, model_policy_id, model,
   input_summary_json, schema_output_json, ignored_groups_json, error, status,
@@ -125,6 +127,14 @@ export function getIntakeRun(db: RunnerDatabase, id: number): IntakeRunRecord | 
   return row ? mapRun(row) : null;
 }
 
+export function listIntakeRuns(db: RunnerDatabase, filter: IntakeRunFilter = {}): IntakeRunRecord[] {
+  const query = runListQuery(filter);
+  return db.sqlite.query<Record<string, unknown>, SQLValue[]>(
+    `select ${RUN_COLUMNS} from intake_runs${query.where}
+      order by updated_at desc, id desc limit ?`
+  ).all(...query.args).map(mapRun);
+}
+
 export function createAttentionInboxItem(
   db: RunnerDatabase,
   input: AttentionInboxItemInput,
@@ -149,11 +159,25 @@ export function listAttentionInboxItems(
   ).all(...query.args).map(mapItem);
 }
 
-function getAttentionInboxItem(db: RunnerDatabase, id: number): AttentionInboxItemRecord | null {
+export function getAttentionInboxItem(db: RunnerDatabase, id: number): AttentionInboxItemRecord | null {
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
   const row = db.sqlite.query<Record<string, unknown>, [number]>(
     `select ${ITEM_COLUMNS} from attention_inbox_items where id=?`
   ).get(id);
   return row ? mapItem(row) : null;
+}
+
+export function updateAttentionInboxItemStatus(
+  db: RunnerDatabase,
+  id: number,
+  status: AttentionInboxItemStatus,
+  timestamp = new Date()
+): AttentionInboxItemRecord {
+  requireAttentionInboxItem(db, id);
+  db.sqlite.run("update attention_inbox_items set status=?, updated_at=? where id=?", [
+    itemStatus(status), timestamp.toISOString(), id
+  ]);
+  return requireAttentionInboxItem(db, id);
 }
 
 function normalizeRun(input: IntakeRunInput, timestamp: Date): IntakeRunRecord {
@@ -184,7 +208,7 @@ function normalizeItem(input: AttentionInboxItemInput, timestamp: Date): Attenti
     confidence: confidence(input.confidence), urgency: cleanString(input.urgency),
     evidence_refs: requiredStringList(input.evidence_refs, "evidence_refs"),
     actor_refs: stringList(input.actor_refs), target_hints: objectArray(input.target_hints),
-    schema_item: schemaItem, status: cleanString(input.status) || "new",
+    schema_item: schemaItem, status: itemStatus(input.status),
     secondary_intents_json: JSON.stringify(stringList(input.secondary_intents)),
     suggested_actions_json: JSON.stringify(stringList(input.suggested_actions)),
     evidence_refs_json: JSON.stringify(requiredStringList(input.evidence_refs, "evidence_refs")),
@@ -223,7 +247,7 @@ function mapItem(row: Record<string, unknown>): AttentionInboxItemRecord {
     confidence: confidence(row.confidence), urgency: cleanString(row.urgency),
     evidence_refs: stringList(jsonArray(row.evidence_refs_json)), actor_refs: stringList(jsonArray(row.actor_refs_json)),
     target_hints: objectArray(jsonArray(row.target_hints_json)), schema_item: jsonObject(row.schema_item_json),
-    status: cleanString(row.status) || "new", secondary_intents_json: jsonText(row.secondary_intents_json, "[]"),
+    status: itemStatus(row.status), secondary_intents_json: jsonText(row.secondary_intents_json, "[]"),
     suggested_actions_json: jsonText(row.suggested_actions_json, "[]"),
     evidence_refs_json: jsonText(row.evidence_refs_json, "[]"), actor_refs_json: jsonText(row.actor_refs_json, "[]"),
     target_hints_json: jsonText(row.target_hints_json, "[]"), schema_item_json: jsonText(row.schema_item_json, "{}"),
@@ -235,9 +259,29 @@ function itemListQuery(filter: AttentionInboxItemFilter): { args: SQLValue[]; wh
   const clauses: string[] = [];
   const args: SQLValue[] = [];
   if (filter.intakeRunId) addClause(clauses, args, "intake_run_id=?", filter.intakeRunId);
+  if (cleanString(filter.source) !== "") addClause(clauses, args, "source=?", cleanString(filter.source));
   if (cleanString(filter.status) !== "") addClause(clauses, args, "status=?", cleanString(filter.status));
-  args.push(100);
+  args.push(listLimit(filter.limit, 100));
   return { args, where: clauses.length > 0 ? ` where ${clauses.join(" and ")}` : "" };
+}
+
+function runListQuery(filter: IntakeRunFilter): { args: SQLValue[]; where: string } {
+  const clauses: string[] = [];
+  const args: SQLValue[] = [];
+  if (filter.bundleId) addClause(clauses, args, "bundle_id=?", filter.bundleId);
+  if (filter.status) addClause(clauses, args, "status=?", runStatus(filter.status));
+  args.push(listLimit(filter.limit, 100));
+  return { args, where: clauses.length > 0 ? ` where ${clauses.join(" and ")}` : "" };
+}
+
+function listLimit(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? Math.min(value, 500) : fallback;
+}
+
+function itemStatus(value: unknown): AttentionInboxItemStatus {
+  const status = cleanString(value);
+  const allowed = ["new", "triaged", "proposal_created", "actioned", "ignored", "failed"];
+  return allowed.includes(status) ? status as AttentionInboxItemStatus : "new";
 }
 
 function runInsertColumns(): string {
@@ -269,6 +313,12 @@ function requireIntakeRun(db: RunnerDatabase, id: number): IntakeRunRecord {
   const run = getIntakeRun(db, id);
   if (!run) throw new Error(`intake run not found: ${id}`);
   return run;
+}
+
+function requireAttentionInboxItem(db: RunnerDatabase, id: number): AttentionInboxItemRecord {
+  const item = getAttentionInboxItem(db, id);
+  if (!item) throw new Error(`attention inbox item not found: ${id}`);
+  return item;
 }
 
 function addClause(clauses: string[], args: SQLValue[], clause: string, value: SQLValue): void {

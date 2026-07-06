@@ -206,6 +206,43 @@ export const api = {
 
   getPiConnectors: () => request('/api/pi/connectors'),
 
+  getPiAttentionItems: ({ status = '', source = '', limit = 100 } = {}) => {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (source) params.append('source', source);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/attention-inbox/items${query}`);
+  },
+
+  getPiAttentionItem: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}`),
+
+  updatePiAttentionItem: (id, updates) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
+  ignorePiAttentionItem: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}/ignore`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  reintakePiAttentionItem: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}/reintake`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  startPiAttentionDomainSkill: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}/domain-skill`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
+  getPiAttentionContextBundle: (id) => request(`/api/pi/attention-inbox/context-bundles/${encodeURIComponent(id)}`),
+
+  getPiAttentionIntakeRun: (id) => request(`/api/pi/attention-inbox/intake-runs/${encodeURIComponent(id)}`),
+
+  getPiAttentionRawEvent: (id) => request(`/api/pi/attention-inbox/raw-events/${encodeURIComponent(id)}`),
+
   getRunnerSettings: () => request('/api/runner/settings'),
 
   updateRunnerSettings: (settings) => request('/api/runner/settings', {
