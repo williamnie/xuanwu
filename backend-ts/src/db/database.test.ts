@@ -51,6 +51,7 @@ describe("Bun SQLite database connection", () => {
         "app_preferences",
         "assistant_tool_providers",
         "assistant_tools",
+        "attention_inbox_items",
         "context_bundles",
         "cron_task_schedules",
         "cron_tasks",
@@ -59,6 +60,7 @@ describe("Bun SQLite database connection", () => {
         "feishu_conversation_state",
         "feishu_project_selections",
         "im_reply_drafts",
+        "intake_runs",
         "issue_events",
         "issue_runs",
         "issue_supervisor_events",
@@ -160,7 +162,8 @@ describe("Bun SQLite database connection", () => {
         { id: "030_remove_legacy_notification_settings" },
         { id: "031_clear_feishu_pi_conversation_projects" },
         { id: "032_assistant_tool_registry" },
-        { id: "033_context_bundles" }
+        { id: "033_context_bundles" },
+        { id: "034_intake_runs" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -221,6 +224,8 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
+      expect(indexNames(connection, "intake_runs")).toContain("idx_intake_runs_bundle");
+      expect(indexNames(connection, "attention_inbox_items")).toContain("idx_attention_inbox_items_intake_run");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -347,6 +352,26 @@ describe("Bun SQLite database connection", () => {
         output_schema_json: "'{}'",
         permission: "'read'",
         timeout_ms: "0"
+      });
+      expect(columnDefaults(connection, "intake_runs")).toMatchObject({
+        error: "''",
+        ignored_groups_json: "'[]'",
+        input_summary_json: "'{}'",
+        model: "''",
+        model_policy_id: "''",
+        schema_output_json: "'{}'",
+        status: "'running'"
+      });
+      expect(columnDefaults(connection, "attention_inbox_items")).toMatchObject({
+        actor_refs_json: "'[]'",
+        evidence_refs_json: "'[]'",
+        kind: "'attention'",
+        schema_item_json: "'{}'",
+        secondary_intents_json: "'[]'",
+        status: "'new'",
+        suggested_actions_json: "'[]'",
+        target_hints_json: "'[]'",
+        urgency: "''"
       });
       expect(columnDefaults(connection, "pi_recovery_attempts")).toMatchObject({
         after_snapshot_json: "'{}'",
@@ -641,7 +666,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 33 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 34 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

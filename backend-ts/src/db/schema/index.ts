@@ -31,6 +31,7 @@ import { removeLegacyNotificationSettingsMigration } from "./030_remove_legacy_n
 import { clearFeishuPiConversationProjectsMigration } from "./031_clear_feishu_pi_conversation_projects.ts";
 import { assistantToolRegistryMigration } from "./032_assistant_tool_registry.ts";
 import { contextBundlesMigration } from "./033_context_bundles.ts";
+import { intakeRunsMigration } from "./034_intake_runs.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -65,5 +66,6 @@ export const migrations = [
   removeLegacyNotificationSettingsMigration,
   clearFeishuPiConversationProjectsMigration,
   assistantToolRegistryMigration,
-  contextBundlesMigration
+  contextBundlesMigration,
+  intakeRunsMigration
 ];
