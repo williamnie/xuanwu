@@ -10,8 +10,10 @@ export type McpCapability = {
   content?: unknown;
   description: string;
   id: string;
+  input_schema?: Record<string, unknown>;
   kind: McpCapabilityKind;
   name: string;
+  output_schema?: Record<string, unknown>;
   permission: McpPermission;
   read_only: boolean;
   requires_confirmation: boolean;
@@ -21,14 +23,18 @@ export type McpCapability = {
 
 export type McpServerRegistry = {
   capabilities: McpCapability[];
+  description: string;
   diagnostics: McpRegistryDiagnostic[];
   id: string;
+  metadata: Record<string, unknown>;
+  name: string;
   permissions: McpPermission[];
   readiness: string;
   resources: McpCapability[];
   risk_level: McpRiskLevel;
   status: string;
   tools: McpCapability[];
+  version?: string;
 };
 
 export type McpRegistryDiagnostic = {
@@ -167,14 +173,18 @@ function normalizeServer(server: RawServer): McpServerRegistry | null {
   const readiness = cleanString(server.readiness) || cleanString(server.ready) || "unknown";
   return {
     capabilities,
+    description: cleanString(server.description ?? server.summary),
     diagnostics: serverDiagnostics(id, status, readiness),
     id,
+    metadata: objectValue(server.metadata),
+    name: cleanString(server.name) || id,
     permissions: permissionsFromServer(server, capabilities),
     readiness,
     resources: capabilities.filter((item) => item.kind === "resource"),
     risk_level: riskLevel(server.risk_level ?? server.risk, capabilities),
     status,
-    tools: capabilities.filter((item) => item.kind === "tool")
+    tools: capabilities.filter((item) => item.kind === "tool"),
+    version: cleanString(server.version) || undefined
   };
 }
 
@@ -188,6 +198,10 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
     content: raw.content ?? raw.value,
     description: cleanString(raw.description ?? raw.summary),
     id: `${serverID}:${kind}:${name}`,
+    ...(kind === "tool" ? {
+      input_schema: jsonSchema(raw.input_schema ?? raw.inputSchema ?? raw.parameters ?? raw.schema, emptyObjectSchema()),
+      output_schema: jsonSchema(raw.output_schema ?? raw.outputSchema, { type: "object" })
+    } : {}),
     kind,
     name,
     permission,
@@ -270,6 +284,15 @@ function tokenize(text: string): string[] {
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function jsonSchema(value: unknown, fallback: Record<string, unknown>): Record<string, unknown> {
+  const schema = objectValue(value);
+  return Object.keys(schema).length > 0 ? schema : fallback;
+}
+
+function emptyObjectSchema(): Record<string, unknown> {
+  return { additionalProperties: false, properties: {}, type: "object" };
 }
 
 function parseJSON(text: string): unknown {

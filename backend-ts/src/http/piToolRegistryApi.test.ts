@@ -8,9 +8,12 @@ import { listPiActionEvents } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
+const previousMcpRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
 const tempRoots: string[] = [];
 
 afterEach(async () => {
+  if (previousMcpRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousMcpRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -74,6 +77,52 @@ describe("PI tool registry read API", () => {
           provider_id: "fixture-cli"
         })
       ]));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("loads MCP server tools into the unified registry without blocking on failed servers", async () => {
+    const db = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsMcpServer(), failedMcpServer()] });
+    try {
+      const router = createDefaultRouter({ database: db });
+      const providers = await router.handle(new Request(`${BASE_URL}/api/pi/tool-providers`));
+      const tools = await router.handle(new Request(`${BASE_URL}/api/pi/tools`));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/pi/tools/mcp-docs%3Asearch`));
+
+      expect(providers.status).toBe(200);
+      await expect(providers.json()).resolves.toMatchObject({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: "mcp-docs", kind: "mcp", status: "enabled" }),
+          expect.objectContaining({ id: "mcp-missing-docs", kind: "mcp", status: "disabled" })
+        ])
+      });
+
+      expect(tools.status).toBe(200);
+      const body = await tools.json() as Record<string, any>;
+      expect(body.tools).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          input_schema: expect.objectContaining({
+            properties: expect.objectContaining({ query: expect.objectContaining({ type: "string" }) }),
+            type: "object"
+          }),
+          metadata: expect.objectContaining({ capability_id: "docs:tool:search", connector: "mcp" }),
+          name: "search",
+          permission: "read",
+          provider: expect.objectContaining({ id: "mcp-docs", kind: "mcp", status: "enabled" }),
+          provider_id: "mcp-docs"
+        })
+      ]));
+
+      expect(detail.status).toBe(200);
+      await expect(detail.json()).resolves.toMatchObject({
+        tool: expect.objectContaining({
+          name: "search",
+          provider_id: "mcp-docs",
+          provider: expect.objectContaining({ kind: "mcp" })
+        })
+      });
     } finally {
       db.close();
     }
@@ -248,4 +297,37 @@ function seedSecretFixture(db: RunnerDatabase): void {
       now
     ]
   );
+}
+
+function docsMcpServer(): Record<string, unknown> {
+  return {
+    description: "Documentation MCP server.",
+    id: "docs",
+    metadata: { transport: "stdio" },
+    name: "Docs MCP",
+    readiness: "ready",
+    status: "enabled",
+    tools: [{
+      description: "Search documentation.",
+      input_schema: {
+        additionalProperties: false,
+        properties: { query: { type: "string" } },
+        required: ["query"],
+        type: "object"
+      },
+      name: "search",
+      output_schema: { properties: { results: { type: "array" } }, type: "object" },
+      permission: "read",
+      risk_level: "low"
+    }]
+  };
+}
+
+function failedMcpServer(): Record<string, unknown> {
+  return {
+    id: "missing-docs",
+    readiness: "spawn_failed",
+    status: "failed",
+    tools: [{ description: "Offline search.", name: "search", permission: "read" }]
+  };
 }
