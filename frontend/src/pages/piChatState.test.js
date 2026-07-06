@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const source = readFileSync(new URL('./piChatState.js', import.meta.url), 'utf8');
+const panelSource = readFileSync(new URL('./PiChat.jsx', import.meta.url), 'utf8');
 
 test('Runner chat loader keeps a stable callback and loads projects for @ mentions', () => {
   assert.match(source, /function usePiChatLoader\(setters\)/);
@@ -40,6 +41,15 @@ test('Runner chat tracks selected conversation and updates title from message re
   assert.match(source, /createConversation\('New conversation'/);
   assert.match(source, /applyConversationTitle\(state, conversationId, result\?\.title\)/);
   assert.doesNotMatch(source, /new Date\(\)\.toLocaleString/);
+});
+
+test('Runner chat uses the default PI agent without exposing an agent selector', () => {
+  assert.doesNotMatch(panelSource, /function AgentSelect/);
+  assert.doesNotMatch(panelSource, /<select className="form-control" value=\{selected\}/);
+  assert.doesNotMatch(panelSource, /Runner Agent/);
+  assert.doesNotMatch(source, /pi_agent_id:\s*state\.selectedAgentId/);
+  assert.match(source, /api\.createPiConversation\(\{\s*project_id:/);
+  assert.doesNotMatch(source, /ensureConversationInput/);
 });
 
 test('Runner chat can infer project from natural @project mention text', async () => {

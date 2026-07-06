@@ -34,9 +34,8 @@ function PiChatSidebar({ navigateTo, state }) {
         navigateTo={navigateTo}
         onRefresh={state.loadPiState}
       />
-      <AgentSelect agents={state.agents} selected={state.selectedAgentId} onChange={state.setSelectedAgentId} />
       <AgentStatus agent={state.selectedAgent} />
-      <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending || !state.selectedAgentId}>
+      <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
         <MessageSquarePlus size={15} /> 新建 Runner 会话
       </button>
       <ConversationList
@@ -54,15 +53,15 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
       <div className="pi-chat-sidebar-brand">
         <span className="pi-chat-sidebar-icon"><Bot size={16} /></span>
         <div>
-          <strong>Runner</strong>
-          <span>Global agent chat</span>
+          <strong>Runner Brain</strong>
+          <span>Default PI runtime</span>
         </div>
       </div>
       <div className="pi-chat-sidebar-actions">
         <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Runner 会话">
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="Runner 设置">
+        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="PI Runtime 设置">
           <Settings2 size={15} />
         </button>
       </div>
@@ -91,23 +90,11 @@ function ChatHeader({ state }) {
   return (
     <header className="pi-chat-main-header">
       <div>
-        <span>Agent chat</span>
+        <span>Runner Brain</span>
         <strong>{title}</strong>
       </div>
       <small>{count} message{count === 1 ? '' : 's'}</small>
     </header>
-  );
-}
-
-function AgentSelect({ agents, onChange, selected }) {
-  return (
-    <label className="pi-chat-field">
-      <span>Runner Agent</span>
-      <select className="form-control" value={selected} onChange={(event) => onChange(event.target.value)}>
-        <option value="">未选择</option>
-        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name || agent.id}</option>)}
-      </select>
-    </label>
   );
 }
 
@@ -154,7 +141,7 @@ function ChatThread({ navigateTo, state }) {
       <div className="pi-chat-thread" ref={scrollRef} onScroll={handleScroll}>
         <div className="pi-chat-thread-content" ref={contentRef}>
           {state.transcript.length === 0 ? (
-            <EmptyChat navigateTo={navigateTo} hasAgents={state.agents.length > 0} />
+            <EmptyChat navigateTo={navigateTo} hasRuntime={state.agents.length > 0} />
           ) : state.transcript.map((item) => <ChatBubble key={item.id} item={item} />)}
           {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Runner 正在思考...</div>}
         </div>
@@ -200,7 +187,7 @@ function ChatComposer({ state }) {
 }
 
 function AgentStatus({ agent }) {
-  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 Runner Agent</div>;
+  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 Runner Brain</div>;
   return (
     <div className="pi-chat-agent-status">
       <Bot size={14} />
@@ -221,13 +208,13 @@ function LoadingState() {
   );
 }
 
-function EmptyChat({ hasAgents, navigateTo }) {
+function EmptyChat({ hasRuntime, navigateTo }) {
   return (
     <div className="pi-chat-empty">
       <Bot size={34} />
-      <strong>{hasAgents ? '开始一次 Runner 对话' : '先配置 Runner Agent'}</strong>
-      <span>{hasAgents ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
-      {!hasAgents && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Runner 设置</button>}
+      <strong>{hasRuntime ? '开始一次 Runner 对话' : '先配置 PI Runtime'}</strong>
+      <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
+      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 PI Runtime 设置</button>}
     </div>
   );
 }

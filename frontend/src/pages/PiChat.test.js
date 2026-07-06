@@ -22,8 +22,8 @@ test('Runner page does not require a project selection for global chat', () => {
 });
 
 test('Runner page uses Runner naming in visible chat copy', () => {
-  assert.match(pageSource, />Runner</);
-  assert.match(pageSource, /Runner Agent/);
+  assert.match(pageSource, /Runner Brain/);
+  assert.doesNotMatch(pageSource, /Runner Agent/);
   assert.doesNotMatch(pageSource, /PI Chat/);
   assert.doesNotMatch(pageSource, /PI 设置/);
 });

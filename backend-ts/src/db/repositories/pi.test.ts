@@ -77,7 +77,7 @@ describe("PI runtime repositories", () => {
         enabled: 0
       });
       expect(updatedAgent).toMatchObject({ model_id: "gpt-5.4", tools_json: "[\"read\"]", enabled: 0 });
-      expect(listPiAgents(db).map((item) => item.id)).toEqual(["agent-1"]);
+      expect(listPiAgents(db).map((item) => item.id)).toEqual(["runner-default", "agent-1"]);
 
       const settings = createProjectPiSettings(db, { project_id: "demo", pi_agent_id: "agent-1" });
       expect(settings).toMatchObject({
@@ -99,6 +99,7 @@ describe("PI runtime repositories", () => {
       expect(getProjectPiSettings(db, "demo")).toBeNull();
       expect(deletePiAgent(db, "agent-1")).toBe(true);
       expect(getPiAgent(db, "agent-1")).toBeNull();
+      expect(getPiAgent(db, "runner-default")).not.toBeNull();
     } finally {
       db.close();
     }

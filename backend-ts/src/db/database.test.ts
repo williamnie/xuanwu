@@ -355,6 +355,69 @@ describe("Bun SQLite database connection", () => {
     }
   });
 
+  test("bootstraps a default PI agent for a fresh runtime database", async () => {
+    const root = await tempPath("codex-runner-bun-default-pi-agent-");
+    const connection = await openDatabase({ stateDir: join(root, "state") });
+
+    try {
+      expect(connection.sqlite.query("select count(*) as count from pi_agents").get()).toEqual({ count: 1 });
+      expect(connection.sqlite.query("select id, name, provider, thinking_level, cwd_policy, enabled from pi_agents").get()).toEqual({
+        id: "runner-default",
+        name: "Default Runner",
+        provider: "pi-sdk",
+        thinking_level: "medium",
+        cwd_policy: "project",
+        enabled: 1
+      });
+    } finally {
+      connection.close();
+    }
+  });
+
+  test("adds runner-default when upgrading a database that only has a legacy PI agent", async () => {
+    const root = await tempPath("codex-runner-bun-legacy-pi-agent-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.sqlite.run("delete from pi_agents where id='runner-default'");
+    first.sqlite.run(
+      `insert into pi_agents
+        (id, name, model_provider, model_id, thinking_level, instructions, enabled, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        "pi-default",
+        "Legacy PI",
+        "pi-smoke-faux",
+        "faux-1",
+        "off",
+        "legacy instructions",
+        1,
+        "2026-01-01T00:00:00Z",
+        "2026-01-01T00:00:00Z"
+      ]
+    );
+    first.close();
+
+    const upgraded = await openDatabase({ stateDir });
+
+    try {
+      expect(upgraded.sqlite.query("select id from pi_agents order by id").all()).toEqual([
+        { id: "pi-default" },
+        { id: "runner-default" }
+      ]);
+      expect(upgraded.sqlite.query("select id, name, model_provider, model_id, thinking_level, instructions, enabled from pi_agents where id='runner-default'").get()).toEqual({
+        id: "runner-default",
+        name: "Legacy PI",
+        model_provider: "pi-smoke-faux",
+        model_id: "faux-1",
+        thinking_level: "off",
+        instructions: "legacy instructions",
+        enabled: 1
+      });
+    } finally {
+      upgraded.close();
+    }
+  });
+
 
 
   test("repairs schema drift when a migration row exists but tables are missing", async () => {

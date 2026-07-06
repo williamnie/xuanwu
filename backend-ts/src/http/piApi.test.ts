@@ -24,31 +24,28 @@ afterEach(async () => {
 });
 
 describe("Bun PI settings API", () => {
-  test("performs PI agent CRUD through HTTP", async () => {
+  test("keeps the public PI agent API scoped to the default runner agent", async () => {
     const database = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database });
       const created = await request(router, "/api/pi/agents", "POST", {
-        id: "pi-default",
-        name: "Default PI",
-        tools_json: ["read", "grep"]
+        id: "another-agent",
+        name: "Another PI"
       });
-      expect(created.status).toBe(201);
-      expect(await created.json()).toMatchObject({
-        id: "pi-default",
-        name: "Default PI",
+      expect(created.status).toBe(405);
+
+      const read = await router.handle(new Request(`${BASE_URL}/api/pi/agents/runner-default`));
+      expect(read.status).toBe(200);
+      expect(await read.json()).toMatchObject({
+        id: "runner-default",
+        name: "Default Runner",
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",
-        tools_json: "[\"read\",\"grep\"]",
         enabled: 1
       });
 
-      const read = await router.handle(new Request(`${BASE_URL}/api/pi/agents/pi-default`));
-      expect(read.status).toBe(200);
-      expect(await read.json()).toMatchObject({ id: "pi-default", name: "Default PI" });
-
-      const patched = await request(router, "/api/pi/agents/pi-default", "PATCH", {
+      const patched = await request(router, "/api/pi/agents/runner-default", "PATCH", {
         model_provider: "openai",
         model_id: "gpt-5.4",
         instructions: "CODEX_API_KEY=fixture-secret\n每轮先总结 Runner 风险。",
@@ -56,18 +53,18 @@ describe("Bun PI settings API", () => {
       });
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({
-        id: "pi-default",
+        id: "runner-default",
         model_provider: "openai",
         model_id: "gpt-5.4",
         enabled: 0
       });
 
-      const promptSummary = await router.handle(new Request(`${BASE_URL}/api/pi/agents/pi-default/runtime-prompt`));
+      const promptSummary = await router.handle(new Request(`${BASE_URL}/api/pi/agents/runner-default/runtime-prompt`));
       const promptSummaryBody = await promptSummary.json() as Record<string, unknown>;
       expect(promptSummary.status).toBe(200);
       expect(JSON.stringify(promptSummaryBody)).not.toContain("fixture-secret");
       expect(promptSummaryBody).toMatchObject({
-        agent_id: "pi-default",
+        agent_id: "runner-default",
         runtime_prompt_summary: {
           custom_instructions_configured: true,
           injected_after: "core PI role/safety/tool/MCP constraints"
@@ -76,13 +73,12 @@ describe("Bun PI settings API", () => {
 
       const listed = await router.handle(new Request(`${BASE_URL}/api/pi/agents`));
       expect(listed.status).toBe(200);
-      expect((await listed.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["pi-default"]);
+      expect((await listed.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual(["runner-default"]);
 
-      const deleted = await router.handle(new Request(`${BASE_URL}/api/pi/agents/pi-default`, { method: "DELETE" }));
-      const missing = await router.handle(new Request(`${BASE_URL}/api/pi/agents/pi-default`));
-      expect(deleted.status).toBe(200);
-      expect(await deleted.json()).toEqual({ deleted: true });
-      expect(missing.status).toBe(404);
+      const deleted = await router.handle(new Request(`${BASE_URL}/api/pi/agents/runner-default`, { method: "DELETE" }));
+      const stillThere = await router.handle(new Request(`${BASE_URL}/api/pi/agents/runner-default`));
+      expect(deleted.status).toBe(405);
+      expect(stillThere.status).toBe(200);
     } finally {
       database.close();
     }
@@ -92,14 +88,13 @@ describe("Bun PI settings API", () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
-      insertAgent(database, "pi-default", 1);
       const router = createDefaultRouter({ database });
 
       const initial = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`));
       expect(initial.status).toBe(200);
       expect(await initial.json()).toMatchObject({
         project_id: "demo",
-        pi_agent_id: "pi-default",
+        pi_agent_id: "runner-default",
         auto_manage: 0,
         auto_triage: 0,
         auto_enqueue: 0,
@@ -116,7 +111,7 @@ describe("Bun PI settings API", () => {
       expect(patched.status).toBe(200);
       expect(await patched.json()).toMatchObject({
         project_id: "demo",
-        pi_agent_id: "pi-default",
+        pi_agent_id: "runner-default",
         auto_manage: 1,
         auto_triage: 1,
         auto_enqueue: 0,
@@ -133,7 +128,6 @@ describe("Bun PI settings API", () => {
     let restored: RunnerDatabase | undefined;
     try {
       insertProject(database, "demo");
-      insertAgent(database, "pi-default", 1);
       const router = createDefaultRouter({ database });
 
       const created = await request(router, "/api/pi/conversations", "POST", {
@@ -146,7 +140,7 @@ describe("Bun PI settings API", () => {
       expect(createdBody).toMatchObject({
         id: "conv-1",
         project_id: "demo",
-        pi_agent_id: "pi-default",
+        pi_agent_id: "runner-default",
         pi_session_id: "conv-1",
         status: "active",
         title: "Plan"
@@ -190,7 +184,6 @@ describe("Bun PI settings API", () => {
   test("creates global Runner conversations without binding a project", async () => {
     const database = await openFixtureDatabase();
     try {
-      insertAgent(database, "pi-default", 1);
       const router = createDefaultRouter({ database });
 
       const created = await request(router, "/api/pi/conversations", "POST", {
@@ -203,7 +196,7 @@ describe("Bun PI settings API", () => {
       expect(body).toMatchObject({
         id: "runner-global",
         project_id: "",
-        pi_agent_id: "pi-default",
+        pi_agent_id: "runner-default",
         pi_session_id: "runner-global",
         status: "active",
         title: "Runner"
@@ -224,7 +217,7 @@ describe("Bun PI settings API", () => {
     }
   });
 
-  test("returns stable errors for invalid PI agent writes", async () => {
+  test("does not expose public PI agent creation even for invalid write payloads", async () => {
     const database = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database });
@@ -235,10 +228,10 @@ describe("Bun PI settings API", () => {
         headers: { "content-type": "application/json" }
       }));
 
-      expect(missingID.status).toBe(400);
-      expect(await missingID.json()).toEqual({ message: "id is required" });
-      expect(invalidJson.status).toBe(400);
-      expect(await invalidJson.json()).toEqual({ message: "请求体不是合法 JSON" });
+      expect(missingID.status).toBe(405);
+      expect(await missingID.json()).toEqual({ message: "method not allowed" });
+      expect(invalidJson.status).toBe(405);
+      expect(await invalidJson.json()).toEqual({ message: "method not allowed" });
     } finally {
       database.close();
     }
@@ -248,7 +241,6 @@ describe("Bun PI settings API", () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
-      insertAgent(database, "pi-default", 1);
       insertAgent(database, "pi-disabled", 0);
       const router = createDefaultRouter({ database });
 
@@ -257,10 +249,10 @@ describe("Bun PI settings API", () => {
         auto_manage: 1
       });
       const autoManaged = await request(router, "/api/projects/demo/pi-settings", "PATCH", {
-        pi_agent_id: "pi-default",
+        pi_agent_id: "runner-default",
         auto_manage: 1
       });
-      const disabledAfterEnable = await request(router, "/api/pi/agents/pi-default", "PATCH", { enabled: 0 });
+      const disabledAfterEnable = await request(router, "/api/pi/agents/runner-default", "PATCH", { enabled: 0 });
 
       expect(disabledAgent.status).toBe(400);
       expect(await disabledAgent.json()).toEqual({ message: "disabled PI agent cannot be used automatically" });

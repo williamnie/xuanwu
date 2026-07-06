@@ -323,11 +323,6 @@ export const api = {
 
   getPiAgentRuntimePrompt: (id) => request(`/api/pi/agents/${encodeURIComponent(id)}/runtime-prompt`),
 
-  createPiAgent: (agent) => request('/api/pi/agents', {
-    method: 'POST',
-    body: JSON.stringify(agent),
-  }),
-
   updatePiAgent: (id, updates) => request(`/api/pi/agents/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(updates),

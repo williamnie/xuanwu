@@ -8,7 +8,7 @@ export default function PiAgentSettingsPanel() {
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
       {state.loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 Runner 配置...</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 PI Runtime 配置...</div>
       ) : (
         <PiSettingsForm state={state} />
       )}
@@ -34,10 +34,10 @@ function PanelHeader({ loading, onRefresh }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
       <div>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={18} color="var(--primary)" /> Runner Agent Settings
+          <Bot size={18} color="var(--primary)" /> PI Runtime · Runner Brain
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          配置 Runner 独立 provider、API path、API key 与默认模型，供全局 Runner 会话使用。
+          配置唯一默认 Runner Brain 的 provider、API path、API key、模型与运行指令，供全局 PI 会话使用。
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -59,8 +59,7 @@ function Field({ children, label }) {
 function PiSettingsGrid({ form, updateField }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-      <TextField form={form} label="Agent ID" name="agentId" updateField={updateField} />
-      <TextField form={form} label="Agent Name" name="agentName" updateField={updateField} />
+      <TextField form={form} label="Runner Brain Name" name="agentName" updateField={updateField} />
       <TextField form={form} label="Model Provider" name="modelProvider" placeholder="openai / anthropic / local" updateField={updateField} />
       <TextField form={form} label="Model ID" name="modelId" placeholder="gpt-5.4" updateField={updateField} />
       <ApiTypeField form={form} updateField={updateField} />
@@ -79,7 +78,7 @@ function TextField({ form, label, name, placeholder = '', updateField }) {
 
 function ApiTypeField({ form, updateField }) {
   return (
-    <Field label="Runner API Type">
+    <Field label="Runtime API Type">
       <select className="form-control" value={form.api} onChange={(event) => updateField('api', event.target.value)}>
         {['openai-responses', 'openai-codex-responses', 'openai-completions', 'anthropic', 'google'].map((api) => <option key={api} value={api}>{api}</option>)}
       </select>
@@ -109,10 +108,10 @@ function ProviderCredentialFields({ state }) {
           type="password"
           value={state.form.apiKey}
           onChange={(event) => state.updateField('apiKey', event.target.value)}
-          placeholder={configured ? '已配置，输入新 key 可覆盖' : '输入 Runner provider API key'}
+          placeholder={configured ? '已配置，输入新 key 可覆盖' : '输入 Runner Brain provider API key'}
         />
       </Field>
-      <Field label="Runner Instructions">
+      <Field label="Runner Brain Instructions">
         <textarea className="form-control" rows={3} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
       <PromptSummaryDebug state={state} />
@@ -202,7 +201,7 @@ function AgentEnableField({ form, updateField }) {
   return (
     <label style={{ display: 'flex', gap: '10px', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '0.86rem' }}>
       <input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} />
-      启用这个 Runner Agent
+      启用 Runner Brain
     </label>
   );
 }
@@ -212,10 +211,10 @@ function SaveRow({ onSave, saving }) {
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
       <button className="btn btn-primary" onClick={onSave} disabled={saving}>
         {saving ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
-        保存 Runner 设置
+        保存 PI Runtime
       </button>
       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-        API key 只写入后端 Runner models.json；读取时只显示是否 configured，不回显明文。
+        API key 只写入后端 PI Runtime models.json；读取时只显示是否 configured，不回显明文。
       </span>
     </div>
   );

@@ -2,6 +2,7 @@ import { Database as SQLiteDatabase } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { buildRunnerPaths } from "../config/paths.ts";
+import { ensureDefaultPiAgent } from "./defaultPiAgent.ts";
 import { runMigrations } from "./migrations.ts";
 
 type OpenDatabaseOptions = {
@@ -36,7 +37,10 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     strict: true
   });
   sqlite.run("pragma foreign_keys = on");
-  if (!target.readonly) runMigrations(sqlite);
+  if (!target.readonly) {
+    runMigrations(sqlite);
+    ensureDefaultPiAgent({ readonly: false, sqlite });
+  }
 
   return {
     path: target.path,

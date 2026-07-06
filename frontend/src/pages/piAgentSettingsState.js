@@ -2,14 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
+export const DEFAULT_PI_AGENT_ID = 'runner-default';
+
 export const DEFAULT_PI_AGENT_FORM = {
-  agentId: 'runner-default',
+  agentId: DEFAULT_PI_AGENT_ID,
   agentName: 'Default Runner',
   api: 'openai-responses',
   apiKey: '',
   baseUrl: '',
   enabled: true,
-  instructions: '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+  instructions: '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
   thinkingLevel: 'medium',
@@ -17,7 +19,6 @@ export const DEFAULT_PI_AGENT_FORM = {
 };
 
 export function usePiAgentSettingsState() {
-  const [agents, setAgents] = useState([]);
   const [providers, setProviders] = useState([]);
   const [form, setForm] = useState(DEFAULT_PI_AGENT_FORM);
   const [loading, setLoading] = useState(true);
@@ -32,16 +33,16 @@ export function usePiAgentSettingsState() {
   );
 
   const loadSettings = () => {
-    loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary);
+    loadPiSettings(setProviders, setForm, setLoading, setPromptSummary);
     loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   };
   const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
-  const loadPromptSummary = () => loadPiPromptSummary(form.agentId, setPromptSummary, setPromptSummaryLoading);
+  const loadPromptSummary = () => loadPiPromptSummary(DEFAULT_PI_AGENT_ID, setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
-    if (key === 'agentId' || key === 'instructions') setPromptSummary(null);
+    if (key === 'instructions') setPromptSummary(null);
     setForm((current) => ({ ...current, [key]: value }));
   };
-  const handleSave = () => savePiSettings({ agents, form, setAgents, setForm, setPromptSummary, setProviders, setSaving });
+  const handleSave = () => savePiSettings({ form, setForm, setPromptSummary, setProviders, setSaving });
   const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
   const copyPiCodexOAuthUrl = () => copyOAuthUrl(oauthStatus?.auth_url);
   const openPiCodexOAuthUrl = () => openOAuthUrl(oauthStatus?.auth_url);
@@ -55,18 +56,17 @@ export function usePiAgentSettingsState() {
     copyPiCodexOAuthUrl, handleSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, startPiCodexOAuthLogin, updateField };
 }
 
-function loadPiSettings(setAgents, setProviders, setForm, setLoading, setPromptSummary) {
+function loadPiSettings(setProviders, setForm, setLoading, setPromptSummary) {
   setLoading(true);
   Promise.all([api.getPiAgents(), api.getPiProviderSettings()])
     .then(([agentList, providerSettings]) => {
       const nextAgents = agentList || [];
       const nextProviders = providerSettings?.providers || [];
-      setAgents(nextAgents);
       setProviders(nextProviders);
       setForm(formFromState(nextAgents, nextProviders));
       setPromptSummary(null);
     })
-    .catch((err) => message.error(err.message || '读取 Runner 设置失败'))
+    .catch((err) => message.error(err.message || '读取 PI Runtime 设置失败'))
     .finally(() => setLoading(false));
 }
 
@@ -138,7 +138,7 @@ function openOAuthUrl(url) {
 
 async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLoading) {
   const id = agentId.trim();
-  if (!id) return message.error('请先保存或选择 Runner Agent');
+  if (!id) return message.error('默认 Runner Brain 尚不可用');
   setPromptSummaryLoading(true);
   try {
     setPromptSummary(await api.getPiAgentRuntimePrompt(id));
@@ -149,37 +149,37 @@ async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLo
   }
 }
 
-async function savePiSettings({ agents, form, setAgents, setForm, setPromptSummary, setProviders, setSaving }) {
+async function savePiSettings({ form, setForm, setPromptSummary, setProviders, setSaving }) {
   if (!isValidForm(form)) return;
   setSaving(true);
   try {
     await api.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
-    await saveAgent(agents, agentPayload(form));
-    message.success('Runner Agent 设置已保存');
+    await saveAgent(agentPayload(form));
+    message.success('PI Runtime 设置已保存');
     setPromptSummary(null);
-    await refreshAfterSave(setAgents, setProviders, setForm);
+    await refreshAfterSave(setProviders, setForm);
   } catch (err) {
-    message.error(err.message || '保存 Runner 设置失败');
+    message.error(err.message || '保存 PI Runtime 设置失败');
   } finally {
     setSaving(false);
   }
 }
 
-async function saveAgent(agents, payload) {
-  if (agents.some((agent) => agent.id === payload.id)) return await api.updatePiAgent(payload.id, payload);
-  return await api.createPiAgent(payload);
+async function saveAgent(payload) {
+  return await api.updatePiAgent(DEFAULT_PI_AGENT_ID, payload);
 }
 
-async function refreshAfterSave(setAgents, setProviders, setForm) {
+async function refreshAfterSave(setProviders, setForm) {
   const [agentList, providerSettings] = await Promise.all([api.getPiAgents(), api.getPiProviderSettings()]);
-  setAgents(agentList || []);
-  setProviders(providerSettings?.providers || []);
-  setForm((current) => ({ ...current, apiKey: '' }));
+  const nextAgents = agentList || [];
+  const nextProviders = providerSettings?.providers || [];
+  setProviders(nextProviders);
+  setForm({ ...formFromState(nextAgents, nextProviders), apiKey: '' });
 }
 
 function isValidForm(form) {
-  if (form.agentId.trim() && form.modelProvider.trim() && form.modelId.trim() && form.api.trim()) return true;
-  message.error('Agent ID、provider、model、API 类型不能为空');
+  if (form.modelProvider.trim() && form.modelId.trim() && form.api.trim()) return true;
+  message.error('provider、model、API 类型不能为空');
   return false;
 }
 
@@ -195,8 +195,8 @@ function providerPayload(form) {
 
 function agentPayload(form) {
   return {
-    id: form.agentId.trim(),
-    name: form.agentName.trim() || form.agentId.trim(),
+    id: DEFAULT_PI_AGENT_ID,
+    name: form.agentName.trim() || DEFAULT_PI_AGENT_FORM.agentName,
     model_provider: form.modelProvider.trim(),
     model_id: form.modelId.trim(),
     thinking_level: form.thinkingLevel,
@@ -206,7 +206,7 @@ function agentPayload(form) {
 }
 
 function formFromState(agents, providers) {
-  const agent = agents.find((item) => item.enabled === 1) || agents[0];
+  const agent = defaultAgentFromList(agents);
   if (!agent) return DEFAULT_PI_AGENT_FORM;
   const provider = providers.find((item) => item.id === agent.model_provider);
   return {
@@ -223,4 +223,12 @@ function formFromState(agents, providers) {
     thinkingLevel: agent.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel,
     userAgent: provider?.user_agent || ''
   };
+}
+
+function defaultAgentFromList(agents) {
+  if (!Array.isArray(agents)) return null;
+  return agents.find((item) => item.id === DEFAULT_PI_AGENT_ID)
+    || agents.find((item) => item.enabled === 1)
+    || agents[0]
+    || null;
 }

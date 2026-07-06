@@ -1,5 +1,6 @@
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   createPiConversation,
@@ -280,7 +281,11 @@ function requireProject(db: RunnerDatabase, id: string): Project {
 }
 
 function defaultPiAgentID(db: RunnerDatabase): string {
-  return listPiAgents(db).find((agent) => agent.enabled === 1)?.id ?? "";
+  ensureDefaultPiAgent(db);
+  const agents = listPiAgents(db);
+  return agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)?.id
+    ?? agents.find((agent) => agent.enabled === 1)?.id
+    ?? "";
 }
 
 function projectID(request: Request): string {

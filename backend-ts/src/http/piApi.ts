@@ -1,11 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
+import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
-  createPiAgent,
   createProjectPiSettings,
-  deletePiAgent,
   getPiAgent,
   getProjectPiSettings,
   listPiAgents,
@@ -52,12 +51,10 @@ type SettingsPatch = Partial<Pick<ProjectPiSettings,
 >>;
 
 export function registerPiRoutes(router: Router, context: PiApiContext): void {
-  router.get("/api/pi/agents", () => json(listPiAgents(context.database)));
-  router.post("/api/pi/agents", async (request) => piAgentCreateResponse(context, request));
+  router.get("/api/pi/agents", () => piAgentListResponse(context));
   router.get("/api/pi/agents/:id", (request) => piAgentResponse(context, request));
   router.get("/api/pi/agents/:id/runtime-prompt", (request) => piAgentPromptResponse(context, request));
   router.patch("/api/pi/agents/:id", (request) => patchPiAgentResponse(context, request));
-  router.delete("/api/pi/agents/:id", (request) => deletePiAgentResponse(context, request));
   registerPiActionRoutes(router, context);
   registerPiApprovalRequestRoutes(router, context);
   registerPiConversationRoutes(router, context);
@@ -80,25 +77,20 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
 }
 
-async function piAgentCreateResponse(context: PiApiContext, request: Request): Promise<Response> {
-  const body = normalizeAgentInput(await parseObjectBody(request));
-  return writeResponse(() => createPiAgent(context.database, body), 201);
-}
-
-function deletePiAgentResponse(context: PiApiContext, request: Request): Response {
-  const id = piAgentID(request);
-  if (!getPiAgent(context.database, id)) throw new HttpError(404, "资源不存在");
-  assertAgentCanBeDeleted(context.database, id);
-  return json({ deleted: deletePiAgent(context.database, id) });
+function piAgentListResponse(context: PiApiContext): Response {
+  ensureDefaultPiAgent(context.database);
+  return json(listPiAgents(context.database));
 }
 
 function piAgentResponse(context: PiApiContext, request: Request): Response {
+  ensureDefaultPiAgent(context.database);
   const agent = getPiAgent(context.database, piAgentID(request));
   if (!agent) throw new HttpError(404, "资源不存在");
   return json(agent);
 }
 
 function piAgentPromptResponse(context: PiApiContext, request: Request): Response {
+  ensureDefaultPiAgent(context.database);
   const agent = getPiAgent(context.database, piAgentID(request));
   if (!agent) throw new HttpError(404, "资源不存在");
   return json({
@@ -109,6 +101,7 @@ function piAgentPromptResponse(context: PiApiContext, request: Request): Respons
 }
 
 async function patchPiAgentResponse(context: PiApiContext, request: Request): Promise<Response> {
+  ensureDefaultPiAgent(context.database);
   const id = piAgentID(request);
   if (!getPiAgent(context.database, id)) throw new HttpError(404, "资源不存在");
   const body = normalizeAgentInput(await parseObjectBody(request));
@@ -184,12 +177,6 @@ function assertSettingsCanUseAgent(db: RunnerDatabase, settings: ProjectPiSettin
 }
 
 
-function assertAgentCanBeDeleted(db: RunnerDatabase, id: string): void {
-  if (agentHasAutoSettings(db, id)) {
-    throw new HttpError(400, "automatically managed PI agent cannot be deleted");
-  }
-}
-
 function assertAgentCanBeDisabled(db: RunnerDatabase, id: string): void {
   if (agentHasAutoSettings(db, id)) {
     throw new HttpError(400, "enabled=false would disable an automatically managed PI agent");
@@ -230,7 +217,11 @@ async function parseObjectBody(request: Request): Promise<Record<string, unknown
 }
 
 function defaultPiAgentID(db: RunnerDatabase): string {
-  return listPiAgents(db).find((agent) => agent.enabled === 1)?.id ?? "";
+  ensureDefaultPiAgent(db);
+  const agents = listPiAgents(db);
+  return agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)?.id
+    ?? agents.find((agent) => agent.enabled === 1)?.id
+    ?? "";
 }
 
 function inputDisablesAgent(input: Record<string, unknown>): boolean {

@@ -212,7 +212,7 @@ describe("Bun project PI control API", () => {
     }
   });
 
-  test("run-once and resume return clear errors when PI agent is missing", async () => {
+  test("run-once and resume use the bootstrapped default PI agent", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -222,9 +222,9 @@ describe("Bun project PI control API", () => {
       const resume = await post(router, "/api/projects/demo/pi/resume");
 
       expect(runOnce.status).toBe(400);
-      expect(await runOnce.json()).toEqual({ message: "PI agent 不存在" });
-      expect(resume.status).toBe(400);
-      expect(await resume.json()).toEqual({ message: "PI agent 不存在" });
+      expect(String((await runOnce.json() as Record<string, unknown>).message)).toContain("No API key found for openai");
+      expect(resume.status).toBe(200);
+      expect(await resume.json()).toMatchObject({ project_id: "demo", pi_agent_id: "runner-default", auto_manage: 1 });
     } finally {
       database.close();
     }
@@ -252,10 +252,10 @@ function insertAgent(db: RunnerDatabase, id: string, enabled: number): void {
 }
 function insertFauxAgent(db: RunnerDatabase, provider = "pi-control-faux"): void {
   db.sqlite.run(
-    `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", provider, "faux-1", "off", 1,
-      "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `update pi_agents
+       set name=?, model_provider=?, model_id=?, thinking_level=?, enabled=?, updated_at=?
+     where id=?`,
+    ["PI Faux", provider, "faux-1", "off", 1, "2026-01-01T00:00:00Z", "runner-default"]
   );
 }
 function insertProject(db: RunnerDatabase, id: string): void {

@@ -1,6 +1,7 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
@@ -355,7 +356,9 @@ function optionalConversationProject(db: RunnerDatabase, id: string): Project | 
 }
 
 function conversationAgent(db: RunnerDatabase, id: string): PiAgent {
-  const agentID = id || (listPiAgents(db).find((agent) => agent.enabled === 1)?.id ?? "");
+  ensureDefaultPiAgent(db);
+  const agents = listPiAgents(db);
+  const agentID = id || agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)?.id || "";
   if (agentID === "") throw new HttpError(400, "PI agent 不存在");
   const agent = getPiAgent(db, agentID);
   if (!agent) throw new HttpError(400, "PI agent 不存在");

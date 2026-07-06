@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import { clearPiLiveAssistant, setPiLiveConversation, usePiConversationEvents } from './piChatLiveBridge';
+import { DEFAULT_PI_AGENT_ID } from './piAgentSettingsState';
 import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
 
 const DEFAULT_TRANSCRIPT = [];
@@ -118,7 +119,7 @@ function usePiChatLoader(setters) {
         setConversations(conversationList || []);
         setProjects(projectList || []);
         setError('');
-        setSelectedAgentId((current) => current || firstEnabledAgent(agentList || [])?.id || '');
+        setSelectedAgentId(defaultRuntimeAgent(agentList || [])?.id || '');
       })
       .catch((err) => setError(err.message || '读取 Runner 状态失败'))
       .finally(() => setLoading(false));
@@ -134,11 +135,9 @@ function usePiChatLoader(setters) {
 
 function useCreatePiConversation(state) {
   return useCallback(async (title, options = {}) => {
-    if (!ensureConversationInput(state.selectedAgentId)) return '';
     state.setSending(true);
     try {
       const conversation = await api.createPiConversation({
-        pi_agent_id: state.selectedAgentId,
         project_id: currentProjectId(state, options.project),
         title
       });
@@ -255,17 +254,16 @@ function normalizeReference(reference) {
   };
 }
 
-function ensureConversationInput(agentId) {
-  if (!agentId) message.error('请先在 Settings 配置并启用 Runner Agent');
-  return Boolean(agentId);
-}
-
 function transcriptMessage(role, text, meta = null) {
   return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, meta, role, text };
 }
 
-function firstEnabledAgent(agents) {
-  return Array.isArray(agents) ? agents.find((agent) => agent.enabled === 1) : null;
+function defaultRuntimeAgent(agents) {
+  if (!Array.isArray(agents)) return null;
+  return agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)
+    || agents.find((agent) => agent.enabled === 1)
+    || agents[0]
+    || null;
 }
 
 export function shortId(value) {
