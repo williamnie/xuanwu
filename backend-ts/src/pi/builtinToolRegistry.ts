@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiProjectTools, PI_READ_ONLY_TOOLS } from "../http/piProjectTools.ts";
 import type { AssistantTool, ToolJsonSchema, ToolPermission, ToolProvider } from "./toolProviderEnvelope.ts";
 
-const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
+export const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
 const READ_TOOL_NAMES = new Set<string>([
   ...PI_READ_ONLY_TOOLS,
   "issue_list",

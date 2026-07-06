@@ -6,13 +6,13 @@ import { dirname, join, resolve } from "node:path";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
-import { createPiProjectTools, PI_ALLOWED_TOOLS } from "./piProjectTools.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import { PI_SAFE_ACTION_TYPES } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
+import { createPiRuntimeToolKit, recordPiRuntimeToolRegistryAudit } from "../pi/piRuntimeTools.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -92,6 +92,23 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     ? sdk.pi.SessionManager.open(input.sessionFile, context.sessionDir, context.cwd)
     : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });
   const cleanupRuntimeProvider = ensureRuntimeProvider(sdk, input.agent);
+  const toolContext = {
+    authorization: input.authorization,
+    bus: input.bus,
+    conversationID: input.conversationID,
+    delegationID: input.delegationID,
+    heartbeatID: input.heartbeatID,
+    onIssueEnqueued: input.onIssueEnqueued,
+    source: input.source
+  };
+  const runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext);
+  recordPiRuntimeToolRegistryAudit(db, {
+    conversationID: input.conversationID,
+    delegationID: input.delegationID,
+    heartbeatID: input.heartbeatID,
+    issueID: input.issueID,
+    projectID: toolProject?.id ?? input.project?.id
+  }, runtimeTools.audit);
   try {
     const { session } = await sdk.pi.createAgentSession({
       cwd: context.cwd,
@@ -103,16 +120,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       sessionManager,
       settingsManager: sdk.pi.SettingsManager.create(context.cwd, paths.agentDir),
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
-      tools: [...PI_ALLOWED_TOOLS],
-      customTools: createPiProjectTools(db, toolProject, {
-        authorization: input.authorization,
-        bus: input.bus,
-        conversationID: input.conversationID,
-        delegationID: input.delegationID,
-        heartbeatID: input.heartbeatID,
-        onIssueEnqueued: input.onIssueEnqueued,
-        source: input.source
-      })
+      tools: runtimeTools.tools,
+      customTools: runtimeTools.customTools
     });
     const cleanupSdkAudit = installPiSdkToolAudit(db, session, {
       authorization: input.authorization,

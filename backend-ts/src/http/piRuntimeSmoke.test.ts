@@ -132,6 +132,42 @@ describe("Bun PI runtime v1 smoke", () => {
     }
   });
 
+  test("assembles PI runtime tools from registry and audits the source", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      writeFauxModelsConfig(database);
+
+      const runtime = await createPiRuntimeSession(database, {
+        agent: agentRecord(),
+        conversationID: "conv-tool-registry",
+        project: projectRecord("demo")
+      });
+      const activeTools = runtime.session.getActiveToolNames();
+      runtime.dispose();
+
+      expect(activeTools).toEqual(expect.arrayContaining([
+        "read",
+        "issue_read",
+        "issue_create_proposal",
+        "issue_enqueue_proposal",
+        "memory_search"
+      ]));
+      const audit = listPiActionEvents(database, { conversationId: "conv-tool-registry" })
+        .find((event) => event.event_type === "runtime_tool_registry_snapshot");
+      expect(audit).toBeTruthy();
+      const payload = JSON.parse(audit?.payload_json ?? "{}");
+      expect(payload).toMatchObject({
+        provider_ids: ["runner-builtin"],
+        source: "registry"
+      });
+      expect(payload.tool_names).toEqual(expect.arrayContaining(["read", "issue_enqueue_proposal"]));
+      expect(payload.counts.sdk_tools).toBeGreaterThan(0);
+      expect(payload.counts.custom_tools).toBeGreaterThan(0);
+    } finally {
+      database.close();
+    }
+  });
+
   test("injects only authorized skill metadata into PI runtime prompt and audits the summary", async () => {
     const database = await openFixtureDatabase();
     try {

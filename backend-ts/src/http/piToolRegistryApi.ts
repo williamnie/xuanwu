@@ -1,10 +1,6 @@
-import {
-  getStoredAssistantTool,
-  listStoredAssistantTools,
-  listStoredToolProviders
-} from "../db/repositories/toolRegistry.ts";
-import { listBuiltinAssistantTools, listBuiltinToolProviders } from "../pi/builtinToolRegistry.ts";
-import { assistantToolKey, type AssistantTool, type ToolProvider } from "../pi/toolProviderEnvelope.ts";
+import { getStoredAssistantTool } from "../db/repositories/toolRegistry.ts";
+import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
+import type { AssistantTool, ToolProvider } from "../pi/toolProviderEnvelope.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -47,9 +43,7 @@ function publicTool(tool: AssistantTool, provider?: ToolProvider): unknown {
 }
 
 function registrySnapshot(db: RunnerDatabase): { providers: ToolProvider[]; tools: AssistantTool[] } {
-  const providers = mergeProviders([...listBuiltinToolProviders(), ...listStoredToolProviders(db)]);
-  const tools = mergeTools([...listBuiltinAssistantTools(), ...listStoredAssistantTools(db)]);
-  return { providers, tools };
+  return loadAssistantToolRegistrySnapshot(db);
 }
 
 function findTool(db: RunnerDatabase, tools: AssistantTool[], request: Request): AssistantTool | undefined {
@@ -75,16 +69,6 @@ function toolID(request: Request): string {
   const value = parts[parts.indexOf("tools") + 1]?.trim() ?? "";
   if (value === "") throw new HttpError(400, "tool id 不能为空");
   return decodeURIComponent(value);
-}
-
-function mergeProviders(providers: ToolProvider[]): ToolProvider[] {
-  return [...new Map(providers.map((provider) => [provider.id, provider])).values()]
-    .sort((left, right) => left.id.localeCompare(right.id));
-}
-
-function mergeTools(tools: AssistantTool[]): AssistantTool[] {
-  return [...new Map(tools.map((tool) => [assistantToolKey(tool), tool])).values()]
-    .sort((left, right) => assistantToolKey(left).localeCompare(assistantToolKey(right)));
 }
 
 function providerByID(providers: ToolProvider[]): Map<string, ToolProvider> {
