@@ -1083,7 +1083,8 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     recommendSkills: record("recommendSkills"),
     auditSkillIntents: record("auditSkillIntents"),
     issueExecutionStatus: record("issueExecutionStatus"),
-    issueStatusSummary: record("issueStatusSummary")
+    issueStatusSummary: record("issueStatusSummary"),
+    runManualContextIntake: record("runManualContextIntake")
   };
 }
 

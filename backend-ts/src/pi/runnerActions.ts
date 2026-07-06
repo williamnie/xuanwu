@@ -43,6 +43,10 @@ import {
   type IssueCompletionWatchCreateInput,
   type IssueCompletionWatchListInput
 } from "./issueCompletionWatchActions.ts";
+import {
+  runManualContextIntake as executeManualContextIntake,
+  type ManualContextIntakeInput
+} from "./manualTrigger.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -62,6 +66,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   enqueueIssueProposal(input: IssueProposalInput): unknown;
   issueExecutionStatus(input: IssueExecutionStatusInput): unknown;
   issueStatusSummary(input: IssueStatusSummaryInput): unknown;
+  runManualContextIntake(input: ManualContextIntakeInput): unknown;
   scheduleIssueEnqueue(input: IssueScheduleEnqueueInput): unknown;
   listIssues(input: IssueListInput): unknown;
   listProjects(input: ProjectListInput): unknown;
@@ -74,6 +79,13 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
 export type PiRunnerActionContext = PiActionContext & {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
+  sourceTurn?: PiRunnerSourceTurn;
+};
+
+export type PiRunnerSourceTurn = {
+  id?: string;
+  source?: string;
+  userPrompt?: string;
 };
 
 type IssueListInput = { limit?: number; project_id?: string; status?: string };
@@ -153,6 +165,7 @@ export function createPiRunnerActions(
     scheduleIssueEnqueue: (input) => createIssueScheduleEnqueueAction(db, context, input),
     issueExecutionStatus: (input) => safeIssueExecutionStatus(db, context, input),
     issueStatusSummary: (input) => safeIssueStatusSummary(db, context, input),
+    runManualContextIntake: (input) => manualContextIntake(db, context, input),
     listIssues: (input) => safeListIssues(db, context, input),
     listSkills: () => safeListSkills(db, context),
     listProjects: () => executeSafePiAction(db, context, {
@@ -167,6 +180,21 @@ export function createPiRunnerActions(
     readIssue: (input) => safeReadIssue(db, context, input),
     readSessionSummary: (input) => safeReadSessionSummary(db, context, input)
   };
+}
+
+function manualContextIntake(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: ManualContextIntakeInput
+) {
+  return executeManualContextIntake(db, {
+    ...input,
+    conversation_id: cleanString(input.conversation_id) || cleanString(context.conversationID),
+    project_id: cleanString(input.project_id) || (context.project?.id ?? ""),
+    source_turn_id: cleanString(input.source_turn_id) || cleanString(context.sourceTurn?.id),
+    source_turn_source: cleanString(input.source_turn_source) || cleanString(context.sourceTurn?.source) || cleanString(context.source),
+    user_prompt: cleanString(input.user_prompt) || cleanString(context.sourceTurn?.userPrompt)
+  });
 }
 
 function createCompletionWatch(

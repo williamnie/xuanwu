@@ -29,6 +29,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "repo_search",
   "repo_read_excerpt",
   "repo_tree",
+  "manual_context_intake",
   "project_status",
   "project_list",
   "session_list",
@@ -42,7 +43,7 @@ export const PI_RUNNER_ACTION_TOOL_NAMES = [
 ] as const;
 
 type ActionToolName = (typeof PI_RUNNER_ACTION_TOOL_NAMES)[number];
-type ActionExecutor<TParams extends TSchema> = (params: Static<TParams>) => unknown;
+type ActionExecutor<TParams extends TSchema> = (params: Static<TParams>) => Promise<unknown> | unknown;
 
 const objectOptions = { additionalProperties: false };
 const optionalString = Type.Optional(Type.String());
@@ -60,10 +61,31 @@ export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDef
     ...agentOrchestrationTools(actions),
     ...issueActionTools(actions),
     ...repoActionTools(actions),
+    ...manualContextTools(actions),
     ...projectActionTools(actions),
     ...sessionActionTools(actions),
     ...skillActionTools(actions),
     ...createPiMcpActionTools(actions)
+  ];
+}
+
+function manualContextTools(actions: PiRunnerActionLayer): ToolDefinition[] {
+  return [
+    actionTool("manual_context_intake", "Manual Context Intake",
+      "Fetch recent source context for a user-requested manual trigger, build a context bundle, run intake, and create proposal-only domain output.",
+      Type.Object({
+        attachment_kinds: Type.Optional(Type.Array(requiredText)),
+        limit: Type.Optional(positiveNumber),
+        lookback_minutes: Type.Optional(positiveNumber),
+        message_id: optionalString,
+        now: optionalString,
+        project_id: optionalString,
+        require_attachments: Type.Optional(Type.Boolean()),
+        source: optionalString,
+        source_turn_id: optionalString,
+        thread_key: optionalString,
+        user_prompt: optionalString
+      }, objectOptions), actions.runManualContextIntake)
   ];
 }
 
@@ -310,7 +332,7 @@ function actionTool<TParams extends TSchema>(
     description,
     parameters,
     async execute(_toolCallId, params) {
-      const details = executeAction(params);
+      const details = await executeAction(params);
       return toolResult(details);
     }
   };

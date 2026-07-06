@@ -68,7 +68,7 @@ describe("PI project tools", () => {
         "issue_enqueue_next_triage", "issue_enqueue_proposal",
         "issue_execution_status", "issue_list", "issue_read", "issue_schedule_enqueue",
         "issue_state_diagnose", "issue_state_repair_proposal", "issue_status_summary",
-"ls", "mcp_capability_read", "mcp_registry_list",
+"ls", "manual_context_intake", "mcp_capability_read", "mcp_registry_list",
         "mcp_requirement_recommend", "mcp_resource_list", "mcp_resource_read",
         "memory_search", "memory_write_candidate", "needs_user_escalation",
         "project_list", "project_status", "read", "repo_read_excerpt", "repo_search", "repo_tree",

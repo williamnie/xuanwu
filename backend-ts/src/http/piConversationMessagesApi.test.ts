@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listContextBundles } from "../db/repositories/contextBundles.ts";
+import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { listIssues } from "../db/repositories/issues.ts";
+import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
 import { getPiConversation, listPiActions } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
@@ -121,6 +124,61 @@ describe("Bun PI conversation message API", () => {
 
       expect(message.status).toBe(201);
       expect(body.text).toBe(`images=1; mime=image/png; bytes=${PNG_FIXTURE.byteLength}`);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("manual context trigger builds bundle, intake run, and proposal from PI chat", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-manual-trigger-api", provider: "pi-manual-trigger" });
+    try {
+      const prompt = "看看刚刚群里的截图和消息，是个 bug，创建 issue";
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("manual_context_intake", {
+            now: "2026-07-06T01:10:00Z",
+            require_attachments: true,
+            source: "fixture-im"
+          }, { id: "manual-context" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("已形成 issue proposal。")
+      ]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-manual-trigger");
+      writeFauxModelsConfig(database, "pi-manual-trigger");
+      seedManualContextEvents(database);
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-manual-trigger", project_id: "demo", pi_agent_id: "pi-faux"
+      });
+
+      const message = await request(router, "/api/pi/conversations/conv-manual-trigger/messages", { prompt });
+      const bundle = listContextBundles(database, "fixture-im", 1)[0];
+      const runs = listIntakeRuns(database, { bundleId: bundle.id });
+      const items = listAttentionInboxItems(database, { intakeRunId: runs[0].id });
+      const proposal = listPiActions(database).find((action) => action.action_type === "attention_inbox.domain_skill");
+      const payload = JSON.parse(proposal?.payload_json || "{}");
+
+      expect(message.status).toBe(201);
+      expect(await message.json()).toMatchObject({ text: "已形成 issue proposal。" });
+      expect(bundle).toMatchObject({ created_by: "user", source: "fixture-im", trigger: "manual" });
+      expect(bundle.source_query).toMatchObject({
+        attachment_kinds: ["image"],
+        manual_trigger: {
+          conversation_id: "conv-manual-trigger",
+          source: "runner_chat",
+          user_prompt: prompt
+        }
+      });
+      expect(runs).toMatchObject([{ status: "succeeded" }]);
+      expect(items).toMatchObject([{ primary_intent: "bug_report", status: "proposal_created" }]);
+      expect(proposal).toMatchObject({ status: "proposal" });
+      expect(payload.action_proposals).toEqual([
+        expect.objectContaining({ requires_approval: true, type: "issue.create" })
+      ]);
+      expect(listIssues(database, { projectId: "demo" })).toEqual([]);
     } finally {
       faux.unregister();
       database.close();
@@ -507,6 +565,39 @@ function insertIssue(
     [input.id, input.projectID, input.title ?? "Issue", input.status ?? "triage",
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+function seedManualContextEvents(db: RunnerDatabase): void {
+  createManualContextEvent(db, "m1", "2026-07-06T01:01:00Z", "登录页 500，是个 bug");
+  createManualContextEvent(db, "m2", "2026-07-06T01:02:00Z", "截图如下", {
+    attachments: [{ kind: "image", mime: "image/png", name: "login.png" }]
+  });
+  createManualContextEvent(db, "m3", "2026-07-06T01:03:00Z", "请帮忙创建 issue");
+}
+
+function createManualContextEvent(
+  db: RunnerDatabase,
+  externalID: string,
+  occurredAt: string,
+  content: string,
+  overrides: Record<string, unknown> = {}
+): void {
+  createExternalEvent(db, {
+    content,
+    external_id: externalID,
+    normalized_message: {
+      chat_id: "group-1",
+      chat_type: "group",
+      message_id: externalID,
+      thread_id: "thread-a"
+    },
+    occurred_at: occurredAt,
+    provider: "fixture-provider",
+    raw_json: { text: content },
+    received_at: occurredAt,
+    source: "fixture-im",
+    ...overrides
+  });
 }
 
 function writeFauxModelsConfig(

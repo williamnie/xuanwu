@@ -28,6 +28,7 @@ export type RuntimeSessionInput = {
   project?: Project;
   sessionFile?: string;
   source?: string;
+  sourceTurn?: { id?: string; source?: string; userPrompt?: string };
   toolProject?: Project;
 };
 
@@ -99,7 +100,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     delegationID: input.delegationID,
     heartbeatID: input.heartbeatID,
     onIssueEnqueued: input.onIssueEnqueued,
-    source: input.source
+    source: input.source,
+    sourceTurn: input.sourceTurn
   };
   const runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext);
   recordPiRuntimeToolRegistryAudit(db, {

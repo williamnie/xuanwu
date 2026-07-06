@@ -19,6 +19,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),
     "Feishu/IM normal chat: reply naturally, briefly, and in the same language as the user. Do not ask for a project mapping or create an issue for greetings, capability questions, how-to-use questions, or other non-task chat. Use the issue workflow only when the user gives a concrete task, asks to run/schedule/inspect a project, or names an issue/project.",
+    manualContextWorkflow(),
     automaticMemoryCandidatePolicy(),
     "Feishu /issue command: `/issue <任务描述>` is an explicit issue workflow command, never a normal chat ack. Create an issue with issue_create_proposal and then call issue_enqueue_proposal by default so the executor session starts. If the project is missing, ask at most one natural question such as “这是哪个项目？”. On success, reply with issue id, project, session started or queued status, and how to view/follow up.",
     "Runner Chat workflow: create requested issues directly. Feishu/IM task messages should create the issue and call issue_enqueue_proposal by default so the executor session starts. Only wait when the user explicitly says not to run, to just record it, or to schedule later. If the user gives a later time, call issue_schedule_enqueue with an RFC3339 next_run_at. Do not rely on click approvals for this issue create/run/schedule flow. Your final IM reply is the user-facing start notification for auto-executed Runner Chat enqueues; choose a compact natural summary instead of assuming per-issue lifecycle start notices will be sent.",
@@ -44,6 +45,16 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
       projectID: promptProject?.id
     })
   ].join("\n");
+}
+
+function manualContextWorkflow(): string {
+  return [
+    "Manual context trigger workflow:",
+    "When the user asks you to look at recent source context such as group messages, screenshots, attachments, a thread, or a message before deciding what to do, call manual_context_intake.",
+    "Pass source/time/thread/message/attachment hints when known; if the source is missing, call the tool or ask one short clarification instead of guessing a connector.",
+    "manual_context_intake only builds context bundle -> intake -> proposal/draft output; it must not send external replies or auto-enqueue issues.",
+    "If the target Runner project is unclear, the result should be ask_user rather than assuming a repository."
+  ].join(" ");
 }
 
 function automaticMemoryCandidatePolicy(): string {

@@ -147,7 +147,7 @@ async function sendPiConversationMessage(
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
-  const runtime = await openConversationRuntime(context, titledConversation, intent, targetProjectId);
+  const runtime = await openConversationRuntime(context, titledConversation, intent, targetProjectId, prompt);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
@@ -305,7 +305,8 @@ async function openConversationRuntime(
   context: PiConversationContext,
   conversation: PiConversation,
   intent = "",
-  targetProjectId = ""
+  targetProjectId = "",
+  userPrompt = ""
 ) {
   const project = conversation.project_id === ""
     ? undefined
@@ -313,6 +314,7 @@ async function openConversationRuntime(
   const toolProject = optionalConversationProject(context.database, cleanString(targetProjectId)) ?? project;
   const agent = requireConversationAgent(context.database, conversation);
   const review = isReviewConversationIntent(intent);
+  const source = review ? reviewConversationSource(conversation) : runnerChatSource(conversation);
   return createPiRuntimeSession(context.database, {
     agent,
     authorization: review ? reviewConversationAuthorization() : toolProject ? runnerChatAuthorization(toolProject) : undefined,
@@ -326,7 +328,8 @@ async function openConversationRuntime(
     project,
     sessionFile: conversation.session_file,
     toolProject,
-    source: review ? reviewConversationSource(conversation) : runnerChatSource(conversation)
+    source,
+    sourceTurn: { source, userPrompt }
   });
 }
 
