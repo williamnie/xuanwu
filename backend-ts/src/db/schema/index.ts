@@ -33,6 +33,7 @@ import { assistantToolRegistryMigration } from "./032_assistant_tool_registry.ts
 import { contextBundlesMigration } from "./033_context_bundles.ts";
 import { intakeRunsMigration } from "./034_intake_runs.ts";
 import { piAutomationsMigration } from "./035_pi_automations.ts";
+import { piAutomationSchedulerMigration } from "./036_pi_automation_scheduler.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -69,5 +70,6 @@ export const migrations = [
   assistantToolRegistryMigration,
   contextBundlesMigration,
   intakeRunsMigration,
-  piAutomationsMigration
+  piAutomationsMigration,
+  piAutomationSchedulerMigration
 ];

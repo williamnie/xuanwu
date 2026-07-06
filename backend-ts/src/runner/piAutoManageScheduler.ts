@@ -30,6 +30,11 @@ import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import { runDueCronTasks } from "./cronExecutor.ts";
 import {
+  runDuePiAutomations,
+  type PiAutomationExecutor,
+  type PiAutomationSchedulerResult
+} from "./piAutomationScheduler.ts";
+import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
 } from "./providerTerminalSignals.ts";
@@ -42,6 +47,7 @@ export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: str
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
+  automations: PiAutomationSchedulerResult;
   cron: { executed: number; failed: number; scanned: number; skipped: number };
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
@@ -63,6 +69,7 @@ export type PiAutoManageCycleInput = {
   database: RunnerDatabase;
   guardianDirectFeishuSender?: FeishuMessageClient;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  runAutomation?: PiAutomationExecutor;
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
   watchdogNow?: Date | string;
@@ -159,6 +166,11 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     database: input.database,
     runProjectCycle: input.runProjectCycle
   });
+  const automations = await runDuePiAutomations({
+    database: input.database,
+    executeAutomation: input.runAutomation,
+    now: optionalDate(input.watchdogNow)
+  });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const providerTerminalSignals = signalOpenRunTerminalProviderErrors(input.database);
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
@@ -188,6 +200,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
+    automations,
     cron,
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
     digestFlush,

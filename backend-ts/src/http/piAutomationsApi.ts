@@ -67,7 +67,7 @@ function filter(request: Request): PiAutomationFilter {
 function triggerParam(params: URLSearchParams): AutomationTriggerType | undefined {
   const value = clean(params.get("trigger_type") || params.get("triggerType"));
   if (value === "") return undefined;
-  if (value === "manual" || value === "schedule" || value === "webhook") return value;
+  if (value === "manual" || value === "schedule" || value === "continuous" || value === "webhook") return value;
   throw new HttpError(400, "trigger_type 不合法");
 }
 

@@ -11,10 +11,15 @@ import {
   positiveInteger,
   type JsonObject
 } from "./intakeRunSupport.ts";
+import {
+  automationScheduleState,
+  mapAutomationScheduleState,
+  type PiAutomationScheduleState
+} from "./piAutomationScheduleState.ts";
 
 type SQLValue = number | string;
 
-export type AutomationTriggerType = "manual" | "schedule" | "webhook";
+export type AutomationTriggerType = "manual" | "schedule" | "continuous" | "webhook";
 export type AutomationStepType = "source_sync" | "context_bundle" | "intake" | "domain_skill";
 export type AutomationMode = "dry_run" | "draft" | "propose" | "auto";
 
@@ -34,6 +39,9 @@ export type PiAutomationInput = {
   max_actions_per_run?: number;
   mode?: AutomationMode;
   name: string;
+  next_run_at?: string;
+  retry_backoff_seconds?: number;
+  run_timeout_ms?: number;
   source_policy?: JsonObject;
   steps: JsonObject[];
   trigger?: JsonObject;
@@ -44,22 +52,18 @@ export type PiAutomationPatch = Partial<PiAutomationInput>;
 export type PiAutomationFilter = { enabled?: boolean; triggerType?: AutomationTriggerType };
 
 export type PiAutomationRecord = Required<Omit<PiAutomationInput, "enabled" | "trigger_type">> & {
-  created_at: string;
-  enabled: boolean;
-  filters_json: string;
-  id: number;
-  max_actions_per_run: number;
-  source_policy_json: string;
-  steps_json: string;
-  trigger: AutomationTrigger;
-  trigger_config_json: string;
-  trigger_type: AutomationTriggerType;
-  updated_at: string;
-};
+  created_at: string; enabled: boolean; filters_json: string; id: number;
+  max_actions_per_run: number; source_policy_json: string; steps_json: string;
+  trigger: AutomationTrigger; trigger_config_json: string;
+  trigger_type: AutomationTriggerType; updated_at: string;
+} & PiAutomationScheduleState;
 
 const COLUMNS = `id, name, trigger_type, trigger_config_json, mode,
   filters_json, source_policy_json, max_actions_per_run, enabled,
-  steps_json, created_at, updated_at`;
+  steps_json, created_at, updated_at, next_run_at, last_run_at, last_status,
+  last_result, error, run_count, retry_count, retry_backoff_seconds, lock_token,
+  lock_expires_at, run_started_at, run_timeout_ms, processed_watermark,
+  last_successful_cursor, failed_cursor`;
 
 export function createPiAutomation(
   db: RunnerDatabase,
@@ -68,7 +72,7 @@ export function createPiAutomation(
 ): PiAutomationRecord {
   const record = normalizeAutomation(input, timestamp);
   db.sqlite.run(`insert into pi_automations (${insertColumns()})
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, insertValues(record));
+    values (${insertValues(record).map(() => "?").join(", ")})`, insertValues(record));
   const saved = getPiAutomation(db, lastInsertID(db));
   if (!saved) throw new Error("pi automation missing after write");
   return saved;
@@ -84,10 +88,12 @@ export function updatePiAutomation(
   const next = normalizeAutomation({ ...current, ...patch }, new Date(current.created_at));
   db.sqlite.run(`update pi_automations set name=?, trigger_type=?,
     trigger_config_json=?, mode=?, filters_json=?, source_policy_json=?,
-    max_actions_per_run=?, enabled=?, steps_json=?, updated_at=? where id=?`, [
+    max_actions_per_run=?, enabled=?, steps_json=?, next_run_at=?,
+    retry_backoff_seconds=?, run_timeout_ms=?, updated_at=? where id=?`, [
     next.name, next.trigger_type, next.trigger_config_json, next.mode,
     next.filters_json, next.source_policy_json, next.max_actions_per_run,
-    next.enabled ? 1 : 0, next.steps_json, timestamp.toISOString(), id
+    next.enabled ? 1 : 0, next.steps_json, next.next_run_at,
+    next.retry_backoff_seconds, next.run_timeout_ms, timestamp.toISOString(), id
   ]);
   return requirePiAutomation(db, id);
 }
@@ -123,6 +129,7 @@ function normalizeAutomation(input: PiAutomationInput, timestamp: Date): PiAutom
   const filters = objectArray(input.filters);
   const sourcePolicy = objectValue(input.source_policy);
   const steps = normalizeSteps(input.steps);
+  const schedule = automationScheduleState(input, trigger, timestamp);
   return {
     id: 0, name: requiredName(input.name), trigger, trigger_type: trigger.type,
     mode: normalizeMode(input.mode), filters, source_policy: sourcePolicy,
@@ -130,7 +137,7 @@ function normalizeAutomation(input: PiAutomationInput, timestamp: Date): PiAutom
     steps, trigger_config_json: JSON.stringify(triggerConfig(trigger)),
     filters_json: JSON.stringify(filters), source_policy_json: JSON.stringify(sourcePolicy),
     steps_json: JSON.stringify(steps), created_at: timestamp.toISOString(),
-    updated_at: timestamp.toISOString()
+    updated_at: timestamp.toISOString(), ...schedule
   };
 }
 
@@ -147,7 +154,8 @@ function mapAutomation(row: Record<string, unknown>): PiAutomationRecord {
     source_policy_json: jsonText(row.source_policy_json, "{}"),
     steps_json: jsonText(row.steps_json, "[]"),
     created_at: requiredTimestamp(row.created_at, "created_at"),
-    updated_at: requiredTimestamp(row.updated_at, "updated_at")
+    updated_at: requiredTimestamp(row.updated_at, "updated_at"),
+    ...mapAutomationScheduleState(row)
   };
 }
 
@@ -196,19 +204,20 @@ function addClause(clauses: string[], args: SQLValue[], clause: string, value: S
 function insertColumns(): string {
   return `name, trigger_type, trigger_config_json, mode, filters_json,
     source_policy_json, max_actions_per_run, enabled, steps_json,
-    created_at, updated_at`;
+    next_run_at, retry_backoff_seconds, run_timeout_ms, created_at, updated_at`;
 }
 
 function insertValues(record: PiAutomationRecord): SQLValue[] {
   return [record.name, record.trigger_type, record.trigger_config_json,
     record.mode, record.filters_json, record.source_policy_json,
     record.max_actions_per_run, record.enabled ? 1 : 0, record.steps_json,
+    record.next_run_at, record.retry_backoff_seconds, record.run_timeout_ms,
     record.created_at, record.updated_at];
 }
 
 function triggerType(value: unknown): AutomationTriggerType {
   const text = cleanString(value);
-  if (text === "schedule" || text === "webhook") return text;
+  if (text === "schedule" || text === "continuous" || text === "webhook") return text;
   return "manual";
 }
 
