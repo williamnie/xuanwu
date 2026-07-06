@@ -49,6 +49,8 @@ describe("Bun SQLite database connection", () => {
         "agent_profiles",
         "agent_sessions",
         "app_preferences",
+        "assistant_tool_providers",
+        "assistant_tools",
         "cron_task_schedules",
         "cron_tasks",
         "external_events",
@@ -155,7 +157,8 @@ describe("Bun SQLite database connection", () => {
         { id: "028_pi_guardian_runtime" },
         { id: "029_pi_issue_completion_watches" },
         { id: "030_remove_legacy_notification_settings" },
-        { id: "031_clear_feishu_pi_conversation_projects" }
+        { id: "031_clear_feishu_pi_conversation_projects" },
+        { id: "032_assistant_tool_registry" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -322,6 +325,20 @@ describe("Bun SQLite database connection", () => {
         initial_status: "''",
         last_status: "''",
         terminal_at: "''"
+      });
+      expect(columnDefaults(connection, "assistant_tool_providers")).toMatchObject({
+        audit_json: '\'{"redact":[]}\'',
+        default_timeout_ms: "0",
+        metadata_json: "'{}'",
+        status: "'enabled'"
+      });
+      expect(columnDefaults(connection, "assistant_tools")).toMatchObject({
+        audit_json: '\'{"redact":[]}\'',
+        input_schema_json: "'{}'",
+        metadata_json: "'{}'",
+        output_schema_json: "'{}'",
+        permission: "'read'",
+        timeout_ms: "0"
       });
       expect(columnDefaults(connection, "pi_recovery_attempts")).toMatchObject({
         after_snapshot_json: "'{}'",
@@ -616,7 +633,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 31 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 32 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
