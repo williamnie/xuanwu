@@ -4,8 +4,8 @@ export default function PiChatComposerMeta({ agent, project }) {
   return (
     <div className="pi-chat-runtime-controls" aria-label="PI runtime context">
       <RuntimePill icon={<FolderGit2 size={13} />} label={projectLabel(project)} muted={!project} title="输入 @ 选择 PI 工作项目" />
-      <RuntimePill icon={<Cpu size={13} />} label={agentModelLabel(agent)} muted={!agent} title="PI Agent 当前模型；如需修改请到 Runner Settings" />
-      <RuntimePill icon={<Brain size={13} />} label={thinkingLabel(agent)} muted={!agent?.thinking_level} title="PI Agent thinking level" />
+      <RuntimePill icon={<Cpu size={13} />} label={agentModelLabel(agent)} muted={!agent} title="PI Assistant 当前模型；如需修改请到 Assistant Settings" />
+      <RuntimePill icon={<Brain size={13} />} label={thinkingLabel(agent)} muted={!agent?.thinking_level} title="PI Assistant thinking level" />
     </div>
   );
 }

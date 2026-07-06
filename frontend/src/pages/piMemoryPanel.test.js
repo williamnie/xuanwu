@@ -4,11 +4,11 @@ import test from 'node:test';
 
 const clientSource = readFileSync(new URL('../api/piMemoryClient.js', import.meta.url), 'utf8');
 const panelSource = readFileSync(new URL('./PiMemoryPanel.jsx', import.meta.url), 'utf8');
-const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
+const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 
 test('PI memory panel exposes review, promotion, edit, disable, and delete controls', () => {
-  assert.match(settingsSource, /import PiMemoryPanel from '\.\/PiMemoryPanel'/);
-  assert.match(settingsSource, /<PiMemoryPanel \/>/);
+  assert.match(sectionsSource, /import PiMemoryPanel from '\.\/PiMemoryPanel'/);
+  assert.match(sectionsSource, /<PiMemoryPanel \/>/);
   assert.match(clientSource, /list:\s*\(filter = \{\}\)/);
   assert.match(clientSource, /promote:\s*\(id\)/);
   assert.match(clientSource, /disable:\s*\(id\)/);

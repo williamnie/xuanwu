@@ -6,7 +6,7 @@ export const DEFAULT_PI_AGENT_ID = 'runner-default';
 
 export const DEFAULT_PI_AGENT_FORM = {
   agentId: DEFAULT_PI_AGENT_ID,
-  agentName: 'Default Runner',
+  agentName: 'PI Assistant',
   api: 'openai-responses',
   apiKey: '',
   baseUrl: '',
@@ -66,7 +66,7 @@ function loadPiSettings(setProviders, setForm, setLoading, setPromptSummary) {
       setForm(formFromState(nextAgents, nextProviders));
       setPromptSummary(null);
     })
-    .catch((err) => message.error(err.message || '读取 PI Runtime 设置失败'))
+    .catch((err) => message.error(err.message || '读取 PI Assistant 设置失败'))
     .finally(() => setLoading(false));
 }
 
@@ -138,7 +138,7 @@ function openOAuthUrl(url) {
 
 async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLoading) {
   const id = agentId.trim();
-  if (!id) return message.error('默认 Runner Brain 尚不可用');
+  if (!id) return message.error('默认 PI Assistant 尚不可用');
   setPromptSummaryLoading(true);
   try {
     setPromptSummary(await api.getPiAgentRuntimePrompt(id));
@@ -155,11 +155,11 @@ async function savePiSettings({ form, setForm, setPromptSummary, setProviders, s
   try {
     await api.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
     await saveAgent(agentPayload(form));
-    message.success('PI Runtime 设置已保存');
+    message.success('Assistant Settings 已保存');
     setPromptSummary(null);
     await refreshAfterSave(setProviders, setForm);
   } catch (err) {
-    message.error(err.message || '保存 PI Runtime 设置失败');
+    message.error(err.message || '保存 Assistant Settings 失败');
   } finally {
     setSaving(false);
   }

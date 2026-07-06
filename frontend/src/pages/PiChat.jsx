@@ -61,7 +61,7 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
         <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Runner 会话">
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="PI Runtime 设置">
+        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="Assistant Settings">
           <Settings2 size={15} />
         </button>
       </div>
@@ -212,9 +212,9 @@ function EmptyChat({ hasRuntime, navigateTo }) {
   return (
     <div className="pi-chat-empty">
       <Bot size={34} />
-      <strong>{hasRuntime ? '开始一次 Runner 对话' : '先配置 PI Runtime'}</strong>
-      <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
-      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 PI Runtime 设置</button>}
+      <strong>{hasRuntime ? '开始一次 Runner 对话' : '先配置 PI Assistant'}</strong>
+      <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Assistant Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
+      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Assistant Settings</button>}
     </div>
   );
 }

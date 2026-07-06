@@ -1,0 +1,94 @@
+import IssueTemplatesPanel from './IssueTemplatesPanel';
+import FeishuSettingsPanel from './FeishuSettingsPanel';
+import PiAgentSettingsPanel from './PiAgentSettingsPanel';
+import PiMemoryPanel from './PiMemoryPanel';
+import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
+import RunnerSettingsPanel from './RunnerSettingsPanel';
+import { AssistantOverviewPanel, SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
+
+export default function SettingsTabContent({ activeTab, RuntimeStatusPanel }) {
+  return (
+    <>
+      {activeTab === 'assistant' && <AssistantSettingsTab />}
+      {activeTab === 'runner-brain' && <RunnerBrainSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
+      {activeTab === 'connectors' && <ConnectorsSettingsTab />}
+      {activeTab === 'skills' && <SkillsSettingsTab />}
+      {activeTab === 'automations' && <AutomationsPlaceholder />}
+      {activeTab === 'approvals' && <ApprovalsPlaceholder />}
+      {activeTab === 'memory' && <MemorySettingsTab />}
+      {activeTab === 'activity' && <ActivityPlaceholder />}
+    </>
+  );
+}
+
+function AssistantSettingsTab() {
+  return (
+    <>
+      <AssistantOverviewPanel />
+      <PiAgentSettingsPanel />
+    </>
+  );
+}
+
+function RunnerBrainSettingsTab({ RuntimeStatusPanel }) {
+  return (
+    <>
+      <RuntimeStatusPanel />
+      <RunnerSettingsPanel />
+      <ProviderAvailabilityPanel />
+    </>
+  );
+}
+
+function ConnectorsSettingsTab() {
+  return (
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Connectors"
+        title="Connector slots"
+        description="外部来源会作为 PI Assistant 的 connector/tool provider 接入；当前仅保留已有 IM 配置入口。"
+        items={['Feishu 仍走现有 integration settings API。', '后续 CLI/MCP/HTTP/browser connector 不在本 issue 实现。']}
+      />
+      <FeishuSettingsPanel />
+    </>
+  );
+}
+
+function SkillsSettingsTab() {
+  return (
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Skills"
+        title="Skill registry placeholder"
+        description="Skills 后续会在同一个 PI Assistant 下声明 intake/domain 能力、所需工具与运行历史。"
+        items={['当前保留 issue template 管理。', '不新增 skill schema、运行器或权限模型。']}
+      />
+      <IssueTemplatesPanel />
+    </>
+  );
+}
+
+function MemorySettingsTab() {
+  return (
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Memory"
+        title="Assistant Memory"
+        description="Memory 是 PI Assistant 的可审计上下文入口；当前继续使用已有 memory 面板。"
+      />
+      <PiMemoryPanel />
+    </>
+  );
+}
+
+function AutomationsPlaceholder() {
+  return <SettingsPlaceholderPanel eyebrow="Automations" title="Automation rules" description="预留自动 intake、定时检查和手动触发规则导航；本阶段不新增调度 schema。" />;
+}
+
+function ApprovalsPlaceholder() {
+  return <SettingsPlaceholderPanel eyebrow="Approvals" title="Approval policy" description="预留 action proposal 审批与外部写操作权限入口；默认不引入新的自动外部写操作。" />;
+}
+
+function ActivityPlaceholder() {
+  return <SettingsPlaceholderPanel eyebrow="Activity" title="Activity timeline" description="预留 raw events、intake、skill run、proposal 与 tool call 的审计时间线入口。" />;
+}

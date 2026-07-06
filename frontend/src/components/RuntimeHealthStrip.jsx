@@ -42,7 +42,7 @@ export default function RuntimeHealthStrip({ backendOnline, navigateTo }) {
         {health.items.map(item => <HealthPill key={item.label} item={item} />)}
         {!health.ok && (
           <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.76rem' }} onClick={() => navigateTo('settings')}>
-            去 Settings <ArrowRight size={12} />
+            去 Assistant Settings <ArrowRight size={12} />
           </button>
         )}
       </div>

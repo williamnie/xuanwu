@@ -4,11 +4,13 @@ import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./RunnerSettingsPanel.jsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
+const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 
 test('Settings exposes Runner global concurrency controls backed by runner settings API', () => {
-  assert.match(settingsSource, /RunnerSettingsPanel/);
-  assert.match(settingsSource, /<RunnerSettingsPanel \/>/);
+  assert.match(settingsSource, /SettingsTabContent/);
+  assert.match(sectionsSource, /RunnerSettingsPanel/);
+  assert.match(sectionsSource, /<RunnerSettingsPanel \/>/);
   assert.match(panelSource, /max_parallel_projects/);
   assert.match(panelSource, /codex_server_mode/);
   assert.match(panelSource, /codex_app_command/);

@@ -4,15 +4,35 @@ import test from 'node:test';
 
 const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
 const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.url), 'utf8');
+const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 
-test('Settings groups panels behind tabs and removes duplicate cron panel', () => {
-  assert.match(settingsSource, /activeTab === 'runtime'/);
-  assert.match(settingsSource, /activeTab === 'agent'/);
-  assert.match(settingsSource, /activeTab === 'integrations'/);
-  assert.match(settingsSource, /activeTab === 'templates'/);
+test('Settings groups panels behind Assistant Settings tabs and removes duplicate cron panel', () => {
+  assert.match(settingsSource, /useState\('assistant'\)/);
+  assert.match(sectionsSource, /activeTab === 'assistant'/);
+  assert.match(sectionsSource, /activeTab === 'runner-brain'/);
+  assert.match(sectionsSource, /activeTab === 'connectors'/);
+  assert.match(sectionsSource, /activeTab === 'skills'/);
+  assert.match(sectionsSource, /activeTab === 'automations'/);
+  assert.match(sectionsSource, /activeTab === 'approvals'/);
+  assert.match(sectionsSource, /activeTab === 'memory'/);
+  assert.match(sectionsSource, /activeTab === 'activity'/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
+});
+
+test('Assistant Settings IA reserves future capability placeholders', () => {
+  assert.match(chromeSource, /Assistant Settings/);
+  assert.match(chromeSource, /PI Assistant · Single Runtime/);
+  assert.match(placeholderSource, /Single Assistant Runtime/);
+  assert.match(placeholderSource, /不恢复多个独立 PI agent/);
+  assert.match(sectionsSource, /Connectors/);
+  assert.match(sectionsSource, /Skills/);
+  assert.match(sectionsSource, /Automations/);
+  assert.match(sectionsSource, /Approvals/);
+  assert.match(sectionsSource, /Memory/);
+  assert.match(sectionsSource, /Activity/);
 });
 
 test('Settings restart action is a red in-page danger control', () => {

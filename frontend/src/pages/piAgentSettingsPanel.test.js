@@ -34,9 +34,10 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
   assert.match(clientSource, /\/api\/pi\/oauth\/openai-codex\/login/);
 });
 
-test('PI Runtime settings no longer expose multi-agent creation controls', () => {
-  assert.match(panelSource, /PI Runtime/);
+test('PI Assistant settings no longer expose multi-agent creation controls', () => {
+  assert.match(panelSource, /PI Assistant/);
   assert.match(panelSource, /Runner Brain/);
+  assert.match(panelSource, /不会创建多个独立 agent/);
   assert.doesNotMatch(panelSource, /label="Agent ID"/);
   assert.doesNotMatch(panelSource, /Runner Agent Settings/);
   assert.doesNotMatch(stateSource, /api\.createPiAgent/);

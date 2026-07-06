@@ -116,7 +116,7 @@ export default function AppSidebar({
           onClick={() => navigateTo('settings')}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Settings size={16} /> Settings
+            <Settings size={16} /> Assistant Settings
           </span>
           <button
             onClick={(e) => {

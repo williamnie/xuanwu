@@ -4,10 +4,14 @@ import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
 const SETTINGS_TABS = [
-  { id: 'runtime', label: '运行控制' },
-  { id: 'agent', label: 'Agent' },
-  { id: 'integrations', label: 'IM通道' },
-  { id: 'templates', label: 'ISSUE模板' },
+  { id: 'assistant', label: 'Assistant' },
+  { id: 'runner-brain', label: 'Runner Brain' },
+  { id: 'connectors', label: 'Connectors' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'automations', label: 'Automations' },
+  { id: 'approvals', label: 'Approvals' },
+  { id: 'memory', label: 'Memory' },
+  { id: 'activity', label: 'Activity' },
 ];
 
 export function SettingsHeader({ activeTab, onTabChange }) {
@@ -16,9 +20,9 @@ export function SettingsHeader({ activeTab, onTabChange }) {
       <div className="settings-title-row">
         <div>
           <div className="settings-eyebrow">
-            <Boxes size={14} /> Xuanwu Control Center
+            <Boxes size={14} /> PI Assistant · Single Runtime
           </div>
-          <h1>系统设置</h1>
+          <h1>Assistant Settings</h1>
         </div>
         <RestartAction />
       </div>
@@ -29,7 +33,7 @@ export function SettingsHeader({ activeTab, onTabChange }) {
 
 function SettingsTabs({ activeTab, onTabChange }) {
   return (
-    <nav className="settings-tabs" role="tablist" aria-label="系统设置分组">
+    <nav className="settings-tabs" role="tablist" aria-label="Assistant Settings sections">
       {SETTINGS_TABS.map((tab) => (
         <TabButton key={tab.id} active={activeTab === tab.id} onClick={() => onTabChange(tab.id)} tab={tab} />
       ))}

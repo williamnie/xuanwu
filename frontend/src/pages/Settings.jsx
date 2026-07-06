@@ -2,58 +2,23 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-react';
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
-import IssueTemplatesPanel from './IssueTemplatesPanel';
-import FeishuSettingsPanel from './FeishuSettingsPanel';
-import PiAgentSettingsPanel from './PiAgentSettingsPanel';
-import PiMemoryPanel from './PiMemoryPanel';
-import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
-import RunnerSettingsPanel from './RunnerSettingsPanel';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
 import { APP_VERSION, buildVersionSummary } from '../version';
+import SettingsTabContent from './AssistantSettingsSections';
 import { SettingsHeader } from './SettingsChrome';
 import './Settings.css';
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState('runtime');
+  const [activeTab, setActiveTab] = useState('assistant');
   return (
     <div className="settings-page animate-fade-in">
       <SettingsHeader activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="settings-tab-content" role="tabpanel">
-        {activeTab === 'runtime' && <RuntimeSettingsTab />}
-        {activeTab === 'agent' && <AgentSettingsTab />}
-        {activeTab === 'integrations' && <IntegrationsSettingsTab />}
-        {activeTab === 'templates' && <TemplatesSettingsTab />}
+        <SettingsTabContent activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} />
       </div>
     </div>
   );
-}
-
-function RuntimeSettingsTab() {
-  return (
-    <>
-      <RuntimeStatusPanel />
-      <RunnerSettingsPanel />
-      <ProviderAvailabilityPanel />
-    </>
-  );
-}
-
-function AgentSettingsTab() {
-  return (
-    <>
-      <PiAgentSettingsPanel />
-      <PiMemoryPanel />
-    </>
-  );
-}
-
-function IntegrationsSettingsTab() {
-  return <FeishuSettingsPanel />;
-}
-
-function TemplatesSettingsTab() {
-  return <IssueTemplatesPanel />;
 }
 
 function RuntimeStatusPanel() {
