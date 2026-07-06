@@ -1,26 +1,55 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { RunnerDatabase } from "../db/database.ts";
+import { upsertAttentionInboxItemByEvidence } from "../db/repositories/attentionInboxItemUpsert.ts";
 import type { ContextBundleRecord } from "../db/repositories/contextBundles.ts";
 import {
-  createAttentionInboxItem,
   createIntakeRun,
   updateIntakeRun,
   type AttentionInboxItemRecord,
   type IntakeRunRecord
 } from "../db/repositories/intakeRuns.ts";
+import { assertIntakeSourcePolicy, type IntakeSourcePolicy } from "./intakeSourcePolicy.ts";
+import { buildIntakeSkillInput, buildIntakeSkillPrompt, type IntakeSkillInput } from "./intakeSkillInput.ts";
 
 type JsonObject = Record<string, unknown>;
 
+export type AssistantModelPolicy = {
+  domain_model?: string;
+  fallback_model?: string;
+  intake_model?: string;
+  memory_model?: string;
+  vision_model?: string;
+};
+
+export type IntakeSkillRuntime = {
+  id?: string;
+  input_object?: string;
+  kind?: string;
+  model_policy_id?: string;
+  output_objects?: string[];
+  output_schema?: JsonObject;
+};
+
 export type LlmIntakeRequest = {
   bundle: ContextBundleRecord;
+  input: IntakeSkillInput;
   prompt: string;
   schema: JsonObject;
+  skill: IntakeSkillRuntime & { id: string };
   skillId: string;
 };
 
 export type LlmIntakeModel = (request: LlmIntakeRequest) => Promise<unknown> | unknown;
-export type LlmIntakeOptions = { model?: string; modelPolicyId?: string; skillId?: string };
+export type LlmIntakeOptions = {
+  model?: string;
+  modelPolicy?: AssistantModelPolicy;
+  modelPolicyId?: string;
+  now?: Date;
+  skill?: IntakeSkillRuntime;
+  skillId?: string;
+  sourcePolicy?: IntakeSourcePolicy;
+};
 export type LlmIntakeResult = {
   created_items: AttentionInboxItemRecord[];
   run: IntakeRunRecord;
@@ -72,8 +101,8 @@ const itemSchema = Type.Object({
 }, objectOptions);
 
 export const LLM_INTAKE_OUTPUT_SCHEMA = Type.Object({
-  ignored: Type.Array(ignoredSchema),
-  items: Type.Array(itemSchema)
+  ignored_groups: Type.Array(ignoredSchema),
+  inbox_items: Type.Array(itemSchema)
 }, objectOptions);
 
 export type LlmIntakeOutput = Static<typeof LLM_INTAKE_OUTPUT_SCHEMA>;
@@ -84,15 +113,27 @@ export async function runLlmIntake(
   model: LlmIntakeModel,
   options: LlmIntakeOptions = {}
 ): Promise<LlmIntakeResult> {
-  const skillId = clean(options.skillId) || DEFAULT_SKILL_ID;
+  return runIntakeSkill(db, bundle, model, options);
+}
+
+export async function runIntakeSkill(
+  db: RunnerDatabase,
+  bundle: ContextBundleRecord,
+  model: LlmIntakeModel,
+  options: LlmIntakeOptions = {}
+): Promise<LlmIntakeResult> {
+  assertIntakeSourcePolicy(db, bundle, options.sourcePolicy, options.now);
+  const skill = intakeSkill(options);
+  const input = buildIntakeSkillInput(db, bundle);
   const run = createIntakeRun(db, {
-    bundle_id: bundle.id, input_summary: inputSummary(bundle),
-    model: clean(options.model), model_policy_id: clean(options.modelPolicyId),
-    skill_id: skillId, status: "running"
+    bundle_id: bundle.id, input_summary: input as unknown as JsonObject,
+    model: intakeModelName(options), model_policy_id: modelPolicyId(options, skill),
+    skill_id: skill.id, status: "running"
   });
   try {
     return persistIntakeSuccess(db, run, bundle, parseAndValidate(await model({
-      bundle, prompt: buildIntakePrompt(bundle), schema: LLM_INTAKE_OUTPUT_SCHEMA as JsonObject, skillId
+      bundle, input, prompt: buildIntakeSkillPrompt(input as unknown as JsonObject),
+      schema: LLM_INTAKE_OUTPUT_SCHEMA as JsonObject, skill, skillId: skill.id
     })));
   } catch (error) {
     updateIntakeRun(db, run.id, { error: errorMessage(error), status: "failed" });
@@ -105,7 +146,7 @@ export function buildIntakePrompt(bundle: ContextBundleRecord): string {
     "You are the PI Assistant LLM intake skill.",
     "Read the context bundle and return only JSON matching the provided schema.",
     "Create attention items for matters needing attention, reply, follow-up, tracking, or handling.",
-    "If there are no attention items, return items=[] and at least one ignored reason.",
+    "If there are no attention items, return inbox_items=[] and at least one ignored_groups reason.",
     "Do not rely on keyword rules; judge the user's intent from the full context and evidence.",
     "Every item must include evidence_refs and confidence.",
     JSON.stringify(inputSummary(bundle), null, 2)
@@ -119,19 +160,26 @@ function persistIntakeSuccess(
   output: LlmIntakeOutput
 ): LlmIntakeResult {
   const savedRun = updateIntakeRun(db, run.id, {
-    ignored_groups: output.ignored as JsonObject[],
+    ignored_groups: output.ignored_groups as JsonObject[],
     schema_output: output as JsonObject,
     status: "succeeded"
   });
-  const created = output.items.map((item) => createAttentionInboxItem(db, itemInput(bundle, savedRun.id, item)));
+  const created = output.inbox_items.map((item) => upsertAttentionInboxItemByEvidence(db, itemInput(bundle, savedRun.id, item)));
   return { created_items: created, run: savedRun };
 }
 
 function parseAndValidate(raw: unknown): LlmIntakeOutput {
-  const parsed = parseOutput(raw);
+  const parsed = normalizeOutput(parseOutput(raw));
   const error = schemaError(parsed) || semanticError(parsed as LlmIntakeOutput);
   if (error) throw new Error(error);
   return parsed as LlmIntakeOutput;
+}
+
+function normalizeOutput(parsed: JsonObject): JsonObject {
+  return {
+    ignored_groups: arrayValue(parsed.ignored_groups ?? parsed.ignored),
+    inbox_items: arrayValue(parsed.inbox_items ?? parsed.items)
+  };
 }
 
 function parseOutput(raw: unknown): JsonObject {
@@ -154,14 +202,14 @@ function schemaError(parsed: JsonObject): string {
 }
 
 function semanticError(output: LlmIntakeOutput): string {
-  if (output.items.length > 0 || output.ignored.length > 0) return "";
+  if (output.inbox_items.length > 0 || output.ignored_groups.length > 0) return "";
   return "intake output must include ignored reason when no items are created";
 }
 
 function itemInput(
   bundle: ContextBundleRecord,
   runID: number,
-  item: LlmIntakeOutput["items"][number]
+  item: LlmIntakeOutput["inbox_items"][number]
 ) {
   return {
     actor_refs: item.actor_refs,
@@ -179,6 +227,32 @@ function itemInput(
     title: item.title,
     urgency: item.urgency
   };
+}
+
+function intakeSkill(options: LlmIntakeOptions): IntakeSkillRuntime & { id: string } {
+  const skill = options.skill ?? {};
+  const id = clean(options.skillId) || clean(skill.id) || DEFAULT_SKILL_ID;
+  if (clean(skill.kind) !== "" && clean(skill.kind) !== "intake") throw new Error("intake skill kind must be intake");
+  if (clean(skill.input_object) !== "" && clean(skill.input_object) !== "context_bundle") {
+    throw new Error("intake skill input_object must be context_bundle");
+  }
+  const outputs = Array.isArray(skill.output_objects) ? skill.output_objects.map(clean).filter(Boolean) : [];
+  if (outputs.length > 0 && (!outputs.includes("inbox_items") || !outputs.includes("ignored_groups"))) {
+    throw new Error("intake skill must output inbox_items and ignored_groups");
+  }
+  return { ...skill, id, input_object: "context_bundle", kind: "intake" };
+}
+
+function intakeModelName(options: LlmIntakeOptions): string {
+  return clean(options.model) || clean(options.modelPolicy?.intake_model);
+}
+
+function modelPolicyId(options: LlmIntakeOptions, skill: IntakeSkillRuntime): string {
+  return clean(options.modelPolicyId) || clean(skill.model_policy_id);
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function inputSummary(bundle: ContextBundleRecord): JsonObject {
