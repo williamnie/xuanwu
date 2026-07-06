@@ -124,7 +124,7 @@ function reintakeInboxItem(context: AttentionInboxContext, request: Request): Re
 function domainSkillProposal(context: AttentionInboxContext, request: Request): Response {
   const item = requireInboxItem(context, request);
   const result = runDomainSkillAndMarkProposal(context.database, item);
-  return json({ action: result.action, item: result.item, proposal_status: "created" }, { status: 202 });
+  return json({ action: result.action, item: result.item, proposal: result.proposal, proposal_status: "created" }, { status: 202 });
 }
 
 function compactInboxItem(item: AttentionInboxItemRecord): JsonObject {

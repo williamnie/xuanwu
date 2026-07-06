@@ -1,6 +1,12 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { updateAttentionInboxItemStatus, type AttentionInboxItemRecord } from "../db/repositories/intakeRuns.ts";
-import { createPiAction, createPiActionEvent, type PiAction } from "../db/repositories/pi.ts";
+import {
+  createActionProposal,
+  createPiAction,
+  createPiActionEvent,
+  type ActionProposalRecord,
+  type PiAction
+} from "../db/repositories/pi.ts";
 import { runFixtureDomainSkill, type DomainSkillOutput } from "./domainSkillFixture.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -8,6 +14,7 @@ type JsonObject = Record<string, unknown>;
 export type DomainSkillRunResult = {
   action: PiAction;
   output: DomainSkillOutput;
+  proposal: ActionProposalRecord;
 };
 
 export function createDomainSkillProposal(
@@ -17,6 +24,7 @@ export function createDomainSkillProposal(
 ): DomainSkillRunResult {
   const output = runFixtureDomainSkill(item, skillID);
   const action = createPiAction(db, domainSkillAction(item, output, skillID));
+  const proposal = createActionProposal(db, actionProposal(item, output, action));
   createPiActionEvent(db, {
     action_id: action.id,
     event_type: "attention_inbox.domain_skill_requested",
@@ -27,7 +35,7 @@ export function createDomainSkillProposal(
       skill_id: skillID
     })
   });
-  return { action, output };
+  return { action, output, proposal };
 }
 
 export function runDomainSkillAndMarkProposal(
@@ -61,6 +69,23 @@ function domainSkillAction(
     risk_level: "low",
     source: "attention_inbox",
     status: "proposal"
+  };
+}
+
+function actionProposal(
+  item: AttentionInboxItemRecord,
+  output: DomainSkillOutput,
+  action: PiAction
+) {
+  return {
+    actions: output.action_proposals,
+    confidence: item.confidence,
+    evidence_refs: item.evidence_refs,
+    id: `${action.id}-proposal`,
+    skill_run_id: action.id,
+    source_item_ids: [`attention_inbox_item:${item.id}`],
+    summary: output.summary,
+    target_hints: item.target_hints
   };
 }
 

@@ -24,7 +24,9 @@
               "type": "string",
               "enum": [
                 "issue.create",
+                "issue.enqueue",
                 "message.reply_draft",
+                "message.reply_send",
                 "issue.status_lookup",
                 "ask_user",
                 "watch_thread",

@@ -68,6 +68,7 @@ describe("Bun SQLite database connection", () => {
         "issues",
         "notifications",
         "pi_action_events",
+        "pi_action_proposals",
         "pi_actions",
         "pi_agents",
         "pi_approval_requests",
@@ -166,7 +167,8 @@ describe("Bun SQLite database connection", () => {
         { id: "033_context_bundles" },
         { id: "034_intake_runs" },
         { id: "035_pi_automations" },
-        { id: "036_pi_automation_scheduler" }
+        { id: "036_pi_automation_scheduler" },
+        { id: "037_pi_action_proposals" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -230,6 +232,8 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "intake_runs")).toContain("idx_intake_runs_bundle");
       expect(indexNames(connection, "attention_inbox_items")).toContain("idx_attention_inbox_items_intake_run");
       expect(indexNames(connection, "pi_automations")).toContain("idx_pi_automations_due");
+      expect(indexNames(connection, "pi_action_proposals")).toContain("idx_pi_action_proposals_status");
+      expect(indexNames(connection, "pi_action_proposals")).toContain("idx_pi_action_proposals_skill_run");
 
       expect(columnDefaults(connection, "pi_delegations")).toMatchObject({
         allowed_actions_json: "'[]'",
@@ -679,7 +683,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 36 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 37 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

@@ -6,9 +6,11 @@ type ActionRisk = "low" | "medium" | "high";
 export type DomainSkillActionType =
   | "ask_user"
   | "issue.create"
+  | "issue.enqueue"
   | "issue.status_lookup"
   | "memory.create"
   | "message.reply_draft"
+  | "message.reply_send"
   | "no_action"
   | "reminder.create"
   | "watch_thread";

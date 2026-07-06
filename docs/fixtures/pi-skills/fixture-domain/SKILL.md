@@ -9,6 +9,7 @@ Reads a neutral attention inbox item and proposes bounded next actions.
 
 It is source-neutral and proposal-only:
 - `bug_report` -> `issue.create`
+- `issue.enqueue` and `message.reply_send` are valid proposal action types but not emitted by the fixture by default.
 - `status_question` -> `issue.status_lookup` + `message.reply_draft`
 - `reply_needed` -> `message.reply_draft`
 - `monitor_thread` / `watch_thread` suggestion -> `watch_thread`
