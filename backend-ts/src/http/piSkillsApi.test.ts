@@ -10,11 +10,14 @@ import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const previousCodexHome = Bun.env.CODEX_HOME;
+const previousMcpRegistry = Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
 const tempRoots: string[] = [];
 
 afterEach(async () => {
   if (previousCodexHome === undefined) delete Bun.env.CODEX_HOME;
   else Bun.env.CODEX_HOME = previousCodexHome;
+  if (previousMcpRegistry === undefined) delete Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON;
+  else Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = previousMcpRegistry;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -48,6 +51,33 @@ describe("PI skill metadata API", () => {
           trigger_rules: expect.stringContaining("local fixture")
         }
       });
+    } finally {
+      fixture.db.close();
+    }
+  });
+
+  test("binds skill required_tools to MCP tool capability ids", async () => {
+    const fixture = await openFixture();
+    await writeManifestSkill(fixture.root, "fixture-mcp-domain", domainManifest({
+      required_tools: ["docs:tool:search"]
+    }));
+    Bun.env.CODEX_HOME = fixture.root;
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [mcpDocsServer()] });
+    try {
+      const router = createDefaultRouter({ database: fixture.db });
+      const listed = await router.handle(new Request(`${BASE_URL}/api/pi/skills`));
+      const body = await listed.json() as Record<string, any>;
+      const skill = body.skills.find((item: Record<string, unknown>) => item.id === "fixture-mcp-domain");
+
+      expect(listed.status).toBe(200);
+      expect(skill).toMatchObject({
+        enabled: true,
+        required_tools: ["docs:tool:search"],
+        runtime_status: "enabled"
+      });
+      expect(body.diagnostics).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "missing_tool", source_path: "codex-home:fixture-mcp-domain/manifest.json" })
+      ]));
     } finally {
       fixture.db.close();
     }
@@ -207,6 +237,17 @@ function domainManifest(overrides: Record<string, unknown> = {}): Record<string,
     primary_intents: ["status_question", "other"],
     required_tools: [],
     ...overrides
+  };
+}
+
+function mcpDocsServer(): Record<string, unknown> {
+  return {
+    id: "docs",
+    readiness: "ready",
+    status: "enabled",
+    tools: [
+      { name: "search", description: "Search documentation", permission: "read", risk_level: "low" }
+    ]
   };
 }
 

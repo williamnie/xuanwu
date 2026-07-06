@@ -19,6 +19,7 @@ export type SkillPrimaryIntent =
   | "other";
 
 export type SkillRegistryTool = {
+  aliases?: string[];
   name: string;
   permission?: SkillToolPermission;
   provider_id?: string;
@@ -169,7 +170,7 @@ function diagnosePermission(
 }
 
 function toolMatches(tool: SkillRegistryTool, name: string): boolean {
-  return tool.name === name || `${tool.provider_id ?? ""}:${tool.name}` === name;
+  return tool.name === name || `${tool.provider_id ?? ""}:${tool.name}` === name || (tool.aliases ?? []).includes(name);
 }
 
 function literal(issues: ValidationIssue[], value: unknown, expected: string, path: string): void {

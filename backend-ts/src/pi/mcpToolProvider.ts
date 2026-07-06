@@ -59,7 +59,8 @@ function toolFromCapability(server: McpServerRegistry, capability: McpCapability
     name: capability.name,
     output_schema: schemaOrObject(capability.output_schema),
     permission: assistantPermission(capability),
-    provider_id: mcpToolProviderID(server.id)
+    provider_id: mcpToolProviderID(server.id),
+    timeout_ms: capability.timeout_ms
   };
 }
 

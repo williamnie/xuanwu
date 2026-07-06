@@ -34,9 +34,9 @@ describe("PI MCP registry and envelope tools", () => {
         "mcp_capability_read",
         "mcp_requirement_recommend",
         "mcp_resource_list",
-        "mcp_resource_read"
+        "mcp_resource_read",
+        "mcp_tool_call"
       ]));
-      expect(toolNames(tools)).not.toContain("mcp_tool_call");
       expect(validateToolArguments(toolByName(tools, "mcp_capability_read") as never, {
         name: "mcp_capability_read",
         arguments: { capability_id: "docs:resource:runbook" }
@@ -51,6 +51,93 @@ describe("PI MCP registry and envelope tools", () => {
 
       expect(registry.details.items[0]).toMatchObject({ id: "docs", readiness: "ready" });
       expect(recommended.details.items.map((item: { id: string }) => item.id)).toContain("docs:resource:runbook");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("calls fixture MCP tools through the shared gate and audit envelope", async () => {
+    const { db, project } = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    try {
+      const tools = createPiRunnerActionTools(createPiRunnerActions(db, {
+        authorization: {
+          allowed_mcp_capabilities: ["docs:tool:search"],
+          authorizedActions: [{ action_type: "mcp.tool.call", project_id: project.id }],
+          mode: "delegated",
+          scope: { project_id: project.id }
+        },
+        conversationID: "conversation-mcp-tool",
+        project
+      }));
+
+      const result = await runTool(tools, "mcp_tool_call", {
+        capability_id: "docs:tool:search",
+        input: { query: "deploy", token: "secret-token-value" }
+      });
+      const action = listPiActions(db).find((item) => item.action_type === "mcp.tool.call");
+      const audit = listPiActionEvents(db, { eventType: "tool_call_audit" }).at(-1);
+
+      expect(result.details).toMatchObject({
+        output: { items: ["runbook"], ok: true },
+        status: "succeeded"
+      });
+      expect(action).toMatchObject({
+        gate_decision: "execute",
+        project_id: project.id,
+        source: "pi_mcp_tool",
+        status: "completed"
+      });
+      expect(listPiActionEvents(db, { actionId: action?.id ?? "" }).map((event) => event.event_type)).toEqual([
+        "candidate",
+        "gate_decision",
+        "execution_started",
+        "execution_result"
+      ]);
+      expect(audit).toMatchObject({
+        conversation_id: "conversation-mcp-tool",
+        event_type: "tool_call_audit",
+        project_id: project.id
+      });
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
+        provider_id: "mcp-docs",
+        status: "succeeded",
+        tool: "search"
+      });
+      expect(audit?.payload_json).not.toContain("secret-token-value");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("normalizes MCP tool failures and timeouts", async () => {
+    const { db, project } = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    try {
+      const tools = createPiRunnerActionTools(createPiRunnerActions(db, {
+        authorization: {
+          allowed_mcp_capabilities: ["docs:tool:fails", "docs:tool:slow"],
+          authorizedActions: [{ action_type: "mcp.tool.call", project_id: project.id }],
+          mode: "delegated",
+          scope: { project_id: project.id }
+        },
+        project
+      }));
+
+      const failed = await runTool(tools, "mcp_tool_call", { capability_id: "docs:tool:fails" });
+      const timeout = await runTool(tools, "mcp_tool_call", { capability_id: "docs:tool:slow", timeout_ms: 5 });
+
+      expect(failed.details).toMatchObject({
+        error: { code: "fixture_failed", message: "fixture MCP failure" },
+        status: "failed"
+      });
+      expect(timeout.details).toMatchObject({
+        error: { code: "mcp_timeout", message: "MCP tool call timed out" },
+        status: "timeout"
+      });
+      expect(listPiActionEvents(db, { eventType: "tool_call_audit" }).map((event) =>
+        JSON.parse(event.payload_json).status
+      )).toEqual(["failed", "timeout"]);
     } finally {
       db.close();
     }
@@ -259,7 +346,28 @@ function docsServer() {
       { name: "secret", description: "Sensitive vault record", permission: "admin", risk_level: "high" }
     ],
     tools: [
-      { name: "search", description: "Search documentation", permission: "read", risk_level: "low" },
+      {
+        name: "search",
+        description: "Search documentation",
+        permission: "read",
+        risk_level: "low",
+        output: { items: ["runbook"], ok: true },
+        timeout_ms: 50
+      },
+      {
+        name: "fails",
+        description: "Failing fixture tool",
+        permission: "read",
+        risk_level: "low",
+        invocation: { error: { code: "fixture_failed", message: "fixture MCP failure" } }
+      },
+      {
+        name: "slow",
+        description: "Slow fixture tool",
+        permission: "read",
+        risk_level: "low",
+        invocation: { delay_ms: 50, output: { ok: true } }
+      },
       { name: "delete_doc", description: "Delete documentation", permission: "write", risk_level: "high" }
     ]
   };

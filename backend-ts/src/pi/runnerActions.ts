@@ -47,6 +47,7 @@ import {
   runManualContextIntake as executeManualContextIntake,
   type ManualContextIntakeInput
 } from "./manualTrigger.ts";
+import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -399,7 +400,7 @@ function safeListSkills(db: RunnerDatabase, context: PiRunnerActionContext) {
   return executeSafePiAction(db, context, {
     actionType: "skill.list",
     payload: {},
-    execute: () => readSkillRegistry()
+    execute: () => readSkillRegistry({ availableTools: skillRegistryTools(db) })
   });
 }
 
@@ -407,7 +408,7 @@ function safeReadSkill(db: RunnerDatabase, context: PiRunnerActionContext, input
   return executeSafePiAction(db, context, {
     actionType: "skill.read",
     payload: { id: cleanString(input.id) },
-    execute: () => getSkillMetadata(input.id) ?? { id: cleanString(input.id), missing: true }
+    execute: () => getSkillMetadata(input.id, { availableTools: skillRegistryTools(db) }) ?? { id: cleanString(input.id), missing: true }
   });
 }
 
@@ -419,6 +420,15 @@ function safeRecommendSkills(db: RunnerDatabase, context: PiRunnerActionContext,
     projectID,
     execute: () => ({ items: recommendSkillIntents(input) })
   });
+}
+
+function skillRegistryTools(db: RunnerDatabase) {
+  return loadAssistantToolRegistrySnapshot(db).tools.map((tool) => ({
+    aliases: cleanString(tool.metadata?.capability_id) ? [cleanString(tool.metadata?.capability_id)] : [],
+    name: tool.name,
+    permission: tool.permission,
+    provider_id: tool.provider_id
+  }));
 }
 
 function safeSkillIntentAudit(db: RunnerDatabase, context: PiRunnerActionContext, input: SkillIntentAuditInput) {

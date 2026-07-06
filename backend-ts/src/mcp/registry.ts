@@ -11,6 +11,7 @@ export type McpCapability = {
   description: string;
   id: string;
   input_schema?: Record<string, unknown>;
+  invocation?: Record<string, unknown>;
   kind: McpCapabilityKind;
   name: string;
   output_schema?: Record<string, unknown>;
@@ -19,6 +20,7 @@ export type McpCapability = {
   requires_confirmation: boolean;
   risk_level: McpRiskLevel;
   server_id: string;
+  timeout_ms?: number;
 };
 
 export type McpServerRegistry = {
@@ -195,9 +197,10 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
   const risk_level = riskLevel(raw.risk_level ?? raw.risk ?? permission, []);
   return {
     allowed_actions: allowedActions(kind, permission),
-    content: raw.content ?? raw.value,
+    content: raw.content ?? raw.value ?? raw.output ?? raw.result,
     description: cleanString(raw.description ?? raw.summary),
     id: `${serverID}:${kind}:${name}`,
+    invocation: objectValue(raw.invocation ?? raw.fixture ?? raw.call),
     ...(kind === "tool" ? {
       input_schema: jsonSchema(raw.input_schema ?? raw.inputSchema ?? raw.parameters ?? raw.schema, emptyObjectSchema()),
       output_schema: jsonSchema(raw.output_schema ?? raw.outputSchema, { type: "object" })
@@ -208,7 +211,8 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
     read_only: permission === "read" && risk_level === "low",
     requires_confirmation: risk_level !== "low" || permission !== "read",
     risk_level,
-    server_id: serverID
+    server_id: serverID,
+    ...optionalTimeout(raw.timeout_ms ?? raw.timeoutMs)
   };
 }
 
@@ -242,6 +246,11 @@ function permissionLevel(value: unknown): McpPermission {
   return "read";
 }
 
+function optionalTimeout(value: unknown): { timeout_ms?: number } {
+  const parsed = typeof value === "number" ? value : Number.parseInt(cleanString(value), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? { timeout_ms: parsed } : {};
+}
+
 function recommendation(capability: McpCapability, terms: string[]): McpRequirementRecommendation {
   const haystack = tokenize(`${capability.id} ${capability.name} ${capability.description} ${capability.server_id}`);
   const matches = terms.filter((term) => haystack.some((word) => word.includes(term) || term.includes(word)));
@@ -249,7 +258,7 @@ function recommendation(capability: McpCapability, terms: string[]): McpRequirem
 }
 
 function publicCapability(capability: McpCapability): McpCapability {
-  const { content: _content, ...safe } = capability;
+  const { content: _content, invocation: _invocation, ...safe } = capability;
   return safe;
 }
 

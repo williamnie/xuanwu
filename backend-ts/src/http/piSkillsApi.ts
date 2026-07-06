@@ -178,11 +178,17 @@ function readRegistry(context?: SkillRouteContext) {
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs ?? []
   });
   const availableTools = snapshot.tools.map((tool) => ({
+    aliases: toolAliases(tool.metadata),
     name: tool.name,
     permission: tool.permission,
     provider_id: tool.provider_id
   }));
   return readSkillRegistry({ availableTools });
+}
+
+function toolAliases(metadata: Record<string, unknown> | undefined): string[] {
+  const capabilityID = cleanString(metadata?.capability_id);
+  return capabilityID === "" ? [] : [capabilityID];
 }
 
 function findSkill(skills: SkillMetadata[], id: string): SkillMetadata | undefined {
