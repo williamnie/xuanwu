@@ -36,7 +36,18 @@ export type CliConnectorToolRef = {
   tool: AssistantTool;
 };
 
+export type CliConnectorRef = {
+  envNames: string[];
+  manifest: CliConnectorManifest;
+  manifestDir: string;
+  manifestPath: string;
+  missingRequiredEnv: string[];
+  provider: ToolProvider;
+  secretEnvNames: string[];
+};
+
 export type CliConnectorRegistry = {
+  connectors: CliConnectorRef[];
   diagnostics: CliConnectorDiagnostic[];
   providers: ToolProvider[];
   toolRefs: CliConnectorToolRef[];
@@ -50,8 +61,9 @@ export function loadCliConnectorRegistry(options: CliConnectorRegistryOptions = 
   const loaded = configuredManifestFiles(options.manifestDirs ?? [], diagnostics)
     .flatMap((path) => loadManifest(path, options.env ?? process.env, diagnostics));
   return {
+    connectors: loaded.map((entry) => entry.connector),
     diagnostics,
-    providers: loaded.map((entry) => entry.provider),
+    providers: loaded.map((entry) => entry.connector.provider),
     toolRefs: loaded.flatMap((entry) => entry.toolRefs),
     tools: loaded.flatMap((entry) => entry.toolRefs.map((ref) => ref.tool))
   };
@@ -85,7 +97,7 @@ function loadManifest(
   path: string,
   env: Record<string, string | undefined>,
   diagnostics: CliConnectorDiagnostic[]
-): Array<{ provider: ToolProvider; toolRefs: CliConnectorToolRef[] }> {
+): Array<{ connector: CliConnectorRef; toolRefs: CliConnectorToolRef[] }> {
   const parsed = readManifest(path, diagnostics);
   if (!parsed) return [];
   if (!parsed.ok) {
@@ -97,8 +109,9 @@ function loadManifest(
   const secretEnvNames = secretNames(manifest, envNames);
   const missing = missingRequiredEnv(manifest, env);
   const provider = providerFromManifest(manifest, path, secretEnvNames, missing);
+  const connector = connectorFromManifest(manifest, path, provider, envNames, secretEnvNames, missing);
   const toolRefs = missing.length === 0 ? toolRefsFromManifest(manifest, path, provider, envNames, secretEnvNames) : [];
-  return [{ provider, toolRefs }];
+  return [{ connector, toolRefs }];
 }
 
 function readManifest(path: string, diagnostics: CliConnectorDiagnostic[]) {
@@ -125,6 +138,25 @@ function providerFromManifest(
     metadata: providerMetadata(manifest, path, missingRequiredEnv),
     name: manifest.name,
     status: missingRequiredEnv.length > 0 ? "disabled" : "enabled"
+  };
+}
+
+function connectorFromManifest(
+  manifest: CliConnectorManifest,
+  path: string,
+  provider: ToolProvider,
+  envNames: string[],
+  secretEnvNames: string[],
+  missingRequiredEnv: string[]
+): CliConnectorRef {
+  return {
+    envNames,
+    manifest,
+    manifestDir: resolve(join(path, "..")),
+    manifestPath: path,
+    missingRequiredEnv,
+    provider,
+    secretEnvNames
   };
 }
 

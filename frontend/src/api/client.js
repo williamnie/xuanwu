@@ -204,6 +204,8 @@ export const api = {
 
   getSystemStatus: () => request('/api/system/status'),
 
+  getPiConnectors: () => request('/api/pi/connectors'),
+
   getRunnerSettings: () => request('/api/runner/settings'),
 
   updateRunnerSettings: (settings) => request('/api/runner/settings', {

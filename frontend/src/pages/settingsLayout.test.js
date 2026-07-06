@@ -6,6 +6,8 @@ const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 
 const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.url), 'utf8');
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url), 'utf8');
+const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsPanel.jsx', import.meta.url), 'utf8');
+const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 
 test('Settings groups panels behind Assistant Settings tabs and removes duplicate cron panel', () => {
@@ -41,4 +43,12 @@ test('Settings restart action is a red in-page danger control', () => {
   assert.ok(stylesSource.includes('.settings-danger-button'));
   assert.ok(stylesSource.includes('var(--error)'));
   assert.doesNotMatch(chromeSource, /window\\.confirm|window\\.alert/);
+});
+
+test('Connectors tab shows read-only connector diagnostics from API', () => {
+  assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
+  assert.match(apiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
+  assert.match(connectorDiagnosticsSource, /api\.getPiConnectors\(\)/);
+  assert.match(connectorDiagnosticsSource, /Connector Diagnostics/);
+  assert.doesNotMatch(connectorDiagnosticsSource, /window\.confirm|window\.alert/);
 });

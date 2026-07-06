@@ -22,7 +22,7 @@
   },
   "health": {
     "command": {
-      "executable": "fixture-inbox",
+      "executable": "./fixture-inbox.mjs",
       "args": ["health", "--json"]
     },
     "timeout_ms": 3000,
@@ -35,7 +35,7 @@
       "description": "Fetch new inbox items after an optional cursor.",
       "permission": "read",
       "command": {
-        "executable": "fixture-inbox",
+        "executable": "./fixture-inbox.mjs",
         "args": [
           "sync",
           "--cursor",

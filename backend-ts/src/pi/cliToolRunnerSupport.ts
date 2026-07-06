@@ -8,7 +8,7 @@ export type CapturedText = { bytes: number; omitted_bytes: number; raw: string; 
 export const SECRET_ENV_RE = /(^|_)(TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|AUTH)(_|$)/i;
 
 export function buildAllowedEnv(source: Record<string, string | undefined>, allowlist?: string[]): Record<string, string> {
-  const names = allowlist ?? ["PATH"];
+  const names = allowlist ? [...new Set(["PATH", ...allowlist])] : ["PATH"];
   return Object.fromEntries(names.flatMap((name) => source[name] === undefined ? [] : [[name, String(source[name])]]));
 }
 

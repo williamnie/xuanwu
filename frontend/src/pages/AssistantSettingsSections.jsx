@@ -1,4 +1,5 @@
 import IssueTemplatesPanel from './IssueTemplatesPanel';
+import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
@@ -46,9 +47,10 @@ function ConnectorsSettingsTab() {
       <SettingsPlaceholderPanel
         eyebrow="Connectors"
         title="Connector slots"
-        description="外部来源会作为 PI Assistant 的 connector/tool provider 接入；当前仅保留已有 IM 配置入口。"
-        items={['Feishu 仍走现有 integration settings API。', '后续 CLI/MCP/HTTP/browser connector 不在本 issue 实现。']}
+        description="外部来源会作为 PI Assistant 的 connector/tool provider 接入；当前提供只读健康摘要和已有 IM 配置入口。"
+        items={['CLI connector 通过 manifest 暴露配置/health 诊断。', 'Feishu 仍走现有 integration settings API。']}
       />
+      <ConnectorDiagnosticsPanel />
       <FeishuSettingsPanel />
     </>
   );
