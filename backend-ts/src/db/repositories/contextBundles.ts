@@ -6,6 +6,7 @@ type JsonObject = Record<string, unknown>;
 export type ContextBundleTrigger =
   | "manual"
   | "mention"
+  | "reply"
   | "schedule"
   | "continuous"
   | "webhook"
@@ -178,7 +179,7 @@ function windowValue(value: unknown): ContextBundleWindow {
 
 function normalizeTrigger(value: unknown): ContextBundleTrigger {
   const text = cleanString(value);
-  const allowed = ["manual", "mention", "schedule", "continuous", "webhook", "retry"];
+  const allowed = ["manual", "mention", "reply", "schedule", "continuous", "webhook", "retry"];
   return allowed.includes(text) ? text as ContextBundleTrigger : "continuous";
 }
 

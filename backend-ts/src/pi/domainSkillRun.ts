@@ -46,7 +46,7 @@ function domainSkillAction(
 ): JsonObject {
   return {
     action_type: "attention_inbox.domain_skill",
-    id: actionID(item.id, skillID),
+    id: domainSkillActionID(item.id, skillID),
     idempotency_key: `attention-inbox-item:${item.id}:domain-skill:${skillID}`,
     payload_json: JSON.stringify({
       ...output,
@@ -64,7 +64,7 @@ function domainSkillAction(
   };
 }
 
-function actionID(itemID: number, skillID: string): string {
+export function domainSkillActionID(itemID: number, skillID: string): string {
   const suffix = skillID === "fixture-domain" ? "" : `-${safeID(skillID)}`;
   return `attention-inbox-item-${itemID}${suffix}-domain-skill`;
 }

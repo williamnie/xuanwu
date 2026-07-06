@@ -12,7 +12,7 @@ export type IntakeSourcePolicy = {
 
 type LastRunRow = { created_at: string };
 
-const AUTOMATIC_TRIGGERS: ContextBundleTrigger[] = ["mention", "schedule", "continuous", "webhook"];
+const AUTOMATIC_TRIGGERS: ContextBundleTrigger[] = ["mention", "reply", "schedule", "continuous", "webhook"];
 
 export function assertIntakeSourcePolicy(
   db: RunnerDatabase,
@@ -55,7 +55,7 @@ function latestAutomaticRunAt(db: RunnerDatabase, source: string): string {
     `select ir.created_at from intake_runs ir
       join context_bundles cb on cb.id=ir.bundle_id
       where cb.source=?
-        and cb.trigger in ('mention', 'schedule', 'continuous', 'webhook')
+        and cb.trigger in ('mention', 'reply', 'schedule', 'continuous', 'webhook')
         and ir.status in ('running', 'succeeded')
       order by ir.created_at desc, ir.id desc limit 1`
   ).get(source);
@@ -64,8 +64,8 @@ function latestAutomaticRunAt(db: RunnerDatabase, source: string): string {
 
 function triggerAllowed(mode: IntakeMode, trigger: ContextBundleTrigger): boolean {
   if (mode === "manual_only") return false;
-  if (mode === "mention_only") return trigger === "mention";
-  if (mode === "scheduled_llm_triage") return trigger === "mention" || trigger === "schedule";
+  if (mode === "mention_only") return trigger === "mention" || trigger === "reply";
+  if (mode === "scheduled_llm_triage") return ["mention", "reply", "schedule"].includes(trigger);
   return AUTOMATIC_TRIGGERS.includes(trigger);
 }
 

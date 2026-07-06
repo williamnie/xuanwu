@@ -56,7 +56,7 @@ export type LlmIntakeResult = {
   run: IntakeRunRecord;
 };
 
-const DEFAULT_SKILL_ID = "pi.llm_intake.v1";
+export const DEFAULT_INTAKE_SKILL_ID = "pi.llm_intake.v1";
 const PRIMARY_INTENTS = [
   "bug_report", "status_question", "reply_needed", "follow_up",
   "decision_needed", "summarize_request", "create_task", "monitor_thread",
@@ -232,7 +232,7 @@ function itemInput(
 
 function intakeSkill(options: LlmIntakeOptions): IntakeSkillRuntime & { id: string } {
   const skill = options.skill ?? {};
-  const id = clean(options.skillId) || clean(skill.id) || DEFAULT_SKILL_ID;
+  const id = clean(options.skillId) || clean(skill.id) || DEFAULT_INTAKE_SKILL_ID;
   if (clean(skill.kind) !== "" && clean(skill.kind) !== "intake") throw new Error("intake skill kind must be intake");
   if (clean(skill.input_object) !== "" && clean(skill.input_object) !== "context_bundle") {
     throw new Error("intake skill input_object must be context_bundle");
