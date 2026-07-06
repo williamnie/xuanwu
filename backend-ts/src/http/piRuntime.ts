@@ -129,7 +129,9 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       conversationID: input.conversationID,
       delegationID: input.delegationID,
       heartbeatID: input.heartbeatID,
-      projectID: toolProject?.id ?? input.project?.id
+      issueID: input.issueID,
+      projectID: toolProject?.id ?? input.project?.id,
+      source: input.source
     });
     if (input.agent.name !== "") session.setSessionName(input.agent.name);
     return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, cleanupSdkAudit) };

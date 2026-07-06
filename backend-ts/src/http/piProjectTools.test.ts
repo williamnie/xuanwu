@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -158,6 +158,66 @@ describe("PI project tools", () => {
     }
   });
 
+  test("records standard audit envelopes for builtin tool success, failure, and redaction", async () => {
+    const { db, projectCwd } = await openFixture();
+    const faux = registerFauxProvider({ api: "pi-tool-audit-api", provider: "pi-tool-audit" });
+    try {
+      insertProject(db, "demo", projectCwd);
+      insertAgent(db, { api: "pi-tool-audit-api", provider: "pi-tool-audit" });
+      writeFauxModelsConfig(db, { api: "pi-tool-audit-api", provider: "pi-tool-audit" });
+      writeFileSync(join(projectCwd, "README.md"), [
+        "# Demo",
+        "AUTH_TOKEN=super-secret-token-value",
+        "A".repeat(2000)
+      ].join("\n"));
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("repo_read_excerpt", { max_lines: 3, path: "README.md", start_line: 1 }, { id: "read-secret" }),
+          fauxToolCall("repo_read_excerpt", { path: "missing.txt", start_line: 1 }, { id: "read-missing" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("done")
+      ]);
+
+      const runtime = await createPiRuntimeSession(db, {
+        agent: agentRecord({ model_provider: "pi-tool-audit" }),
+        conversationID: "conv-tool-audit",
+        project: projectRecord(projectCwd),
+        source: "rpc"
+      });
+      await runtime.session.prompt("Audit tool calls", { expandPromptTemplates: false, source: "rpc" });
+      runtime.dispose();
+
+      const audit = toolCallAuditPayloads(listPiActionEvents(db, { conversationId: "conv-tool-audit" }));
+      const success = audit.find((event) => event.tool_call_id === "read-secret");
+      const failure = audit.find((event) => event.tool_call_id === "read-missing");
+      const serialized = JSON.stringify(audit);
+
+      expect(audit).toHaveLength(2);
+      expect(success).toMatchObject({
+        provider_id: "runner-builtin",
+        source: "rpc",
+        status: "succeeded",
+        tool: "repo_read_excerpt"
+      });
+      expect(Number(success?.duration_ms)).toBeGreaterThanOrEqual(0);
+      expect(JSON.stringify(success?.input_summary)).toContain("README.md");
+      expect(JSON.stringify(success?.output_summary).length).toBeLessThanOrEqual(900);
+
+      expect(failure).toMatchObject({
+        error: expect.objectContaining({ type: "tool_error", message: expect.any(String) }),
+        provider_id: "runner-builtin",
+        status: "failed",
+        tool: "repo_read_excerpt"
+      });
+      expect(serialized).toContain("[redacted");
+      expect(serialized).not.toContain("super-secret-token-value");
+      expect(serialized).not.toContain("AUTH_TOKEN=super-secret-token-value");
+    } finally {
+      faux.unregister();
+      db.close();
+    }
+  });
+
 });
 
 function agentRecord(overrides: Record<string, unknown> = {}) {
@@ -173,6 +233,7 @@ function projectRecord(cwd: string) {
   return {
     id: "demo", name: "Demo", cwd, provider: "codex", provider_config_json: "{}", auto_run: 0,
     model: "", approval_policy: "never", sandbox: "workspace-write", default_agent_profile_id: "",
+    default_service_tier: "",
     sort_order: 1, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
     default_mcp_policy: "{}", default_skill_policy: "{}", loop_status: "stopped", provider_capabilities: []
   };
@@ -201,6 +262,12 @@ function collectText(content: unknown): string {
     if (typeof block === "object" && block && "text" in block && typeof block.text === "string") return block.text;
     return "";
   }).join("\n");
+}
+
+function toolCallAuditPayloads(events: PiActionEvent[]): Array<Record<string, any>> {
+  return events
+    .filter((event) => event.event_type === "tool_call_audit")
+    .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
 }
 
 function insertAgent(db: RunnerDatabase, overrides: { api?: string; provider?: string } = {}): void {

@@ -6,6 +6,7 @@ import type { EventBus } from "../events/bus.ts";
 import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
 import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
+import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/toolCallAudit.ts";
 
 type SdkAuditContext = {
   authorization?: PiGatePolicy;
@@ -13,11 +14,14 @@ type SdkAuditContext = {
   conversationID: string;
   delegationID?: string;
   heartbeatID?: string;
+  issueID?: number;
   projectID?: string;
+  source?: string;
 };
 
 const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "find", "ls"]);
 const SOURCE = "pi_sdk_tool";
+type ActiveToolAudit = { args: unknown; startedAt: number; toolName: string };
 
 export function installPiSdkToolAudit(
   db: RunnerDatabase,
@@ -25,11 +29,19 @@ export function installPiSdkToolAudit(
   context: SdkAuditContext
 ): () => void {
   const active = new Map<string, PiAction>();
+  const toolAudits = new Map<string, ActiveToolAudit>();
   const previousBefore = session.agent.beforeToolCall;
   const previousAfter = session.agent.afterToolCall;
   const beforeHook = async (hook: BeforeToolCallContext, signal?: AbortSignal) => {
+    startToolAudit(toolAudits, hook);
     const started = startSdkAction(db, context, hook);
-    if (started && started.gate_decision !== "execute") return { block: true, reason: started.gate_reason };
+    if (started && started.gate_decision !== "execute") {
+      finishToolAudit(db, context, toolAudits, hook.toolCall.id, {
+        error: { message: started.gate_reason || "Tool execution denied", type: "permission_denied" },
+        status: "denied"
+      });
+      return { block: true, reason: started.gate_reason };
+    }
     if (started) active.set(hook.toolCall.id, started);
     try {
       const result = await previousBefore?.(hook, signal);
@@ -37,9 +49,17 @@ export function installPiSdkToolAudit(
         error: result.reason || "Tool execution was blocked",
         isError: true
       });
+      if (result?.block) finishToolAudit(db, context, toolAudits, hook.toolCall.id, {
+        error: { message: result.reason || "Tool execution was blocked", type: "permission_denied" },
+        status: "denied"
+      });
       return result;
     } catch (error) {
       if (started) finishSdkAction(db, context, active, hook.toolCall.id, { error: errorMessage(error), isError: true });
+      finishToolAudit(db, context, toolAudits, hook.toolCall.id, {
+        error: { message: errorMessage(error), type: errorType(error) },
+        status: "failed"
+      });
       throw error;
     }
   };
@@ -47,9 +67,14 @@ export function installPiSdkToolAudit(
     try {
       const result = await previousAfter?.(hook, signal);
       finishSdkAction(db, context, active, hook.toolCall.id, afterResult(hook, result));
+      finishToolAudit(db, context, toolAudits, hook.toolCall.id, afterAuditResult(hook, result));
       return result;
     } catch (error) {
       finishSdkAction(db, context, active, hook.toolCall.id, { error: errorMessage(error), isError: true });
+      finishToolAudit(db, context, toolAudits, hook.toolCall.id, {
+        error: { message: errorMessage(error), type: errorType(error) },
+        status: "failed"
+      });
       throw error;
     }
   };
@@ -60,6 +85,37 @@ export function installPiSdkToolAudit(
     if (session.agent.beforeToolCall === beforeHook) session.agent.beforeToolCall = previousBefore;
     if (session.agent.afterToolCall === afterHook) session.agent.afterToolCall = previousAfter;
   };
+}
+
+function startToolAudit(active: Map<string, ActiveToolAudit>, hook: BeforeToolCallContext): ActiveToolAudit {
+  const audit = { args: hook.args, startedAt: Date.now(), toolName: cleanString(hook.toolCall.name) };
+  active.set(hook.toolCall.id, audit);
+  return audit;
+}
+
+function finishToolAudit(
+  db: RunnerDatabase,
+  context: ToolCallAuditContext,
+  active: Map<string, ActiveToolAudit>,
+  toolCallID: string,
+  outcome: { error?: { message: string; type: string }; output?: unknown; status: "denied" | "failed" | "succeeded" }
+): void {
+  const audit = active.get(toolCallID);
+  if (!audit) return;
+  active.delete(toolCallID);
+  try {
+    recordToolCallAuditEvent(db, context, {
+      args: audit.args,
+      durationMs: Date.now() - audit.startedAt,
+      error: outcome.error,
+      output: outcome.output,
+      status: outcome.status,
+      toolCallID,
+      toolName: audit.toolName
+    });
+  } catch (error) {
+    console.warn("[pi-runtime] failed to audit tool call:", errorMessage(error));
+  }
 }
 
 function startSdkAction(
@@ -150,6 +206,15 @@ function afterResult(hook: AfterToolCallContext, result: AfterToolCallResult | u
   };
 }
 
+function afterAuditResult(hook: AfterToolCallContext, result: AfterToolCallResult | undefined) {
+  const isError = result?.isError ?? hook.isError;
+  return {
+    error: isError ? { message: errorSummary(result?.content ?? hook.result.content), type: "tool_error" } : undefined,
+    output: result?.details ?? result?.content ?? hook.result.details ?? hook.result.content,
+    status: isError ? "failed" as const : "succeeded" as const
+  };
+}
+
 function sdkPayload(toolCallID: string, toolName: string, args: unknown): Record<string, unknown> {
   return {
     args: sanitizeJson(args),
@@ -189,6 +254,23 @@ function publishGateEvent(bus: EventBus | undefined, decision: string, action: P
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "SDK tool execution failed";
+}
+
+function errorSummary(value: unknown): string {
+  const text = collectText(value).trim();
+  return text === "" ? "Tool execution failed" : text;
+}
+
+function collectText(value: unknown): string {
+  if (!Array.isArray(value)) return typeof value === "string" ? value : "";
+  return value.map((block) => {
+    if (typeof block === "object" && block && "text" in block && typeof block.text === "string") return block.text;
+    return "";
+  }).filter(Boolean).join("\n");
+}
+
+function errorType(error: unknown): string {
+  return error instanceof Error && error.name !== "" ? error.name : "tool_error";
 }
 
 function cleanString(value: unknown): string {
