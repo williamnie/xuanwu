@@ -1,0 +1,82 @@
+{
+  "manifest_version": "pi-cli-connector.v0",
+  "id": "fixture-local-inbox",
+  "name": "Fixture Local Inbox",
+  "kind": "cli",
+  "description": "Neutral fixture connector for incremental local inbox sync.",
+  "auth": {
+    "type": "env",
+    "env": ["FIXTURE_INBOX_TOKEN"]
+  },
+  "env": [
+    {
+      "name": "FIXTURE_INBOX_TOKEN",
+      "required": true,
+      "secret": true,
+      "description": "Bearer token read by the CLI at runtime."
+    }
+  ],
+  "timeout": {
+    "default_ms": 5000,
+    "max_ms": 30000
+  },
+  "health": {
+    "command": {
+      "executable": "fixture-inbox",
+      "args": ["health", "--json"]
+    },
+    "timeout_ms": 3000,
+    "stdout": { "mode": "json" },
+    "exit_codes": { "success": [0], "auth_required": [20], "usage_error": [64] }
+  },
+  "commands": [
+    {
+      "name": "sync_items",
+      "description": "Fetch new inbox items after an optional cursor.",
+      "permission": "read",
+      "command": {
+        "executable": "fixture-inbox",
+        "args": [
+          "sync",
+          "--cursor",
+          "{{input.cursor}}",
+          "--limit",
+          "{{input.limit}}",
+          "--idempotency-key",
+          "{{input.idempotency_key}}",
+          "--json"
+        ]
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": { "type": "string" },
+          "idempotency_key": { "type": "string" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+        },
+        "required": ["idempotency_key", "limit"]
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": { "type": "array" },
+          "next_cursor": { "type": "string" }
+        },
+        "required": ["items"]
+      },
+      "stdout": { "mode": "json" },
+      "exit_codes": {
+        "success": [0],
+        "retryable": [75],
+        "auth_required": [20],
+        "usage_error": [64]
+      },
+      "stderr": { "summary": "tail", "max_bytes": 2048 },
+      "cursor": { "input_field": "cursor", "output_field": "next_cursor" },
+      "idempotency": { "input_field": "idempotency_key" },
+      "timeout_ms": 10000
+    }
+  ]
+}
