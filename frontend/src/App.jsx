@@ -299,7 +299,7 @@ export default function App() {
           ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
             <AttentionInbox />
           ) : isAssistantModulePage(currentPage) ? (
-            <AssistantModulePage page={currentPage} />
+            <AssistantModulePage navigateTo={navigateTo} page={currentPage} />
           ) : currentPage === 'projects' ? (
             <Projects />
           ) : currentPage === 'cron' ? (

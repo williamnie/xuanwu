@@ -1,5 +1,6 @@
 export * from "./pi/actions.ts";
 export * from "./pi/actionProposals.ts";
+export * from "./pi/activityTimeline.ts";
 export * from "./pi/actionProposalValidation.ts";
 export * from "./pi/agents.ts";
 export * from "./pi/conversations.ts";

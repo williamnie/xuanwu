@@ -8,6 +8,7 @@ const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', i
 const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url), 'utf8');
 const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsPanel.jsx', import.meta.url), 'utf8');
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
+const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 
@@ -87,4 +88,14 @@ test('Skills tab shows intake and domain runtime history from API', () => {
   assert.match(skillsRuntimeSource, /optionalRuntimeList/);
   assert.match(skillsRuntimeSource, /coming soon 空态/);
   assert.doesNotMatch(skillsRuntimeSource, /window\.confirm|window\.alert/);
+});
+
+test('Activity tab shows traceable redacted timeline from API', () => {
+  assert.match(sectionsSource, /ActivityTimelinePanel/);
+  assert.match(apiSource, /getPiActivityTimeline/);
+  assert.match(activityTimelineSource, /Raw → Intake → Action trace/);
+  assert.match(activityTimelineSource, /source/);
+  assert.match(activityTimelineSource, /proposalId/);
+  assert.match(activityTimelineSource, /summaries are redacted/);
+  assert.doesNotMatch(activityTimelineSource, /window\.confirm|window\.alert/);
 });

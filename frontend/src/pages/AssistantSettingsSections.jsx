@@ -3,12 +3,13 @@ import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
+import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import { AssistantOverviewPanel, SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
 
-export default function SettingsTabContent({ activeTab, RuntimeStatusPanel }) {
+export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo }) {
   return (
     <>
       {activeTab === 'assistant' && <AssistantSettingsTab />}
@@ -18,7 +19,7 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel }) {
       {activeTab === 'automations' && <AutomationsPlaceholder />}
       {activeTab === 'approvals' && <ApprovalsPlaceholder />}
       {activeTab === 'memory' && <MemorySettingsTab />}
-      {activeTab === 'activity' && <ActivityPlaceholder />}
+      {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
       {activeTab === 'policies' && <PoliciesPlaceholder />}
     </>
   );
@@ -92,10 +93,6 @@ function AutomationsPlaceholder() {
 
 function ApprovalsPlaceholder() {
   return <SettingsPlaceholderPanel eyebrow="Approvals" title="Approval policy" description="预留 action proposal 审批与外部写操作权限入口；默认不引入新的自动外部写操作。" />;
-}
-
-function ActivityPlaceholder() {
-  return <SettingsPlaceholderPanel eyebrow="Activity" title="Activity timeline" description="预留 raw events、intake、skill run、proposal 与 tool call 的审计时间线入口。" />;
 }
 
 function PoliciesPlaceholder() {

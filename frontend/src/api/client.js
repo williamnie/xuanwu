@@ -210,6 +210,19 @@ export const api = {
 
   getPiSkill: (id) => request(`/api/pi/skills/${encodeURIComponent(id)}`),
 
+  getPiActivityTimeline: ({ source = '', inboxItemId = '', proposalId = '', issueId = '', since = '', until = '', limit = 100 } = {}) => {
+    const params = new URLSearchParams();
+    if (source) params.append('source', source);
+    if (inboxItemId) params.append('inbox_item_id', String(inboxItemId));
+    if (proposalId) params.append('proposal_id', proposalId);
+    if (issueId) params.append('issue_id', String(issueId));
+    if (since) params.append('since', since);
+    if (until) params.append('until', until);
+    if (limit) params.append('limit', String(limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/activity${query}`);
+  },
+
   getPiSkillIntakeRuns: ({ bundleId = '', skillId = '', status = '', limit = 50 } = {}) => {
     const params = new URLSearchParams();
     if (bundleId) params.append('bundle_id', String(bundleId));

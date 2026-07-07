@@ -3,7 +3,7 @@ import SettingsTabContent from './AssistantSettingsSections';
 import { assistantModuleForPage } from './assistantModules';
 import './Settings.css';
 
-export default function AssistantModulePage({ page }) {
+export default function AssistantModulePage({ navigateTo, page }) {
   const module = assistantModuleForPage(page) || assistantModuleForPage('pi-overview');
   return (
     <div className="assistant-module-page settings-page animate-fade-in">
@@ -17,7 +17,7 @@ export default function AssistantModulePage({ page }) {
         </div>
       </header>
       <div className="settings-tab-content assistant-module-content" role="tabpanel" aria-label={`PI Assistant ${module.title}`}>
-        <SettingsTabContent activeTab={module.tab} />
+        <SettingsTabContent activeTab={module.tab} navigateTo={navigateTo} />
       </div>
     </div>
   );
