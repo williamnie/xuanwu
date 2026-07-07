@@ -100,7 +100,7 @@ function PoliciesPlaceholder() {
     <SettingsPlaceholderPanel
       eyebrow="Policies"
       title="Source policies"
-      description="Policies 独立于 Settings，用于管理 source policy、自动回复、自动建 issue、自动 enqueue 等策略；本阶段只提供清晰入口与空态。"
+      description="Source policies 统一收在 Assistant Settings，用于管理自动回复、自动建 issue、自动 enqueue 等策略；本阶段只提供清晰入口与空态。"
       items={['External reply 默认 opt-in，不自动外部写。', 'issue.create / issue.enqueue 策略后续按 source、project 与风险级别配置。']}
     />
   );

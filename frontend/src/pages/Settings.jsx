@@ -9,13 +9,18 @@ import SettingsTabContent from './AssistantSettingsSections';
 import { SettingsHeader } from './SettingsChrome';
 import './Settings.css';
 
-export default function Settings() {
-  const [activeTab, setActiveTab] = useState('assistant');
+export default function Settings({ initialTab = 'assistant', navigateTo }) {
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   return (
     <div className="settings-page animate-fade-in">
       <SettingsHeader activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="settings-tab-content" role="tabpanel">
-        <SettingsTabContent activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} />
+        <SettingsTabContent activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
       </div>
     </div>
   );

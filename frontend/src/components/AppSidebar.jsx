@@ -1,22 +1,14 @@
 import {
-  Activity,
   CalendarClock,
-  CheckCircle2,
   ChevronLeft,
-  Brain,
-  Compass,
   FolderGit2,
   Inbox,
   Layers,
   ListTodo,
-  Plug,
-  ScrollText,
   Moon,
   Settings,
-  ShieldCheck,
   Sun,
   LayoutDashboard,
-  Workflow,
 } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { useDynamicFavicon } from './brandFavicon.js';
@@ -29,18 +21,10 @@ import {
   selectProjects,
   useDataStore,
 } from '../store/dataStore';
-import { PI_ASSISTANT_MODULES } from '../pages/assistantModules';
+import { PI_ASSISTANT_NAV_ITEMS } from '../pages/assistantModules';
 
 const ASSISTANT_ICONS = {
-  Overview: Compass,
   Inbox,
-  Connectors: Plug,
-  Skills: Brain,
-  Automations: Workflow,
-  Approvals: CheckCircle2,
-  Memory: ScrollText,
-  Activity,
-  Policies: ShieldCheck,
   Settings,
 };
 
@@ -103,7 +87,7 @@ export default function AppSidebar({
 
       <div className="sidebar-section-title">PI Assistant</div>
       <div className="sidebar-nav-group pi-assistant-nav">
-        {PI_ASSISTANT_MODULES.map((module) => (
+        {PI_ASSISTANT_NAV_ITEMS.map((module) => (
           <button
             className={`nav-item pi-assistant-item ${currentPage === module.page ? 'active' : ''}`}
             key={module.page}

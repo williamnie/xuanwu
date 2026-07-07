@@ -12,6 +12,7 @@ const SETTINGS_TABS = [
   { id: 'approvals', label: 'Approvals' },
   { id: 'memory', label: 'Memory' },
   { id: 'activity', label: 'Activity' },
+  { id: 'policies', label: 'Policies' },
 ];
 
 export function SettingsHeader({ activeTab, onTabChange }) {

@@ -9,10 +9,9 @@ import IssueDetail from './pages/IssueDetail';
 import Sessions from './pages/Sessions';
 import PiChat from './pages/PiChat';
 import AttentionInbox from './pages/AttentionInbox';
-import AssistantModulePage from './pages/AssistantModulePage';
 import Cron from './pages/Cron';
 import Settings from './pages/Settings';
-import { isAssistantModulePage } from './pages/assistantModules';
+import { assistantModuleForPage, isAssistantModulePage } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
 import {
@@ -227,6 +226,7 @@ export default function App() {
     });
   };
 
+  const assistantModule = assistantModuleForPage(currentPage);
 
 
   if (!authReady) {
@@ -299,13 +299,13 @@ export default function App() {
           ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
             <AttentionInbox />
           ) : isAssistantModulePage(currentPage) ? (
-            <AssistantModulePage navigateTo={navigateTo} page={currentPage} />
+            <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
           ) : currentPage === 'projects' ? (
             <Projects />
           ) : currentPage === 'cron' ? (
             <Cron />
           ) : currentPage === 'settings' ? (
-            <Settings />
+            <Settings navigateTo={navigateTo} />
           ) : (
             <Dashboard navigateTo={navigateTo} />
           )

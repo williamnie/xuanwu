@@ -1,16 +1,25 @@
-export const PI_ASSISTANT_MODULES = [
+export const PI_ASSISTANT_NAV_ITEMS = [
+  {
+    page: 'pi-inbox',
+    label: 'Inbox',
+    title: 'Inbox',
+    description: '多来源事项经过 intake 后进入这里，再由 skill 或人工处理。'
+  },
+  {
+    page: 'settings',
+    label: 'Settings',
+    title: 'Settings',
+    description: 'PI Assistant 与 runner runtime 的高级配置集合。'
+  }
+];
+
+export const PI_ASSISTANT_CONFIG_MODULES = [
   {
     page: 'pi-overview',
     tab: 'assistant',
     label: 'Overview',
     title: 'Overview',
     description: '唯一 PI Assistant 的管理中心，集中展示 runtime 配置、能力边界与入口。'
-  },
-  {
-    page: 'pi-inbox',
-    label: 'Inbox',
-    title: 'Inbox',
-    description: '多来源事项经过 intake 后进入这里，再由 skill 或人工处理。'
   },
   {
     page: 'pi-connectors',
@@ -59,14 +68,13 @@ export const PI_ASSISTANT_MODULES = [
     tab: 'policies',
     label: 'Policies',
     title: 'Policies',
-    description: '独立管理 source policy、自动回复、自动建 issue 与自动 enqueue 等策略。'
-  },
-  {
-    page: 'settings',
-    label: 'Settings',
-    title: 'Settings',
-    description: 'PI Assistant 与 runner runtime 的高级配置集合。'
+    description: '在 Assistant Settings 中管理 source policy、自动回复、自动建 issue 与自动 enqueue 等策略。'
   }
+];
+
+export const PI_ASSISTANT_MODULES = [
+  ...PI_ASSISTANT_NAV_ITEMS,
+  ...PI_ASSISTANT_CONFIG_MODULES,
 ];
 
 export function assistantModuleForPage(page) {

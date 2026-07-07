@@ -13,7 +13,7 @@ const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'ut
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 
 test('Settings groups panels behind Assistant Settings tabs and removes duplicate cron panel', () => {
-  assert.match(settingsSource, /useState\('assistant'\)/);
+  assert.match(settingsSource, /initialTab = 'assistant'/);
   assert.match(sectionsSource, /activeTab === 'assistant'/);
   assert.match(sectionsSource, /activeTab === 'runner-brain'/);
   assert.match(sectionsSource, /activeTab === 'connectors'/);
@@ -23,6 +23,7 @@ test('Settings groups panels behind Assistant Settings tabs and removes duplicat
   assert.match(sectionsSource, /activeTab === 'memory'/);
   assert.match(sectionsSource, /activeTab === 'activity'/);
   assert.match(sectionsSource, /activeTab === 'policies'/);
+  assert.match(chromeSource, /id: 'policies'/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
 });
@@ -40,23 +41,24 @@ test('Assistant Settings IA reserves future capability placeholders', () => {
   assert.match(sectionsSource, /Memory/);
   assert.match(sectionsSource, /Activity/);
   assert.match(sectionsSource, /Policies/);
-  assert.doesNotMatch(chromeSource, /id: 'policies'/);
 });
 
-test('PI Assistant workbench exposes first-class module routes', () => {
+test('PI Assistant sidebar keeps only operational Inbox and consolidated Settings', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
-  const modulePageSource = readFileSync(new URL('./AssistantModulePage.jsx', import.meta.url), 'utf8');
 
   for (const route of ['pi-overview', 'pi-inbox', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
   assert.match(sidebarSource, /PI Assistant/);
-  assert.match(sidebarSource, /PI_ASSISTANT_MODULES\.map/);
+  assert.match(sidebarSource, /PI_ASSISTANT_NAV_ITEMS\.map/);
   assert.match(appSource, /currentPage === 'attention-inbox' \|\| currentPage === 'pi-inbox'/);
   assert.match(appSource, /isAssistantModulePage\(currentPage\)/);
-  assert.match(modulePageSource, /PI Assistant Workbench/);
+  assert.match(appSource, /<Settings initialTab=\{assistantModule\?\.tab\} navigateTo=\{navigateTo\} \/>/);
+  assert.doesNotMatch(sidebarSource, /Overview/);
+  assert.doesNotMatch(sidebarSource, /Connectors: Plug/);
+  assert.doesNotMatch(appSource, /from '\.\/pages\/AssistantModulePage'/);
   assert.doesNotMatch(sidebarSource, /> Runner</);
 });
 

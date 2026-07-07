@@ -19,7 +19,7 @@ export function AssistantOverviewPanel() {
       </div>
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', lineHeight: 1.6, margin: 0 }}>
         Assistant Settings 是唯一 PI Assistant 的设置中心：Runtime 负责当前 issue/session 编排；
-        Connectors、Skills、Automations、Approvals、Memory 与 Activity 会逐步挂到同一个 Assistant 下。
+        Connectors、Skills、Automations、Approvals、Memory、Activity 与 Policies 会逐步挂到同一个 Assistant 下。
       </p>
       <BulletList items={items} />
     </section>
