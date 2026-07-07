@@ -21,11 +21,14 @@ import {
   selectProjects,
   useDataStore,
 } from '../store/dataStore';
-import { PI_ASSISTANT_NAV_ITEMS } from '../pages/assistantModules';
+import {
+  isAssistantModulePage,
+  PI_ASSISTANT_NAV_ITEMS,
+  PI_ASSISTANT_SETTINGS_ITEM,
+} from '../pages/assistantModules';
 
 const ASSISTANT_ICONS = {
   Inbox,
-  Settings,
 };
 
 export default function AppSidebar({
@@ -41,6 +44,7 @@ export default function AppSidebar({
   toggleSidebar,
 }) {
   const brandState = useRunnerBrandState();
+  const settingsActive = currentPage === PI_ASSISTANT_SETTINGS_ITEM.page || isAssistantModulePage(currentPage);
   useDynamicFavicon(brandState);
 
   return (
@@ -113,6 +117,13 @@ export default function AppSidebar({
       )}
 
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <button
+          className={`nav-item nav-item-secondary ${settingsActive ? 'active' : ''}`}
+          onClick={() => navigateTo(PI_ASSISTANT_SETTINGS_ITEM.page)}
+          type="button"
+        >
+          <NavIconLabel Icon={Settings} label={PI_ASSISTANT_SETTINGS_ITEM.label} />
+        </button>
         <button
           className="nav-item nav-item-secondary sidebar-theme-row"
           onClick={toggleTheme}

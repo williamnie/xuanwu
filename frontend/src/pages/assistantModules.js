@@ -4,14 +4,15 @@ export const PI_ASSISTANT_NAV_ITEMS = [
     label: 'Inbox',
     title: 'Inbox',
     description: '多来源事项经过 intake 后进入这里，再由 skill 或人工处理。'
-  },
-  {
-    page: 'settings',
-    label: 'Settings',
-    title: 'Settings',
-    description: 'PI Assistant 与 runner runtime 的高级配置集合。'
   }
 ];
+
+export const PI_ASSISTANT_SETTINGS_ITEM = {
+  page: 'settings',
+  label: 'Settings',
+  title: 'Settings',
+  description: 'PI Assistant 与 runner runtime 的高级配置集合。'
+};
 
 export const PI_ASSISTANT_CONFIG_MODULES = [
   {
@@ -74,6 +75,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
 
 export const PI_ASSISTANT_MODULES = [
   ...PI_ASSISTANT_NAV_ITEMS,
+  PI_ASSISTANT_SETTINGS_ITEM,
   ...PI_ASSISTANT_CONFIG_MODULES,
 ];
 

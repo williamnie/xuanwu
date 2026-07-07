@@ -43,7 +43,7 @@ test('Assistant Settings IA reserves future capability placeholders', () => {
   assert.match(sectionsSource, /Policies/);
 });
 
-test('PI Assistant sidebar keeps only operational Inbox and consolidated Settings', () => {
+test('PI Assistant sidebar keeps operational Inbox and moves Settings to bottom tools', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
@@ -53,6 +53,9 @@ test('PI Assistant sidebar keeps only operational Inbox and consolidated Setting
   }
   assert.match(sidebarSource, /PI Assistant/);
   assert.match(sidebarSource, /PI_ASSISTANT_NAV_ITEMS\.map/);
+  assert.match(modulesSource, /PI_ASSISTANT_SETTINGS_ITEM/);
+  assert.match(sidebarSource, /PI_ASSISTANT_SETTINGS_ITEM/);
+  assert.match(sidebarSource, /isAssistantModulePage\(currentPage\)/);
   assert.match(appSource, /currentPage === 'attention-inbox' \|\| currentPage === 'pi-inbox'/);
   assert.match(appSource, /isAssistantModulePage\(currentPage\)/);
   assert.match(appSource, /<Settings initialTab=\{assistantModule\?\.tab\} navigateTo=\{navigateTo\} \/>/);
