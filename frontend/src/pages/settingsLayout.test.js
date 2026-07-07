@@ -11,6 +11,7 @@ const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', imp
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
+const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 
 test('Settings groups panels behind Assistant Settings tabs and removes duplicate cron panel', () => {
   assert.match(settingsSource, /initialTab = 'assistant'/);
@@ -56,6 +57,8 @@ test('PI Assistant sidebar keeps operational Inbox and moves Settings to bottom 
   assert.match(modulesSource, /PI_ASSISTANT_SETTINGS_ITEM/);
   assert.match(sidebarSource, /PI_ASSISTANT_SETTINGS_ITEM/);
   assert.match(sidebarSource, /isAssistantModulePage\(currentPage\)/);
+  assert.match(sidebarSource, /sidebar-footer-actions/);
+  assert.match(appStylesSource, /\.sidebar-footer-actions \.nav-item/);
   assert.match(appSource, /currentPage === 'attention-inbox' \|\| currentPage === 'pi-inbox'/);
   assert.match(appSource, /isAssistantModulePage\(currentPage\)/);
   assert.match(appSource, /<Settings initialTab=\{assistantModule\?\.tab\} navigateTo=\{navigateTo\} \/>/);

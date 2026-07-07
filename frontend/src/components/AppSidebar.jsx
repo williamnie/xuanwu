@@ -116,21 +116,23 @@ export default function AppSidebar({
         <div id="sessions-app-sidebar-slot" className="sessions-app-sidebar-slot" />
       )}
 
-      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <button
-          className={`nav-item nav-item-secondary ${settingsActive ? 'active' : ''}`}
-          onClick={() => navigateTo(PI_ASSISTANT_SETTINGS_ITEM.page)}
-          type="button"
-        >
-          <NavIconLabel Icon={Settings} label={PI_ASSISTANT_SETTINGS_ITEM.label} />
-        </button>
-        <button
-          className="nav-item nav-item-secondary sidebar-theme-row"
-          onClick={toggleTheme}
-          type="button"
-        >
-          <NavIconLabel Icon={theme === 'dark' ? Sun : Moon} label={theme === 'dark' ? 'Light theme' : 'Dark theme'} />
-        </button>
+      <div className="sidebar-footer">
+        <div className="sidebar-footer-actions">
+          <button
+            className={`nav-item nav-item-secondary ${settingsActive ? 'active' : ''}`}
+            onClick={() => navigateTo(PI_ASSISTANT_SETTINGS_ITEM.page)}
+            type="button"
+          >
+            <NavIconLabel Icon={Settings} label={PI_ASSISTANT_SETTINGS_ITEM.label} />
+          </button>
+          <button
+            className="nav-item nav-item-secondary sidebar-theme-row"
+            onClick={toggleTheme}
+            type="button"
+          >
+            <NavIconLabel Icon={theme === 'dark' ? Sun : Moon} label={theme === 'dark' ? 'Light theme' : 'Dark theme'} />
+          </button>
+        </div>
         <div className="sidebar-version">{APP_VERSION}</div>
       </div>
     </aside>

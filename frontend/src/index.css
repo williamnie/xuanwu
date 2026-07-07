@@ -437,6 +437,28 @@ body {
   font-size: 0.8rem;
 }
 
+.sidebar-footer {
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.sidebar-footer-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sidebar-footer-actions .nav-item {
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
 [data-theme="dark"] .nav-item.active {
   background: rgba(56, 189, 248, 0.12);
   color: var(--primary);
