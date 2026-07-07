@@ -49,11 +49,12 @@ test('PI Assistant sidebar keeps operational Inbox and moves Settings to bottom 
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
 
-  for (const route of ['pi-overview', 'pi-inbox', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies', 'settings']) {
+  for (const route of ['pi-chat', 'pi-overview', 'pi-inbox', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
   assert.match(sidebarSource, /PI Assistant/);
   assert.match(sidebarSource, /PI_ASSISTANT_NAV_ITEMS\.map/);
+  assert.match(sidebarSource, /Chat:\s*MessageSquare/);
   assert.match(modulesSource, /PI_ASSISTANT_SETTINGS_ITEM/);
   assert.match(sidebarSource, /PI_ASSISTANT_SETTINGS_ITEM/);
   assert.match(sidebarSource, /isAssistantModulePage\(currentPage\)/);

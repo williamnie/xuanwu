@@ -1,5 +1,11 @@
 export const PI_ASSISTANT_NAV_ITEMS = [
   {
+    page: 'pi-chat',
+    label: 'Chat',
+    title: 'Chat',
+    description: '查看和继续所有 PI Assistant conversations。'
+  },
+  {
     page: 'pi-inbox',
     label: 'Inbox',
     title: 'Inbox',

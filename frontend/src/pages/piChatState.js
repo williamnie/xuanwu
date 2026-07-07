@@ -113,7 +113,7 @@ function usePiChatLoader(setters) {
   } = setters;
   return useCallback(() => {
     setLoading(true);
-    return Promise.all([api.getPiAgents(), api.getPiConversations({ status: 'active' }), api.getProjects()])
+    return Promise.all([api.getPiAgents(), api.getPiConversations(), api.getProjects()])
       .then(([agentList, conversationList, projectList]) => {
         setAgents(agentList || []);
         setConversations(conversationList || []);

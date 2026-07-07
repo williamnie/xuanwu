@@ -83,3 +83,8 @@ test('PI Assistant composer supports @project activation and PI model context', 
   assert.doesNotMatch(pageSource, /state\.messageSettings/);
   assert.doesNotMatch(pageSource, /state\.updateMessageSetting/);
 });
+
+test('PI Assistant chat lists all conversations instead of only active rows', () => {
+  assert.match(stateSource, /api\.getPiConversations\(\)/);
+  assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);
+});

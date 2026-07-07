@@ -5,6 +5,7 @@ import {
   Inbox,
   Layers,
   ListTodo,
+  MessageSquare,
   Moon,
   Settings,
   Sun,
@@ -28,6 +29,7 @@ import {
 } from '../pages/assistantModules';
 
 const ASSISTANT_ICONS = {
+  Chat: MessageSquare,
   Inbox,
 };
 
