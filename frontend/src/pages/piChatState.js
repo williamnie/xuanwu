@@ -95,6 +95,7 @@ function normalizeTranscriptItem(item) {
   const text = String(item?.text || '').trim();
   if (!role || !text) return null;
   return {
+    created_at: item.created_at || '',
     id: item.id || `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     meta: item.meta || null,
     role,

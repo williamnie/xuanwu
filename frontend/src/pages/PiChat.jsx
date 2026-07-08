@@ -1,12 +1,14 @@
-import { Bot, ChevronDown, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
+import { Bot, ChevronDown, Copy, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import SessionComposer from './sessions/SessionComposer';
 import PiChatComposerMeta from './PiChatComposerMeta';
 import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
+import { copyPiDebugText, formatPiConversationDebugInfo, formatPiMessageDebugInfo } from './piChatDiagnostics';
 import { projectFromPrompt } from './piChatProjectContext';
 import { shortId, usePiChatState } from './piChatState';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import './PiChat.css';
+import './PiChatDiagnostics.css';
 import './PiChatSidebar.css';
 import './PiChatThread.css';
 
@@ -88,12 +90,28 @@ function ChatHeader({ state }) {
   const title = state.selectedConversation?.title || 'New conversation';
   const count = state.transcript.length;
   return (
-    <header className="pi-chat-main-header">
+    <header
+      className="pi-chat-main-header"
+      onContextMenu={(event) => copyConversationDebugInfo(event, state.selectedConversation)}
+      title="右键复制当前 Assistant 会话诊断信息"
+    >
       <div>
         <span>PI Assistant</span>
         <strong>{title}</strong>
       </div>
-      <small>{count} message{count === 1 ? '' : 's'}</small>
+      <div className="pi-chat-header-actions">
+        <small>{count} message{count === 1 ? '' : 's'}</small>
+        <button
+          aria-label="复制当前会话诊断信息"
+          className="pi-chat-copy-button"
+          disabled={!state.selectedConversation}
+          onClick={() => copyConversationDebugInfo(null, state.selectedConversation)}
+          title="复制当前会话诊断信息"
+          type="button"
+        >
+          <Copy size={13} />
+        </button>
+      </div>
     </header>
   );
 }
@@ -108,6 +126,8 @@ function ConversationList({ conversations, onSelect, selectedId }) {
             key={conversation.id}
             className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''}`}
             onClick={() => onSelect(conversation.id)}
+            onContextMenu={(event) => copyConversationDebugInfo(event, conversation)}
+            title="右键复制 Assistant 会话诊断信息"
           >
             <span>{conversation.title || conversation.id}</span>
             <small>{shortId(conversation.pi_session_id || conversation.id)}</small>
@@ -142,7 +162,9 @@ function ChatThread({ navigateTo, state }) {
         <div className="pi-chat-thread-content" ref={contentRef}>
           {state.transcript.length === 0 ? (
             <EmptyChat navigateTo={navigateTo} hasRuntime={state.agents.length > 0} />
-          ) : state.transcript.map((item) => <ChatBubble key={item.id} item={item} />)}
+          ) : state.transcript.map((item) => (
+            <ChatBubble key={item.id} conversation={state.selectedConversation} item={item} />
+          ))}
           {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> PI Assistant 正在思考...</div>}
         </div>
       </div>
@@ -219,12 +241,43 @@ function EmptyChat({ hasRuntime, navigateTo }) {
   );
 }
 
-function ChatBubble({ item }) {
+function ChatBubble({ conversation, item }) {
+  const copyDebugInfo = () => copyMessageDebugInfo(null, item, conversation);
+  const conversationId = item.meta?.conversation_id || conversation?.id || '';
+  const sessionId = item.meta?.pi_session_id || conversation?.pi_session_id || '';
   return (
-    <article className={`pi-chat-bubble ${item.role}`}>
+    <article
+      className={`pi-chat-bubble ${item.role}`}
+      onContextMenu={(event) => copyMessageDebugInfo(event, item, conversation)}
+      title="右键复制消息诊断信息"
+    >
       <div className="pi-chat-bubble-role">{item.role === 'assistant' ? 'PI Assistant' : item.role === 'error' ? 'Error' : 'You'}</div>
       <MarkdownPreview text={item.text} className="pi-chat-markdown" />
-      {item.meta?.pi_session_id && <div className="pi-chat-bubble-meta">session {shortId(item.meta.pi_session_id)}</div>}
+      {(conversationId || sessionId) && (
+        <div className="pi-chat-bubble-meta">
+          <span>{piBubbleMetaLabel(conversationId, sessionId)}</span>
+          <button aria-label="复制消息诊断信息" onClick={copyDebugInfo} title="复制消息诊断信息" type="button">
+            <Copy size={11} />
+          </button>
+        </div>
+      )}
     </article>
   );
+}
+
+function piBubbleMetaLabel(conversationId, sessionId) {
+  if (!conversationId) return `session ${shortId(sessionId)}`;
+  if (!sessionId || sessionId === conversationId) return `chat ${shortId(conversationId || sessionId)}`;
+  return `chat ${shortId(conversationId)} · session ${shortId(sessionId)}`;
+}
+
+function copyConversationDebugInfo(event, conversation) {
+  if (!conversation) return;
+  event?.preventDefault();
+  copyPiDebugText(formatPiConversationDebugInfo(conversation), '已复制 Assistant 会话诊断信息');
+}
+
+function copyMessageDebugInfo(event, item, conversation) {
+  event?.preventDefault();
+  copyPiDebugText(formatPiMessageDebugInfo(item, conversation), '已复制 Assistant 消息诊断信息');
 }

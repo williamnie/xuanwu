@@ -88,3 +88,13 @@ test('PI Assistant chat lists all conversations instead of only active rows', ()
   assert.match(stateSource, /api\.getPiConversations\(\)/);
   assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);
 });
+
+test('PI Assistant chat exposes copyable conversation and message diagnostics', () => {
+  assert.match(pageSource, /formatPiConversationDebugInfo/);
+  assert.match(pageSource, /formatPiMessageDebugInfo/);
+  assert.match(pageSource, /右键复制当前 Assistant 会话诊断信息/);
+  assert.match(pageSource, /右键复制 Assistant 会话诊断信息/);
+  assert.match(pageSource, /右键复制消息诊断信息/);
+  assert.match(pageSource, /复制当前会话诊断信息/);
+  assert.match(stateSource, /created_at:\s*item\.created_at \|\| ''/);
+});

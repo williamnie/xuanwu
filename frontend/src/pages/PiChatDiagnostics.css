@@ -1,0 +1,45 @@
+.pi-chat-header-actions {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.pi-chat-copy-button,
+.pi-chat-bubble-meta button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.pi-chat-copy-button {
+  height: 26px;
+  width: 26px;
+}
+
+.pi-chat-copy-button:hover:not(:disabled),
+.pi-chat-bubble-meta button:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.pi-chat-copy-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pi-chat-bubble-meta {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pi-chat-bubble-meta button {
+  height: 20px;
+  padding: 0;
+  width: 20px;
+}
