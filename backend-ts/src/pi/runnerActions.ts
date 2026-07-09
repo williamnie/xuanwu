@@ -78,6 +78,8 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
 };
 
 export type PiRunnerActionContext = PiActionContext & {
+  cliConnectorDirs?: string[];
+  env?: Record<string, string | undefined>;
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   sourceTurn?: PiRunnerSourceTurn;
@@ -195,6 +197,17 @@ function manualContextIntake(
     source_turn_id: cleanString(input.source_turn_id) || cleanString(context.sourceTurn?.id),
     source_turn_source: cleanString(input.source_turn_source) || cleanString(context.sourceTurn?.source) || cleanString(context.source),
     user_prompt: cleanString(input.user_prompt) || cleanString(context.sourceTurn?.userPrompt)
+  }, {
+    auditContext: {
+      conversationID: context.conversationID,
+      delegationID: context.delegationID,
+      heartbeatID: context.heartbeatID,
+      issueID: context.issueID,
+      projectID: context.project?.id,
+      source: context.source
+    },
+    connectorManifestDirs: context.cliConnectorDirs,
+    env: context.env
   });
 }
 

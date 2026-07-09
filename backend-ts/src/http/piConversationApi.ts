@@ -1,5 +1,6 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
+import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
@@ -39,6 +40,7 @@ import type { Router } from "./router.ts";
 
 type PiConversationContext = {
   bus?: EventBus;
+  config?: RunnerConfig;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
@@ -319,6 +321,7 @@ async function openConversationRuntime(
     agent,
     authorization: review ? reviewConversationAuthorization() : toolProject ? runnerChatAuthorization(toolProject) : undefined,
     bus: context.bus,
+    cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     conversationID: conversation.id,
     onIssueEnqueued: (projectID) => startProjectLoop({
       bus: context.bus,

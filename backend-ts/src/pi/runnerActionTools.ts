@@ -75,6 +75,7 @@ function manualContextTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Fetch recent source context for a user-requested manual trigger, build a context bundle, run intake, and create proposal-only domain output.",
       Type.Object({
         attachment_kinds: Type.Optional(Type.Array(requiredText)),
+        cursor: optionalString,
         limit: Type.Optional(positiveNumber),
         lookback_minutes: Type.Optional(positiveNumber),
         message_id: optionalString,
@@ -82,7 +83,9 @@ function manualContextTools(actions: PiRunnerActionLayer): ToolDefinition[] {
         project_id: optionalString,
         require_attachments: Type.Optional(Type.Boolean()),
         source: optionalString,
+        source_provider_id: optionalString,
         source_turn_id: optionalString,
+        source_tool_name: optionalString,
         thread_key: optionalString,
         user_prompt: optionalString
       }, objectOptions), actions.runManualContextIntake)

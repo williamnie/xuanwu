@@ -20,8 +20,10 @@ export type RuntimeSessionInput = {
   agent: PiAgent;
   authorization?: PiGatePolicy;
   bus?: EventBus;
+  cliConnectorDirs?: string[];
   conversationID: string;
   delegationID?: string;
+  env?: Record<string, string | undefined>;
   heartbeatID?: string;
   issueID?: number;
   onIssueEnqueued?: (projectID: string) => void;
@@ -96,8 +98,10 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   const toolContext = {
     authorization: input.authorization,
     bus: input.bus,
+    cliConnectorDirs: input.cliConnectorDirs,
     conversationID: input.conversationID,
     delegationID: input.delegationID,
+    env: input.env,
     heartbeatID: input.heartbeatID,
     onIssueEnqueued: input.onIssueEnqueued,
     source: input.source,

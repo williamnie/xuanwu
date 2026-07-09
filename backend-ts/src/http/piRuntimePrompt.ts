@@ -52,7 +52,7 @@ function manualContextWorkflow(): string {
   return [
     "Manual context trigger workflow:",
     "When the user asks you to look at recent source context such as group messages, screenshots, attachments, a thread, or a message before deciding what to do, call manual_context_intake.",
-    "Pass source/time/thread/message/attachment hints when known; if the source is missing, call the tool or ask one short clarification instead of guessing a connector.",
+    "Pass source/time/thread/message/cursor/attachment hints when known; use source_provider_id/source_tool_name only when a connector is known; if the source is missing, call the tool or ask one short clarification instead of guessing a connector.",
     "manual_context_intake only builds context bundle -> intake -> proposal/draft output; it must not send external replies or auto-enqueue issues.",
     "If the target Runner project is unclear, the result should be ask_user rather than assuming a repository."
   ].join(" ");

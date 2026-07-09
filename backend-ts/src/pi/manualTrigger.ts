@@ -14,12 +14,19 @@ import {
 } from "./contextBundleBuilder.ts";
 import { runDomainSkillAndMarkProposal } from "./domainSkillRun.ts";
 import { runIntakeSkill, type LlmIntakeOutput, type LlmIntakeRequest } from "./llmIntake.ts";
+import {
+  listManualSourcePullSources,
+  pullManualSourceEvents,
+  type ManualSourcePullOptions,
+  type ManualSourcePullResult
+} from "./manualSourcePull.ts";
 
 type JsonObject = Record<string, unknown>;
 
 export type ManualContextIntakeInput = {
   attachment_kinds?: string[];
   conversation_id?: string;
+  cursor?: string;
   limit?: number;
   lookback_minutes?: number;
   message_id?: string;
@@ -27,8 +34,10 @@ export type ManualContextIntakeInput = {
   project_id?: string;
   require_attachments?: boolean;
   source?: string;
+  source_provider_id?: string;
   source_turn_id?: string;
   source_turn_source?: string;
+  source_tool_name?: string;
   thread_key?: string;
   user_prompt?: string;
 };
@@ -52,15 +61,26 @@ const TOKEN_BUDGET = 2000;
 
 export async function runManualContextIntake(
   db: RunnerDatabase,
-  input: ManualContextIntakeInput
+  input: ManualContextIntakeInput,
+  options: ManualSourcePullOptions = {}
 ): Promise<ManualContextIntakeResult> {
   const prompt = cleanString(input.user_prompt);
-  const resolved = resolveManualSource(db, input.source, prompt);
+  const pullSources = listManualSourcePullSources(db, options);
+  const allowExplicitPull = cleanString(input.source_provider_id) !== "" || cleanString(input.source_tool_name) !== "";
+  const resolved = resolveManualSource(db, input.source, prompt, pullSources, allowExplicitPull);
   if (!resolved.source) return needsUser(resolved.reason, sourceHelp(resolved.reason, resolved.sources));
   const now = normalizeNow(input.now);
-  const request = manualRequest(input, prompt, resolved.source, now);
-  const selected = selectManualEvents(db, request.source_query, resolved.source);
-  if (!selected.anchor) return needsUser("context_not_found", contextHelp(resolved.source, selected.reason), request);
+  let source = resolved.source;
+  let request = manualRequest(input, prompt, source, now);
+  let selected = selectManualEvents(db, request.source_query, source);
+  if (!selected.anchor) {
+    const pulled = await pullRecentManualSource(db, input, request, source, now, options);
+    if (pulled.status === "needs_user") return needsUser(pulled.reason, pulled.text, request);
+    source = pulled.source;
+    request = requestWithPullResult(request, pulled);
+    selected = selectManualEvents(db, request.source_query, source);
+  }
+  if (!selected.anchor) return needsUser("context_not_found", contextHelp(source, selected.reason), request);
   const bundle = persistManualBundle(db, request, selected.events, selected.anchor, now);
   const intake = await runIntakeSkill(db, bundle, (llmRequest) => manualIntakeModel(llmRequest, input), {
     model: "manual-trigger-intake"
@@ -75,6 +95,49 @@ export async function runManualContextIntake(
     request,
     status: "succeeded",
     text: successText(bundle, intake.created_items, proposals)
+  };
+}
+
+async function pullRecentManualSource(
+  db: RunnerDatabase,
+  input: ManualContextIntakeInput,
+  request: ManualContextBundleRequest,
+  source: string,
+  now: Date,
+  options: ManualSourcePullOptions
+): Promise<ManualSourcePullResult> {
+  return pullManualSourceEvents(db, {
+    attachmentKinds: stringList(request.source_query.attachment_kinds),
+    cursor: cleanString(input.cursor),
+    limit: positiveInteger(input.limit, DEFAULT_LIMIT),
+    messageID: cleanString(input.message_id),
+    now,
+    providerID: cleanString(input.source_provider_id),
+    query: request.source_query,
+    requireAttachments: input.require_attachments === true,
+    source,
+    threadKey: cleanString(input.thread_key),
+    toolName: cleanString(input.source_tool_name)
+  }, options);
+}
+
+function requestWithPullResult(
+  request: ManualContextBundleRequest,
+  pulled: Extract<ManualSourcePullResult, { status: "succeeded" }>
+): ManualContextBundleRequest {
+  return {
+    ...request,
+    source: pulled.source,
+    source_query: cleanObject({
+      ...request.source_query,
+      processed_watermark: pulled.processed_watermark,
+      source_pull: {
+        event_count: pulled.event_count,
+        provider_id: pulled.provider_id,
+        status: pulled.status,
+        tool_name: pulled.tool_name
+      }
+    })
   };
 }
 
@@ -153,10 +216,13 @@ function manualIntakeModel(request: LlmIntakeRequest, input: ManualContextIntake
 function resolveManualSource(
   db: RunnerDatabase,
   requested: unknown,
-  prompt: string
+  prompt: string,
+  pullSources: string[] = [],
+  allowExplicitPull = false
 ): { reason: string; source: string; sources: string[] } {
-  const sources = listExternalEventSources(db);
+  const sources = uniqueStrings([...listExternalEventSources(db), ...pullSources]);
   const explicit = cleanString(requested);
+  if (explicit !== "" && allowExplicitPull) return { reason: "", source: explicit, sources };
   if (explicit !== "") return sources.includes(explicit)
     ? { reason: "", source: explicit, sources }
     : { reason: "source_unavailable_or_needs_authorization", source: "", sources };
@@ -174,6 +240,7 @@ function sourceQueryWithHints(
   return cleanObject({
     ...query,
     attachment_kinds: attachmentKinds(query, input, prompt),
+    cursor: cleanString(input.cursor),
     manual_trigger: manualTriggerMetadata(input, prompt),
     message_id: cleanString(input.message_id),
     source_turn_id: cleanString(input.source_turn_id)
@@ -316,6 +383,10 @@ function listExternalEventSources(db: RunnerDatabase): string[] {
   return db.sqlite.query<{ source: string }, []>(
     "select distinct source from external_events where source<>'' order by source asc"
   ).all().map((row) => row.source.trim()).filter(Boolean);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.map(cleanString).filter(Boolean))].sort();
 }
 
 function withinSince(event: ExternalEventRecord, value: unknown): boolean {
