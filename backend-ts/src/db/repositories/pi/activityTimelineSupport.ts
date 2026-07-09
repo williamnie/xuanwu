@@ -74,6 +74,7 @@ export function jsonSummary(value: unknown): string {
 
 export function publicFilters(filter: PiActivityFilter): Record<string, unknown> {
   return cleanRefs({
+    conversation_id: clean(filter.conversationId),
     inbox_item_id: filter.inboxItemId,
     issue_id: filter.issueId,
     limit: resultLimit(filter.limit),

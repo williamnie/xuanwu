@@ -12,6 +12,7 @@ export function registerPiActivityRoutes(router: Router, context: PiActivityCont
 function activityFilter(request: Request) {
   const params = new URL(request.url).searchParams;
   return {
+    conversationId: clean(params.get("conversation_id") || params.get("conversationId")),
     inboxItemId: optionalPositiveInt(params.get("inbox_item_id") || params.get("inboxItemId"), "inbox_item_id"),
     issueId: optionalPositiveInt(params.get("issue_id") || params.get("issueId"), "issue_id"),
     limit: optionalPositiveInt(params.get("limit"), "limit"),

@@ -5,7 +5,7 @@ import { getAttentionInboxItem, listAttentionInboxItems, listIntakeRuns } from "
 import { listImReplyDrafts, listSyncOutbox } from "../imReplyOutbox.ts";
 import { getIssue, listIssues } from "../issues.ts";
 import { getActionProposal, listActionProposals, type ActionProposalRecord } from "./actionProposals.ts";
-import { listPiActions, type PiAction } from "./actions.ts";
+import { listPiActionEvents, listPiActions, type PiAction } from "./actions.ts";
 import { emptyActivityScope, type PiActivityFilter, type PiActivityScope } from "./activityTimelineTypes.ts";
 import { addActivityRef, clean, DEFAULT_ACTIVITY_LIMIT, externalEventIds, positiveNumber, refNumber, textRefs } from "./activityTimelineSupport.ts";
 
@@ -30,6 +30,7 @@ export function buildPiActivityScope(db: RunnerDatabase, rows: PiActivityRows, f
   const scope = emptyActivityScope(clean(filter.source));
   if (!hasNarrowFilter(filter)) seedRecent(rows, scope);
   if (scope.source !== "") seedSource(rows, scope);
+  if (filter.conversationId) seedConversation(db, rows, scope, filter.conversationId);
   if (filter.inboxItemId) addInbox(scope, getAttentionInboxItem(db, filter.inboxItemId));
   if (filter.proposalId) addProposal(scope, getActionProposal(db, filter.proposalId));
   if (filter.issueId) addIssue(scope, getIssue(db, filter.issueId));
@@ -51,6 +52,19 @@ function seedSource(rows: PiActivityRows, scope: PiActivityScope): void {
   for (const bundle of rows.bundles.filter((row) => row.source === scope.source)) scope.bundleIds.add(bundle.id);
   for (const item of rows.inboxItems.filter((row) => row.source === scope.source)) scope.inboxIds.add(item.id);
   for (const reply of rows.replies.filter((row) => row.source === scope.source)) scope.actionIds.add(reply.approval_action_id);
+}
+
+function seedConversation(db: RunnerDatabase, rows: PiActivityRows, scope: PiActivityScope, conversationID: string): void {
+  const id = clean(conversationID);
+  if (id === "") return;
+  for (const action of rows.actions.filter((row) => row.conversation_id === id)) {
+    scope.actionIds.add(action.id);
+    addPossibleIssue(scope, action.issue_id);
+  }
+  for (const event of listPiActionEvents(db, { conversationId: id })) {
+    scope.actionIds.add(event.action_id);
+    addPossibleIssue(scope, event.issue_id);
+  }
 }
 
 function expandScope(rows: PiActivityRows, scope: PiActivityScope): void {
@@ -146,7 +160,7 @@ function addPossibleIssue(scope: PiActivityScope, value: unknown): void {
 }
 
 function hasNarrowFilter(filter: PiActivityFilter): boolean {
-  return clean(filter.source) !== "" || positiveNumber(filter.inboxItemId) > 0 ||
+  return clean(filter.source) !== "" || clean(filter.conversationId) !== "" || positiveNumber(filter.inboxItemId) > 0 ||
     positiveNumber(filter.issueId) > 0 || clean(filter.proposalId) !== "";
 }
 

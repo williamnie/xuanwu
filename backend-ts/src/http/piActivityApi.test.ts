@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { createPiAction, createPiActionEvent } from "../db/repositories/pi.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -62,12 +63,59 @@ describe("PI Activity timeline API", () => {
       db.close();
     }
   });
+
+  test("filters activity timeline by PI conversation id", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      seedProject(db, "demo");
+      seedConversationActivity(db, "conv-a", "action-a");
+      seedConversationActivity(db, "conv-b", "action-b");
+      createPiActionEvent(db, {
+        action_id: "tool-registry:conv-a",
+        conversation_id: "conv-a",
+        event_type: "runtime_tool_registry_snapshot",
+        reason: "loaded PI runtime tools from registry"
+      });
+      const router = createDefaultRouter({ database: db });
+
+      const timeline = await jsonRequest(router, "/api/pi/activity?conversation_id=conv-a&limit=200");
+      const ids = timeline.items.map((item: { id: string }) => item.id);
+      const text = JSON.stringify(timeline);
+
+      expect(timeline.filters.conversation_id).toBe("conv-a");
+      expect(ids).toContain("pi_action:action-a");
+      expect(text).toContain("tool-registry:conv-a");
+      expect(ids).not.toContain("pi_action:action-b");
+      expect(text).not.toContain("conv-b");
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-pi-activity-api-"));
   tempRoots.push(root);
   return openDatabase({ stateDir: join(root, "state") });
+}
+
+
+function seedConversationActivity(db: RunnerDatabase, conversationID: string, actionID: string): void {
+  createPiAction(db, {
+    action_type: "issue.status_summary",
+    conversation_id: conversationID,
+    id: actionID,
+    payload_json: { conversation_id: conversationID },
+    project_id: "demo",
+    status: "completed"
+  });
+  createPiActionEvent(db, {
+    action_id: actionID,
+    conversation_id: conversationID,
+    event_type: "tool_call_audit",
+    project_id: "demo",
+    reason: `audit for ${conversationID}`
+  });
 }
 
 function seedFakeCliFlow(db: RunnerDatabase): { eventID: number; itemID: number } {

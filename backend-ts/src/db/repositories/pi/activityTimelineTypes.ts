@@ -1,4 +1,5 @@
 export type PiActivityFilter = {
+  conversationId?: string;
   inboxItemId?: number;
   issueId?: number;
   limit?: number;
