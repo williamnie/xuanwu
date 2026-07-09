@@ -9,12 +9,15 @@ import {
 } from "../mcp/registry.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
 import { mcpToolProviderID } from "./mcpToolProvider.ts";
+import { invokeMcpTransport } from "./mcpTransport.ts";
 import type { ToolPermission, ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 
 export const MCP_TOOL_ERROR_CODES = {
   capabilityNotTool: "mcp_capability_not_tool",
   permissionDenied: "permission_denied",
+  schemaMismatch: "mcp_schema_mismatch",
   serverUnavailable: "mcp_server_unavailable",
+  spawnError: "mcp_spawn_error",
   toolError: "mcp_tool_error",
   toolNotFound: "mcp_tool_not_found",
   timeout: "mcp_timeout"
@@ -76,7 +79,38 @@ function mcpToolResult(
     const message = `Permission ${assistantPermission(capability)} is required to call this MCP tool`;
     return timedResult(invocationID, startedAt, started, "denied", toolError("permissionDenied", message));
   }
+  if (server.transport) return executeTransportTool(request, invocationID, startedAt, capability, server);
   return executeFixtureTool(request, invocationID, startedAt, started, capability, server);
+}
+
+function executeTransportTool(
+  request: McpToolCallInput,
+  invocationID: string,
+  startedAt: Date,
+  capability: McpCapability,
+  server: McpServerRegistry
+): ToolResult {
+  const timeoutMs = request.timeoutMs ?? capability.timeout_ms ?? DEFAULT_TIMEOUT_MS;
+  const result = invokeMcpTransport({
+    capability,
+    input: request.input ?? {},
+    operation: "tool.call",
+    server,
+    timeoutMs
+  });
+  const metadata = {
+    ...mcpMetadata(capability, server, timeoutMs),
+    ...(result.metadata ?? {})
+  };
+  return fixedDurationResult(
+    invocationID,
+    startedAt,
+    result.durationMs,
+    result.status,
+    metadata,
+    result.error,
+    result.output
+  );
 }
 
 function executeFixtureTool(
@@ -188,7 +222,7 @@ function toolError(code: keyof typeof MCP_TOOL_ERROR_CODES, message: string, det
   return { code: MCP_TOOL_ERROR_CODES[code], message, ...(details === undefined ? {} : { details }) };
 }
 
-function mcpMetadata(capability: McpCapability, server: McpServerRegistry, timeoutMs: number, delayMs: number): Record<string, unknown> {
+function mcpMetadata(capability: McpCapability, server: McpServerRegistry, timeoutMs: number, delayMs = 0): Record<string, unknown> {
   return {
     mcp: {
       capability_id: capability.id,

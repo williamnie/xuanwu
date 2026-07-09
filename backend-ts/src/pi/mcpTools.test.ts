@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
@@ -105,6 +105,122 @@ describe("PI MCP registry and envelope tools", () => {
         tool: "search"
       });
       expect(audit?.payload_json).not.toContain("secret-token-value");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("calls real stdio MCP tools and resources through gate and audit", async () => {
+    const { db, project, root } = await openFixture();
+    const serverScript = await writeRealMcpServer(root);
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({
+      servers: [realMcpServer(serverScript)]
+    });
+    try {
+      const actions = createPiRunnerActions(db, {
+        authorization: {
+          allowed_mcp_capabilities: ["docs:tool:search", "docs:resource:runbook"],
+          authorizedActions: [{ action_type: "mcp.tool.call", project_id: project.id }],
+          mode: "delegated",
+          scope: { project_id: project.id }
+        },
+        conversationID: "conversation-real-mcp",
+        project
+      });
+      const tools = createPiRunnerActionTools(actions);
+
+      const tool = await runTool(tools, "mcp_tool_call", {
+        capability_id: "docs:tool:search",
+        input: { query: "deploy", token: "secret-token-value" }
+      });
+      const resource = actions.readMcpResource({ capability_id: "docs:resource:runbook" });
+      const audits = listPiActionEvents(db, { eventType: "tool_call_audit" })
+        .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
+
+      expect(tool.details).toMatchObject({
+        output: { items: ["real-runbook"], query: "deploy" },
+        status: "succeeded"
+      });
+      expect(resource).toMatchObject({
+        capability: { id: "docs:resource:runbook" },
+        content: "real deploy safely"
+      });
+      expect(audits).toEqual(expect.arrayContaining([
+        expect.objectContaining({ provider_id: "mcp-docs", status: "succeeded", tool: "search" }),
+        expect.objectContaining({ provider_id: "mcp-docs", status: "succeeded", tool: "resource:runbook" })
+      ]));
+      expect(JSON.stringify(audits)).not.toContain("secret-token-value");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("normalizes real MCP transport errors, timeouts, and schema mismatches", async () => {
+    const { db, project, root } = await openFixture();
+    const serverScript = await writeRealMcpServer(root);
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({
+      servers: [
+        realMcpServer(serverScript, { id: "tool-error", mode: "tool-error" }),
+        realMcpServer(serverScript, { id: "tool-slow", mode: "slow", toolTimeoutMs: 5 }),
+        missingMcpServer(),
+        realMcpServer(serverScript, { id: "resource-bad", mode: "bad-schema" }),
+        realMcpServer(serverScript, { id: "resource-slow", mode: "slow", resourceTimeoutMs: 5 })
+      ]
+    });
+    try {
+      const actions = createPiRunnerActions(db, {
+        authorization: {
+          allowed_mcp_capabilities: [
+            "tool-error:tool:search",
+            "tool-slow:tool:search",
+            "spawn-missing:tool:search",
+            "resource-bad:resource:runbook",
+            "resource-slow:resource:runbook"
+          ],
+          authorizedActions: [{ action_type: "mcp.tool.call", project_id: project.id }],
+          mode: "delegated",
+          scope: { project_id: project.id }
+        },
+        conversationID: "conversation-real-mcp-failure",
+        project
+      });
+      const tools = createPiRunnerActionTools(actions);
+
+      const toolError = await runTool(tools, "mcp_tool_call", { capability_id: "tool-error:tool:search" });
+      const toolTimeout = await runTool(tools, "mcp_tool_call", { capability_id: "tool-slow:tool:search" });
+      const spawnFailure = await runTool(tools, "mcp_tool_call", { capability_id: "spawn-missing:tool:search" });
+      const resourceSchema = actions.readMcpResource({ capability_id: "resource-bad:resource:runbook" });
+      const resourceTimeout = actions.readMcpResource({ capability_id: "resource-slow:resource:runbook" });
+      const audits = listPiActionEvents(db, { eventType: "tool_call_audit" })
+        .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
+
+      expect(toolError.details).toMatchObject({
+        error: { code: "mcp_tool_error", message: "fixture MCP tool failed" },
+        status: "failed"
+      });
+      expect(toolTimeout.details).toMatchObject({
+        error: { code: "mcp_timeout" },
+        status: "timeout"
+      });
+      expect(spawnFailure.details).toMatchObject({
+        error: { code: "mcp_spawn_error" },
+        status: "failed"
+      });
+      expect(resourceSchema).toMatchObject({
+        error: { code: "mcp_schema_mismatch" },
+        status: "failed"
+      });
+      expect(resourceTimeout).toMatchObject({
+        error: { code: "mcp_timeout" },
+        status: "timeout"
+      });
+      expect(audits).toEqual(expect.arrayContaining([
+        expect.objectContaining({ provider_id: "mcp-tool-error", status: "failed", tool: "search" }),
+        expect.objectContaining({ provider_id: "mcp-tool-slow", status: "timeout", tool: "search" }),
+        expect.objectContaining({ provider_id: "mcp-spawn-missing", status: "failed", tool: "search" }),
+        expect.objectContaining({ provider_id: "mcp-resource-bad", status: "failed", tool: "resource:runbook" }),
+        expect.objectContaining({ provider_id: "mcp-resource-slow", status: "timeout", tool: "resource:runbook" })
+      ]));
     } finally {
       db.close();
     }
@@ -322,6 +438,12 @@ async function openFixture(): Promise<{ db: RunnerDatabase; project: Project; ro
   return { db, project, root };
 }
 
+async function writeRealMcpServer(root: string): Promise<string> {
+  const script = join(root, "fixture-mcp-server.mjs");
+  await writeFile(script, REAL_MCP_SERVER_SCRIPT, "utf8");
+  return script;
+}
+
 function offlineServer() {
   return {
     id: "offline-docs",
@@ -372,6 +494,115 @@ function docsServer() {
     ]
   };
 }
+
+function realMcpServer(
+  script: string,
+  options: { id?: string; mode?: string; resourceTimeoutMs?: number; toolTimeoutMs?: number } = {}
+) {
+  const id = options.id ?? "docs";
+  return {
+    id,
+    readiness: "ready",
+    status: "enabled",
+    transport: {
+      args: [script, options.mode ?? "ok"],
+      command: process.execPath,
+      type: "stdio"
+    },
+    resources: [
+      {
+        name: "runbook",
+        permission: "read",
+        risk_level: "low",
+        timeout_ms: options.resourceTimeoutMs ?? 500,
+        uri: `mcp://${id}/runbook`
+      }
+    ],
+    tools: [
+      {
+        name: "search",
+        permission: "read",
+        risk_level: "low",
+        timeout_ms: options.toolTimeoutMs ?? 500
+      }
+    ]
+  };
+}
+
+function missingMcpServer() {
+  return {
+    id: "spawn-missing",
+    readiness: "ready",
+    status: "enabled",
+    transport: {
+      args: [],
+      command: "/definitely/missing/mcp-server",
+      type: "stdio"
+    },
+    tools: [
+      { name: "search", permission: "read", risk_level: "low", timeout_ms: 500 }
+    ]
+  };
+}
+
+const REAL_MCP_SERVER_SCRIPT = `
+import { readFileSync } from "node:fs";
+
+const mode = process.argv[2] || "ok";
+const lines = readFileSync(0, "utf8").split(/\\r?\\n/).filter(Boolean);
+
+for (const line of lines) {
+  const message = JSON.parse(line);
+  if (message.method === "notifications/initialized") continue;
+  if (message.method === "initialize") {
+    send({
+      id: message.id,
+      jsonrpc: "2.0",
+      result: {
+        capabilities: { resources: {}, tools: {} },
+        protocolVersion: "2024-11-05",
+        serverInfo: { name: "fixture-mcp", version: "0.0.0" }
+      }
+    });
+    continue;
+  }
+  if (mode === "slow") await new Promise((resolve) => setTimeout(resolve, 100));
+  if (message.method === "tools/call") {
+    if (mode === "tool-error") {
+      send({ error: { code: -32000, message: "fixture MCP tool failed" }, id: message.id, jsonrpc: "2.0" });
+    } else {
+      const args = message.params?.arguments || {};
+      send({
+        id: message.id,
+        jsonrpc: "2.0",
+        result: {
+          content: [{ text: JSON.stringify({ items: ["real-runbook"], query: args.query || "" }), type: "text" }]
+        }
+      });
+    }
+    continue;
+  }
+  if (message.method === "resources/read") {
+    if (mode === "bad-schema") {
+      send({ id: message.id, jsonrpc: "2.0", result: { content: [] } });
+    } else {
+      send({
+        id: message.id,
+        jsonrpc: "2.0",
+        result: {
+          contents: [{ mimeType: "text/plain", text: "real deploy safely", uri: message.params?.uri || "" }]
+        }
+      });
+    }
+    continue;
+  }
+  send({ error: { code: -32601, message: "method not found" }, id: message.id, jsonrpc: "2.0" });
+}
+
+function send(message) {
+  process.stdout.write(JSON.stringify(message) + "\\n");
+}
+`;
 
 function toolNames(tools: ReturnType<typeof createPiRunnerActionTools>): string[] {
   return tools.map((tool) => tool.name);

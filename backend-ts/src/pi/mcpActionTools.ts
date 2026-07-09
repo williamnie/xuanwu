@@ -5,11 +5,11 @@ import {
   listMcpResources,
   publicMcpRegistry,
   readMcpCapability,
-  readMcpResource,
   readMcpServer,
   recommendMcpRequirements
 } from "../mcp/registry.ts";
 import { executeSafePiAction, type PiActionContext, type PiActionRequest } from "./actionEngine.ts";
+import { readMcpResourceWithAdapter } from "./mcpResourceRead.ts";
 import { callMcpTool } from "./mcpToolCall.ts";
 import { mcpToolProviderID } from "./mcpToolProvider.ts";
 
@@ -134,7 +134,14 @@ function safeMcpResource(db: RunnerDatabase, context: McpActionContext, input: M
   };
   if (!capability || !server || !isMcpServerAuthorized(server)) return denyMcpAction(db, context, request);
   if (capability.permission !== "read") return denyMcpAction(db, context, request);
-  return executeSafePiAction(db, context, { ...request, execute: () => readMcpResource(capabilityID) });
+  return executeSafePiAction(db, context, {
+    ...request,
+    execute: () => readMcpResourceWithAdapter({
+      auditContext: auditContext(context),
+      capabilityID,
+      db
+    })
+  });
 }
 
 function denyMcpAction(db: RunnerDatabase, context: McpActionContext, request: PiActionRequest) {

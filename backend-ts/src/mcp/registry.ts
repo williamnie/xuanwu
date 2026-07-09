@@ -21,6 +21,15 @@ export type McpCapability = {
   risk_level: McpRiskLevel;
   server_id: string;
   timeout_ms?: number;
+  uri?: string;
+};
+
+export type McpServerTransport = {
+  args: string[];
+  command: string;
+  type: "stdio";
+  cwd?: string;
+  env?: Record<string, string>;
 };
 
 export type McpServerRegistry = {
@@ -36,6 +45,7 @@ export type McpServerRegistry = {
   risk_level: McpRiskLevel;
   status: string;
   tools: McpCapability[];
+  transport?: McpServerTransport;
   version?: string;
 };
 
@@ -131,12 +141,7 @@ export function recommendMcpRequirements(
 }
 
 export function publicMcpRegistry(options: McpRegistryOptions = {}): McpServerRegistry[] {
-  return listMcpRegistry(options).map((server) => ({
-    ...server,
-    capabilities: server.capabilities.map(publicCapability),
-    resources: server.resources.map(publicCapability),
-    tools: server.tools.map(publicCapability)
-  }));
+  return listMcpRegistry(options).map(publicServer);
 }
 
 export function mcpCapabilityIDsFromPayload(payload: Record<string, unknown>): string[] {
@@ -186,6 +191,7 @@ function normalizeServer(server: RawServer): McpServerRegistry | null {
     risk_level: riskLevel(server.risk_level ?? server.risk, capabilities),
     status,
     tools: capabilities.filter((item) => item.kind === "tool"),
+    ...optionalTransport(server.transport),
     version: cleanString(server.version) || undefined
   };
 }
@@ -212,7 +218,8 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
     requires_confirmation: risk_level !== "low" || permission !== "read",
     risk_level,
     server_id: serverID,
-    ...optionalTimeout(raw.timeout_ms ?? raw.timeoutMs)
+    ...optionalTimeout(raw.timeout_ms ?? raw.timeoutMs),
+    ...optionalURI(raw.uri)
   };
 }
 
@@ -251,10 +258,58 @@ function optionalTimeout(value: unknown): { timeout_ms?: number } {
   return Number.isSafeInteger(parsed) && parsed > 0 ? { timeout_ms: parsed } : {};
 }
 
+function optionalURI(value: unknown): { uri?: string } {
+  const uri = cleanString(value);
+  return uri === "" ? {} : { uri };
+}
+
+function optionalTransport(value: unknown): { transport?: McpServerTransport } {
+  const raw = objectValue(value);
+  const type = cleanString(raw.type).toLowerCase();
+  const command = cleanString(raw.command ?? raw.executable);
+  if (type !== "stdio" || command === "") return {};
+  return {
+    transport: {
+      args: stringArray(raw.args),
+      command,
+      type: "stdio",
+      ...optionalStringField("cwd", raw.cwd),
+      ...optionalEnv(raw.env)
+    }
+  };
+}
+
+function optionalStringField(key: "cwd", value: unknown): { cwd?: string } {
+  const text = cleanString(value);
+  return text === "" ? {} : { [key]: text };
+}
+
+function optionalEnv(value: unknown): { env?: Record<string, string> } {
+  const raw = objectValue(value);
+  const env = Object.fromEntries(Object.entries(raw)
+    .map(([key, entry]) => [cleanString(key), cleanString(entry)])
+    .filter(([key]) => key !== ""));
+  return Object.keys(env).length === 0 ? {} : { env };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(cleanString) : [];
+}
+
 function recommendation(capability: McpCapability, terms: string[]): McpRequirementRecommendation {
   const haystack = tokenize(`${capability.id} ${capability.name} ${capability.description} ${capability.server_id}`);
   const matches = terms.filter((term) => haystack.some((word) => word.includes(term) || term.includes(word)));
   return { ...publicCapability(capability), reason: `matched ${matches.slice(0, 4).join(", ")}`, score: new Set(matches).size };
+}
+
+function publicServer(server: McpServerRegistry): McpServerRegistry {
+  const { transport: _transport, ...safe } = server;
+  return {
+    ...safe,
+    capabilities: server.capabilities.map(publicCapability),
+    resources: server.resources.map(publicCapability),
+    tools: server.tools.map(publicCapability)
+  };
 }
 
 function publicCapability(capability: McpCapability): McpCapability {
