@@ -8,6 +8,7 @@ import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
+import AutomationsRuntimePanel from './AutomationsRuntimePanel';
 import { AssistantOverviewPanel, SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
 
 export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo }) {
@@ -17,7 +18,7 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
       {activeTab === 'runner-brain' && <RunnerBrainSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
       {activeTab === 'connectors' && <ConnectorsSettingsTab />}
       {activeTab === 'skills' && <SkillsSettingsTab />}
-      {activeTab === 'automations' && <AutomationsPlaceholder />}
+      {activeTab === 'automations' && <AutomationsRuntimePanel />}
       {activeTab === 'approvals' && <ApprovalsPlaceholder />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
@@ -86,10 +87,6 @@ function MemorySettingsTab() {
       <PiMemoryPanel />
     </>
   );
-}
-
-function AutomationsPlaceholder() {
-  return <SettingsPlaceholderPanel eyebrow="Automations" title="Automation rules" description="预留自动 intake、定时检查和手动触发规则导航；本阶段不新增调度 schema。" />;
 }
 
 function ApprovalsPlaceholder() {

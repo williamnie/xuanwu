@@ -10,6 +10,7 @@ const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsP
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const sourcePoliciesSource = readFileSync(new URL('./SourcePoliciesPanel.jsx', import.meta.url), 'utf8');
+const automationsRuntimeSource = readFileSync(new URL('./AutomationsRuntimePanel.jsx', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
@@ -120,4 +121,15 @@ test('Policies tab manages source policies from API', () => {
   assert.match(sourcePoliciesSource, /require_project_confirmation/);
   assert.match(sourcePoliciesSource, /allowed_chats/);
   assert.doesNotMatch(sourcePoliciesSource, /window\.confirm|window\.alert/);
+});
+
+test('Automations tab shows scheduler status and pause controls from API', () => {
+  assert.match(sectionsSource, /AutomationsRuntimePanel/);
+  assert.match(apiSource, /getPiAutomations/);
+  assert.match(apiSource, /updatePiAutomation/);
+  assert.match(automationsRuntimeSource, /last_status/);
+  assert.match(automationsRuntimeSource, /next_run_at/);
+  assert.match(automationsRuntimeSource, /error/);
+  assert.doesNotMatch(sectionsSource, /AutomationsPlaceholder/);
+  assert.doesNotMatch(automationsRuntimeSource, /window\.confirm|window\.alert/);
 });

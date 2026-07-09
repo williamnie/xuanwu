@@ -8,6 +8,10 @@ import {
   type ClaimedPiAutomation
 } from "../db/repositories/piAutomationScheduler.ts";
 import { createPiAutomation, getPiAutomation, listRunnablePiAutomations } from "../db/repositories/piAutomations.ts";
+import { createExternalEvent } from "../db/repositories/externalEvents.ts";
+import { listContextBundles } from "../db/repositories/contextBundles.ts";
+import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
+import { listActionProposals, listPiActions } from "../db/repositories/pi.ts";
 import { runDuePiAutomations } from "./piAutomationScheduler.ts";
 
 const tempRoots: string[] = [];
@@ -98,6 +102,43 @@ describe("PI automation scheduler", () => {
     }
   });
 
+  test("runs due continuous automation through context intake and domain proposal", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      seedRawEvent(db, "fixture-im", "m1", "登录页 500 了，麻烦创建 issue");
+      const automation = insertAutomation(db, {
+        nextRunAt: "2026-06-02T09:59:00Z",
+        source: "fixture-im",
+        triggerType: "continuous"
+      });
+
+      const result = await runDuePiAutomations({ database: db, now: NOW });
+
+      expect(result).toEqual({ executed: 1, failed: 0, scanned: 1, skipped: 0 });
+      expect(getPiAutomation(db, automation.id)).toMatchObject({
+        error: "",
+        last_status: "success",
+        next_run_at: "2026-06-02T10:05:00.000Z",
+        retry_count: 0,
+        run_count: 1
+      });
+      expect(listContextBundles(db, "fixture-im")).toMatchObject([{
+        created_by: "automation",
+        source: "fixture-im",
+        trigger: "continuous"
+      }]);
+      expect(listIntakeRuns(db)).toMatchObject([{ status: "succeeded" }]);
+      expect(listAttentionInboxItems(db, { source: "fixture-im" })).toMatchObject([{
+        primary_intent: "bug_report",
+        status: "proposal_created"
+      }]);
+      expect(listPiActions(db).filter((action) => action.action_type === "attention_inbox.domain_skill")).toHaveLength(1);
+      expect(listActionProposals(db)).toMatchObject([{ status: "proposed" }]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps unfinished restart claims locked until timeout then schedules backoff", async () => {
     const root = await tempRoot();
     const firstDb = await openDatabase({ stateDir: join(root, "state") });
@@ -154,7 +195,7 @@ async function tempRoot(): Promise<string> {
 }
 
 function insertAutomation(db: RunnerDatabase, input: {
-  enabled?: boolean; nextRunAt: string; runTimeoutMs?: number; triggerType?: "manual" | "schedule";
+  enabled?: boolean; nextRunAt: string; runTimeoutMs?: number; source?: string; triggerType?: "manual" | "schedule" | "continuous";
 }) {
   return createPiAutomation(db, {
     enabled: input.enabled,
@@ -162,7 +203,15 @@ function insertAutomation(db: RunnerDatabase, input: {
     next_run_at: input.nextRunAt,
     retry_backoff_seconds: 60,
     run_timeout_ms: input.runTimeoutMs ?? 300_000,
-    steps: [{ cursor: "cursor-1", idempotency_key: "step-1", type: "source_sync", watermark: "wm-1" }],
+    filters: input.source ? [{ source: input.source }] : [],
+    mode: "propose",
+    source_policy: input.source ? { action_mode: "propose_actions", intake_mode: "continuous_llm_triage", profile: "custom" } : {},
+    steps: [
+      { cursor: "cursor-1", idempotency_key: "step-1", type: "source_sync", watermark: "wm-1" },
+      { cursor: "cursor-1", idempotency_key: "step-2", type: "context_bundle", watermark: "wm-1" },
+      { cursor: "cursor-1", idempotency_key: "step-3", skill_id: "fixture-intake", type: "intake", watermark: "wm-1" },
+      { cursor: "cursor-1", idempotency_key: "step-4", skill_id: "fixture-domain", type: "domain_skill", watermark: "wm-1" }
+    ],
     trigger: { every: "5m", type: input.triggerType ?? "schedule" }
   }, new Date("2026-06-02T09:00:00Z"));
 }
@@ -172,4 +221,18 @@ function seedCursor(db: RunnerDatabase, id: number, cursor: string, watermark: s
     "update pi_automations set last_successful_cursor=?, processed_watermark=? where id=?",
     [cursor, watermark, id]
   );
+}
+
+function seedRawEvent(db: RunnerDatabase, source: string, externalID: string, content: string): void {
+  createExternalEvent(db, {
+    actor: "alice",
+    content,
+    external_id: externalID,
+    normalized_message: { message_id: externalID, thread_id: "thread-a" },
+    occurred_at: "2026-06-02T09:58:00Z",
+    provider: source,
+    raw_json: { text: content },
+    received_at: "2026-06-02T09:58:01Z",
+    source
+  });
 }

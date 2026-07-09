@@ -240,6 +240,13 @@ export const api = {
     body: JSON.stringify(payload),
   }),
 
+  getPiAutomations: () => request('/api/pi/automations'),
+
+  updatePiAutomation: (id, updates) => request(`/api/pi/automations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
   getPiSkillIntakeRuns: ({ bundleId = '', skillId = '', status = '', limit = 50 } = {}) => {
     const params = new URLSearchParams();
     if (bundleId) params.append('bundle_id', String(bundleId));

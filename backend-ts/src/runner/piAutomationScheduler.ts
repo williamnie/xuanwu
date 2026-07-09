@@ -5,6 +5,7 @@ import {
   recordPiAutomationSuccess
 } from "../db/repositories/piAutomationScheduler.ts";
 import type { PiAutomationRecord } from "../db/repositories/piAutomations.ts";
+import { runPiAutomationPipeline } from "../pi/automationRunner.ts";
 
 export type PiAutomationRunResult = {
   detail?: string;
@@ -75,9 +76,11 @@ function executor(input: PiAutomationSchedulerInput): PiAutomationExecutor {
   return input.executeAutomation ?? defaultExecutor;
 }
 
-async function defaultExecutor(automation: PiAutomationRecord): Promise<PiAutomationRunResult> {
-  const stages = automation.steps.map((step) => step.type).join(",");
-  return { detail: `automation ${automation.id} scheduled tick (${stages})` };
+async function defaultExecutor(
+  automation: PiAutomationRecord,
+  context: { database: RunnerDatabase; now: Date }
+): Promise<PiAutomationRunResult> {
+  return runPiAutomationPipeline(automation, context);
 }
 
 function errorCursor(error: unknown): string | undefined {
