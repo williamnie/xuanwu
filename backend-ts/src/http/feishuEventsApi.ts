@@ -17,7 +17,13 @@ import { normalizeFeishuPiActionCardAction } from "../integrations/feishuPiActio
 import { resolvePiActionFromFeishu } from "../integrations/feishuPiActionResolve.ts";
 import { projectSelectionCallbackAcceptedBody } from "../integrations/feishuCardCallbackResponse.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
+import {
+  routeFeishuMessageToGenericIntake,
+  type FeishuGenericIntakeOptions
+} from "../integrations/feishuIntakeBridge.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import type { EventRouterSourcePolicy } from "../pi/eventRouter.ts";
+import type { LlmIntakeModel } from "../pi/llmIntake.ts";
 import { json, jsonError } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -26,6 +32,8 @@ export type FeishuEventRoutesContext = {
   bus?: EventBus;
   config: FeishuConnectorConfig;
   database?: RunnerDatabase;
+  feishuIntakeModel?: LlmIntakeModel;
+  feishuIntakePolicy?: EventRouterSourcePolicy;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
@@ -88,19 +96,19 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
     void context.agentBridge?.handleProjectSelectionAction(projectAction).catch(() => undefined);
     return projectSelectionCallbackAccepted();
   }
-  return acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);
+  return await acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);
 }
 
 function projectSelectionCallbackAccepted(): Response {
   return json(projectSelectionCallbackAcceptedBody());
 }
 
-function acceptMessageEvent(
+async function acceptMessageEvent(
   body: Record<string, unknown>,
   context: FeishuEventRoutesContext,
   rawRef: string,
   encrypted: boolean
-): Response {
+): Promise<Response> {
   try {
     const event = normalizeFeishuMessageEvent(body, { rawEventRef: rawRef });
     const ingest = ingestFeishuMessageEvent(body, context, {
@@ -108,10 +116,32 @@ function acceptMessageEvent(
       rawPayloadRef: rawRef,
       transport: "callback"
     });
+    await routeGenericIntake(context, ingest);
     void context.agentBridge?.handle({ event, ingest });
     return json(ingest, { status: 202 });
   } catch {
     return reject(context, "unsupported_or_invalid_event", rawRef, 400, encrypted);
+  }
+}
+
+async function routeGenericIntake(
+  context: FeishuEventRoutesContext,
+  ingest: FeishuGenericIntakeOptions["ingest"]
+): Promise<void> {
+  if (!context.database || !context.feishuIntakeModel) return;
+  try {
+    await routeFeishuMessageToGenericIntake({
+      database: context.database,
+      ingest,
+      model: context.feishuIntakeModel,
+      policy: context.feishuIntakePolicy
+    });
+  } catch (error) {
+    console.warn(JSON.stringify({
+      action: "feishu_generic_intake",
+      error: safeError(error),
+      ok: false
+    }));
   }
 }
 

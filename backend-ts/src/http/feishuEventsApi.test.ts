@@ -5,9 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { listContextBundles } from "../db/repositories/contextBundles.ts";
+import { listAttentionInboxItems } from "../db/repositories/intakeRuns.ts";
+import { listActionProposals } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
 import { createRequestHandler, createDefaultRouter } from "./server.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
+import type { LlmIntakeModel, LlmIntakeRequest } from "../pi/llmIntake.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const ENCRYPT_KEY = "fixture-encrypt-key";
@@ -107,6 +111,69 @@ describe("Feishu events endpoint", () => {
         projectId: "",
         text: "@PI implement it"
       }]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("routes accepted Feishu messages through generic intake and keeps legacy bridge fallback", async () => {
+    const bridgeCalls: string[] = [];
+    const bridge: ReturnType<typeof createFeishuAgentBridge> = {
+      handle: async ({ event }) => {
+        bridgeCalls.push(event.message_id);
+        return { reason: "agent_reply_sent", replied: true };
+      },
+      handleProjectSelectionAction: async () => ({ reason: "unused", replied: false })
+    };
+    const { database, handle } = await fixtureHandler({
+      agentBridge: bridge,
+      feishuIntakeModel: feishuTaskIntakeModel(),
+      feishuIntakePolicy: { action_mode: "propose_actions", profile: "company_chat" }
+    });
+    seedProject(database, "demo");
+    try {
+      const response = await postFeishu(handle, messageEvent({
+        text: "@PI demo 登录页 500 了，请创建 issue",
+        token: "verify-token"
+      }));
+      const body = await response.json() as Record<string, unknown>;
+      const bundles = listContextBundles(database, "feishu");
+      const items = listAttentionInboxItems(database, { source: "feishu" });
+      const proposals = listActionProposals(database);
+
+      expect(response.status).toBe(202);
+      expect(body).toMatchObject({ ok: true });
+      expect(bundles).toHaveLength(1);
+      expect(bundles[0]).toMatchObject({ source: "feishu", trigger: "mention" });
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        primary_intent: "bug_report",
+        source: "feishu",
+        status: "proposal_created",
+        title: "登录页 500"
+      });
+      expect(proposals).toHaveLength(1);
+      expect(proposals[0].actions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "issue.create" })
+      ]));
+      expect(bridgeCalls).toEqual(["om_message_1"]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("does not create proposals when generic intake classifies Feishu chat as non-task", async () => {
+    const { database, handle } = await fixtureHandler({
+      feishuIntakeModel: feishuIgnoredIntakeModel(),
+      feishuIntakePolicy: { action_mode: "propose_actions", profile: "company_chat" }
+    });
+    try {
+      const response = await postFeishu(handle, messageEvent({ text: "@PI 你是谁？", token: "verify-token" }));
+
+      expect(response.status).toBe(202);
+      expect(listContextBundles(database, "feishu")).toHaveLength(1);
+      expect(listAttentionInboxItems(database, { source: "feishu" })).toHaveLength(0);
+      expect(listActionProposals(database)).toHaveLength(0);
     } finally {
       database.close();
     }
@@ -227,6 +294,8 @@ describe("Feishu events endpoint", () => {
 async function fixtureHandler(options: {
   agentBridge?: ReturnType<typeof createFeishuAgentBridge>;
   encryptKey?: string;
+  feishuIntakeModel?: LlmIntakeModel;
+  feishuIntakePolicy?: Record<string, unknown>;
   projectMappings?: string;
   runnerAuthToken?: string;
 }) {
@@ -242,7 +311,14 @@ async function fixtureHandler(options: {
     feishuProjectMappings: options.projectMappings ?? "",
     feishuVerificationToken: "verify-token"
   });
-  const router = createDefaultRouter({ bus, config, database, feishuAgentBridge: options.agentBridge });
+  const router = createDefaultRouter({
+    bus,
+    config,
+    database,
+    feishuAgentBridge: options.agentBridge,
+    feishuIntakeModel: options.feishuIntakeModel,
+    feishuIntakePolicy: options.feishuIntakePolicy
+  } as Parameters<typeof createDefaultRouter>[0] & Record<string, unknown>);
   return { bus, database, handle: createRequestHandler(router, config.authToken) };
 }
 
@@ -266,14 +342,14 @@ function signedHeaders(rawBody: string): Headers {
   });
 }
 
-function messageEvent(input: { token: string }): Record<string, unknown> {
+function messageEvent(input: { text?: string; token: string }): Record<string, unknown> {
   return {
     header: { event_id: "event-v2-1", event_type: "im.message.receive_v1", token: input.token },
     event: {
       message: {
         chat_id: "oc_group",
         chat_type: "group",
-        content: JSON.stringify({ text: "@PI implement it" }),
+        content: JSON.stringify({ text: input.text ?? "@PI implement it" }),
         create_time: "1781244167890",
         message_id: "om_message_1"
       },
@@ -281,6 +357,46 @@ function messageEvent(input: { token: string }): Record<string, unknown> {
     },
     schema: "2.0"
   };
+}
+
+function seedProject(db: RunnerDatabase, id: string): void {
+  db.sqlite.run(
+    `insert into projects (id, name, cwd, provider, created_at, updated_at)
+      values (?, ?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, "codex", "2026-07-09T00:00:00Z", "2026-07-09T00:00:00Z"]
+  );
+}
+
+function feishuTaskIntakeModel(): LlmIntakeModel {
+  return (request) => {
+    const event = request.input.context_bundle.raw_event_summaries[0];
+    return {
+      ignored_groups: [],
+      inbox_items: [{
+        actor_refs: [event.actor],
+        confidence: 0.93,
+        evidence_refs: [event.evidence_ref],
+        intents: { primary: "bug_report", secondary: ["reply_needed"], tags: ["feishu"] },
+        suggested_actions: ["issue.create"],
+        summary: "Feishu 用户反馈 demo 登录页 500，需要进入通用 proposal 流。",
+        target_hints: [{ confidence: 0.95, id: "demo", kind: "project", reason: "intake extracted explicit project" }],
+        title: "登录页 500",
+        urgency: "medium"
+      }]
+    };
+  };
+}
+
+function feishuIgnoredIntakeModel(): LlmIntakeModel {
+  return (request: LlmIntakeRequest) => ({
+    ignored_groups: [{
+      confidence: 0.91,
+      evidence_refs: request.input.context_bundle.evidence_refs,
+      reason: "casual_chat_no_task",
+      summary: "普通聊天，不需要创建任务或提案。"
+    }],
+    inbox_items: []
+  });
 }
 
 function encryptedChallengePayload(): string {
