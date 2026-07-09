@@ -7,6 +7,7 @@ import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
+import SourcePoliciesPanel from './SourcePoliciesPanel';
 import { AssistantOverviewPanel, SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
 
 export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo }) {
@@ -20,7 +21,7 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
       {activeTab === 'approvals' && <ApprovalsPlaceholder />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
-      {activeTab === 'policies' && <PoliciesPlaceholder />}
+      {activeTab === 'policies' && <SourcePoliciesPanel />}
     </>
   );
 }
@@ -93,15 +94,4 @@ function AutomationsPlaceholder() {
 
 function ApprovalsPlaceholder() {
   return <SettingsPlaceholderPanel eyebrow="Approvals" title="Approval policy" description="预留 action proposal 审批与外部写操作权限入口；默认不引入新的自动外部写操作。" />;
-}
-
-function PoliciesPlaceholder() {
-  return (
-    <SettingsPlaceholderPanel
-      eyebrow="Policies"
-      title="Source policies"
-      description="Source policies 统一收在 Assistant Settings，用于管理自动回复、自动建 issue、自动 enqueue 等策略；本阶段只提供清晰入口与空态。"
-      items={['External reply 默认 opt-in，不自动外部写。', 'issue.create / issue.enqueue 策略后续按 source、project 与风险级别配置。']}
-    />
-  );
 }

@@ -37,6 +37,7 @@ import { registerPiGuardianRoutes } from "./piGuardianApi.ts";
 import { registerPiIssueCompletionWatchRoutes } from "./piIssueCompletionWatchesApi.ts";
 import { registerPiGuardianAlertRoutes } from "./piGuardianAlertsApi.ts";
 import { registerPiReportRoutes } from "./piReportsApi.ts";
+import { registerPiSourcePolicyRoutes } from "./piSourcePoliciesApi.ts";
 import { registerPiSkillRoutes } from "./piSkillsApi.ts";
 import { registerPiToolRegistryRoutes } from "./piToolRegistryApi.ts";
 import { piRuntimePromptSummary } from "./piRuntimePrompt.ts";
@@ -83,6 +84,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiHeartbeatRoutes(router, context);
   registerPiHeartbeatTimelineRoutes(router, context);
   registerPiReportRoutes(router, context);
+  registerPiSourcePolicyRoutes(router, context);
   registerPiSkillRoutes(router, context);
   registerPiToolRegistryRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));

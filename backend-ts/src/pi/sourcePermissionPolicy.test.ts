@@ -75,4 +75,50 @@ describe("PI source permission policy", () => {
       source: "fixture-im"
     })).toMatchObject({ reason: "auto_reply_target_not_allowlisted", requiresApproval: true });
   });
+
+  test("issue policy keeps create/enqueue confirm-first unless explicitly enabled", () => {
+    expect(decideSourcePermission({
+      actionRisk: "medium",
+      actionType: "issue.create",
+      payload: { status: "triage" },
+      sourcePolicy: { issue_policy: { auto_create_triage_issue: false } }
+    })).toMatchObject({ reason: "auto_create_triage_issue_disabled", requiresApproval: true });
+
+    expect(decideSourcePermission({
+      actionRisk: "medium",
+      actionType: "issue.create",
+      payload: { status: "triage" },
+      sourcePolicy: { issue_policy: { auto_create_triage_issue: true } }
+    })).toMatchObject({ canAutoExecute: true, reason: "triage_issue_auto_create_allowed" });
+
+    expect(decideSourcePermission({
+      actionRisk: "medium",
+      actionType: "issue.enqueue",
+      payload: { issue_id: 42 },
+      sourcePolicy: { issue_policy: { auto_enqueue: true } }
+    })).toMatchObject({ canAutoExecute: true, reason: "issue_enqueue_allowed" });
+
+    expect(decideSourcePermission({
+      actionRisk: "high",
+      actionType: "issue.enqueue",
+      payload: { issue_id: 42 },
+      sourcePolicy: { issue_policy: { auto_enqueue: true } }
+    })).toMatchObject({ reason: "issue_enqueue_risk_requires_approval", requiresApproval: true });
+  });
+
+  test("require_project_confirmation blocks issue creation without confirmed project", () => {
+    expect(decideSourcePermission({
+      actionRisk: "medium",
+      actionType: "issue.create",
+      payload: { status: "triage" },
+      sourcePolicy: { issue_policy: { auto_create_triage_issue: true, require_project_confirmation: true } }
+    })).toMatchObject({ reason: "project_confirmation_required", requiresApproval: true });
+
+    expect(decideSourcePermission({
+      actionRisk: "medium",
+      actionType: "issue.create",
+      payload: { project_confirmed: true, status: "triage" },
+      sourcePolicy: { issue_policy: { auto_create_triage_issue: true, require_project_confirmation: true } }
+    })).toMatchObject({ canAutoExecute: true, reason: "triage_issue_auto_create_allowed" });
+  });
 });

@@ -164,20 +164,28 @@ function sourcePermission(
   action: ActionProposalAction,
   payload: JsonObject
 ): SourcePermissionDecision | undefined {
-  if (action.type !== "message.reply_send") return undefined;
+  if (!sourcePolicyAction(action.type)) return undefined;
   return decideSourcePermission({
     actionRisk: action.risk,
     actionType: action.type,
     actor: cleanString(payload.actor),
     automation: cleanString(payload.automation_id ?? payload.automation),
     chat: cleanString(payload.target_chat_id),
+    issuePolicy: objectValue(payload.issue_policy),
     person: cleanString(payload.target_person_id),
+    payload,
+    projectConfirmed: payload.project_confirmed === true,
     replyPolicy: replyPolicyInput(payload),
     skill: cleanString(payload.skill_id) || proposal.skill_run_id,
     source: cleanString(payload.source),
     sourcePolicy: objectValue(payload.source_policy),
     tool: cleanString(payload.tool) || action.type
   });
+}
+
+function sourcePolicyAction(type: string): boolean {
+  return type === "message.reply_send" || type === "issue.create" ||
+    type === "issue.enqueue" || type === "issue.schedule_enqueue";
 }
 
 function replyPolicyInput(payload: JsonObject): JsonObject {
@@ -190,7 +198,12 @@ function requiresConfirmation(
   action: ActionProposalAction,
   decision: SourcePermissionDecision | undefined
 ): boolean {
+  if (decision?.canAutoExecute === true && issuePolicyAction(action.type)) return false;
   return action.requires_approval || decision?.requiresApproval === true;
+}
+
+function issuePolicyAction(type: string): boolean {
+  return type === "issue.create" || type === "issue.enqueue" || type === "issue.schedule_enqueue";
 }
 
 function recordSourcePolicyDecision(

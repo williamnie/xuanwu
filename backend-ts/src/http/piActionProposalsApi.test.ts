@@ -206,6 +206,7 @@ describe("PI action proposals API", () => {
         requires_confirmation: 1,
         status: "completed"
       });
+      expect(sourcePolicyReason(db, approved.actions[0].pi_action_id)).toBe("auto_create_triage_issue_disabled");
       expect(sourcePolicyReason(db, approved.actions[3].pi_action_id)).toBe("auto_reply_disabled");
       expect(actions.map((item) => item.action_type).sort()).toEqual([
         "issue.create",
@@ -260,6 +261,48 @@ describe("PI action proposals API", () => {
       expect(listSyncOutbox(db, { source: "fixture-im" })).toMatchObject([
         expect.objectContaining({ content: "可以发送", status: "pending" })
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("source issue policy can allow triage issue creation with audit event", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      seedProject(db, "demo");
+      const router = createDefaultRouter({ database: db });
+      const proposal = await jsonRequest(router, "/api/pi/action-proposals", {
+        body: JSON.stringify({
+          actions: [
+            action("issue.create", {
+              body: "来自 source policy 的低风险 triage issue。",
+              project_id: "demo",
+              source_policy: { issue_policy: { auto_create_triage_issue: true } },
+              status: "triage",
+              title: "Source policy triage"
+            }, "medium", true)
+          ],
+          evidence_refs: ["external_event:1"],
+          skill_run_id: "domain-run-policy",
+          source_item_ids: ["attention_inbox_item:1"],
+          summary: "允许按 policy 自动创建 triage issue。",
+          target_hints: [{ confidence: 0.9, id: "demo", kind: "project" }]
+        }),
+        method: "POST"
+      });
+
+      const approved = await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
+        body: JSON.stringify({ actor: "tester" }),
+        method: "POST"
+      });
+
+      expect(getPiAction(db, approved.actions[0].pi_action_id)).toMatchObject({
+        gate_decision: "execute",
+        requires_confirmation: 0,
+        status: "completed"
+      });
+      expect(sourcePolicyReason(db, approved.actions[0].pi_action_id)).toBe("triage_issue_auto_create_allowed");
+      expect(listIssues(db, { projectId: "demo" }).map((issue) => issue.title)).toContain("Source policy triage");
     } finally {
       db.close();
     }

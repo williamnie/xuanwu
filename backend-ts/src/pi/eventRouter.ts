@@ -15,7 +15,8 @@ import { sourcePolicyBlockReason, type IntakeMode, type IntakeSourcePolicy } fro
 
 type JsonObject = Record<string, unknown>;
 
-export type SourceProfile = "company_chat" | "personal_chat" | "ops_chat" | "private_dm" | "email" | "github" | "custom";
+export const SOURCE_PROFILES = ["company_chat", "personal_chat", "ops_chat", "private_dm", "email", "github", "custom"] as const;
+export type SourceProfile = typeof SOURCE_PROFILES[number];
 export type ActionMode = "observe_only" | "draft_only" | "propose_actions" | "auto_low_risk";
 export type InboxRouteDecision = "no_action" | "draft" | "proposal" | "ask_user" | "auto_low_risk";
 export type EventRouteStatus = "routed" | "skipped";

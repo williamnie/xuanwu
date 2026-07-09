@@ -223,6 +223,23 @@ export const api = {
     return request(`/api/pi/activity${query}`);
   },
 
+  getPiSourcePolicies: ({ projectId = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append('project_id', projectId);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/pi/source-policies${query}`);
+  },
+
+  createPiSourcePolicy: (payload) => request('/api/pi/source-policies', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
+  updatePiAutomationSourcePolicy: (id, payload) => request(`/api/pi/source-policies/automations/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }),
+
   getPiSkillIntakeRuns: ({ bundleId = '', skillId = '', status = '', limit = 50 } = {}) => {
     const params = new URLSearchParams();
     if (bundleId) params.append('bundle_id', String(bundleId));

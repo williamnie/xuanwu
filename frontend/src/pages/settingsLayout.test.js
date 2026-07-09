@@ -9,6 +9,7 @@ const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.
 const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsPanel.jsx', import.meta.url), 'utf8');
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
+const sourcePoliciesSource = readFileSync(new URL('./SourcePoliciesPanel.jsx', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
@@ -107,4 +108,16 @@ test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(activityTimelineSource, /proposalId/);
   assert.match(activityTimelineSource, /summaries are redacted/);
   assert.doesNotMatch(activityTimelineSource, /window\.confirm|window\.alert/);
+});
+
+test('Policies tab manages source policies from API', () => {
+  assert.match(sectionsSource, /SourcePoliciesPanel/);
+  assert.match(apiSource, /getPiSourcePolicies/);
+  assert.match(apiSource, /updatePiAutomationSourcePolicy/);
+  assert.match(sourcePoliciesSource, /Source Policy/);
+  assert.match(sourcePoliciesSource, /auto_create_triage_issue/);
+  assert.match(sourcePoliciesSource, /auto_enqueue/);
+  assert.match(sourcePoliciesSource, /require_project_confirmation/);
+  assert.match(sourcePoliciesSource, /allowed_chats/);
+  assert.doesNotMatch(sourcePoliciesSource, /window\.confirm|window\.alert/);
 });
