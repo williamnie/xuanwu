@@ -3,10 +3,15 @@ import { authHeader } from './authToken';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export const piMemoryApi = {
+  batch: ({ action, ids }) => request('/api/pi/memory/batch', {
+    method: 'POST',
+    body: JSON.stringify({ action, ids }),
+  }),
   create: (memory) => request('/api/pi/memory', {
     method: 'POST',
     body: JSON.stringify(memory),
   }),
+  digest: (filter = {}) => request(`/api/pi/memory/digest${query(filter)}`),
   disable: (id) => request(`/api/pi/memory/${encodeURIComponent(id)}/disable`, {
     method: 'POST',
     body: JSON.stringify({}),
@@ -54,6 +59,7 @@ function query(filter) {
   addParam(params, 'status', filter.status);
   addParam(params, 'memory_type', filter.memoryType);
   addParam(params, 'layer', filter.layer);
+  addParam(params, 'window', filter.window);
   const text = params.toString();
   return text ? `?${text}` : '';
 }

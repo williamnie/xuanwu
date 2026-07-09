@@ -259,6 +259,79 @@ describe("Bun PI memory API", () => {
     }
   });
 
+  test("generates digest draft and applies batch promote/forget without auto-promoting policy long-term", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/memory/candidates", "POST", {
+        id: "pref-candidate",
+        scope: "project",
+        scope_id: "demo",
+        kind: "user_preference",
+        content: "Prefer daily digest bullets",
+        memory_type: "user",
+        layer: "working",
+        confidence: "high"
+      });
+      await request(router, "/api/pi/memory/candidates", "POST", {
+        id: "policy-candidate",
+        scope: "project",
+        scope_id: "demo",
+        kind: "project_policy",
+        content: "Project policy: never auto-change source policy",
+        memory_type: "project",
+        layer: "long_term",
+        confidence: "high"
+      });
+      insertLegacyCandidate(database, {
+        id: "legacy-secret",
+        content: "CODEX_RUNNER_AUTH_TOKEN=fixture-secret",
+        kind: "provider_runtime",
+        layer: "long_term",
+        memoryType: "project"
+      });
+
+      const digestResponse = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory/digest?window=weekly&scope=project&scope_id=demo`
+      ));
+      const digest = await digestResponse.json() as {
+        groups: Array<{ items: Array<{ id: string; requires_user_confirmation: boolean }> }>;
+        recommended_batches: { forget: string[]; promote: string[]; review: string[] };
+      };
+      const promoted = await request(router, "/api/pi/memory/batch", "POST", {
+        action: "promote",
+        ids: digest.recommended_batches.promote
+      });
+      const forgotten = await request(router, "/api/pi/memory/batch", "POST", {
+        action: "forget",
+        ids: digest.recommended_batches.forget
+      });
+      const active = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=active`
+      ));
+      const candidates = await router.handle(new Request(
+        `${BASE_URL}/api/pi/memory?scope=project&scope_id=demo&status=candidate`
+      ));
+
+      expect(digestResponse.status).toBe(200);
+      expect(digest.groups.map((group) => group.items.map((item) => item.id)).flat().sort())
+        .toEqual(["legacy-secret", "policy-candidate", "pref-candidate"]);
+      expect(digest.recommended_batches.promote).toEqual(["pref-candidate"]);
+      expect(digest.recommended_batches.forget).toEqual(["legacy-secret"]);
+      expect(digest.recommended_batches.review).toEqual(["policy-candidate"]);
+      expect(digest.groups.flatMap((group) => group.items).find((item) => item.id === "policy-candidate"))
+        .toMatchObject({ requires_user_confirmation: true });
+      expect(await promoted.json()).toMatchObject({ action: "promote", updated: ["pref-candidate"] });
+      expect(await forgotten.json()).toMatchObject({ action: "forget", forgotten: ["legacy-secret"] });
+      expect((await active.json() as Array<Record<string, unknown>>).map((item) => item.id))
+        .toEqual(["pref-candidate"]);
+      expect((await candidates.json() as Array<Record<string, unknown>>).map((item) => item.id))
+        .toEqual(["policy-candidate"]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("rejects memory writes that contain high-sensitive secrets", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -293,4 +366,18 @@ function request(
     body: JSON.stringify(body),
     headers: { "content-type": "application/json" }
   }));
+}
+
+function insertLegacyCandidate(
+  db: RunnerDatabase,
+  item: { content: string; id: string; kind: string; layer: string; memoryType: string }
+): void {
+  db.sqlite.run(
+    `insert into pi_memory_items
+      (id, scope, scope_id, kind, content, source_type, source_id, confidence,
+        pinned, disabled, memory_type, layer, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [item.id, "project", "demo", item.kind, item.content, "legacy", "fixture", "high",
+      0, 1, item.memoryType, item.layer, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
 }

@@ -25,8 +25,10 @@ export type PiMemoryContextItem = {
   layer: string;
   memory_type: string;
   pinned: number;
+  provenance: PiMemoryProvenance;
   reference: string;
   retrieval_scope: string;
+  selection_reason: string;
   scope: string;
   scope_id: string;
   source_id: string;
@@ -36,16 +38,37 @@ export type PiMemoryContextItem = {
   truncated: boolean;
   updated_at: string;
 };
+export type PiMemoryProvenance = {
+  citation_id: string;
+  citation_label: string;
+  citation_type: string;
+  citation_url: string;
+  reference: string;
+  source_id: string;
+  source_path: string;
+  source_type: string;
+};
 export type PiMemoryRetrievalLimits = {
   item_limit: number;
   token_budget: number;
   token_estimate: number;
   truncated: boolean;
 };
+export type PiMemoryTruncationSummary = {
+  omitted_by_item_limit: number;
+  omitted_by_token_budget: number;
+  omitted_count: number;
+  selected_count: number;
+  summary: string;
+  token_budget: number;
+  total_candidates: number;
+  truncated_item_ids: string[];
+};
 export type PiMemoryRetrievalResult = {
   memory_items: PiMemoryContextItem[];
   retrieval_scopes: string[];
   limits: PiMemoryRetrievalLimits;
+  truncation_summary: PiMemoryTruncationSummary;
 };
 
 const DEFAULT_MEMORY_LIMIT = 10;
@@ -62,6 +85,7 @@ export function buildPiMemoryPromptContext(db: RunnerDatabase, input: PiMemoryPr
     "Confirmed PI memory:",
     lines.length > 0 ? lines.join("\n") : "- No confirmed memories for this scope.",
     `Memory retrieval: scopes=${result.retrieval_scopes.join(",") || "global"} item_limit=${result.limits.item_limit} token_budget=${result.limits.token_budget} token_estimate=${result.limits.token_estimate} truncated=${result.limits.truncated}.`,
+    `Memory truncation: ${result.truncation_summary.summary}`,
     "Memory rule: write new observations only via memory_write_candidate; only explicit low-risk user preferences from normal chat may auto-enable, and guesses or policy/workflow observations still require review."
   ].join("\n");
 }
@@ -82,7 +106,8 @@ export function retrievePiMemoryContext(
       truncated: selected.truncated
     },
     memory_items: selected.items,
-    retrieval_scopes: memoryScopeFilters(input).map(scopeKey)
+    retrieval_scopes: memoryScopeFilters(input).map(scopeKey),
+    truncation_summary: truncationSummary(candidates, selected, itemLimit, tokenBudget)
   };
 }
 
@@ -156,8 +181,10 @@ function contextItem(item: PiMemoryItem): PiMemoryContextItem {
     layer: item.layer,
     memory_type: item.memory_type,
     pinned: item.pinned,
+    provenance: memoryProvenance(item, reference),
     reference,
     retrieval_scope: scopeKey({ scope: item.scope, scopeId: item.scope_id }),
+    selection_reason: selectionReason(item),
     scope: item.scope,
     scope_id: item.scope_id,
     source_id: item.source_id,
@@ -167,6 +194,24 @@ function contextItem(item: PiMemoryItem): PiMemoryContextItem {
     truncated: false,
     updated_at: item.updated_at
   };
+}
+
+function memoryProvenance(item: PiMemoryItem, reference: string): PiMemoryProvenance {
+  return {
+    citation_id: item.citation_id,
+    citation_label: item.citation_label,
+    citation_type: item.citation_type,
+    citation_url: item.citation_url,
+    reference,
+    source_id: item.source_id,
+    source_path: reference,
+    source_type: item.source_type
+  };
+}
+
+function selectionReason(item: PiMemoryItem): string {
+  const base = `scope ${scopeKey({ scope: item.scope, scopeId: item.scope_id })} matched retrieval request`;
+  return item.pinned === 1 ? `${base}; pinned memory ranked first` : `${base}; ranked by scope and freshness`;
 }
 
 function formatMemoryLine(item: PiMemoryContextItem): string {
@@ -192,16 +237,45 @@ function selectWithinBudget(items: PiMemoryContextItem[], itemLimit: number, tok
   const selected: PiMemoryContextItem[] = [];
   let tokenEstimate = 0;
   let truncated = items.length > itemLimit;
+  let stoppedByTokenBudget = false;
   for (const item of items.slice(0, itemLimit)) {
     const remaining = tokenBudget - tokenEstimate;
-    if (remaining <= 0) { truncated = true; break; }
+    if (remaining <= 0) { stoppedByTokenBudget = true; truncated = true; break; }
     const next = fitItemToBudget(item, remaining);
-    if (!next) { truncated = true; break; }
+    if (!next) { stoppedByTokenBudget = true; truncated = true; break; }
     selected.push(next);
     tokenEstimate += next.token_estimate;
     truncated ||= next.truncated;
   }
-  return { items: selected, tokenEstimate, truncated };
+  return { items: selected, stoppedByTokenBudget, tokenEstimate, truncated };
+}
+
+function truncationSummary(
+  items: PiMemoryContextItem[],
+  selected: ReturnType<typeof selectWithinBudget>,
+  itemLimit: number,
+  tokenBudget: number
+): PiMemoryTruncationSummary {
+  const limitedCount = Math.min(items.length, itemLimit);
+  const omittedByItemLimit = Math.max(0, items.length - itemLimit);
+  const omittedByTokenBudget = selected.stoppedByTokenBudget ? limitedCount - selected.items.length : 0;
+  const truncatedItemIds = selected.items.filter((item) => item.truncated).map((item) => item.id);
+  return {
+    omitted_by_item_limit: omittedByItemLimit,
+    omitted_by_token_budget: omittedByTokenBudget,
+    omitted_count: Math.max(0, items.length - selected.items.length),
+    selected_count: selected.items.length,
+    summary: truncationText(omittedByItemLimit, omittedByTokenBudget, truncatedItemIds.length, tokenBudget),
+    token_budget: tokenBudget,
+    total_candidates: items.length,
+    truncated_item_ids: truncatedItemIds
+  };
+}
+
+function truncationText(itemLimitOmitted: number, budgetOmitted: number, truncatedItems: number, tokenBudget: number): string {
+  const omitted = itemLimitOmitted + budgetOmitted;
+  if (omitted === 0 && truncatedItems === 0) return `No truncation; token budget ${tokenBudget} was sufficient.`;
+  return `${omitted} memory item(s) omitted and ${truncatedItems} item(s) shortened by token budget ${tokenBudget}.`;
 }
 
 function fitItemToBudget(item: PiMemoryContextItem, tokenBudget: number): PiMemoryContextItem | null {

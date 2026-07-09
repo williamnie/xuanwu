@@ -26,6 +26,7 @@ export default function PiMemoryPanel() {
         candidateCount={candidateCount}
         recentCandidateSource={recentCandidateSource}
       />
+      <MemoryDigestPanel state={state} />
       <MemoryCreateForm state={state} />
       {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
       <MemoryList state={state} />
@@ -36,7 +37,10 @@ export default function PiMemoryPanel() {
 function usePiMemoryPanel() {
   const [items, setItems] = useState([]);
   const [drafts, setDrafts] = useState({});
+  const [digest, setDigest] = useState(null);
+  const [digestWindow, setDigestWindow] = useState('daily');
   const [newDraft, setNewDraft] = useState(defaultNewDraft);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -54,6 +58,14 @@ function usePiMemoryPanel() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+  const loadDigest = useCallback(async () => {
+    try {
+      setDigest(await loadMemoryDigest({ digestWindow }));
+    } catch (err) {
+      setError(err.message || '生成 PI memory digest 失败');
+    }
+  }, [digestWindow]);
+  useEffect(() => { loadDigest(); }, [loadDigest]);
   const create = useCallback(async () => {
     setBusy('new:create');
     try {
@@ -79,11 +91,70 @@ function usePiMemoryPanel() {
       setBusy('');
     }
   }, [drafts, load]);
+  const bulkAction = useCallback(async (name) => {
+    if (selectedIds.length === 0) return;
+    setBusy(`bulk:${name}`);
+    try {
+      await piMemoryApi.batch({ action: name, ids: selectedIds });
+      message.success('PI memory batch review 已更新');
+      setSelectedIds([]);
+      await load();
+      await loadDigest();
+    } catch (err) {
+      message.error(err.message || '批量更新 PI memory 失败');
+    } finally {
+      setBusy('');
+    }
+  }, [load, loadDigest, selectedIds]);
+  const toggleSelected = useCallback((id, checked) => {
+    setSelectedIds((current) => checked ? [...new Set([...current, id])] : current.filter((item) => item !== id));
+  }, []);
   const updateDraft = useCallback((id, field, value) => setDrafts((current) => ({
     ...current, [id]: { ...(current[id] || {}), [field]: value }
   })), []);
   const updateNewDraft = useCallback((field, value) => setNewDraft((current) => ({ ...current, [field]: value })), []);
-  return { action, busy, create, drafts, error, items, load, loading, newDraft, updateDraft, updateNewDraft };
+  return {
+    action, bulkAction, busy, create, digest, digestWindow, drafts, error, items, load, loadDigest,
+    loading, newDraft, selectedIds, setDigestWindow, toggleSelected, updateDraft, updateNewDraft
+  };
+}
+
+function MemoryDigestPanel({ state }) {
+  const totals = state.digest?.totals;
+  return (
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ fontSize: '0.94rem', marginBottom: '4px' }}>Daily/Weekly digest</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+            digest draft 按 scope / layer / type 分组；策略或权限类候选只进入 review，不自动进入 active long_term。
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <SmallSelect label="window" value={state.digestWindow} values={['daily', 'weekly']} onChange={state.setDigestWindow} />
+          <button className="btn btn-secondary" onClick={state.loadDigest} disabled={Boolean(state.busy)}>生成 digest</button>
+        </div>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', lineHeight: 1.5 }}>
+        batch review：已选 {state.selectedIds.length} 条；digest 候选 {totals?.candidate_count ?? 0} 条，
+        建议 promote {totals?.recommend_promote ?? 0} / forget {totals?.recommend_forget ?? 0}，
+        需用户确认 {totals?.requires_confirmation ?? 0}。
+      </p>
+      <BulkButtons state={state} />
+    </div>
+  );
+}
+
+function BulkButtons({ state }) {
+  const disabled = Boolean(state.busy) || state.selectedIds.length === 0;
+  return (
+    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <button className="btn btn-secondary" onClick={() => state.bulkAction('promote')} disabled={disabled}><Check size={14} />批量启用</button>
+      <button className="btn btn-secondary" onClick={() => state.bulkAction('pin')} disabled={disabled}><Pin size={14} />批量 Pin</button>
+      <button className="btn btn-secondary" onClick={() => state.bulkAction('disable')} disabled={disabled}><XCircle size={14} />批量禁用</button>
+      <button className="btn btn-secondary" onClick={() => state.bulkAction('forget')} disabled={disabled}><Trash2 size={14} />批量忘记</button>
+    </div>
+  );
 }
 
 function MemoryCreateForm({ state }) {
@@ -166,6 +237,14 @@ function MemoryCard({ item, state }) {
     <article style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
         <strong>{item.memory_type || 'user'} / {item.kind}</strong>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+          <input
+            checked={state.selectedIds.includes(item.id)}
+            onChange={(event) => state.toggleSelected(item.id, event.target.checked)}
+            type="checkbox"
+          />
+          batch review
+        </label>
         <span style={{ color: candidate ? 'var(--warning)' : 'var(--success)', fontSize: '0.78rem', fontWeight: 700 }}>
           {candidate ? 'candidate / disabled' : 'active'} · {Number(item.pinned) === 1 ? 'pinned' : 'unpinned'} · {item.layer || 'working'} · {item.scope}:{item.scope_id || 'runner'} · {item.confidence}
         </span>
@@ -246,6 +325,10 @@ function defaultNewDraft() {
 
 function createMemory(state) {
   return piMemoryApi.create(state.newDraft);
+}
+
+function loadMemoryDigest(state) {
+  return piMemoryApi.digest({ window: state.digestWindow });
 }
 
 function runMemoryAction(item, name, draft) {

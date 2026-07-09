@@ -8,6 +8,7 @@ import {
   type PiMemoryItemFilter,
   type PiMemoryItemInput
 } from "../db/repositories/pi.ts";
+import { applyPiMemoryBatchAction, buildPiMemoryDigestDraft, type PiMemoryBatchAction } from "../pi/memoryLifecycle.ts";
 import { assertMemoryContentSafe } from "../pi/memoryPolicy.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -16,7 +17,9 @@ type PiMemoryContext = { database: RunnerDatabase };
 
 export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext): void {
   router.get("/api/pi/memory", (request) => json(listPiMemoryItems(context.database, memoryFilter(request))));
+  router.get("/api/pi/memory/digest", (request) => json(buildPiMemoryDigestDraft(context.database, digestFilter(request))));
   router.post("/api/pi/memory", async (request) => createMemoryResponse(context, request));
+  router.post("/api/pi/memory/batch", async (request) => batchMemoryResponse(context, request));
   router.post("/api/pi/memory/candidates", async (request) => createCandidateResponse(context, request));
   router.post("/api/pi/memory/:id/approve", (request) => reviewMemoryResponse(context, request, 0));
   router.post("/api/pi/memory/:id/promote", (request) => reviewMemoryResponse(context, request, 0));
@@ -25,6 +28,14 @@ export function registerPiMemoryRoutes(router: Router, context: PiMemoryContext)
   router.post("/api/pi/memory/:id/forget", (request) => forgetMemoryResponse(context, request));
   router.patch("/api/pi/memory/:id", async (request) => patchMemoryResponse(context, request));
   router.delete("/api/pi/memory/:id", (request) => deleteMemoryResponse(context, request));
+}
+
+async function batchMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {
+  const body = await parseObjectBody(request);
+  return writeResponse(() => applyPiMemoryBatchAction(context.database, {
+    action: batchAction(body.action),
+    ids: idList(body.ids)
+  }));
 }
 
 async function createMemoryResponse(context: PiMemoryContext, request: Request): Promise<Response> {
@@ -129,6 +140,15 @@ function memoryFilter(request: Request): PiMemoryItemFilter {
   };
 }
 
+function digestFilter(request: Request) {
+  const params = new URL(request.url).searchParams;
+  return {
+    scope: cleanString(params.get("scope")),
+    scopeId: cleanString(params.get("scope_id")),
+    window: cleanString(params.get("window"))
+  };
+}
+
 function statusParam(value: string | null): number | undefined {
   const text = cleanString(value).toLowerCase();
   if (text === "active") return 0;
@@ -151,6 +171,17 @@ function memoryID(request: Request): string {
 
 function hasValue(input: Record<string, unknown>, key: string): boolean {
   return Object.hasOwn(input, key) && input[key] !== null && input[key] !== undefined;
+}
+
+function batchAction(value: unknown): PiMemoryBatchAction {
+  const action = cleanString(value);
+  if (["approve", "disable", "forget", "pin", "promote"].includes(action)) return action as PiMemoryBatchAction;
+  throw new HttpError(400, "不支持的 memory batch action");
+}
+
+function idList(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new HttpError(400, "memory batch ids 必须是数组");
+  return value.map(cleanString).filter(Boolean);
 }
 
 function integerFlag(value: unknown): number {

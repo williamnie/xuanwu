@@ -10,6 +10,8 @@ test('PI memory panel exposes review, promotion, edit, disable, and delete contr
   assert.match(sectionsSource, /import PiMemoryPanel from '\.\/PiMemoryPanel'/);
   assert.match(sectionsSource, /<PiMemoryPanel \/>/);
   assert.match(clientSource, /list:\s*\(filter = \{\}\)/);
+  assert.match(clientSource, /digest:\s*\(filter = \{\}\)/);
+  assert.match(clientSource, /batch:\s*\(\{ action, ids \}\)/);
   assert.match(clientSource, /create:\s*\(memory\)/);
   assert.match(clientSource, /pin:\s*\(id\)/);
   assert.match(clientSource, /forget:\s*\(id\)/);
@@ -24,7 +26,14 @@ test('PI memory panel exposes review, promotion, edit, disable, and delete contr
   assert.match(panelSource, /piMemoryApi\.disable\(item\.id\)/);
   assert.match(panelSource, /piMemoryApi\.update\(item\.id/);
   assert.match(panelSource, /piMemoryApi\.remove\(item\.id\)/);
+  assert.match(panelSource, /piMemoryApi\.digest\(\{ window: state\.digestWindow \}\)/);
+  assert.match(panelSource, /state\.bulkAction\('promote'\)/);
+  assert.match(panelSource, /state\.bulkAction\('pin'\)/);
+  assert.match(panelSource, /state\.bulkAction\('forget'\)/);
+  assert.match(panelSource, /state\.bulkAction\('disable'\)/);
   assert.match(panelSource, /手动添加/);
+  assert.match(panelSource, /Daily\/Weekly digest/);
+  assert.match(panelSource, /batch review/);
   assert.match(panelSource, /memory_type/);
   assert.match(panelSource, /citation_label/);
   assert.match(panelSource, /引用对象/);
