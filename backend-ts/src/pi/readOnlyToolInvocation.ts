@@ -87,7 +87,7 @@ function callMcp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock:
     input: input.input ?? {},
     invocationID: clock.invocationID,
     maxPermission: "read",
-    registry: { registryJson: input.env?.CODEX_RUNNER_MCP_REGISTRY_JSON },
+    registry: { database: input.db, registryJson: input.env?.CODEX_RUNNER_MCP_REGISTRY_JSON },
     timeoutMs: input.timeoutMs ?? tool.timeout_ms
   });
 }

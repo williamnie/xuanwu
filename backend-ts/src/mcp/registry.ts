@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import type { RunnerDatabase } from "../db/database.ts";
+import { listPiMcpCapabilities } from "../db/repositories/piMcpCapabilities.ts";
+import { listPiMcpServers } from "../db/repositories/piMcpServers.ts";
 import { mcpCapabilitiesFromPayload, parseMcpCapabilityList } from "./policy.ts";
 
 export type McpRiskLevel = "low" | "medium" | "high";
@@ -20,6 +23,7 @@ export type McpCapability = {
   requires_confirmation: boolean;
   risk_level: McpRiskLevel;
   server_id: string;
+  source_path?: string;
   timeout_ms?: number;
   uri?: string;
 };
@@ -50,7 +54,7 @@ export type McpServerRegistry = {
 };
 
 export type McpRegistryDiagnostic = {
-  code: "registry_file_unavailable" | "registry_json_invalid" | "server_not_ready" | "server_unavailable";
+  code: "registry_file_unavailable" | "registry_json_invalid" | "server_not_ready" | "server_unavailable" | string;
   message: string;
   readiness?: string;
   server_id: string;
@@ -62,7 +66,7 @@ export type McpRegistryDiagnostic = {
 export type McpRegistry = { diagnostics: McpRegistryDiagnostic[]; servers: McpServerRegistry[] };
 export type McpRecommendationInput = { description?: string; issue?: unknown; title?: string };
 export type McpRequirementRecommendation = McpCapability & { reason: string; score: number };
-export type McpRegistryOptions = { registryJson?: string };
+export type McpRegistryOptions = { database?: RunnerDatabase; registryJson?: string };
 
 type RawServer = Record<string, unknown>;
 type RawCapability = Record<string, unknown>;
@@ -79,7 +83,8 @@ export function readMcpRegistry(options: McpRegistryOptions = {}): McpRegistry {
   const diagnostics: McpRegistryDiagnostic[] = [];
   const config = registryConfig(options, diagnostics);
   const servers = Array.isArray(config.servers) ? config.servers : [];
-  const normalized = servers.map((server) => normalizeServer(objectValue(server))).filter(Boolean)
+  const managed = options.database ? managedRegistryServers(options.database) : [];
+  const normalized = [...servers, ...managed].map((server) => normalizeServer(objectValue(server))).filter(Boolean)
     .slice(0, MAX_SERVERS) as McpServerRegistry[];
   diagnostics.push(...normalized.flatMap((server) => server.diagnostics));
   return { diagnostics, servers: normalized };
@@ -152,6 +157,36 @@ export function normalizeMcpCapabilityIDs(value: unknown): string[] {
   return parseMcpCapabilityList(value);
 }
 
+
+function managedRegistryServers(db: RunnerDatabase): RawServer[] {
+  const capabilities = listPiMcpCapabilities(db).filter((capability) => capability.enabled);
+  const byServer = new Map<string, typeof capabilities>();
+  for (const capability of capabilities) byServer.set(capability.server_id, [...(byServer.get(capability.server_id) ?? []), capability]);
+  return listPiMcpServers(db).filter((server) => server.enabled).map((server) => {
+    const items = byServer.get(server.id) ?? [];
+    return {
+      description: server.description, id: server.id, metadata: server.metadata, name: server.name,
+      readiness: server.readiness || "unknown", risk_level: server.risk_level,
+      resources: items.filter((item) => item.kind === "resource").map(managedCapability),
+      status: managedServerStatus(server.status),
+      tools: items.filter((item) => item.kind === "tool").map(managedCapability),
+      transport: server.transport_type === "stdio" ? { args: server.args, command: server.command, cwd: server.cwd, env: server.env, type: "stdio" } : undefined
+    };
+  });
+}
+
+function managedServerStatus(status: string): string {
+  return ["available", "configured", "discovered"].includes(status) ? "enabled" : status || "enabled";
+}
+
+function managedCapability(capability: ReturnType<typeof listPiMcpCapabilities>[number]): RawCapability {
+  return {
+    description: capability.description, input_schema: capability.input_schema, name: capability.name, output_schema: capability.output_schema,
+    permission: capability.permission, read_only: capability.read_only, requires_confirmation: capability.requires_confirmation,
+    risk_level: capability.risk_level, source_path: capability.source_path, timeout_ms: capability.timeout_ms, uri: capability.uri
+  };
+}
+
 function registryConfig(options: McpRegistryOptions, diagnostics: McpRegistryDiagnostic[]): Record<string, unknown> {
   const text = options.registryJson ?? Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON ?? registryFileText(diagnostics) ?? DEFAULT_REGISTRY;
   const parsed = parseJSON(text);
@@ -201,6 +236,7 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
   if (name === "") return null;
   const permission = permissionLevel(raw.permission ?? raw.permissions ?? (kind === "resource" ? "read" : "write"));
   const risk_level = riskLevel(raw.risk_level ?? raw.risk ?? permission, []);
+  const readOnly = booleanValue(raw.read_only ?? raw.readOnly, permission === "read" && risk_level === "low");
   return {
     allowed_actions: allowedActions(kind, permission),
     content: raw.content ?? raw.value ?? raw.output ?? raw.result,
@@ -214,10 +250,11 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
     kind,
     name,
     permission,
-    read_only: permission === "read" && risk_level === "low",
-    requires_confirmation: risk_level !== "low" || permission !== "read",
+    read_only: readOnly,
+    requires_confirmation: booleanValue(raw.requires_confirmation ?? raw.requiresConfirmation, risk_level !== "low" || permission !== "read"),
     risk_level,
     server_id: serverID,
+    ...optionalStringField("source_path", raw.source_path ?? raw.sourcePath),
     ...optionalTimeout(raw.timeout_ms ?? raw.timeoutMs),
     ...optionalURI(raw.uri)
   };
@@ -253,6 +290,11 @@ function permissionLevel(value: unknown): McpPermission {
   return "read";
 }
 
+function booleanValue(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
 function optionalTimeout(value: unknown): { timeout_ms?: number } {
   const parsed = typeof value === "number" ? value : Number.parseInt(cleanString(value), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? { timeout_ms: parsed } : {};
@@ -279,7 +321,9 @@ function optionalTransport(value: unknown): { transport?: McpServerTransport } {
   };
 }
 
-function optionalStringField(key: "cwd", value: unknown): { cwd?: string } {
+function optionalStringField(key: "cwd", value: unknown): { cwd?: string };
+function optionalStringField(key: "source_path", value: unknown): { source_path?: string };
+function optionalStringField(key: "cwd" | "source_path", value: unknown): { cwd?: string; source_path?: string } {
   const text = cleanString(value);
   return text === "" ? {} : { [key]: text };
 }

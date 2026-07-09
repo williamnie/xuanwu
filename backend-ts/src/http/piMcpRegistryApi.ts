@@ -1,14 +1,17 @@
 import { readMcpCapability, readMcpRegistry, type McpCapability } from "../mcp/registry.ts";
+import type { RunnerDatabase } from "../db/database.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-export function registerPiMcpRegistryRoutes(router: Router): void {
-  router.get("/api/pi/mcp/capabilities", () => mcpCapabilitiesResponse());
-  router.get("/api/pi/mcp/capabilities/:id", (request) => mcpCapabilityResponse(request));
+type PiMcpRegistryContext = { database?: RunnerDatabase };
+
+export function registerPiMcpRegistryRoutes(router: Router, context: PiMcpRegistryContext = {}): void {
+  router.get("/api/pi/mcp/capabilities", () => mcpCapabilitiesResponse(context));
+  router.get("/api/pi/mcp/capabilities/:id", (request) => mcpCapabilityResponse(context, request));
 }
 
-function mcpCapabilitiesResponse(): Response {
-  const registry = readMcpRegistry();
+function mcpCapabilitiesResponse(context: PiMcpRegistryContext): Response {
+  const registry = readMcpRegistry({ database: context.database });
   return json({
     capabilities: registry.servers.flatMap((server) => server.capabilities.map(publicCapability)),
     diagnostics: registry.diagnostics,
@@ -24,10 +27,10 @@ function mcpCapabilitiesResponse(): Response {
   });
 }
 
-function mcpCapabilityResponse(request: Request): Response {
+function mcpCapabilityResponse(context: PiMcpRegistryContext, request: Request): Response {
   const id = capabilityID(request);
-  const registry = readMcpRegistry();
-  const capability = readMcpCapability(id);
+  const registry = readMcpRegistry({ database: context.database });
+  const capability = readMcpCapability(id, { database: context.database });
   if (!capability) throw new HttpError(404, `MCP capability 不存在: ${id}`);
   return json({ capability: publicCapability(capability), diagnostics: registry.diagnostics });
 }

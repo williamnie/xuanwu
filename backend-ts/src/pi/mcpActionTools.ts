@@ -44,8 +44,8 @@ export function createPiMcpActions(db: RunnerDatabase, context: McpActionContext
 
 function safeMcpToolCall(db: RunnerDatabase, context: McpActionContext, input: McpToolCallInput) {
   const capabilityID = cleanString(input.capability_id);
-  const capability = readMcpCapability(capabilityID);
-  const server = capability ? readMcpServer(capability.server_id) : null;
+  const capability = readMcpCapability(capabilityID, { database: db });
+  const server = capability ? readMcpServer(capability.server_id, { database: db }) : null;
   const request: PiActionRequest = {
     actionType: "mcp.tool.call",
     payload: cleanPayload({
@@ -68,6 +68,7 @@ function safeMcpToolCall(db: RunnerDatabase, context: McpActionContext, input: M
       capabilityID,
       db,
       input: input.input ?? {},
+      registry: { database: db },
       timeoutMs: input.timeout_ms
     })
   });
@@ -78,7 +79,7 @@ function safeMcpRegistry(db: RunnerDatabase, context: McpActionContext) {
     actionType: "mcp.registry.list",
     payload: {},
     projectID: cleanString(context.projectID),
-    execute: () => ({ items: publicMcpRegistry() })
+    execute: () => ({ items: publicMcpRegistry({ database: db }) })
   });
 }
 
@@ -88,7 +89,7 @@ function safeMcpCapability(db: RunnerDatabase, context: McpActionContext, input:
     actionType: "mcp.capability.read",
     payload: { capability_id: capabilityID },
     projectID: cleanString(context.projectID),
-    execute: () => publicMcpCapability(readMcpCapability(capabilityID)) ?? { id: capabilityID, missing: true }
+    execute: () => publicMcpCapability(readMcpCapability(capabilityID, { database: db })) ?? { id: capabilityID, missing: true }
   });
 }
 
@@ -98,13 +99,13 @@ function safeMcpRecommend(db: RunnerDatabase, context: McpActionContext, input: 
     actionType: "mcp.requirement.recommend",
     payload: cleanPayload({ project_id: projectID, title: input.title ?? "", description: input.description ?? "" }),
     projectID,
-    execute: () => ({ items: recommendMcpRequirements(input) })
+    execute: () => ({ items: recommendMcpRequirements(input, { database: db }) })
   });
 }
 
 function safeMcpResources(db: RunnerDatabase, context: McpActionContext, input: McpResourceListInput) {
   const serverID = cleanString(input.server_id);
-  const server = serverID === "" ? null : readMcpServer(serverID);
+  const server = serverID === "" ? null : readMcpServer(serverID, { database: db });
   const request = {
     actionType: "mcp.resource.list",
     payload: cleanPayload({ server_id: serverID }),
@@ -115,14 +116,14 @@ function safeMcpResources(db: RunnerDatabase, context: McpActionContext, input: 
   }
   return executeSafePiAction(db, context, {
     ...request,
-    execute: () => ({ items: listMcpResources(serverID) })
+    execute: () => ({ items: listMcpResources(serverID, { database: db }) })
   });
 }
 
 function safeMcpResource(db: RunnerDatabase, context: McpActionContext, input: McpResourceReadInput) {
   const capabilityID = cleanString(input.capability_id);
-  const capability = readMcpCapability(capabilityID);
-  const server = capability ? readMcpServer(capability.server_id) : null;
+  const capability = readMcpCapability(capabilityID, { database: db });
+  const server = capability ? readMcpServer(capability.server_id, { database: db }) : null;
   const request: PiActionRequest = {
     actionType: "mcp.resource.read",
     payload: { capability_id: capabilityID },
@@ -139,7 +140,8 @@ function safeMcpResource(db: RunnerDatabase, context: McpActionContext, input: M
     execute: () => readMcpResourceWithAdapter({
       auditContext: auditContext(context),
       capabilityID,
-      db
+      db,
+      registry: { database: db }
     })
   });
 }

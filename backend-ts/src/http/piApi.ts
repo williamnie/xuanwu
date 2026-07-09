@@ -26,6 +26,7 @@ import { registerPiConnectorHealthRoutes } from "./piConnectorHealthApi.ts";
 import { registerPiDelegationRoutes } from "./piDelegationsApi.ts";
 import { registerPiMemoryRoutes } from "./piMemoryApi.ts";
 import { registerPiMaintenanceRoutes } from "./piMaintenanceApi.ts";
+import { registerPiMcpDiscoveryRoutes } from "./piMcpDiscoveryApi.ts";
 import { registerPiMcpRegistryRoutes } from "./piMcpRegistryApi.ts";
 import { registerPiOAuthRoutes, type PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import { registerPiProjectPolicyRoutes } from "./piProjectPolicyApi.ts";
@@ -73,7 +74,8 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiDelegationRoutes(router, context);
   registerPiMaintenanceRoutes(router, context);
   registerPiMemoryRoutes(router, context);
-  registerPiMcpRegistryRoutes(router);
+  registerPiMcpDiscoveryRoutes(router, context);
+  registerPiMcpRegistryRoutes(router, context);
   registerPiOAuthRoutes(router, context);
   registerPiProjectPolicyRoutes(router, context);
   registerPiProviderSettingsRoutes(router, context);

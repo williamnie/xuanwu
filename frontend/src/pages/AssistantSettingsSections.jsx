@@ -3,6 +3,7 @@ import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
 import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
+import PiMcpManagementPanel from './PiMcpManagementPanel';
 import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
@@ -55,6 +56,7 @@ function ConnectorsSettingsTab() {
         description="外部来源会作为 PI Assistant 的 connector/tool provider 接入；当前提供只读健康摘要和已有 IM 配置入口。"
         items={['CLI connector 通过 manifest 暴露配置/health 诊断。', 'Feishu 仍走现有 integration settings API。']}
       />
+      <PiMcpManagementPanel />
       <ConnectorDiagnosticsPanel />
       <FeishuSettingsPanel />
     </>

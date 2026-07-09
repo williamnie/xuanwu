@@ -84,6 +84,8 @@ describe("Bun SQLite database connection", () => {
         "pi_heartbeat_runs",
         "pi_issue_completion_watch_items",
         "pi_issue_completion_watches",
+        "pi_mcp_capabilities",
+        "pi_mcp_servers",
         "pi_memory_items",
         "pi_notification_intents",
         "pi_notification_preferences",
@@ -118,6 +120,8 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_skill_intents_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("allowed_mcp_capabilities_json");
       expect(columnNames(connection, "project_pi_policies")).toContain("verification_policy_json");
+      expect(columnNames(connection, "pi_mcp_servers")).toEqual(expect.arrayContaining(["enabled", "env_json", "redaction_json", "source_path", "transport_type"]));
+      expect(columnNames(connection, "pi_mcp_capabilities")).toEqual(expect.arrayContaining(["enabled", "permission", "read_only", "requires_confirmation", "risk_level"]));
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
       expect(columnNames(connection, "cron_tasks")).toContain("claim_token");
@@ -177,7 +181,8 @@ describe("Bun SQLite database connection", () => {
         { id: "035_pi_automations" },
         { id: "036_pi_automation_scheduler" },
         { id: "037_pi_action_proposals" },
-        { id: "038_pi_memory_store_metadata" }
+        { id: "038_pi_memory_store_metadata" },
+        { id: "039_pi_mcp_discovery" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
@@ -692,7 +697,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 38 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 39 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
