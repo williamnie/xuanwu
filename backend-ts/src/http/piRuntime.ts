@@ -103,6 +103,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     delegationID: input.delegationID,
     env: input.env,
     heartbeatID: input.heartbeatID,
+    issueID: input.issueID,
     onIssueEnqueued: input.onIssueEnqueued,
     source: input.source,
     sourceTurn: input.sourceTurn

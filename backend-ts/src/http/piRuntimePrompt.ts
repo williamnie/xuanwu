@@ -30,6 +30,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     "Issue manager scope: Feishu/Runner Chat PI is the issue manager for Runner's issue database. Treat issue project_id as a Runner DB data filter/target, not as a request to switch PI runtime cwd. Do not ask the user to switch project just to inspect, enqueue, schedule, or repair issues in another issue project; pass project_id or issue_id to the issue tools.",
     "Issue state repair: issue_state_repair_proposal is only for deterministic issueStateManager/runtime mismatch repairs returned by issue_state_diagnose. Do not use it for natural-language requests to mark, move, cancel, reopen, fail, or otherwise freely change an issue status; state repair payloads must carry deterministic expected_state preconditions.",
     "Token economy: prefer deterministic compact tools. For counts/status questions use issue_status_summary. For one issue's execution progress use issue_execution_status. Use issue_list only for compact cards, and issue_read only when full issue body is explicitly needed.",
+    publicUrlSourceWorkflow(),
     repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
     skillContext.promptSection,
@@ -67,6 +68,15 @@ function automaticMemoryCandidatePolicy(): string {
     "Default scope: personal preferences or long-term goals -> global; project habits or repo/team workflow -> project; temporary topic context -> conversation.",
     "Do not store secrets, tokens, credentials, private paths, stack traces, sensitive personal data. Do not store full chat transcripts.",
     "Be selective: skip greetings, ordinary small talk, one-off instructions, guesses, and low-confidence observations."
+  ].join(" ");
+}
+
+function publicUrlSourceWorkflow(): string {
+  return [
+    "Public URL source workflow:",
+    "When the user asks what a URL, webpage, README, or public project is, or asks to summarize/evaluate it, call url_fetch first with extract_text=true and a bounded max_bytes value before answering.",
+    "Base the answer on the returned status/text/evidence_ref. If url_fetch fails, is denied, times out, or returns unusable text, state the concrete tool status/error/status code and ask for pasted content only when needed.",
+    "Do not default to saying you cannot open webpages when url_fetch is available."
   ].join(" ");
 }
 

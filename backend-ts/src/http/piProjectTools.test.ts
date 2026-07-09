@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listPiActionEvents, listPiActions, type PiActionEvent } from "../db/repositories/pi.ts";
+import { URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 
 const tempRoots: string[] = [];
@@ -74,7 +75,7 @@ describe("PI project tools", () => {
         "project_list", "project_status", "read", "repo_read_excerpt", "repo_search", "repo_tree",
         "report_workflow_request", "review_workflow_request", "session_list",
         "session_read_summary", "session_steer_proposal", "skill_intent_audit",
-        "skill_list", "skill_read", "skill_recommend", "verification_workflow_request"
+        "skill_list", "skill_read", "skill_recommend", URL_FETCH_TOOL_NAME, "verification_workflow_request"
       ]);
       expect(runtime.session.getAllTools().map((tool) => tool.name).sort()).toEqual(runtime.session.getActiveToolNames().sort());
       expect(probes.get("project_status")?.isError).toBe(false);

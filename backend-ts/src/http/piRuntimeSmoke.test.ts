@@ -10,6 +10,7 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssues } from "../db/repositories/issues.ts";
 import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { EventBus } from "../events/bus.ts";
+import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -147,6 +148,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
       expect(activeTools).toEqual(expect.arrayContaining([
         "read",
+        URL_FETCH_TOOL_NAME,
         "issue_read",
         "issue_create_proposal",
         "issue_enqueue_proposal",
@@ -156,14 +158,78 @@ describe("Bun PI runtime v1 smoke", () => {
         .find((event) => event.event_type === "runtime_tool_registry_snapshot");
       expect(audit).toBeTruthy();
       const payload = JSON.parse(audit?.payload_json ?? "{}");
-      expect(payload).toMatchObject({
-        provider_ids: ["runner-builtin"],
-        source: "registry"
-      });
-      expect(payload.tool_names).toEqual(expect.arrayContaining(["read", "issue_enqueue_proposal"]));
+      expect(payload.source).toBe("registry");
+      expect(payload.provider_ids).toEqual(expect.arrayContaining(["runner-builtin", HTTP_READONLY_PROVIDER_ID]));
+      expect(payload.tool_names).toEqual(expect.arrayContaining(["read", URL_FETCH_TOOL_NAME, "issue_enqueue_proposal"]));
+      expect(payload.custom_tool_names).toContain(URL_FETCH_TOOL_NAME);
       expect(payload.counts.sdk_tools).toBeGreaterThan(0);
       expect(payload.counts.custom_tools).toBeGreaterThan(0);
     } finally {
+      database.close();
+    }
+  });
+
+  test("can answer URL questions through url_fetch instead of only local SDK tools", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-url-faux-api", provider: "pi-url-faux" });
+    const originalFetch = globalThis.fetch;
+    const fetchCalls: string[] = [];
+    try {
+      (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = (async (url, _init) => {
+        fetchCalls.push(String(url));
+        return new Response([
+          "<html><body>",
+          "<h1>Open Connector</h1>",
+          "<p>Open Connector is an OOMOL Lab project for building connector integrations.</p>",
+          "</body></html>"
+        ].join(""), { headers: { "content-type": "text/html; charset=utf-8" }, status: 200 });
+      }) as typeof fetch;
+      writeFauxModelsConfig(database, { api: "pi-url-faux-api", provider: "pi-url-faux" });
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall(URL_FETCH_TOOL_NAME, {
+            extract_text: true,
+            max_bytes: 12000,
+            url: "https://github.com/oomol-lab/open-connector"
+          }, { id: "url-fetch" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("Open Connector 是 OOMOL Lab 的 connector integrations 项目。")
+      ]);
+
+      const runtime = await createPiRuntimeSession(database, {
+        agent: agentRecord({ model_provider: "pi-url-faux" }),
+        conversationID: "conv-url-question",
+        project: projectRecord("demo"),
+        source: "rpc"
+      });
+      const probes = new Map<string, { isError: boolean; text: string }>();
+      const unsubscribe = runtime.session.subscribe((event) => {
+        if (event.type !== "tool_execution_end") return;
+        probes.set(event.toolName, { isError: event.isError, text: collectToolText(event.result.content) });
+      });
+
+      expect(runtime.session.getActiveToolNames()).toContain(URL_FETCH_TOOL_NAME);
+      await runtime.session.prompt(
+        "https://github.com/oomol-lab/open-connector 这是个什么项目",
+        { expandPromptTemplates: false, source: "rpc" }
+      );
+      unsubscribe();
+      runtime.dispose();
+
+      expect(fetchCalls).toEqual(["https://github.com/oomol-lab/open-connector"]);
+      expect(probes.get(URL_FETCH_TOOL_NAME)?.isError).toBe(false);
+      expect(probes.get(URL_FETCH_TOOL_NAME)?.text).toContain("Open Connector");
+      const audit = toolCallAuditPayloads(listPiActionEvents(database, { conversationId: "conv-url-question" }))
+        .find((event) => event.tool === URL_FETCH_TOOL_NAME);
+      expect(audit).toMatchObject({
+        provider_id: HTTP_READONLY_PROVIDER_ID,
+        source: "rpc",
+        status: "succeeded",
+        tool: URL_FETCH_TOOL_NAME
+      });
+    } finally {
+      (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = originalFetch;
+      faux.unregister();
       database.close();
     }
   });
@@ -265,6 +331,8 @@ describe("Bun PI runtime v1 smoke", () => {
 
       expect(prompt).toContain("Agent-specific runner behavior");
       expect(prompt).toContain("自定义 PI 行为：先用中文总结项目风险，再提出最小 action。");
+      expect(prompt).toContain("Public URL source workflow");
+      expect(prompt).toContain("url_fetch");
       expect(prompt.indexOf("Role contract: PI is manager/orchestrator")).toBeLessThan(
         prompt.indexOf("Agent-specific runner behavior")
       );
@@ -299,6 +367,20 @@ async function nextEvent(events: ReturnType<EventBus["subscribe"]>) {
     events.next(),
     Bun.sleep(20).then(() => undefined)
   ]);
+}
+
+function collectToolText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return content.map((block) => {
+    if (typeof block === "object" && block && "text" in block && typeof block.text === "string") return block.text;
+    return "";
+  }).join("\n");
+}
+
+function toolCallAuditPayloads(events: ReturnType<typeof listPiActionEvents>): Array<Record<string, any>> {
+  return events
+    .filter((event) => event.event_type === "tool_call_audit")
+    .map((event) => JSON.parse(event.payload_json) as Record<string, any>);
 }
 
 function insertFauxAgent(db: RunnerDatabase): void {
@@ -345,13 +427,17 @@ function insertProject(db: RunnerDatabase, id: string, skillPolicy = "{}"): void
   );
 }
 
-function writeFauxModelsConfig(db: RunnerDatabase): void {
+function writeFauxModelsConfig(
+  db: RunnerDatabase,
+  overrides: { api?: string; provider?: string } = {}
+): void {
   const agentDir = join(db.path, "..", "pi-runtime", "agent");
+  const provider = overrides.provider ?? "pi-smoke-faux";
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(join(agentDir, "models.json"), JSON.stringify({
     providers: {
-      "pi-smoke-faux": {
-        api: "pi-smoke-faux-api",
+      [provider]: {
+        api: overrides.api ?? "pi-smoke-faux-api",
         apiKey: "test",
         baseUrl: "http://localhost:0",
         models: [{ id: "faux-1" }]

@@ -4,6 +4,7 @@ import { createPiActionEvent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS, PI_READ_ONLY_TOOLS } from "../http/piProjectTools.ts";
 import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
+import { createReadOnlyRuntimeTools } from "./readOnlyRuntimeTools.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 
 type ToolContext = Parameters<typeof createPiProjectTools>[2];
@@ -77,13 +78,28 @@ function registryToolKit(db: RunnerDatabase, project: Project | undefined, conte
   if (!provider || provider.status === "disabled") throw new Error("builtin tool provider is unavailable");
   const registryTools = snapshot.tools.filter((tool) => tool.provider_id === RUNNER_BUILTIN_PROVIDER_ID);
   const customTools = createPiProjectTools(db, project, context);
-  const customByName = new Map(customTools.map((tool) => [tool.name, tool]));
-  const executable = executableToolNames(registryTools.map((tool) => tool.name), customByName);
+  const readOnlyTools = createReadOnlyRuntimeTools({
+    context,
+    db,
+    existingNames: new Set(customTools.map((tool) => tool.name)),
+    projectID: project?.id,
+    providers: snapshot.providers,
+    tools: snapshot.tools
+  });
+  const allCustomTools = [...customTools, ...readOnlyTools.tools];
+  const customByName = new Map(allCustomTools.map((tool) => [tool.name, tool]));
+  const executable = executableToolNames([
+    ...registryTools.map((tool) => tool.name),
+    ...readOnlyTools.tools.map((tool) => tool.name)
+  ], customByName);
   if (executable.names.size === 0) throw new Error("builtin tool provider returned no executable tools");
-  const tools = PI_ALLOWED_TOOLS.filter((name) => executable.names.has(name));
-  const filteredCustomTools = customTools.filter((tool) => executable.names.has(tool.name));
+  const tools = [
+    ...PI_ALLOWED_TOOLS.filter((name) => executable.names.has(name)),
+    ...readOnlyTools.tools.map((tool) => tool.name).filter((name) => executable.names.has(name))
+  ];
+  const filteredCustomTools = allCustomTools.filter((tool) => executable.names.has(tool.name));
   return {
-    audit: auditSnapshot("registry", tools, filteredCustomTools, [provider.id], executable.skipped),
+    audit: auditSnapshot("registry", tools, filteredCustomTools, [provider.id, ...readOnlyTools.providerIDs], executable.skipped),
     customTools: filteredCustomTools,
     source: "registry",
     tools
