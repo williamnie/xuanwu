@@ -4,6 +4,7 @@ import {
   listStoredToolProviders
 } from "../db/repositories/toolRegistry.ts";
 import { listBuiltinAssistantTools, listBuiltinToolProviders } from "./builtinToolRegistry.ts";
+import { listBrowserAssistantTools, listBrowserToolProviders } from "./browserToolProvider.ts";
 import { loadCliConnectorRegistry } from "./cliConnectorProvider.ts";
 import { listHttpAssistantTools, listHttpToolProviders } from "./httpToolProvider.ts";
 import { loadMcpToolProviderRegistry } from "./mcpToolProvider.ts";
@@ -27,10 +28,10 @@ export function loadAssistantToolRegistrySnapshot(
   const mcp = loadMcpToolProviderRegistry({ registryJson: options.env?.CODEX_RUNNER_MCP_REGISTRY_JSON });
   return {
     providers: mergeProviders([
-      ...listBuiltinToolProviders(), ...listHttpToolProviders(), ...listStoredToolProviders(db), ...cli.providers, ...mcp.providers
+      ...listBuiltinToolProviders(), ...listBrowserToolProviders(), ...listHttpToolProviders(), ...listStoredToolProviders(db), ...cli.providers, ...mcp.providers
     ]),
     tools: mergeTools([
-      ...listBuiltinAssistantTools(), ...listHttpAssistantTools(), ...listStoredAssistantTools(db), ...cli.tools, ...mcp.tools
+      ...listBuiltinAssistantTools(), ...listBrowserAssistantTools(), ...listHttpAssistantTools(), ...listStoredAssistantTools(db), ...cli.tools, ...mcp.tools
     ])
   };
 }

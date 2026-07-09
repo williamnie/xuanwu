@@ -33,6 +33,7 @@ describe("PI tool registry read API", () => {
       expect(providers.status).toBe(200);
       await expect(providers.json()).resolves.toMatchObject({
         providers: expect.arrayContaining([
+          expect.objectContaining({ id: "browser-readonly", kind: "browser" }),
           expect.objectContaining({ id: "http-readonly", kind: "http" }),
           expect.objectContaining({ id: "runner-builtin", kind: "builtin" })
         ])
@@ -41,6 +42,12 @@ describe("PI tool registry read API", () => {
       expect(tools.status).toBe(200);
       const toolBody = await tools.json() as Record<string, any>;
       expect(toolBody.tools).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          name: "read_page_context",
+          permission: "read",
+          provider: expect.objectContaining({ id: "browser-readonly", kind: "browser" }),
+          provider_id: "browser-readonly"
+        }),
         expect.objectContaining({
           name: "url_fetch",
           permission: "read",

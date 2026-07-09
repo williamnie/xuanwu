@@ -8,10 +8,14 @@ import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const FIXTURE_TOKEN = "FIXTURE_CONNECTOR_TOKEN";
+const BROWSER_SNAPSHOT_ENV = "CODEX_RUNNER_BROWSER_SNAPSHOT_JSON";
+const previousBrowserSnapshot = process.env[BROWSER_SNAPSHOT_ENV];
 const tempRoots: string[] = [];
 
 afterEach(async () => {
   delete process.env[FIXTURE_TOKEN];
+  if (previousBrowserSnapshot === undefined) delete process.env[BROWSER_SNAPSHOT_ENV];
+  else process.env[BROWSER_SNAPSHOT_ENV] = previousBrowserSnapshot;
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -66,6 +70,41 @@ describe("PI connector health API", () => {
         status: "disabled",
         health: { checked: false, ok: false, status: "skipped" },
         summary: expect.objectContaining({ configured: false, state: "disabled" })
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reports browser read-only connector unavailable without fabricating browser verification", async () => {
+    const { db, dir } = await openFixtureRuntime();
+    delete process.env[BROWSER_SNAPSHOT_ENV];
+    try {
+      const config = buildConfig({ cliConnectorDirs: [dir] });
+      const router = createDefaultRouter({ config, database: db });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/connectors`));
+      const body = await response.json() as ConnectorHealthBody;
+      const connector = body.connectors.find((item) => item.id === "browser-readonly");
+
+      expect(response.status).toBe(200);
+      expect(connector).toMatchObject({
+        enabled: false,
+        kind: "browser",
+        missing_required: [BROWSER_SNAPSHOT_ENV],
+        status: "disabled",
+        health: {
+          checked: false,
+          ok: false,
+          status: "skipped",
+          error: { code: "browser_unavailable" }
+        },
+        summary: expect.objectContaining({
+          configured: false,
+          read_only: true,
+          tool: "read_page_context",
+          unavailable_diagnostic: "browser_unavailable"
+        })
       });
     } finally {
       db.close();

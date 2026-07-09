@@ -1,5 +1,6 @@
 import type { RunnerConfig } from "../config/env.ts";
 import { feishuConnectorStatus } from "../integrations/feishu.ts";
+import { browserConnectorHealth } from "../pi/browserConnectorHealth.ts";
 import { checkCliConnectorHealth } from "../pi/cliConnectorHealth.ts";
 import { json } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -20,7 +21,7 @@ async function connectorHealthResponse(context: PiConnectorHealthContext): Promi
     manifestDirs: context.config?.cliConnectors.manifestDirs ?? []
   });
   return json({
-    connectors: [...staticConnectorStatuses(context), ...cli.connectors],
+    connectors: [...staticConnectorStatuses(context), browserConnectorHealth(context.env), ...cli.connectors],
     diagnostics: cli.diagnostics,
     generated_at: new Date().toISOString()
   });

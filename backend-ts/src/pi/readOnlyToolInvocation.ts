@@ -2,6 +2,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createPiProjectTools } from "../http/piProjectTools.ts";
+import { callBrowserTool } from "./browserToolCall.ts";
 import { callCliConnectorTool } from "./cliConnectorToolCall.ts";
 import { callHttpTool } from "./httpToolCall.ts";
 import { callMcpTool } from "./mcpToolCall.ts";
@@ -41,6 +42,7 @@ export async function invokeReadOnlyAssistantTool(input: ReadOnlyToolInvocationI
   if (kind === "cli") return callCli(input, clock);
   if (kind === "mcp") return callMcp(input, target.tool, clock);
   if (kind === "http") return callHttp(input, target.tool, clock);
+  if (kind === "browser") return callBrowser(input, target.tool, clock);
   if (kind === "builtin") return callBuiltin(input, target.tool, clock);
   return auditLocalResult(input, target.tool, unsupportedProviderResult(clock, kind));
 }
@@ -95,6 +97,15 @@ async function callHttp(input: ReadOnlyToolInvocationInput, tool: AssistantTool,
     input: input.input ?? {},
     invocationID: clock.invocationID,
     timeoutMs: input.timeoutMs ?? tool.timeout_ms,
+    toolName: input.toolName
+  }));
+}
+
+async function callBrowser(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock: InvocationClock): Promise<ToolResult> {
+  return auditLocalResult(input, tool, await callBrowserTool({
+    env: input.env,
+    input: input.input ?? {},
+    invocationID: clock.invocationID,
     toolName: input.toolName
   }));
 }

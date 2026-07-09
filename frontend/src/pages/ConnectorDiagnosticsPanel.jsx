@@ -40,7 +40,7 @@ function PanelHeader({ loading, onRefresh }) {
           <Cable size={18} color="var(--primary)" /> Connector Diagnostics
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          只读检查 CLI connector 的配置、health command 最近结果与缺失项；不返回 secret 明文。
+          只读检查 Browser / CLI connector 的配置、health 诊断与缺失项；不返回 secret 明文。
         </p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
