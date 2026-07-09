@@ -22,6 +22,8 @@ export const MCP_TOOL_ERROR_CODES = {
 
 export type McpToolCallInput = {
   auditContext?: Partial<ToolCallAuditContext>;
+  auditProviderID?: string;
+  auditToolName?: string;
   db: RunnerDatabase;
   input?: Record<string, unknown>;
   invocationID?: string;
@@ -118,10 +120,10 @@ function auditResult(
     durationMs: result.duration_ms ?? 0,
     error: result.error ? { message: result.error.message, type: result.error.code ?? "tool_error" } : undefined,
     output: result.output,
-    providerID: server ? mcpToolProviderID(server.id) : undefined,
+    providerID: cleanString(request.auditProviderID) || (server ? mcpToolProviderID(server.id) : undefined),
     status: result.status,
     toolCallID: result.invocation_id,
-    toolName: capability?.name ?? request.capabilityID
+    toolName: cleanString(request.auditToolName) || (capability?.name ?? request.capabilityID)
   });
   return result;
 }

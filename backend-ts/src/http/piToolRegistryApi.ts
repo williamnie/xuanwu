@@ -1,8 +1,8 @@
 import type { RunnerConfig } from "../config/env.ts";
 import { getStoredAssistantTool } from "../db/repositories/toolRegistry.ts";
-import { callCliConnectorTool } from "../pi/cliConnectorToolCall.ts";
+import { invokeReadOnlyAssistantTool, ToolInvocationNotFoundError } from "../pi/readOnlyToolInvocation.ts";
 import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
-import { isToolPermission, type AssistantTool, type ToolPermission, type ToolProvider } from "../pi/toolProviderEnvelope.ts";
+import type { AssistantTool, ToolProvider } from "../pi/toolProviderEnvelope.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -18,18 +18,20 @@ export function registerPiToolRegistryRoutes(router: Router, context: ToolRegist
 
 async function callToolResponse(context: ToolRegistryContext, request: Request): Promise<Response> {
   const parsed = parseToolRef(request);
-  if (!parsed.providerID) throw new HttpError(400, "CLI tool 调用需使用 provider:name");
+  if (!parsed.providerID) throw new HttpError(400, "tool 调用需使用 provider:name");
   const body = objectBody(await parseJsonBody(request));
-  const result = await callCliConnectorTool({
+  const result = await invokeReadOnlyAssistantTool({
     auditContext: auditContext(body),
     db: context.database,
+    env: process.env,
     input: objectInput(body.input),
     invocationID: stringInput(body.invocation_id),
     manifestDirs: cliConnectorDirs(context),
-    maxPermission: permissionInput(body.max_permission ?? body.permission),
+    projectID: stringInput(body.project_id),
     providerID: parsed.providerID,
+    timeoutMs: numberInput(body.timeout_ms),
     toolName: parsed.name
-  }).catch((error) => cliToolError(error));
+  }).catch((error) => toolInvocationError(error));
   return json({ result }, { status: result.status === "denied" ? 403 : 200 });
 }
 
@@ -115,10 +117,6 @@ function cliConnectorDirs(context: ToolRegistryContext): string[] {
   return context.config?.cliConnectors.manifestDirs ?? [];
 }
 
-function permissionInput(value: unknown): ToolPermission {
-  return isToolPermission(value) ? value : "read";
-}
-
 function objectBody(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) throw new HttpError(400, "request body must be an object");
   return value;
@@ -138,9 +136,11 @@ function numberInput(value: unknown): number | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function cliToolError(error: unknown): never {
+function toolInvocationError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.startsWith("CLI tool not found:")) throw new HttpError(404, message);
+  if (error instanceof ToolInvocationNotFoundError || message.startsWith("CLI tool not found:")) {
+    throw new HttpError(404, message);
+  }
   throw error;
 }
 

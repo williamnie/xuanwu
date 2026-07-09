@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listPiActionEvents } from "../db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -160,7 +160,7 @@ describe("PI tool registry read API", () => {
     }
   });
 
-  test("denies CLI connector write tools without explicit permission and audits denial", async () => {
+  test("denies CLI connector write tools even with elevated permission request and audits denial", async () => {
     const db = await openFixture();
     const dir = await cliConnectorFixtureDir();
     try {
@@ -169,7 +169,8 @@ describe("PI tool registry read API", () => {
       const response = await router.handle(new Request(`${BASE_URL}/api/pi/tools/fixture-cli%3Amutate/call`, {
         body: JSON.stringify({
           audit_context: { conversation_id: "conv-cli-denied", source: "test" },
-          input: { payload: "do-write" }
+          input: { payload: "do-write" },
+          permission: "write"
         }),
         method: "POST"
       }));
@@ -178,6 +179,7 @@ describe("PI tool registry read API", () => {
       await expect(response.json()).resolves.toMatchObject({
         result: { error: { code: "permission_denied" }, status: "denied" }
       });
+      expect(listPiActions(db, { status: "pending" })).toEqual([]);
       const audit = listPiActionEvents(db, { conversationId: "conv-cli-denied" })
         .find((event) => event.event_type === "tool_call_audit");
       expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
