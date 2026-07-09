@@ -10,3 +10,8 @@ test('api events client shares one EventSource across subscribers', () => {
   assert.match(clientSource, /function ensureSharedEventSource\(\)/);
   assert.match(clientSource, /eventSubscribers\.size === 0[\s\S]*sharedEventSource\?\.close\(\)/);
 });
+
+test('api client exposes PI conversation interrupt endpoint', () => {
+  assert.match(clientSource, /interruptPiConversation:\s*\(id\) => request/);
+  assert.ok(clientSource.includes('`/api/pi/conversations/${encodeURIComponent(id)}/interrupt`'));
+});

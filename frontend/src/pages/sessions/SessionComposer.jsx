@@ -83,7 +83,6 @@ export default function SessionComposer({
   return (
     <form className="session-composer" onSubmit={onSubmit}>
       <QueueStatus
-        running={running}
         queuedMessages={queuedMessages}
         onCancel={onCancelQueuedMessage}
         onRetry={onRetryQueuedMessage}
@@ -140,7 +139,7 @@ function InterruptStatus({ interruptState, selectedId }) {
   );
 }
 
-function QueueStatus({ running, queuedMessages, onCancel, onRetry }) {
+function QueueStatus({ queuedMessages, onCancel, onRetry }) {
   if (queuedMessages.length === 0) return null;
   return (
     <div className="session-message-queue-panel">
@@ -266,14 +265,14 @@ function ComposerActions({
   onFollowModeChange,
   onStop,
 }) {
-  const modeSwitch = running ? (
+  const modeSwitch = running && onFollowModeChange ? (
     <ComposerModeSwitch value={followMode} onChange={onFollowModeChange} disabled={sending || interrupting} />
   ) : null;
   if (running) {
     return (
       <>
         {modeSwitch}
-        <button type="button" className="session-composer-circle" onClick={onStop} disabled={!selectedId || interrupting} title={interrupting ? '正在中断...' : '停止'}>
+        <button type="button" className="session-composer-circle stop" onClick={onStop} disabled={!selectedId || interrupting} title={interrupting ? '正在中断...' : '停止'}>
           {interrupting ? <Loader2 className="animate-spin" size={14} /> : <Square size={14} fill="currentColor" />}
         </button>
       </>

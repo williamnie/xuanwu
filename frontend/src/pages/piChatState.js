@@ -6,6 +6,8 @@ import { DEFAULT_PI_AGENT_ID } from './piAgentSettingsState';
 import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
 
 const DEFAULT_TRANSCRIPT = [];
+const STOP_RETRY_COUNT = 4;
+const STOP_RETRY_DELAY_MS = 160;
 
 export function usePiChatState() {
   const state = usePiChatFields();
@@ -20,6 +22,7 @@ export function usePiChatState() {
   });
   const createConversation = useCreatePiConversation(state);
   const sendMessage = useSendPiMessage(state, createConversation, loadPiState, liveRefs);
+  const stopMessage = useStopPiMessage(state);
 
   useEffect(() => {
     loadPiState();
@@ -31,6 +34,7 @@ export function usePiChatState() {
     handleConversationChange: state.selectConversation,
     handleCreateConversation: () => createConversation('New conversation', { notify: true }),
     handleSend: sendMessage,
+    handleStop: stopMessage,
     loadPiState
   };
 }
@@ -44,8 +48,10 @@ function usePiChatFields() {
   const [prompt, setPrompt] = useState('');
   const [projects, setProjects] = useState([]);
   const [references, setReferences] = useState([]);
+  const [runningConversationId, setRunningConversationId] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [error, setError] = useState('');
   const selectedAgent = useMemo(() => agents.find((agent) => agent.id === selectedAgentId), [agents, selectedAgentId]);
   const selectedConversation = useMemo(
@@ -78,10 +84,10 @@ function usePiChatFields() {
   const removeReference = useCallback((key) => {
     setReferences((current) => current.filter((item) => referenceKey(item) !== key));
   }, []);
-  return { agents, attachReference, error, filteredConversations: conversations, loading, projects, prompt, references, removeReference, selectConversation,
-    selectedAgent, selectedAgentId, selectedConversation, selectedConversationId, selectedProject, sending,
+  return { agents, attachReference, error, filteredConversations: conversations, loading, projects, prompt, references, removeReference, runningConversationId,
+    selectConversation, selectedAgent, selectedAgentId, selectedConversation, selectedConversationId, selectedProject, sending, stopping,
     setAgents, setConversations, setError, setLoading, setProjects, setPrompt, setReferences, setSelectedAgentId,
-    setSelectedConversationId, setSending, setTranscript, transcript };
+    setSelectedConversationId, setRunningConversationId, setSending, setStopping, setTranscript, transcript };
 }
 
 function conversationTranscript(detail) {
@@ -172,10 +178,31 @@ function useSendPiMessage(state, createConversation, loadPiState, liveRefs) {
   }, [createConversation, liveRefs, loadPiState, state]);
 }
 
+function useStopPiMessage(state) {
+  return useCallback(async () => {
+    const conversationId = state.runningConversationId;
+    if (!state.sending || !conversationId || state.stopping) return;
+    state.setStopping(true);
+    try {
+      const result = await interruptActivePiConversation(conversationId);
+      if (result?.interrupted) {
+        message.success('已请求停止 PI Assistant');
+        return;
+      }
+      state.setStopping(false);
+      message.error('当前没有可停止的 PI Assistant 执行');
+    } catch (err) {
+      state.setStopping(false);
+      message.error(err.message || '停止 PI Assistant 失败');
+    }
+  }, [state]);
+}
+
 async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject = null, liveRefs = null) {
   setPiLiveConversation(liveRefs, conversationId);
   state.setTranscript((items) => [...items, transcriptMessage('user', text)]);
   state.setPrompt('');
+  state.setRunningConversationId(conversationId);
   state.setSending(true);
   try {
     const result = await api.sendPiConversationMessage(conversationId, { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) });
@@ -187,8 +214,24 @@ async function sendPromptToPi(state, conversationId, text, loadPiState, targetPr
     message.error(err.message || '发送 Assistant 消息失败');
   } finally {
     clearPiLiveAssistant(liveRefs);
+    state.setRunningConversationId('');
     state.setSending(false);
+    state.setStopping(false);
   }
+}
+
+async function interruptActivePiConversation(conversationId) {
+  let result = null;
+  for (let attempt = 0; attempt <= STOP_RETRY_COUNT; attempt += 1) {
+    result = await api.interruptPiConversation(conversationId);
+    if (result?.interrupted || attempt === STOP_RETRY_COUNT) return result;
+    await delay(STOP_RETRY_DELAY_MS);
+  }
+  return result;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function hydrateConversationTranscript(state, conversationId, fallbackResult = null) {

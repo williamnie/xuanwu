@@ -448,3 +448,51 @@
   background: rgba(255, 255, 255, 0.08);
   color: #f0eee7;
 }
+
+.session-composer-circle.stop,
+.client-chat-composer-section .session-composer-circle.stop,
+.pi-chat-composer .session-composer-circle.stop {
+  animation: composer-stop-pulse 1.35s ease-in-out infinite;
+  background: #ef4444;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.16),
+    0 10px 22px rgba(239, 68, 68, 0.24);
+  color: #fff;
+}
+
+.session-composer-circle.stop:hover:not(:disabled),
+.client-chat-composer-section .session-composer-circle.stop:hover:not(:disabled),
+.pi-chat-composer .session-composer-circle.stop:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px) scale(1.03);
+}
+
+.session-composer-circle.stop:disabled,
+.client-chat-composer-section .session-composer-circle.stop:disabled,
+.pi-chat-composer .session-composer-circle.stop:disabled {
+  animation: none;
+  background: #f87171;
+  opacity: 0.72;
+}
+
+[data-theme="dark"] .session-composer-circle.stop,
+[data-theme="dark"] .client-chat-composer-section .session-composer-circle.stop,
+[data-theme="dark"] .pi-chat-composer .session-composer-circle.stop {
+  background: #fb7185;
+  color: #25070b;
+}
+
+@keyframes composer-stop-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px rgba(239, 68, 68, 0.16),
+      0 10px 22px rgba(239, 68, 68, 0.24);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 7px rgba(239, 68, 68, 0.06),
+      0 12px 26px rgba(239, 68, 68, 0.3);
+  }
+}

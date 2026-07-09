@@ -84,6 +84,17 @@ test('PI Assistant composer supports @project activation and PI model context', 
   assert.doesNotMatch(pageSource, /state\.updateMessageSetting/);
 });
 
+test('PI Assistant composer exposes an active stop control while sending', () => {
+  assert.match(pageSource, /const messageRunning = Boolean\(state\.sending && state\.runningConversationId\)/);
+  assert.match(pageSource, /const selectedId = state\.runningConversationId \|\| state\.selectedConversationId \|\| 'runner-draft'/);
+  assert.match(pageSource, /running=\{messageRunning\}/);
+  assert.match(pageSource, /interruptState=\{messageRunning \? piChatInterruptState\(state, selectedId\) : null\}/);
+  assert.match(pageSource, /onStop=\{state\.handleStop\}/);
+  assert.match(pageSource, /function piChatInterruptState/);
+  assert.match(stateSource, /function useStopPiMessage\(state\)/);
+  assert.match(stateSource, /api\.interruptPiConversation\(conversationId\)/);
+});
+
 test('PI Assistant chat lists all conversations instead of only active rows', () => {
   assert.match(stateSource, /api\.getPiConversations\(\)/);
   assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);

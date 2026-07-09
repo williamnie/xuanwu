@@ -181,6 +181,8 @@ function ChatThread({ navigateTo, state }) {
 const PI_CHAT_COMPOSER_SETTINGS = { model: '', reasoningEffort: '', approvalPolicy: 'never', sandbox: 'workspace-write' };
 
 function ChatComposer({ state }) {
+  const messageRunning = Boolean(state.sending && state.runningConversationId);
+  const selectedId = state.runningConversationId || state.selectedConversationId || 'runner-draft';
   return (
     <div className="pi-chat-composer">
       <SessionComposer
@@ -192,9 +194,9 @@ function ChatComposer({ state }) {
         modelsLoading={false}
         modelsError=""
         sending={state.sending}
-        running={false}
-        interruptState={null}
-        selectedId={state.selectedConversationId || 'runner-draft'}
+        running={messageRunning}
+        interruptState={messageRunning ? piChatInterruptState(state, selectedId) : null}
+        selectedId={selectedId}
         placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Assistant 输入体验..."
         onSubmit={state.handleSend}
         suggestions={buildPiChatProjectSuggestions(state.projects)}
@@ -202,10 +204,20 @@ function ChatComposer({ state }) {
         onAttachReference={state.attachReference}
         onRemoveReference={state.removeReference}
         runtimeControls={<PiChatComposerMeta agent={state.selectedAgent} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
-        onStop={() => {}}
+        onStop={state.handleStop}
       />
     </div>
   );
+}
+
+function piChatInterruptState(state, selectedId) {
+  if (!state.stopping) return null;
+  return {
+    sessionId: selectedId,
+    status: 'pending',
+    text: '正在停止 PI Assistant...',
+    tone: 'info'
+  };
 }
 
 function AgentStatus({ agent }) {

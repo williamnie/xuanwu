@@ -26,12 +26,21 @@ test('queued messages stay compact directly above composer input', () => {
 });
 
 test('running composer defaults to guidance without top queue hint', () => {
+  assert.match(source, /running && onFollowModeChange/);
   assert.match(source, /<ComposerModeSwitch value=\{followMode\}/);
   assert.match(source, /followMode = true/);
   assert.match(sessionsSource, /\[followRunningTurn,\s*setFollowRunningTurn\]\s*=\s*useState\(true\)/);
   assert.doesNotMatch(css, /session-message-queue-hint/);
   assert.doesNotMatch(source, /className="session-message-queue-hint" role="status"/);
   assert.doesNotMatch(source, /发送会排队为下一条/);
+});
+
+test('running stop action is visibly distinct from disabled sending spinner', () => {
+  const stopRule = ruleFor('.session-composer-circle.stop');
+  assert.match(source, /className="session-composer-circle stop"/);
+  assert.match(stopRule, /animation:\s*composer-stop-pulse/);
+  assert.match(stopRule, /background:\s*#ef4444/);
+  assert.match(css, /@keyframes composer-stop-pulse/);
 });
 
 

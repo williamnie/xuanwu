@@ -505,6 +505,11 @@ export const api = {
     body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
   }),
 
+  interruptPiConversation: (id) => request(`/api/pi/conversations/${encodeURIComponent(id)}/interrupt`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+
   getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities'),
 
   getPiHeartbeatTimeline: ({ projectId = '', issueId = '', limit = 80 } = {}) => {
