@@ -110,7 +110,21 @@ function executablePayload(
     return replyPayload(db, proposal, action, payload);
   }
   if (action.type === "issue.status_lookup") return withProjectHint(action, payload);
-  return payload;
+  return withProposalTrace(proposal, action, payload);
+}
+
+function withProposalTrace(
+  proposal: ActionProposalRecord,
+  action: ActionProposalAction,
+  payload: JsonObject
+): JsonObject {
+  return {
+    ...payload,
+    evidence_refs: [...new Set([...stringList(payload.evidence_refs), ...action.evidence_refs, ...proposal.evidence_refs])],
+    proposal_id: proposal.id,
+    proposal_ref: `proposal:${proposal.id}`,
+    source_item_ids: proposal.source_item_ids
+  };
 }
 
 function issueCreatePayload(proposal: ActionProposalRecord, action: ActionProposalAction, payload: JsonObject): JsonObject {
@@ -235,10 +249,21 @@ function withExecution(actions: ActionProposalAction[], executions: ExecutionSum
 }
 
 function markSourceItems(db: RunnerDatabase, proposal: ActionProposalRecord, executions: ExecutionSummary[]): void {
-  const status = executions.some((item) => item.execution_status === "completed") ? "actioned" : "failed";
+  const status = sourceItemStatus(proposal.actions, executions);
   for (const id of proposal.source_item_ids.map(attentionItemID).filter(Boolean)) {
     if (getAttentionInboxItem(db, id)) updateAttentionInboxItemStatus(db, id, status);
   }
+}
+
+function sourceItemStatus(
+  actions: ActionProposalAction[],
+  executions: ExecutionSummary[]
+): "actioned" | "failed" | "ignored" {
+  if (executions.some((item) => item.execution_status === "failed")) return "failed";
+  if (actions.length > 0 && actions.every((action) => action.type === "no_action")) {
+    return executions.every((item) => item.execution_status === "completed") ? "ignored" : "failed";
+  }
+  return executions.some((item) => item.execution_status === "completed") ? "actioned" : "failed";
 }
 
 function firstExternalEvent(db: RunnerDatabase, refs: string[]) {

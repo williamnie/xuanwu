@@ -65,10 +65,24 @@ function actionNode(action: PiAction): PiActivityNode {
 
 function actionEventNode(event: PiActionEvent): PiActivityNode {
   const kind = actionEventKind(event);
-  return node(kind, `${kind}:${event.id}`, event.created_at, event.decision || event.event_type, event.event_type, event.reason || event.error || jsonSummary(event.payload_json), {
+  return node(kind, `${kind}:${event.id}`, event.created_at, event.decision || event.event_type, event.event_type, eventSummary(event), {
     action: `/api/pi/actions/${encodeURIComponent(event.action_id)}`,
     events: `/api/pi/actions/${encodeURIComponent(event.action_id)}/events`
   }, { action_id: event.action_id, event_id: event.id, issue_id: event.issue_id || undefined }, [`pi_action:${event.action_id}`], event.decision);
+}
+
+function eventSummary(event: PiActionEvent): string {
+  return event.reason || event.error || nonEmptyJsonSummary(event.payload_json) || jsonSummary(event.result_json);
+}
+
+function nonEmptyJsonSummary(value: string): string {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return jsonSummary(value);
+    return Object.keys(parsed).length > 0 ? jsonSummary(value) : "";
+  } catch {
+    return jsonSummary(value);
+  }
 }
 
 function actionEventKind(event: PiActionEvent): string {

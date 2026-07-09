@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
-import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
+import { createAttentionInboxItem, createIntakeRun, getAttentionInboxItem } from "../db/repositories/intakeRuns.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listImReplyDrafts, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { getPiAction, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
+import { getPiAction, getPiIssueCompletionWatch, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { listPiAutomations } from "../db/repositories/piAutomations.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -266,6 +268,130 @@ describe("PI action proposals API", () => {
     }
   });
 
+  test("approving non-issue proposal actions terminalizes into traceable records", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      seedProject(db, "demo");
+      const itemID = seedBugReport(db);
+      const watched = createIssue(db, { project_id: "demo", status: "todo", title: "Watched task" });
+      const router = createDefaultRouter({ database: db });
+
+      const proposal = await jsonRequest(router, "/api/pi/action-proposals", {
+        body: JSON.stringify({
+          actions: [
+            action("ask_user", { question: "要把这个提醒发到群里吗？" }, "low", false),
+            action("watch_thread", {
+              issue_ids: [watched.id],
+              project_id: "demo",
+              target_channel: "feishu",
+              target_chat_id: "oc_watch"
+            }, "low", false),
+            action("reminder.create", {
+              due_at: "2999-01-01T00:00:00Z",
+              summary: "到点检查是否需要继续跟进",
+              title: "跟进提醒"
+            }, "low", false),
+            action("memory.create", {
+              content: "用户偏好：提醒前先确认是否需要发群。",
+              kind: "preference",
+              scope: "inbox"
+            }, "low", false)
+          ],
+          confidence: 0.86,
+          evidence_refs: [`external_event:${itemID}`],
+          skill_run_id: "domain-run-non-issue",
+          source_item_ids: [`attention_inbox_item:${itemID}`],
+          summary: "需要询问、监听、提醒并写入记忆候选。",
+          target_hints: [{ confidence: 0.9, id: "demo", kind: "project" }]
+        }),
+        method: "POST"
+      });
+
+      const approved = await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
+        body: JSON.stringify({ actor: "tester" }),
+        method: "POST"
+      });
+      const actions = approved.actions as Array<{ execution_status?: string; pi_action_id?: string; result?: Record<string, unknown>; type: string }>;
+      const byType = new Map(actions.map((item) => [item.type, item]));
+      const watchID = String(byType.get("watch_thread")?.result?.watch_id || "");
+      const memoryID = String(byType.get("memory.create")?.result?.memory_id || "");
+      const reminderID = Number(byType.get("reminder.create")?.result?.automation_id || 0);
+
+      expect(actions.map((item) => [item.type, item.execution_status, Boolean(item.pi_action_id)])).toEqual([
+        ["ask_user", "completed", true],
+        ["watch_thread", "completed", true],
+        ["reminder.create", "completed", true],
+        ["memory.create", "completed", true]
+      ]);
+      expect(byType.get("ask_user")?.result).toMatchObject({ question: "要把这个提醒发到群里吗？", status: "needs_user" });
+      expect(getPiIssueCompletionWatch(db, watchID)).toMatchObject({
+        status: "active",
+        target_chat_id: "oc_watch",
+        items: [expect.objectContaining({ issue_id: watched.id })]
+      });
+      expect(listPiAutomations(db).find((item) => item.id === reminderID)).toMatchObject({
+        mode: "draft",
+        name: "跟进提醒",
+        next_run_at: "2999-01-01T00:00:00.000Z",
+        trigger_type: "schedule"
+      });
+      expect(listPiMemoryItems(db).find((item) => item.id === memoryID)).toMatchObject({
+        content: "用户偏好：提醒前先确认是否需要发群。",
+        disabled: 1,
+        scope: "inbox",
+        source_id: proposal.id,
+        source_type: "action_proposal"
+      });
+      expect(getAttentionInboxItem(db, itemID)).toMatchObject({ status: "actioned" });
+
+      const timeline = await jsonRequest(router, `/api/pi/activity?proposal_id=${proposal.id}&limit=200`);
+      const timelineText = JSON.stringify(timeline);
+      expect(timelineText).toContain("needs_user");
+      expect(timelineText).toContain("跟进提醒");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("approving no_action records ignored reason and marks inbox ignored", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const itemID = seedBugReport(db);
+      const router = createDefaultRouter({ database: db });
+      const proposal = await jsonRequest(router, "/api/pi/action-proposals", {
+        body: JSON.stringify({
+          actions: [action("no_action", { reason: "这是重复通知，不需要处理。" }, "low", false)],
+          confidence: 0.7,
+          evidence_refs: [`external_event:${itemID}`],
+          skill_run_id: "domain-run-no-action",
+          source_item_ids: [`attention_inbox_item:${itemID}`],
+          summary: "重复通知无需处理。",
+          target_hints: []
+        }),
+        method: "POST"
+      });
+
+      const approved = await jsonRequest(router, `/api/pi/action-proposals/${proposal.id}/approve`, {
+        body: JSON.stringify({ actor: "tester" }),
+        method: "POST"
+      });
+      const [noAction] = approved.actions as Array<{ execution_status?: string; pi_action_id?: string; result?: Record<string, unknown>; type: string }>;
+
+      expect(noAction).toMatchObject({
+        execution_status: "completed",
+        result: { ignored: true, reason: "这是重复通知，不需要处理。", status: "ignored" },
+        type: "no_action"
+      });
+      expect(noAction.pi_action_id).toBeTruthy();
+      expect(getAttentionInboxItem(db, itemID)).toMatchObject({ status: "ignored" });
+
+      const timeline = await jsonRequest(router, `/api/pi/activity?proposal_id=${proposal.id}&limit=200`);
+      expect(JSON.stringify(timeline)).toContain("这是重复通知");
+    } finally {
+      db.close();
+    }
+  });
+
   test("source issue policy can allow triage issue creation with audit event", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -428,12 +554,12 @@ function sourcePolicyReason(db: RunnerDatabase, actionID: string): string {
   return event?.reason ?? "";
 }
 
-async function jsonRequest(router: ReturnType<typeof createDefaultRouter>, path: string, init: RequestInit = {}) {
+async function jsonRequest<T = any>(router: ReturnType<typeof createDefaultRouter>, path: string, init: RequestInit = {}): Promise<T> {
   const response = await router.handle(new Request(`${BASE_URL}${path}`, {
     headers: { "content-type": "application/json" },
     ...init
   }));
   expect(response.status).toBeGreaterThanOrEqual(200);
   expect(response.status).toBeLessThan(300);
-  return response.json();
+  return await response.json() as T;
 }

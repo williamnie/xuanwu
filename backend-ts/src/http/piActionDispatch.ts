@@ -9,6 +9,13 @@ import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { applyIssueStateRepair } from "../pi/issueStateManager.ts";
 import { createAgentWorkflowProposal, type AgentWorkflowInput } from "../pi/agentOrchestration.ts";
 import { createIssueEnqueueCron } from "../pi/runnerIssueScheduleActions.ts";
+import {
+  askUserActionResult,
+  createMemoryFromAction,
+  createReminderFromAction,
+  createWatchThreadFromAction,
+  noActionResult
+} from "../pi/nonIssueProposalActions.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import {
@@ -62,6 +69,16 @@ export async function dispatchPiAction(
       ).id);
     case "issue.schedule_enqueue":
       return createIssueEnqueueCron(context.database, payload);
+    case "ask_user":
+      return askUserActionResult(action, payload);
+    case "watch_thread":
+      return createWatchThreadFromAction(context.database, action, payload);
+    case "reminder.create":
+      return createReminderFromAction(context.database, action, payload);
+    case "memory.create":
+      return createMemoryFromAction(context.database, action, payload);
+    case "no_action":
+      return noActionResult(action, payload);
     case "issue_completion_watch.create":
       return createIssueCompletionWatchAction(context.database, payload as IssueCompletionWatchCreateInput);
     case "issue_completion_watch.cancel":
