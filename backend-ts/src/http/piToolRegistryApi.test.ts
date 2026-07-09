@@ -32,12 +32,21 @@ describe("PI tool registry read API", () => {
 
       expect(providers.status).toBe(200);
       await expect(providers.json()).resolves.toMatchObject({
-        providers: [expect.objectContaining({ id: "runner-builtin", kind: "builtin" })]
+        providers: expect.arrayContaining([
+          expect.objectContaining({ id: "http-readonly", kind: "http" }),
+          expect.objectContaining({ id: "runner-builtin", kind: "builtin" })
+        ])
       });
 
       expect(tools.status).toBe(200);
       const toolBody = await tools.json() as Record<string, any>;
       expect(toolBody.tools).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          name: "url_fetch",
+          permission: "read",
+          provider: expect.objectContaining({ id: "http-readonly", kind: "http" }),
+          provider_id: "http-readonly"
+        }),
         expect.objectContaining({
           description: expect.any(String),
           input_schema: expect.objectContaining({ type: "object" }),

@@ -1,10 +1,11 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { createPiProjectTools, PI_READ_ONLY_TOOLS } from "../http/piProjectTools.ts";
+import { createPiProjectTools } from "../http/piProjectTools.ts";
 import type { AssistantTool, ToolJsonSchema, ToolPermission, ToolProvider } from "./toolProviderEnvelope.ts";
 
 export const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
+const PRIMITIVE_READ_TOOL_NAMES = ["read", "grep", "find", "ls"] as const;
 const READ_TOOL_NAMES = new Set<string>([
-  ...PI_READ_ONLY_TOOLS,
+  ...PRIMITIVE_READ_TOOL_NAMES,
   "issue_list",
   "issue_status_summary",
   "issue_execution_status",
@@ -60,7 +61,7 @@ function piActionTools(): AssistantTool[] {
 }
 
 function primitiveReadTools(): AssistantTool[] {
-  return PI_READ_ONLY_TOOLS.map((name) => ({
+  return PRIMITIVE_READ_TOOL_NAMES.map((name) => ({
     audit: { redact: [] },
     description: primitiveDescription(name),
     input_schema: primitiveSchema(name),

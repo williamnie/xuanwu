@@ -3,6 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createPiProjectTools } from "../http/piProjectTools.ts";
 import { callCliConnectorTool } from "./cliConnectorToolCall.ts";
+import { callHttpTool } from "./httpToolCall.ts";
 import { callMcpTool } from "./mcpToolCall.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
@@ -39,6 +40,7 @@ export async function invokeReadOnlyAssistantTool(input: ReadOnlyToolInvocationI
   const kind = target.provider?.kind ?? providerKindFromMetadata(target.tool);
   if (kind === "cli") return callCli(input, clock);
   if (kind === "mcp") return callMcp(input, target.tool, clock);
+  if (kind === "http") return callHttp(input, target.tool, clock);
   if (kind === "builtin") return callBuiltin(input, target.tool, clock);
   return auditLocalResult(input, target.tool, unsupportedProviderResult(clock, kind));
 }
@@ -88,6 +90,15 @@ function callMcp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock:
   });
 }
 
+async function callHttp(input: ReadOnlyToolInvocationInput, tool: AssistantTool, clock: InvocationClock): Promise<ToolResult> {
+  return auditLocalResult(input, tool, await callHttpTool({
+    input: input.input ?? {},
+    invocationID: clock.invocationID,
+    timeoutMs: input.timeoutMs ?? tool.timeout_ms,
+    toolName: input.toolName
+  }));
+}
+
 async function callBuiltin(
   input: ReadOnlyToolInvocationInput,
   tool: AssistantTool,
@@ -111,13 +122,14 @@ function builtinDefinition(input: ReadOnlyToolInvocationInput, name: string): To
   const context = auditContext(input);
   const projectID = input.projectID || cleanString(input.input?.project_id) || context.projectID;
   const project = projectID ? getProject(input.db, projectID) ?? undefined : undefined;
-  return createPiProjectTools(input.db, project, {
+  const toolContext = {
     conversationID: context.conversationID,
     delegationID: context.delegationID,
     heartbeatID: context.heartbeatID,
     issueID: context.issueID,
     source: context.source || "read_only_tool_invocation"
-  }).find((item) => item.name === name);
+  };
+  return createPiProjectTools(input.db, project, toolContext).find((item) => item.name === name);
 }
 
 async function executeDefinition(
