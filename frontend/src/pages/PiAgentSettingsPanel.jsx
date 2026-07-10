@@ -1,4 +1,5 @@
 import { Bot, Eye, KeyRound, Loader2, RefreshCw, Save } from 'lucide-react';
+import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 
 export default function PiAgentSettingsPanel() {
@@ -8,7 +9,7 @@ export default function PiAgentSettingsPanel() {
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
       {state.loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 PI Assistant 配置...</div>
+        <PanelLoader label="玄武正在读取 Assistant 配置…" />
       ) : (
         <PiSettingsForm state={state} />
       )}

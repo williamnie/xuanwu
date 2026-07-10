@@ -9,6 +9,7 @@ import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import PromptEditor from '../components/editor/PromptEditor';
+import TurtleLoader from '../components/TurtleLoader';
 import { selectProjects, selectRefreshData, selectSetProjects, useDataStore } from '../store/dataStore';
 import ApprovalDialog from './sessions/ApprovalDialog';
 import {
@@ -979,8 +980,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
             <div className="client-chat-area">
               {detailLoading ? (
                 <div className="session-detail-loading">
-                  <Loader2 className="animate-spin" size={24} color="var(--primary)" />
-                  <span>正在加载会话详情...</span>
+                  <TurtleLoader label="玄武正在翻阅会话记录…" />
                 </div>
               ) : selectedSession ? (
                 <SessionDetail
@@ -1212,7 +1212,9 @@ function SessionSidebarContent({
       <SessionListFilterTabs value={sessionListFilter} onChange={onSessionListFilterChange} />
       <div className="sidebar-scroll-area">
         {loading ? (
-          <div className="session-list-loading">加载 provider sessions...</div>
+          <div className="session-list-loading">
+            <TurtleLoader compact label="正在召回会话…" />
+          </div>
         ) : (
           <VirtualSessionList
             sessions={sessions}
@@ -1500,7 +1502,11 @@ function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detai
 }
 
 function LoadingState() {
-  return <div style={{ display: 'grid', placeItems: 'center', height: '60vh' }}><Loader2 className="animate-spin" size={36} color="var(--primary)" /></div>;
+  return (
+    <div className="session-loading-stage">
+      <TurtleLoader label="玄武正在召回最近会话…" />
+    </div>
+  );
 }
 
 function EmptyDetail() {

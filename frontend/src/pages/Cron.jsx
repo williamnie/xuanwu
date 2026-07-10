@@ -28,8 +28,8 @@ export default function Cron() {
   const doneCount = countByStatus(cronTasks, 'done');
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, flex: 1 }}>
-      <div style={{ flexShrink: 0, padding: '24px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
+    <div className="cron-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, flex: 1 }}>
+      <div className="page-intro" style={{ flexShrink: 0, padding: '24px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <CalendarClock size={28} color="var(--primary)" /> Cron

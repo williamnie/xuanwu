@@ -67,25 +67,25 @@ export default function AppSidebar({
 
 
       <div className="sidebar-nav-group">
-        <button className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
+        <button aria-label="Dashboard" className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
           <NavIconLabel Icon={LayoutDashboard} label="Dashboard" />
         </button>
 
-        <button className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
+        <button aria-label="Sessions" className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
           <NavIconLabel Icon={Layers} label="Sessions" />
         </button>
 
-        <button className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
+        <button aria-label="Issues" className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
           <NavIconLabel Icon={ListTodo} label="Issues" />
           <IssueCountBadge active={currentPage === 'issues'} />
         </button>
 
-        <button className={`nav-item ${currentPage === 'cron' ? 'active' : ''}`} onClick={() => navigateTo('cron')}>
+        <button aria-label="Cron" className={`nav-item ${currentPage === 'cron' ? 'active' : ''}`} onClick={() => navigateTo('cron')}>
           <NavIconLabel Icon={CalendarClock} label="Cron" />
           <CronCountBadge active={currentPage === 'cron'} />
         </button>
 
-        <button className={`nav-item ${currentPage === 'projects' ? 'active' : ''}`} onClick={() => navigateTo('projects')}>
+        <button aria-label="Projects" className={`nav-item ${currentPage === 'projects' ? 'active' : ''}`} onClick={() => navigateTo('projects')}>
           <NavIconLabel Icon={FolderGit2} label="Projects" />
           <ProjectCountBadge active={currentPage === 'projects'} />
         </button>
@@ -95,6 +95,7 @@ export default function AppSidebar({
       <div className="sidebar-nav-group pi-assistant-nav">
         {PI_ASSISTANT_NAV_ITEMS.map((module) => (
           <button
+            aria-label={module.label}
             className={`nav-item pi-assistant-item ${currentPage === module.page ? 'active' : ''}`}
             key={module.page}
             onClick={() => navigateTo(module.page)}
@@ -121,6 +122,7 @@ export default function AppSidebar({
       <div className="sidebar-footer">
         <div className="sidebar-footer-actions">
           <button
+            aria-label={PI_ASSISTANT_SETTINGS_ITEM.label}
             className={`nav-item nav-item-secondary ${settingsActive ? 'active' : ''}`}
             onClick={() => navigateTo(PI_ASSISTANT_SETTINGS_ITEM.page)}
             type="button"
@@ -128,6 +130,7 @@ export default function AppSidebar({
             <NavIconLabel Icon={Settings} label={PI_ASSISTANT_SETTINGS_ITEM.label} />
           </button>
           <button
+            aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
             className="nav-item nav-item-secondary sidebar-theme-row"
             onClick={toggleTheme}
             type="button"

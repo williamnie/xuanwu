@@ -1,5 +1,6 @@
 import { Bot, ChevronDown, Copy, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
+import TurtleLoader from '../components/TurtleLoader';
 import SessionComposer from './sessions/SessionComposer';
 import PiChatComposerMeta from './PiChatComposerMeta';
 import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
@@ -236,8 +237,7 @@ function AgentStatus({ agent }) {
 function LoadingState() {
   return (
     <div className="pi-chat-empty">
-      <Loader2 className="spin-animation" size={22} />
-      正在读取 Assistant 会话...
+      <TurtleLoader label="玄武正在连接 Assistant…" />
     </div>
   );
 }

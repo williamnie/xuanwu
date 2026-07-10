@@ -14,6 +14,7 @@ import Settings from './pages/Settings';
 import { assistantModuleForPage, isAssistantModulePage } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
+import TurtleLoader from './components/TurtleLoader';
 import {
   selectLoading,
   selectRefreshData,
@@ -21,7 +22,7 @@ import {
   useDataStore,
 } from './store/dataStore';
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
-import { Loader2, Menu } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
 import './App.css';
@@ -268,9 +269,8 @@ export default function App() {
       <main className="main-content">
         <GuardianAlertBanner />
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '16px' }}>
-            <Loader2 className="animate-spin" size={32} color="var(--primary)" />
-            <p style={{ color: 'var(--text-secondary)' }}>载入系统中...</p>
+          <div className="app-loading-stage">
+            <TurtleLoader label="玄武正在唤醒工作台…" />
           </div>
         ) : (
           currentPage === 'issues' && selectedIssueId ? (

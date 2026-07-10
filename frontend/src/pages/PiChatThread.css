@@ -432,3 +432,153 @@
   background: rgba(255, 255, 255, 0.09);
   color: #f0eee7;
 }
+
+/* Xuanwu unified workspace: PI Chat now shares the Issue page surface language. */
+.pi-chat-page,
+[data-theme="dark"] .pi-chat-page {
+  background:
+    radial-gradient(circle at 76% 8%, color-mix(in srgb, var(--brand-mint) 8%, transparent), transparent 30%),
+    var(--bg-primary);
+  color: var(--text-primary);
+  padding: 14px;
+}
+
+.pi-chat-shell {
+  gap: 12px;
+  grid-template-columns: minmax(250px, 286px) minmax(0, 1fr);
+}
+
+.pi-chat-sidebar.glass-card,
+[data-theme="dark"] .pi-chat-sidebar.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 14px;
+}
+
+.pi-chat-main.glass-card,
+[data-theme="dark"] .pi-chat-main.glass-card {
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.pi-chat-main::before,
+[data-theme="dark"] .pi-chat-main::before {
+  display: none;
+}
+
+.pi-chat-sidebar-brand strong,
+[data-theme="dark"] .pi-chat-sidebar-brand strong,
+.pi-chat-main-header strong,
+[data-theme="dark"] .pi-chat-main-header strong,
+.pi-chat-markdown,
+[data-theme="dark"] .pi-chat-markdown {
+  color: var(--text-primary);
+}
+
+.pi-chat-sidebar-brand span,
+[data-theme="dark"] .pi-chat-sidebar-brand span,
+.pi-chat-field span,
+.pi-chat-sidebar-title,
+[data-theme="dark"] .pi-chat-field span,
+[data-theme="dark"] .pi-chat-sidebar-title,
+.pi-chat-main-header span,
+.pi-chat-main-header small,
+[data-theme="dark"] .pi-chat-main-header span,
+[data-theme="dark"] .pi-chat-main-header small,
+.pi-chat-bubble-role,
+[data-theme="dark"] .pi-chat-bubble-role {
+  color: var(--text-muted);
+}
+
+.pi-chat-sidebar-icon,
+.pi-chat-icon-button,
+[data-theme="dark"] .pi-chat-sidebar-icon,
+[data-theme="dark"] .pi-chat-icon-button,
+.pi-chat-agent-status,
+[data-theme="dark"] .pi-chat-agent-status {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  color: var(--text-secondary);
+}
+
+.pi-chat-sidebar .btn.btn-primary,
+[data-theme="dark"] .pi-chat-sidebar .btn.btn-primary {
+  background: var(--primary-gradient);
+  color: white;
+}
+
+.pi-chat-conversation,
+[data-theme="dark"] .pi-chat-conversation {
+  color: var(--text-secondary);
+}
+
+.pi-chat-conversation:hover,
+.pi-chat-conversation.active,
+[data-theme="dark"] .pi-chat-conversation:hover,
+[data-theme="dark"] .pi-chat-conversation.active {
+  background: var(--primary-glow);
+  color: var(--text-primary);
+}
+
+.pi-chat-main-header {
+  border-bottom: 1px solid var(--border-light);
+  margin: 0;
+  max-width: none;
+  padding: 16px 20px;
+}
+
+.pi-chat-thread {
+  padding: 28px clamp(18px, 5vw, 72px) 22px;
+}
+
+.pi-chat-bubble.user,
+[data-theme="dark"] .pi-chat-bubble.user {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+.pi-chat-composer {
+  border-top: 1px solid var(--border-light);
+  padding: 14px clamp(18px, 5vw, 72px) 18px;
+}
+
+.pi-chat-composer .prompt-editor-shell.composer,
+[data-theme="dark"] .pi-chat-composer .prompt-editor-shell.composer {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.pi-chat-runtime-pill,
+[data-theme="dark"] .pi-chat-runtime-pill {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  color: var(--text-secondary);
+}
+
+.pi-chat-runtime-pill:first-child,
+[data-theme="dark"] .pi-chat-runtime-pill:first-child {
+  background: var(--primary-glow);
+  color: var(--primary);
+}
+
+@media (max-width: 960px) {
+  .pi-chat-page {
+    padding: 0;
+  }
+
+  .pi-chat-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .pi-chat-sidebar.glass-card,
+  .pi-chat-main.glass-card {
+    border-radius: 0;
+  }
+}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bot, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
 import { api } from '../api/client';
+import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 
 export default function AutomationsRuntimePanel() {
@@ -50,7 +51,7 @@ function AutomationSummary({ counts }) {
 
 function AutomationList({ automations, loading, setState }) {
   if (loading && automations.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 automation rules...</div>;
+    return <PanelLoader label="正在整理 Automation 规则…" />;
   }
   if (automations.length === 0) {
     return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无 automation rules。</div>;

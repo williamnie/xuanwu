@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Link2, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
+import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import './ActivityTimelinePanel.css';
 
@@ -72,7 +73,7 @@ function TimelineSummary({ generatedAt, items }) {
 }
 
 function TimelineList({ items, loading, navigateTo }) {
-  if (loading && !items.length) return <div className="activity-empty">正在加载 Activity timeline…</div>;
+  if (loading && !items.length) return <PanelLoader label="正在拼接 Activity 时间线…" />;
   if (!items.length) return <div className="activity-empty">暂无可追踪 activity。可按 source / inbox / proposal / issue 缩小范围。</div>;
   return <div className="activity-list">{items.map((node) => <TimelineNode key={node.id} navigateTo={navigateTo} node={node} />)}</div>;
 }

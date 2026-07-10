@@ -60,15 +60,15 @@ export default function Dashboard({
   const doneIssues = issues.filter(i => i.status === 'done');
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div className="dashboard-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       
       {/* 头部标题区域 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>系统总览</h1>
           <p style={{ color: 'var(--text-muted)' }}>实时监控项目 Loop 运行状态与待处理 Issue 队列</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="page-intro-status" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span className={`status-dot ${activeLoopsCount > 0 ? 'active' : 'idle'}`}></span>
           <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             {activeLoopsCount > 0 ? `${activeLoopsCount} 个项目 Loop 运行中` : 'Loop 空闲中'}

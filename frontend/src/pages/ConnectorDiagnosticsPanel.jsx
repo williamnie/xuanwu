@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Cable, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
+import { PanelLoader } from '../components/TurtleLoader';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
 
@@ -53,7 +54,7 @@ function PanelHeader({ loading, onRefresh }) {
 
 function ConnectorBody({ connectors, loading, notice }) {
   if (loading && connectors.length === 0) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 connector 诊断...</div>;
+    return <PanelLoader label="正在检查 Connector…" />;
   }
   if (notice) {
     return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>{notice}</div>;

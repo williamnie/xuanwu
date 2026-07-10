@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, KeyRound } from 'lucide-react';
 import { api } from '../api/client';
+import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 
 const DEFAULT_FORM = {
@@ -78,7 +79,7 @@ function StatusPill({ enabled, status }) {
 }
 
 function SettingsForm({ form, loading, remote, saving, updateField, handleSubmit }) {
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>加载飞书配置...</div>;
+  if (loading) return <PanelLoader label="玄武正在读取飞书配置…" />;
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <ReceiveModeHint callbackPath={remote?.callback_path} receiveMode={form.receive_mode} settingsFile={remote?.settings_file} />

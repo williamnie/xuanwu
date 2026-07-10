@@ -360,15 +360,15 @@ export default function Projects() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, flex: 1 }}>
+    <div className="projects-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, flex: 1 }}>
       
       {/* 头部导航/动作栏 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, padding: '24px 0 8px 0' }}>
+      <div className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, padding: '24px 0 8px 0' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>项目管理</h1>
           <p style={{ color: 'var(--text-muted)' }}>管理本地项目代码库，控制 Codex 自动扫描和执行参数</p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div className="page-intro-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>
             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
             {syncing ? '正在同步...' : '同步 Codex 项目'}

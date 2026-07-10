@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, RefreshCw } from 'lucide-react';
 import { api } from '../api/client';
+import { PanelLoader } from '../components/TurtleLoader';
 
 export default function ProviderAvailabilityPanel() {
   const [status, setStatus] = useState(null);
@@ -48,7 +49,7 @@ function PanelHeader({ loading, onRefresh }) {
 
 function ProviderBody({ loading, status, providers }) {
   if (loading && !status) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取 provider 状态...</div>;
+    return <PanelLoader label="正在确认 Provider 状态…" />;
   }
   if (providers.length === 0) {
     return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无 provider 状态</div>;

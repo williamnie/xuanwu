@@ -1188,3 +1188,133 @@
   background: rgba(255, 255, 255, 0.055);
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* Xuanwu unified workspace: keep Sessions aligned with the Issue workbench. */
+.sessions-client-container {
+  font-family: var(--font-sans);
+}
+
+.in-sessions-page .sidebar,
+[data-theme="dark"] .in-sessions-page .sidebar {
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--brand-mint) 11%, transparent), transparent 30%),
+    var(--bg-sidebar);
+  border-right-color: var(--border-color);
+  box-shadow: none;
+}
+
+.in-sessions-page .nav-item.active,
+.in-sessions-page .sidebar-shortcut-item.active,
+.in-sessions-page .session-item-row.active,
+.in-sessions-page .pinned-session-row.active,
+[data-theme="dark"] .in-sessions-page .nav-item.active,
+[data-theme="dark"] .in-sessions-page .sidebar-shortcut-item.active,
+[data-theme="dark"] .in-sessions-page .session-item-row.active,
+[data-theme="dark"] .in-sessions-page .pinned-session-row.active {
+  background: var(--primary-glow);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.sessions-client-container,
+.sessions-client-main,
+.client-chat-area,
+.new-session-container,
+[data-theme="dark"] .sessions-client-container,
+[data-theme="dark"] .sessions-client-main,
+[data-theme="dark"] .client-chat-area,
+[data-theme="dark"] .new-session-container {
+  background:
+    radial-gradient(circle at 76% 8%, color-mix(in srgb, var(--brand-mint) 8%, transparent), transparent 30%),
+    var(--bg-primary);
+}
+
+.client-chat-area::before,
+[data-theme="dark"] .client-chat-area::before {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-primary) 94%, transparent), transparent);
+}
+
+.client-chat-area .session-runtime-header,
+[data-theme="dark"] .client-chat-area .session-runtime-header {
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  border-color: var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.client-chat-area .chat-bubble-container.user .chat-bubble-body,
+[data-theme="dark"] .client-chat-area .chat-bubble-container.user .chat-bubble-body {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-light) !important;
+  color: var(--text-primary) !important;
+}
+
+.client-chat-area .tools-trigger-btn,
+[data-theme="dark"] .client-chat-area .tools-trigger-btn {
+  background: var(--bg-secondary);
+  border-color: var(--border-light);
+  color: var(--text-secondary);
+}
+
+.client-chat-area .tools-trigger-btn:hover,
+.client-chat-area .tools-trigger-btn.open,
+[data-theme="dark"] .client-chat-area .tools-trigger-btn:hover,
+[data-theme="dark"] .client-chat-area .tools-trigger-btn.open {
+  background: var(--bg-card-hover);
+  border-color: var(--border-color-hover);
+  color: var(--text-primary);
+}
+
+.client-chat-composer-section .prompt-editor-shell.composer,
+.new-session-composer-wrapper .prompt-editor-shell.composer,
+[data-theme="dark"] .client-chat-composer-section .prompt-editor-shell.composer,
+[data-theme="dark"] .new-session-composer-wrapper .prompt-editor-shell.composer {
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  border-color: var(--border-color);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.new-session-center-card {
+  gap: 24px;
+  margin-top: -3vh;
+  max-width: 760px;
+}
+
+.new-session-title,
+[data-theme="dark"] .new-session-title {
+  color: var(--text-primary);
+  font-size: clamp(1.9rem, 3vw, 2.8rem);
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  max-width: 720px;
+}
+
+.new-session-bottom-tags .bottom-tag-select,
+.composer-embedded-select,
+[data-theme="dark"] .new-session-bottom-tags .bottom-tag-select,
+[data-theme="dark"] .composer-embedded-select {
+  background: var(--bg-card);
+  border-color: var(--border-light);
+}
+
+.session-list-loading {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 110px;
+  padding: 4px 0;
+}
+
+.session-loading-stage {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  min-height: 60vh;
+  width: 100%;
+}
+
+.session-detail-loading .turtle-loader {
+  margin: auto;
+}

@@ -3,6 +3,7 @@ import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-reac
 import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
+import { PanelLoader } from '../components/TurtleLoader';
 import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
 import { APP_VERSION, buildVersionSummary } from '../version';
 import SettingsTabContent from './AssistantSettingsSections';
@@ -169,7 +170,7 @@ function downloadText(filename, text) {
 
 function RuntimeStatusBody({ status, loading }) {
   if (loading && !status) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>正在读取状态...</div>;
+    return <PanelLoader label="正在确认 Runtime 状态…" />;
   }
   if (!status) {
     return <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>暂无状态数据</div>;

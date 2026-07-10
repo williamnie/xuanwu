@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, Bot, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { api } from '../api/client';
+import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import './AttentionInbox.css';
 
@@ -118,7 +119,7 @@ export default function AttentionInbox() {
       <div className="attention-inbox-grid">
         <aside className="attention-inbox-list">
           <div className="attention-list-head"><Search size={15} /> Items · {items.length}</div>
-          {loading ? <EmptyState text="加载中…" /> : unavailable ? <EmptyState text={unavailable} /> : items.length === 0 ? <EmptyState text="当前筛选没有 item" /> : items.map((item) => (
+          {loading ? <PanelLoader label="玄武正在整理 Inbox…" /> : unavailable ? <EmptyState text={unavailable} /> : items.length === 0 ? <EmptyState text="当前筛选没有 item" /> : items.map((item) => (
             <ItemRow key={item.id} item={item} active={item.id === selectedItem?.id} onClick={() => setSelectedId(item.id)} />
           ))}
         </aside>
@@ -278,7 +279,7 @@ function ProposalAction({ action, draftText, onDraftChange }) {
 }
 
 function EvidencePanel({ detail }) {
-  if (!detail) return <section className="attention-card"><p className="muted">证据加载中…</p></section>;
+  if (!detail) return <section className="attention-card"><PanelLoader label="正在串联证据链…" /></section>;
   return (
     <section className="attention-card evidence-stack">
       <h3>Evidence trace</h3>

@@ -386,7 +386,7 @@ export default function Issues({
 
   const visibleColumns = getVisibleColumns();
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
+    <div className="issues-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1 }}>
 
       {/* 头部控制栏 (对齐截图) */}
       <div className="view-header">
