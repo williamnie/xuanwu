@@ -1,28 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BarChart3, Gauge, RefreshCw, Zap } from 'lucide-react';
+import { BarChart3, ChevronDown, Gauge, RefreshCw, Zap } from 'lucide-react';
 import { api } from '../api/client';
 import CodexUsageBreakdown from './CodexUsageBreakdown';
-
-const USAGE_LIMITS = [
-  { value: 0, label: '全部事件' },
-  { value: 50, label: '最近 50 条' },
-  { value: 200, label: '最近 200 条' },
-  { value: 500, label: '最近 500 条' },
-];
+import './CodexUsagePanel.css';
+import './CodexUsagePanel.details.css';
 
 export default function CodexUsagePanel() {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
-  const [limit, setLimit] = useState(0);
 
   const loadUsage = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await api.getCodexUsage(limit);
+      const data = await api.getCodexUsage();
       setState({ loading: false, data, error: '' });
     } catch (err) {
-      setState({ loading: false, data: null, error: err.message || '读取 Codex 用量失败' });
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || '读取 Codex 用量失败',
+      }));
     }
-  }, [limit]);
+  }, []);
 
   useEffect(() => {
     loadUsage();
@@ -31,107 +29,65 @@ export default function CodexUsagePanel() {
   }, [loadUsage]);
 
   const { data, error, loading } = state;
-
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      <UsageHeader loading={loading} limit={limit} onLimitChange={setLimit} onRefresh={loadUsage} />
-      {error ? <UsageError message={error} /> : <UsageContent data={data} loading={loading} />}
+    <section className="glass-card codex-usage-panel">
+      <UsageHeader data={data} loading={loading} onRefresh={loadUsage} />
+      {error ? <UsageError message={error} /> : null}
+      <UsageContent data={data} loading={loading} />
     </section>
   );
 }
 
-function UsageHeader({ loading, limit, onLimitChange, onRefresh }) {
+function UsageHeader({ data, loading, onRefresh }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start' }}>
+    <header className="codex-usage-header">
       <div>
-        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Zap size={18} color="var(--primary)" /> Codex Token 与限额
-        </h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-          从本机 Codex session 事件统计，展示每日、周、月 token 量与最新 5 小时/周限额。
-        </p>
+        <h3><Zap size={18} /> Codex 用量</h3>
+        <p>优先展示当前可用额度，需要时再查看历史与项目明细。</p>
       </div>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-        <select className="form-control" value={limit} onChange={(event) => onLimitChange(Number(event.target.value))} style={{ width: '130px', padding: '7px 10px', fontSize: '0.8rem' }}>
-          {USAGE_LIMITS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} style={{ padding: '7px 12px', fontSize: '0.8rem' }}>
-          <RefreshCw size={14} /> {loading ? '刷新中' : '刷新'}
+      <div className="codex-usage-actions">
+        <span>{formatUpdatedAt(data?.generated_at)}</span>
+        <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} type="button">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          {loading ? '刷新中' : '刷新'}
         </button>
       </div>
-    </div>
+    </header>
   );
 }
 
 function UsageContent({ data, loading }) {
   if (loading && !data) {
-    return <div style={{ color: 'var(--text-muted)', padding: '16px 0' }}>正在读取 Codex 用量日志...</div>;
+    return <div className="codex-usage-loading">正在读取 Codex 用量…</div>;
   }
-  if (!data || data.events_scanned === 0) {
-    return <EmptyUsage source={data?.source} />;
-  }
+  if (!data || data.events_scanned === 0) return <EmptyUsage />;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      <SummaryGrid summary={data.summary} eventsScanned={data.events_scanned} />
+    <div className="codex-usage-content">
       <LimitGrid limits={data.rate_limits} />
-      <CodexUsageBreakdown projects={data.project_usage || []} />
-      <div className="grid-cols-2" style={{ alignItems: 'stretch' }}>
-        <DailyBars periods={data.daily || []} />
-        <PeriodLists weekly={data.weekly || []} monthly={data.monthly || []} source={data.source} />
-      </div>
+      <TodayUsage usage={data.summary?.today} />
+      <UsageDetails data={data} />
     </div>
   );
 }
 
 function UsageError({ message }) {
-  return (
-    <div style={{ background: 'var(--warning-bg)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px', padding: '14px 16px', color: 'var(--text-secondary)' }}>
-      暂时无法读取 Codex 用量：{message}
-    </div>
-  );
+  return <div className="codex-usage-error">暂时无法更新用量：{message}</div>;
 }
 
-function EmptyUsage({ source }) {
+function EmptyUsage() {
   return (
-    <div style={{ border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '18px', color: 'var(--text-muted)' }}>
-      暂无 `token_count` 事件。Codex 产生新的响应后会自动出现在这里。
-      {source ? <div style={{ marginTop: '8px', fontSize: '0.75rem' }}>统计源：{source}</div> : null}
-    </div>
-  );
-}
-
-function SummaryGrid({ summary, eventsScanned }) {
-  const cards = [
-    ['今日', summary?.today],
-    ['本周', summary?.this_week],
-    ['本月', summary?.this_month],
-    [`累计 · ${eventsScanned} 条事件`, summary?.all_time],
-  ];
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
-      {cards.map(([label, usage]) => <TokenStat key={label} label={label} usage={usage} />)}
-    </div>
-  );
-}
-
-function TokenStat({ label, usage }) {
-  return (
-    <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px' }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: '1.45rem', fontWeight: 800, marginTop: '8px' }}>{formatTokens(usage?.total_tokens || 0)}</div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: '6px' }}>
-        输入 {formatTokens(usage?.input_tokens || 0)} · 输出 {formatTokens(usage?.output_tokens || 0)}
-      </div>
+    <div className="codex-usage-empty">
+      暂无用量记录。Codex 产生新的响应后会自动显示在这里。
     </div>
   );
 }
 
 function LimitGrid({ limits }) {
   if (!limits) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>暂未捕获到 Codex 限额快照。</div>;
+    return <div className="codex-usage-empty">暂未捕获到 Codex 限额快照。</div>;
   }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+    <div className="codex-limit-grid">
       <LimitCard title={windowTitle('primary', limits.primary)} window={limits.primary} planType={limits.plan_type} />
       <LimitCard title={windowTitle('secondary', limits.secondary)} window={limits.secondary} planType={limits.plan_type} />
     </div>
@@ -139,41 +95,100 @@ function LimitGrid({ limits }) {
 }
 
 function LimitCard({ title, window, planType }) {
-  if (!window) {
-    return <div className="glass-card" style={{ boxShadow: 'none' }}>{title}：暂无</div>;
-  }
+  if (!window) return <div className="codex-limit-card is-empty">{title}：暂无数据</div>;
   const used = clamp(window.used_percent || 0, 0, 100);
+  const remaining = clamp(window.remaining_percent ?? 100 - used, 0, 100);
   return (
-    <div style={{ background: 'linear-gradient(135deg, var(--bg-primary), var(--bg-card))', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
-          <Gauge size={16} color="var(--primary)" /> {title}
-        </div>
-        {planType ? <span className="status-badge todo">{planType}</span> : null}
+    <article className={`codex-limit-card ${limitTone(used)}`}>
+      <div className="codex-limit-card-head">
+        <span><Gauge size={16} /> {title}</span>
+        {planType ? <span className="codex-plan-badge">{String(planType).toUpperCase()}</span> : null}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', fontSize: '0.85rem' }}>
+      <div className="codex-limit-remaining">
+        <strong>{remaining.toFixed(0)}%</strong><span>可用</span>
+      </div>
+      <div
+        aria-label={`${title}已使用 ${used.toFixed(1)}%`}
+        aria-valuemax="100"
+        aria-valuemin="0"
+        aria-valuenow={used}
+        className="codex-limit-track"
+        role="progressbar"
+      >
+        <span style={{ width: `${used}%` }} />
+      </div>
+      <div className="codex-limit-meta">
         <span>已用 {used.toFixed(1)}%</span>
-        <span style={{ color: 'var(--success)' }}>剩余 {clamp(window.remaining_percent || 0, 0, 100).toFixed(1)}%</span>
+        <span>{formatResetTime(window.resets_at_iso)}</span>
       </div>
-      <div style={{ height: '8px', borderRadius: '999px', background: 'var(--border-color)', overflow: 'hidden', marginTop: '8px' }}>
-        <div style={{ width: `${used}%`, height: '100%', borderRadius: '999px', background: limitColor(used) }} />
+    </article>
+  );
+}
+
+function TodayUsage({ usage }) {
+  return (
+    <div className="codex-today-usage">
+      <div>
+        <span>今日用量</span>
+        <strong>{formatTokens(usage?.total_tokens || 0)}</strong>
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '10px' }}>
-        重置：{formatDateTime(window.resets_at_iso)} · 窗口 {formatWindow(window.window_minutes)}
+      <p>本地 Codex session 统计，仅用于观察工作量趋势。</p>
+    </div>
+  );
+}
+
+function UsageDetails({ data }) {
+  return (
+    <details className="codex-usage-details">
+      <summary>
+        <span>
+          <strong>查看用量详情</strong>
+          <small>历史趋势、Project 归因与输入/输出拆分</small>
+        </span>
+        <ChevronDown size={16} />
+      </summary>
+      <div className="codex-usage-details-body">
+        <SummaryGrid summary={data.summary} />
+        <CodexUsageBreakdown projects={data.project_usage || []} />
+        <div className="codex-usage-detail-columns">
+          <DailyBars periods={data.daily || []} />
+          <PeriodLists weekly={data.weekly || []} monthly={data.monthly || []} />
+        </div>
       </div>
+    </details>
+  );
+}
+
+function SummaryGrid({ summary }) {
+  const cards = [
+    ['本周', summary?.this_week],
+    ['本月', summary?.this_month],
+    ['累计', summary?.all_time],
+  ];
+  return (
+    <div className="codex-summary-grid">
+      {cards.map(([label, usage]) => <TokenStat key={label} label={label} usage={usage} />)}
+    </div>
+  );
+}
+
+function TokenStat({ label, usage }) {
+  return (
+    <div className="codex-token-stat">
+      <span>{label}</span>
+      <strong>{formatTokens(usage?.total_tokens || 0)}</strong>
+      <small>输入 {formatTokens(usage?.input_tokens || 0)} · 输出 {formatTokens(usage?.output_tokens || 0)}</small>
     </div>
   );
 }
 
 function DailyBars({ periods }) {
   const latest = periods.slice(-7);
-  const max = Math.max(1, ...latest.map(p => p.usage?.total_tokens || 0));
+  const max = Math.max(1, ...latest.map(period => period.usage?.total_tokens || 0));
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px' }}>
-      <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem', marginBottom: '14px' }}>
-        <BarChart3 size={16} color="var(--primary)" /> 最近 7 天
-      </h4>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div className="codex-detail-panel">
+      <h4><BarChart3 size={16} /> 最近 7 天</h4>
+      <div className="codex-daily-bars">
         {latest.map(period => <UsageBar key={period.key} period={period} max={max} />)}
       </div>
     </div>
@@ -183,22 +198,19 @@ function DailyBars({ periods }) {
 function UsageBar({ period, max }) {
   const total = period.usage?.total_tokens || 0;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '88px 1fr 70px', gap: '10px', alignItems: 'center', fontSize: '0.78rem' }}>
-      <span style={{ color: 'var(--text-muted)' }}>{period.label}</span>
-      <div style={{ height: '8px', background: 'var(--border-color)', borderRadius: '999px', overflow: 'hidden' }}>
-        <div style={{ width: `${Math.max(2, (total / max) * 100)}%`, height: '100%', background: 'var(--primary-gradient)' }} />
-      </div>
-      <span style={{ textAlign: 'right', fontWeight: 700 }}>{formatTokens(total)}</span>
+    <div className="codex-usage-bar">
+      <span>{period.label}</span>
+      <div><span style={{ width: `${Math.max(2, (total / max) * 100)}%` }} /></div>
+      <strong>{formatTokens(total)}</strong>
     </div>
   );
 }
 
-function PeriodLists({ weekly, monthly, source }) {
+function PeriodLists({ weekly, monthly }) {
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div className="codex-detail-panel codex-period-lists">
       <CompactPeriods title="周统计" periods={weekly.slice(-4)} />
       <CompactPeriods title="月统计" periods={monthly.slice(-4)} />
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', wordBreak: 'break-all' }}>统计源：{source}</div>
     </div>
   );
 }
@@ -206,15 +218,13 @@ function PeriodLists({ weekly, monthly, source }) {
 function CompactPeriods({ title, periods }) {
   return (
     <div>
-      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '8px' }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {periods.map(period => (
-          <div key={period.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-            <span>{period.label}</span>
-            <strong>{formatTokens(period.usage?.total_tokens || 0)}</strong>
-          </div>
-        ))}
-      </div>
+      <h4>{title}</h4>
+      {periods.map(period => (
+        <div className="codex-period-row" key={period.key}>
+          <span>{period.label}</span>
+          <strong>{formatTokens(period.usage?.total_tokens || 0)}</strong>
+        </div>
+      ))}
     </div>
   );
 }
@@ -231,22 +241,30 @@ function formatTokens(value) {
   return new Intl.NumberFormat('zh-CN').format(value || 0);
 }
 
-function formatWindow(minutes) {
-  if (!minutes) return '—';
-  if (minutes % 1440 === 0) return `${minutes / 1440} 天`;
-  if (minutes % 60 === 0) return `${minutes / 60} 小时`;
-  return `${minutes} 分钟`;
+function formatUpdatedAt(value) {
+  if (!value) return '等待更新';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '更新时间未知';
+  return `更新于 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-function formatDateTime(value) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString();
+function formatResetTime(value) {
+  if (!value) return '重置时间未知';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '重置时间未知';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const resetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const days = Math.round((resetDay.getTime() - today.getTime()) / 86_400_000);
+  const dayLabel = days === 0 ? '今天' : days === 1 ? '明天' : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  return `${dayLabel} ${time} 重置`;
 }
 
-function limitColor(used) {
-  if (used >= 90) return 'var(--error)';
-  if (used >= 70) return 'var(--warning)';
-  return 'var(--primary-gradient)';
+function limitTone(used) {
+  if (used >= 90) return 'is-critical';
+  if (used >= 70) return 'is-warning';
+  return 'is-healthy';
 }
 
 function clamp(value, min, max) {

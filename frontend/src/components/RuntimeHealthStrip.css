@@ -1,0 +1,56 @@
+.runtime-health-alert {
+  align-items: center;
+  background: linear-gradient(100deg, var(--warning-bg), var(--bg-card) 72%);
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border-color));
+  border-left: 3px solid var(--warning);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.runtime-health-alert-copy {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.runtime-health-alert-copy strong {
+  display: block;
+  font-size: 0.88rem;
+}
+
+.runtime-health-alert-copy p {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.runtime-health-alert-icon {
+  align-items: center;
+  background: var(--warning-glow);
+  border-radius: 10px;
+  color: var(--warning);
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 8px;
+}
+
+.runtime-health-alert .btn {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+}
+
+@media (max-width: 720px) {
+  .runtime-health-alert {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .runtime-health-alert .btn {
+    align-self: flex-start;
+  }
+}

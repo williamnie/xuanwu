@@ -11,6 +11,7 @@ export function buildRuntimeHealth({ status, error = '', backendOnline = false }
 
   if (loading) {
     return {
+      loading: true,
       ok: true,
       title: 'Runtime status 读取中',
       reason: '',
@@ -20,11 +21,16 @@ export function buildRuntimeHealth({ status, error = '', backendOnline = false }
 
   const ok = issues.length === 0;
   return {
+    loading: false,
     ok,
     title: ok ? 'Runtime healthy' : 'Runtime 需要关注',
     reason: issues[0] || '等待 runtime status',
     items: buildHealthItems({ status, error, apiOk, dbOk, codexOk }),
   };
+}
+
+export function shouldShowRuntimeHealth(health, backendOnline) {
+  return Boolean(backendOnline && health && !health.loading && !health.ok);
 }
 
 function buildHealthItems({ status, error, apiOk, dbOk, codexOk }) {

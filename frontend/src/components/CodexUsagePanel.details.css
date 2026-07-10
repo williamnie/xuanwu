@@ -1,0 +1,131 @@
+.codex-usage-details > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 2px;
+}
+
+.codex-usage-details > summary::-webkit-details-marker { display: none; }
+
+.codex-usage-details > summary strong {
+  display: block;
+  font-size: 0.88rem;
+}
+
+.codex-usage-details > summary small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 450;
+  margin-top: 3px;
+}
+
+.codex-usage-details > summary svg {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
+}
+
+.codex-usage-details[open] > summary svg { transform: rotate(180deg); }
+
+.codex-usage-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.codex-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.codex-token-stat,
+.codex-detail-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.codex-token-stat > span,
+.codex-token-stat small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.72rem;
+}
+
+.codex-token-stat strong {
+  display: block;
+  font-size: 1.18rem;
+  margin: 6px 0 4px;
+}
+
+.codex-usage-detail-columns {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.codex-detail-panel h4 {
+  align-items: center;
+  display: flex;
+  font-size: 0.84rem;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.codex-daily-bars,
+.codex-period-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.codex-usage-bar {
+  align-items: center;
+  display: grid;
+  font-size: 0.74rem;
+  gap: 9px;
+  grid-template-columns: 82px 1fr 62px;
+}
+
+.codex-usage-bar > span,
+.codex-period-row > span { color: var(--text-muted); }
+
+.codex-usage-bar > div {
+  background: var(--border-color);
+  border-radius: 999px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.codex-usage-bar > div > span {
+  background: var(--primary-gradient);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.codex-usage-bar > strong { text-align: right; }
+.codex-period-lists { gap: 14px; }
+
+.codex-period-row {
+  display: flex;
+  font-size: 0.76rem;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+@media (max-width: 820px) {
+  .codex-summary-grid,
+  .codex-usage-detail-columns { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .codex-usage-bar { grid-template-columns: 72px 1fr 56px; }
+}

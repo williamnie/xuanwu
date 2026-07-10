@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, ServerCog } from 'lucide-react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { api } from '../api/client';
-import { buildRuntimeHealth } from './runtimeHealth';
+import { buildRuntimeHealth, shouldShowRuntimeHealth } from './runtimeHealth';
+import './RuntimeHealthStrip.css';
 
 export default function RuntimeHealthStrip({ backendOnline, navigateTo }) {
   const [status, setStatus] = useState(null);
@@ -27,63 +28,20 @@ export default function RuntimeHealthStrip({ backendOnline, navigateTo }) {
     [status, error, backendOnline]
   );
 
+  if (!shouldShowRuntimeHealth(health, backendOnline)) return null;
+
   return (
-    <section className="glass-card" style={stripStyle(health.ok)}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-        {health.ok ? <ServerCog size={18} color="var(--success)" /> : <AlertTriangle size={18} color="var(--warning)" />}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: health.ok ? 'var(--text-secondary)' : 'var(--warning)' }}>
-            {health.title}
-          </div>
-          {!health.ok && <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '2px', overflowWrap: 'anywhere' }}>{health.reason}</div>}
+    <section className="glass-card runtime-health-alert" role="alert">
+      <div className="runtime-health-alert-copy">
+        <span className="runtime-health-alert-icon"><AlertTriangle size={18} /></span>
+        <div>
+          <strong>运行环境需要关注</strong>
+          <p>{health.reason}</p>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
-        {health.items.map(item => <HealthPill key={item.label} item={item} />)}
-        {!health.ok && (
-          <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.76rem' }} onClick={() => navigateTo('settings')}>
-            去 Assistant Settings <ArrowRight size={12} />
-          </button>
-        )}
-      </div>
+      <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>
+        查看设置 <ArrowRight size={13} />
+      </button>
     </section>
   );
-}
-
-function HealthPill({ item }) {
-  return (
-    <span style={pillStyle(item.ok)} title={`${item.label}: ${item.value}`}>
-      <span className={`status-dot ${item.ok ? 'active' : 'idle'}`} style={{ width: '6px', height: '6px', flex: '0 0 auto' }}></span>
-      <span>{item.label}</span>
-      <strong style={{ color: 'var(--text-primary)' }}>{item.value}</strong>
-    </span>
-  );
-}
-
-function stripStyle(ok) {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: '24px',
-    padding: '12px 16px',
-    borderLeft: `4px solid ${ok ? 'var(--success)' : 'var(--warning)'}`,
-    background: ok ? 'var(--success-bg)' : 'var(--warning-bg)',
-  };
-}
-
-function pillStyle(ok) {
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    whiteSpace: 'nowrap',
-    border: '1px solid var(--border-color)',
-    borderRadius: '999px',
-    padding: '5px 9px',
-    background: 'var(--bg-card)',
-    color: ok ? 'var(--text-secondary)' : 'var(--warning)',
-    fontSize: '0.74rem',
-    lineHeight: 1.2,
-  };
 }

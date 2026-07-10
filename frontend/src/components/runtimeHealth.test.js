@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildRuntimeHealth } from './runtimeHealth.js';
+import { buildRuntimeHealth, shouldShowRuntimeHealth } from './runtimeHealth.js';
 
 const healthyStatus = {
   service: { alive: true },
@@ -40,4 +40,19 @@ test('surfaces API read errors without requiring deep probes', () => {
   assert.equal(health.ok, false);
   assert.equal(health.reason, 'API unauthorized');
   assert.equal(health.items.find(item => item.label === 'API').value, 'down');
+});
+
+test('keeps healthy and duplicate offline runtime states quiet on dashboard', () => {
+  const healthy = buildRuntimeHealth({ status: healthyStatus, backendOnline: true });
+  const loading = buildRuntimeHealth({ status: null, backendOnline: true });
+  const offline = buildRuntimeHealth({ status: null, error: 'offline', backendOnline: false });
+  const codexFailure = buildRuntimeHealth({
+    status: { ...healthyStatus, codex: { command_ok: false, command_error: 'codex not found' } },
+    backendOnline: true,
+  });
+
+  assert.equal(shouldShowRuntimeHealth(healthy, true), false);
+  assert.equal(shouldShowRuntimeHealth(loading, true), false);
+  assert.equal(shouldShowRuntimeHealth(offline, false), false);
+  assert.equal(shouldShowRuntimeHealth(codexFailure, true), true);
 });

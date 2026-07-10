@@ -1,0 +1,231 @@
+.codex-usage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+}
+
+.codex-usage-header {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.codex-usage-header h3 {
+  align-items: center;
+  display: flex;
+  font-size: 1.18rem;
+  font-weight: 760;
+  gap: 8px;
+  letter-spacing: -0.02em;
+}
+
+.codex-usage-header h3 svg,
+.codex-detail-panel h4 svg {
+  color: var(--primary);
+}
+
+.codex-usage-header p {
+  color: var(--text-muted);
+  font-size: 0.83rem;
+  margin-top: 4px;
+}
+
+.codex-usage-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.codex-usage-actions > span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.codex-usage-actions .btn {
+  min-width: 86px;
+  padding: 7px 11px;
+}
+
+.codex-usage-actions .btn:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.codex-usage-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.codex-usage-loading,
+.codex-usage-empty,
+.codex-usage-error {
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  padding: 18px;
+}
+
+.codex-usage-error {
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border-color));
+  color: var(--text-secondary);
+}
+
+.codex-limit-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.codex-limit-card {
+  --limit-accent: var(--primary);
+  background:
+    radial-gradient(circle at 92% 10%, color-mix(in srgb, var(--limit-accent) 11%, transparent), transparent 38%),
+    var(--bg-secondary);
+  border: 1px solid color-mix(in srgb, var(--limit-accent) 18%, var(--border-color));
+  border-radius: 14px;
+  min-width: 0;
+  padding: 17px 18px 16px;
+}
+
+.codex-limit-card.is-warning { --limit-accent: var(--warning); }
+.codex-limit-card.is-critical { --limit-accent: var(--error); }
+
+.codex-limit-card.is-empty {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  min-height: 148px;
+}
+
+.codex-limit-card-head,
+.codex-limit-card-head > span:first-child,
+.codex-limit-meta {
+  align-items: center;
+  display: flex;
+}
+
+.codex-limit-card-head {
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.codex-limit-card-head > span:first-child {
+  font-size: 0.88rem;
+  font-weight: 720;
+  gap: 7px;
+}
+
+.codex-limit-card-head svg {
+  color: var(--limit-accent);
+}
+
+.codex-plan-badge {
+  background: color-mix(in srgb, var(--limit-accent) 9%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--limit-accent) 18%, var(--border-color));
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  padding: 3px 7px;
+}
+
+.codex-limit-remaining {
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
+  margin-top: 15px;
+}
+
+.codex-limit-remaining strong {
+  color: var(--limit-accent);
+  font-size: 2rem;
+  font-weight: 780;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.codex-limit-remaining span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.codex-limit-track {
+  background: color-mix(in srgb, var(--limit-accent) 10%, var(--border-color));
+  border-radius: 999px;
+  height: 6px;
+  margin-top: 13px;
+  overflow: hidden;
+}
+
+.codex-limit-track > span {
+  background: var(--limit-accent);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  transition: width 0.3s ease;
+}
+
+.codex-limit-meta {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  justify-content: space-between;
+  margin-top: 9px;
+}
+
+.codex-today-usage {
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 14px 2px;
+}
+
+.codex-today-usage > div {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+}
+
+.codex-today-usage span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.codex-today-usage strong {
+  font-size: 1.18rem;
+  letter-spacing: -0.03em;
+}
+
+.codex-today-usage p {
+  color: var(--text-muted);
+  font-size: 0.73rem;
+}
+
+@media (max-width: 820px) {
+  .codex-limit-grid { grid-template-columns: 1fr; }
+
+  .codex-usage-header,
+  .codex-today-usage {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .codex-usage-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .codex-limit-meta { align-items: flex-start; }
+}
