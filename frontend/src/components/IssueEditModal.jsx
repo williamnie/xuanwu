@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Save, X } from 'lucide-react';
 import { api } from '../api/client';
 import PromptEditor from './editor/PromptEditor';
@@ -52,7 +53,7 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
 
   if (!canEditIssue(issue)) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="glass-card modal-content" style={{ maxWidth: '780px', padding: '24px', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' }}>
         <ModalHeader issue={issue} onClose={onClose} />
@@ -65,7 +66,8 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
           <ModalActions saving={saving} onClose={onClose} />
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
