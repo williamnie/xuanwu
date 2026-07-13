@@ -671,25 +671,31 @@ function addIssueSource(payload, sourceMetadata) {
 function IssueTemplatePreview({ preview, unknownVariables }) {
   return (
     <div className="form-group" style={{ gap: '8px' }}>
-      <label>模板渲染预览</label>
-      {unknownVariables.length > 0 && (
-        <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.76rem', border: '1px solid rgba(245, 158, 11, 0.18)' }}>
-          未识别变量：{unknownVariables.map(name => `{{${name}}}`).join('、')}。保存不会被阻塞，执行时这些占位符会原样保留。
+      <details>
+        <summary style={{ cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          模板渲染预览
+        </summary>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+          {unknownVariables.length > 0 && (
+            <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.76rem', border: '1px solid rgba(245, 158, 11, 0.18)' }}>
+              未识别变量：{unknownVariables.map(name => `{{${name}}}`).join('、')}。保存不会被阻塞，执行时这些占位符会原样保留。
+            </div>
+          )}
+          <pre style={{
+            margin: 0,
+            maxHeight: '220px',
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            color: 'var(--text-secondary)',
+            background: 'rgba(0,0,0,0.04)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
+            padding: '10px',
+            fontSize: '0.74rem',
+            lineHeight: 1.5,
+          }}>{preview || '（模板为空或当前内容为空）'}</pre>
         </div>
-      )}
-      <pre style={{
-        margin: 0,
-        maxHeight: '220px',
-        overflow: 'auto',
-        whiteSpace: 'pre-wrap',
-        color: 'var(--text-secondary)',
-        background: 'rgba(0,0,0,0.04)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '8px',
-        padding: '10px',
-        fontSize: '0.74rem',
-        lineHeight: 1.5,
-      }}>{preview || '（模板为空或当前内容为空）'}</pre>
+      </details>
     </div>
   );
 }
