@@ -38,7 +38,7 @@ const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
 const DEFAULT_PROVIDER = 'codex';
 
-const CODEX_MODEL_OPTIONS = [
+const FALLBACK_CODEX_MODEL_OPTIONS = [
   { value: DEFAULT_CODEX_MODEL, label: '系统默认模型' },
   { value: 'gpt-5.5', label: 'GPT-5.5' },
   { value: 'gpt-5.4', label: 'GPT-5.4' },
@@ -66,10 +66,34 @@ function compactPath(cwd = '') {
 }
 
 function normalizeCodexModel(model) {
-  if (!CODEX_MODEL_OPTIONS.some(option => option.value === model)) {
-    return DEFAULT_CODEX_MODEL;
+  return String(model || '').trim() || DEFAULT_CODEX_MODEL;
+}
+
+function buildCodexModelOptions(models, ...selectedValues) {
+  const options = [];
+  const seen = new Set();
+  const pushOption = (value, label) => {
+    const normalizedValue = String(value || '').trim();
+    if (!normalizedValue || seen.has(normalizedValue)) return;
+    seen.add(normalizedValue);
+    options.push({ value: normalizedValue, label: String(label || normalizedValue).trim() || normalizedValue });
+  };
+
+  pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
+
+  const liveModels = Array.isArray(models) ? models.filter(model => !model?.hidden) : [];
+  if (liveModels.length > 0) {
+    liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
+  } else {
+    FALLBACK_CODEX_MODEL_OPTIONS.slice(1).forEach(option => pushOption(option.value, option.label));
   }
-  return model;
+
+  selectedValues.forEach(value => {
+    const normalizedValue = normalizeCodexModel(value);
+    if (normalizedValue !== DEFAULT_CODEX_MODEL) pushOption(normalizedValue, normalizedValue);
+  });
+
+  return options;
 }
 
 export default function Projects() {
@@ -98,6 +122,9 @@ export default function Projects() {
     profilesLoading: false,
     profileForm: emptyAgentProfileForm(),
     profileError: '',
+    codexModels: [],
+    codexModelsLoading: false,
+    codexModelsError: '',
   });
 
   const {
@@ -121,7 +148,12 @@ export default function Projects() {
     profilesLoading,
     profileForm,
     profileError,
+    codexModels,
+    codexModelsLoading,
+    codexModelsError,
   } = ui;
+
+  const codexModelOptions = buildCodexModelOptions(codexModels, formModel, profileForm.model);
 
   const closeModal = () => {
     updateUi(draft => {
@@ -158,6 +190,28 @@ export default function Projects() {
     } finally {
       updateUi(draft => {
         draft.profilesLoading = false;
+      });
+    }
+  };
+
+  const loadCodexModels = async () => {
+    updateUi(draft => {
+      draft.codexModelsLoading = true;
+      draft.codexModelsError = '';
+    });
+    try {
+      const result = await api.getCodexModels();
+      updateUi(draft => {
+        draft.codexModels = Array.isArray(result?.data) ? result.data : [];
+      });
+    } catch (err) {
+      updateUi(draft => {
+        draft.codexModels = [];
+        draft.codexModelsError = err.message || '读取 Codex 模型列表失败';
+      });
+    } finally {
+      updateUi(draft => {
+        draft.codexModelsLoading = false;
       });
     }
   };
@@ -201,6 +255,7 @@ export default function Projects() {
       draft.isModalOpen = true;
     });
     loadAgentProfiles();
+    loadCodexModels();
   };
 
   const handleOpenEditModal = (proj) => {
@@ -211,7 +266,7 @@ export default function Projects() {
       draft.formProvider = proj.provider;
       draft.formProviderConfig = proj.provider_config_json || '{}';
       draft.formAutoRun = proj.auto_run === 1;
-      draft.formModel = normalizeCodexModel(proj.model || DEFAULT_CODEX_MODEL);
+      draft.formModel = normalizeCodexModel(proj.model);
       draft.formApproval = proj.approval_policy || 'never';
       draft.formSandbox = proj.sandbox || 'workspace-write';
       draft.formServiceTier = proj.default_service_tier || '';
@@ -220,6 +275,7 @@ export default function Projects() {
       draft.isModalOpen = true;
     });
     loadAgentProfiles();
+    loadCodexModels();
   };
 
   const handleSubmit = async (e) => {
@@ -644,10 +700,17 @@ export default function Projects() {
                     value={formModel}
                     onChange={(e) => setFormField('formModel', e.target.value)}
                   >
-                    {CODEX_MODEL_OPTIONS.map(option => (
+                    {codexModelOptions.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    {codexModelsLoading
+                      ? '正在读取 Codex 模型列表…'
+                      : codexModelsError
+                        ? `读取失败，已使用内置备用列表：${codexModelsError}`
+                        : '模型列表来自当前 Codex provider。'}
+                  </span>
                 </div>
 
                 <div className="form-group">
@@ -714,6 +777,7 @@ export default function Projects() {
                 loading={profilesLoading}
                 form={profileForm}
                 error={profileError}
+                modelOptions={codexModelOptions}
                 onFieldChange={setProfileFormField}
                 onSubmit={handleProfileSubmit}
                 onEdit={handleEditProfile}
@@ -764,7 +828,7 @@ function ProjectMetaRow({ label, value, strong = false }) {
   );
 }
 
-function AgentProfileManager({ profiles, loading, form, error, onFieldChange, onSubmit, onEdit, onReset }) {
+function AgentProfileManager({ profiles, loading, form, error, modelOptions, onFieldChange, onSubmit, onEdit, onReset }) {
   return (
     <div className="glass-card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.025)' }}>
       <div>
@@ -786,7 +850,7 @@ function AgentProfileManager({ profiles, loading, form, error, onFieldChange, on
           <input className="form-control" placeholder="Profile ID（可留空自动生成）" value={form.id} onChange={(e) => onFieldChange('id', e.target.value)} />
           <input className="form-control" placeholder="Profile 名称" value={form.name} onChange={(e) => onFieldChange('name', e.target.value)} />
           <select className="form-control" value={form.model} onChange={(e) => onFieldChange('model', e.target.value)}>
-            {CODEX_MODEL_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <select className="form-control" value={form.reasoning_effort} onChange={(e) => onFieldChange('reasoning_effort', e.target.value)}>
             <option value="">默认 effort</option>
