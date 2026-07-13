@@ -65,6 +65,41 @@ describe("Bun issue patch API", () => {
     }
   });
 
+  test("moves a triage issue to an existing project", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertProject(database, "target");
+      const issueId = insertIssue(database, "demo");
+
+      const response = await patchIssue(database, issueId, { project_id: "target" });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: issueId, project_id: "target" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("rejects moving an issue after it leaves triage or to a missing project", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const triageIssueId = insertIssue(database, "demo");
+      const queuedIssueId = insertIssue(database, "demo", "todo");
+
+      const missingProject = await patchIssue(database, triageIssueId, { project_id: "missing" });
+      const queuedIssue = await patchIssue(database, queuedIssueId, { project_id: "demo" });
+
+      expect(missingProject.status).toBe(404);
+      expect(await missingProject.json()).toEqual({ message: "资源不存在" });
+      expect(queuedIssue.status).toBe(400);
+      expect(await queuedIssue.json()).toEqual({ message: "只有 Triage 状态的 Issue 可以更换所属项目" });
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns stable errors for invalid and missing issue patches", async () => {
     const database = await openFixtureDatabase();
     try {

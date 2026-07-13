@@ -8,6 +8,7 @@ export function canEditIssue(issue) {
 
 export function issueToEditDraft(issue) {
   return {
+    project_id: issue?.project_id || '',
     title: issue?.title || '',
     description: issue?.description || '',
     priority: String(normalizePriority(issue?.priority)),
@@ -15,6 +16,9 @@ export function issueToEditDraft(issue) {
 }
 
 export function validateIssueDraft(draft) {
+  if (!cleanText(draft?.project_id)) {
+    return '请选择关联目标项目';
+  }
   if (!cleanText(draft?.description)) {
     return '任务内容不能为空';
   }
@@ -24,6 +28,7 @@ export function validateIssueDraft(draft) {
 export function issueDraftToPatch(draft) {
   const description = cleanText(draft.description);
   return {
+    project_id: cleanText(draft.project_id),
     title: cleanText(draft.title) || deriveIssueTitle(description),
     description,
     priority: normalizePriority(draft.priority),

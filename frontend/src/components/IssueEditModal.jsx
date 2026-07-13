@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Save, X } from 'lucide-react';
 import { api } from '../api/client';
 import PromptEditor from './editor/PromptEditor';
+import { selectProjects, useDataStore } from '../store/dataStore';
 import {
   canEditIssue,
   issueDraftToPatch,
@@ -16,6 +17,7 @@ const PRIORITY_OPTIONS = [
 ];
 
 export default function IssueEditModal({ issue, onClose, onSaved }) {
+  const projects = useDataStore(selectProjects);
   const [draft, setDraft] = useState(() => issueToEditDraft(issue));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -56,12 +58,26 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
         <ModalHeader issue={issue} onClose={onClose} />
         <form onSubmit={submitEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {error && <EditError message={error} />}
+          <ProjectField projects={projects} value={draft.project_id} onChange={(value) => setField('project_id', value)} />
           <TitleField value={draft.title} onChange={(value) => setField('title', value)} />
           <DescriptionField value={draft.description} onChange={(value) => setField('description', value)} />
           <PriorityField value={draft.priority} onChange={(value) => setField('priority', value)} />
           <ModalActions saving={saving} onClose={onClose} />
         </form>
       </div>
+    </div>
+  );
+}
+
+function ProjectField({ projects, value, onChange }) {
+  return (
+    <div className="form-group">
+      <label>关联目标项目 *</label>
+      <select className="form-control" value={value} onChange={(event) => onChange(event.target.value)} required>
+        {projects.map((project) => (
+          <option key={project.id} value={project.id}>{project.name}</option>
+        ))}
+      </select>
     </div>
   );
 }

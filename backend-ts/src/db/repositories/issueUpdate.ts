@@ -11,7 +11,7 @@ import {
 } from "./issueCreate.ts";
 import { normalizeMcpCapabilityList } from "../../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../../skills/intents.ts";
-import { ProjectNotFoundError } from "./projects.ts";
+import { getProject, ProjectNotFoundError } from "./projects.ts";
 import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 
 export type UpdateIssueInput = Partial<Record<keyof NormalizedIssuePatch, unknown>>;
@@ -26,6 +26,7 @@ type NormalizedIssuePatch = {
   description: string;
   error: string;
   priority: number;
+  project_id: string;
   recommended_mcp_capabilities: string;
   recommended_skill_intents: string;
   required_mcp_capabilities: string;
@@ -39,6 +40,7 @@ type NormalizedIssuePatch = {
 };
 
 const PATCH_FIELDS = [
+  "project_id",
   "title",
   "description",
   "status",
@@ -67,16 +69,16 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
   if (Object.hasOwn(patch, "description") && !Object.hasOwn(patch, "title")) {
     next.title = deriveIssueTitle(next.description);
   }
-  validateIssuePatch(next);
+  validateIssuePatch(db, current, patch, next);
   const timestamp = issueTimestamp();
   const write = db.transaction((record: NormalizedIssuePatch) => {
-    db.sqlite.run(`update issues set title=?, description=?, status=?, priority=?,
+    db.sqlite.run(`update issues set project_id=?, title=?, description=?, status=?, priority=?,
       required_skill_intents_json=?, recommended_skill_intents_json=?,
       required_mcp_capabilities_json=?, recommended_mcp_capabilities_json=?,
       agent_profile_id=?, service_tier=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
       codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?, auto_retry_reason=?,
       error=?, updated_at=? where id=?`,
-      [record.title, record.description, record.status, record.priority,
+      [record.project_id, record.title, record.description, record.status, record.priority,
         record.required_skill_intents, record.recommended_skill_intents,
         record.required_mcp_capabilities, record.recommended_mcp_capabilities,
         record.agent_profile_id, record.service_tier, record.source_session_id, record.source_turn_id,
@@ -135,7 +137,16 @@ function normalizePatchField(field: keyof NormalizedIssuePatch, value: unknown):
   }
 }
 
-function validateIssuePatch(issue: NormalizedIssuePatch): void {
+function validateIssuePatch(
+  db: RunnerDatabase,
+  current: Issue,
+  patch: Partial<NormalizedIssuePatch>,
+  issue: NormalizedIssuePatch
+): void {
+  if (Object.hasOwn(patch, "project_id")) {
+    if (current.status !== "triage") throw new Error("只有 Triage 状态的 Issue 可以更换所属项目");
+    if (issue.project_id === "" || !getProject(db, issue.project_id)) throw new ProjectNotFoundError();
+  }
   if (!VALID_ISSUE_STATUSES.has(issue.status)) throw new Error("status 不合法");
   if (issue.title === "") throw new Error("issue 内容不能为空");
 }
@@ -143,6 +154,7 @@ function validateIssuePatch(issue: NormalizedIssuePatch): void {
 function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
   return {
     id: issue.id,
+    project_id: issue.project_id,
     title: issue.title,
     description: issue.description,
     status: issue.status,

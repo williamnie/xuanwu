@@ -20,11 +20,13 @@ test('non-triage issue cannot enter edit mode', () => {
 
 test('issue edit draft keeps editable fields only', () => {
   assert.deepEqual(issueToEditDraft({
+    project_id: 'runner',
     title: '修正文案',
     description: '  旧内容  ',
     priority: 2,
     status: 'triage',
   }), {
+    project_id: 'runner',
     title: '修正文案',
     description: '  旧内容  ',
     priority: '2',
@@ -33,10 +35,12 @@ test('issue edit draft keeps editable fields only', () => {
 
 test('issue edit patch trims text and normalizes priority', () => {
   assert.deepEqual(issueDraftToPatch({
+    project_id: '  runner  ',
     title: '  新标题  ',
     description: '  新内容  ',
     priority: 'bad',
   }), {
+    project_id: 'runner',
     title: '新标题',
     description: '新内容',
     priority: 0,
@@ -44,5 +48,9 @@ test('issue edit patch trims text and normalizes priority', () => {
 });
 
 test('blank issue description is rejected before saving', () => {
-  assert.equal(validateIssueDraft({ description: '   ' }), '任务内容不能为空');
+  assert.equal(validateIssueDraft({ project_id: 'runner', description: '   ' }), '任务内容不能为空');
+});
+
+test('missing target project is rejected before saving', () => {
+  assert.equal(validateIssueDraft({ project_id: '   ', description: '有效内容' }), '请选择关联目标项目');
 });
