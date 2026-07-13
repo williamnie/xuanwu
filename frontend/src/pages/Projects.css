@@ -1,10 +1,48 @@
-/* Project config modal can grow tall after Agent Profile fields; keep actions reachable. */
+/* Keep the title and actions visible while long project configuration forms scroll. */
 .project-config-modal {
+  display: flex;
+  flex-direction: column;
   max-width: 760px;
   max-height: calc(100vh - 48px);
+  overflow: hidden;
+  padding: 0;
+}
+
+.project-config-modal-header {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  padding: 32px 32px 24px;
+}
+
+.project-config-modal-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.project-config-modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: 0 32px;
   scrollbar-gutter: stable;
+}
+
+.project-config-modal-footer {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 32px 32px;
 }
 
 @supports (height: 100dvh) {

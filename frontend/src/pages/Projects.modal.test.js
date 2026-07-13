@@ -12,13 +12,29 @@ function ruleFor(selector) {
   return match[1];
 }
 
-test('project config modal is viewport bounded and scrollable', () => {
+test('project config modal keeps its header and footer fixed while its body scrolls', () => {
   assert.match(source, /className="glass-card modal-content project-config-modal"/);
+  assert.match(source, /className="project-config-modal-header"/);
+  assert.match(source, /className="project-config-modal-form"/);
+  assert.match(source, /className="project-config-modal-body"/);
+  assert.match(source, /className="project-config-modal-footer"/);
 
-  const rule = ruleFor('.project-config-modal');
-  assert.match(rule, /max-height:\s*calc\(100vh - 48px\)/);
-  assert.match(rule, /overflow-y:\s*auto/);
-  assert.match(rule, /overscroll-behavior:\s*contain/);
+  const modalRule = ruleFor('.project-config-modal');
+  assert.match(modalRule, /max-height:\s*calc\(100vh - 48px\)/);
+  assert.match(modalRule, /overflow:\s*hidden/);
+
+  const formRule = ruleFor('.project-config-modal-form');
+  assert.match(formRule, /flex:\s*1 1 auto/);
+  assert.match(formRule, /min-height:\s*0/);
+
+  const bodyRule = ruleFor('.project-config-modal-body');
+  assert.match(bodyRule, /flex:\s*1 1 auto/);
+  assert.match(bodyRule, /overflow-y:\s*auto/);
+  assert.match(bodyRule, /overscroll-behavior:\s*contain/);
+
+  const footerRule = ruleFor('.project-config-modal-footer');
+  assert.match(footerRule, /flex:\s*0 0 auto/);
+  assert.match(footerRule, /justify-content:\s*flex-end/);
 });
 
 test('project cards keep low-frequency metadata behind compact details', () => {

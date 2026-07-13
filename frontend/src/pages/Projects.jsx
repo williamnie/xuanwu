@@ -637,8 +637,8 @@ export default function Projects() {
       {/* 新增/编辑项目模态窗 */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="glass-card modal-content project-config-modal" style={{ padding: '32px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <div className="glass-card modal-content project-config-modal">
+            <div className="project-config-modal-header">
               <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>
                 {modalMode === 'create' ? '新增监控项目' : '编辑项目配置'}
               </h2>
@@ -651,8 +651,8 @@ export default function Projects() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              
+            <form className="project-config-modal-form" onSubmit={handleSubmit}>
+              <div className="project-config-modal-body">
               {formError && (
                 <div style={{ color: 'var(--error)', background: 'var(--error-bg)', border: '1px solid rgba(244,63,94,0.2)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.85rem' }}>
                   {formError}
@@ -798,8 +798,9 @@ export default function Projects() {
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>新 Issue 将会被自动提交给 Codex 执行。</span>
                 </div>
               </div>
+              </div>
 
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <div className="project-config-modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={closeModal}>
                   取消
                 </button>
