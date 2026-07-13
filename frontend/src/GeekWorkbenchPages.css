@@ -97,7 +97,7 @@
 .cron-page > div:last-child section { border-radius: var(--radius-lg); }
 
 /* PI Assistant Chat */
-.pi-chat-page, [data-theme="dark"] .pi-chat-page { background: transparent; color: var(--text-primary); padding: 22px 0 0; }
+.pi-chat-page, [data-theme="dark"] .pi-chat-page { background: transparent; color: var(--text-primary); padding: 0; }
 .pi-chat-shell { gap: 12px; grid-template-columns: minmax(272px, 298px) minmax(0, 1fr); }
 .pi-chat-sidebar.glass-card, [data-theme="dark"] .pi-chat-sidebar.glass-card,
 .pi-chat-main.glass-card, [data-theme="dark"] .pi-chat-main.glass-card {
