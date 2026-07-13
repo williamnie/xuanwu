@@ -260,8 +260,20 @@
   border-radius: 8px;
   flex: 0 0 auto;
   height: 28px;
-  padding: 5px;
   width: 28px;
+}
+
+.project-card-actions .project-card-icon-btn {
+  min-height: 28px;
+  min-width: 28px;
+  padding: 5px;
+}
+
+.project-card-icon-btn svg {
+  flex: 0 0 auto;
+  height: 16px;
+  stroke-width: 2.25;
+  width: 16px;
 }
 
 .project-card-delete-btn {
