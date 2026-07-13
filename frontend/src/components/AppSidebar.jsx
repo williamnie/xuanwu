@@ -159,7 +159,7 @@ function ApiStatus() {
   return (
     <span className={`api-status ${backendOnline ? '' : 'offline'}`}>
       <span className="api-status-dot" />
-      {backendOnline ? 'LOCAL API • ONLINE' : 'LOCAL API • OFFLINE'}
+      {backendOnline ? 'ONLINE' : 'OFFLINE'}
     </span>
   );
 }

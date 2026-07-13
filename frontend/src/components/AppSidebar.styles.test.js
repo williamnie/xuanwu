@@ -28,3 +28,8 @@ test('collapsed sidebar navigation keeps accessible names when labels are visual
   assert.match(source, /aria-label=\{PI_ASSISTANT_SETTINGS_ITEM\.label\}/);
   assert.match(source, /aria-label=\{theme === 'dark' \? 'Light theme' : 'Dark theme'\}/);
 });
+
+test('sidebar API indicator only shows the connection state', () => {
+  assert.match(source, /backendOnline \? 'ONLINE' : 'OFFLINE'/);
+  assert.doesNotMatch(source, /LOCAL API/);
+});
