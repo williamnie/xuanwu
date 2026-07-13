@@ -26,6 +26,8 @@ import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
 import './App.css';
+import './GeekWorkbench.css';
+import './GeekWorkbenchPages.css';
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
