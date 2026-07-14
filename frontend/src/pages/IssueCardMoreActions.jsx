@@ -51,9 +51,9 @@ export default function IssueCardMoreActions({ issue, canDelete, canEdit, onRequ
 
 function MoreActionsButton({ issue, setTriggerElement, moreOpen, setMoreOpen, children }) {
   const menuId = `issue-${issue.id}-more-menu`;
-  const toggleMenu = (event) => {
+  const openMenu = (event) => {
     event.stopPropagation();
-    setMoreOpen(open => !open);
+    setMoreOpen(true);
   };
   return (
     <div className="kanban-card-more" onClick={(event) => event.stopPropagation()}>
@@ -65,7 +65,9 @@ function MoreActionsButton({ issue, setTriggerElement, moreOpen, setMoreOpen, ch
         aria-haspopup="menu"
         aria-expanded={moreOpen}
         aria-controls={menuId}
-        onClick={toggleMenu}
+        onMouseEnter={openMenu}
+        onFocus={openMenu}
+        onClick={openMenu}
       >
         <MoreHorizontal size={14} />
       </button>

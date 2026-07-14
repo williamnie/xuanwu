@@ -17,6 +17,7 @@ test('issue card more menu owns click bubbling and contains destructive actions'
   assert.match(moreSource, /className="kanban-card-more"[\s\S]*onClick=\{\(event\) => event\.stopPropagation\(\)\}/);
   assert.match(moreSource, /aria-haspopup="menu"/);
   assert.match(moreSource, /aria-expanded=\{moreOpen\}/);
+  assert.match(moreSource, /onMouseEnter=\{openMenu\}/);
   assert.match(moreSource, /role="menu"/);
   assert.match(moreSource, /onRequestDelete/);
   assert.match(moreSource, /role="menuitem"/);
