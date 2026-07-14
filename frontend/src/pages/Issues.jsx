@@ -41,7 +41,6 @@ export default function Issues({
   const refreshData = useDataStore(selectRefreshData);
 
   // 新建 Issue 的局部表单状态
-  const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formProjectId, setFormProjectId] = useState(projects[0]?.id || '');
   const [formPriority, setFormPriority] = useState(0);
@@ -140,7 +139,6 @@ export default function Issues({
     project: selectedProject,
     issue: {
       id: '保存后生成',
-      title: formTitle,
       description: formDescription,
       priority: formPriority,
     },
@@ -217,7 +215,6 @@ export default function Issues({
   useEffect(() => {
     if (isNewIssueOpen) {
       refreshData(['projects', 'issueTemplates']);
-      setFormTitle(sourceMetadata?.suggested_title || '');
       setFormDescription(sourceMetadata?.source_excerpt || '');
       setFormPriority(0);
       setFormError('');
@@ -286,7 +283,6 @@ export default function Issues({
     setFormError('');
 
     const payload = {
-      title: formTitle.trim(),
       description: formDescription.trim(),
       project_id: finalProjectId,
       priority: parseInt(formPriority),
@@ -298,7 +294,6 @@ export default function Issues({
     try {
       await api.createIssue(payload);
       setIsNewIssueOpen(false);
-      setFormTitle('');
       setFormDescription('');
       refreshData(['issues']);
     } catch (err) {
@@ -542,17 +537,6 @@ export default function Issues({
                   </span>
                 </div>
               )}
-
-              <div className="form-group">
-                <label>任务标题（可选，会自动生成）</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="不填则从任务内容第一行自动生成"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                />
-              </div>
 
               <div className="form-group">
                 <label>任务内容 / 需求描述 *</label>
