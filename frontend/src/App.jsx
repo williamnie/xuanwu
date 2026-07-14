@@ -1,16 +1,7 @@
-import { useCallback, useEffect } from 'react';
+import { lazy, Suspense, useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from './api/client';
 import { getAuthToken } from './api/authToken';
-import Dashboard from './pages/Dashboard';
-import Projects from './pages/Projects';
-import Issues from './pages/Issues';
-import IssueDetail from './pages/IssueDetail';
-import Sessions from './pages/Sessions';
-import PiChat from './pages/PiChat';
-import AttentionInbox from './pages/AttentionInbox';
-import Cron from './pages/Cron';
-import Settings from './pages/Settings';
 import { assistantModuleForPage, isAssistantModulePage } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
@@ -28,6 +19,17 @@ import AuthGate from './components/AuthGate';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
+
+// 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Projects = lazy(() => import('./pages/Projects'));
+const Issues = lazy(() => import('./pages/Issues'));
+const IssueDetail = lazy(() => import('./pages/IssueDetail'));
+const Sessions = lazy(() => import('./pages/Sessions'));
+const PiChat = lazy(() => import('./pages/PiChat'));
+const AttentionInbox = lazy(() => import('./pages/AttentionInbox'));
+const Cron = lazy(() => import('./pages/Cron'));
+const Settings = lazy(() => import('./pages/Settings'));
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
   'issue.created',
@@ -54,6 +56,14 @@ const PAGE_DATA_SLICES = {
 function getReconcileSlices(currentPage, selectedIssueId) {
   if (currentPage === 'issues' && selectedIssueId) return ['issues'];
   return PAGE_DATA_SLICES[currentPage] || [];
+}
+
+function PageLoadingFallback() {
+  return (
+    <div className="app-loading-stage" role="status" aria-live="polite">
+      <TurtleLoader label="正在加载页面…" />
+    </div>
+  );
 }
 
 export default function App() {
@@ -275,42 +285,44 @@ export default function App() {
             <TurtleLoader label="玄武正在唤醒工作台…" />
           </div>
         ) : (
-          currentPage === 'issues' && selectedIssueId ? (
-            <IssueDetail issueId={selectedIssueId} navigateTo={navigateTo} />
-          ) : currentPage === 'issues' ? (
-            <Issues
-              filterProject={filterProject}
-              focusFilter={focusFilter}
-              isNewIssueOpen={isNewIssueOpen}
-              setIsNewIssueOpen={setIsNewIssueOpen}
-              prefilledStatus={prefilledStatus}
-              sourceMetadata={newIssueSource}
-              handleOpenNewIssue={handleOpenNewIssue}
-              navigateTo={navigateTo}
-            />
-          ) : currentPage === 'sessions' ? (
-            <Sessions
-              handleOpenNewIssue={handleOpenNewIssue}
-              navigateTo={navigateTo}
-              selectedSessionId={selectedSessionId}
-              theme={theme}
-              toggleTheme={toggleTheme}
-            />
-          ) : currentPage === 'pi-chat' ? (
-            <PiChat navigateTo={navigateTo} />
-          ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
-            <AttentionInbox />
-          ) : isAssistantModulePage(currentPage) ? (
-            <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
-          ) : currentPage === 'projects' ? (
-            <Projects />
-          ) : currentPage === 'cron' ? (
-            <Cron />
-          ) : currentPage === 'settings' ? (
-            <Settings navigateTo={navigateTo} />
-          ) : (
-            <Dashboard navigateTo={navigateTo} />
-          )
+          <Suspense fallback={<PageLoadingFallback />}>
+            {currentPage === 'issues' && selectedIssueId ? (
+              <IssueDetail issueId={selectedIssueId} navigateTo={navigateTo} />
+            ) : currentPage === 'issues' ? (
+              <Issues
+                filterProject={filterProject}
+                focusFilter={focusFilter}
+                isNewIssueOpen={isNewIssueOpen}
+                setIsNewIssueOpen={setIsNewIssueOpen}
+                prefilledStatus={prefilledStatus}
+                sourceMetadata={newIssueSource}
+                handleOpenNewIssue={handleOpenNewIssue}
+                navigateTo={navigateTo}
+              />
+            ) : currentPage === 'sessions' ? (
+              <Sessions
+                handleOpenNewIssue={handleOpenNewIssue}
+                navigateTo={navigateTo}
+                selectedSessionId={selectedSessionId}
+                theme={theme}
+                toggleTheme={toggleTheme}
+              />
+            ) : currentPage === 'pi-chat' ? (
+              <PiChat navigateTo={navigateTo} />
+            ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
+              <AttentionInbox />
+            ) : isAssistantModulePage(currentPage) ? (
+              <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
+            ) : currentPage === 'projects' ? (
+              <Projects />
+            ) : currentPage === 'cron' ? (
+              <Cron />
+            ) : currentPage === 'settings' ? (
+              <Settings navigateTo={navigateTo} />
+            ) : (
+              <Dashboard navigateTo={navigateTo} />
+            )}
+          </Suspense>
         )}
       </main>
     </div>
