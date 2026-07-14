@@ -518,15 +518,13 @@ textarea:focus-visible {
 
 .sidebar-footer-actions {
   display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
 .sidebar-footer-actions .nav-item {
-  flex: 1 1 0;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
-  padding-left: 8px;
-  padding-right: 8px;
 }
 
 [data-theme="dark"] .nav-item.active {

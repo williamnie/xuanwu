@@ -206,8 +206,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .nav-label { font-size: 0.84rem; font-weight: 600; }
 .nav-badge { background: color-mix(in srgb, var(--text-muted) 13%, transparent); border-radius: var(--radius-xs); font-family: var(--font-mono); }
 .sidebar-footer { border-top-color: var(--border-light); }
-.sidebar-footer-actions { gap: 5px; }
-.sidebar-footer-actions .nav-item { border-color: var(--border-light); }
+.sidebar-footer-actions { gap: 2px; }
+.sidebar-footer-actions .nav-item { border-color: transparent; }
 
 .page-intro { border-bottom-color: var(--border-color); gap: 22px; min-height: 98px; padding: 26px 0 18px; }
 .page-intro h1, .settings-title-row h1, .attention-inbox-hero h1 {
