@@ -54,7 +54,8 @@ const PAGE_DATA_SLICES = {
 };
 
 function getReconcileSlices(currentPage, selectedIssueId) {
-  if (currentPage === 'issues' && selectedIssueId) return ['issues'];
+  // IssueDetail 自己读取单条 issue；不要在详情页额外轮询整张 issues 列表。
+  if (currentPage === 'issues' && selectedIssueId) return [];
   return PAGE_DATA_SLICES[currentPage] || [];
 }
 

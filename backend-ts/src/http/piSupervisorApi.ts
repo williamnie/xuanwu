@@ -19,7 +19,8 @@ function issueSupervisorView(db: RunnerDatabase, id: number): Record<string, unk
   const issue = getIssue(db, id);
   if (!issue) throw new HttpError(404, "资源不存在");
   const supervisorEvents = listIssueSupervisorEvents(db, { issueId: id });
-  const issueEvents = listIssueEvents(db, id);
+  // Supervisor 只需要 retry-after 证据；避免详情页读取整段 Provider 日志。
+  const issueEvents = listIssueEvents(db, id, { types: ["issue.retry_after_scheduled"] });
   const latestDecision = latestEvent(supervisorEvents, (event) => event.event_type.includes("decision"));
   const latestProvider = latestEvent(supervisorEvents, providerSignalEvent) ?? latestRetryIssueEvent(issueEvents);
   const latestRecovery = latestEvent(supervisorEvents, recoveryMessageEvent);

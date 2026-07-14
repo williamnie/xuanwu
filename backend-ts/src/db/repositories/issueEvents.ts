@@ -25,12 +25,25 @@ type CreateIssueCommentInput = {
   body?: unknown;
 };
 
-export function listIssueEvents(db: RunnerDatabase, issueID: number): IssueEvent[] {
+export type ListIssueEventsOptions = {
+  afterID?: number;
+  beforeID?: number;
+  excludeTypes?: string[];
+  limit?: number;
+  types?: string[];
+};
+
+export function listIssueEvents(
+  db: RunnerDatabase,
+  issueID: number,
+  options: ListIssueEventsOptions = {}
+): IssueEvent[] {
   ensureIssueExists(db, issueID);
-  return db.sqlite.query<IssueEventRow, [number]>(`
-    select id, issue_id, type, payload, created_at from issue_events
-    where issue_id = ? order by created_at asc, id asc
-  `).all(issueID).map(mapIssueEventRow);
+  const query = issueEventListQuery(issueID, options);
+  const rows = db.sqlite.query<IssueEventRow, Array<number | string>>(query.sql)
+    .all(...query.args)
+    .map(mapIssueEventRow);
+  return query.reverseResult ? rows.reverse() : rows;
 }
 
 export function createIssueComment(db: RunnerDatabase, issueID: number, input: CreateIssueCommentInput): IssueEvent {
@@ -91,6 +104,60 @@ function normalizeCommentAuthor(value: unknown): string {
   const author = cleanString(value) || "user";
   if (author === "user" || author === "agent" || author === "system") return author;
   throw new Error("评论作者必须是 user、agent 或 system");
+}
+
+function issueEventListQuery(
+  issueID: number,
+  options: ListIssueEventsOptions
+): { args: Array<number | string>; reverseResult: boolean; sql: string } {
+  const clauses = ["issue_id = ?"];
+  const args: Array<number | string> = [issueID];
+  const types = normalizedEventTypes(options.types);
+  const excludeTypes = normalizedEventTypes(options.excludeTypes);
+
+  if (types.length > 0) {
+    clauses.push(`type in (${types.map(() => "?").join(", ")})`);
+    args.push(...types);
+  }
+  if (excludeTypes.length > 0) {
+    clauses.push(`type not in (${excludeTypes.map(() => "?").join(", ")})`);
+    args.push(...excludeTypes);
+  }
+  if (options.beforeID !== undefined) {
+    clauses.push("id < ?");
+    args.push(options.beforeID);
+  }
+  if (options.afterID !== undefined) {
+    clauses.push("id > ?");
+    args.push(options.afterID);
+  }
+
+  const limit = normalizedEventLimit(options.limit);
+  const reverseResult = limit !== undefined && options.afterID === undefined;
+  const cursorQuery = options.beforeID !== undefined || options.afterID !== undefined;
+  const order = reverseResult ? "id desc" : cursorQuery ? "id asc" : "created_at asc, id asc";
+  const limitClause = limit === undefined ? "" : " limit ?";
+  if (limit !== undefined) args.push(limit);
+
+  return {
+    args,
+    reverseResult,
+    sql: `select id, issue_id, type, payload, created_at from issue_events
+      where ${clauses.join(" and ")} order by ${order}${limitClause}`
+  };
+}
+
+function normalizedEventTypes(values: string[] | undefined): string[] {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function normalizedEventLimit(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 500) {
+    throw new Error("事件 limit 必须是 1 到 500 的整数");
+  }
+  return value;
 }
 
 function ensureIssueExists(db: RunnerDatabase, id: number): void {

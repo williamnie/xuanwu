@@ -2,7 +2,11 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { deleteIssue, enqueueIssue, retryIssue, type IssueActionOptions } from "../db/repositories/issueActions.ts";
-import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
+import {
+  createIssueComment,
+  listIssueEvents,
+  type ListIssueEventsOptions
+} from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
 import { listCronTasks } from "../db/repositories/cronTasks.ts";
@@ -102,7 +106,7 @@ function registerIssueItemRoutes(router: Router, context: ReadApiContext): void 
 }
 
 function issueEventsResponse(context: ReadApiContext, request: Request): Response {
-  return writeResponse(() => listIssueEvents(context.database, issueID(request)));
+  return writeResponse(() => listIssueEvents(context.database, issueID(request), issueEventFilter(request)));
 }
 
 function issueRunsResponse(context: ReadApiContext, request: Request): Response {
@@ -317,6 +321,41 @@ function issueFilter(request: Request): { projectId: string; sourceSessionId: st
     sourceSessionId: cleanParam(params.get("sourceSessionId") || params.get("source_session_id")),
     status: cleanParam(params.get("status"))
   };
+}
+
+function issueEventFilter(request: Request): ListIssueEventsOptions {
+  const params = new URL(request.url).searchParams;
+  const beforeID = optionalPositiveIntegerParam(params, "before_id");
+  const afterID = optionalPositiveIntegerParam(params, "after_id");
+  if (beforeID !== undefined && afterID !== undefined) {
+    throw new HttpError(400, "before_id 和 after_id 不能同时使用");
+  }
+  return {
+    afterID,
+    beforeID,
+    excludeTypes: eventTypeParams(params, "exclude_type"),
+    limit: optionalPositiveIntegerParam(params, "limit", 500),
+    types: eventTypeParams(params, "type")
+  };
+}
+
+function eventTypeParams(params: URLSearchParams, key: string): string[] {
+  return params.getAll(key)
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function optionalPositiveIntegerParam(params: URLSearchParams, key: string, maximum?: number): number | undefined {
+  const raw = cleanParam(params.get(key));
+  if (raw === "") return undefined;
+  if (!/^[0-9]+$/.test(raw)) throw new HttpError(400, `${key} 必须是正整数`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) throw new HttpError(400, `${key} 必须是正整数`);
+  if (maximum !== undefined && value > maximum) {
+    throw new HttpError(400, `${key} 不能大于 ${maximum}`);
+  }
+  return value;
 }
 
 function actionOptions(body: Record<string, unknown>): IssueActionOptions {

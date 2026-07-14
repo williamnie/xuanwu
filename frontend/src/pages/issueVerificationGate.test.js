@@ -18,11 +18,13 @@ test('issue detail provides pending verification review actions', () => {
   assert.match(apiClient, /reviewIssueVerification:/);
   assert.match(apiClient, /generateIssueVerifierReport:/);
   assert.match(detailPage, /issue\.status === 'pending_verification'/);
-  assert.match(detailPage, /handleVerificationReview\('accept'\)/);
-  assert.match(detailPage, /handleVerificationReview\('reject'\)/);
-  assert.match(detailPage, /handleVerificationReview\('request_changes'\)/);
+  assert.match(detailPage, /handleVerificationReview\('accept', ''\)/);
+  assert.match(detailPage, /setVerificationReviewAction\('reject'\)/);
+  assert.match(detailPage, /setVerificationReviewAction\('request_changes'\)/);
+  assert.match(detailPage, /function VerificationReviewModal/);
   assert.match(detailPage, /VerifierReportPanel/);
   assert.match(detailPage, /issue\.verification_report/);
+  assert.doesNotMatch(detailPage, /window\.prompt/);
 });
 
 test('triage to todo avoids native confirm gates', () => {

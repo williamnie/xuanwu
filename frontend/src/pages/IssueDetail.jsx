@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useImmer } from 'use-immer';
 import { api } from '../api/client';
 import IssueEditModal from '../components/IssueEditModal';
-import IssueWorkflowEvidencePanel from '../components/IssueWorkflowEvidencePanel';
 import { message } from '../store/toastStore';
 import {
   selectRefreshData,
@@ -33,10 +32,17 @@ import {
   History,
   ExternalLink,
   Trash2,
+  Activity,
+  ChevronDown,
+  Clock3,
+  FileText,
+  MoreHorizontal,
+  Settings2,
+  StickyNote,
 } from 'lucide-react';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import { canEditIssue } from '../utils/issueEdit';
-import { deriveIssueWorkflowEvidence } from '../utils/issueWorkflowEvidence';
+import { deriveIssueExecutionSummary } from '../utils/issueExecutionSummary';
 import { issueRunSessionRef } from '../utils/issueRuns';
 import {
   serviceTierLabel,
@@ -56,6 +62,10 @@ import {
   mcpRequirementStatus,
 } from '../utils/mcpRequirements';
 import IssueSupervisorPanel from './IssueSupervisorPanel';
+import './IssueDetail.css';
+
+const LOG_PAGE_SIZE = 200;
+const ACTIVE_SUPERVISOR_STATUSES = new Set(['todo', 'in_progress']);
 
 const COMMENT_AUTHOR_LABELS = {
   user: 'User',
@@ -223,24 +233,49 @@ function issueProviderIdentity(issue, runs) {
 export default function IssueDetail({ issueId, navigateTo }) {
   const refreshData = useDataStore(selectRefreshData);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('activity');
   const [commentDraft, setCommentDraft] = useState('');
   const [commentError, setCommentError] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [verifierGenerating, setVerifierGenerating] = useState(false);
   const [verifierError, setVerifierError] = useState('');
+  const [verificationReviewAction, setVerificationReviewAction] = useState('');
+  const [verificationReviewDraft, setVerificationReviewDraft] = useState('');
+  const [verificationReviewSubmitting, setVerificationReviewSubmitting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingIssue, setDeletingIssue] = useState(false);
   const [detailState, updateDetailState] = useImmer({
     issue: null,
     project: null,
     events: [],
+    logEvents: [],
+    logsLoaded: false,
+    logsLoading: false,
+    logsHasMore: false,
+    logsError: '',
+    unseenLogCount: 0,
     runs: [],
     profiles: [],
     supervisor: null,
     loading: true,
     error: null,
   });
-  const { issue, project, events, runs, profiles, supervisor, loading, error } = detailState;
+  const {
+    issue,
+    project,
+    events,
+    logEvents,
+    logsLoaded,
+    logsLoading,
+    logsHasMore,
+    logsError,
+    unseenLogCount,
+    runs,
+    profiles,
+    supervisor,
+    loading,
+    error,
+  } = detailState;
 
   // 只滚动终端自己的滚动容器，避免把整个详情页抢到最底部。
   const terminalRef = useRef(null);
@@ -266,7 +301,11 @@ export default function IssueDetail({ issueId, navigateTo }) {
           nextSupervisor,
         ] = await Promise.all([
           readOptional(() => api.getProject(issueData.project_id), '获取关联项目失败:'),
-          readOptional(() => api.getIssueEvents(issueId), '获取日志事件失败:', []),
+          readOptional(
+            () => api.getIssueEvents(issueId, { excludeTypes: ['issue.log'] }),
+            '获取活动事件失败:',
+            [],
+          ),
           readOptional(() => api.getIssueRuns(issueId), '获取运行历史失败:', []),
           includeProfiles
             ? readOptional(() => api.getAgentProfiles(), '获取 Agent Profiles 失败:', [])
@@ -346,8 +385,14 @@ ${error}` : error;
             }
           }
 
-          // 追加到 issue 事件列表；重复的轮询/SSE 结果不再制造新数组。
-          if (!hasIssueEvent(draft.events, data)) {
+          // 日志只在用户打开 Logs 后驻留；其余轻量事件进入活动流。
+          if (data.type === 'issue.log') {
+            if (draft.logsLoaded && !hasIssueEvent(draft.logEvents, data)) {
+              draft.logEvents.push(data);
+            } else if (!draft.logsLoaded) {
+              draft.unseenLogCount += 1;
+            }
+          } else if (!hasIssueEvent(draft.events, data)) {
             draft.events.push(data);
           }
         });
@@ -363,15 +408,64 @@ ${error}` : error;
     };
   }, [issueId, loadIssueData, updateDetailState]);
 
+  const loadIssueLogs = useCallback(async ({ beforeId = '' } = {}) => {
+    updateDetailState(draft => {
+      draft.logsLoading = true;
+      draft.logsError = '';
+    });
+    try {
+      const nextLogs = await api.getIssueEvents(issueId, {
+        beforeId,
+        limit: LOG_PAGE_SIZE,
+        types: ['issue.log'],
+      });
+      updateDetailState(draft => {
+        const page = Array.isArray(nextLogs) ? nextLogs : [];
+        if (beforeId) {
+          const existingIDs = new Set(draft.logEvents.map(event => event.id).filter(Boolean));
+          draft.logEvents.unshift(...page.filter(event => !existingIDs.has(event.id)));
+        } else {
+          draft.logEvents = page;
+          draft.unseenLogCount = 0;
+        }
+        draft.logsHasMore = page.length === LOG_PAGE_SIZE;
+        draft.logsLoaded = true;
+        draft.logsLoading = false;
+      });
+    } catch (loadError) {
+      updateDetailState(draft => {
+        draft.logsError = loadError.message || '加载日志失败';
+        draft.logsLoading = false;
+      });
+    }
+  }, [issueId, updateDetailState]);
+
   useEffect(() => {
+    if (activeTab !== 'logs' || logsLoaded || logsLoading) return;
+    loadIssueLogs();
+  }, [activeTab, loadIssueLogs, logsLoaded, logsLoading]);
+
+  useEffect(() => {
+    setActiveTab('activity');
     setCommentDraft('');
     setCommentError('');
     setCommentSubmitting(false);
     setVerifierGenerating(false);
     setVerifierError('');
+    setVerificationReviewAction('');
+    setVerificationReviewDraft('');
+    setVerificationReviewSubmitting(false);
     setDeleteConfirmOpen(false);
     setDeletingIssue(false);
-  }, [issueId]);
+    updateDetailState(draft => {
+      draft.logEvents = [];
+      draft.logsLoaded = false;
+      draft.logsLoading = false;
+      draft.logsHasMore = false;
+      draft.logsError = '';
+      draft.unseenLogCount = 0;
+    });
+  }, [issueId, updateDetailState]);
 
   const updateTerminalFollowState = useCallback(() => {
     const node = terminalRef.current;
@@ -382,8 +476,8 @@ ${error}` : error;
 
   // 监听真正新增的事件，只在用户仍停留在终端底部附近时跟随滚动。
   useEffect(() => {
-    const lastEvent = events[events.length - 1];
-    const lastEventKey = issueEventKey(lastEvent, events.length - 1);
+    const lastEvent = logEvents[logEvents.length - 1];
+    const lastEventKey = issueEventKey(lastEvent, logEvents.length - 1);
     if (!lastEventKey || lastEventKey === lastScrolledEventKeyRef.current) {
       return;
     }
@@ -393,7 +487,7 @@ ${error}` : error;
     if (node && shouldFollowTerminalRef.current) {
       node.scrollTop = node.scrollHeight;
     }
-  }, [events]);
+  }, [logEvents]);
 
   const handleMoveToTodo = async () => {
     try {
@@ -409,7 +503,10 @@ ${error}` : error;
     try {
       await api.retryIssue(issueId, serviceTierPayload(issue.service_tier));
       updateDetailState(draft => {
-        draft.events = [];
+        draft.logEvents = [];
+        draft.logsLoaded = false;
+        draft.logsHasMore = false;
+        draft.unseenLogCount = 0;
       }); // 重置本地日志，等待新线程输出
       loadIssueData();
     } catch (err) {
@@ -466,16 +563,19 @@ ${error}` : error;
     }
   };
 
-  const handleVerificationReview = async (action) => {
-    const comment = verificationReviewComment(action);
-    if (comment === null) return;
+  const handleVerificationReview = async (action, comment = '') => {
+    setVerificationReviewSubmitting(true);
     try {
-      await api.reviewIssueVerification(issueId, { action, comment });
+      await api.reviewIssueVerification(issueId, { action, comment: comment.trim() });
       message.success('验证处理已提交');
+      setVerificationReviewAction('');
+      setVerificationReviewDraft('');
       loadIssueData();
       refreshData(['issues']);
     } catch (err) {
       message.error('验证处理失败: ' + err.message);
+    } finally {
+      setVerificationReviewSubmitting(false);
     }
   };
 
@@ -483,7 +583,7 @@ ${error}` : error;
     event.preventDefault();
     const body = commentDraft.trim();
     if (!body) {
-      setCommentError('评论内容不能为空');
+      setCommentError('内部备注不能为空');
       return;
     }
     setCommentSubmitting(true);
@@ -497,9 +597,9 @@ ${error}` : error;
       });
       setCommentDraft('');
     } catch (err) {
-      const errorMessage = err.message || '提交评论失败';
+      const errorMessage = err.message || '保存内部备注失败';
       setCommentError(errorMessage);
-      message.error('提交评论失败: ' + errorMessage);
+      message.error('保存内部备注失败: ' + errorMessage);
     } finally {
       setCommentSubmitting(false);
     }
@@ -577,15 +677,21 @@ ${error}` : error;
   const commentEvents = events.filter(event => event.type === 'issue.comment');
   const runtimeIdentity = issueProviderIdentity(issue, runs);
   const runtimeProvider = providerLabel(runtimeIdentity.provider);
-  const workflowEvidence = deriveIssueWorkflowEvidence({ issue, events, runs });
+  const executionSummary = deriveIssueExecutionSummary({ issue, events, runs });
   const verifierReports = issueVerifierReports(events);
   const profileSummary = summarizeAgentProfile(project?.default_agent_profile);
   const mcpSummary = issueMcpRequirementSummary(issue);
+  const latestRun = executionSummary.latestRun;
+  const executionSessionRef = latestRun
+    ? issueRunSessionRef(issue, latestRun)
+    : runtimeIdentity.sessionId ? `codex:${runtimeIdentity.sessionId}` : '';
+  const hasSupervisorHistory = supervisorHasSignal(supervisor);
+  const hasCurrentSupervisorSignal = supervisorNeedsAttention(supervisor, issue);
   const renderTerminalLines = () => {
     // 将相邻的、类型相同的流式 delta 事件合并，解决单字符或短片段流式输出时高度折行、字占一行的排版问题
     const getMergedEvents = () => {
       const merged = [];
-      for (const event of events) {
+      for (const event of logEvents) {
         if (event.type === 'issue.comment') {
           continue;
         }
@@ -744,43 +850,52 @@ ${error}` : error;
   };
 
   return (
-    <div className="issue-detail-page animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-
-      {/* 头部返回与快速操作 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button className="btn btn-secondary" style={{ padding: '8px 14px' }} onClick={() => navigateTo('issues')}>
-          <ArrowLeft size={16} /> 返回队列
+    <div className="issue-detail-page animate-fade-in">
+      <div className="issue-detail-toolbar">
+        <button className="issue-detail-back" type="button" onClick={() => navigateTo('issues')}>
+          <ArrowLeft size={15} /> 返回队列
         </button>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="issue-detail-actions">
           {canEditIssue(issue) && (
-            <>
-              <button className="btn btn-secondary" onClick={() => setIsEditModalOpen(true)}>
-                <Pencil size={14} /> 编辑内容
-              </button>
-              <button className="btn btn-success" onClick={handleMoveToTodo}>
-                <Play size={14} /> Move to Todo
-              </button>
-            </>
+            <button className="btn btn-secondary" type="button" onClick={() => setIsEditModalOpen(true)}>
+              <Pencil size={14} /> 编辑任务
+            </button>
+          )}
+
+          {canEditIssue(issue) && (
+            <button className="btn btn-success" type="button" onClick={handleMoveToTodo}>
+              <Play size={14} /> 移到 Todo
+            </button>
           )}
 
           {(issue.status === 'todo' || issue.status === 'in_progress') && (
-            <button className="btn btn-danger" onClick={handleCancel}>
-              <XOctagon size={14} /> 中断取消
+            <button className="btn btn-secondary issue-cancel-action" type="button" onClick={handleCancel}>
+              <XOctagon size={14} /> {issue.status === 'in_progress' ? '中断执行' : '取消排队'}
             </button>
           )}
 
           {(issue.status === 'failed' || issue.status === 'cancelled' || issue.status === 'done') && (
-            <button className="btn btn-primary" onClick={handleRetry}>
+            <button className="btn btn-primary" type="button" onClick={handleRetry}>
               <RotateCw size={14} /> 重新执行
             </button>
           )}
 
-          {issue.status !== 'in_progress' && (
-            <button className="btn btn-danger" onClick={() => setDeleteConfirmOpen(true)}>
-              <Trash2 size={14} /> 删除
-            </button>
-          )}
+          <details className="issue-more-menu">
+            <summary className="btn btn-secondary" aria-label="更多任务操作">
+              <MoreHorizontal size={16} /> 更多 <ChevronDown size={13} />
+            </summary>
+            <div className="issue-more-menu-popover">
+              <button type="button" onClick={() => setActiveTab('advanced')}>
+                <Settings2 size={14} /> 高级信息与状态操作
+              </button>
+              {issue.status !== 'in_progress' && (
+                <button type="button" className="danger" onClick={() => setDeleteConfirmOpen(true)}>
+                  <Trash2 size={14} /> 删除 Issue
+                </button>
+              )}
+            </div>
+          </details>
         </div>
       </div>
 
@@ -793,267 +908,250 @@ ${error}` : error;
         />
       )}
 
-      {/* 主面板内容 */}
-      <div className="issue-detail-grid grid-cols-3">
+      {verificationReviewAction && (
+        <VerificationReviewModal
+          action={verificationReviewAction}
+          draft={verificationReviewDraft}
+          submitting={verificationReviewSubmitting}
+          onDraftChange={setVerificationReviewDraft}
+          onCancel={() => setVerificationReviewAction('')}
+          onConfirm={() => handleVerificationReview(verificationReviewAction, verificationReviewDraft)}
+        />
+      )}
 
-        {/* 左侧：任务细节与极客终端 */}
-        <div className="issue-detail-main" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <header className="issue-detail-hero glass-card">
+        <div className="issue-detail-kicker">
+          <span>{project ? project.name : issue.project_id}</span>
+          <span>Issue #{issue.id}</span>
+          <span>{formatRelativeTime(issue.updated_at)} 更新</span>
+        </div>
+        <div className="issue-detail-title-row">
+          <div>
+            <h1>{issue.title}</h1>
+            <p>{issueStatusDescription(issue.status)}</p>
+          </div>
+          <span className={`status-badge ${issue.status} issue-detail-status`}>
+            {issue.status === 'in_progress' && <span className="status-dot running" />}
+            {issue.status}
+          </span>
+        </div>
+      </header>
 
-          <div className="glass-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: 'var(--primary-glow)', color: 'var(--primary)', fontWeight: 600 }}>
-                    {project ? project.name : issue.project_id}
-                  </span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                    ID: #{issue.id}
-                  </span>
-                </div>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>{issue.title}</h2>
-              </div>
-              <span className={`status-badge ${issue.status}`} style={{ fontSize: '0.9rem', padding: '8px 16px' }}>
-                {issue.status === 'in_progress' && <span className="status-dot running"></span>}
-                {issue.status}
-              </span>
+      <div className="issue-detail-overview-grid">
+        <section className="issue-description-card glass-card">
+          <div className="issue-section-heading">
+            <div>
+              <span className="issue-section-eyebrow">Task brief</span>
+              <h2><FileText size={17} /> 任务说明</h2>
             </div>
-
-            {issueBody && (
-              <div style={{ marginTop: '20px', background: 'rgba(0,0,0,0.03)', padding: '16px', borderRadius: '10px', fontSize: '0.9rem', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>任务描述</div>
-                <MarkdownPreview text={issueBody} />
-              </div>
+            {canEditIssue(issue) && (
+              <button className="kanban-card-action-btn" type="button" onClick={() => setIsEditModalOpen(true)}>
+                <Pencil size={12} /> 编辑
+              </button>
             )}
           </div>
-
-          <IssueDiscussion
-            events={commentEvents}
-            draft={commentDraft}
-            error={commentError}
-            submitting={commentSubmitting}
-            onDraftChange={setCommentDraft}
-            onSubmit={handleSubmitComment}
-          />
-
-          {/* 实时终端控制台 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Terminal size={18} color="var(--primary)" /> Provider 代理工作终端 (实时)
-            </h3>
-            <div
-              ref={terminalRef}
-              className="terminal-view"
-              style={{ minHeight: '400px' }}
-              onScroll={updateTerminalFollowState}
-            >
-              <div className="terminal-line info" style={{ borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '12px' }}>
-                🐢 XUANWU AGENT GUARDIAN [ONLINE]
-                <br />
-                -------------------------------------------------
-                <br />
-                项目路径: {project ? project.cwd : '加载中...'}
-                <br />
-                Provider: {runtimeProvider}
-                <br />
-                Session ID: {runtimeIdentity.sessionId || '暂无'}
-                <br />
-                Turn ID: {runtimeIdentity.turnId || '暂无'}
-                <br />
-                Agent Profile: {profileSummary}
+          {issueBody ? (
+            <div className="issue-description-content"><MarkdownPreview text={issueBody} /></div>
+          ) : (
+            <p className="issue-empty-copy">暂无任务描述。</p>
+          )}
+          {issue.source_session_id && (
+            <div className="issue-source-strip">
+              <div>
+                <span>来源 Session</span>
+                <strong>{issue.source_session_id}</strong>
+                {issue.source_excerpt && <p>{summarize(issue.source_excerpt, 180)}</p>}
               </div>
-
-              {renderTerminalLines()}
+              <button
+                type="button"
+                className="kanban-card-action-btn"
+                onClick={() => navigateTo('sessions', null, issueSourceSessionRef(issue))}
+              >
+                <ExternalLink size={12} /> 查看来源
+              </button>
             </div>
-          </div>
+          )}
+        </section>
 
+        <IssueExecutionOverview
+          issue={issue}
+          latestRun={latestRun}
+          summary={executionSummary}
+          sessionRef={executionSessionRef}
+          navigateTo={navigateTo}
+        />
+      </div>
+
+      {executionSummary.statusConflict && (
+        <div className="issue-inline-alert warning" role="status">
+          <AlertTriangle size={17} />
+          <div>
+            <strong>状态需要核对</strong>
+            <p>Issue 为 {issue.status}，最新 Run 为 {executionSummary.runStatus}。页面不再把历史 workflow 推断当作最终结论，请先查看 Session 或 Runs。</p>
+          </div>
+          <button type="button" onClick={() => setActiveTab('runs')}>查看 Runs</button>
+        </div>
+      )}
+
+      {issue.error && issue.status !== 'pending_verification' && (
+        <div className="issue-error-card issue-inline-alert danger" role="alert">
+          <AlertTriangle size={17} />
+          <div>
+            <strong>执行异常</strong>
+            <p className="issue-error-text">{issue.error}</p>
+          </div>
+          <button type="button" onClick={() => setActiveTab('logs')}>查看日志</button>
+        </div>
+      )}
+
+      {issue.status === 'pending_verification' && (
+        <VerificationReviewPanel
+          evidence={issue.error}
+          onAccept={() => handleVerificationReview('accept', '')}
+          onReject={() => setVerificationReviewAction('reject')}
+          onRequestChanges={() => setVerificationReviewAction('request_changes')}
+        />
+      )}
+
+      {hasCurrentSupervisorSignal && <IssueSupervisorPanel supervisor={supervisor} />}
+
+      <section className="issue-detail-workspace glass-card">
+        <div className="issue-detail-tabs" role="tablist" aria-label="Issue 详情分区">
+          <IssueDetailTab
+            active={activeTab === 'activity'}
+            icon={<Activity size={15} />}
+            label="活动"
+            count={events.length}
+            onClick={() => setActiveTab('activity')}
+          />
+          <IssueDetailTab
+            active={activeTab === 'logs'}
+            icon={<Terminal size={15} />}
+            label="日志"
+            count={logsLoaded ? logEvents.length : unseenLogCount}
+            hasUpdate={!logsLoaded && unseenLogCount > 0}
+            onClick={() => setActiveTab('logs')}
+          />
+          <IssueDetailTab
+            active={activeTab === 'runs'}
+            icon={<History size={15} />}
+            label="Runs"
+            count={runs.length}
+            onClick={() => setActiveTab('runs')}
+          />
+          <IssueDetailTab
+            active={activeTab === 'advanced'}
+            icon={<Settings2 size={15} />}
+            label="高级"
+            onClick={() => setActiveTab('advanced')}
+          />
         </div>
 
-        {/* 右侧：元数据信息与运行设置 */}
-        <div className="issue-detail-side" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-          <IssueWorkflowEvidencePanel
-            workflow={workflowEvidence}
-            navigateTo={navigateTo}
-            onCopy={handleCopyText}
-          />
-
-          <IssueMcpRequirementsPanel summary={mcpSummary} />
-
-          <IssueSupervisorPanel supervisor={supervisor} />
-
-          {canGenerateVerifierReport(issue) && (
-            <VerifierReportPanel
-              reports={verifierReports}
-              generating={verifierGenerating}
-              error={verifierError}
-              onGenerate={handleGenerateVerifierReport}
-            />
-          )}
-
-          {issue.status === 'pending_verification' && (
-            <VerificationReviewPanel
-              evidence={issue.error}
-              onAccept={() => handleVerificationReview('accept')}
-              onReject={() => handleVerificationReview('reject')}
-              onRequestChanges={() => handleVerificationReview('request_changes')}
-            />
-          )}
-
-          {/* 故障错误警报栏 */}
-          {issue.error && issue.status !== 'pending_verification' && (
-            <div className="issue-error-card glass-card" style={{ background: 'var(--error-bg)', borderColor: 'rgba(244,63,94,0.3)', borderLeft: '4px solid var(--error)' }}>
-              <h4 style={{ color: 'var(--error)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <AlertTriangle size={18} /> 执行失败阻断
-              </h4>
-              <p className="issue-error-text" style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                {issue.error}
-              </p>
+        <div className="issue-detail-tab-panel" role="tabpanel">
+          {activeTab === 'activity' && (
+            <div className="issue-activity-grid">
+              <IssueActivityPanel events={events} />
+              <IssueInternalNotes
+                count={commentEvents.length}
+                draft={commentDraft}
+                error={commentError}
+                submitting={commentSubmitting}
+                sessionRef={executionSessionRef}
+                navigateTo={navigateTo}
+                onDraftChange={setCommentDraft}
+                onSubmit={handleSubmitComment}
+              />
             </div>
           )}
 
-          {/* 任务状态详情卡 */}
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              任务元数据
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.85rem' }}>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>当前状态:</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{String(issue.status || 'unknown').toUpperCase()}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>重试尝试数:</span>
-                <span style={{ fontWeight: 600 }}>{issue.attempt_count} 次</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>优先级:</span>
-                <span style={{ fontWeight: 600 }}>{issue.priority === 2 ? 'High (紧急)' : issue.priority === 1 ? 'Medium (普通)' : 'Low (低)'}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Provider:</span>
-                <span style={{ fontWeight: 600 }}>{runtimeProvider}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Agent Profile:</span>
-                <span style={{ fontWeight: 600 }}>{profileSummary}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>仅描述默认 instructions 与 skill/plugin intent，不授予额外工具权限。</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '6px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>下次运行速度:</span>
-                <select
-                  className="form-control"
-                  value={issue.service_tier || ''}
-                  onChange={(event) => handleServiceTierChange(event.target.value)}
-                  disabled={issue.status === 'in_progress'}
-                >
-                  {serviceTierOptions(issue.service_tier).map(option => (
-                    <option key={option.value || 'standard'} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-                  当前选择：{serviceTierLabel(issue.service_tier)}；运行中的 issue 会保留本轮快照，仅影响下次执行。
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>执行 Session ID:</span>
-                <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {runtimeIdentity.sessionId || '未开始分配'}
-                </code>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>执行 Turn ID:</span>
-                <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {runtimeIdentity.turnId || '暂无'}
-                </code>
-              </div>
-
-              {issue.source_session_id && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>来源 Session:</span>
-                  <button
-                    type="button"
-                    className="kanban-card-action-btn"
-                    style={{ alignSelf: 'flex-start' }}
-                    onClick={() => navigateTo('sessions', null, issueSourceSessionRef(issue))}
-                  >
-                    <ExternalLink size={12} /> {issue.source_session_id}
+          {activeTab === 'logs' && (
+            <div className="issue-logs-panel">
+              <div className="issue-tab-panel-header">
+                <div>
+                  <span className="issue-section-eyebrow">Lazy loaded · {LOG_PAGE_SIZE} / page</span>
+                  <h2><Terminal size={17} /> Provider 运行日志</h2>
+                  <p>仅在打开本页签时读取最新日志；历史内容按需向前加载。</p>
+                </div>
+                <div className="issue-log-actions">
+                  {logsHasMore && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={logsLoading}
+                      onClick={() => loadIssueLogs({ beforeId: logEvents[0]?.id })}
+                    >
+                      <Clock3 size={14} /> 加载更早日志
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-secondary" disabled={logsLoading} onClick={() => loadIssueLogs()}>
+                    <RotateCw size={14} /> 刷新最新
                   </button>
-                  {issue.source_turn_id && (
-                    <code style={{ background: 'rgba(0,0,0,0.1)', padding: '4px 6px', borderRadius: '4px', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      Turn: {issue.source_turn_id}
-                    </code>
-                  )}
-                  {issue.source_excerpt && (
-                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.78rem', overflowWrap: 'anywhere' }}>
-                      {summarize(issue.source_excerpt, 180)}
-                    </p>
-                  )}
+                </div>
+              </div>
+
+              {logsError && <div className="issue-log-error">{logsError}</div>}
+              {logsLoading && !logsLoaded ? (
+                <div className="issue-tab-loading">正在读取最新日志…</div>
+              ) : (
+                <div
+                  ref={terminalRef}
+                  className="terminal-view issue-detail-terminal"
+                  onScroll={updateTerminalFollowState}
+                >
+                  <div className="terminal-runtime-strip">
+                    <span>Provider <strong>{runtimeProvider}</strong></span>
+                    <span>Session <strong>{runtimeIdentity.sessionId || '暂无'}</strong></span>
+                    <span>Turn <strong>{runtimeIdentity.turnId || '暂无'}</strong></span>
+                    <span>Path <strong>{project?.cwd || '加载中'}</strong></span>
+                  </div>
+                  {renderTerminalLines()}
                 </div>
               )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>最后更新时间:</span>
-                <span>{new Date(issue.updated_at).toLocaleString()}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>创建时间:</span>
-                <span>{new Date(issue.created_at).toLocaleString()}</span>
-              </div>
-
             </div>
-          </div>
+          )}
 
-          <IssueRunsPanel
-            issue={issue}
-            project={project}
-            profiles={profiles}
-            runs={runs}
-            currentStatus={issue.status}
-            navigateTo={navigateTo}
-            onCopy={handleCopyText}
-          />
+          {activeTab === 'runs' && (
+            <IssueRunsPanel
+              issue={issue}
+              project={project}
+              profiles={profiles}
+              runs={runs}
+              currentStatus={issue.status}
+              navigateTo={navigateTo}
+              onCopy={handleCopyText}
+            />
+          )}
 
-          {/* 人工干预区 */}
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <UserCheck size={18} color="var(--primary)" /> 人工状态变更干预
-            </h3>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              若 Codex 已经完成修改但由于一些脚本检测导致状态未能流转，或者您需要直接标记其状态，可在此手动强制修改：
-            </p>
+          {activeTab === 'advanced' && (
+            <div className="issue-advanced-grid">
+              <IssueMetadataPanel
+                issue={issue}
+                profileSummary={profileSummary}
+                runtimeIdentity={runtimeIdentity}
+                runtimeProvider={runtimeProvider}
+                onServiceTierChange={handleServiceTierChange}
+              />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button
-                className="btn btn-secondary btn-success"
-                style={{ padding: '8px 12px', fontSize: '0.8rem', width: '100%', justifyContent: 'flex-start' }}
-                onClick={() => handleMarkStatus('done')}
-              >
-                <CheckCircle size={14} /> 强制标记为：完成 (Done)
-              </button>
+              <IssueManualControls issue={issue} onMarkStatus={handleMarkStatus} />
 
-              <button
-                className="btn btn-secondary btn-danger"
-                style={{ padding: '8px 12px', fontSize: '0.8rem', width: '100%', justifyContent: 'flex-start' }}
-                onClick={() => handleMarkStatus('failed')}
-              >
-                <XCircle size={14} /> 强制标记为：失败 (Failed)
-              </button>
+              {hasMcpRequirements(mcpSummary) && <IssueMcpRequirementsPanel summary={mcpSummary} />}
+
+              {hasSupervisorHistory && !hasCurrentSupervisorSignal && (
+                <IssueSupervisorPanel supervisor={supervisor} />
+              )}
+
+              {canGenerateVerifierReport(issue) && (
+                <VerifierReportPanel
+                  reports={verifierReports}
+                  generating={verifierGenerating}
+                  error={verifierError}
+                  onGenerate={handleGenerateVerifierReport}
+                />
+              )}
             </div>
-          </div>
-
+          )}
         </div>
-
-      </div>
+      </section>
 
       {isEditModalOpen && (
         <IssueEditModal
@@ -1062,8 +1160,307 @@ ${error}` : error;
           onSaved={handleIssueSaved}
         />
       )}
-
     </div>
+  );
+}
+
+function IssueExecutionOverview({ issue, latestRun, summary, sessionRef, navigateTo }) {
+  const running = latestRun && !latestRun.ended_at;
+  return (
+    <section className="issue-execution-card glass-card">
+      <div className="issue-section-heading">
+        <div>
+          <span className="issue-section-eyebrow">Execution truth</span>
+          <h2><Activity size={17} /> 执行概览</h2>
+        </div>
+        {summary.statusConflict && <span className="issue-summary-flag warning">需核对</span>}
+      </div>
+
+      <div className="issue-execution-facts">
+        <div>
+          <span>Issue 状态</span>
+          <strong>{summary.issueStatus}</strong>
+        </div>
+        <div>
+          <span>最新 Run</span>
+          <strong>
+            {latestRun ? `#${latestRun.attempt || '?'} · ${summary.runStatus || 'unknown'}` : '尚未执行'}
+            {running && <i className="status-dot running" />}
+          </strong>
+        </div>
+        <div className={`issue-verification-fact ${summary.verification.state}`}>
+          <span>结构化验证</span>
+          <strong>{summary.verification.label}</strong>
+          <p>{summary.verification.detail}</p>
+        </div>
+      </div>
+
+      <div className="issue-next-action">
+        <span>建议下一步</span>
+        <p>{summary.nextAction}</p>
+      </div>
+
+      {sessionRef && (
+        <button
+          type="button"
+          className="btn btn-primary issue-open-session"
+          onClick={() => navigateTo?.('sessions', null, sessionRef)}
+        >
+          <ExternalLink size={14} /> 打开执行 Session
+        </button>
+      )}
+      {!sessionRef && issue.status === 'triage' && (
+        <p className="issue-empty-copy">任务尚未进入 runner，因此还没有执行 Session。</p>
+      )}
+    </section>
+  );
+}
+
+function IssueDetailTab({ active, icon, label, count, hasUpdate = false, onClick }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`issue-detail-tab${active ? ' active' : ''}`}
+      onClick={onClick}
+    >
+      {icon}
+      <span>{label}</span>
+      {Number(count) > 0 && <em>{count}</em>}
+      {hasUpdate && <i aria-label="有新内容" />}
+    </button>
+  );
+}
+
+function IssueActivityPanel({ events }) {
+  const orderedEvents = [...events].reverse();
+  return (
+    <section className="issue-activity-panel">
+      <div className="issue-tab-panel-header">
+        <div>
+          <span className="issue-section-eyebrow">Audit trail</span>
+          <h2><Activity size={17} /> 活动记录</h2>
+          <p>状态、内部备注和系统事件按时间汇总；Provider 输出已独立到“日志”。</p>
+        </div>
+      </div>
+
+      {orderedEvents.length === 0 ? (
+        <div className="issue-activity-empty">暂无活动事件。</div>
+      ) : (
+        <div className="issue-activity-list">
+          {orderedEvents.map((event, index) => (
+            <IssueActivityItem key={event.id || issueEventKey(event, index)} event={event} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IssueActivityItem({ event }) {
+  const view = activityEventView(event);
+  return (
+    <article className={`issue-activity-item ${view.tone}`}>
+      <div className="issue-activity-marker">{view.icon}</div>
+      <div className="issue-activity-content">
+        <div className="issue-activity-title">
+          <strong>{view.title}</strong>
+          <time>{formatDateTime(event.created_at)}</time>
+        </div>
+        {view.markdown ? (
+          <div className="issue-activity-markdown"><MarkdownPreview text={view.detail} /></div>
+        ) : view.detail ? (
+          <p>{view.detail}</p>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function activityEventView(event) {
+  const payload = parseEventPayload(event);
+  if (event.type === 'issue.comment') {
+    const author = payload.author || 'user';
+    return {
+      title: `内部备注 · ${COMMENT_AUTHOR_LABELS[author] || author}`,
+      detail: payload.body || payload.text || '',
+      icon: <StickyNote size={14} />,
+      markdown: true,
+      tone: 'note',
+    };
+  }
+  if (event.type === 'issue.created') {
+    return { title: '任务已创建', detail: 'Issue 已写入任务队列。', icon: <Play size={13} />, tone: 'neutral' };
+  }
+  if (event.type === 'issue.status_changed') {
+    const status = issueStatusFromEvent(event) || 'unknown';
+    const reason = payload.reason ? ` · ${interruptReasonLabel(payload.reason)}` : '';
+    return { title: `状态变更 → ${status}`, detail: `任务状态已更新${reason}`, icon: <Activity size={13} />, tone: status === 'failed' ? 'danger' : 'status' };
+  }
+  if (event.type === 'issue.run_selected') {
+    const runProvider = providerLabel(payload.provider_id || payload.provider);
+    const selection = runSelectionReasonLabel(payload.selection_reason);
+    return {
+      title: '已选择执行配置',
+      detail: [runProvider, selection, payload.profile_id && `Profile ${payload.profile_id}`].filter(Boolean).join(' · '),
+      icon: <Settings2 size={13} />,
+      tone: 'neutral',
+    };
+  }
+  if (event.type === 'issue.verification_reviewed') {
+    return {
+      title: `人工验证 → ${payload.action || 'reviewed'}`,
+      detail: payload.comment || `任务状态更新为 ${payload.status || 'unknown'}`,
+      icon: <UserCheck size={14} />,
+      tone: 'verification',
+    };
+  }
+  if (event.type === 'issue.retry_after_scheduled') {
+    return {
+      title: '已安排重试等待',
+      detail: [payload.retry_after_at, payload.reason].filter(Boolean).join(' · '),
+      icon: <Clock3 size={13} />,
+      tone: 'neutral',
+    };
+  }
+  if (event.type === 'issue.error' || event.type === 'issue.notification_failed') {
+    return {
+      title: event.type === 'issue.error' ? '执行异常' : '通知失败',
+      detail: event.error || payload.error || payload.message || '未提供错误详情',
+      icon: <AlertTriangle size={14} />,
+      tone: 'danger',
+    };
+  }
+  if (event.type === 'issue.verification_report') {
+    return {
+      title: `Verifier report${payload.recommendation ? ` · ${payload.recommendation}` : ''}`,
+      detail: payload.summary || '已记录结构化验证报告。',
+      icon: <ClipboardCheck size={14} />,
+      tone: 'verification',
+    };
+  }
+  if (event.type?.startsWith('issue.interrupt')) {
+    return {
+      title: interruptEventLabel(event.type),
+      detail: [payload.reason && interruptReasonLabel(payload.reason), payload.error || event.error].filter(Boolean).join(' · '),
+      icon: <XOctagon size={14} />,
+      tone: event.type === 'issue.interrupt_failed' ? 'danger' : 'neutral',
+    };
+  }
+  return {
+    title: event.type || '系统事件',
+    detail: summarize(
+      payload.message || payload.text || payload.summary || payload.error || event.text || event.error || '',
+      240,
+    ),
+    icon: <Clock3 size={13} />,
+    tone: 'neutral',
+  };
+}
+
+function IssueInternalNotes({ count, draft, error, submitting, sessionRef, navigateTo, onDraftChange, onSubmit }) {
+  return (
+    <aside className="issue-notes-panel">
+      <div className="issue-section-heading">
+        <div>
+          <span className="issue-section-eyebrow">Internal only · {count} notes</span>
+          <h2><StickyNote size={17} /> 内部备注</h2>
+        </div>
+      </div>
+      <div className="issue-notes-notice">
+        <strong>不会发送给 Agent</strong>
+        <p>这里仅写入 Issue 的活动审计，不会通知、恢复或 steer 正在运行的 Session。</p>
+      </div>
+      {sessionRef && (
+        <button type="button" className="issue-session-link" onClick={() => navigateTo?.('sessions', null, sessionRef)}>
+          <MessageCircle size={14} /> 要和 Agent 沟通？打开 Session <ExternalLink size={12} />
+        </button>
+      )}
+      <form className="issue-note-form" onSubmit={onSubmit}>
+        <textarea
+          className="form-control"
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder="记录背景、验收口径或人工判断…"
+          rows={5}
+          disabled={submitting}
+        />
+        {error && <div className="issue-note-error">{error}</div>}
+        <button type="submit" className="btn btn-secondary" disabled={submitting}>
+          <Send size={14} /> {submitting ? '保存中…' : '保存内部备注'}
+        </button>
+      </form>
+    </aside>
+  );
+}
+
+function IssueMetadataPanel({ issue, profileSummary, runtimeIdentity, runtimeProvider, onServiceTierChange }) {
+  return (
+    <section className="issue-advanced-card">
+      <div className="issue-section-heading">
+        <div>
+          <span className="issue-section-eyebrow">Runtime metadata</span>
+          <h2><Settings2 size={17} /> 运行元数据</h2>
+        </div>
+      </div>
+      <div className="issue-metadata-list">
+        <MetadataRow label="当前状态" value={String(issue.status || 'unknown').toUpperCase()} />
+        <MetadataRow label="尝试次数" value={`${issue.attempt_count || 0} 次`} />
+        <MetadataRow label="优先级" value={issuePriorityLabel(issue.priority)} />
+        <MetadataRow label="Provider" value={runtimeProvider} />
+        <MetadataRow label="Agent Profile" value={profileSummary} />
+        <MetadataRow label="Session ID" value={runtimeIdentity.sessionId || '未分配'} mono />
+        <MetadataRow label="Turn ID" value={runtimeIdentity.turnId || '暂无'} mono />
+        <MetadataRow label="创建时间" value={formatDateTime(issue.created_at)} />
+        <MetadataRow label="最后更新" value={formatDateTime(issue.updated_at)} />
+      </div>
+      <label className="issue-service-tier-field">
+        <span>下次运行速度</span>
+        <select
+          className="form-control"
+          value={issue.service_tier || ''}
+          onChange={(event) => onServiceTierChange(event.target.value)}
+          disabled={issue.status === 'in_progress'}
+        >
+          {serviceTierOptions(issue.service_tier).map(option => (
+            <option key={option.value || 'standard'} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <small>当前：{serviceTierLabel(issue.service_tier)}。运行中修改不会影响本轮快照。</small>
+      </label>
+    </section>
+  );
+}
+
+function MetadataRow({ label, value, mono = false }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong className={mono ? 'mono' : ''}>{value}</strong>
+    </div>
+  );
+}
+
+function IssueManualControls({ issue, onMarkStatus }) {
+  return (
+    <section className="issue-advanced-card issue-manual-controls">
+      <div className="issue-section-heading">
+        <div>
+          <span className="issue-section-eyebrow">Manual override</span>
+          <h2><UserCheck size={17} /> 人工状态干预</h2>
+        </div>
+      </div>
+      <p>仅在运行态未正确回写时使用。此操作会直接改 Issue 状态，不会补造 Run 或验证证据。</p>
+      <div>
+        <button className="btn btn-secondary btn-success" type="button" disabled={issue.status === 'done'} onClick={() => onMarkStatus('done')}>
+          <CheckCircle size={14} /> 标记 Done
+        </button>
+        <button className="btn btn-secondary btn-danger" type="button" disabled={issue.status === 'failed'} onClick={() => onMarkStatus('failed')}>
+          <XCircle size={14} /> 标记 Failed
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1087,6 +1484,43 @@ function IssueDeleteConfirmModal({ issue, deleting, onCancel, onConfirm }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VerificationReviewModal({ action, draft, submitting, onDraftChange, onCancel, onConfirm }) {
+  const rejecting = action === 'reject';
+  const title = rejecting ? '拒绝验证' : '请求修改';
+  return (
+    <div className="modal-overlay">
+      <form
+        className="glass-card modal-content verification-review-modal"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onConfirm();
+        }}
+      >
+        <div className="issue-delete-modal-header">
+          <ClipboardCheck size={18} color="var(--primary)" />
+          <h3>{title}</h3>
+        </div>
+        <p>这段说明会写入活动记录，并作为后续状态的人工依据。</p>
+        <textarea
+          className="form-control"
+          rows={5}
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder={rejecting ? '说明拒绝原因…' : '说明需要修改的内容…'}
+          autoFocus
+          disabled={submitting}
+        />
+        <div className="issue-delete-modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={submitting}>取消</button>
+          <button type="submit" className={rejecting ? 'btn btn-danger' : 'btn btn-primary'} disabled={submitting || !draft.trim()}>
+            {submitting ? '提交中…' : `确认${title}`}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -1285,16 +1719,6 @@ function summarize(value, maxLength) {
   return `${value.slice(0, maxLength - 1)}…`;
 }
 
-function verificationReviewComment(action) {
-  if (action === 'accept') {
-    return '';
-  }
-  const label = action === 'reject' ? '拒绝原因' : '需要修改的内容';
-  const value = window.prompt(`${label}（会写入 issue comment）`, '');
-  if (value === null) return null;
-  return value.trim() || (action === 'reject' ? '验证拒绝' : '请求修改');
-}
-
 function canGenerateVerifierReport(issue) {
   if (issue?.status === 'pending_verification') return true;
   return issue?.status === 'done' && String(issue?.error || '').trim() !== '';
@@ -1423,68 +1847,56 @@ function VerificationReviewPanel({ evidence, onAccept, onReject, onRequestChange
   );
 }
 
-function IssueDiscussion({ events, draft, error, submitting, onDraftChange, onSubmit }) {
-  return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <MessageCircle size={18} color="var(--primary)" />
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>讨论 / Discussion</h3>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
-        {events.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
-            当前暂无讨论，适合补充背景、验收标准或澄清问题。
-          </p>
-        ) : (
-          events.map((event, index) => (
-            <IssueComment key={event.id || index} event={event} />
-          ))
-        )}
-      </div>
-
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <textarea
-          className="form-control"
-          value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
-          placeholder="补充背景、验收标准或澄清问题，支持 Markdown..."
-          rows={4}
-          disabled={submitting}
-          style={{ width: '100%', resize: 'vertical' }}
-        />
-        {error && (
-          <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.8rem' }}>
-            {error}
-          </div>
-        )}
-        <button type="submit" className="btn btn-primary" disabled={submitting} style={{ alignSelf: 'flex-start' }}>
-          <Send size={14} /> {submitting ? '提交中...' : '发表评论'}
-        </button>
-      </form>
-    </section>
+function supervisorHasSignal(supervisor) {
+  const latest = supervisor?.latest || {};
+  const decision = latest.pi_decision || {};
+  return Boolean(
+    latest.diagnosis_code
+      || decision.decision
+      || supervisor?.retry_after
+      || latest.provider_error?.raw_summary
+      || (Array.isArray(supervisor?.recovery_history) && supervisor.recovery_history.length > 0)
   );
 }
 
-function IssueComment({ event }) {
-  const payload = parseEventPayload(event);
-  const author = payload.author || 'user';
-  const body = payload.body || payload.text || '';
-  const createdAt = event.created_at ? new Date(event.created_at).toLocaleString() : '';
+function supervisorNeedsAttention(supervisor, issue) {
+  if (!ACTIVE_SUPERVISOR_STATUSES.has(issue?.status)) return false;
+  const latest = supervisor?.latest || {};
+  const decision = latest.pi_decision?.decision || '';
+  const diagnosis = String(latest.diagnosis_code || '');
+  return decision === 'needs_user'
+    || decision === 'blocked'
+    || Number(supervisor?.retry_after?.remaining_seconds || 0) > 0
+    || diagnosis === 'provider_retry_after_waiting';
+}
 
-  return (
-    <article style={{ border: '1px solid var(--border-color)', borderRadius: '10px', padding: '12px', background: 'rgba(0,0,0,0.025)', minWidth: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
-        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary)' }}>
-          {COMMENT_AUTHOR_LABELS[author] || author}
-        </span>
-        {createdAt && (
-          <time style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {createdAt}
-          </time>
-        )}
-      </div>
-      <MarkdownPreview text={body} />
-    </article>
-  );
+function issuePriorityLabel(value) {
+  const priority = Number(value);
+  if (priority === 2) return 'High · 紧急';
+  if (priority === 1) return 'Medium · 普通';
+  if (priority === 0) return 'Low · 低';
+  return Number.isFinite(priority) ? `Legacy rank · ${priority}` : '未设置';
+}
+
+function issueStatusDescription(status) {
+  switch (status) {
+    case 'triage': return '待梳理任务说明，尚未进入 runner 队列。';
+    case 'todo': return '已进入执行队列，等待 runner claim。';
+    case 'in_progress': return 'Provider 正在执行，实时交互请进入 Session。';
+    case 'pending_verification': return '执行已结束，等待人工完成验证门禁。';
+    case 'done': return '任务已结束；请结合 Run 与结构化验证证据判断结果。';
+    case 'failed': return '最近一次执行失败，可从日志或 Session 定位退出原因。';
+    case 'cancelled': return '任务已取消，可在确认上下文后重新执行。';
+    default: return '查看活动记录和运行信息确认当前状态。';
+  }
+}
+
+function formatRelativeTime(value) {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return '未知时间';
+  const delta = Date.now() - timestamp;
+  if (delta < 60_000) return '刚刚';
+  if (delta < 3_600_000) return `${Math.max(1, Math.floor(delta / 60_000))} 分钟前`;
+  if (delta < 86_400_000) return `${Math.max(1, Math.floor(delta / 3_600_000))} 小时前`;
+  return `${Math.max(1, Math.floor(delta / 86_400_000))} 天前`;
 }

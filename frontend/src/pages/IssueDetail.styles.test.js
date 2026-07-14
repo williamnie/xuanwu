@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const css = [
+  readFileSync(new URL('../index.css', import.meta.url), 'utf8'),
+  readFileSync(new URL('./IssueDetail.css', import.meta.url), 'utf8'),
+].join('\n');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -12,8 +15,8 @@ function ruleFor(selector) {
 }
 
 test('issue detail error and terminal blocks constrain long unbroken text', () => {
-  const gridRule = ruleFor('.issue-detail-grid');
-  assert.match(gridRule, /grid-template-columns:\s*minmax\(0,\s*2fr\)\s+minmax\(0,\s*1fr\)/);
+  const gridRule = ruleFor('.issue-detail-overview-grid');
+  assert.match(gridRule, /grid-template-columns:\s*minmax\(0,\s*1\.35fr\)\s+minmax\(340px,\s*0\.9fr\)/);
 
   for (const selector of ['.issue-detail-page,\n.issue-detail-grid,\n.issue-detail-main,\n.issue-detail-side', '.issue-error-card', '.terminal-view']) {
     assert.match(ruleFor(selector), /min-width:\s*0/);
@@ -24,6 +27,13 @@ test('issue detail error and terminal blocks constrain long unbroken text', () =
   assert.match(ruleFor('.terminal-line'), /overflow-wrap:\s*anywhere/);
   assert.match(ruleFor('.terminal-line'), /white-space:\s*pre-wrap/);
   assert.match(ruleFor('.diff-line'), /overflow-wrap:\s*anywhere/);
+});
+
+test('issue detail workspace keeps activity, notes, and advanced data in bounded responsive grids', () => {
+  assert.match(ruleFor('.issue-activity-grid'), /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*340px\)/);
+  assert.match(ruleFor('.issue-advanced-grid'), /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(ruleFor('.issue-description-content'), /max-height:\s*240px/);
+  assert.match(ruleFor('.issue-detail-terminal'), /max-height:\s*620px/);
 });
 
 test('issue workflow evidence panel keeps compact long evidence inside sidebar', () => {
@@ -44,7 +54,7 @@ test('issue detail exposes PI supervisor panel without native browser dialogs', 
   assert.match(panelSource, /PI Supervisor/);
   assert.match(panelSource, /retry-after wait/);
   assert.match(panelSource, /Recovery history/);
-  assert.doesNotMatch(`${source}\n${panelSource}`, /window\.alert|window\.confirm/);
+  assert.doesNotMatch(`${source}\n${panelSource}`, /window\.alert|window\.confirm|window\.prompt/);
 
   for (const selector of ['.issue-supervisor-panel', '.issue-supervisor-history']) {
     assert.match(ruleFor(selector), /min-width:\s*0/);

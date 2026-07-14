@@ -427,7 +427,16 @@ export const api = {
     body: JSON.stringify(review),
   }),
 
-  getIssueEvents: (id) => request(`/api/issues/${id}/events`),
+  getIssueEvents: (id, { afterId = '', beforeId = '', excludeTypes = [], limit = 0, types = [] } = {}) => {
+    const params = new URLSearchParams();
+    if (afterId) params.append('after_id', String(afterId));
+    if (beforeId) params.append('before_id', String(beforeId));
+    for (const type of excludeTypes) params.append('exclude_type', type);
+    if (limit) params.append('limit', String(limit));
+    for (const type of types) params.append('type', type);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/issues/${id}/events${query}`);
+  },
 
   getIssueRuns: (id) => request(`/api/issues/${id}/runs`),
 
