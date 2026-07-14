@@ -45,7 +45,6 @@ import {
   serviceTierOptions,
 } from './sessions/sessionOptions';
 import VirtualSessionList from './sessions/VirtualSessionList';
-import { SESSION_LIST_FILTER_ALL, SESSION_LIST_FILTER_RECENT, SESSION_LIST_FILTER_RUNNING } from './sessions/sessionListFilters';
 import { orderedProjectsAfterMove } from './sessions/projectOrder';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import {
@@ -298,7 +297,6 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
 
   // 客户端风格路由与置顶状态
   const [activeView, setActiveView] = useState('chat');
-  const [sessionListFilter, setSessionListFilter] = useState(SESSION_LIST_FILTER_ALL);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(() => {
     const stored = localStorage.getItem('codex-pinned-sessions');
     return stored ? JSON.parse(stored) : [];
@@ -947,13 +945,11 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       projects={projects}
       savingProjectOrder={savingProjectOrder}
       selectedId={selectedId}
-      sessionListFilter={sessionListFilter}
       sessions={sessions}
       onLoadMore={loadMore}
       onNewSession={openNewSession}
       onReorderProjects={handleReorderProjects}
       onSelectSession={selectSession}
-      onSessionListFilterChange={setSessionListFilter}
       onTogglePinSession={togglePinSession}
     />
   );
@@ -1157,13 +1153,11 @@ function SessionSidebarContent({
   projects,
   savingProjectOrder,
   selectedId,
-  sessionListFilter,
   sessions,
   onLoadMore,
   onNewSession,
   onReorderProjects,
   onSelectSession,
-  onSessionListFilterChange,
   onTogglePinSession,
 }) {
   return (
@@ -1209,7 +1203,6 @@ function SessionSidebarContent({
       )}
 
       <div className="sidebar-section-title">项目</div>
-      <SessionListFilterTabs value={sessionListFilter} onChange={onSessionListFilterChange} />
       <div className="sidebar-scroll-area">
         {loading ? (
           <div className="session-list-loading">
@@ -1223,8 +1216,6 @@ function SessionSidebarContent({
             hasMore={Boolean(cursor)}
             loadingMore={loadingMore}
             savingOrder={savingProjectOrder}
-            autoCollapseEmptyProjects={sessionListFilter === SESSION_LIST_FILTER_ALL}
-            filterMode={sessionListFilter}
             onSelect={onSelectSession}
             onLoadMore={onLoadMore}
             onReorderProjects={onReorderProjects}
@@ -1407,29 +1398,6 @@ function tokenSummary(usage) {
     reasoning: formatTokenNumber(total.reasoning_output_tokens),
     capturedAt: usage.captured_at || '',
   };
-}
-
-function SessionListFilterTabs({ value, onChange }) {
-  const filters = [
-    { value: SESSION_LIST_FILTER_ALL, label: 'All' },
-    { value: SESSION_LIST_FILTER_RUNNING, label: 'Running' },
-    { value: SESSION_LIST_FILTER_RECENT, label: 'Recent' },
-  ];
-
-  return (
-    <div className="session-list-filter-tabs" aria-label="Session 状态筛选">
-      {filters.map((filter) => (
-        <button
-          key={filter.value}
-          type="button"
-          className={`session-list-filter-tab ${value === filter.value ? 'active' : ''}`}
-          onClick={() => onChange(filter.value)}
-        >
-          {filter.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function mergeSessions(prev, next) {
