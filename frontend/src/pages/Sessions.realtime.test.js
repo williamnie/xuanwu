@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const sessionsSource = readFileSync(new URL('./Sessions.jsx', import.meta.url), 'utf8');
+const transcriptSource = readFileSync(new URL('./sessions/SessionTranscript.jsx', import.meta.url), 'utf8');
 
 test('session detail keeps a low-frequency reconcile timer while selected', () => {
   assert.match(sessionsSource, /SESSION_DETAIL_RECONCILE_INTERVAL_MS\s*=\s*30_000/);
@@ -22,10 +23,10 @@ test('session list keeps a low-frequency reconcile timer while page stays open',
 });
 
 test('live thinking state avoids duplicate thinking labels', () => {
-  assert.match(sessionsSource, /const showActivityBanner = shouldShowLiveActivityBanner\(parsed\);/);
-  assert.match(sessionsSource, /\{showActivityBanner && \(\s*<LiveActivityBanner/);
+  assert.match(transcriptSource, /const showActivityBanner = shouldShowLiveActivityBanner\(parsed\);/);
+  assert.match(transcriptSource, /\{showActivityBanner && \(\s*<LiveActivityBanner/);
   assert.doesNotMatch(
-    sessionsSource,
+    transcriptSource,
     /<div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking\.\.\.<\/span><\/div>\s*<div className="chat-bubble-body thinking-placeholder">/,
   );
 });

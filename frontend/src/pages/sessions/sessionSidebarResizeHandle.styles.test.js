@@ -5,6 +5,7 @@ import test from 'node:test';
 const css = readFileSync(new URL('./SessionsClient.css', import.meta.url), 'utf8');
 const appSidebar = readFileSync(new URL('../../components/AppSidebar.jsx', import.meta.url), 'utf8');
 const sessionsPage = readFileSync(new URL('../Sessions.jsx', import.meta.url), 'utf8');
+const sessionSidebar = readFileSync(new URL('./SessionSidebar.jsx', import.meta.url), 'utf8');
 
 function ruleFor(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -18,7 +19,9 @@ test('sessions list is hosted in the app sidebar slot', () => {
   const panelRule = ruleFor('.sessions-app-sidebar-panel');
 
   assert.match(appSidebar, /id="sessions-app-sidebar-slot"/);
-  assert.match(sessionsPage, /createPortal\(sidebarContent, sidebarPortalTarget\)/);
+  assert.match(sessionsPage, /<SessionSidebar/);
+  assert.match(sessionSidebar, /return createPortal\(/);
+  assert.match(sessionSidebar, /document\.getElementById\(SESSION_APP_SIDEBAR_SLOT_ID\)/);
   assert.match(slotRule, /flex:\s*1 1 auto/);
   assert.match(slotRule, /min-height:\s*0/);
   assert.match(panelRule, /flex-direction:\s*column/);
@@ -27,6 +30,8 @@ test('sessions list is hosted in the app sidebar slot', () => {
 test('sessions no longer renders an inner resizable sidebar divider', () => {
   assert.doesNotMatch(sessionsPage, /sessions-client-sidebar/);
   assert.doesNotMatch(sessionsPage, /sessions-sidebar-resize-handle/);
+  assert.doesNotMatch(sessionSidebar, /sessions-client-sidebar/);
+  assert.doesNotMatch(sessionSidebar, /sessions-sidebar-resize-handle/);
   assert.doesNotMatch(css, /sessions-sidebar-resize-handle/);
   assert.doesNotMatch(css, /resizing-session-sidebar/);
 });

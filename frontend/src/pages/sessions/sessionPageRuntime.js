@@ -1,0 +1,189 @@
+import { approvalsForSession } from './approvalQueue.js';
+import { normalizeQueuedSessionMessages } from './sessionMessageQueue.js';
+
+const DEFAULT_SESSION_PROVIDER = 'codex';
+const MESSAGE_QUEUE_STORAGE_KEY = 'codex-session-message-queue';
+
+export function readQueuedSessionMessages() {
+  try {
+    return normalizeQueuedSessionMessages(JSON.parse(window.localStorage.getItem(MESSAGE_QUEUE_STORAGE_KEY) || '[]'));
+  } catch {
+    return [];
+  }
+}
+
+export function persistQueuedSessionMessages(queue) {
+  try {
+    const active = normalizeQueuedSessionMessages(queue);
+    window.localStorage.setItem(MESSAGE_QUEUE_STORAGE_KEY, JSON.stringify(active));
+  } catch {
+    // localStorage 不可用时仅保留当前页面内队列。
+  }
+}
+
+export function queuedMessageId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function visibleApprovalsForSession(queue, selectedId) {
+  const selected = approvalsForSession(queue, selectedId);
+  if (selected.length > 0 || selectedId) return selected;
+  return queue;
+}
+
+export function parseApprovalPayload(payload) {
+  const request = approvalPayloadObject(payload);
+  return {
+    id: request.id || request.params?.approvalId || request.params?.itemId || request.params?.callId || '',
+    method: request.method || 'approval/requested',
+    params: request.params || {},
+  };
+}
+
+function approvalPayloadObject(payload) {
+  if (payload && typeof payload === 'object') return payload;
+  try {
+    const parsed = JSON.parse(payload || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function normalizePendingApprovals(requests) {
+  if (!Array.isArray(requests)) return [];
+  return requests
+    .map((request) => ({
+      id: request?.id || '',
+      method: request?.method || 'approval/requested',
+      params: request?.params || {},
+    }))
+    .filter((request) => request.id);
+}
+
+export function parseApprovalResolvedPayload(payload) {
+  try {
+    const request = JSON.parse(payload || '{}');
+    return { id: request.id || '' };
+  } catch {
+    return { id: '' };
+  }
+}
+
+export function eventSessionKeyFromPayload(request) {
+  return providerSessionKey(DEFAULT_SESSION_PROVIDER, request?.params?.threadId || '');
+}
+
+export function isSessionFileEvent(event) {
+  return event?.type === 'session.created' || event?.type === 'session.updated';
+}
+
+export function isAgentEvent(event) {
+  return event?.type === 'agent.event' || event?.type === 'codex.event';
+}
+
+export function isSessionStartEvent(event) {
+  return event?.agent_event_type === 'agent.turn.started' || event?.method === 'turn/started';
+}
+
+export function providerSessionKey(provider = DEFAULT_SESSION_PROVIDER, sessionId = '') {
+  const normalizedProvider = String(provider || DEFAULT_SESSION_PROVIDER).trim().toLowerCase();
+  const normalizedSessionId = String(sessionId || '').trim();
+  if (!normalizedSessionId) return '';
+  if (normalizedSessionId.startsWith(`${normalizedProvider}:`)) return normalizedSessionId;
+  return `${normalizedProvider}:${normalizedSessionId}`;
+}
+
+export function eventSessionKey(event) {
+  return providerSessionKey(event?.provider || DEFAULT_SESSION_PROVIDER, event?.threadId || '');
+}
+
+export function sessionIDFromCreateResult(result) {
+  return result?.id ||
+    providerSessionKey(result?.provider || DEFAULT_SESSION_PROVIDER, result?.provider_session_id || result?.thread_id || '');
+}
+
+export function providerLabel(provider) {
+  switch (String(provider || DEFAULT_SESSION_PROVIDER).toLowerCase()) {
+    case 'codex':
+      return 'Codex';
+    case 'claude':
+      return 'Claude';
+    case 'opencode':
+      return 'opencode';
+    case 'kimicode':
+      return 'kimicode';
+    default:
+      return provider || 'Unknown';
+  }
+}
+
+export function mergeSessions(prev, next) {
+  const seen = new Set(prev.map((item) => item.id));
+  return [...prev, ...next.filter((item) => !seen.has(item.id))];
+}
+
+export function mergeRefreshedSessions(current, refreshed) {
+  const refreshedIds = new Set(refreshed.map((item) => item.id));
+  return [
+    ...refreshed,
+    ...current.filter((item) => !refreshedIds.has(item.id)),
+  ];
+}
+
+export function isSessionRunning(session) {
+  if (!session) return false;
+  if (normalizePendingApprovals(session.pending_approvals).length > 0) return true;
+  if (session.isRunning) return true;
+  const value = sessionStatusValue(session.status);
+  return ['running', 'inprogress', 'in-progress', 'streaming', 'busy'].includes(value);
+}
+
+function sessionStatusValue(status) {
+  if (!status) return '';
+  let value = status;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return normalizeSessionStatusValue(value);
+    }
+  }
+  return normalizeSessionStatusValue(value.type || value.state || value.status || '');
+}
+
+function normalizeSessionStatusValue(value) {
+  return String(value || '').trim().toLowerCase().replaceAll('_', '-');
+}
+
+export function setSessionRunningInList(list, id, running) {
+  if (!id) return list;
+  let changed = false;
+  const next = list.map((session) => {
+    if (session.id !== id || session.isRunning === running) return session;
+    changed = true;
+    return { ...session, isRunning: running };
+  });
+  return changed ? next : list;
+}
+
+export function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detail)) {
+  if (!detail?.id) return list;
+  let changed = false;
+  const next = list.map((session) => {
+    if (session.id !== detail.id) return session;
+    changed = true;
+    return {
+      ...session,
+      name: detail.name ?? session.name,
+      preview: detail.preview ?? session.preview,
+      status: detail.status ?? session.status,
+      origin: detail.origin ?? session.origin,
+      updatedAt: detail.updatedAt ?? session.updatedAt,
+      pending_approvals: detail.pending_approvals || [],
+      isRunning: running,
+    };
+  });
+  return changed ? next : list;
+}

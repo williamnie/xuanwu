@@ -5,7 +5,11 @@ import test from 'node:test';
 const loaderSource = readFileSync(new URL('./TurtleLoader.jsx', import.meta.url), 'utf8');
 const loaderStyles = readFileSync(new URL('./TurtleLoader.css', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
-const sessionSource = readFileSync(new URL('../pages/Sessions.jsx', import.meta.url), 'utf8');
+const sessionSource = [
+  '../pages/sessions/SessionSidebar.jsx',
+  '../pages/sessions/SessionWorkspace.jsx',
+  '../pages/sessions/SessionChatWorkspace.jsx',
+].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n');
 const piChatSource = readFileSync(new URL('../pages/PiChat.jsx', import.meta.url), 'utf8');
 const globalStyles = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 
