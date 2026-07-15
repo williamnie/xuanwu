@@ -23,7 +23,7 @@ test('session transcript has shrink-safe responsive boundaries', () => {
   assert.match(turnRule, /min-width:\s*0/);
   assert.match(turnRule, /max-width:\s*100%/);
   assert.match(bubbleRule, /min-width:\s*0/);
-  assert.match(bubbleRule, /max-width:\s*min\(100%,\s*85%\)/);
+  assert.match(bubbleRule, /max-width:\s*min\(100%,\s*var\(--sessions-message-max-width\)\)/);
   assert.match(bubbleContentRule, /min-width:\s*0/);
   assert.match(bubbleContentRule, /max-width:\s*100%/);
 });
@@ -52,9 +52,9 @@ test('session markdown wraps long user content without overflowing small screens
 test('client chat spacing uses viewport-aware padding instead of fixed desktop width', () => {
   const transcriptRule = ruleFor(clientCss, '.client-chat-area .session-transcript');
   const composerRule = ruleFor(clientCss, '.client-chat-composer-section');
-  const userBubbleRule = ruleFor(clientCss, '.client-chat-area .chat-bubble-container.user');
+  const userBubbleRule = ruleFor(sessionsCss, '.chat-bubble-container.user');
 
-  assert.match(transcriptRule, /padding:\s*30px\s+clamp\(12px,\s*3\.2vw,\s*40px\)/);
-  assert.match(composerRule, /padding:\s*16px\s+clamp\(12px,\s*3\.2vw,\s*40px\)\s+24px/);
+  assert.match(transcriptRule, /padding:\s*44px\s+var\(--sessions-page-gutter\)\s+24px/);
+  assert.match(composerRule, /padding:\s*12px\s+var\(--sessions-page-gutter\)\s+26px/);
   assert.match(userBubbleRule, /max-width:\s*min\(100%,\s*80%\)/);
 });

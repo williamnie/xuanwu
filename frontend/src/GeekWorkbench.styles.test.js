@@ -29,6 +29,8 @@ test('light and dark themes use separate workbench palettes', () => {
   assert.match(foundationCss, /--radius-xl:\s*11px/);
   assert.match(foundationCss, /--button-radius:\s*0px/);
   assert.match(foundationCss, /--button-height:\s*40px/);
+  assert.match(foundationCss, /--sessions-transcript-max-width:\s*980px/);
+  assert.match(foundationCss, /--sessions-page-gutter:\s*clamp\(18px,\s*6vw,\s*88px\)/);
   assert.match(foundationCss, /\.status-badge,[^{]*\{[^}]*border-radius:\s*var\(--radius-xs\)/);
 });
 
@@ -48,7 +50,7 @@ test('page refinements keep chat layouts bounded on narrow screens', () => {
   assert.match(pagesCss, /\.attention-inbox-grid\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
-test('low-frequency panels and mobile session controls use the same visual system', () => {
+test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
   for (const selector of [
     '.session-create-modal',
     '.approval-card',
@@ -60,13 +62,11 @@ test('low-frequency panels and mobile session controls use the same visual syste
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(pagesCss, new RegExp(escaped));
   }
-  assert.match(pagesCss, /\.composer-embedded-select span\s*\{\s*white-space:\s*nowrap/);
-  assert.match(pagesCss, /\.new-session-composer-wrapper \.prompt-composer-footer\s*\{[^}]*flex-wrap:\s*wrap/);
   assert.match(pagesCss, /\.status-pill, \.attention-chip\s*\{\s*border-radius:\s*var\(--radius-xs\)/);
-  assert.match(pagesCss, /\.session-list-filter-tab\s*\{[^}]*border-radius:\s*var\(--button-radius\)/);
   assert.match(pagesCss, /\.attention-empty\s*\{\s*border-radius:\s*var\(--radius-md\)/);
   assert.match(pagesCss, /\.attention-inbox-filter button, \.attention-actions button\s*\{[^}]*font-family:\s*var\(--font-sans\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-sans\)/);
   assert.doesNotMatch(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-mono\)/);
   assert.doesNotMatch(pagesCss, /\.pi-chat-runtime-pill[^}]*border-radius:\s*999px/);
+  assert.doesNotMatch(pagesCss, /\.(?:sessions-client|client-chat|new-session|session-list-filter|session-info)/);
 });

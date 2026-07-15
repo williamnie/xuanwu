@@ -380,12 +380,36 @@
 
 }
 
-/* Chat workspace composer polish shared by Sessions and Runner chat */
-.client-chat-composer-section .session-composer,
+/* Composer internals are owned here; page shells only position the component. */
+.client-chat-composer-section .session-composer {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin: 0 auto;
+  max-width: var(--sessions-composer-max-width);
+  padding: 0;
+}
+
 .pi-chat-composer .session-composer {
   background: transparent;
   border-top: 0;
   box-shadow: none;
+}
+
+.client-chat-composer-section .prompt-editor-shell.composer,
+.new-session-composer-wrapper .prompt-editor-shell.composer,
+[data-theme="dark"] .client-chat-composer-section .prompt-editor-shell.composer,
+[data-theme="dark"] .new-session-composer-wrapper .prompt-editor-shell.composer {
+  width: 100%;
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: var(--sessions-composer-radius);
+  box-shadow: var(--shadow-md);
+}
+
+.new-session-composer-wrapper .prompt-editor-shell.composer.focused {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.06);
 }
 
 .client-chat-composer-section .prompt-editor-content.composer,
@@ -395,6 +419,12 @@
   font-size: 0.96rem;
   line-height: 1.58;
   padding: 18px 24px 8px;
+}
+
+.new-session-composer-wrapper .prompt-editor-content.composer {
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 16px 20px 8px;
 }
 
 [data-theme="dark"] .client-chat-composer-section .prompt-editor-content.composer,
@@ -416,15 +446,13 @@
 }
 
 .client-chat-composer-section .session-composer-circle,
-.pi-chat-composer .session-composer-circle,
-.composer-circle-submit {
+.pi-chat-composer .session-composer-circle {
   background: #2f2c26;
   box-shadow: none;
 }
 
 [data-theme="dark"] .client-chat-composer-section .session-composer-circle,
-[data-theme="dark"] .pi-chat-composer .session-composer-circle,
-[data-theme="dark"] .composer-circle-submit {
+[data-theme="dark"] .pi-chat-composer .session-composer-circle {
   background: #f0eee7;
   color: #1d1d1b;
 }

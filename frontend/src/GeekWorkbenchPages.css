@@ -164,74 +164,6 @@
 }
 .pi-chat-runtime-pill, [data-theme="dark"] .pi-chat-runtime-pill { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-xs); color: var(--text-secondary); }
 
-/* Sessions */
-.sessions-client-container, .sessions-client-main, .client-chat-area, .new-session-container,
-[data-theme="dark"] .sessions-client-container, [data-theme="dark"] .sessions-client-main,
-[data-theme="dark"] .client-chat-area, [data-theme="dark"] .new-session-container { background: transparent; }
-.in-sessions-page .sidebar, [data-theme="dark"] .in-sessions-page .sidebar { background: var(--sidebar-gradient); border-right-color: var(--border-color); box-shadow: none; }
-.in-sessions-page .nav-item, .in-sessions-page .sidebar-shortcut-item,
-.in-sessions-page .session-item-row, .in-sessions-page .pinned-session-row { border-radius: var(--radius-sm); }
-.session-list-filter-tab {
-  background: var(--button-secondary-bg);
-  border: 1px solid var(--button-border);
-  border-radius: var(--button-radius);
-  height: 32px;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-}
-.session-list-filter-tab.active {
-  background: var(--button-primary-bg);
-  border-color: var(--button-primary-bg);
-  color: var(--button-primary-fg);
-}
-.in-sessions-page .nav-item.active, .in-sessions-page .sidebar-shortcut-item.active,
-.in-sessions-page .session-item-row.active, .in-sessions-page .pinned-session-row.active,
-[data-theme="dark"] .in-sessions-page .nav-item.active,
-[data-theme="dark"] .in-sessions-page .sidebar-shortcut-item.active,
-[data-theme="dark"] .in-sessions-page .session-item-row.active,
-[data-theme="dark"] .in-sessions-page .pinned-session-row.active {
-  background: var(--nav-active);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 16%, transparent);
-  color: var(--text-primary);
-}
-.new-session-title, [data-theme="dark"] .new-session-title { color: var(--text-primary); font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 600; letter-spacing: -0.025em; }
-.client-chat-area::before, [data-theme="dark"] .client-chat-area::before { background: linear-gradient(180deg, color-mix(in srgb, var(--bg-primary) 93%, transparent), transparent); }
-.client-chat-area .session-runtime-header, [data-theme="dark"] .client-chat-area .session-runtime-header {
-  background: var(--surface-overlay);
-  border-color: var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-}
-.client-chat-area .chat-bubble-container.user .chat-bubble-body,
-[data-theme="dark"] .client-chat-area .chat-bubble-container.user .chat-bubble-body {
-  background: var(--message-user) !important;
-  border-color: var(--message-user-border) !important;
-  border-radius: var(--radius-md) !important;
-  color: var(--text-primary) !important;
-}
-.client-chat-area .tools-trigger-btn, [data-theme="dark"] .client-chat-area .tools-trigger-btn,
-.client-chat-area .diff-file-card, .client-chat-area .generic-tool-card,
-[data-theme="dark"] .client-chat-area .diff-file-card, [data-theme="dark"] .client-chat-area .generic-tool-card {
-  background: var(--bg-secondary);
-  border-color: var(--border-light);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-}
-.client-chat-composer-section .prompt-editor-shell.composer,
-.new-session-composer-wrapper .prompt-editor-shell.composer,
-[data-theme="dark"] .client-chat-composer-section .prompt-editor-shell.composer,
-[data-theme="dark"] .new-session-composer-wrapper .prompt-editor-shell.composer {
-  background: var(--control-bg);
-  border-color: var(--border-color);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-md);
-}
-.new-session-bottom-tags .bottom-tag-select, .composer-embedded-select,
-[data-theme="dark"] .new-session-bottom-tags .bottom-tag-select,
-[data-theme="dark"] .composer-embedded-select { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-sm); }
-.composer-embedded-select,
-.composer-embedded-select span { white-space: nowrap; }
-
 /* Inbox, Settings, Activity */
 .attention-inbox-hero, .assistant-module-hero {
   background: linear-gradient(110deg, color-mix(in srgb, var(--primary) 10%, var(--bg-card)), color-mix(in srgb, var(--info) 5%, var(--bg-card)));
@@ -423,7 +355,6 @@
 .session-command-execute { background: var(--button-primary-bg); color: var(--button-primary-fg); }
 .session-command-history { background: var(--surface-tint); border-color: var(--border-light); border-radius: var(--radius-md); }
 .session-command-history-card { background: var(--surface-raised); border-radius: var(--radius-sm); }
-.session-info-panel { background: var(--surface-overlay); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 
 .kanban-card-more-menu {
   background: var(--surface-raised);
@@ -479,10 +410,6 @@ button:hover:not(.kanban-card-speed-toggle) { transform: none !important; }
 
 @media (max-width: 760px) {
   .dashboard-page { gap: 18px !important; }
-  .new-session-composer-wrapper .prompt-composer-footer { align-items: center; flex-wrap: wrap; gap: 8px; }
-  .new-session-composer-wrapper .prompt-composer-left { flex: 1 1 100%; flex-wrap: nowrap; }
-  .new-session-composer-wrapper .prompt-composer-actions { justify-content: flex-end; width: 100%; }
-  .new-session-composer-wrapper .composer-embedded-select { flex: 0 0 auto; }
   .pi-chat-sidebar.glass-card { max-height: 44vh; min-height: 250px; }
   .pi-chat-main.glass-card { min-height: 52vh; }
   .pi-chat-thread { padding: 22px 16px; }

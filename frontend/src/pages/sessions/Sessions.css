@@ -1,20 +1,4 @@
-/* Sessions page with paged virtual list */
-.sessions-page {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-}
-
-.sessions-shell {
-  display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-  gap: 16px;
-  flex: 1;
-  min-height: 0;
-}
-
-.sessions-sidebar,
+/* Session list and transcript primitives. Page composition lives in SessionsClient.css. */
 .session-detail {
   min-height: 0;
   display: flex;
@@ -32,35 +16,6 @@
 }
 
 
-
-.session-list-filter-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 0 14px 6px;
-}
-
-.session-list-filter-tab {
-  flex: 1;
-  min-width: 0;
-  height: 26px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.session-list-filter-tab:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
-}
-
-.session-list-filter-tab.active {
-  background: var(--primary-glow);
-  color: var(--primary);
-}
 
 .session-list-empty-state {
   display: flex;
@@ -128,21 +83,6 @@
   color: var(--text-primary);
 }
 
-.project-group-drag-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 16px;
-  color: var(--text-muted);
-  opacity: 0.55;
-  flex: 0 0 auto;
-}
-
-.project-group-header:hover .project-group-drag-handle {
-  opacity: 0.9;
-}
-
 .project-order-saving {
   color: var(--primary);
   animation: spin 0.8s linear infinite;
@@ -189,25 +129,39 @@
   width: 100%;
   height: 38px;
   padding: 6px 10px;
-  margin: 2px 0;
+  margin: 1px 0;
   background: transparent;
   border: 0;
   border-radius: 6px;
-  color: var(--text-secondary);
+  color: #4b5563;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .session-item-row {
+  color: #9ca3af;
 }
 
 .session-item-row:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
+  background-color: #e5e7eb;
+  color: #111827;
+}
+
+[data-theme="dark"] .session-item-row:hover {
+  background-color: #2d2d34;
+  color: #f9fafb;
 }
 
 .session-item-row.active {
-  background: var(--primary-glow);
-  color: var(--text-primary);
-  font-weight: 550;
+  background-color: #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .session-item-row.active {
+  background-color: #374151;
+  color: #f9fafb;
 }
 
 .session-item-title {
@@ -525,9 +479,13 @@
 }
 
 .session-list-loading {
+  align-items: center;
   color: var(--text-muted);
+  display: flex;
   font-size: 0.8rem;
-  padding: 16px;
+  justify-content: center;
+  min-height: 110px;
+  padding: 4px 0;
   text-align: center;
 }
 
@@ -568,7 +526,9 @@
 .session-transcript-content {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 30px;
+  margin: 0 auto;
+  max-width: var(--sessions-transcript-max-width);
   min-height: 100%;
   min-width: 0;
   width: 100%;
@@ -657,13 +617,14 @@
   display: flex;
   gap: 14px;
   min-width: 0;
-  max-width: min(100%, 85%);
+  max-width: min(100%, var(--sessions-message-max-width));
   margin-bottom: 8px;
 }
 
 .chat-bubble-container.user {
   align-self: flex-end;
   flex-direction: row-reverse;
+  max-width: min(100%, 80%);
 }
 
 .chat-bubble-container.user .chat-bubble-content {
@@ -680,10 +641,11 @@
 
 .chat-bubble-container.agent {
   align-self: flex-start;
+  width: min(100%, var(--sessions-message-max-width));
 }
 
 .chat-bubble-container.agent.streaming {
-  width: min(100%, 85%);
+  width: min(100%, var(--sessions-message-max-width));
 }
 
 .chat-bubble-avatar {
@@ -740,11 +702,6 @@
   padding: 4px 0 !important;
   box-shadow: none !important;
   overflow-wrap: anywhere;
-}
-
-.chat-bubble-container.user {
-  align-self: flex-end;
-  max-width: min(100%, 80%);
 }
 
 .chat-bubble-container.user .chat-bubble-body {
@@ -1217,28 +1174,6 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-.session-error {
-  margin: 12px 24px 0 24px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--error);
-  background: var(--error-bg);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-}
-
-@media (max-width: 960px) {
-  .sessions-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .sessions-sidebar {
-    min-height: 320px;
-  }
 }
 
 .generic-tool-card {
