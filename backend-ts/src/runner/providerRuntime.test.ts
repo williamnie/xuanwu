@@ -82,6 +82,33 @@ class ClosingClaudeProvider implements ExecutorProvider {
   }
 }
 
+class LongSessionProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly chunks = Array.from({ length: 513 }, (_, index) => `chunk-${String(index).padStart(3, "0")}\n`);
+
+  async run(input: ProviderRunInput) {
+    const session = { provider: this.id, sessionId: "thread-long", turnId: "turn-long" };
+    for (const text of this.chunks) {
+      input.onEvent?.({
+        provider: this.id,
+        type: "text",
+        session,
+        text,
+        raw: { method: "item/agentMessage/delta", payload: JSON.stringify({ delta: text }) }
+      });
+    }
+    input.onEvent?.({
+      provider: this.id,
+      type: "done",
+      status: "completed",
+      session,
+      raw: { method: "turn/completed", payload: JSON.stringify({ turn: { id: "turn-long", status: "completed" } }) }
+    });
+    return { runId: "codex:thread-long:turn-long", session };
+  }
+}
+
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-provider-runtime-"));
   tempRoots.push(root);
@@ -285,6 +312,57 @@ describe("executor provider runtime seam", () => {
         issue_id: issueId,
         raw_ref: "{\"provider_turn_id\":\"claude-turn\",\"run_id\":\"claude-run\"}"
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("replays a long Session from aggregated logs with fewer rows and bytes", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const provider = new LongSessionProvider();
+      const runtimeEvents: ProviderEvent[] = [];
+      const liveEvents: unknown[] = [];
+
+      await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "long session",
+        bus: { publish: (event) => liveEvents.push(event) },
+        onRuntimeEvent: (event) => runtimeEvents.push(event)
+      });
+
+      const events = listIssueEvents(db, issueId);
+      const payloads = events.map((event) => JSON.parse(event.payload) as Record<string, unknown>);
+      const replay = payloads
+        .filter((payload) => payload.raw_method === "item/agentMessage/delta")
+        .map((payload) => payload.text)
+        .join("");
+      const storedBytes = db.sqlite.query<{ bytes: number }, [number]>(`
+        select sum(length(cast(payload as blob))) as bytes from issue_events where issue_id=? and type='issue.log'
+      `).get(issueId)?.bytes ?? 0;
+      const baselineBytes = provider.chunks.reduce((total, text) => total + Buffer.byteLength(JSON.stringify({
+        type: "text",
+        provider: "codex",
+        raw_method: "item/agentMessage/delta",
+        raw_payload: JSON.stringify({ delta: text }),
+        text
+      })), 0);
+
+      expect(runtimeEvents).toHaveLength(514);
+      expect(events).toHaveLength(10);
+      expect(liveEvents).toHaveLength(10);
+      expect(replay).toBe(provider.chunks.join(""));
+      expect(payloads.at(-1)).toMatchObject({
+        type: "done",
+        raw_method: "turn/completed",
+        status: "completed"
+      });
+      expect(storedBytes).toBeLessThan(baselineBytes * 0.35);
     } finally {
       db.close();
     }

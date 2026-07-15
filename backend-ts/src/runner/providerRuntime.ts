@@ -6,6 +6,7 @@ import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
+import { createIssueLogPersistence } from "./issueLogPersistence.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
@@ -45,7 +46,13 @@ export async function runIssueWithProvider(
     metadata: { cwd: input.cwd }
   });
   const activeRunID = openIssueRunID(input.database, input.issueId);
-  const result = await provider.run(providerInput(input, providerEventSink(input, activeRunID)));
+  const eventSink = providerEventSink(input, activeRunID);
+  let result: ProviderRunResult;
+  try {
+    result = await provider.run(providerInput(input, eventSink.push));
+  } finally {
+    eventSink.flush();
+  }
   persistRuntimeResult(input, providerID, result, activeRunID);
   input.onRunComplete?.({
     provider: providerID,
@@ -57,11 +64,15 @@ export async function runIssueWithProvider(
   return result;
 }
 
-function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string): ProviderRunInput["onEvent"] {
-  return (event) => {
-    input.onLog?.(event);
-    persistRuntimeEvent(input, event, activeRunID);
-    input.onRuntimeEvent?.(event);
+function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string) {
+  const persistence = createIssueLogPersistence((event) => persistRuntimeEvent(input, event, activeRunID));
+  return {
+    flush: persistence.flush,
+    push(event: ProviderEvent) {
+      input.onLog?.(event);
+      persistence.push(event);
+      input.onRuntimeEvent?.(event);
+    }
   };
 }
 
