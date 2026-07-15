@@ -5,6 +5,7 @@ import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
 import type { Router } from "./router.ts";
+import { registerWorkRoutes } from "./workApi.ts";
 
 describe("read API route contracts", () => {
   test("locks the route registry responsibility boundary", () => {
@@ -29,6 +30,10 @@ describe("read API route contracts", () => {
           },
           {
             "id": "sessions",
+            "responsibility": "domain",
+          },
+          {
+            "id": "work",
             "responsibility": "domain",
           },
           {
@@ -65,6 +70,20 @@ describe("read API route contracts", () => {
         "POST /api/issues/:id/retry",
         "POST /api/issues/:id/verification",
         "POST /api/projects",
+      ]
+    `);
+  });
+
+  test("locks Work method and path contracts", () => {
+    expect(captureRoutes(registerWorkRoutes)).toMatchInlineSnapshot(`
+      [
+        "GET /api/work-relations",
+        "GET /api/works",
+        "GET /api/works/:id",
+        "GET /api/works/:id/relations",
+        "PATCH /api/works/:id",
+        "POST /api/works",
+        "POST /api/works/:id/actions/:action",
       ]
     `);
   });

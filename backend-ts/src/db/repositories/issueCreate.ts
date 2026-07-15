@@ -6,6 +6,10 @@ import { normalizeSkillIntentList } from "../../skills/intents.ts";
 
 export type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>>;
 
+export type CreateIssueOptions = {
+  createdEventPayload?: Record<string, unknown>;
+};
+
 type NormalizedIssueWrite = {
   agent_profile_id: string;
   description: string;
@@ -44,7 +48,11 @@ type IssueTemplateSnapshot = {
   id: string;
 };
 
-export function createIssue(db: RunnerDatabase, input: CreateIssueInput): Issue {
+export function createIssue(
+  db: RunnerDatabase,
+  input: CreateIssueInput,
+  options: CreateIssueOptions = {}
+): Issue {
   const issue = normalizeIssueForWrite(db, input);
   validateIssueForCreate(db, issue);
   const timestamp = issueTimestamp();
@@ -63,11 +71,17 @@ export function createIssue(db: RunnerDatabase, input: CreateIssueInput): Issue 
     const id = lastInsertID(db);
     db.sqlite.run(
       `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-      [id, "issue.created", "", timestamp]
+      [id, "issue.created", createdEventPayload(options), timestamp]
     );
     return id;
   });
   return mustGetIssue(db, insertIssue(issue));
+}
+
+function createdEventPayload(options: CreateIssueOptions): string {
+  return options.createdEventPayload === undefined
+    ? ""
+    : JSON.stringify(options.createdEventPayload);
 }
 
 function validateIssueForCreate(db: RunnerDatabase, issue: NormalizedIssueWrite): void {

@@ -5,6 +5,7 @@ import { registerPiSupervisorRoutes } from "./piSupervisorApi.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
 import { registerSessionRoutes } from "./sessionApi.ts";
 import { registerUsageRoutes } from "./usageApi.ts";
+import { registerWorkRoutes } from "./workApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 
@@ -21,6 +22,7 @@ export const READ_API_ROUTE_REGISTRY = [
   { id: "pi-supervisor", register: registerPiSupervisorRoutes, responsibility: "domain" },
   { id: "pi", register: registerPiRoutes, responsibility: "domain" },
   { id: "sessions", register: registerSessionRoutes, responsibility: "domain" },
+  { id: "work", register: registerWorkRoutes, responsibility: "domain" },
   { id: "frontend-compat", register: registerFrontendCompatRoutes, responsibility: "legacy-compatibility" },
   { id: "usage", register: registerUsageRoutes, responsibility: "projection" }
 ] as const satisfies readonly ReadApiRouteRegistration[];

@@ -1,9 +1,15 @@
 import type { RunnerDatabase } from "../database.ts";
 
 export type IssueFilter = {
+  limit?: number;
+  offset?: number;
   projectId?: string;
+  query?: string;
+  sort?: "created_at" | "status" | "title" | "updated_at";
+  sortOrder?: "asc" | "desc";
   sourceSessionId?: string;
   status?: string;
+  statuses?: string[];
 };
 
 type IssueRow = {
@@ -130,6 +136,13 @@ export function listIssues(db: RunnerDatabase, filter: IssueFilter = {}): Issue[
   return attachLatestRuns(db, rows.map(mapIssueRow));
 }
 
+export function countIssues(db: RunnerDatabase, filter: IssueFilter = {}): number {
+  const query = buildIssueWhere(filter);
+  return db.sqlite.query<{ count: number }, Array<number | string>>(
+    `select count(*) as count from issues${query.where}`
+  ).get(...query.args)?.count ?? 0;
+}
+
 export function getIssue(db: RunnerDatabase, id: number): Issue | null {
   const issueID = positiveInteger(id, "issue id");
   const row = db.sqlite.query<IssueRow, [number]>(`
@@ -147,26 +160,70 @@ export function listIssueRuns(db: RunnerDatabase, id: number): IssueRun[] {
   `).all(issueID).map(mapIssueRunRow);
 }
 
-function buildIssueListQuery(filter: IssueFilter): { args: string[]; sql: string } {
-  const conditions: string[] = [];
-  const args: string[] = [];
-  const projectId = cleanOptionalString(filter.projectId);
-  const status = cleanOptionalString(filter.status);
-  const sourceSessionId = normalizeSourceSessionID(filter.sourceSessionId);
-  addFilter(conditions, args, "project_id = ?", projectId);
-  addFilter(conditions, args, "status = ?", status);
-  addFilter(conditions, args, "source_session_id = ?", sourceSessionId);
-  const where = conditions.length > 0 ? ` where ${conditions.join(" and ")}` : "";
+function buildIssueListQuery(filter: IssueFilter): { args: Array<number | string>; sql: string } {
+  const query = buildIssueWhere(filter);
+  const pagination = issuePagination(filter);
   return {
-    args,
-    sql: `select ${ISSUE_COLUMNS} from issues${where} order by priority desc, created_at asc`
+    args: [...query.args, ...pagination.args],
+    sql: `select ${ISSUE_COLUMNS} from issues${query.where}${issueOrder(filter)}${pagination.sql}`
   };
 }
 
-function addFilter(conditions: string[], args: string[], condition: string, value: string): void {
+function buildIssueWhere(filter: IssueFilter): { args: Array<number | string>; where: string } {
+  const conditions: string[] = [];
+  const args: Array<number | string> = [];
+  const projectId = cleanOptionalString(filter.projectId);
+  const status = cleanOptionalString(filter.status);
+  const statuses = uniqueStrings([status, ...(filter.statuses ?? [])]);
+  const query = cleanOptionalString(filter.query);
+  const sourceSessionId = normalizeSourceSessionID(filter.sourceSessionId);
+  addFilter(conditions, args, "project_id = ?", projectId);
+  if (statuses.length > 0) {
+    conditions.push(`status in (${statuses.map(() => "?").join(", ")})`);
+    args.push(...statuses);
+  }
+  if (query) {
+    conditions.push("instr(lower(title || char(10) || description), lower(?)) > 0");
+    args.push(query);
+  }
+  addFilter(conditions, args, "source_session_id = ?", sourceSessionId);
+  return {
+    args,
+    where: conditions.length > 0 ? ` where ${conditions.join(" and ")}` : ""
+  };
+}
+
+function addFilter(conditions: string[], args: Array<number | string>, condition: string, value: string): void {
   if (!value) return;
   conditions.push(condition);
   args.push(value);
+}
+
+function issueOrder(filter: IssueFilter): string {
+  const direction = filter.sortOrder === "asc" ? "asc" : "desc";
+  if (filter.sort === "created_at") return ` order by created_at ${direction}, id asc`;
+  if (filter.sort === "updated_at") return ` order by updated_at ${direction}, id asc`;
+  if (filter.sort === "title") return ` order by title collate nocase ${direction}, id asc`;
+  if (filter.sort === "status") return ` order by status ${direction}, id asc`;
+  return " order by priority desc, created_at asc";
+}
+
+function issuePagination(filter: IssueFilter): { args: number[]; sql: string } {
+  if (filter.limit === undefined && filter.offset === undefined) return { args: [], sql: "" };
+  const limit = nonNegativeInteger(filter.limit, "issue list limit", true);
+  const offset = nonNegativeInteger(filter.offset ?? 0, "issue list offset", false);
+  return { args: [limit, offset], sql: " limit ? offset ?" };
+}
+
+function nonNegativeInteger(value: number | undefined, field: string, positive: boolean): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < (positive ? 1 : 0)) {
+    throw new Error(`${field} is invalid`);
+  }
+  return value;
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return [...new Set(values.map(cleanOptionalString).filter(Boolean))];
 }
 
 function attachLatestRuns(db: RunnerDatabase, issues: Issue[]): Issue[] {

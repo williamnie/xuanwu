@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { enqueueIssue, retryIssue, cancelIssue } from "../../db/repositories/issueActions.ts";
+import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { listIssueEvents, recordIssueEvent, type IssueEvent } from "../../db/repositories/issueEvents.ts";
-import { getIssue, listIssues, type Issue, type IssueFilter } from "../../db/repositories/issues.ts";
+import { countIssues, getIssue, listIssues, type Issue, type IssueFilter } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import { getWork } from "../../db/repositories/workLedger.ts";
 import { makeDomainID, parseDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
@@ -25,6 +26,15 @@ export type IssueWorkShadowMode = "disabled" | "best_effort";
 export type IssueWorkAction = "cancel" | "enqueue" | "retry";
 
 export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "goal" | "title">>;
+
+export type IssueWorkCreateCommand = {
+  audit: WorkTransitionAudit;
+  goal: string;
+  project_id: string;
+  status: "todo" | "triage";
+  title: string;
+  type: "engineering_task";
+};
 
 export type IssueWorkUpdateCommand = {
   audit: WorkTransitionAudit;
@@ -97,6 +107,10 @@ export function listIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {
   return listIssues(db, filter).map((issue) => projectIssueAsWork(db, issue));
 }
 
+export function countIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): number {
+  return countIssues(db, filter);
+}
+
 export function projectIssueAsWork(db: RunnerDatabase, issue: Issue): WorkLedgerEntry {
   const createdEvent = listIssueEvents(db, issue.id, { limit: 1, types: ["issue.created"] })[0];
   return issueAsWork(issue, createdEvent);
@@ -138,6 +152,46 @@ export function issueStatusToWorkStatus(status: string): WorkStatus {
 export function workStatusToIssueStatus(status: WorkStatus): string {
   if (!WORK_STATUSES.includes(status)) throw new Error(`unsupported Work status ${status}`);
   return status;
+}
+
+export function createIssueBackedWork(
+  db: RunnerDatabase,
+  command: IssueWorkCreateCommand
+): IssueWorkMutationResult {
+  const violations = [
+    ...auditViolations(command.audit),
+    ...createViolations(command)
+  ];
+  if (violations.length > 0) throw new Error([...new Set(violations)].join("; "));
+  const fingerprint = createFingerprint(command);
+  const write = db.transaction((): AdapterWriteOutcome => {
+    const replay = replayIssueWorkCreate(db, command.audit.event_id, fingerprint);
+    if (replay) return replay;
+    const issue = createIssue(db, {
+      description: command.goal,
+      project_id: command.project_id,
+      status: command.status,
+      title: command.title
+    }, {
+      createdEventPayload: {
+        actor: command.audit.actor,
+        correlation_id: command.audit.correlation_id,
+        event_id: command.audit.event_id,
+        fingerprint,
+        gate: command.audit.gate,
+        operation: "create",
+        outcome: "applied",
+        reason: command.audit.reason
+      }
+    });
+    return {
+      applied: true,
+      audit_event_id: command.audit.event_id,
+      violations: [],
+      work: projectIssueAsWork(db, issue)
+    };
+  }).immediate();
+  return { ...write, shadow: disabledShadow(write.work.id) };
 }
 
 export function updateIssueBackedWork(
@@ -377,6 +431,20 @@ function patchViolations(patch: IssueWorkPatch): string[] {
   return violations;
 }
 
+function createViolations(command: IssueWorkCreateCommand): string[] {
+  const violations: string[] = [];
+  if (!command.project_id.trim()) violations.push("project_id is required");
+  if (!command.title.trim()) violations.push("Work title is required");
+  if (!command.goal.trim()) violations.push("Work goal is required");
+  if (command.type !== "engineering_task") {
+    violations.push("Issue-backed Work type must be engineering_task");
+  }
+  if (command.status !== "triage" && command.status !== "todo") {
+    violations.push("Issue-backed Work must be created in triage or todo");
+  }
+  return violations;
+}
+
 function auditViolations(audit: WorkTransitionAudit): string[] {
   const violations: string[] = [];
   if (!audit.event_id.trim()) violations.push("event_id is required");
@@ -409,6 +477,34 @@ function mutationFingerprint(operation: string, command: IssueWorkUpdateCommand 
     ? { operation, work_id: command.work_id, expected_revision: command.expected_revision, patch: command.patch, audit: command.audit }
     : { operation, work_id: command.work_id, expected_revision: command.expected_revision, action: command.action, audit: command.audit };
   return createHash("sha256").update(stableJson(body)).digest("hex");
+}
+
+function createFingerprint(command: IssueWorkCreateCommand): string {
+  return createHash("sha256").update(stableJson({ command, operation: "create" })).digest("hex");
+}
+
+function replayIssueWorkCreate(
+  db: RunnerDatabase,
+  eventID: string,
+  fingerprint: string
+): AdapterWriteOutcome | null {
+  const existing = db.sqlite.query<{ issue_id: number; payload: string }, [string]>(`
+    select issue_id, payload from issue_events
+    where type='issue.created'
+      and json_extract(case when json_valid(payload) then payload else '{}' end, '$.event_id')=?
+    order by id asc limit 1
+  `).get(eventID);
+  if (!existing) return null;
+  const payload = parsedObject(existing.payload);
+  if (payload?.fingerprint !== fingerprint) {
+    throw new Error(`Issue Work adapter event ${eventID} conflicts with another command`);
+  }
+  return {
+    applied: true,
+    audit_event_id: eventID,
+    violations: [],
+    work: mustGetIssueWork(db, existing.issue_id)
+  };
 }
 
 function replayAdapterWrite(
