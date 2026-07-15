@@ -1,6 +1,6 @@
+import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
 import { Cable, RefreshCw } from 'lucide-react';
-import { api } from '../api/client';
 import { PanelLoader } from '../components/TurtleLoader';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
@@ -22,7 +22,7 @@ export default function ConnectorDiagnosticsPanel() {
 
 function loadConnectors(setState) {
   setState(previous => ({ ...previous, loading: true }));
-  api.getPiConnectors()
+  connectorsApi.getPiConnectors()
     .then(data => setState({ data, error: '', loading: false, notice: '' }))
     .catch(error => setState(previous => ({
       ...previous,

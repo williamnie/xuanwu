@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const issuesPage = readFileSync(new URL('./Issues.jsx', import.meta.url), 'utf8');
 const detailPage = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
-const apiClient = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
+const workClient = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 
 test('issues board does not expose pending verification as its own column', () => {
@@ -15,8 +15,8 @@ test('issues board does not expose pending verification as its own column', () =
 });
 
 test('issue detail provides pending verification review actions', () => {
-  assert.match(apiClient, /reviewIssueVerification:/);
-  assert.match(apiClient, /generateIssueVerifierReport:/);
+  assert.match(workClient, /reviewIssueVerification:/);
+  assert.match(workClient, /generateIssueVerifierReport:/);
   assert.match(detailPage, /issue\.status === 'pending_verification'/);
   assert.match(detailPage, /handleVerificationReview\('accept', ''\)/);
   assert.match(detailPage, /setVerificationReviewAction\('reject'\)/);
@@ -36,5 +36,5 @@ test('triage to todo avoids native confirm gates', () => {
 test('dragging to in progress starts runner execution instead of raw status patch', () => {
   assert.match(issuesPage, /moveIssueAfterDrop/);
   assert.match(issuesPage, /await moveIssueAfterDrop\(issueId,\s*targetStatus\)/);
-  assert.match(issuesPage, /targetStatus === 'in_progress'[\s\S]*api\.enqueueIssue\(issueId\)/);
+  assert.match(issuesPage, /targetStatus === 'in_progress'[\s\S]*workApi\.enqueueIssue\(issueId\)/);
 });

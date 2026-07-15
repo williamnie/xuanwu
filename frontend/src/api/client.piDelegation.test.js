@@ -2,18 +2,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const clientSource = readFileSync(new URL('./client.js', import.meta.url), 'utf8');
+const assistantSource = readFileSync(new URL('./assistant.js', import.meta.url), 'utf8');
+const connectorsSource = readFileSync(new URL('./connectors.js', import.meta.url), 'utf8');
 
 test('PI delegation client exposes active API surface without retired project controls', () => {
-  assert.ok(clientSource.includes("getPiSkills: () => request('/api/pi/skills')"));
-  assert.ok(clientSource.includes("getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities')"));
-  assert.ok(clientSource.includes('updatePiDelegation: (id, updates) => request(`/api/pi/delegations/${encodeURIComponent(id)}`'));
-  assert.ok(clientSource.includes('expirePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/expire`'));
+  assert.ok(assistantSource.includes("getPiSkills: () => request('/api/pi/skills')"));
+  assert.ok(connectorsSource.includes("getPiMcpCapabilities: () => request('/api/pi/mcp/capabilities')"));
+  assert.ok(assistantSource.includes('updatePiDelegation: (id, updates) => request(`/api/pi/delegations/${encodeURIComponent(id)}`'));
+  assert.ok(assistantSource.includes('expirePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/expire`'));
 
-  assert.doesNotMatch(clientSource, /getProjectPiSettings:/);
-  assert.doesNotMatch(clientSource, /updateProjectPiSettings:/);
-  assert.doesNotMatch(clientSource, /getProjectPiPolicy:/);
-  assert.doesNotMatch(clientSource, /updateProjectPiPolicy:/);
-  assert.doesNotMatch(clientSource, /pauseProjectPiAutonomousMode:/);
-  assert.doesNotMatch(clientSource, /resumeProjectPiAutonomousMode:/);
+  assert.doesNotMatch(assistantSource, /getProjectPiSettings:/);
+  assert.doesNotMatch(assistantSource, /updateProjectPiSettings:/);
+  assert.doesNotMatch(assistantSource, /getProjectPiPolicy:/);
+  assert.doesNotMatch(assistantSource, /updateProjectPiPolicy:/);
+  assert.doesNotMatch(assistantSource, /pauseProjectPiAutonomousMode:/);
+  assert.doesNotMatch(assistantSource, /resumeProjectPiAutonomousMode:/);
 });

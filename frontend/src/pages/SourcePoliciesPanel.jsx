@@ -1,6 +1,6 @@
+import { automationApi } from '../api/automation.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, Save, ShieldCheck } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
 const PROFILES = ['company_chat', 'personal_chat', 'ops_chat', 'private_dm', 'email', 'github', 'custom'];
@@ -221,18 +221,18 @@ function policyFromForm(form) {
 
 function loadPolicies(setState) {
   setState((previous) => ({ ...previous, loading: true }));
-  api.getPiSourcePolicies()
+  automationApi.getPiSourcePolicies()
     .then((data) => setState({ data, error: '', loading: false, saving: false }))
     .catch((error) => setState((previous) => ({ ...previous, error: error.message || '读取 source policies 失败', loading: false })));
 }
 
 async function savePolicy(selected, form, setState) {
   if (!selected) return;
-  await runPolicyWrite(setState, () => api.updatePiAutomationSourcePolicy(selected.id, { source_policy: policyFromForm(form) }), 'Source policy 已保存');
+  await runPolicyWrite(setState, () => automationApi.updatePiAutomationSourcePolicy(selected.id, { source_policy: policyFromForm(form) }), 'Source policy 已保存');
 }
 
 async function createPolicy(form, setState) {
-  await runPolicyWrite(setState, () => api.createPiSourcePolicy({ source_policy: policyFromForm(form) }), 'Source policy 记录已创建');
+  await runPolicyWrite(setState, () => automationApi.createPiSourcePolicy({ source_policy: policyFromForm(form) }), 'Source policy 记录已创建');
 }
 
 async function runPolicyWrite(setState, write, successText) {

@@ -1,6 +1,6 @@
+import { systemApi } from '../api/system.js';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { PanelLoader } from '../components/TurtleLoader';
@@ -84,7 +84,7 @@ function RuntimeStatusPanel() {
 
 function loadStatus(setStatus, setError, setLoading) {
   setLoading(true);
-  api.getSystemStatus()
+  systemApi.getSystemStatus()
     .then(data => { setStatus(data); setError(''); })
     .catch(err => setError(err.message || '读取 runtime status 失败'))
     .finally(() => setLoading(false));
@@ -92,7 +92,7 @@ function loadStatus(setStatus, setError, setLoading) {
 
 function loadLogs(setLogs, setError, setLoading) {
   setLoading(true);
-  api.getRuntimeLogs(120)
+  systemApi.getRuntimeLogs(120)
     .then(data => { setLogs(data); setError(''); })
     .catch(err => setError(err.message || '读取 runtime logs 失败'))
     .finally(() => setLoading(false));
@@ -128,7 +128,7 @@ async function copyLogs(logs) {
 async function withDoctor(setDoctorLoading, action) {
   setDoctorLoading(true);
   try {
-    await action(await api.getRuntimeDoctor());
+    await action(await systemApi.getRuntimeDoctor());
   } catch (err) {
     message.error(err.message || '生成诊断摘要失败');
   } finally {

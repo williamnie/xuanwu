@@ -1,6 +1,8 @@
+import { projectsApi } from '../api/projects.js';
+import { workApi } from '../api/work.js';
+import { automationApi } from '../api/automation.js';
 import { create } from 'zustand';
 import { clearAuthToken } from '../api/authToken';
-import { api } from '../api/client';
 import {
   sameCronTasks,
   sameGuardianAlerts,
@@ -11,22 +13,22 @@ import {
 
 const DATA_SLICE_CONFIG = {
   projects: {
-    fetch: () => api.getProjects(),
+    fetch: () => projectsApi.getProjects(),
     same: sameProjects,
     fallback: [],
   },
   issues: {
-    fetch: () => api.getIssues(),
+    fetch: () => workApi.getIssues(),
     same: sameIssues,
     fallback: [],
   },
   issueTemplates: {
-    fetch: () => api.getIssueTemplates(),
+    fetch: () => workApi.getIssueTemplates(),
     same: sameIssueTemplates,
     fallback: [],
   },
   cronTasks: {
-    fetch: () => api.getCronTasks(),
+    fetch: () => automationApi.getCronTasks(),
     same: sameCronTasks,
     fallback: [],
   },

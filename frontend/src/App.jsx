@@ -1,6 +1,7 @@
+import { eventsApi } from './api/events.js';
 import { lazy, Suspense, useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
-import { api } from './api/client';
+import { systemApi } from './api/system.js';
 import { getAuthToken } from './api/authToken';
 import { assistantModuleForPage, isAssistantModulePage } from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
@@ -110,14 +111,14 @@ export default function App() {
   } = appState;
 
   const setAuthReady = useCallback(() => {
-    return api.validateAuthToken()
+    return systemApi.validateAuthToken()
       .then(() => {
         updateAppState(draft => {
           draft.authReady = true;
         });
       })
       .catch((err) => {
-        api.clearAuthToken();
+        systemApi.clearAuthToken();
         updateAppState(draft => {
           draft.authReady = false;
         });
@@ -214,7 +215,7 @@ export default function App() {
   // 订阅 SSE 实时变更，触发数据刷新
   useEffect(() => {
     if (!authReady) return undefined;
-    const unsubscribe = api.subscribeToEvents(
+    const unsubscribe = eventsApi.subscribeToEvents(
       (event) => {
         if (ACTIVE_RECONCILE_EVENT_TYPES.has(event.type)) {
           refreshVisibleData();

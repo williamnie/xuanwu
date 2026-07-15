@@ -54,7 +54,7 @@ test('project cards keep low-frequency metadata behind compact details', () => {
 });
 
 test('project config modal reads Codex model options from provider API', () => {
-  assert.match(source, /api\.getCodexModels\(\)/);
+  assert.match(source, /systemApi\.getCodexModels\(\)/);
   assert.match(source, /buildCodexModelOptions\(codexModels, formModel, profileForm\.model\)/);
   assert.match(source, /codexModelOptions\.map\(option =>/);
   assert.doesNotMatch(source, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);

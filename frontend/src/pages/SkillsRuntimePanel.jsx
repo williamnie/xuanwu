@@ -1,6 +1,6 @@
+import { assistantApi } from '../api/assistant.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Boxes, Play, RefreshCw, Sparkles } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import './SkillsRuntimePanel.css';
 
@@ -158,11 +158,11 @@ function initialState() {
 function loadAll(setState) {
   setState((previous) => ({ ...previous, loading: true }));
   Promise.all([
-    api.getPiSkills(),
-    optionalRuntimeList(() => api.getPiSkillIntakeRuns({ limit: 50 })),
-    optionalRuntimeList(() => api.getPiSkillDomainRuns({ limit: 50 })),
-    optionalRuntimeList(() => api.getPiAttentionContextBundles({ limit: 20 })),
-    optionalRuntimeList(() => api.getPiAttentionItems({ status: '', limit: 20 })),
+    assistantApi.getPiSkills(),
+    optionalRuntimeList(() => assistantApi.getPiSkillIntakeRuns({ limit: 50 })),
+    optionalRuntimeList(() => assistantApi.getPiSkillDomainRuns({ limit: 50 })),
+    optionalRuntimeList(() => assistantApi.getPiAttentionContextBundles({ limit: 20 })),
+    optionalRuntimeList(() => assistantApi.getPiAttentionItems({ status: '', limit: 20 })),
   ]).then(([skills, intakeRuns, domainRuns, bundles, items]) => setState({
     bundles: bundles.value,
     domainRuns: domainRuns.value,
@@ -213,8 +213,8 @@ function runsForSkill(state, skill) {
 async function runSkill(skill, form, setState) {
   if (!skill) return;
   try {
-    if (skill.kind === 'intake') await api.runPiSkillIntake(skill.id, Number(form.bundleId));
-    else await api.runPiSkillDomain(skill.id, Number(form.itemId));
+    if (skill.kind === 'intake') await assistantApi.runPiSkillIntake(skill.id, Number(form.bundleId));
+    else await assistantApi.runPiSkillDomain(skill.id, Number(form.itemId));
     message.success('Manual skill run 已创建');
     loadAll(setState);
   } catch (error) {

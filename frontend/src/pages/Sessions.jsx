@@ -1,3 +1,8 @@
+import { systemApi } from '../api/system.js';
+import { projectsApi } from '../api/projects.js';
+import { workApi } from '../api/work.js';
+import { runsApi } from '../api/runs.js';
+import { eventsApi } from '../api/events.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { 
@@ -5,7 +10,6 @@ import {
   Pin, MessageSquarePlus,
   SlidersHorizontal, ShieldAlert, Brain, ArrowUp, Folder, Gauge
 } from 'lucide-react';
-import { api } from '../api/client';
 import { message as toast } from '../store/toastStore';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import PromptEditor from '../components/editor/PromptEditor';
@@ -379,7 +383,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const result = await api.getSessions({ limit: PAGE_SIZE });
+      const result = await runsApi.getSessions({ limit: PAGE_SIZE });
       const data = result.data || [];
       const nextCursor = result.nextCursor || '';
       setSessions((current) => (
@@ -399,7 +403,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      const result = await api.getSessions({ limit: PAGE_SIZE, cursor });
+      const result = await runsApi.getSessions({ limit: PAGE_SIZE, cursor });
       setSessions((prev) => mergeSessions(prev, result.data || []));
       setCursor(result.nextCursor || '');
     } catch (err) {
@@ -417,7 +421,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
     const requestId = selectedId;
     try {
-      const detail = await api.getSession(requestId);
+      const detail = await runsApi.getSession(requestId);
       if (selectedIdRef.current !== requestId) return;
       const running = isSessionRunning(detail);
       setSelectedSession(detail);
@@ -441,7 +445,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const loadModels = useCallback(async () => {
     setModelsLoading(true);
     try {
-      const result = await api.getCodexModels();
+      const result = await systemApi.getCodexModels();
       setModels(result.data || []);
       setModelsError('');
     } catch (err) {
@@ -458,7 +462,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
     let alive = true;
     const timer = window.setTimeout(() => {
-      api.searchProjectReferences(pathSearchRequest.projectId, {
+      projectsApi.searchProjectReferences(pathSearchRequest.projectId, {
         type: pathSearchRequest.type, query: pathSearchRequest.query, limit: 40,
       }).then((result) => {
         if (alive) setPathReferences({ files: result?.files || [], folders: result?.folders || [] });
@@ -475,7 +479,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
   useEffect(() => {
     let alive = true;
-    api.getSessionPreferences()
+    runsApi.getSessionPreferences()
       .then((prefs) => {
         if (alive) setLastProjectId(prefs?.last_project_id || '');
       })
@@ -538,7 +542,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     if (selectedIdRef.current) loadSelected(false);
   }, [loadSelected]);
 
-  useEffect(() => api.subscribeToEvents((event) => {
+  useEffect(() => eventsApi.subscribeToEvents((event) => {
     const eventKey = eventSessionKey(event);
     if (isSessionFileEvent(event)) {
       scheduleListRefresh();
@@ -613,7 +617,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     setSavingProjectOrder(true);
     setProjects(nextProjects);
     try {
-      const updated = await api.reorderProjects(nextProjects.map((project) => project.id));
+      const updated = await projectsApi.reorderProjects(nextProjects.map((project) => project.id));
       setProjects(updated || nextProjects);
     } catch (err) {
       setProjects(projects);
@@ -635,7 +639,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     if (!approvalRequest) return;
     setApprovalSubmitting(true);
     try {
-      await api.resolveCodexApproval(approvalRequest.id, { decision, scope });
+      await runsApi.resolveCodexApproval(approvalRequest.id, { decision, scope });
       setApprovalQueue((current) => removeApprovalRequest(current, approvalRequest));
     } catch (err) {
       toast.error(err.message || '提交授权决策失败');
@@ -668,7 +672,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const startSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
     const optimisticMessage = addOptimisticUserMessage(sessionId, promptText);
     try {
-      await api.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
+      await runsApi.sendSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
         model: settings.model,
         reasoning_effort: settings.reasoningEffort,
         service_tier: settings.serviceTier,
@@ -685,7 +689,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   }, [addOptimisticUserMessage, removeOptimisticUserMessage]);
 
   const steerSessionMessage = useCallback(async (sessionId, promptText, settings, references = []) => {
-    await api.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
+    await runsApi.steerSessionMessage(sessionId, sessionPayloadWithReferences(promptText, {
       model: settings.model,
       reasoning_effort: settings.reasoningEffort,
       service_tier: settings.serviceTier,
@@ -815,7 +819,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     setCommandExecuting(true);
     setError('');
     try {
-      const result = await api.executeCommand(buildRunnerCommandRequest(commandState, context, { confirmed: true }));
+      const result = await systemApi.executeCommand(buildRunnerCommandRequest(commandState, context, { confirmed: true }));
       setResult(result);
       if (context.sessionId) {
         await loadSelected(false);
@@ -838,7 +842,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       text: '正在发送中断请求...',
     });
     try {
-      const result = await api.interruptSession(requestId);
+      const result = await runsApi.interruptSession(requestId);
       const notice = interruptRequestNotice(requestId, result);
       if (isInterruptPendingForSession(interruptStateRef.current, requestId)) {
         applyInterruptNotice(notice);
@@ -882,7 +886,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     }
     setSending(true);
     try {
-      const result = await api.createSession(sessionPayloadWithReferences(prompt.trim(), {
+      const result = await runsApi.createSession(sessionPayloadWithReferences(prompt.trim(), {
         project_id: projectId,
         cwd,
         model: sessionSettings.model,
@@ -1758,7 +1762,7 @@ function CreateSessionIssueButton({ session, project, navigateTo }) {
     setCreating(true);
     try {
       const selectedText = window.getSelection?.().toString() || '';
-      const issue = await api.createIssue(buildSessionIssuePayload(session, project, { selectedText }));
+      const issue = await workApi.createIssue(buildSessionIssuePayload(session, project, { selectedText }));
       toast.success(`已创建 triage Issue #${issue.id}`);
       navigateTo?.('issues', issue.id);
     } catch (err) {

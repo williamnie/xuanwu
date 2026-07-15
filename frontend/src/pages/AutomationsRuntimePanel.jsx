@@ -1,6 +1,6 @@
+import { automationApi } from '../api/automation.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Bot, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
-import { api } from '../api/client';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 
@@ -121,7 +121,7 @@ function StepList({ steps }) {
 
 function loadAutomations(setState) {
   setState((previous) => ({ ...previous, loading: true }));
-  api.getPiAutomations()
+  automationApi.getPiAutomations()
     .then((data) => setState({ automations: data.automations || [], error: '', loading: false, notice: '' }))
     .catch((error) => setState((previous) => ({
       ...previous,
@@ -134,7 +134,7 @@ function loadAutomations(setState) {
 
 async function toggleAutomation(automation, setState) {
   try {
-    await api.updatePiAutomation(automation.id, { enabled: !automation.enabled });
+    await automationApi.updatePiAutomation(automation.id, { enabled: !automation.enabled });
     message.success(automation.enabled ? 'Automation 已暂停' : 'Automation 已启用');
     loadAutomations(setState);
   } catch (error) {

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./FeishuSettingsPanel.jsx', import.meta.url), 'utf8');
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
-const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
+const connectorsSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 
 test('Settings exposes a Feishu bot configuration panel backed by integration settings API', () => {
   assert.match(sectionsSource, /FeishuSettingsPanel/);
@@ -19,11 +19,11 @@ test('Settings exposes a Feishu bot configuration panel backed by integration se
   assert.match(panelSource, /Default Chat ID/);
   assert.match(panelSource, /Default User ID/);
   assert.match(panelSource, /Project Mappings/);
-  assert.match(panelSource, /api\.getFeishuSettings/);
-  assert.match(panelSource, /api\.updateFeishuSettings/);
+  assert.match(panelSource, /connectorsApi\.getFeishuSettings/);
+  assert.match(panelSource, /connectorsApi\.updateFeishuSettings/);
   assert.match(panelSource, /receive_mode/);
-  assert.match(clientSource, /getFeishuSettings:/);
-  assert.match(clientSource, /updateFeishuSettings:/);
-  assert.match(clientSource, /\/api\/integrations\/feishu\/settings/);
+  assert.match(connectorsSource, /getFeishuSettings:/);
+  assert.match(connectorsSource, /updateFeishuSettings:/);
+  assert.match(connectorsSource, /\/api\/integrations\/feishu\/settings/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });

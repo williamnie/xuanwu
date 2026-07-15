@@ -1,5 +1,5 @@
+import { workApi } from '../api/work.js';
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import {
   selectIssueTemplates,
@@ -67,7 +67,7 @@ export default function Issues({
     if (!issueId) return;
     setRetryingIssueId(issueId);
     try {
-      await api.retryIssue(issueId, serviceTierPayload(issue?.service_tier));
+      await workApi.retryIssue(issueId, serviceTierPayload(issue?.service_tier));
       message.success(`Issue #${issueId} 已重新加入队列`);
       refreshData(['issues']);
     } catch (err) {
@@ -81,7 +81,7 @@ export default function Issues({
     stopCardAction(event);
     setPendingServiceTiers(prev => ({ ...prev, [issueId]: serviceTier }));
     try {
-      await api.updateIssue(issueId, serviceTierPayload(serviceTier));
+      await workApi.updateIssue(issueId, serviceTierPayload(serviceTier));
       await refreshData(['issues']);
     } catch (err) {
       message.error(`更新执行速度失败: ${err.message || '网络异常'}`);
@@ -121,7 +121,7 @@ export default function Issues({
     if (!issueToDelete) return;
     setDeletingIssueId(issueToDelete.id);
     try {
-      await api.deleteIssue(issueToDelete.id);
+      await workApi.deleteIssue(issueToDelete.id);
       message.success(`Issue #${issueToDelete.id} 已删除`);
       setIssueToDelete(null);
       refreshData(['issues']);
@@ -204,11 +204,11 @@ export default function Issues({
 
   const moveIssueAfterDrop = async (issueId, targetStatus) => {
     if (targetStatus === 'in_progress') {
-      await api.enqueueIssue(issueId);
+      await workApi.enqueueIssue(issueId);
       message.success(`Issue #${issueId} 已加入执行队列`);
       return;
     }
-    await api.updateIssue(issueId, { status: targetStatus });
+    await workApi.updateIssue(issueId, { status: targetStatus });
   };
 
   // 当模态框打开时重置表单输入内容，防止共享项目列表更新时清空用户输入
@@ -292,7 +292,7 @@ export default function Issues({
     addIssueSource(payload, sourceMetadata);
 
     try {
-      await api.createIssue(payload);
+      await workApi.createIssue(payload);
       setIsNewIssueOpen(false);
       setFormDescription('');
       refreshData(['issues']);

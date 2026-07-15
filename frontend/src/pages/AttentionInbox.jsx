@@ -1,6 +1,6 @@
+import { assistantApi } from '../api/assistant.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, Bot, RefreshCw, Search, Sparkles } from 'lucide-react';
-import { api } from '../api/client';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import './AttentionInbox.css';
@@ -29,7 +29,7 @@ export default function AttentionInbox() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    api.getPiAttentionItems({ status, limit: 100 })
+    assistantApi.getPiAttentionItems({ status, limit: 100 })
       .then((rows) => {
         if (cancelled) return;
         setUnavailable('');
@@ -62,7 +62,7 @@ export default function AttentionInbox() {
     return () => { cancelled = true; };
   }, [selectedItem]);
 
-  const refreshItems = () => api.getPiAttentionItems({ status, limit: 100 }).then((rows) => setItems(rows || []));
+  const refreshItems = () => assistantApi.getPiAttentionItems({ status, limit: 100 }).then((rows) => setItems(rows || []));
   const runAction = async (label, action) => {
     if (!selectedItem) return;
     setBusy(label);
@@ -93,10 +93,10 @@ export default function AttentionInbox() {
     }
   };
   const approveProposal = (proposal, edits) => resolveProposal(proposal, 'approve', () => (
-    api.approvePiActionProposal(proposal.id, { action_edits: edits, actor: 'user' })
+    assistantApi.approvePiActionProposal(proposal.id, { action_edits: edits, actor: 'user' })
   ));
   const rejectProposal = (proposal) => resolveProposal(proposal, 'reject', () => (
-    api.rejectPiActionProposal(proposal.id, { actor: 'user', reason: 'Rejected from Attention Inbox' })
+    assistantApi.rejectPiActionProposal(proposal.id, { actor: 'user', reason: 'Rejected from Attention Inbox' })
   ));
 
   return (
@@ -129,10 +129,10 @@ export default function AttentionInbox() {
             <>
               <DetailHeader item={selectedItem} />
               <div className="attention-actions">
-                <button disabled={!!busy} onClick={() => runAction('triage', (id) => api.updatePiAttentionItem(id, { status: 'triaged' }))}>Mark triaged</button>
-                <button disabled={!!busy} onClick={() => runAction('domain', api.startPiAttentionDomainSkill)}><Sparkles size={14} /> Domain skill</button>
-                <button disabled={!!busy} onClick={() => runAction('reintake', api.reintakePiAttentionItem)}><RefreshCw size={14} /> Re-intake</button>
-                <button disabled={!!busy} onClick={() => runAction('ignore', api.ignorePiAttentionItem)}><Archive size={14} /> Ignore</button>
+                <button disabled={!!busy} onClick={() => runAction('triage', (id) => assistantApi.updatePiAttentionItem(id, { status: 'triaged' }))}>Mark triaged</button>
+                <button disabled={!!busy} onClick={() => runAction('domain', assistantApi.startPiAttentionDomainSkill)}><Sparkles size={14} /> Domain skill</button>
+                <button disabled={!!busy} onClick={() => runAction('reintake', assistantApi.reintakePiAttentionItem)}><RefreshCw size={14} /> Re-intake</button>
+                <button disabled={!!busy} onClick={() => runAction('ignore', assistantApi.ignorePiAttentionItem)}><Archive size={14} /> Ignore</button>
               </div>
               <IntentPanel item={detail?.item || selectedItem} />
               <ProposalPanel
@@ -151,14 +151,14 @@ export default function AttentionInbox() {
 }
 
 async function loadDetail(id) {
-  const item = await api.getPiAttentionItem(id);
+  const item = await assistantApi.getPiAttentionItem(id);
   const eventIds = rawEventIds(item);
   const sourceItemId = `attention_inbox_item:${item.id}`;
   const [bundle, intakeRun, proposals, rawEvents] = await Promise.all([
-    api.getPiAttentionContextBundle(item.bundle_id),
-    api.getPiAttentionIntakeRun(item.intake_run_id),
-    api.getPiActionProposals({ sourceItemId }),
-    Promise.all(eventIds.map((eventId) => api.getPiAttentionRawEvent(eventId))),
+    assistantApi.getPiAttentionContextBundle(item.bundle_id),
+    assistantApi.getPiAttentionIntakeRun(item.intake_run_id),
+    assistantApi.getPiActionProposals({ sourceItemId }),
+    Promise.all(eventIds.map((eventId) => assistantApi.getPiAttentionRawEvent(eventId))),
   ]);
   return { bundle, intakeRun, item, proposals: proposals || [], rawEvents };
 }

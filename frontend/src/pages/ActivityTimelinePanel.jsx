@@ -1,6 +1,6 @@
+import { assistantApi } from '../api/assistant.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Link2, RefreshCw, Search, ShieldCheck } from 'lucide-react';
-import { api } from '../api/client';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 import './ActivityTimelinePanel.css';
@@ -121,7 +121,7 @@ function cleanFilters(filters) {
 
 function loadTimeline(filters, setTimeline, setNotice, setLoading) {
   setLoading(true);
-  api.getPiActivityTimeline(filters)
+  assistantApi.getPiActivityTimeline(filters)
     .then((data) => { setTimeline(data || { items: [] }); setNotice(''); })
     .catch((err) => {
       if (err.status === 404) setNotice('当前 runtime 尚未启用 Activity API。');

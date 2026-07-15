@@ -1,6 +1,6 @@
+import { systemApi } from '../api/system.js';
 import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, ChevronDown, Gauge, RefreshCw, Zap } from 'lucide-react';
-import { api } from '../api/client';
 import CodexUsageBreakdown from './CodexUsageBreakdown';
 import './CodexUsagePanel.css';
 import './CodexUsagePanel.details.css';
@@ -11,7 +11,7 @@ export default function CodexUsagePanel() {
   const loadUsage = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await api.getCodexUsage();
+      const data = await systemApi.getCodexUsage();
       setState({ loading: false, data, error: '' });
     } catch (err) {
       setState(prev => ({

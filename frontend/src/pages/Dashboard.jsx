@@ -1,6 +1,6 @@
+import { eventsApi } from '../api/events.js';
 import { useEffect } from 'react';
 import { useImmer } from 'use-immer';
-import { api } from '../api/client';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import {
@@ -31,7 +31,7 @@ export default function Dashboard({
 
   useEffect(() => {
     let active = true;
-    api.getEventSummaries({ limit: 20 })
+    eventsApi.getEventSummaries({ limit: 20 })
       .then(result => {
         if (!active) return;
         const history = [...(result?.items || [])].reverse().map(summaryDashboardEvent);
@@ -44,7 +44,7 @@ export default function Dashboard({
       .catch(() => {});
 
     // 订阅全局 SSE 事件流
-    const unsubscribe = api.subscribeToEvents(
+    const unsubscribe = eventsApi.subscribeToEvents(
       (event) => {
         // 将新事件加入实时活动流，限制最多保存 20 条
         updateEvents((draft) => {

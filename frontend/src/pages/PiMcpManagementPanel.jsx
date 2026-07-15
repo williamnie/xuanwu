@@ -1,6 +1,6 @@
+import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useMemo, useState } from 'react';
 import { PlugZap, RefreshCw, ShieldCheck } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
 const emptyForm = { args: '', command: '', envKeys: '', name: '' };
@@ -173,7 +173,7 @@ function TextField({ label, onChange, placeholder, value }) {
 async function loadMcpState(setters) {
   setters.setLoading(true);
   try {
-    const [sources, results] = await Promise.all([api.getPiMcpDiscoverySources(), api.getPiMcpDiscoveryResults()]);
+    const [sources, results] = await Promise.all([connectorsApi.getPiMcpDiscoverySources(), connectorsApi.getPiMcpDiscoveryResults()]);
     setters.setSources(sources.sources || []);
     setters.setServers(results.servers || []);
     setters.setCapabilities(results.capabilities || []);
@@ -184,7 +184,7 @@ async function loadMcpState(setters) {
 
 async function scanMcp({ loadAll, setError, setScanning }) {
   setScanning(true);
-  try { await api.scanPiMcpDiscovery({}); message.success('MCP discovery scan 已完成'); await loadAll(); }
+  try { await connectorsApi.scanPiMcpDiscovery({}); message.success('MCP discovery scan 已完成'); await loadAll(); }
   catch (err) { setError(err.message || 'MCP discovery scan 失败'); }
   finally { setScanning(false); }
 }
@@ -193,30 +193,30 @@ async function createManualServer(event, state) {
   event.preventDefault();
   state.setSaving(true);
   try {
-    await api.createPiMcpServer({ name: state.form.name, transport: { args: splitWords(state.form.args), command: state.form.command, env: envPlaceholders(state.form.envKeys), type: 'stdio' } });
+    await connectorsApi.createPiMcpServer({ name: state.form.name, transport: { args: splitWords(state.form.args), command: state.form.command, env: envPlaceholders(state.form.envKeys), type: 'stdio' } });
     state.setForm(emptyForm); message.success('Manual MCP server 已添加'); await state.loadAll();
   } catch (err) { state.setError(err.message || '添加 MCP server 失败'); }
   finally { state.setSaving(false); }
 }
 
 async function patchServer(id, patch, { loadAll, setError }) {
-  try { await api.patchPiMcpServer(id, patch); await loadAll(); }
+  try { await connectorsApi.patchPiMcpServer(id, patch); await loadAll(); }
   catch (err) { setError(err.message || '更新 MCP server 失败'); }
 }
 
 async function introspectServerCapabilities(id, { loadAll, setError }) {
-  try { await api.introspectPiMcpServer(id); await loadAll(); }
+  try { await connectorsApi.introspectPiMcpServer(id); await loadAll(); }
   catch (err) { setError(err.message || 'Inspect MCP server capabilities 失败'); }
 }
 
 async function patchCapability(id, patch, { loadAll, setError }) {
-  try { await api.patchPiMcpCapability(id, patch); await loadAll(); }
+  try { await connectorsApi.patchPiMcpCapability(id, patch); await loadAll(); }
   catch (err) { setError(err.message || '更新 MCP capability 失败'); }
 }
 
 async function forgetDisabledServer(server, { loadAll, setError }) {
   if (server.enabled) return;
-  try { await api.deletePiMcpServer(server.id); await loadAll(); }
+  try { await connectorsApi.deletePiMcpServer(server.id); await loadAll(); }
   catch (err) { setError(err.message || 'Forget MCP server 失败'); }
 }
 

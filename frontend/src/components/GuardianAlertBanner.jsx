@@ -1,6 +1,7 @@
+import { systemApi } from '../api/system.js';
+import { assistantApi } from '../api/assistant.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Loader2, RefreshCw, ShieldAlert, TimerReset, WifiOff } from 'lucide-react';
-import { api } from '../api/client';
 import {
   selectGuardianAlerts,
   selectSetGuardianAlerts,
@@ -23,7 +24,7 @@ export default function GuardianAlertBanner() {
 
   const refreshAlerts = useCallback(async () => {
     try {
-      setGuardianAlerts(await api.getPiGuardianAlerts());
+      setGuardianAlerts(await assistantApi.getPiGuardianAlerts());
     } catch {
       setGuardianAlerts([]);
     }
@@ -36,7 +37,7 @@ export default function GuardianAlertBanner() {
     setAckingId(id);
     setAckError('');
     try {
-      const alert = await api.ackPiGuardianAlert(id);
+      const alert = await assistantApi.ackPiGuardianAlert(id);
       if (alert?.status !== 'open') {
         setAckedIds((current) => new Set(current).add(id));
       }
@@ -73,7 +74,7 @@ function useGuardianStatus() {
   const reload = useCallback(async () => {
     setState((current) => ({ ...current, loading: true }));
     try {
-      const data = await api.getSystemStatus();
+      const data = await systemApi.getSystemStatus();
       setState({ data, error: '', loading: false });
     } catch (error) {
       setState((current) => ({ ...current, error: errorMessage(error), loading: false }));

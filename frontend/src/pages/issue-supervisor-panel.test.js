@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./IssueSupervisorPanel.jsx', import.meta.url), 'utf8');
-const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
+const workSource = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');
 
 test('Issue Detail supervisor panel reads diagnosis, retry wait, recovery history, and rationale', () => {
-  assert.match(clientSource, /getIssueSupervisor:/);
-  assert.match(clientSource, /\/api\/issues\/\$\{id\}\/supervisor/);
+  assert.match(workSource, /getIssueSupervisor:/);
+  assert.match(workSource, /\/api\/issues\/\$\{id\}\/supervisor/);
   assert.match(panelSource, /function RetryAfterCard/);
   assert.match(panelSource, /Diagnosis/);
   assert.match(panelSource, /Last provider error/);

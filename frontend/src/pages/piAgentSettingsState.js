@@ -1,5 +1,5 @@
+import { assistantApi } from '../api/assistant.js';
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
 import { PRODUCT_TERMS } from '../brand';
 import { message } from '../store/toastStore';
 
@@ -67,7 +67,7 @@ export function usePiAgentSettingsState() {
 
 function loadPiSettings(setProviders, setForm, setLoading, setPromptSummary) {
   setLoading(true);
-  Promise.all([api.getPiAgents(), api.getPiProviderSettings()])
+  Promise.all([assistantApi.getPiAgents(), assistantApi.getPiProviderSettings()])
     .then(([agentList, providerSettings]) => {
       const nextAgents = agentList || [];
       const nextProviders = providerSettings?.providers || [];
@@ -82,7 +82,7 @@ function loadPiSettings(setProviders, setForm, setLoading, setPromptSummary) {
 async function loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy) {
   setOauthBusy(true);
   try {
-    setOauthStatus(await api.getPiCodexOAuthStatus());
+    setOauthStatus(await assistantApi.getPiCodexOAuthStatus());
   } catch (err) {
     message.error(err.message || '读取 Codex OAuth 状态失败');
   } finally {
@@ -93,7 +93,7 @@ async function loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy) {
 async function startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus) {
   setOauthBusy(true);
   try {
-    const result = await api.startPiCodexOAuthLogin();
+    const result = await assistantApi.startPiCodexOAuthLogin();
     setOauthStatus(result);
     applyCodexOAuthPreset(setForm);
     message.success('已生成 Codex OAuth 登录地址，请复制到已登录 ChatGPT 的浏览器打开');
@@ -131,7 +131,7 @@ function applyCodexOAuthPreset(setForm) {
 async function logoutPiOAuth(setOauthBusy, setOauthStatus) {
   setOauthBusy(true);
   try {
-    setOauthStatus(await api.logoutPiCodexOAuth());
+    setOauthStatus(await assistantApi.logoutPiCodexOAuth());
     message.success('已退出 Supervisor Codex OAuth');
   } catch (err) {
     message.error(err.message || '退出 Supervisor Codex OAuth 失败');
@@ -150,7 +150,7 @@ async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLo
   if (!id) return message.error('默认 Supervisor 尚不可用');
   setPromptSummaryLoading(true);
   try {
-    setPromptSummary(await api.getPiAgentRuntimePrompt(id));
+    setPromptSummary(await assistantApi.getPiAgentRuntimePrompt(id));
   } catch (err) {
     message.error(err.message || '读取生效 prompt 摘要失败');
   } finally {
@@ -162,7 +162,7 @@ async function savePiSettings({ form, setForm, setPromptSummary, setProviders, s
   if (!isValidForm(form)) return;
   setSaving(true);
   try {
-    await api.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
+    await assistantApi.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
     await saveAgent(agentPayload(form));
     message.success('Supervisor Settings 已保存');
     setPromptSummary(null);
@@ -175,11 +175,11 @@ async function savePiSettings({ form, setForm, setPromptSummary, setProviders, s
 }
 
 async function saveAgent(payload) {
-  return await api.updatePiAgent(DEFAULT_PI_AGENT_ID, payload);
+  return await assistantApi.updatePiAgent(DEFAULT_PI_AGENT_ID, payload);
 }
 
 async function refreshAfterSave(setProviders, setForm) {
-  const [agentList, providerSettings] = await Promise.all([api.getPiAgents(), api.getPiProviderSettings()]);
+  const [agentList, providerSettings] = await Promise.all([assistantApi.getPiAgents(), assistantApi.getPiProviderSettings()]);
   const nextAgents = agentList || [];
   const nextProviders = providerSettings?.providers || [];
   setProviders(nextProviders);

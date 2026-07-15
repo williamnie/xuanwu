@@ -12,24 +12,24 @@ const templatesSource = readFileSync(new URL('./IssueTemplatesPanel.jsx', import
 test('sessions page initial store refresh does not fetch global issue list or capabilities', () => {
   assert.match(sessionsSource, /refreshData\(\['projects'\]\)/);
   assert.doesNotMatch(sessionsSource, /refreshData\(\['projects', 'issues'\]\)/);
-  assert.doesNotMatch(sessionsSource, /api\.getCapabilities\(\)/);
+  assert.doesNotMatch(sessionsSource, /systemApi\.getCapabilities\(\)/);
 });
 
 test('issue detail uses parallel detail reads and only loads profiles on first load', () => {
   assert.match(issueDetailSource, /Promise\.all\(/);
   assert.match(issueDetailSource, /loadIssueData\(\{ includeProfiles: true \}\)/);
-  assert.match(issueDetailSource, /includeProfiles\s*\?\s*readOptional\(\(\) => api\.getAgentProfiles\(\)/);
+  assert.match(issueDetailSource, /includeProfiles\s*\?\s*readOptional\(\(\) => projectsApi\.getAgentProfiles\(\)/);
 });
 
 test('issue detail excludes logs from initial reads and loads a bounded log page on demand', () => {
-  assert.match(issueDetailSource, /api\.getIssueEventSummaries\(issueId,\s*\{ excludeTypes: \['issue\.log'\] \}\)/);
+  assert.match(issueDetailSource, /workApi\.getIssueEventSummaries\(issueId,\s*\{ excludeTypes: \['issue\.log'\] \}\)/);
   assert.match(issueDetailSource, /types: \['issue\.log'\]/);
   assert.match(issueDetailSource, /limit: LOG_PAGE_SIZE/);
   assert.match(issueDetailSource, /activeTab !== 'logs'/);
 });
 
 test('dashboard hydrates bounded persisted activity from the event summary projection', () => {
-  assert.match(dashboardSource, /api\.getEventSummaries\(\{ limit: 20 \}\)/);
+  assert.match(dashboardSource, /eventsApi\.getEventSummaries\(\{ limit: 20 \}\)/);
   assert.match(dashboardSource, /subscribeToEvents/);
 });
 

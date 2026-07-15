@@ -19,6 +19,8 @@ test('PI memory panel exposes review, promotion, edit, disable, and delete contr
   assert.match(clientSource, /disable:\s*\(id\)/);
   assert.match(clientSource, /update:\s*\(id, updates\)/);
   assert.match(clientSource, /remove:\s*\(id\)/);
+  assert.match(clientSource, /import \{ request \} from '\.\/base\.js'/);
+  assert.doesNotMatch(clientSource, /async function request/);
   assert.match(panelSource, /piMemoryApi\.create\(state\.newDraft\)/);
   assert.match(panelSource, /piMemoryApi\.pin\(item\.id\)/);
   assert.match(panelSource, /piMemoryApi\.forget\(item\.id\)/);

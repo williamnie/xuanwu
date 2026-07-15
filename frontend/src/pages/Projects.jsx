@@ -1,6 +1,7 @@
+import { systemApi } from '../api/system.js';
+import { projectsApi } from '../api/projects.js';
 import { useImmer } from 'use-immer';
 import './Projects.css';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import {
   selectBackendOnline,
@@ -179,7 +180,7 @@ export default function Projects() {
       draft.profileError = '';
     });
     try {
-      const list = await api.getAgentProfiles();
+      const list = await projectsApi.getAgentProfiles();
       updateUi(draft => {
         draft.profiles = list || [];
       });
@@ -200,7 +201,7 @@ export default function Projects() {
       draft.codexModelsError = '';
     });
     try {
-      const result = await api.getCodexModels();
+      const result = await systemApi.getCodexModels();
       updateUi(draft => {
         draft.codexModels = Array.isArray(result?.data) ? result.data : [];
       });
@@ -222,7 +223,7 @@ export default function Projects() {
       draft.syncResult = null;
     });
     try {
-      const result = await api.syncCodexProjects();
+      const result = await projectsApi.syncCodexProjects();
       updateUi(draft => {
         draft.syncResult = result;
       });
@@ -304,9 +305,9 @@ export default function Projects() {
     try {
       if (modalMode === 'create') {
         const generatedId = projectIdFromPath(formCwd);
-        await api.createProject({ id: generatedId, ...payload });
+        await projectsApi.createProject({ id: generatedId, ...payload });
       } else {
-        await api.updateProject(selectedProjectId, payload);
+        await projectsApi.updateProject(selectedProjectId, payload);
       }
       updateUi(draft => {
         draft.isModalOpen = false;
@@ -331,8 +332,8 @@ export default function Projects() {
     try {
       const exists = profiles.some(profile => profile.id === payload.id);
       const saved = exists
-        ? await api.updateAgentProfile(payload.id, payload)
-        : await api.createAgentProfile(payload);
+        ? await projectsApi.updateAgentProfile(payload.id, payload)
+        : await projectsApi.createAgentProfile(payload);
       updateUi(draft => {
         draft.profileForm = emptyAgentProfileForm();
         draft.formAgentProfileId = saved.id;
@@ -362,7 +363,7 @@ export default function Projects() {
   const handleDelete = async (id) => {
     if (window.confirm('确定要删除该项目吗？关联的 Issue 也会被删除！')) {
       try {
-        await api.deleteProject(id);
+        await projectsApi.deleteProject(id);
         refreshData(['projects', 'issues']);
       } catch (err) {
         message.error(err.message || '删除失败');
@@ -373,7 +374,7 @@ export default function Projects() {
   const handleToggleAutoRun = async (proj) => {
     const nextAutoRun = proj.auto_run === 1 ? 0 : 1;
     try {
-      await api.updateProject(proj.id, { auto_run: nextAutoRun });
+      await projectsApi.updateProject(proj.id, { auto_run: nextAutoRun });
       refreshData(['projects', 'issues']);
     } catch {
       message.error('更新自动执行配置失败');
@@ -382,7 +383,7 @@ export default function Projects() {
 
   const handleStartLoop = async (id) => {
     try {
-      await api.startProjectLoop(id);
+      await projectsApi.startProjectLoop(id);
       refreshData(['projects', 'issues']);
     } catch (err) {
       message.error('启动 Loop 失败: ' + err.message);
@@ -391,7 +392,7 @@ export default function Projects() {
 
   const handleStopLoop = async (id) => {
     try {
-      await api.stopProjectLoop(id);
+      await projectsApi.stopProjectLoop(id);
       refreshData(['projects', 'issues']);
     } catch (err) {
       message.error('停止 Loop 失败: ' + err.message);
@@ -403,7 +404,7 @@ export default function Projects() {
       draft.resumingHoldProjectId = id;
     });
     try {
-      await api.resumeProjectHold(id);
+      await projectsApi.resumeProjectHold(id);
       message.success('项目 hold 已恢复');
     } catch (err) {
       message.error('恢复失败，hold 已保留: ' + err.message);

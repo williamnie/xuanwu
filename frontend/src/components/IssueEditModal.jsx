@@ -1,7 +1,7 @@
+import { workApi } from '../api/work.js';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Save, X } from 'lucide-react';
-import { api } from '../api/client';
 import PromptEditor from './editor/PromptEditor';
 import { selectProjects, useDataStore } from '../store/dataStore';
 import {
@@ -43,7 +43,7 @@ export default function IssueEditModal({ issue, onClose, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      const updatedIssue = await api.updateIssue(issue.id, issueDraftToPatch(draft));
+      const updatedIssue = await workApi.updateIssue(issue.id, issueDraftToPatch(draft));
       onSaved(updatedIssue);
     } catch (err) {
       setError(err.message || '保存 Issue 失败');

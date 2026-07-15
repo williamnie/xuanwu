@@ -94,11 +94,11 @@ test('PI Assistant composer exposes an active stop control while sending', () =>
   assert.match(pageSource, /onStop=\{state\.handleStop\}/);
   assert.match(pageSource, /function piChatInterruptState/);
   assert.match(stateSource, /function useStopPiMessage\(state\)/);
-  assert.match(stateSource, /api\.interruptPiConversation\(conversationId\)/);
+  assert.match(stateSource, /assistantApi\.interruptPiConversation\(conversationId\)/);
 });
 
 test('PI Assistant chat lists all conversations instead of only active rows', () => {
-  assert.match(stateSource, /api\.getPiConversations\(\)/);
+  assert.match(stateSource, /assistantApi\.getPiConversations\(\)/);
   assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);
 });
 

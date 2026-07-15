@@ -1,6 +1,9 @@
+import { projectsApi } from '../api/projects.js';
+import { workApi } from '../api/work.js';
+import { runsApi } from '../api/runs.js';
+import { eventsApi } from '../api/events.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useImmer } from 'use-immer';
-import { api } from '../api/client';
 import IssueEditModal from '../components/IssueEditModal';
 import { message } from '../store/toastStore';
 import {
@@ -285,7 +288,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
   const loadIssueData = useCallback(async (options = {}) => {
     const { includeProfiles = false } = options;
     try {
-      const issueData = await api.getIssue(issueId);
+      const issueData = await workApi.getIssue(issueId);
       let projData = null;
       let eventList = [];
       let runList = [];
@@ -300,17 +303,17 @@ export default function IssueDetail({ issueId, navigateTo }) {
           nextProfiles,
           nextSupervisor,
         ] = await Promise.all([
-          readOptional(() => api.getProject(issueData.project_id), '获取关联项目失败:'),
+          readOptional(() => projectsApi.getProject(issueData.project_id), '获取关联项目失败:'),
           readOptional(
-            () => api.getIssueEventSummaries(issueId, { excludeTypes: ['issue.log'] }),
+            () => workApi.getIssueEventSummaries(issueId, { excludeTypes: ['issue.log'] }),
             '获取活动事件失败:',
             [],
           ),
-          readOptional(() => api.getIssueRuns(issueId), '获取运行历史失败:', []),
+          readOptional(() => runsApi.getIssueRuns(issueId), '获取运行历史失败:', []),
           includeProfiles
-            ? readOptional(() => api.getAgentProfiles(), '获取 Agent Profiles 失败:', [])
+            ? readOptional(() => projectsApi.getAgentProfiles(), '获取 Agent Profiles 失败:', [])
             : Promise.resolve(undefined),
-          readOptional(() => api.getIssueSupervisor(issueId), '获取 supervisor 状态失败:', null),
+          readOptional(() => workApi.getIssueSupervisor(issueId), '获取 supervisor 状态失败:', null),
         ]);
         projData = nextProject;
         eventList = nextEvents || [];
@@ -359,7 +362,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
     loadIssueData({ includeProfiles: true });
 
     // 订阅 SSE 实时事件以追加最新日志
-    const unsubscribe = api.subscribeToEvents((data) => {
+    const unsubscribe = eventsApi.subscribeToEvents((data) => {
       // 如果收到的事件是关于当前这一条 issue 的，动态更新
       if (Number(data.issueId) === Number(issueId)) {
         updateDetailState(draft => {
@@ -414,7 +417,7 @@ ${error}` : error;
       draft.logsError = '';
     });
     try {
-      const nextLogs = await api.getIssueEvents(issueId, {
+      const nextLogs = await workApi.getIssueEvents(issueId, {
         beforeId,
         limit: LOG_PAGE_SIZE,
         types: ['issue.log'],
@@ -491,7 +494,7 @@ ${error}` : error;
 
   const handleMoveToTodo = async () => {
     try {
-      await api.updateIssue(issueId, { status: 'todo', ...serviceTierPayload(issue.service_tier) });
+      await workApi.updateIssue(issueId, { status: 'todo', ...serviceTierPayload(issue.service_tier) });
       message.success('Issue 已移动到 Todo');
       loadIssueData();
     } catch (err) {
@@ -501,7 +504,7 @@ ${error}` : error;
 
   const handleRetry = async () => {
     try {
-      await api.retryIssue(issueId, serviceTierPayload(issue.service_tier));
+      await workApi.retryIssue(issueId, serviceTierPayload(issue.service_tier));
       updateDetailState(draft => {
         draft.logEvents = [];
         draft.logsLoaded = false;
@@ -516,7 +519,7 @@ ${error}` : error;
 
   const handleServiceTierChange = async (serviceTier) => {
     try {
-      const updated = await api.updateIssue(issueId, serviceTierPayload(serviceTier));
+      const updated = await workApi.updateIssue(issueId, serviceTierPayload(serviceTier));
       updateDetailState(draft => {
         draft.issue = updated;
       });
@@ -528,7 +531,7 @@ ${error}` : error;
 
   const handleCancel = async () => {
     try {
-      await api.cancelIssue(issueId);
+      await workApi.cancelIssue(issueId);
       loadIssueData();
     } catch (err) {
       message.error('取消任务失败: ' + err.message);
@@ -543,7 +546,7 @@ ${error}` : error;
     }
     setDeletingIssue(true);
     try {
-      await api.deleteIssue(issueId);
+      await workApi.deleteIssue(issueId);
       message.success(`Issue #${issueId} 已删除`);
       refreshData(['issues']);
       navigateTo('issues');
@@ -556,7 +559,7 @@ ${error}` : error;
 
   const handleMarkStatus = async (targetStatus) => {
     try {
-      await api.updateIssue(issueId, { status: targetStatus });
+      await workApi.updateIssue(issueId, { status: targetStatus });
       loadIssueData();
     } catch (err) {
       message.error('更改状态失败: ' + err.message);
@@ -566,7 +569,7 @@ ${error}` : error;
   const handleVerificationReview = async (action, comment = '') => {
     setVerificationReviewSubmitting(true);
     try {
-      await api.reviewIssueVerification(issueId, { action, comment: comment.trim() });
+      await workApi.reviewIssueVerification(issueId, { action, comment: comment.trim() });
       message.success('验证处理已提交');
       setVerificationReviewAction('');
       setVerificationReviewDraft('');
@@ -589,7 +592,7 @@ ${error}` : error;
     setCommentSubmitting(true);
     setCommentError('');
     try {
-      const created = await api.createIssueComment(issueId, { body, author: 'user' });
+      const created = await workApi.createIssueComment(issueId, { body, author: 'user' });
       updateDetailState(draft => {
         if (!hasIssueEvent(draft.events, created)) {
           draft.events.push(created);
@@ -609,7 +612,7 @@ ${error}` : error;
     setVerifierGenerating(true);
     setVerifierError('');
     try {
-      const result = await api.generateIssueVerifierReport(issueId);
+      const result = await workApi.generateIssueVerifierReport(issueId);
       updateDetailState(draft => {
         if (result?.event && !hasIssueEvent(draft.events, result.event)) {
           draft.events.push(result.event);

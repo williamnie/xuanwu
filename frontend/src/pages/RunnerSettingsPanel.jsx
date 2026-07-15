@@ -1,6 +1,6 @@
+import { systemApi } from '../api/system.js';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Gauge, Monitor, RefreshCw, Rocket, Save, Terminal } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
 const DEFAULT_SETTINGS = {
@@ -38,7 +38,7 @@ function useRunnerSettings() {
 
   const loadSettings = () => {
     setLoading(true);
-    api.getRunnerSettings()
+    systemApi.getRunnerSettings()
       .then((data) => {
         const normalized = normalizeSettings(data);
         setSettings(normalized);
@@ -57,7 +57,7 @@ function useRunnerSettings() {
     event.preventDefault();
     setSaving(true);
     try {
-      const updated = await api.updateRunnerSettings(settingsPayload(draft));
+      const updated = await systemApi.updateRunnerSettings(settingsPayload(draft));
       const normalized = normalizeSettings(updated);
       setSettings(normalized);
       setDraft(draftFromSettings(normalized));

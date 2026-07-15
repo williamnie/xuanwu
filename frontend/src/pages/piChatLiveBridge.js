@@ -1,5 +1,5 @@
+import { eventsApi } from '../api/events.js';
 import { useEffect, useRef } from 'react';
-import { api } from '../api/client';
 import {
   appendPiAssistantDelta,
   endsPiAssistantMessage,
@@ -20,7 +20,7 @@ export function usePiConversationEvents(state, selectedConversationId) {
   useEffect(() => {
     liveRefs.current.conversationId = selectedConversationId || '';
   }, [selectedConversationId]);
-  useEffect(() => api.subscribeToEvents((event) => {
+  useEffect(() => eventsApi.subscribeToEvents((event) => {
     const live = liveRefs.current;
     if (!isSelectedPiConversationEvent(event, live.conversationId)) return;
     applyPiConversationEvent(stateRef.current, event, live);

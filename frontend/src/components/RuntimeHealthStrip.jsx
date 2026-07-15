@@ -1,6 +1,6 @@
+import { systemApi } from '../api/system.js';
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
-import { api } from '../api/client';
 import { buildRuntimeHealth, shouldShowRuntimeHealth } from './runtimeHealth';
 import './RuntimeHealthStrip.css';
 
@@ -10,7 +10,7 @@ export default function RuntimeHealthStrip({ backendOnline, navigateTo }) {
 
   useEffect(() => {
     let alive = true;
-    api.getSystemStatus()
+    systemApi.getSystemStatus()
       .then(data => {
         if (!alive) return;
         setStatus(data);

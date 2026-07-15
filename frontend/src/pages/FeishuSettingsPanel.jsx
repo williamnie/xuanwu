@@ -1,6 +1,6 @@
+import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, KeyRound } from 'lucide-react';
-import { api } from '../api/client';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
 
@@ -169,7 +169,7 @@ function Footer({ remote, saving }) {
 async function loadFeishuSettings(setRemote, setForm, setError, setLoading) {
   setLoading(true);
   try {
-    const data = await api.getFeishuSettings();
+    const data = await connectorsApi.getFeishuSettings();
     setRemote(data);
     setForm(formFromRemote(data));
     setError('');
@@ -185,7 +185,7 @@ async function saveFeishuSettings(event, state) {
   state.setSaving(true);
   state.setError('');
   try {
-    const data = await api.updateFeishuSettings(payloadFromForm(state.form));
+    const data = await connectorsApi.updateFeishuSettings(payloadFromForm(state.form));
     state.setRemote(data);
     state.setForm(formFromRemote(data));
     message.success('飞书 Bot 配置已保存');

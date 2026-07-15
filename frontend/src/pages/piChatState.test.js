@@ -10,7 +10,7 @@ test('PI Assistant chat loader keeps a stable callback and loads projects for @ 
   assert.doesNotMatch(source, /useCallback\([\s\S]*\], \[[^\]]*state[^\]]*\]\)/);
   assert.doesNotMatch(source, /selectedProjectId/);
   assert.doesNotMatch(source, /setSelectedProjectId/);
-  assert.match(source, /api\.getProjects\(\)/);
+  assert.match(source, /projectsApi\.getProjects\(\)/);
   assert.match(source, /setProjects\(projectList \|\| \[\]\)/);
 });
 
@@ -30,7 +30,7 @@ test('Supervisor chat uses a failure fallback instead of empty-text wording', ()
 });
 
 test('PI Assistant chat switches conversations by loading persisted transcript detail', () => {
-  assert.match(source, /api\.getPiConversation\(id\)/);
+  assert.match(source, /assistantApi\.getPiConversation\(id\)/);
   assert.match(source, /setTranscript\(conversationTranscript\(detail\)\)/);
   assert.match(source, /function conversationTranscript\(detail\)/);
 });
@@ -48,7 +48,7 @@ test('PI Assistant chat uses the default PI agent without exposing an agent sele
   assert.doesNotMatch(panelSource, /<select className="form-control" value=\{selected\}/);
   assert.doesNotMatch(panelSource, /Runner Agent/);
   assert.doesNotMatch(source, /pi_agent_id:\s*state\.selectedAgentId/);
-  assert.match(source, /api\.createPiConversation\(\{\s*project_id:/);
+  assert.match(source, /assistantApi\.createPiConversation\(\{\s*project_id:/);
   assert.doesNotMatch(source, /ensureConversationInput/);
 });
 

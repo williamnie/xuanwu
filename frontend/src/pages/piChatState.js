@@ -1,5 +1,6 @@
+import { projectsApi } from '../api/projects.js';
+import { assistantApi } from '../api/assistant.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import { clearPiLiveAssistant, setPiLiveConversation, usePiConversationEvents } from './piChatLiveBridge';
 import { DEFAULT_PI_AGENT_ID } from './piAgentSettingsState';
@@ -69,7 +70,7 @@ function usePiChatFields() {
     if (!id) return;
     setLoading(true);
     try {
-      const detail = await api.getPiConversation(id);
+      const detail = await assistantApi.getPiConversation(id);
       setTranscript(conversationTranscript(detail));
       setError('');
     } catch (err) {
@@ -120,7 +121,7 @@ function usePiChatLoader(setters) {
   } = setters;
   return useCallback(() => {
     setLoading(true);
-    return Promise.all([api.getPiAgents(), api.getPiConversations(), api.getProjects()])
+    return Promise.all([assistantApi.getPiAgents(), assistantApi.getPiConversations(), projectsApi.getProjects()])
       .then(([agentList, conversationList, projectList]) => {
         setAgents(agentList || []);
         setConversations(conversationList || []);
@@ -144,7 +145,7 @@ function useCreatePiConversation(state) {
   return useCallback(async (title, options = {}) => {
     state.setSending(true);
     try {
-      const conversation = await api.createPiConversation({
+      const conversation = await assistantApi.createPiConversation({
         project_id: currentProjectId(state, options.project),
         title
       });
@@ -205,7 +206,7 @@ async function sendPromptToPi(state, conversationId, text, loadPiState, targetPr
   state.setRunningConversationId(conversationId);
   state.setSending(true);
   try {
-    const result = await api.sendPiConversationMessage(conversationId, { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) });
+    const result = await assistantApi.sendPiConversationMessage(conversationId, { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) });
     applyConversationTitle(state, conversationId, result?.title);
     await loadPiState();
     await hydrateConversationTranscript(state, conversationId, result);
@@ -223,7 +224,7 @@ async function sendPromptToPi(state, conversationId, text, loadPiState, targetPr
 async function interruptActivePiConversation(conversationId) {
   let result = null;
   for (let attempt = 0; attempt <= STOP_RETRY_COUNT; attempt += 1) {
-    result = await api.interruptPiConversation(conversationId);
+    result = await assistantApi.interruptPiConversation(conversationId);
     if (result?.interrupted || attempt === STOP_RETRY_COUNT) return result;
     await delay(STOP_RETRY_DELAY_MS);
   }
@@ -236,7 +237,7 @@ function delay(ms) {
 
 async function hydrateConversationTranscript(state, conversationId, fallbackResult = null) {
   try {
-    const detail = await api.getPiConversation(conversationId);
+    const detail = await assistantApi.getPiConversation(conversationId);
     state.setTranscript(conversationTranscript(detail));
     state.setError('');
   } catch {

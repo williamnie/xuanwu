@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
 const stateSource = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
-const clientSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
+const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 
 test('PI Agent Settings exposes runtime prompt summary debug without secret echo', () => {
   assert.match(panelSource, /当前生效 Prompt 摘要/);
@@ -12,8 +12,8 @@ test('PI Agent Settings exposes runtime prompt summary debug without secret echo
   assert.match(panelSource, /Custom instructions:/);
   assert.match(panelSource, /state\.loadPromptSummary/);
   assert.match(stateSource, /loadPiPromptSummary/);
-  assert.match(clientSource, /getPiAgentRuntimePrompt:/);
-  assert.match(clientSource, /\/api\/pi\/agents\/\$\{encodeURIComponent\(id\)\}\/runtime-prompt/);
+  assert.match(assistantSource, /getPiAgentRuntimePrompt:/);
+  assert.match(assistantSource, /\/api\/pi\/agents\/\$\{encodeURIComponent\(id\)\}\/runtime-prompt/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
@@ -29,9 +29,9 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
   assert.match(stateSource, /getPiCodexOAuthStatus/);
   assert.match(stateSource, /startPiCodexOAuthLogin/);
   assert.match(stateSource, /logoutPiCodexOAuth/);
-  assert.match(clientSource, /getPiCodexOAuthStatus:/);
-  assert.match(clientSource, /\/api\/pi\/oauth\/openai-codex\/status/);
-  assert.match(clientSource, /\/api\/pi\/oauth\/openai-codex\/login/);
+  assert.match(assistantSource, /getPiCodexOAuthStatus:/);
+  assert.match(assistantSource, /\/api\/pi\/oauth\/openai-codex\/status/);
+  assert.match(assistantSource, /\/api\/pi\/oauth\/openai-codex\/login/);
 });
 
 test('Supervisor settings no longer expose multi-agent creation controls', () => {
@@ -41,9 +41,9 @@ test('Supervisor settings no longer expose multi-agent creation controls', () =>
   assert.match(panelSource, /不会创建多个独立 agent/);
   assert.doesNotMatch(panelSource, /label="Agent ID"/);
   assert.doesNotMatch(panelSource, /Runner Agent Settings/);
-  assert.doesNotMatch(stateSource, /api\.createPiAgent/);
-  assert.doesNotMatch(clientSource, /createPiAgent:/);
-  assert.match(stateSource, /api\.updatePiAgent\(DEFAULT_PI_AGENT_ID/);
+  assert.doesNotMatch(stateSource, /assistantApi\.createPiAgent/);
+  assert.doesNotMatch(assistantSource, /createPiAgent:/);
+  assert.match(stateSource, /assistantApi\.updatePiAgent\(DEFAULT_PI_AGENT_ID/);
 });
 
 test('Supervisor settings normalizes legacy default runtime instructions and names', () => {

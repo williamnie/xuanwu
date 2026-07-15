@@ -1,6 +1,6 @@
+import { automationApi } from '../api/automation.js';
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Pause, Play, Trash2, X } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 import { buildCronRunSummary } from '../utils/cronTaskSummary';
 import {
@@ -95,7 +95,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
     setSubmitting(true);
     setError('');
     try {
-      await api.createCronTask(buildPayload(form, projects));
+      await automationApi.createCronTask(buildPayload(form, projects));
       await refreshData(['cronTasks']);
       setForm(prev => ({ ...prev, runAt: defaultRunAt() }));
       if (compact) setOpen(false);
@@ -109,7 +109,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
   const handleToggleStatus = async (task) => {
     const status = task.status === 'active' ? 'paused' : 'active';
     try {
-      await api.updateCronTask(task.id, { status });
+      await automationApi.updateCronTask(task.id, { status });
       refreshData(['cronTasks']);
     } catch (err) {
       message.error(err.message || '更新 cron 任务失败');
@@ -119,7 +119,7 @@ export default function CronTasksPanel({ compact = false, defaultProjectId = '' 
   const handleDelete = async (task) => {
     if (!window.confirm(`删除定时任务「${task.name}」？`)) return;
     try {
-      await api.deleteCronTask(task.id);
+      await automationApi.deleteCronTask(task.id);
       refreshData(['cronTasks']);
     } catch (err) {
       message.error(err.message || '删除 cron 任务失败');

@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const pageSource = readFileSync(new URL('./AttentionInbox.jsx', import.meta.url), 'utf8');
-const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
+const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 const styleSource = readFileSync(new URL('./AttentionInbox.css', import.meta.url), 'utf8');
 
 test('Attention Inbox shows approval UI for action proposals with editable reply drafts', () => {
-  assert.match(apiSource, /getPiActionProposals/);
-  assert.match(apiSource, /approvePiActionProposal/);
-  assert.match(apiSource, /rejectPiActionProposal/);
+  assert.match(assistantSource, /getPiActionProposals/);
+  assert.match(assistantSource, /approvePiActionProposal/);
+  assert.match(assistantSource, /rejectPiActionProposal/);
   assert.match(pageSource, /function ProposalPanel/);
   assert.match(pageSource, /Action proposal/);
   assert.match(pageSource, /Reply draft/);

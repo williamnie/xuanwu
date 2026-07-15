@@ -1,6 +1,4 @@
-import { authHeader } from './authToken';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+import { request } from './base.js';
 
 export const piMemoryApi = {
   batch: ({ action, ids }) => request('/api/pi/memory/batch', {
@@ -36,21 +34,6 @@ export const piMemoryApi = {
   }),
 };
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeader(),
-      ...options.headers,
-    },
-  });
-  if (!response.ok) throw await responseError(response);
-  if (response.status === 204) return null;
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
-}
-
 function query(filter) {
   const params = new URLSearchParams();
   addParam(params, 'scope', filter.scope);
@@ -67,21 +50,4 @@ function query(filter) {
 function addParam(params, key, value) {
   if (value === undefined || value === null || value === '') return;
   params.append(key, String(value));
-}
-
-async function responseError(response) {
-  const error = new Error(await readErrorMessage(response));
-  error.status = response.status;
-  return error;
-}
-
-async function readErrorMessage(response) {
-  const text = await response.text();
-  if (!text) return `请求失败: ${response.status}`;
-  try {
-    const data = JSON.parse(text);
-    return data.message || `请求失败: ${response.status}`;
-  } catch {
-    return text;
-  }
 }

@@ -11,7 +11,9 @@ const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', imp
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const sourcePoliciesSource = readFileSync(new URL('./SourcePoliciesPanel.jsx', import.meta.url), 'utf8');
 const automationsRuntimeSource = readFileSync(new URL('./AutomationsRuntimePanel.jsx', import.meta.url), 'utf8');
-const apiSource = readFileSync(new URL('../api/client.js', import.meta.url), 'utf8');
+const assistantApiSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
+const automationApiSource = readFileSync(new URL('../api/automation.js', import.meta.url), 'utf8');
+const connectorsApiSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 
@@ -82,8 +84,8 @@ test('Settings restart action is a red in-page danger control', () => {
 
 test('Connectors tab shows read-only connector diagnostics from API', () => {
   assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
-  assert.match(apiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
-  assert.match(connectorDiagnosticsSource, /api\.getPiConnectors\(\)/);
+  assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
+  assert.match(connectorDiagnosticsSource, /connectorsApi\.getPiConnectors\(\)/);
   assert.match(connectorDiagnosticsSource, /Connector Diagnostics/);
   assert.match(connectorDiagnosticsSource, /Connector API coming soon/);
   assert.doesNotMatch(connectorDiagnosticsSource, /window\.confirm|window\.alert/);
@@ -91,9 +93,9 @@ test('Connectors tab shows read-only connector diagnostics from API', () => {
 
 test('Skills tab shows intake and domain runtime history from API', () => {
   assert.match(sectionsSource, /SkillsRuntimePanel/);
-  assert.match(apiSource, /getPiSkills/);
-  assert.match(apiSource, /getPiSkillIntakeRuns/);
-  assert.match(apiSource, /runPiSkillDomain/);
+  assert.match(assistantApiSource, /getPiSkills/);
+  assert.match(assistantApiSource, /getPiSkillIntakeRuns/);
+  assert.match(assistantApiSource, /runPiSkillDomain/);
   assert.match(skillsRuntimeSource, /入箱识别/);
   assert.match(skillsRuntimeSource, /处理事项/);
   assert.match(skillsRuntimeSource, /Run history/);
@@ -104,7 +106,7 @@ test('Skills tab shows intake and domain runtime history from API', () => {
 
 test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(sectionsSource, /ActivityTimelinePanel/);
-  assert.match(apiSource, /getPiActivityTimeline/);
+  assert.match(assistantApiSource, /getPiActivityTimeline/);
   assert.match(activityTimelineSource, /Raw → Intake → Action trace/);
   assert.match(activityTimelineSource, /source/);
   assert.match(activityTimelineSource, /proposalId/);
@@ -114,8 +116,8 @@ test('Activity tab shows traceable redacted timeline from API', () => {
 
 test('Policies tab manages source policies from API', () => {
   assert.match(sectionsSource, /SourcePoliciesPanel/);
-  assert.match(apiSource, /getPiSourcePolicies/);
-  assert.match(apiSource, /updatePiAutomationSourcePolicy/);
+  assert.match(automationApiSource, /getPiSourcePolicies/);
+  assert.match(automationApiSource, /updatePiAutomationSourcePolicy/);
   assert.match(sourcePoliciesSource, /Source Policy/);
   assert.match(sourcePoliciesSource, /auto_create_triage_issue/);
   assert.match(sourcePoliciesSource, /auto_enqueue/);
@@ -126,8 +128,8 @@ test('Policies tab manages source policies from API', () => {
 
 test('Automations tab shows scheduler status and pause controls from API', () => {
   assert.match(sectionsSource, /AutomationsRuntimePanel/);
-  assert.match(apiSource, /getPiAutomations/);
-  assert.match(apiSource, /updatePiAutomation/);
+  assert.match(automationApiSource, /getPiAutomations/);
+  assert.match(automationApiSource, /updatePiAutomation/);
   assert.match(automationsRuntimeSource, /last_status/);
   assert.match(automationsRuntimeSource, /next_run_at/);
   assert.match(automationsRuntimeSource, /error/);

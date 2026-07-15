@@ -1,6 +1,6 @@
+import { systemApi } from '../api/system.js';
 import { useEffect, useState } from 'react';
 import { KeyRound, RefreshCw } from 'lucide-react';
-import { api } from '../api/client';
 import { PanelLoader } from '../components/TurtleLoader';
 
 export default function ProviderAvailabilityPanel() {
@@ -22,7 +22,7 @@ export default function ProviderAvailabilityPanel() {
 
 function loadStatus(setStatus, setError, setLoading) {
   setLoading(true);
-  api.getSystemStatus()
+  systemApi.getSystemStatus()
     .then(data => { setStatus(data); setError(''); })
     .catch(err => setError(err.message || '读取 provider 状态失败'))
     .finally(() => setLoading(false));

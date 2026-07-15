@@ -24,8 +24,8 @@ test('new issue creation keeps service tier at the standard default', () => {
 
 test('issue cards persist service tier overrides and retry with the selected tier', () => {
   assert.match(issuesSource, /handleIssueServiceTierChange/);
-  assert.match(issuesSource, /api\.updateIssue\(issueId,\s*serviceTierPayload\(serviceTier\)\)/);
-  assert.match(issuesSource, /api\.retryIssue\(issueId,\s*serviceTierPayload\(issue\?\.service_tier\)\)/);
+  assert.match(issuesSource, /workApi\.updateIssue\(issueId,\s*serviceTierPayload\(serviceTier\)\)/);
+  assert.match(issuesSource, /workApi\.retryIssue\(issueId,\s*serviceTierPayload\(issue\?\.service_tier\)\)/);
   assert.match(issueCardSource, /onServiceTierChange/);
   assert.match(issueCardSource, /issueSpeedToggleCopy\(issue\.service_tier\)/);
   assert.match(issuesSource, /pendingServiceTiers/);
@@ -34,7 +34,7 @@ test('issue cards persist service tier overrides and retry with the selected tie
 
 test('issue detail can change next-run speed and displays run snapshots', () => {
   assert.match(issueDetailSource, /handleServiceTierChange/);
-  assert.match(issueDetailSource, /api\.retryIssue\(issueId,\s*serviceTierPayload\(issue\.service_tier\)\)/);
+  assert.match(issueDetailSource, /workApi\.retryIssue\(issueId,\s*serviceTierPayload\(issue\.service_tier\)\)/);
   assert.match(issueDetailSource, /RunField label="Speed"/);
   assert.match(issueDetailSource, /serviceTierRunLabel\(run\)/);
 });

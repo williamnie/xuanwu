@@ -1,6 +1,6 @@
+import { systemApi } from '../api/system.js';
 import { useState } from 'react';
 import { AlertTriangle, Boxes, RefreshCw } from 'lucide-react';
-import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
 const SETTINGS_TABS = [
@@ -98,7 +98,7 @@ function RestartConfirm({ onCancel, onRestart, restarting }) {
 async function restartSystem(setRestarting, setConfirming) {
   setRestarting(true);
   try {
-    await api.restartSystem();
+    await systemApi.restartSystem();
     setConfirming(false);
     message.success('重启请求已发送，服务会短暂断开。');
   } catch (err) {

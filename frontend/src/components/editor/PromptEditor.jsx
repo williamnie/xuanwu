@@ -1,7 +1,7 @@
+import { systemApi } from '../../api/system.js';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent } from '@tiptap/react';
 import { ImagePlus, Plus } from 'lucide-react';
-import { api } from '../../api/client';
 import { filterPromptSuggestionItems } from './promptEditorSuggestions';
 import { message } from '../../store/toastStore';
 import './PromptEditor.css';
@@ -124,7 +124,7 @@ export default function PromptEditor({
     try {
       const nextAttachments = [];
       for (const image of images) {
-        const upload = await api.uploadImage(image);
+        const upload = await systemApi.uploadImage(image);
         if (isComposer) {
           nextAttachments.push(createComposerImageAttachment(upload, image));
         } else {
