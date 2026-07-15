@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "coreDomainContracts.ts",
+    "coreDomainContracts.type-test.ts"
+  ]
+}
