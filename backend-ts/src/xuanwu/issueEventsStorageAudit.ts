@@ -2,8 +2,9 @@ import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { statSync } from "node:fs";
+import { classifyIssueLogRetentionTier, type EventRetentionTier } from "../events/retentionPolicy.ts";
 
-export type RetentionValue = "R1_OPERATIONAL" | "R2_DURABLE" | "R3_AUDIT" | "REVIEW_REQUIRED";
+export type RetentionValue = EventRetentionTier;
 
 export type DistributionRow = {
   key: string;
@@ -95,10 +96,6 @@ type DuplicateScanRow = {
   type: string;
 };
 type DuplicateAggregate = Omit<DuplicateScanRow, "payload"> & { count: number };
-
-const OPERATIONAL_METHOD = /(?:delta|updated|tokenusage|moderationmetadata|startupstatus|terminalinteraction|thread\/goal\/cleared)/i;
-const DURABLE_METHOD = /^(?:item\/started|item\/completed)$/i;
-const AUDIT_METHOD = /(?:turn\/(?:started|completed)|thread\/status\/changed|error|approval)/i;
 
 export function auditIssueEventsStorage(path: string, options: AuditOptions = {}): IssueEventsStorageAudit {
   const issueLimit = boundedLimit(options.issueLimit, 25);
@@ -208,10 +205,7 @@ export function compareIssueEventsStorage(
 
 export function classifyRetentionValue(eventType: string, rawMethod: string): RetentionValue {
   if (eventType !== "issue.log") return "R3_AUDIT";
-  if (AUDIT_METHOD.test(rawMethod)) return "R3_AUDIT";
-  if (DURABLE_METHOD.test(rawMethod)) return "R2_DURABLE";
-  if (OPERATIONAL_METHOD.test(rawMethod)) return "R1_OPERATIONAL";
-  return "REVIEW_REQUIRED";
+  return classifyIssueLogRetentionTier(rawMethod);
 }
 
 function assertAuditSchema(sqlite: Database): void {
