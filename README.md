@@ -219,6 +219,133 @@ git push origin v0.1.0
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
 当前 CLI 子命令不实现 `--help`，`--json` 输出是完整 JSON 文档且可能跨多行。
 
+## 事件归档与数据库维护 runbook
+
+维护命令直接操作指定 SQLite 文件，不经过 HTTP。`issue_events` 仍是唯一 source of truth；归档目录只是 append-only shadow archive，不参与 Issue / Session / Guardian / PI 的 live read。首次演练必须使用 SQLite online backup 副本，不能直接拿正式库试验。
+
+```bash
+LIVE_DB="$HOME/Library/Application Support/codex-issue-runner-bun-live/state/runner.db"
+COPY_DB="/tmp/runner-maintenance-$(date +%Y%m%dT%H%M%S).db"
+LIVE_DB="$LIVE_DB" COPY_DB="$COPY_DB" python3 - <<'PY'
+import os, sqlite3
+source = sqlite3.connect(f"file:{os.environ['LIVE_DB']}?mode=ro", uri=True)
+target = sqlite3.connect(os.environ["COPY_DB"])
+try:
+    source.backup(target, pages=4096, sleep=0.01)
+finally:
+    target.close()
+    source.close()
+PY
+```
+
+先只读预览候选、阻塞原因、行数、payload bytes 与空间统计：
+
+```bash
+cd backend-ts
+bun run src/main.ts maintenance events report \
+  --db "$COPY_DB" \
+  --report /tmp/event-maintenance-report.json \
+  --json
+```
+
+归档按 batch 生成 `0600` 的 gzip JSONL chunks、manifest、SHA-256、row count、provenance 和隔离恢复演练结果；不会删除 source row。每个 batch 后原子更新 manifest。可用 `--max-batches N` 主动中断演练，或在进程中断后用完全相同的 selection/audit 参数加 `--resume` 继续：
+
+```bash
+bun run src/main.ts maintenance events archive \
+  --db "$COPY_DB" \
+  --archive /tmp/runner-event-archive \
+  --report /tmp/event-archive-report.json \
+  --actor operator-id \
+  --reason "retention rehearsal on database copy" \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --batch-size 500 \
+  --json
+
+# 中断后恢复；now/before/actor/reason/audit-ref 必须与 manifest 一致
+bun run src/main.ts maintenance events archive \
+  --db "$COPY_DB" \
+  --archive /tmp/runner-event-archive \
+  --report /tmp/event-archive-resume-report.json \
+  --actor operator-id \
+  --reason "retention rehearsal on database copy" \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --batch-size 500 \
+  --resume \
+  --json
+```
+
+`delete` 默认为 dry-run，且必须读取 `xuanwu.event-maintenance-delete-evidence.v1` 证据文件。该文件要绑定 archive manifest SHA-256 和 source snapshot，并携带 P01.02 的 `delete_enabled` config、audited authorization、pin/legal hold snapshot，以及每个 `(issue_id, run_id, policy_id)` 的 deterministic summary watermark、reference check 和 destructive gate。缺失或变化一项都会 fail closed；`actor_kind=llm` 不合法。证据 contract 以 `backend-ts/src/events/maintenanceService.ts` 和 `backend-ts/src/events/retentionPolicy.ts` 为准。
+
+```bash
+# 先预览；不会创建 delete checkpoint，也不会写数据库
+bun run src/main.ts maintenance events delete \
+  --db "$COPY_DB" \
+  --archive /tmp/runner-event-archive \
+  --evidence /secure/path/delete-evidence.json \
+  --checkpoint /tmp/event-delete-checkpoint.json \
+  --report /tmp/event-delete-dry-run.json \
+  --json
+
+# 仅在副本完成过 backup/restore rehearsal、停止所有 writer 后执行
+bun run src/main.ts maintenance events delete \
+  --db "$COPY_DB" \
+  --archive /tmp/runner-event-archive \
+  --evidence /secure/path/delete-evidence.json \
+  --checkpoint /tmp/event-delete-checkpoint.json \
+  --report /tmp/event-delete-apply.json \
+  --batch-size 500 \
+  --apply \
+  --confirm-backup-tested \
+  --confirm-no-active-writers \
+  --json
+```
+
+批删 checkpoint 绑定 manifest/evidence hash，并在每批事务提交后原子落盘；暂停后使用相同命令加 `--resume`。Apply 会向现有 `pi_action_events` 写 started/paused/completed 审计。回滚使用 archive 原 ID、issue、type、payload、timestamp 恢复，已存在但 hash 不同的行会拒绝覆盖：
+
+```bash
+bun run src/main.ts maintenance events restore \
+  --db "$COPY_DB" \
+  --archive /tmp/runner-event-archive \
+  --checkpoint /tmp/event-restore-checkpoint.json \
+  --report /tmp/event-restore-report.json \
+  --actor operator-id \
+  --reason "rollback rehearsal" \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --apply \
+  --confirm-backup-tested \
+  --confirm-no-active-writers \
+  --json
+```
+
+删除 source row 后先 checkpoint，再做 VACUUM。所有 DB 命令默认也是 dry-run；full VACUUM 是首次物理回收路径。若要后续使用增量 vacuum，第一次 full VACUUM 加 `--enable-incremental`，之后才能使用 `--mode incremental --pages N`：
+
+```bash
+bun run src/main.ts maintenance db checkpoint \
+  --db "$COPY_DB" --mode truncate \
+  --report /tmp/db-checkpoint.json \
+  --actor operator-id --reason "maintenance checkpoint" \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --apply --confirm-backup-tested --confirm-no-active-writers --json
+
+bun run src/main.ts maintenance db vacuum \
+  --db "$COPY_DB" --mode full --enable-incremental \
+  --report /tmp/db-vacuum.json \
+  --actor operator-id --reason "reclaim archived event pages" \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --apply --confirm-backup-tested --confirm-no-active-writers --json
+
+bun run src/main.ts maintenance db vacuum \
+  --db "$COPY_DB" --mode incremental --pages 4096 \
+  --report /tmp/db-incremental-vacuum.json \
+  --actor operator-id --reason "incremental page reclaim" \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --apply --confirm-backup-tested --confirm-no-active-writers --json
+```
+
+副本验收至少核对 maintenance reports 的 before/after `issue_event_count`、`payload_bytes`、`file_bytes`、`quick_check`，抽查关键 state/audit/delivery event，并完整跑一次 restore。source-row 回滚走 archive restore；VACUUM 或整个维护批次的物理回滚走维护前 online backup。副本验证通过后，正式库仍须先停止 writer、创建新备份并使用与副本相同的 manifest/evidence gate；不要复用陈旧 snapshot。
+
+当前没有双写/双读：archive 只做 shadow copy。正式 source delete 仍需 [P01.02 最终删除门禁](docs/architecture/xuanwu/0007-event-retention-policy.md#9-最终删除门禁) 全部通过；后续 dual-read parity 若未在两个 release window 内达标，必须回到 `report_only` 并停止 delete。状态、审计、交付和 unknown event 在 v1 永远不会被批删。
+
 ## Codex Skill（可选）
 
 仓库内置了一个 Codex skill，方便 Codex 在会话里创建、查询、重试、取消和显式完成 runner issue：

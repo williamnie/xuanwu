@@ -1,5 +1,6 @@
 import { sanitizeError } from "./common.ts";
 import { runIssue } from "./issue.ts";
+import { runMaintenance } from "./maintenance.ts";
 import { runProject } from "./project.ts";
 import { getSystemDoctor, runSystem } from "./system.ts";
 import type { CliOptions, EnvReader, Fetcher, Writer } from "./types.ts";
@@ -24,6 +25,7 @@ async function dispatch(args: string[], env: EnvReader, fetcher: Fetcher): Promi
   const command = args[0]?.trim();
   if (!command) throw new Error("missing command");
   if (command === "issue") return await runIssue(args.slice(1), env, fetcher);
+  if (command === "maintenance") return runMaintenance(args.slice(1));
   if (command === "project") return await runProject(args.slice(1), env, fetcher);
   if (command === "system") return await runSystem(args.slice(1), env, fetcher);
   if (command === "doctor") return await getSystemDoctor(args.slice(1), env, fetcher);
