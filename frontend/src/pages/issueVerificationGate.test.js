@@ -4,6 +4,10 @@ import test from 'node:test';
 
 const issuesPage = readFileSync(new URL('./Issues.jsx', import.meta.url), 'utf8');
 const detailPage = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
+const detailActions = readFileSync(new URL('./issue-detail/useIssueDetailActions.js', import.meta.url), 'utf8');
+const detailVerification = readFileSync(new URL('./issue-detail/IssueDetailVerification.jsx', import.meta.url), 'utf8');
+const detailTimeline = readFileSync(new URL('./issue-detail/IssueDetailTimeline.jsx', import.meta.url), 'utf8');
+const detailSource = [detailPage, detailActions, detailVerification, detailTimeline].join('\n');
 const workClient = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 
@@ -21,16 +25,16 @@ test('issue detail provides pending verification review actions', () => {
   assert.match(detailPage, /handleVerificationReview\('accept', ''\)/);
   assert.match(detailPage, /setVerificationReviewAction\('reject'\)/);
   assert.match(detailPage, /setVerificationReviewAction\('request_changes'\)/);
-  assert.match(detailPage, /function VerificationReviewModal/);
+  assert.match(detailVerification, /function VerificationReviewModal/);
   assert.match(detailPage, /VerifierReportPanel/);
-  assert.match(detailPage, /issue\.verification_report/);
-  assert.doesNotMatch(detailPage, /window\.prompt/);
+  assert.match(detailTimeline, /issue\.verification_report/);
+  assert.doesNotMatch(detailSource, /window\.prompt/);
 });
 
 test('triage to todo avoids native confirm gates', () => {
   assert.doesNotMatch(issuesPage, /window\.confirm/);
-  assert.doesNotMatch(detailPage, /window\.confirm/);
-  assert.doesNotMatch(detailPage, /confirmTriageReady/);
+  assert.doesNotMatch(detailSource, /window\.confirm/);
+  assert.doesNotMatch(detailSource, /confirmTriageReady/);
 });
 
 test('dragging to in progress starts runner execution instead of raw status patch', () => {

@@ -6,6 +6,9 @@ const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 
 const issuesSource = readFileSync(new URL('./Issues.jsx', import.meta.url), 'utf8');
 const issueCardSource = readFileSync(new URL('./IssueCard.jsx', import.meta.url), 'utf8');
 const issueDetailSource = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
+const issueDetailActionsSource = readFileSync(new URL('./issue-detail/useIssueDetailActions.js', import.meta.url), 'utf8');
+const issueDetailEvidenceSource = readFileSync(new URL('./issue-detail/IssueDetailEvidence.jsx', import.meta.url), 'utf8');
+const issueDetailRunsSource = readFileSync(new URL('./issue-detail/IssueDetailRuns.jsx', import.meta.url), 'utf8');
 const stateGuardsSource = readFileSync(new URL('../utils/stateGuards.js', import.meta.url), 'utf8');
 
 test('projects and agent profiles expose service tier settings', () => {
@@ -34,7 +37,8 @@ test('issue cards persist service tier overrides and retry with the selected tie
 
 test('issue detail can change next-run speed and displays run snapshots', () => {
   assert.match(issueDetailSource, /handleServiceTierChange/);
-  assert.match(issueDetailSource, /workApi\.retryIssue\(issueId,\s*serviceTierPayload\(issue\.service_tier\)\)/);
-  assert.match(issueDetailSource, /RunField label="Speed"/);
-  assert.match(issueDetailSource, /serviceTierRunLabel\(run\)/);
+  assert.match(issueDetailActionsSource, /workApi\.retryIssue\(issueId,\s*serviceTierPayload\(issue\.service_tier\)\)/);
+  assert.match(issueDetailEvidenceSource, /onServiceTierChange/);
+  assert.match(issueDetailRunsSource, /RunField label="Speed"/);
+  assert.match(issueDetailRunsSource, /serviceTierRunLabel\(run\)/);
 });

@@ -1,32 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 import test from 'node:test';
-
-const source = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
-
-function runIssueLogAgentPayload(payload) {
-  const start = source.indexOf('function legacyAgentEventType');
-  const end = source.indexOf('\nasync function readOptional', start);
-  assert.notEqual(start, -1, 'missing legacyAgentEventType');
-  assert.notEqual(end, -1, 'missing readOptional boundary');
-  const context = { payload, result: null };
-  vm.runInNewContext(`${source.slice(start, end)}\nresult = issueLogAgentPayload(payload);`, context);
-  return context.result;
-}
-
-function runIssueStatusFromEvent(event) {
-  const start = source.indexOf('function parseEventPayload');
-  const end = source.indexOf('\nfunction legacyAgentEventType', start);
-  assert.notEqual(start, -1, 'missing parseEventPayload');
-  assert.notEqual(end, -1, 'missing legacyAgentEventType boundary');
-  const context = { event, result: null };
-  vm.runInNewContext(`${source.slice(start, end)}\nresult = issueStatusFromEvent(event);`, context);
-  return context.result;
-}
+import {
+  issueLogAgentPayload,
+  issueStatusFromEvent,
+  mergeIssueLogEvents,
+} from './issue-detail/issueDetailEventAdapters.js';
 
 test('terminal issue logs prefer raw method mapping over generic persisted type', () => {
-  const agent = runIssueLogAgentPayload({
+  const agent = issueLogAgentPayload({
     type: 'text',
     raw_method: 'item/agentMessage/delta',
     text: '我',
@@ -36,11 +17,24 @@ test('terminal issue logs prefer raw method mapping over generic persisted type'
 });
 
 test('issue detail reads status_changed status from SSE payload JSON', () => {
-  const status = runIssueStatusFromEvent({
+  const status = issueStatusFromEvent({
     issueId: 7,
     payload: '{"status":"done"}',
     type: 'issue.status_changed',
   });
 
   assert.equal(status, 'done');
+});
+
+test('adjacent log deltas are merged without crossing event kinds', () => {
+  const events = [
+    { id: 1, type: 'issue.log', payload: { agent_event_type: 'agent.message.delta', text: '你' } },
+    { id: 2, type: 'issue.log', payload: { agent_event_type: 'agent.message.delta', text: '好' } },
+    { id: 3, type: 'issue.log', payload: { agent_event_type: 'agent.command.output_delta', text: 'ok' } },
+  ];
+
+  const merged = mergeIssueLogEvents(events);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0]._textMerged, '你好');
+  assert.equal(merged[1]._textMerged, 'ok');
 });

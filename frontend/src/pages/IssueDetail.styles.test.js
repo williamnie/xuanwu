@@ -47,14 +47,16 @@ test('issue workflow evidence panel keeps compact long evidence inside sidebar',
 
 test('issue detail exposes Supervisor panel without native browser dialogs', () => {
   const source = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
+  const dataSource = readFileSync(new URL('./issue-detail/useIssueDetailData.js', import.meta.url), 'utf8');
+  const evidenceSource = readFileSync(new URL('./issue-detail/IssueDetailEvidence.jsx', import.meta.url), 'utf8');
   const panelSource = readFileSync(new URL('./IssueSupervisorPanel.jsx', import.meta.url), 'utf8');
-  assert.match(source, /workApi\.getIssueSupervisor\(issueId\)/);
-  assert.match(source, /import IssueSupervisorPanel from '\.\/IssueSupervisorPanel'/);
-  assert.match(source, /<IssueSupervisorPanel supervisor=\{supervisor\} \/>/);
+  assert.match(dataSource, /workApi\.getIssueSupervisor\(issueId\)/);
+  assert.match(evidenceSource, /import IssueSupervisorPanel from '\.\.\/IssueSupervisorPanel'/);
+  assert.match(evidenceSource, /<IssueSupervisorPanel supervisor=\{supervisor\} \/>/);
   assert.match(panelSource, /> Supervisor</);
   assert.match(panelSource, /retry-after wait/);
   assert.match(panelSource, /Recovery history/);
-  assert.doesNotMatch(`${source}\n${panelSource}`, /window\.alert|window\.confirm|window\.prompt/);
+  assert.doesNotMatch(`${source}\n${dataSource}\n${evidenceSource}\n${panelSource}`, /window\.alert|window\.confirm|window\.prompt/);
 
   for (const selector of ['.issue-supervisor-panel', '.issue-supervisor-history']) {
     assert.match(ruleFor(selector), /min-width:\s*0/);
