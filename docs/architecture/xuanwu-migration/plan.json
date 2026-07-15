@@ -1,0 +1,1896 @@
+{
+  "schema_version": "xuanwu.migration-plan.v1",
+  "canonical_document": "docs/architecture/xuanwu-migration/README.md",
+  "baseline": {
+    "roadmap_issue_id": 746,
+    "roadmap_node_count": 115,
+    "dependency_snapshot_date": "2026-07-16",
+    "dependency_source": "XW issue descriptions; only explicit hard dependencies are edges"
+  },
+  "global_invariants": [
+    "Before an audited write cutover, the declared legacy path is the only state authority; shadow data is never a second authority.",
+    "A migration may use at most two consecutive formal release windows for dual-read or dual-write behavior.",
+    "Parity failure keeps or restores the legacy authority and blocks the next gate; no third temporary state path is allowed.",
+    "Every state change, external write, cutover, rollback, and destructive action records actor, reason, target, correlation id, gate decision, outcome, and timestamp.",
+    "LLM output may propose an action but cannot approve, execute, or mark a deterministic migration gate as passed.",
+    "No legacy route, table, index, fixture path, or compatibility branch is deleted before G7 and its item-specific P11 dependencies pass."
+  ],
+  "architecture_lanes": [
+    {
+      "id": "foundation",
+      "name": "产品与领域合同",
+      "depends_on": [],
+      "roadmap_scope": [
+        "P00"
+      ],
+      "completion_gate": "P00.01-P00.06 accepted and the canonical roadmap DAG validates."
+    },
+    {
+      "id": "storage_safety",
+      "name": "存储安全与代码接缝",
+      "depends_on": [
+        "foundation"
+      ],
+      "roadmap_scope": [
+        "P01"
+      ],
+      "completion_gate": "Retention, archive, projection, API/client seams, and focused regressions are reproducible."
+    },
+    {
+      "id": "work_ledger",
+      "name": "Work Ledger",
+      "depends_on": [
+        "foundation",
+        "storage_safety"
+      ],
+      "roadmap_scope": [
+        "P02"
+      ],
+      "completion_gate": "Work backfill and Issue compatibility parity pass; legacy Issue writes remain rollback-capable."
+    },
+    {
+      "id": "run_runtime",
+      "name": "Run / Attempt Runtime",
+      "depends_on": [
+        "work_ledger",
+        "storage_safety"
+      ],
+      "roadmap_scope": [
+        "P03"
+      ],
+      "completion_gate": "Run lifecycle, provider mapping, recovery, controls, and Sessions compatibility view pass."
+    },
+    {
+      "id": "verification",
+      "name": "Evidence 与 Verification",
+      "depends_on": [
+        "work_ledger",
+        "run_runtime"
+      ],
+      "roadmap_scope": [
+        "P04"
+      ],
+      "completion_gate": "Structured Evidence and deterministic done policy pass success and rejection fixtures."
+    },
+    {
+      "id": "handoff",
+      "name": "Handoff 与 Review",
+      "depends_on": [
+        "verification"
+      ],
+      "roadmap_scope": [
+        "P05"
+      ],
+      "completion_gate": "Local and remote delivery modes are audited, reversible where applicable, and reviewable."
+    },
+    {
+      "id": "supervisor_workflows",
+      "name": "Supervisor 与 Workflows",
+      "depends_on": [
+        "work_ledger",
+        "run_runtime",
+        "verification",
+        "handoff"
+      ],
+      "roadmap_scope": [
+        "P06"
+      ],
+      "completion_gate": "Supervisor uses domain tools and deterministic permission gates instead of direct state mutation."
+    },
+    {
+      "id": "security_secrets",
+      "name": "Secrets 基线",
+      "depends_on": [
+        "foundation"
+      ],
+      "roadmap_scope": [
+        "P10.06"
+      ],
+      "completion_gate": "Credential lifecycle and redaction contract are enforced before connector diagnostics expose state."
+    },
+    {
+      "id": "always_on",
+      "name": "Automation、Attention 与 Approval",
+      "depends_on": [
+        "supervisor_workflows",
+        "work_ledger",
+        "run_runtime",
+        "handoff"
+      ],
+      "roadmap_scope": [
+        "P08"
+      ],
+      "completion_gate": "Automation claims are recoverable and all needs-user/external effects pass Attention/Approval gates."
+    },
+    {
+      "id": "integrations",
+      "name": "Channels 与外部集成",
+      "depends_on": [
+        "supervisor_workflows",
+        "always_on",
+        "handoff",
+        "security_secrets"
+      ],
+      "roadmap_scope": [
+        "P09"
+      ],
+      "completion_gate": "Connectors preserve local authority, idempotency, provenance, permission, and outbox delivery audit."
+    },
+    {
+      "id": "product_surfaces",
+      "name": "Command Center 与产品 UI",
+      "depends_on": [
+        "work_ledger",
+        "run_runtime",
+        "verification",
+        "handoff",
+        "supervisor_workflows",
+        "always_on",
+        "integrations"
+      ],
+      "roadmap_scope": [
+        "P07"
+      ],
+      "completion_gate": "Primary UI reads canonical projections and all compatibility entry points share the same domain commands."
+    },
+    {
+      "id": "hardening",
+      "name": "可靠性、安全、评测与部署",
+      "depends_on": [
+        "storage_safety",
+        "product_surfaces",
+        "always_on",
+        "integrations"
+      ],
+      "roadmap_scope": [
+        "P10 except P10.06"
+      ],
+      "completion_gate": "Backup/restore, restart, threat, evaluation, six Golden Journeys, capacity, onboarding, and release gates pass."
+    },
+    {
+      "id": "retirement",
+      "name": "兼容退出与 destructive 收口",
+      "depends_on": [
+        "hardening"
+      ],
+      "roadmap_scope": [
+        "P11"
+      ],
+      "completion_gate": "G7 plus every item-specific zero-consumer, archive, backup/restore, rollback-window, and audit gate passes."
+    }
+  ],
+  "migration_gates": [
+    {
+      "id": "G0",
+      "name": "合同基线",
+      "depends_on": [],
+      "enter_when": [
+        "P00.04 and P00.05 are done"
+      ],
+      "exit_evidence": [
+        "P00.06 roadmap DAG is acyclic",
+        "Each stream names legacy authority, compatibility window, rollback, and delete gate"
+      ],
+      "rollback_point": "No runtime mutation; revert only the scoped plan artifacts."
+    },
+    {
+      "id": "G1",
+      "name": "增量结构就绪",
+      "depends_on": [
+        "G0"
+      ],
+      "enter_when": [
+        "The stream contract and field/state mapping are accepted",
+        "A current database copy and schema inventory exist"
+      ],
+      "exit_evidence": [
+        "Empty DB and upgrade-copy migrations pass",
+        "Migration rerun is idempotent",
+        "Only additive schema/index changes are present",
+        "Legacy reads and writes remain authoritative"
+      ],
+      "rollback_point": "Stop rollout and run the previous binary against the untouched legacy authority; unused additive structures may remain dormant."
+    },
+    {
+      "id": "G2",
+      "name": "Backfill 与 shadow 就绪",
+      "depends_on": [
+        "G1"
+      ],
+      "enter_when": [
+        "Backup and restore rehearsal passed on the same source snapshot",
+        "Backfill has checkpoint and deterministic id mapping"
+      ],
+      "exit_evidence": [
+        "Dry-run and full-copy backfill pass",
+        "Interrupted backfill resumes without duplicates",
+        "Count, state, relation, cursor, and sample parity report is clean",
+        "Shadow write/read failures do not alter the legacy result"
+      ],
+      "rollback_point": "Disable shadow path, clear only derived target rows using the recorded batch id, and continue legacy reads/writes."
+    },
+    {
+      "id": "G3",
+      "name": "读切换",
+      "depends_on": [
+        "G2"
+      ],
+      "enter_when": [
+        "W1 shadow comparison passed for one formal release window",
+        "A deterministic old-read fallback flag is tested"
+      ],
+      "exit_evidence": [
+        "Target read is primary in W2",
+        "Old read remains comparison/fallback only",
+        "API response and Golden Journey parity remain within declared tolerance"
+      ],
+      "rollback_point": "Flip the deterministic read flag to legacy and rebuild target projection from legacy authority."
+    },
+    {
+      "id": "G4",
+      "name": "写切换与双模式退出",
+      "depends_on": [
+        "G3"
+      ],
+      "enter_when": [
+        "W2 read parity passed",
+        "Cutover actor and approval reference are recorded",
+        "All write callers converge on one domain command"
+      ],
+      "exit_evidence": [
+        "Target path is the sole write authority",
+        "Legacy API writes translate to the target command instead of writing legacy storage",
+        "Dual-read and dual-write are disabled by the end of W2",
+        "Restart and retry preserve idempotency"
+      ],
+      "rollback_point": "Before irreversible target-only data exists, stop target writes, restore legacy read/write flags, and replay the audited cutover delta into legacy authority."
+    },
+    {
+      "id": "G5",
+      "name": "领域完成",
+      "depends_on": [
+        "G4"
+      ],
+      "enter_when": [
+        "The stream has exited dual mode"
+      ],
+      "exit_evidence": [
+        "Affected Golden Journey success and failure branches pass from clean baseline",
+        "Restart/recovery invariants pass",
+        "Observability exposes drift, fallback use, and blocked writes"
+      ],
+      "rollback_point": "Deploy the last compatibility build and use the stream rollback runbook; do not create a third path."
+    },
+    {
+      "id": "G6",
+      "name": "兼容退出候选",
+      "depends_on": [
+        "G5"
+      ],
+      "enter_when": [
+        "No dual read/write remains",
+        "The target authority completed the declared rollback observation window"
+      ],
+      "exit_evidence": [
+        "Production route/module/table consumers are zero for one formal release window",
+        "Docs, fixtures, tests, and operator runbooks use the target path",
+        "Previous release artifact and data restore point are retained"
+      ],
+      "rollback_point": "Redeploy the retained compatibility build; restore archived data only through the rehearsed tool."
+    },
+    {
+      "id": "G7",
+      "name": "Destructive 删除授权",
+      "depends_on": [
+        "G6"
+      ],
+      "enter_when": [
+        "All item-specific P11 dependencies are done",
+        "Fresh source backup and reviewed archive checksums exist",
+        "Isolated restore rehearsal passes",
+        "A non-LLM authorized actor approves the exact target and operation"
+      ],
+      "exit_evidence": [
+        "Destructive command report records before/after counts and checksums",
+        "DB integrity and affected Golden Journeys pass",
+        "Rollback limit and retained artifacts are documented"
+      ],
+      "rollback_point": "Code/routes roll back by the retained release artifact; dropped data restores only from the fresh backup/archive, never from model-generated reconstruction."
+    }
+  ],
+  "compatibility_policy": {
+    "formal_release_window": "One deployed binary/API/schema release observed under normal project workload and recorded with revision, start/end time, parity report, and consumer inventory.",
+    "max_dual_mode_release_windows": 2,
+    "windows": [
+      {
+        "id": "W0",
+        "authority": "legacy",
+        "reads": "legacy only",
+        "writes": "legacy only",
+        "purpose": "baseline and additive schema"
+      },
+      {
+        "id": "W1",
+        "authority": "legacy",
+        "reads": "legacy primary plus target shadow comparison",
+        "writes": "legacy primary plus optional idempotent target shadow",
+        "purpose": "backfill and parity"
+      },
+      {
+        "id": "W2",
+        "authority": "legacy until audited G4 cutover, then target",
+        "reads": "target primary with deterministic legacy comparison/fallback",
+        "writes": "single authority selected by the audited cutover flag",
+        "purpose": "read then write cutover; all dual modes end here"
+      },
+      {
+        "id": "W3",
+        "authority": "target",
+        "reads": "target only",
+        "writes": "target only; legacy API adapters translate to target commands",
+        "purpose": "rollback observation without dual data paths"
+      }
+    ],
+    "api": {
+      "additive_period": "Existing /api/issues, /api/sessions, and applicable /api/pi routes keep status and required-field semantics through G5; additions must be optional and unknown fields tolerated.",
+      "write_rule": "A compatibility endpoint calls the same deterministic domain command as the target endpoint; it must not perform a second storage write.",
+      "deprecation_start_gate": "G5",
+      "removal_gate": "G7 and the owning P11 issue; requires one formal release window of zero production consumers plus retained previous binary and API contract snapshot.",
+      "version_mismatch": "Fail closed with an actionable compatibility error; never guess a schema/status mapping or let an LLM choose the winner."
+    }
+  },
+  "migration_streams": [
+    {
+      "id": "work",
+      "owner_issues": [
+        "P02.01",
+        "P02.02",
+        "P02.03",
+        "P02.04",
+        "P02.08"
+      ],
+      "source_of_truth_before_cutover": "issues, issue_events, and current Issue API/state service",
+      "target_authority_after_cutover": "works/work_relations/work_events and Work domain service defined by P02",
+      "cutover_gate": "G4",
+      "dual_read_release_windows": 2,
+      "dual_write_release_windows": 1,
+      "rollback": "Disable Work writes/reads, restore Issue flags, replay audited target-only delta by stable Issue-to-Work mapping, then rebuild Work projection.",
+      "final_delete_gate": "P11.05/P11.09 after Issues consumer zero, backup/restore rehearsal, and G7.",
+      "dual_read_windows": [
+        "W1",
+        "W2"
+      ],
+      "dual_write_windows": [
+        "W1"
+      ]
+    },
+    {
+      "id": "run",
+      "owner_issues": [
+        "P03.01",
+        "P03.02",
+        "P03.03",
+        "P03.04",
+        "P03.07"
+      ],
+      "source_of_truth_before_cutover": "issue_runs; agent_sessions and provider sessions are observation/drill-down only",
+      "target_authority_after_cutover": "issue_runs with the unified Run/Attempt relation and lifecycle defined by P03",
+      "cutover_gate": "G4",
+      "dual_read_release_windows": 1,
+      "dual_write_release_windows": 0,
+      "rollback": "Restore legacy lifecycle projection and Sessions view; retain new additive relation fields without treating agent_sessions as a second Run authority.",
+      "final_delete_gate": "P11.05 only after Sessions consumers are zero and G7; issue_runs is retained unless a later migration ADR supersedes this plan.",
+      "dual_read_windows": [
+        "W2"
+      ],
+      "dual_write_windows": []
+    },
+    {
+      "id": "evidence_handoff",
+      "owner_issues": [
+        "P04.01",
+        "P04.07",
+        "P04.09",
+        "P05.01",
+        "P05.08"
+      ],
+      "source_of_truth_before_cutover": "issue_events, issue_runs/provider facts, pi_action_events, Git, command outputs, and current verification payloads",
+      "target_authority_after_cutover": "structured Evidence/Handoff records defined by P04/P05 while Git and external providers remain artifact authorities",
+      "cutover_gate": "G4",
+      "dual_read_release_windows": 2,
+      "dual_write_release_windows": 1,
+      "rollback": "Restore legacy evidence assembly, keep done gated by deterministic legacy verification, and rebuild structured records from provenance refs.",
+      "final_delete_gate": "P11.03/P11.06 after every audit/provenance consumer maps to the target and G7.",
+      "dual_read_windows": [
+        "W1",
+        "W2"
+      ],
+      "dual_write_windows": [
+        "W1"
+      ]
+    },
+    {
+      "id": "attention_approval",
+      "owner_issues": [
+        "P08.01",
+        "P08.07",
+        "P08.08",
+        "P08.09"
+      ],
+      "source_of_truth_before_cutover": "attention_inbox_items plus Guardian alert, approval request, project hold, and notification carriers with their current authorities",
+      "target_authority_after_cutover": "unified Attention model; proposal/approval decision records remain deterministic permission authorities",
+      "cutover_gate": "G4",
+      "dual_read_release_windows": 2,
+      "dual_write_release_windows": 1,
+      "rollback": "Restore carrier-specific reads and routing, stop unified writes, preserve correlation/dedupe audit, and rebuild Attention projection.",
+      "final_delete_gate": "P11.02/P11.03 only after unresolved items and permission audit parity are zero-drift and G7.",
+      "dual_read_windows": [
+        "W1",
+        "W2"
+      ],
+      "dual_write_windows": [
+        "W1"
+      ]
+    },
+    {
+      "id": "automation",
+      "owner_issues": [
+        "P08.01",
+        "P08.02",
+        "P08.03",
+        "P08.04",
+        "P08.06"
+      ],
+      "source_of_truth_before_cutover": "pi_automations plus legacy cron_tasks/schedules, pi_delegations, heartbeat controls, and completion watches for their own IDs/cursors",
+      "target_authority_after_cutover": "unified Automation definition/claim/run model from P08 with one owner for each trigger and cursor",
+      "cutover_gate": "G4",
+      "dual_read_release_windows": 2,
+      "dual_write_release_windows": 1,
+      "rollback": "Pause target scheduler, release/expire target leases, restore legacy scheduler flags and cursors from the cutover snapshot, then dedupe by idempotency key.",
+      "final_delete_gate": "P11.04/P11.09 after no active claim/watch, cursor parity, restart rehearsal, archive, and G7.",
+      "dual_read_windows": [
+        "W1",
+        "W2"
+      ],
+      "dual_write_windows": [
+        "W1"
+      ]
+    },
+    {
+      "id": "api_ui_compatibility",
+      "owner_issues": [
+        "P02.09",
+        "P03.07",
+        "P07.01",
+        "P07.08",
+        "P07.09",
+        "P11.05"
+      ],
+      "source_of_truth_before_cutover": "current Issue/Session/PI APIs and their existing UI entry points",
+      "target_authority_after_cutover": "target domain APIs/projections; legacy routes are translation-only adapters during W3",
+      "cutover_gate": "G3",
+      "dual_read_release_windows": 2,
+      "dual_write_release_windows": 0,
+      "rollback": "Restore the previous route/UI feature flags or previous release artifact without changing the underlying single data authority.",
+      "final_delete_gate": "P11.05 after zero-consumer telemetry for one release, contract snapshot, previous artifact retention, and G7.",
+      "dual_read_windows": [
+        "W1",
+        "W2"
+      ],
+      "dual_write_windows": []
+    }
+  ],
+  "data_migration_steps": [
+    {
+      "id": "M00",
+      "name": "freeze-baseline",
+      "depends_on": [],
+      "owner_issues": [
+        "P00.04",
+        "P00.05",
+        "P00.06"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "Authority inventory",
+        "Stable ID/state mapping",
+        "Acyclic roadmap DAG"
+      ],
+      "backup_preconditions": [],
+      "rollback_preconditions": [],
+      "audit_preconditions": [
+        "Record plan revision and reviewer"
+      ]
+    },
+    {
+      "id": "M01",
+      "name": "snapshot-and-preflight",
+      "depends_on": [
+        "M00"
+      ],
+      "owner_issues": [
+        "P01.01",
+        "P01.02",
+        "P10.02",
+        "P10.03"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "SQLite online backup or equivalent source snapshot",
+        "schema_migrations and table/row inventory",
+        "isolated restore quick_check"
+      ],
+      "backup_preconditions": [
+        "Fresh source-consistent backup"
+      ],
+      "rollback_preconditions": [
+        "Restore rehearsal on isolated target"
+      ],
+      "audit_preconditions": [
+        "Record actor, reason, source revision, DB fingerprint"
+      ]
+    },
+    {
+      "id": "M02",
+      "name": "additive-schema",
+      "depends_on": [
+        "M01"
+      ],
+      "owner_issues": [
+        "P02.02",
+        "P03.02"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "Empty DB migration",
+        "Upgrade-copy migration",
+        "Idempotent rerun",
+        "Previous binary compatibility or explicit fail-closed version gate"
+      ],
+      "backup_preconditions": [
+        "M01 backup retained"
+      ],
+      "rollback_preconditions": [
+        "Previous binary runbook tested"
+      ],
+      "audit_preconditions": [
+        "Record migration ids and outcome"
+      ]
+    },
+    {
+      "id": "M03",
+      "name": "compat-adapter-and-shadow-write",
+      "depends_on": [
+        "M02"
+      ],
+      "owner_issues": [
+        "P02.04",
+        "P02.05",
+        "P03.03"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "Stable old-to-new IDs",
+        "Idempotency keys",
+        "Shadow failure isolation",
+        "Legacy remains sole authority"
+      ],
+      "backup_preconditions": [
+        "M01 backup retained"
+      ],
+      "rollback_preconditions": [
+        "Shadow feature flag disables all target writes"
+      ],
+      "audit_preconditions": [
+        "Record every shadow mismatch without mutating legacy result"
+      ]
+    },
+    {
+      "id": "M04",
+      "name": "checkpointed-backfill",
+      "depends_on": [
+        "M03"
+      ],
+      "owner_issues": [
+        "P02.08"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "Dry-run",
+        "Batch checkpoint",
+        "Interrupt/resume",
+        "Full-copy count/state/relation/cursor parity"
+      ],
+      "backup_preconditions": [
+        "M01 backup retained"
+      ],
+      "rollback_preconditions": [
+        "Batch ids allow derived rows to be cleared and rebuilt"
+      ],
+      "audit_preconditions": [
+        "Record batch actor, scope, counts, hashes, and errors"
+      ]
+    },
+    {
+      "id": "M05",
+      "name": "shadow-read-parity",
+      "depends_on": [
+        "M04"
+      ],
+      "owner_issues": [
+        "P02.08",
+        "P03.06",
+        "P04.09"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "W1 parity report",
+        "Restart parity",
+        "Golden Journey affected slice",
+        "Mismatch blocker list is empty"
+      ],
+      "backup_preconditions": [
+        "M01 backup retained"
+      ],
+      "rollback_preconditions": [
+        "Legacy read flag remains tested"
+      ],
+      "audit_preconditions": [
+        "Record comparison revision, window, sample, mismatch, and tolerance"
+      ]
+    },
+    {
+      "id": "M06",
+      "name": "read-cutover",
+      "depends_on": [
+        "M05"
+      ],
+      "owner_issues": [
+        "P02.08",
+        "P02.09",
+        "P03.07"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "W2 target-primary reads",
+        "Legacy fallback test",
+        "API and UI compatibility parity"
+      ],
+      "backup_preconditions": [
+        "M01 backup retained"
+      ],
+      "rollback_preconditions": [
+        "Deterministic read flag restores legacy path"
+      ],
+      "audit_preconditions": [
+        "Non-LLM actor, reason, approval ref, before/after flags"
+      ]
+    },
+    {
+      "id": "M07",
+      "name": "write-cutover-and-stop-dual-mode",
+      "depends_on": [
+        "M06"
+      ],
+      "owner_issues": [
+        "P02.08",
+        "P04.07",
+        "P08.04"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "Target is sole write authority",
+        "Compatibility writes translate to one domain command",
+        "Dual modes disabled by W2 end",
+        "Cutover delta and restart idempotency verified"
+      ],
+      "backup_preconditions": [
+        "Fresh pre-cutover backup and delta checkpoint"
+      ],
+      "rollback_preconditions": [
+        "Audited inverse mapping and replay procedure tested before target-only writes"
+      ],
+      "audit_preconditions": [
+        "Non-LLM actor, exact target, reason, approval ref, gate decision, outcome"
+      ]
+    },
+    {
+      "id": "M08",
+      "name": "rollback-observation-and-zero-consumer",
+      "depends_on": [
+        "M07"
+      ],
+      "owner_issues": [
+        "P10.01",
+        "P10.02",
+        "P10.08"
+      ],
+      "destructive": false,
+      "exit_evidence": [
+        "W3 target-only operation",
+        "Golden Journeys and restart recovery pass",
+        "One release of zero legacy consumers",
+        "Previous artifact and restore point retained"
+      ],
+      "backup_preconditions": [
+        "Retain pre-cutover backup and current target backup"
+      ],
+      "rollback_preconditions": [
+        "Compatibility build and runbook rehearsed"
+      ],
+      "audit_preconditions": [
+        "Record consumer inventory and fallback use"
+      ]
+    },
+    {
+      "id": "M09",
+      "name": "retire-legacy-api-and-compat-code",
+      "depends_on": [
+        "M08"
+      ],
+      "owner_issues": [
+        "P11.05",
+        "P11.06"
+      ],
+      "destructive": true,
+      "exit_evidence": [
+        "Legacy routes/branches absent",
+        "Contract and Golden Journey tests pass",
+        "Binary smoke passes"
+      ],
+      "backup_preconditions": [
+        "Previous release binary/install artifact retained",
+        "Legacy API contract and route inventory archived",
+        "Current source revision tagged by commit"
+      ],
+      "rollback_preconditions": [
+        "Previous release can be redeployed against the unchanged target authority",
+        "Compatibility feature/config snapshot retained"
+      ],
+      "audit_preconditions": [
+        "Non-LLM approval names exact routes/modules and zero-consumer evidence"
+      ]
+    },
+    {
+      "id": "M10",
+      "name": "drop-legacy-tables-and-indexes",
+      "depends_on": [
+        "M09"
+      ],
+      "owner_issues": [
+        "P11.03",
+        "P11.04",
+        "P11.09"
+      ],
+      "destructive": true,
+      "exit_evidence": [
+        "Archive schema/rows/checksums match source",
+        "Drop migration passes empty and upgrade DBs",
+        "quick_check and affected Golden Journeys pass",
+        "Before/after size and row report recorded"
+      ],
+      "backup_preconditions": [
+        "Fresh SQLite online backup with SHA-256",
+        "Reviewable schema and row archive with parent-child mapping",
+        "Isolated full restore rehearsal passed"
+      ],
+      "rollback_preconditions": [
+        "Stop writers before restore",
+        "Restore command and target path are rehearsed",
+        "Rollback limit after new target writes is documented"
+      ],
+      "audit_preconditions": [
+        "Non-LLM approval names exact tables/indexes, reason, backup hash, archive hash, and maintenance window"
+      ]
+    },
+    {
+      "id": "M11",
+      "name": "remove-fixtures-placeholders-and-dead-code",
+      "depends_on": [
+        "M09"
+      ],
+      "owner_issues": [
+        "P11.01",
+        "P11.02",
+        "P11.10"
+      ],
+      "destructive": true,
+      "exit_evidence": [
+        "Production config and binary have no fixture/placeholder fallback",
+        "Relevant tests and binary smoke pass",
+        "Dead-code/reference audit is zero"
+      ],
+      "backup_preconditions": [
+        "Previous release artifact and source commit retained",
+        "Production config snapshot archived"
+      ],
+      "rollback_preconditions": [
+        "Previous release redeploy is compatible with the target authority",
+        "No deleted fixture data is required for live records"
+      ],
+      "audit_preconditions": [
+        "Non-LLM approval names exact modules/paths and live zero-reference evidence"
+      ]
+    }
+  ],
+  "roadmap_nodes": [
+    {
+      "key": "P00.01",
+      "issue_id": 631,
+      "title": "固定产品定位、用户承诺与非目标 ADR",
+      "depends_on": []
+    },
+    {
+      "key": "P00.02",
+      "issue_id": 632,
+      "title": "统一玄武、Supervisor 与 Runner 的品牌术语表",
+      "depends_on": [
+        "P00.01"
+      ]
+    },
+    {
+      "key": "P00.03",
+      "issue_id": 633,
+      "title": "定义六条 Golden Journey 验收合同",
+      "depends_on": [
+        "P00.01"
+      ]
+    },
+    {
+      "key": "P00.04",
+      "issue_id": 634,
+      "title": "定义 Work、Run、Evidence、Handoff、Attention、Automation 核心对象",
+      "depends_on": [
+        "P00.01",
+        "P00.03"
+      ]
+    },
+    {
+      "key": "P00.05",
+      "issue_id": 635,
+      "title": "完成现有能力 keep/merge/migrate/delete 清单",
+      "depends_on": [
+        "P00.04"
+      ]
+    },
+    {
+      "key": "P00.06",
+      "issue_id": 636,
+      "title": "建立目标架构依赖图与分阶段迁移门禁",
+      "depends_on": [
+        "P00.04",
+        "P00.05"
+      ]
+    },
+    {
+      "key": "P01.01",
+      "issue_id": 637,
+      "title": "审计 issue_events 与 issue.log 存储膨胀",
+      "depends_on": [
+        "P00.05"
+      ]
+    },
+    {
+      "key": "P01.02",
+      "issue_id": 638,
+      "title": "定义事件保留、摘要、归档与删除策略",
+      "depends_on": [
+        "P01.01",
+        "P00.04"
+      ]
+    },
+    {
+      "key": "P01.03",
+      "issue_id": 639,
+      "title": "实现事件归档、压缩和数据库 vacuum 命令",
+      "depends_on": [
+        "P01.02"
+      ]
+    },
+    {
+      "key": "P01.04",
+      "issue_id": 640,
+      "title": "减少 issue.log 重复写入与超大 payload",
+      "depends_on": [
+        "P01.01",
+        "P01.02"
+      ]
+    },
+    {
+      "key": "P01.05",
+      "issue_id": 641,
+      "title": "建立事件摘要 projection 与游标重建",
+      "depends_on": [
+        "P01.02",
+        "P01.04"
+      ]
+    },
+    {
+      "key": "P01.06",
+      "issue_id": 642,
+      "title": "行为保持拆分 Sessions.jsx 页面单体",
+      "depends_on": [
+        "P00.06"
+      ]
+    },
+    {
+      "key": "P01.07",
+      "issue_id": 643,
+      "title": "行为保持拆分 IssueDetail.jsx 页面单体",
+      "depends_on": [
+        "P00.06"
+      ]
+    },
+    {
+      "key": "P01.08",
+      "issue_id": 644,
+      "title": "收敛 Sessions 多份 CSS 与设计 token",
+      "depends_on": [
+        "P01.06"
+      ]
+    },
+    {
+      "key": "P01.09",
+      "issue_id": 645,
+      "title": "按领域拆分 frontend API client",
+      "depends_on": [
+        "P00.04"
+      ]
+    },
+    {
+      "key": "P01.10",
+      "issue_id": 646,
+      "title": "拆分 backend readApi 与 frontendCompat 路由职责",
+      "depends_on": [
+        "P00.05",
+        "P00.06"
+      ]
+    },
+    {
+      "key": "P02.01",
+      "issue_id": 647,
+      "title": "定义 Work Ledger 领域合同与状态机",
+      "depends_on": [
+        "P00.04",
+        "P00.06"
+      ]
+    },
+    {
+      "key": "P02.02",
+      "issue_id": 648,
+      "title": "新增 Work Ledger 数据表与索引",
+      "depends_on": [
+        "P02.01"
+      ]
+    },
+    {
+      "key": "P02.03",
+      "issue_id": 649,
+      "title": "实现 Work repository 与状态转移服务",
+      "depends_on": [
+        "P02.02"
+      ]
+    },
+    {
+      "key": "P02.04",
+      "issue_id": 650,
+      "title": "实现 Issue 到 Work 的兼容适配器",
+      "depends_on": [
+        "P02.03"
+      ]
+    },
+    {
+      "key": "P02.05",
+      "issue_id": 651,
+      "title": "映射 PI Action、Delegation、Watch 到 Work 关系",
+      "depends_on": [
+        "P02.03",
+        "P00.05"
+      ]
+    },
+    {
+      "key": "P02.06",
+      "issue_id": 652,
+      "title": "实现 Work list/detail/write API",
+      "depends_on": [
+        "P02.03",
+        "P02.04"
+      ]
+    },
+    {
+      "key": "P02.07",
+      "issue_id": 653,
+      "title": "实现 Work timeline 与统一事件视图",
+      "depends_on": [
+        "P02.05",
+        "P01.05"
+      ]
+    },
+    {
+      "key": "P02.08",
+      "issue_id": 654,
+      "title": "实现 Work backfill、双读和一致性审计",
+      "depends_on": [
+        "P02.04",
+        "P02.05",
+        "P02.06"
+      ]
+    },
+    {
+      "key": "P02.09",
+      "issue_id": 655,
+      "title": "建立 Work Board 并保持 Issues 兼容入口",
+      "depends_on": [
+        "P02.06",
+        "P02.08"
+      ]
+    },
+    {
+      "key": "P03.01",
+      "issue_id": 656,
+      "title": "定义统一 Run 与 Attempt 生命周期合同",
+      "depends_on": [
+        "P00.04",
+        "P02.01"
+      ]
+    },
+    {
+      "key": "P03.02",
+      "issue_id": 657,
+      "title": "新增 Run/Attempt 关联字段与迁移",
+      "depends_on": [
+        "P03.01",
+        "P02.02"
+      ]
+    },
+    {
+      "key": "P03.03",
+      "issue_id": 658,
+      "title": "统一 Codex 与 Claude provider 生命周期事件",
+      "depends_on": [
+        "P03.01"
+      ]
+    },
+    {
+      "key": "P03.04",
+      "issue_id": 659,
+      "title": "实现 Run retry、resume、interrupt 与 supersede 语义",
+      "depends_on": [
+        "P03.02",
+        "P03.03"
+      ]
+    },
+    {
+      "key": "P03.05",
+      "issue_id": 660,
+      "title": "实现 Run list/detail/control API",
+      "depends_on": [
+        "P03.02",
+        "P03.04"
+      ]
+    },
+    {
+      "key": "P03.06",
+      "issue_id": 661,
+      "title": "实现 Run progress projection 与时间线",
+      "depends_on": [
+        "P03.03",
+        "P01.05"
+      ]
+    },
+    {
+      "key": "P03.07",
+      "issue_id": 662,
+      "title": "迁移 Sessions 页面为 Runs 兼容视图",
+      "depends_on": [
+        "P03.05",
+        "P03.06",
+        "P01.06"
+      ]
+    },
+    {
+      "key": "P04.01",
+      "issue_id": 663,
+      "title": "定义 Evidence 结构、状态和来源合同",
+      "depends_on": [
+        "P00.04",
+        "P03.01"
+      ]
+    },
+    {
+      "key": "P04.02",
+      "issue_id": 664,
+      "title": "实现 Shell、Test、Lint、Build Evidence collector",
+      "depends_on": [
+        "P04.01"
+      ]
+    },
+    {
+      "key": "P04.03",
+      "issue_id": 665,
+      "title": "实现 Git 状态、Diff 与 Revision Evidence collector",
+      "depends_on": [
+        "P04.01"
+      ]
+    },
+    {
+      "key": "P04.04",
+      "issue_id": 666,
+      "title": "实现 HTTP/API Evidence verifier",
+      "depends_on": [
+        "P04.01"
+      ]
+    },
+    {
+      "key": "P04.05",
+      "issue_id": 667,
+      "title": "实现 Browser/Visual Evidence verifier",
+      "depends_on": [
+        "P04.01"
+      ]
+    },
+    {
+      "key": "P04.06",
+      "issue_id": 668,
+      "title": "定义 Workflow Verification Policy",
+      "depends_on": [
+        "P04.01"
+      ]
+    },
+    {
+      "key": "P04.07",
+      "issue_id": 669,
+      "title": "将 Evidence Policy 接入 done 完成门禁",
+      "depends_on": [
+        "P04.02",
+        "P04.06",
+        "P02.03"
+      ]
+    },
+    {
+      "key": "P04.08",
+      "issue_id": 670,
+      "title": "升级 Verifier Agent 为结构化审查输出",
+      "depends_on": [
+        "P04.06",
+        "P04.07"
+      ]
+    },
+    {
+      "key": "P04.09",
+      "issue_id": 671,
+      "title": "实现 Evidence API 与用户可读证据界面",
+      "depends_on": [
+        "P04.02",
+        "P04.03",
+        "P04.04",
+        "P04.05"
+      ]
+    },
+    {
+      "key": "P05.01",
+      "issue_id": 672,
+      "title": "定义 Handoff 与 Delivery 状态合同",
+      "depends_on": [
+        "P00.04",
+        "P04.01"
+      ]
+    },
+    {
+      "key": "P05.02",
+      "issue_id": 673,
+      "title": "生成 Changed Files 与 Diff Summary",
+      "depends_on": [
+        "P04.03",
+        "P05.01"
+      ]
+    },
+    {
+      "key": "P05.03",
+      "issue_id": 674,
+      "title": "实现本地 Branch 与 Commit Handoff",
+      "depends_on": [
+        "P05.01",
+        "P05.02",
+        "P04.07"
+      ]
+    },
+    {
+      "key": "P05.04",
+      "issue_id": 675,
+      "title": "定义 Remote Push 与 Pull Request Provider 接口",
+      "depends_on": [
+        "P05.01",
+        "P05.03"
+      ]
+    },
+    {
+      "key": "P05.05",
+      "issue_id": 676,
+      "title": "实现 GitHub/GitLab Handoff Adapter",
+      "depends_on": [
+        "P05.04"
+      ]
+    },
+    {
+      "key": "P05.06",
+      "issue_id": 677,
+      "title": "实现外部 Tracker Update Handoff",
+      "depends_on": [
+        "P05.01"
+      ]
+    },
+    {
+      "key": "P05.07",
+      "issue_id": 678,
+      "title": "实现 Reviewer Loop 与修改回路",
+      "depends_on": [
+        "P04.08",
+        "P05.01"
+      ]
+    },
+    {
+      "key": "P05.08",
+      "issue_id": 679,
+      "title": "实现 Handoff API、页面和交付通知",
+      "depends_on": [
+        "P05.02",
+        "P05.03",
+        "P05.05",
+        "P05.06"
+      ]
+    },
+    {
+      "key": "P06.01",
+      "issue_id": 680,
+      "title": "重写玄武 Supervisor 角色合同与系统 Prompt",
+      "depends_on": [
+        "P00.02",
+        "P00.04"
+      ]
+    },
+    {
+      "key": "P06.02",
+      "issue_id": 681,
+      "title": "替换 emptyResourceLoader 为真实资源装配",
+      "depends_on": [
+        "P06.01",
+        "P00.06"
+      ]
+    },
+    {
+      "key": "P06.03",
+      "issue_id": 682,
+      "title": "实现 Supervisor Intent Router",
+      "depends_on": [
+        "P06.01"
+      ]
+    },
+    {
+      "key": "P06.04",
+      "issue_id": 683,
+      "title": "实现项目、Work 与会话上下文解析器",
+      "depends_on": [
+        "P06.03",
+        "P02.06"
+      ]
+    },
+    {
+      "key": "P06.05",
+      "issue_id": 684,
+      "title": "实现 Supervisor Planner 与 Work 分解",
+      "depends_on": [
+        "P06.03",
+        "P06.04",
+        "P02.03"
+      ]
+    },
+    {
+      "key": "P06.06",
+      "issue_id": 685,
+      "title": "提供 Work/Run/Evidence/Handoff 控制工具",
+      "depends_on": [
+        "P02.06",
+        "P03.05",
+        "P04.09",
+        "P05.08"
+      ]
+    },
+    {
+      "key": "P06.07",
+      "issue_id": 686,
+      "title": "定义 Workflow Manifest 与 Registry",
+      "depends_on": [
+        "P00.04",
+        "P04.06"
+      ]
+    },
+    {
+      "key": "P06.08",
+      "issue_id": 687,
+      "title": "实现 Investigate Workflow",
+      "depends_on": [
+        "P06.07",
+        "P04.02"
+      ]
+    },
+    {
+      "key": "P06.09",
+      "issue_id": 688,
+      "title": "实现 Implement Workflow",
+      "depends_on": [
+        "P06.07",
+        "P04.07",
+        "P05.03"
+      ]
+    },
+    {
+      "key": "P06.10",
+      "issue_id": 689,
+      "title": "实现 Repair 与 Review Workflows",
+      "depends_on": [
+        "P06.07",
+        "P04.08",
+        "P05.07"
+      ]
+    },
+    {
+      "key": "P06.11",
+      "issue_id": 690,
+      "title": "实现 Release、Research 与 Migrate Workflows",
+      "depends_on": [
+        "P06.07",
+        "P04.06",
+        "P05.08"
+      ]
+    },
+    {
+      "key": "P06.12",
+      "issue_id": 691,
+      "title": "实现可执行 Skill Runtime 与权限审计",
+      "depends_on": [
+        "P06.02",
+        "P06.07"
+      ]
+    },
+    {
+      "key": "P06.13",
+      "issue_id": 692,
+      "title": "实现 Goal、Commitment 与会话连续性",
+      "depends_on": [
+        "P02.03",
+        "P06.05"
+      ]
+    },
+    {
+      "key": "P07.01",
+      "issue_id": 693,
+      "title": "重组侧栏、路由与用户可见品牌",
+      "depends_on": [
+        "P00.02",
+        "P02.09",
+        "P03.07"
+      ]
+    },
+    {
+      "key": "P07.02",
+      "issue_id": 694,
+      "title": "实现 Command Center 聚合 API",
+      "depends_on": [
+        "P02.06",
+        "P03.06",
+        "P05.08"
+      ]
+    },
+    {
+      "key": "P07.03",
+      "issue_id": 695,
+      "title": "实现 Command Center Attention 区",
+      "depends_on": [
+        "P07.02",
+        "P08.07"
+      ]
+    },
+    {
+      "key": "P07.04",
+      "issue_id": 696,
+      "title": "实现 Command Center Active Work 区",
+      "depends_on": [
+        "P07.02",
+        "P03.06"
+      ]
+    },
+    {
+      "key": "P07.05",
+      "issue_id": 697,
+      "title": "实现 Command Center Recent Deliveries 区",
+      "depends_on": [
+        "P07.02",
+        "P05.08"
+      ]
+    },
+    {
+      "key": "P07.06",
+      "issue_id": 698,
+      "title": "实现全局 Ask Xuanwu Composer",
+      "depends_on": [
+        "P06.03",
+        "P06.04",
+        "P07.01"
+      ]
+    },
+    {
+      "key": "P07.07",
+      "issue_id": 699,
+      "title": "简化 Chat 并隐藏模型与原始会话细节",
+      "depends_on": [
+        "P06.01",
+        "P06.13",
+        "P07.06"
+      ]
+    },
+    {
+      "key": "P07.08",
+      "issue_id": 700,
+      "title": "实现 Work Board 与 Work Detail 完整体验",
+      "depends_on": [
+        "P02.06",
+        "P02.07",
+        "P02.09"
+      ]
+    },
+    {
+      "key": "P07.09",
+      "issue_id": 701,
+      "title": "实现 Run Detail 与 Provider Session Drill-down",
+      "depends_on": [
+        "P03.05",
+        "P03.06",
+        "P04.09"
+      ]
+    },
+    {
+      "key": "P07.10",
+      "issue_id": 702,
+      "title": "实现 Handoff Detail 与 Review 操作",
+      "depends_on": [
+        "P05.07",
+        "P05.08"
+      ]
+    },
+    {
+      "key": "P07.11",
+      "issue_id": 703,
+      "title": "重构 Settings 为普通与 Advanced 两层",
+      "depends_on": [
+        "P00.02",
+        "P07.01"
+      ]
+    },
+    {
+      "key": "P07.12",
+      "issue_id": 704,
+      "title": "实现模型与 Agent 连接向导",
+      "depends_on": [
+        "P07.11"
+      ]
+    },
+    {
+      "key": "P07.13",
+      "issue_id": 705,
+      "title": "实现 Connections、Permissions 与通知设置",
+      "depends_on": [
+        "P07.11",
+        "P09.07",
+        "P08.08"
+      ]
+    },
+    {
+      "key": "P07.14",
+      "issue_id": 706,
+      "title": "实现 Advanced Diagnostics 与 Runtime 管理",
+      "depends_on": [
+        "P07.11",
+        "P01.05"
+      ]
+    },
+    {
+      "key": "P08.01",
+      "issue_id": 707,
+      "title": "审计并统一 Cron、PI Automation、Heartbeat 与 Watch 语义",
+      "depends_on": [
+        "P00.05",
+        "P00.06"
+      ]
+    },
+    {
+      "key": "P08.02",
+      "issue_id": 708,
+      "title": "定义统一 Automation 模型与持久化",
+      "depends_on": [
+        "P08.01",
+        "P06.07"
+      ]
+    },
+    {
+      "key": "P08.03",
+      "issue_id": 709,
+      "title": "实现 Automation claim、lock、retry 与 backoff",
+      "depends_on": [
+        "P08.02"
+      ]
+    },
+    {
+      "key": "P08.04",
+      "issue_id": 710,
+      "title": "将 Automation 执行接入 Work、Run 与 Evidence",
+      "depends_on": [
+        "P08.03",
+        "P02.03",
+        "P03.05"
+      ]
+    },
+    {
+      "key": "P08.05",
+      "issue_id": 711,
+      "title": "实现 Heartbeat 与 Standing Orders",
+      "depends_on": [
+        "P08.04",
+        "P06.13"
+      ]
+    },
+    {
+      "key": "P08.06",
+      "issue_id": 712,
+      "title": "统一 Completion、Failure 与 Thread Watch",
+      "depends_on": [
+        "P08.02",
+        "P08.04"
+      ]
+    },
+    {
+      "key": "P08.07",
+      "issue_id": 713,
+      "title": "定义统一 Attention 模型和优先级规则",
+      "depends_on": [
+        "P00.04",
+        "P08.01"
+      ]
+    },
+    {
+      "key": "P08.08",
+      "issue_id": 714,
+      "title": "定义 Approval 模型、权限矩阵与 Action Gate",
+      "depends_on": [
+        "P08.07",
+        "P06.06"
+      ]
+    },
+    {
+      "key": "P08.09",
+      "issue_id": 715,
+      "title": "实现 Automations 与 Attention/Approval 页面",
+      "depends_on": [
+        "P08.02",
+        "P08.07",
+        "P08.08",
+        "P07.03"
+      ]
+    },
+    {
+      "key": "P08.10",
+      "issue_id": 716,
+      "title": "统一通知 Outbox、Daily Digest 与交付消息",
+      "depends_on": [
+        "P08.06",
+        "P08.07",
+        "P05.08"
+      ]
+    },
+    {
+      "key": "P09.01",
+      "issue_id": 717,
+      "title": "定义 Channel 与 Connector 统一契约",
+      "depends_on": [
+        "P00.04",
+        "P06.06"
+      ]
+    },
+    {
+      "key": "P09.02",
+      "issue_id": 718,
+      "title": "迁移 Feishu 到统一 Channel/Connector 契约",
+      "depends_on": [
+        "P09.01",
+        "P08.10"
+      ]
+    },
+    {
+      "key": "P09.03",
+      "issue_id": 719,
+      "title": "实现 CLI 与 Webhook Channel Adapter",
+      "depends_on": [
+        "P09.01",
+        "P02.06"
+      ]
+    },
+    {
+      "key": "P09.04",
+      "issue_id": 720,
+      "title": "实现 Git Provider 事件与项目关联",
+      "depends_on": [
+        "P09.01",
+        "P05.04"
+      ]
+    },
+    {
+      "key": "P09.05",
+      "issue_id": 721,
+      "title": "实现 Issue Tracker 双向同步",
+      "depends_on": [
+        "P09.01",
+        "P05.06"
+      ]
+    },
+    {
+      "key": "P09.06",
+      "issue_id": 722,
+      "title": "实现 OpenClaw Gateway 可选适配",
+      "depends_on": [
+        "P09.01",
+        "P09.03",
+        "P08.08"
+      ]
+    },
+    {
+      "key": "P09.07",
+      "issue_id": 723,
+      "title": "实现 Connector Health、Secrets 与诊断",
+      "depends_on": [
+        "P09.01",
+        "P10.06"
+      ]
+    },
+    {
+      "key": "P10.01",
+      "issue_id": 724,
+      "title": "定义重启恢复与一致性不变量",
+      "depends_on": [
+        "P02.03",
+        "P03.04",
+        "P08.03"
+      ]
+    },
+    {
+      "key": "P10.02",
+      "issue_id": 725,
+      "title": "建立数据库迁移、回滚和兼容门禁",
+      "depends_on": [
+        "P00.06",
+        "P02.08"
+      ]
+    },
+    {
+      "key": "P10.03",
+      "issue_id": 726,
+      "title": "实现备份、导出、导入与恢复演练",
+      "depends_on": [
+        "P10.02"
+      ]
+    },
+    {
+      "key": "P10.04",
+      "issue_id": 727,
+      "title": "完善 Daemon 生命周期与开机常驻",
+      "depends_on": [
+        "P10.02"
+      ]
+    },
+    {
+      "key": "P10.05",
+      "issue_id": 728,
+      "title": "完成威胁模型与 Prompt Injection 防线",
+      "depends_on": [
+        "P06.02",
+        "P08.08",
+        "P09.01"
+      ]
+    },
+    {
+      "key": "P10.06",
+      "issue_id": 729,
+      "title": "统一 Secrets、脱敏和凭据生命周期",
+      "depends_on": [
+        "P00.05"
+      ]
+    },
+    {
+      "key": "P10.07",
+      "issue_id": 730,
+      "title": "建立 Supervisor 与 Workflow Evaluation Harness",
+      "depends_on": [
+        "P06.03",
+        "P06.05",
+        "P06.07"
+      ]
+    },
+    {
+      "key": "P10.08",
+      "issue_id": 731,
+      "title": "实现六条 Golden Journey 端到端测试",
+      "depends_on": [
+        "P00.03",
+        "P04.09",
+        "P05.08",
+        "P08.10"
+      ]
+    },
+    {
+      "key": "P10.09",
+      "issue_id": 732,
+      "title": "建立性能、容量和事件增长基准",
+      "depends_on": [
+        "P01.05",
+        "P02.07",
+        "P03.06"
+      ]
+    },
+    {
+      "key": "P10.10",
+      "issue_id": 733,
+      "title": "统一可观测性、成本与诊断包",
+      "depends_on": [
+        "P03.06",
+        "P08.03",
+        "P10.06"
+      ]
+    },
+    {
+      "key": "P10.11",
+      "issue_id": 734,
+      "title": "实现首次使用引导与 10 分钟首个交付",
+      "depends_on": [
+        "P07.11",
+        "P07.12",
+        "P10.04"
+      ]
+    },
+    {
+      "key": "P10.12",
+      "issue_id": 735,
+      "title": "完善发布、自动升级、文档与运维手册",
+      "depends_on": [
+        "P10.02",
+        "P10.03",
+        "P10.04",
+        "P10.08"
+      ]
+    },
+    {
+      "key": "P11.01",
+      "issue_id": 736,
+      "title": "删除生产路径中的 fixture-domain 与 fixture tool 回退",
+      "depends_on": [
+        "P06.12",
+        "P10.08"
+      ]
+    },
+    {
+      "key": "P11.02",
+      "issue_id": 737,
+      "title": "删除空壳 Inbox、Approvals、Activity 与 Settings 占位入口",
+      "depends_on": [
+        "P07.03",
+        "P07.11",
+        "P07.14",
+        "P08.09"
+      ]
+    },
+    {
+      "key": "P11.03",
+      "issue_id": 738,
+      "title": "合并 PI Action、Proposal、Approval 与 Attention 夹层",
+      "depends_on": [
+        "P02.05",
+        "P08.07",
+        "P08.08",
+        "P10.02"
+      ]
+    },
+    {
+      "key": "P11.04",
+      "issue_id": 739,
+      "title": "合并 Cron、PI Automation、Heartbeat、Watch 与 Nightly 表",
+      "depends_on": [
+        "P08.02",
+        "P08.03",
+        "P08.04",
+        "P08.06",
+        "P10.02"
+      ]
+    },
+    {
+      "key": "P11.05",
+      "issue_id": 740,
+      "title": "退役旧 Issues/Sessions 用户路由与兼容 API",
+      "depends_on": [
+        "P02.09",
+        "P03.07",
+        "P07.08",
+        "P07.09",
+        "P10.12"
+      ]
+    },
+    {
+      "key": "P11.06",
+      "issue_id": 741,
+      "title": "清理 legacy/compat 分支与重复通知路径",
+      "depends_on": [
+        "P09.02",
+        "P08.10",
+        "P10.08"
+      ]
+    },
+    {
+      "key": "P11.07",
+      "issue_id": 742,
+      "title": "完成 PI 用户可见命名迁移并保留内部兼容",
+      "depends_on": [
+        "P00.02",
+        "P06.01",
+        "P07.01"
+      ]
+    },
+    {
+      "key": "P11.08",
+      "issue_id": 743,
+      "title": "归档过时架构文档并建立 canonical 文档索引",
+      "depends_on": [
+        "P00.01",
+        "P10.12"
+      ]
+    },
+    {
+      "key": "P11.09",
+      "issue_id": 744,
+      "title": "迁移并删除废弃数据库表与索引",
+      "depends_on": [
+        "P11.03",
+        "P11.04",
+        "P11.05",
+        "P10.03"
+      ]
+    },
+    {
+      "key": "P11.10",
+      "issue_id": 745,
+      "title": "执行最终 dead-code、重复 CSS 与仓库产物清理",
+      "depends_on": [
+        "P11.01",
+        "P11.02",
+        "P11.05",
+        "P11.06"
+      ]
+    }
+  ]
+}
