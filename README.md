@@ -1,6 +1,8 @@
 # Codex Issue Runner
 
-本地 Codex App Server 驱动的 Issue Loop Runner，用于管理多个本地项目的 issue 队列，并自动调用 Codex 执行任务。
+**玄武**是本地优先、验证优先的 AI Engineering Control Plane：把工程目标变成可追踪的工作，交给 Coding Agents 长时间执行，并以可审计的监督、恢复、验证和交付闭环收口。Codex Issue Runner 是当前仓库、CLI 与兼容 API 的名称。
+
+产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准。
 
 当前后端已经切到 Bun/TypeScript，live 默认监听 `0.0.0.0:3008`，CLI 默认连接 `127.0.0.1:3008`。
 
