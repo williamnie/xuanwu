@@ -51,7 +51,7 @@ function PanelHeader({ loading, onRefresh, onScan, scanning }) {
           <PlugZap size={18} color="var(--primary)" /> MCP discovery & access
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          发现不等于启用；PI 只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
+          发现不等于启用；Supervisor 只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
         </p>
       </div>
       <div style={{ display: 'flex', gap: '8px' }}>
@@ -111,7 +111,7 @@ function ServerCard({ server, showForget, state }) {
       </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <button className="btn btn-secondary" onClick={() => state.introspectServer(server)} type="button">Inspect server capabilities</button>
-        <button className="btn btn-secondary" onClick={() => state.toggleServer(server)} type="button">{server.enabled ? 'Disable server' : 'Enable server for PI'}</button>
+        <button className="btn btn-secondary" onClick={() => state.toggleServer(server)} type="button">{server.enabled ? 'Disable server' : 'Enable for Supervisor'}</button>
         {showForget && !server.enabled && <button className="btn btn-secondary" onClick={() => state.forgetServer(server)} type="button">Forget</button>}
       </div>
     </div>

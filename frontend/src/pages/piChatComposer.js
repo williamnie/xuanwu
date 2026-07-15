@@ -5,7 +5,7 @@ export function buildPiChatProjectSuggestions(projects = []) {
     id: `pi-project-${project.id}`,
     trigger: '@',
     label: `@${project.name || project.id}`,
-    description: project.cwd || '把本次 PI 对话绑定到这个项目',
+    description: project.cwd || '把本次 Supervisor 对话绑定到这个项目',
     insertText: `@${project.id}`,
     reference: {
       type: 'project',

@@ -27,6 +27,7 @@ import {
   PI_ASSISTANT_NAV_ITEMS,
   PI_ASSISTANT_SETTINGS_ITEM,
 } from '../pages/assistantModules';
+import { PRODUCT_TERMS } from '../brand';
 
 const ASSISTANT_ICONS = {
   Chat: MessageSquare,
@@ -91,7 +92,7 @@ export default function AppSidebar({
         </button>
       </div>
 
-      <div className="sidebar-section-title">PI Assistant</div>
+      <div className="sidebar-section-title">{PRODUCT_TERMS.supervisor}</div>
       <div className="sidebar-nav-group pi-assistant-nav">
         {PI_ASSISTANT_NAV_ITEMS.map((module) => (
           <button

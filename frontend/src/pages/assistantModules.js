@@ -3,7 +3,7 @@ export const PI_ASSISTANT_NAV_ITEMS = [
     page: 'pi-chat',
     label: 'Chat',
     title: 'Chat',
-    description: '查看和继续所有 PI Assistant conversations。'
+    description: '查看和继续所有 Supervisor conversations。'
   },
   {
     page: 'pi-inbox',
@@ -17,7 +17,7 @@ export const PI_ASSISTANT_SETTINGS_ITEM = {
   page: 'settings',
   label: 'Settings',
   title: 'Settings',
-  description: 'PI Assistant 与 runner runtime 的高级配置集合。'
+  description: 'Supervisor 与 Runner runtime 的高级配置集合。'
 };
 
 export const PI_ASSISTANT_CONFIG_MODULES = [
@@ -26,7 +26,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'assistant',
     label: 'Overview',
     title: 'Overview',
-    description: '唯一 PI Assistant 的管理中心，集中展示 runtime 配置、能力边界与入口。'
+    description: '唯一 Xuanwu Supervisor 的管理中心，集中展示 runtime 配置、能力边界与入口。'
   },
   {
     page: 'pi-connectors',
@@ -61,7 +61,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'memory',
     label: 'Memory',
     title: 'Memory',
-    description: '审阅、启用、pin 或忘记 PI Assistant 可检索记忆。'
+    description: '审阅、启用、pin 或忘记 Supervisor 可检索记忆。'
   },
   {
     page: 'pi-activity',
@@ -75,7 +75,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'policies',
     label: 'Policies',
     title: 'Policies',
-    description: '在 Assistant Settings 中管理 source policy、自动回复、自动建 issue 与自动 enqueue 等策略。'
+    description: '在 Supervisor Settings 中管理 source policy、自动回复、自动建 issue 与自动 enqueue 等策略。'
   }
 ];
 

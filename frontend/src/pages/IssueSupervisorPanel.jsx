@@ -12,7 +12,7 @@ export default function IssueSupervisorPanel({ supervisor }) {
     <section className="glass-card issue-supervisor-panel">
       <div className="issue-supervisor-header">
         <div>
-          <h3><Bot size={18} color="var(--primary)" /> PI Supervisor</h3>
+          <h3><Bot size={18} color="var(--primary)" /> Supervisor</h3>
           <p>只读展示最近一次 supervisor 判断、等待窗口和恢复审计；不触发恢复动作。</p>
         </div>
         <span className={`triage-readiness-badge ${supervisorBadgeClass(latest.diagnosis_code, decision.decision)}`}>
@@ -26,7 +26,7 @@ export default function IssueSupervisorPanel({ supervisor }) {
           <SupervisorField label="Diagnosis" value={latest.diagnosis_code} />
           <SupervisorField label="Last provider error" value={providerErrorText(latest.provider_error)} mono />
           {retry && <RetryAfterCard retry={retry} />}
-          <SupervisorField label="PI decision rationale" value={decision.rationale} />
+          <SupervisorField label="Decision rationale" value={decision.rationale} />
           <SupervisorField label="Executed recovery message" value={latest.executed_recovery_message} mono />
           <SupervisorHistory events={history} />
         </>

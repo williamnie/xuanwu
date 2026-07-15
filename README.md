@@ -1,8 +1,8 @@
-# Codex Issue Runner
+# 玄武 (Xuanwu)
 
 **玄武**是本地优先、验证优先的 AI Engineering Control Plane：把工程目标变成可追踪的工作，交给 Coding Agents 长时间执行，并以可审计的监督、恢复、验证和交付闭环收口。Codex Issue Runner 是当前仓库、CLI 与兼容 API 的名称。
 
-产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准。
+产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准；产品、Supervisor、Runner 与兼容标识的命名以 [玄武品牌术语合同](docs/architecture/xuanwu/0002-brand-terminology.md) 为准。
 
 当前后端已经切到 Bun/TypeScript，live 默认监听 `0.0.0.0:3008`，CLI 默认连接 `127.0.0.1:3008`。
 
@@ -70,7 +70,7 @@ cd ../backend-ts && bun run build:binary
 
 ## 一键安装部署（推荐）
 
-如果只是使用 Codex Issue Runner，推荐直接安装 GitHub Release 里的预构建二进制；脚本会自动下载当前系统架构的 release，并注册为后台服务（macOS 使用 launchd，Linux 使用 user systemd）：
+如果只是使用玄武，推荐直接安装当前仍以 `codex-issue-runner` 兼容名发布的预构建二进制；脚本会自动下载当前系统架构的 release，并注册为后台服务（macOS 使用 launchd，Linux 使用 user systemd）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash

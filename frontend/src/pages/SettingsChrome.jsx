@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { message } from '../store/toastStore';
 
 const SETTINGS_TABS = [
-  { id: 'assistant', label: 'Assistant' },
+  { id: 'assistant', label: 'Supervisor' },
   { id: 'runner-brain', label: 'Runtime' },
   { id: 'connectors', label: 'Connectors' },
   { id: 'skills', label: 'Skills' },
@@ -21,9 +21,9 @@ export function SettingsHeader({ activeTab, onTabChange }) {
       <div className="settings-title-row">
         <div>
           <div className="settings-eyebrow">
-            <Boxes size={14} /> PI Assistant · Single Runtime
+            <Boxes size={14} /> Xuanwu Supervisor · Single Runtime
           </div>
-          <h1>Assistant Settings</h1>
+          <h1>Supervisor Settings</h1>
         </div>
         <RestartAction />
       </div>
@@ -34,7 +34,7 @@ export function SettingsHeader({ activeTab, onTabChange }) {
 
 function SettingsTabs({ activeTab, onTabChange }) {
   return (
-    <nav className="settings-tabs" role="tablist" aria-label="Assistant Settings sections">
+    <nav className="settings-tabs" role="tablist" aria-label="Supervisor Settings sections">
       {SETTINGS_TABS.map((tab) => (
         <TabButton key={tab.id} active={activeTab === tab.id} onClick={() => onTabChange(tab.id)} tab={tab} />
       ))}
@@ -82,7 +82,7 @@ function RestartConfirm({ onCancel, onRestart, restarting }) {
   return (
     <div className="settings-restart-confirm" role="alert">
       <div>
-        <strong><AlertTriangle size={15} /> 确认重启 Xuanwu？</strong>
+        <strong><AlertTriangle size={15} /> 确认重启玄武？</strong>
         <p>服务会短暂断开，随后由守护进程拉起。</p>
       </div>
       <div className="settings-restart-confirm-actions">

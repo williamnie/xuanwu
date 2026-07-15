@@ -2,9 +2,9 @@ import { Bot, CircleDot, Compass } from 'lucide-react';
 
 export function AssistantOverviewPanel() {
   const items = [
-    '一个 PI Assistant 统一承载 Runtime、Connectors、Skills、Automations 与 Memory。',
+    '一个 Xuanwu Supervisor 统一承载 Runtime、Connectors、Skills、Automations 与 Memory。',
     '当前先保留已有模型、thinking、instructions、OAuth 与 enabled 配置。',
-    '后续能力只作为这个 Assistant 的能力区，不恢复多个独立 PI agent。'
+    '后续能力只作为这个 Supervisor 的能力区，不恢复多个独立 agent。'
   ];
   return (
     <section className="glass-card" style={{ display: 'grid', gap: '14px' }}>
@@ -12,14 +12,14 @@ export function AssistantOverviewPanel() {
         <Bot size={20} color="var(--primary)" />
         <div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            Single Assistant Runtime
+            Single Supervisor Runtime
           </div>
-          <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>PI Assistant</h2>
+          <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Xuanwu Supervisor</h2>
         </div>
       </div>
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', lineHeight: 1.6, margin: 0 }}>
-        Assistant Settings 是唯一 PI Assistant 的设置中心：Runtime 负责当前 issue/session 编排；
-        Connectors、Skills、Automations、Approvals、Memory、Activity 与 Policies 会逐步挂到同一个 Assistant 下。
+        Supervisor Settings 是唯一 Supervisor 的设置中心：Runtime 负责当前 issue/session 编排；
+        Connectors、Skills、Automations、Approvals、Memory、Activity 与 Policies 会逐步挂到同一个 Supervisor 下。
       </p>
       <BulletList items={items} />
     </section>

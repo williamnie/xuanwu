@@ -31,12 +31,12 @@ test('Settings groups panels behind Assistant Settings tabs and removes duplicat
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
 });
 
-test('Assistant Settings IA reserves future capability placeholders', () => {
-  assert.match(chromeSource, /Assistant Settings/);
-  assert.match(chromeSource, /PI Assistant · Single Runtime/);
-  assert.match(placeholderSource, /Single Assistant Runtime/);
+test('Supervisor Settings IA reserves future capability placeholders', () => {
+  assert.match(chromeSource, /Supervisor Settings/);
+  assert.match(chromeSource, /Xuanwu Supervisor · Single Runtime/);
+  assert.match(placeholderSource, /Single Supervisor Runtime/);
   assert.doesNotMatch(placeholderSource, /Runner Brain/);
-  assert.match(placeholderSource, /不恢复多个独立 PI agent/);
+  assert.match(placeholderSource, /不恢复多个独立 agent/);
   assert.match(sectionsSource, /Connectors/);
   assert.match(sectionsSource, /Skills/);
   assert.match(sectionsSource, /Automations/);
@@ -46,7 +46,7 @@ test('Assistant Settings IA reserves future capability placeholders', () => {
   assert.match(sectionsSource, /Policies/);
 });
 
-test('PI Assistant sidebar keeps operational Inbox and moves Settings to bottom tools', () => {
+test('Xuanwu Supervisor sidebar keeps operational Inbox and moves Settings to bottom tools', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
@@ -54,7 +54,8 @@ test('PI Assistant sidebar keeps operational Inbox and moves Settings to bottom 
   for (const route of ['pi-chat', 'pi-overview', 'pi-inbox', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
-  assert.match(sidebarSource, /PI Assistant/);
+  assert.match(sidebarSource, /PRODUCT_TERMS\.supervisor/);
+  assert.doesNotMatch(sidebarSource, /PI Assistant/);
   assert.match(sidebarSource, /PI_ASSISTANT_NAV_ITEMS\.map/);
   assert.match(sidebarSource, /Chat:\s*MessageSquare/);
   assert.match(modulesSource, /PI_ASSISTANT_SETTINGS_ITEM/);

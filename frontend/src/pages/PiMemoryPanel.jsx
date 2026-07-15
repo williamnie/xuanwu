@@ -12,9 +12,9 @@ export default function PiMemoryPanel() {
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>PI Memory Review</h2>
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Supervisor Memory Review</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-            管理 PI 记忆；明确授权的低风险个人偏好可自动启用，候选 promote 后才进入 heartbeat / prompt 检索上下文。
+            管理 Supervisor 工程记忆；明确授权的低风险个人偏好可自动启用，候选 promote 后才进入 heartbeat / prompt 检索上下文。
           </p>
         </div>
         <button className="btn btn-secondary" onClick={state.load} disabled={state.loading}>
@@ -52,7 +52,7 @@ function usePiMemoryPanel() {
       setDrafts(Object.fromEntries((Array.isArray(memory) ? memory : []).map((item) => [item.id, draftFromItem(item)])));
       setError('');
     } catch (err) {
-      setError(err.message || '读取 PI memory 失败');
+      setError(err.message || '读取 Supervisor memory 失败');
     } finally {
       setLoading(false);
     }
@@ -62,7 +62,7 @@ function usePiMemoryPanel() {
     try {
       setDigest(await loadMemoryDigest({ digestWindow }));
     } catch (err) {
-      setError(err.message || '生成 PI memory digest 失败');
+      setError(err.message || '生成 Supervisor memory digest 失败');
     }
   }, [digestWindow]);
   useEffect(() => { loadDigest(); }, [loadDigest]);
@@ -70,11 +70,11 @@ function usePiMemoryPanel() {
     setBusy('new:create');
     try {
       await createMemory({ newDraft });
-      message.success('PI memory 已添加');
+      message.success('Supervisor memory 已添加');
       setNewDraft(defaultNewDraft());
       await load();
     } catch (err) {
-      message.error(err.message || '添加 PI memory 失败');
+      message.error(err.message || '添加 Supervisor memory 失败');
     } finally {
       setBusy('');
     }
@@ -83,10 +83,10 @@ function usePiMemoryPanel() {
     setBusy(`${item.id}:${name}`);
     try {
       await runMemoryAction(item, name, drafts[item.id] || {});
-      message.success('PI memory 已更新');
+      message.success('Supervisor memory 已更新');
       await load();
     } catch (err) {
-      message.error(err.message || '更新 PI memory 失败');
+      message.error(err.message || '更新 Supervisor memory 失败');
     } finally {
       setBusy('');
     }
@@ -96,12 +96,12 @@ function usePiMemoryPanel() {
     setBusy(`bulk:${name}`);
     try {
       await piMemoryApi.batch({ action: name, ids: selectedIds });
-      message.success('PI memory batch review 已更新');
+      message.success('Supervisor memory batch review 已更新');
       setSelectedIds([]);
       await load();
       await loadDigest();
     } catch (err) {
-      message.error(err.message || '批量更新 PI memory 失败');
+      message.error(err.message || '批量更新 Supervisor memory 失败');
     } finally {
       setBusy('');
     }
@@ -164,7 +164,7 @@ function MemoryCreateForm({ state }) {
       <h3 style={{ fontSize: '0.94rem', marginBottom: '8px' }}>手动添加</h3>
       <textarea
         className="form-control"
-        placeholder="写入一条可审计、可删除的 PI memory"
+        placeholder="写入一条可审计、可删除的 Supervisor memory"
         rows={3}
         value={draft.content}
         onChange={(event) => state.updateNewDraft('content', event.target.value)}
@@ -194,7 +194,7 @@ function MemoryList({ state }) {
   if (!state.loading && state.items.length === 0) {
     return (
       <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem', lineHeight: 1.55 }}>
-        暂无 PI memory 或候选记忆。PI Assistant chat / manager cycle / supervisor 会通过
+        暂无 Supervisor memory 或候选记忆。Supervisor chat / manager cycle / supervisor 会通过
         <code> memory_write_candidate </code>写入记忆；明确授权的低风险个人偏好可自动启用，
         failure-pattern generator 会在 heartbeat 发现重复失败时写候选。推断、敏感、低置信度、项目/团队策略仍会保留为候选。
       </div>
@@ -213,7 +213,7 @@ function MemorySummary({ activeCount, candidateCount, recentCandidateSource }) {
       <SummaryPill label="Candidate memory" value={`${candidateCount} 条待审核`} />
       <SummaryPill label="最近候选来源" value={source} />
       <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', gridColumn: '1 / -1', lineHeight: 1.55, margin: 0 }}>
-        写入来源：PI Assistant chat / manager cycle / supervisor 通过 <code>memory_write_candidate</code> 记录。
+        写入来源：Supervisor chat / manager cycle / supervisor 通过 <code>memory_write_candidate</code> 记录。
         仅用户明确授权的低风险个人偏好可自动启用；推断、敏感、低置信度、项目/团队策略仍会保留为候选。
         可随时禁用或删除已启用记忆。
       </p>

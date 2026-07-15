@@ -1,4 +1,5 @@
 import { Bot, ChevronDown, Copy, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
+import { PRODUCT_TERMS } from '../brand';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import TurtleLoader from '../components/TurtleLoader';
 import SessionComposer from './sessions/SessionComposer';
@@ -39,7 +40,7 @@ function PiChatSidebar({ navigateTo, state }) {
       />
       <AgentStatus agent={state.selectedAgent} />
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
-        <MessageSquarePlus size={15} /> 新建 Assistant 会话
+        <MessageSquarePlus size={15} /> 新建 Supervisor 会话
       </button>
       <ConversationList
         conversations={state.conversations}
@@ -56,15 +57,15 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
       <div className="pi-chat-sidebar-brand">
         <span className="pi-chat-sidebar-icon"><Bot size={16} /></span>
         <div>
-          <strong>PI Assistant</strong>
+          <strong>{PRODUCT_TERMS.supervisor}</strong>
           <span>Single runtime</span>
         </div>
       </div>
       <div className="pi-chat-sidebar-actions">
-        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Assistant 会话">
+        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Supervisor 会话">
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="Assistant Settings">
+        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="Supervisor Settings">
           <Settings2 size={15} />
         </button>
       </div>
@@ -94,10 +95,10 @@ function ChatHeader({ state }) {
     <header
       className="pi-chat-main-header"
       onContextMenu={(event) => copyConversationDebugInfo(event, state.selectedConversation)}
-      title="右键复制当前 Assistant 会话诊断信息"
+      title="右键复制当前 Supervisor 会话诊断信息"
     >
       <div>
-        <span>PI Assistant</span>
+        <span>{PRODUCT_TERMS.supervisorShort}</span>
         <strong>{title}</strong>
       </div>
       <div className="pi-chat-header-actions">
@@ -121,14 +122,14 @@ function ConversationList({ conversations, onSelect, selectedId }) {
   return (
     <div className="pi-chat-conversation-list">
       <div className="pi-chat-sidebar-title">Conversations</div>
-      {conversations.length === 0 ? <div className="pi-chat-empty-mini">暂无 Assistant 会话</div> : (
+      {conversations.length === 0 ? <div className="pi-chat-empty-mini">暂无 Supervisor 会话</div> : (
         conversations.map((conversation) => (
           <button
             key={conversation.id}
             className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''}`}
             onClick={() => onSelect(conversation.id)}
             onContextMenu={(event) => copyConversationDebugInfo(event, conversation)}
-            title="右键复制 Assistant 会话诊断信息"
+            title="右键复制 Supervisor 会话诊断信息"
           >
             <span>{conversation.title || conversation.id}</span>
             <small>{shortId(conversation.pi_session_id || conversation.id)}</small>
@@ -166,7 +167,7 @@ function ChatThread({ navigateTo, state }) {
           ) : state.transcript.map((item) => (
             <ChatBubble key={item.id} conversation={state.selectedConversation} item={item} />
           ))}
-          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> PI Assistant 正在思考...</div>}
+          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Supervisor 正在思考...</div>}
         </div>
       </div>
       {showScrollButton && (
@@ -198,7 +199,7 @@ function ChatComposer({ state }) {
         running={messageRunning}
         interruptState={messageRunning ? piChatInterruptState(state, selectedId) : null}
         selectedId={selectedId}
-        placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Assistant 输入体验..."
+        placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Supervisor 输入体验..."
         onSubmit={state.handleSend}
         suggestions={buildPiChatProjectSuggestions(state.projects)}
         referenceDetails={buildPiChatReferenceDetails(state.references, state.projects)}
@@ -216,13 +217,13 @@ function piChatInterruptState(state, selectedId) {
   return {
     sessionId: selectedId,
     status: 'pending',
-    text: '正在停止 PI Assistant...',
+    text: '正在停止 Supervisor...',
     tone: 'info'
   };
 }
 
 function AgentStatus({ agent }) {
-  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 PI Assistant runtime</div>;
+  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 Supervisor runtime</div>;
   return (
     <div className="pi-chat-agent-status">
       <Bot size={14} />
@@ -237,7 +238,7 @@ function AgentStatus({ agent }) {
 function LoadingState() {
   return (
     <div className="pi-chat-empty">
-      <TurtleLoader label="玄武正在连接 Assistant…" />
+      <TurtleLoader label="玄武正在连接 Supervisor…" />
     </div>
   );
 }
@@ -246,9 +247,9 @@ function EmptyChat({ hasRuntime, navigateTo }) {
   return (
     <div className="pi-chat-empty">
       <Bot size={34} />
-      <strong>{hasRuntime ? '开始一次 Assistant 对话' : '先配置 PI Assistant'}</strong>
-      <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 PI 要创建/梳理什么 issue。' : 'Assistant Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
-      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Assistant Settings</button>}
+      <strong>{hasRuntime ? '开始一次 Supervisor 对话' : '先配置 Supervisor'}</strong>
+      <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 Supervisor 要创建/梳理什么 issue。' : 'Supervisor Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
+      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Supervisor Settings</button>}
     </div>
   );
 }
@@ -263,7 +264,7 @@ function ChatBubble({ conversation, item }) {
       onContextMenu={(event) => copyMessageDebugInfo(event, item, conversation)}
       title="右键复制消息诊断信息"
     >
-      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? 'PI Assistant' : item.role === 'error' ? 'Error' : 'You'}</div>
+      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? PRODUCT_TERMS.supervisorShort : item.role === 'error' ? 'Error' : 'You'}</div>
       <MarkdownPreview text={item.text} className="pi-chat-markdown" />
       {(conversationId || sessionId) && (
         <div className="pi-chat-bubble-meta">
@@ -286,10 +287,10 @@ function piBubbleMetaLabel(conversationId, sessionId) {
 function copyConversationDebugInfo(event, conversation) {
   if (!conversation) return;
   event?.preventDefault();
-  copyPiDebugText(formatPiConversationDebugInfo(conversation), '已复制 Assistant 会话诊断信息');
+  copyPiDebugText(formatPiConversationDebugInfo(conversation), '已复制 Supervisor 会话诊断信息');
 }
 
 function copyMessageDebugInfo(event, item, conversation) {
   event?.preventDefault();
-  copyPiDebugText(formatPiMessageDebugInfo(item, conversation), '已复制 Assistant 消息诊断信息');
+  copyPiDebugText(formatPiMessageDebugInfo(item, conversation), '已复制 Supervisor 消息诊断信息');
 }

@@ -444,7 +444,7 @@ describe("Bun SQLite database connection", () => {
       expect(connection.sqlite.query("select count(*) as count from pi_agents").get()).toEqual({ count: 1 });
       expect(connection.sqlite.query("select id, name, provider, thinking_level, cwd_policy, enabled from pi_agents").get()).toEqual({
         id: "runner-default",
-        name: "PI Assistant",
+        name: "Xuanwu Supervisor",
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",

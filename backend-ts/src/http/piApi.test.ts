@@ -38,7 +38,7 @@ describe("Bun PI settings API", () => {
       expect(read.status).toBe(200);
       expect(await read.json()).toMatchObject({
         id: "runner-default",
-        name: "PI Assistant",
+        name: "Xuanwu Supervisor",
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",

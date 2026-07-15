@@ -53,7 +53,7 @@ function ConnectorsSettingsTab() {
       <SettingsPlaceholderPanel
         eyebrow="Connectors"
         title="Connector slots"
-        description="外部来源会作为 PI Assistant 的 connector/tool provider 接入；当前提供只读健康摘要和已有 IM 配置入口。"
+        description="外部来源会作为 Supervisor 的 connector/tool provider 接入；当前提供只读健康摘要和已有 IM 配置入口。"
         items={['CLI connector 通过 manifest 暴露配置/health 诊断。', 'Feishu 仍走现有 integration settings API。']}
       />
       <PiMcpManagementPanel />
@@ -69,7 +69,7 @@ function SkillsSettingsTab() {
       <SettingsPlaceholderPanel
         eyebrow="Skills"
         title="Skill registry"
-        description="Skills 在同一个 PI Assistant 下声明 intake/domain 能力、所需工具、schema 与运行历史。"
+        description="Skills 在同一个 Supervisor 下声明 intake/domain 能力、所需工具、schema 与运行历史。"
         items={['Intake skill 负责从 context bundle 识别入箱事项。', 'Domain skill 负责从 inbox item 生成 approval-gated action proposal。']}
       />
       <SkillsRuntimePanel />
@@ -83,8 +83,8 @@ function MemorySettingsTab() {
     <>
       <SettingsPlaceholderPanel
         eyebrow="Memory"
-        title="Assistant Memory"
-        description="Memory 是 PI Assistant 的可审计上下文入口；当前继续使用已有 memory 面板。"
+        title="Supervisor Memory"
+        description="Memory 是 Supervisor 的可审计上下文入口；当前继续使用已有 memory 面板。"
       />
       <PiMemoryPanel />
     </>

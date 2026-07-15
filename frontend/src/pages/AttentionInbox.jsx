@@ -39,7 +39,7 @@ export default function AttentionInbox() {
       .catch((err) => {
         if (cancelled) return;
         if (err.status === 404) {
-          setUnavailable('当前 runtime 尚未启用 Inbox API；这是 PI Assistant Inbox 的预留入口，升级后会显示 intake items。');
+          setUnavailable('当前 runtime 尚未启用 Inbox API；这是 Supervisor Inbox 的预留入口，升级后会显示 intake items。');
           setItems([]);
           setSelectedId(0);
           return;
@@ -103,9 +103,9 @@ export default function AttentionInbox() {
     <div className="attention-inbox-page">
       <section className="attention-inbox-hero">
         <div>
-          <p className="eyebrow">PI Assistant</p>
+          <p className="eyebrow">Xuanwu Supervisor</p>
           <h1>Inbox</h1>
-          <p>处理事项视图：从 raw event、context bundle、intake run 追溯 PI 为什么认为它需要关注。</p>
+          <p>处理事项视图：从 raw event、context bundle、intake run 追溯 Supervisor 为什么认为它需要关注。</p>
         </div>
         <div className="attention-inbox-filter" aria-label="状态筛选">
           {STATUSES.map((value) => (

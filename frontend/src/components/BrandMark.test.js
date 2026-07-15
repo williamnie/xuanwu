@@ -10,8 +10,9 @@ const cssSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
 const indexHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
 test('Xuanwu brand constants and logo are available to app chrome', () => {
-  assert.match(brandConstants, /name:\s*'Xuanwu'/);
-  assert.match(brandConstants, /hanzi:\s*'玄武'/);
+  assert.match(brandConstants, /productLatin:\s*'Xuanwu'/);
+  assert.match(brandConstants, /product:\s*'玄武'/);
+  assert.match(brandConstants, /descriptor:\s*'AI Engineering Control Plane'/);
   assert.match(brandSource, /function XuanwuLogo/);
   assert.match(brandSource, /turtle-logo-img/);
   assert.match(brandSource, /turtleAssetForState/);
@@ -34,5 +35,5 @@ test('brand visual system includes Xuanwu CSS and favicon title metadata', () =>
   assert.match(cssSource, /background:\s*transparent/);
   assert.match(cssSource, /data-brand-state="running"/);
   assert.match(indexHtml, /brand-turtles\/turtle-idle\.png/);
-  assert.match(indexHtml, /Xuanwu · Agent Guardian/);
+  assert.match(indexHtml, /玄武 Xuanwu · AI Engineering Control Plane/);
 });

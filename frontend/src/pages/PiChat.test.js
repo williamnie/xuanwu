@@ -21,8 +21,10 @@ test('PI Assistant page does not require a project selection for global chat', (
   assert.doesNotMatch(stateSource, /请先选择 Project/);
 });
 
-test('PI Assistant page uses assistant naming in visible chat copy', () => {
-  assert.match(pageSource, /PI Assistant/);
+test('Supervisor page uses canonical naming in visible chat copy', () => {
+  assert.match(pageSource, /PRODUCT_TERMS\.supervisor/);
+  assert.match(pageSource, /Supervisor Settings/);
+  assert.doesNotMatch(pageSource, /PI Assistant/);
   assert.doesNotMatch(pageSource, /Runner Brain/);
   assert.doesNotMatch(pageSource, /Runner Agent/);
   assert.doesNotMatch(pageSource, /PI Chat/);
@@ -100,11 +102,11 @@ test('PI Assistant chat lists all conversations instead of only active rows', ()
   assert.doesNotMatch(stateSource, /getPiConversations\(\{\s*status:\s*'active'\s*\}\)/);
 });
 
-test('PI Assistant chat exposes copyable conversation and message diagnostics', () => {
+test('Supervisor chat exposes copyable conversation and message diagnostics', () => {
   assert.match(pageSource, /formatPiConversationDebugInfo/);
   assert.match(pageSource, /formatPiMessageDebugInfo/);
-  assert.match(pageSource, /右键复制当前 Assistant 会话诊断信息/);
-  assert.match(pageSource, /右键复制 Assistant 会话诊断信息/);
+  assert.match(pageSource, /右键复制当前 Supervisor 会话诊断信息/);
+  assert.match(pageSource, /右键复制 Supervisor 会话诊断信息/);
   assert.match(pageSource, /右键复制消息诊断信息/);
   assert.match(pageSource, /复制当前会话诊断信息/);
   assert.match(stateSource, /created_at:\s*item\.created_at \|\| ''/);

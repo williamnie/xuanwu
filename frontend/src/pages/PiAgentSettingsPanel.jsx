@@ -9,7 +9,7 @@ export default function PiAgentSettingsPanel() {
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
       {state.loading ? (
-        <PanelLoader label="玄武正在读取 Assistant 配置…" />
+        <PanelLoader label="玄武正在读取 Supervisor 配置…" />
       ) : (
         <PiSettingsForm state={state} />
       )}
@@ -35,10 +35,10 @@ function PanelHeader({ loading, onRefresh }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
       <div>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={18} color="var(--primary)" /> PI Assistant · Runtime
+          <Bot size={18} color="var(--primary)" /> Xuanwu Supervisor · Runtime
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          配置这个唯一 PI Assistant 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。
+          配置这个唯一 Supervisor 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -60,7 +60,7 @@ function Field({ children, label }) {
 function PiSettingsGrid({ form, updateField }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-      <TextField form={form} label="Assistant Display Name" name="agentName" updateField={updateField} />
+      <TextField form={form} label="Supervisor Display Name" name="agentName" updateField={updateField} />
       <TextField form={form} label="Model Provider" name="modelProvider" placeholder="openai / anthropic / local" updateField={updateField} />
       <TextField form={form} label="Model ID" name="modelId" placeholder="gpt-5.4" updateField={updateField} />
       <ApiTypeField form={form} updateField={updateField} />
@@ -102,14 +102,14 @@ function ProviderCredentialFields({ state }) {
   return (
     <>
       <TextField form={state.form} label="API Path / Base URL" name="baseUrl" placeholder="https://api.openai.com/v1 或自定义兼容代理地址" updateField={state.updateField} />
-      <TextField form={state.form} label="User-Agent" name="userAgent" placeholder="例如 CodexIssueRunner/1.0 PI" updateField={state.updateField} />
+      <TextField form={state.form} label="User-Agent" name="userAgent" placeholder="例如 XuanwuSupervisor/1.0" updateField={state.updateField} />
       <Field label={`API Key${configured ? '（已配置；留空保留旧 key）' : ''}`}>
         <input
           className="form-control"
           type="password"
           value={state.form.apiKey}
           onChange={(event) => state.updateField('apiKey', event.target.value)}
-          placeholder={configured ? '已配置，输入新 key 可覆盖' : '输入 PI Assistant provider API key'}
+          placeholder={configured ? '已配置，输入新 key 可覆盖' : '输入 Supervisor provider API key'}
         />
       </Field>
       <Field label="Runtime Instructions">
@@ -154,7 +154,7 @@ function OAuthButtons({ state }) {
         在默认浏览器打开
       </button>
       <button className="btn btn-secondary" onClick={state.logoutPiCodexOAuth} disabled={state.oauthBusy || !state.oauthStatus?.pi_oauth?.configured} type="button">
-        退出 PI OAuth
+        退出 Supervisor OAuth
       </button>
     </div>
   );
@@ -163,7 +163,7 @@ function OAuthButtons({ state }) {
 function OAuthStatusLine({ status }) {
   return (
     <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'grid', gap: '4px' }}>
-      <span>PI OAuth：{status?.pi_oauth?.configured ? '已配置' : '未配置'} · {status?.pi_oauth?.status || 'idle'}</span>
+      <span>Supervisor OAuth：{status?.pi_oauth?.configured ? '已配置' : '未配置'} · {status?.pi_oauth?.status || 'idle'}</span>
       <span>本机 Codex 登录：{status?.codex_login?.configured ? '已检测到' : '未检测到'} · {status?.codex_login?.storage || 'file'}</span>
       {status?.auth_url && <code style={{ color: 'var(--text-muted)', wordBreak: 'break-all' }}>{status.auth_url}</code>}
     </div>
@@ -202,7 +202,7 @@ function AgentEnableField({ form, updateField }) {
   return (
     <label style={{ display: 'flex', gap: '10px', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '0.86rem' }}>
       <input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} />
-      启用 PI Assistant
+      启用 Supervisor
     </label>
   );
 }
@@ -212,10 +212,10 @@ function SaveRow({ onSave, saving }) {
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
       <button className="btn btn-primary" onClick={onSave} disabled={saving}>
         {saving ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
-        保存 Assistant Settings
+        保存 Supervisor Settings
       </button>
       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-        API key 只写入后端 PI provider models.json；读取时只显示是否 configured，不回显明文。
+        API key 只写入后端 provider 配置；读取时只显示是否 configured，不回显明文。
       </span>
     </div>
   );

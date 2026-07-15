@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
+import { PRODUCT_TERMS } from '../brand';
 import { message } from '../store/toastStore';
 
 export const DEFAULT_PI_AGENT_ID = 'runner-default';
 
 export const DEFAULT_PI_AGENT_FORM = {
   agentId: DEFAULT_PI_AGENT_ID,
-  agentName: 'PI Assistant',
+  agentName: PRODUCT_TERMS.supervisor,
   api: 'openai-responses',
   apiKey: '',
   baseUrl: '',
   enabled: true,
-  instructions: '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+  instructions: '你是玄武的 Supervisor runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀工程记忆。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
   thinkingLevel: 'medium',
@@ -19,9 +20,12 @@ export const DEFAULT_PI_AGENT_FORM = {
 };
 
 const LEGACY_PI_ASSISTANT_INSTRUCTIONS = new Set([
+  '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
 ]);
+
+const LEGACY_PI_AGENT_NAMES = new Set(['PI Assistant', 'Runner Agent', 'Runner Brain']);
 
 export function usePiAgentSettingsState() {
   const [providers, setProviders] = useState([]);
@@ -71,7 +75,7 @@ function loadPiSettings(setProviders, setForm, setLoading, setPromptSummary) {
       setForm(formFromState(nextAgents, nextProviders));
       setPromptSummary(null);
     })
-    .catch((err) => message.error(err.message || '读取 PI Assistant 设置失败'))
+    .catch((err) => message.error(err.message || '读取 Supervisor 设置失败'))
     .finally(() => setLoading(false));
 }
 
@@ -128,9 +132,9 @@ async function logoutPiOAuth(setOauthBusy, setOauthStatus) {
   setOauthBusy(true);
   try {
     setOauthStatus(await api.logoutPiCodexOAuth());
-    message.success('已退出 PI Codex OAuth');
+    message.success('已退出 Supervisor Codex OAuth');
   } catch (err) {
-    message.error(err.message || '退出 PI Codex OAuth 失败');
+    message.error(err.message || '退出 Supervisor Codex OAuth 失败');
   } finally {
     setOauthBusy(false);
   }
@@ -143,7 +147,7 @@ function openOAuthUrl(url) {
 
 async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLoading) {
   const id = agentId.trim();
-  if (!id) return message.error('默认 PI Assistant 尚不可用');
+  if (!id) return message.error('默认 Supervisor 尚不可用');
   setPromptSummaryLoading(true);
   try {
     setPromptSummary(await api.getPiAgentRuntimePrompt(id));
@@ -160,11 +164,11 @@ async function savePiSettings({ form, setForm, setPromptSummary, setProviders, s
   try {
     await api.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
     await saveAgent(agentPayload(form));
-    message.success('Assistant Settings 已保存');
+    message.success('Supervisor Settings 已保存');
     setPromptSummary(null);
     await refreshAfterSave(setProviders, setForm);
   } catch (err) {
-    message.error(err.message || '保存 Assistant Settings 失败');
+    message.error(err.message || '保存 Supervisor Settings 失败');
   } finally {
     setSaving(false);
   }
@@ -217,7 +221,7 @@ function formFromState(agents, providers) {
   return {
     ...DEFAULT_PI_AGENT_FORM,
     agentId: agent.id,
-    agentName: agent.name,
+    agentName: normalizedAgentName(agent.name),
     api: provider?.api || DEFAULT_PI_AGENT_FORM.api,
     apiKey: '',
     baseUrl: provider?.base_url || '',
@@ -236,6 +240,14 @@ function normalizedInstructions(instructions) {
     return DEFAULT_PI_AGENT_FORM.instructions;
   }
   return instructions;
+}
+
+function normalizedAgentName(name) {
+  const value = String(name || '').trim();
+  if (!value || LEGACY_PI_AGENT_NAMES.has(value)) {
+    return DEFAULT_PI_AGENT_FORM.agentName;
+  }
+  return name;
 }
 
 function defaultAgentFromList(agents) {

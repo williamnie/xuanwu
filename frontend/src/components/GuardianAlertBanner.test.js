@@ -57,7 +57,7 @@ test('Guardian alert display maps missed digest pending to actionable Chinese co
   assert.equal(display.severityLabel, '观察');
   assert.match(display.message, /待补发的通知摘要/);
   assert.match(display.message, /恢复后会自动补发/);
-  assert.match(display.message, /检查 PI Guardian 的 digest\/coordinator\/outbox 状态/);
+  assert.match(display.message, /检查 Guardian 的 digest\/coordinator\/outbox 状态/);
   assert.match(display.meta, /范围：系统级/);
   assert.match(display.meta, /级别：观察/);
   assert.doesNotMatch(visibleText, /missed_digest_pending|digest_pipeline_unavailable|project -/);

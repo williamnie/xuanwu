@@ -1,10 +1,10 @@
 const ALERT_TYPE_DISPLAYS = {
   coordinator_stalled: {
-    message: '通知协调器存在待处理任务，后续通知分发可能延迟。请检查 PI Guardian 的 coordinator 状态和 pending intents。',
+    message: '通知协调器存在待处理任务，后续通知分发可能延迟。请检查 Guardian 的 coordinator 状态和 pending intents。',
     title: '通知协调器处理停滞',
   },
   digest_flush_stalled: {
-    message: '摘要发送已超过预期，可能导致飞书摘要延迟。请检查 PI Guardian 的 digest 状态和相关 run group；恢复后系统会继续发送。',
+    message: '摘要发送已超过预期，可能导致飞书摘要延迟。请检查 Guardian 的 digest 状态和相关 run group；恢复后系统会继续发送。',
     title: '飞书摘要发送积压',
   },
   guardian_inbox_stalled: {
@@ -20,8 +20,8 @@ const ALERT_TYPE_DISPLAYS = {
     title: '飞书通知发送队列积压',
   },
   scheduler_stalled: {
-    message: 'PI 自动调度心跳已超时，自动巡检和恢复可能暂停。请确认 scheduler 进程仍在运行，必要时重启 runner 服务。',
-    title: 'PI 自动调度心跳停滞',
+    message: 'Supervisor 自动调度心跳已超时，自动巡检和恢复可能暂停。请确认 scheduler 进程仍在运行，必要时重启 Runner 服务。',
+    title: 'Supervisor 自动调度心跳停滞',
   },
 };
 
@@ -65,7 +65,7 @@ function alertMessage(display, alert) {
 
 function missedDigestPendingMessage(alert) {
   const reason = guardianReasonLabel(alertReason(alert)) || '通知摘要链路暂时不可用';
-  return `系统发现有待补发的通知摘要，但当前${reason}。恢复后会自动补发；如持续出现，请检查 PI Guardian 的 digest/coordinator/outbox 状态。`;
+  return `系统发现有待补发的通知摘要，但当前${reason}。恢复后会自动补发；如持续出现，请检查 Guardian 的 digest/coordinator/outbox 状态。`;
 }
 
 function alertReason(alert) {
@@ -99,7 +99,7 @@ function projectScope(projectId) {
 
 function fallbackDisplay() {
   return {
-    message: 'Guardian 发现一条系统告警，可能影响自动恢复或通知链路。请检查 PI Guardian 状态页和后端日志。',
+    message: 'Guardian 发现一条系统告警，可能影响自动恢复或通知链路。请检查 Guardian 状态页和后端日志。',
     title: 'Guardian 系统告警',
   };
 }
