@@ -30,6 +30,19 @@ export default function Dashboard({
   const [events, updateEvents] = useImmer([]);
 
   useEffect(() => {
+    let active = true;
+    api.getEventSummaries({ limit: 20 })
+      .then(result => {
+        if (!active) return;
+        const history = [...(result?.items || [])].reverse().map(summaryDashboardEvent);
+        updateEvents(draft => {
+          const liveIDs = new Set(draft.map(event => event.id).filter(Boolean));
+          draft.push(...history.filter(event => !liveIDs.has(event.id)));
+          if (draft.length > 20) draft.length = 20;
+        });
+      })
+      .catch(() => {});
+
     // 订阅全局 SSE 事件流
     const unsubscribe = api.subscribeToEvents(
       (event) => {
@@ -50,7 +63,10 @@ export default function Dashboard({
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [updateEvents]);
 
   // 统计计算
@@ -283,4 +299,25 @@ export default function Dashboard({
 
     </div>
   );
+}
+
+function summaryDashboardEvent(event) {
+  const payload = dashboardEventPayload(event.payload);
+  return {
+    ...event,
+    viewId: `summary-${event.id}`,
+    issueId: event.issue_id,
+    projectId: event.project_id,
+    status: payload.status || '',
+    text: event.summary || payload.text || '',
+    timestamp: event.created_at ? new Date(event.created_at).toLocaleTimeString() : ''
+  };
+}
+
+function dashboardEventPayload(value) {
+  try {
+    return JSON.parse(value || '{}');
+  } catch {
+    return {};
+  }
 }

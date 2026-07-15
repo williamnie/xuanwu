@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../../database.ts";
-import { listIssueEvents } from "../issueEvents.ts";
+import { queryEventSummaries } from "../../../events/eventSummaryQuery.ts";
 import { listIssueRuns } from "../issues.ts";
 import { listPiActionEvents, type PiAction, type PiActionEvent } from "./actions.ts";
 import type { ActionProposalRecord } from "./actionProposals.ts";
@@ -139,7 +139,7 @@ function replyIncluded(scope: PiActivityScope, reply: PiActivityRows["replies"][
 }
 
 function safeIssueEvents(db: RunnerDatabase, issueID: number) {
-  try { return listIssueEvents(db, issueID); } catch { return []; }
+  try { return queryEventSummaries(db, { issueID, limit: 500 }).items; } catch { return []; }
 }
 
 function actionList(actions: ActionProposalRecord["actions"]): string {

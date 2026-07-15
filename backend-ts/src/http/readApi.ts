@@ -35,6 +35,7 @@ import { registerPiSupervisorRoutes } from "./piSupervisorApi.ts";
 import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { registerUsageRoutes } from "./usageApi.ts";
 import type { Router } from "./router.ts";
+import { registerEventSummaryRoutes } from "./eventSummariesApi.ts";
 
 type ReadApiContext = {
   bus?: EventBus;
@@ -48,6 +49,7 @@ type ReadApiContext = {
 
 
 export function registerReadApiRoutes(router: Router, context: ReadApiContext): void {
+  registerEventSummaryRoutes(router, context);
   registerIssuesPageAuxRoutes(router, context);
   registerProjectRoutes(router, context);
   registerIssueCollectionRoutes(router, context);

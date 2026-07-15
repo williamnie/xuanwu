@@ -219,6 +219,34 @@ git push origin v0.1.0
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
 当前 CLI 子命令不实现 `--help`，`--json` 输出是完整 JSON 文档且可能跨多行。
 
+Dashboard、PI Activity 和 Issue Activity/Work timeline 默认读取可重建的 `event_summary_projection`；完整 Logs、Session/Guardian 与 legacy event API 仍读取 `issue_events` authority。首次切读或需要校验 cursor 时，在数据库副本先执行可中断重建：
+
+```bash
+cd backend-ts
+COPY_DB=/path/to/runner-copy.db
+bun run src/main.ts maintenance events rebuild-projection \
+  --db "$COPY_DB" \
+  --actor operator-id \
+  --actor-kind user \
+  --reason "event summary projection rebuild rehearsal" \
+  --audit-ref "pi_action_events:approved-projection-rebuild" \
+  --batch-size 500 \
+  --json
+
+# 使用 --max-batches N 受控暂停后，从已提交 watermark 继续
+bun run src/main.ts maintenance events rebuild-projection \
+  --db "$COPY_DB" \
+  --actor operator-id \
+  --actor-kind user \
+  --reason "event summary projection rebuild rehearsal" \
+  --audit-ref "pi_action_events:approved-projection-rebuild" \
+  --batch-size 500 \
+  --resume \
+  --json
+```
+
+重建只清理 derived projection/watermark，started/paused/completed/failed 会写入 `pi_action_events`；`actor=llm` 或未知 `actor-kind` 会拒绝。该 cursor watermark 不能作为 raw 删除授权，P01.02 的 archive/summary/hold/reference/destructive gates 仍全部适用。完整 contract 见 `docs/architecture/xuanwu/0009-event-summary-projection.md`。
+
 ## 事件归档与数据库维护 runbook
 
 维护命令直接操作指定 SQLite 文件，不经过 HTTP。`issue_events` 仍是唯一 source of truth；归档目录只是 append-only shadow archive，不参与 Issue / Session / Guardian / PI 的 live read。首次演练必须使用 SQLite online backup 副本，不能直接拿正式库试验。

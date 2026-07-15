@@ -302,7 +302,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
         ] = await Promise.all([
           readOptional(() => api.getProject(issueData.project_id), '获取关联项目失败:'),
           readOptional(
-            () => api.getIssueEvents(issueId, { excludeTypes: ['issue.log'] }),
+            () => api.getIssueEventSummaries(issueId, { excludeTypes: ['issue.log'] }),
             '获取活动事件失败:',
             [],
           ),

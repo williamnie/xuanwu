@@ -64,6 +64,13 @@ describe("Bun system status endpoints", () => {
       expect(body.config.addr).toBe("127.0.0.1:3008");
       expect(body.config.auth_enabled).toBe(true);
       expect(body.config.db_path).toBe("<stateDir>/runner.db");
+      expect(body.event_projection).toMatchObject({
+        lag_rows: 0,
+        last_event_id: 0,
+        projected_row_count: 0,
+        source_of_truth: "issue_events",
+        status: "ready"
+      });
       expect(body.codex).toMatchObject({
         command: "codex app-server --listen stdio://",
         command_ok: true,
@@ -420,6 +427,7 @@ type SystemStatusBody = {
   db: { ok: boolean };
   codex: Record<string, unknown>;
   connectors: Array<{ id: string } & Record<string, unknown>>;
+  event_projection: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
   runner: Record<string, number>;
   service: {

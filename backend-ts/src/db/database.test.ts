@@ -55,6 +55,8 @@ describe("Bun SQLite database connection", () => {
         "context_bundles",
         "cron_task_schedules",
         "cron_tasks",
+        "event_projection_watermarks",
+        "event_summary_projection",
         "external_events",
         "external_links",
         "feishu_conversation_state",
@@ -182,9 +184,20 @@ describe("Bun SQLite database connection", () => {
         { id: "036_pi_automation_scheduler" },
         { id: "037_pi_action_proposals" },
         { id: "038_pi_memory_store_metadata" },
-        { id: "039_pi_mcp_discovery" }
+        { id: "039_pi_mcp_discovery" },
+        { id: "040_event_summary_projection" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
+      expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
+        "idx_event_summary_projection_issue",
+        "idx_event_summary_projection_project"
+      ]));
+      expect(columnNames(connection, "event_projection_watermarks")).toEqual(expect.arrayContaining([
+        "last_event_id",
+        "projected_row_count",
+        "projection_id",
+        "projector_version"
+      ]));
       expect(columnNames(connection, "pi_actions")).toContain("gate_decision");
       expect(columnNames(connection, "pi_actions")).toEqual(expect.arrayContaining([
         "before_snapshot_json",
@@ -697,7 +710,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 39 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 40 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

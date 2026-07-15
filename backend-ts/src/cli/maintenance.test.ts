@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "./command.ts";
+import { openDatabase } from "../db/database.ts";
 
 const roots: string[] = [];
 
@@ -57,7 +58,53 @@ describe("maintenance CLI", () => {
     expect(code).toBe(1);
     expect(stderr.text).toContain("Unknown argument: --apply");
   });
+
+  test("rebuilds and resumes the audited event summary projection", async () => {
+    const root = mkdtempSync(join(tmpdir(), "maintenance-projection-cli-"));
+    roots.push(root);
+    const dbPath = join(root, "runner-copy.db");
+    const database = await openDatabase({ dbPath, stateDir: root });
+    database.sqlite.run(`
+      insert into projects (id, name, cwd, created_at, updated_at)
+        values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+      insert into issues (project_id, title, status, created_at, updated_at)
+        values ('demo', 'Projection', 'done', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+      insert into issue_events (issue_id, type, payload, created_at) values
+        (1, 'issue.created', '{}', '2026-01-01T00:00:00Z'),
+        (1, 'issue.log', '{"raw_method":"item/agentMessage/delta","text":"a"}', '2026-01-01T00:00:01Z'),
+        (1, 'issue.status_changed', '{"status":"done"}', '2026-01-01T00:00:02Z');
+    `);
+    database.close();
+
+    const first = await cli(["--batch-size", "2", "--max-batches", "1"], dbPath);
+    const resumed = await cli(["--batch-size", "2", "--resume"], dbPath);
+
+    expect(first).toMatchObject({ paused: true, projected_rows: 2, watermark: { last_event_id: 2 } });
+    expect(resumed).toMatchObject({ paused: false, projected_rows: 1, watermark: { last_event_id: 3 } });
+    const check = new Database(dbPath, { readonly: true });
+    expect(check.query<{ count: number }, []>(
+      "select count(*) as count from event_summary_projection"
+    ).get()?.count).toBe(3);
+    expect(check.query<{ count: number }, []>(`
+      select count(*) as count from pi_action_events
+      where event_type like 'event_summary_projection.rebuild_%'
+    `).get()?.count).toBe(4);
+    check.close();
+  });
 });
+
+async function cli(extra: string[], dbPath: string): Promise<Record<string, unknown>> {
+  const stdout = new MemoryWriter();
+  const stderr = new MemoryWriter();
+  const code = await runCli([
+    "maintenance", "events", "rebuild-projection", "--db", dbPath,
+    "--actor", "operator", "--actor-kind", "user", "--audit-ref", "pi_action_events:test-rebuild",
+    "--reason", "projection test", ...extra, "--json"
+  ], stdout, stderr);
+  expect(code).toBe(0);
+  expect(stderr.text).toBe("");
+  return JSON.parse(stdout.text);
+}
 
 class MemoryWriter {
   text = "";

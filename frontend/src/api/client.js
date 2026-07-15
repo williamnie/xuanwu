@@ -116,6 +116,17 @@ function dispatchEventMessage(event) {
   }
 }
 
+function eventSummaryParams({ afterId, beforeId, excludeTypes, limit, projectId = '', types }) {
+  const params = new URLSearchParams();
+  if (afterId) params.append('after_id', String(afterId));
+  if (beforeId) params.append('before_id', String(beforeId));
+  for (const type of excludeTypes) params.append('exclude_type', type);
+  if (limit) params.append('limit', String(limit));
+  if (projectId) params.append('project_id', projectId);
+  for (const type of types) params.append('type', type);
+  return params;
+}
+
 
 export const api = {
   validateAuthToken: () => request('/api/system/status'),
@@ -203,6 +214,12 @@ export const api = {
   },
 
   getSystemStatus: () => request('/api/system/status'),
+
+  getEventSummaries: ({ afterId = '', beforeId = '', excludeTypes = [], limit = 0, projectId = '', types = [] } = {}) => {
+    const params = eventSummaryParams({ afterId, beforeId, excludeTypes, limit, projectId, types });
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/event-summaries${query}`);
+  },
 
   getPiConnectors: () => request('/api/pi/connectors'),
 
@@ -436,6 +453,12 @@ export const api = {
     for (const type of types) params.append('type', type);
     const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/issues/${id}/events${query}`);
+  },
+
+  getIssueEventSummaries: (id, { afterId = '', beforeId = '', excludeTypes = [], limit = 0, types = [] } = {}) => {
+    const params = eventSummaryParams({ afterId, beforeId, excludeTypes, limit, types });
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/issues/${id}/event-summaries${query}`).then(result => result?.items || []);
   },
 
   getIssueRuns: (id) => request(`/api/issues/${id}/runs`),

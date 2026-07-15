@@ -6,6 +6,7 @@ import {
   restoreArchivedEvents,
   vacuumEventDatabase
 } from "../events/maintenanceService.ts";
+import { rebuildEventSummaryProjection } from "../events/eventSummaryProjectionService.ts";
 import { formatJSON } from "./output.ts";
 
 const BOOLEAN_FLAGS = new Set([
@@ -30,6 +31,18 @@ export function runMaintenance(args: string[]): string {
       before: flags.before,
       now: flags.now,
       reportPath: flags.report
+    });
+  } else if (family === "events" && command === "rebuild-projection") {
+    allowOnly(flags, ["actor", "actor-kind", "audit-ref", "batch-size", "db", "json", "max-batches", "reason", "resume"]);
+    report = rebuildEventSummaryProjection({
+      actor: required(flags, "actor"),
+      actorKind: actorKind(flags["actor-kind"]),
+      auditRef: required(flags, "audit-ref"),
+      batchSize: optionalInteger(flags["batch-size"], "--batch-size"),
+      dbPath: required(flags, "db"),
+      maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
+      reason: required(flags, "reason"),
+      resume: enabled(flags, "resume")
     });
   } else if (family === "events" && command === "archive") {
     allowOnly(flags, ["actor", "archive", "audit-ref", "batch-size", "before", "db", "json", "max-batches", "now", "reason", "report", "resume"]);
@@ -139,6 +152,12 @@ function actor(flags: Record<string, string>): { actor: string; auditRef: string
     auditRef: required(flags, "audit-ref"),
     reason: required(flags, "reason")
   };
+}
+
+function actorKind(value: string | undefined): "retention_worker" | "system" | "user" {
+  const kind = value?.trim().toLowerCase();
+  if (kind === "retention_worker" || kind === "system" || kind === "user") return kind;
+  throw new Error("--actor-kind must be user, system, or retention_worker");
 }
 
 function required(flags: Record<string, string>, name: string): string {

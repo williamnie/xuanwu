@@ -15,3 +15,10 @@ test('api client exposes PI conversation interrupt endpoint', () => {
   assert.match(clientSource, /interruptPiConversation:\s*\(id\) => request/);
   assert.ok(clientSource.includes('`/api/pi/conversations/${encodeURIComponent(id)}/interrupt`'));
 });
+
+test('api client exposes global and issue-scoped event summary queries', () => {
+  assert.match(clientSource, /getEventSummaries:/);
+  assert.match(clientSource, /`\/api\/event-summaries\$\{query\}`/);
+  assert.match(clientSource, /getIssueEventSummaries:/);
+  assert.match(clientSource, /`\/api\/issues\/\$\{id\}\/event-summaries\$\{query\}`/);
+});
