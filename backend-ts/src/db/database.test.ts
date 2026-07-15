@@ -105,7 +105,10 @@ describe("Bun SQLite database connection", () => {
         "session_turn_references",
         "sqlite_sequence",
         "sync_outbox",
-        "uploads"
+        "uploads",
+        "work_events",
+        "work_relations",
+        "works"
       ]);
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
       expect(columnNames(connection, "projects")).toContain("default_service_tier");
@@ -185,7 +188,8 @@ describe("Bun SQLite database connection", () => {
         { id: "037_pi_action_proposals" },
         { id: "038_pi_memory_store_metadata" },
         { id: "039_pi_mcp_discovery" },
-        { id: "040_event_summary_projection" }
+        { id: "040_event_summary_projection" },
+        { id: "041_work_ledger_schema" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -710,7 +714,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 40 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 41 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

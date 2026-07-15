@@ -38,6 +38,7 @@ import { piActionProposalsMigration } from "./037_pi_action_proposals.ts";
 import { piMemoryStoreMetadataMigration } from "./038_pi_memory_store_metadata.ts";
 import { piMcpDiscoveryMigration } from "./039_pi_mcp_discovery.ts";
 import { eventSummaryProjectionMigration } from "./040_event_summary_projection.ts";
+import { workLedgerSchemaMigration } from "./041_work_ledger_schema.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -79,5 +80,6 @@ export const migrations = [
   piActionProposalsMigration,
   piMemoryStoreMetadataMigration,
   piMcpDiscoveryMigration,
-  eventSummaryProjectionMigration
+  eventSummaryProjectionMigration,
+  workLedgerSchemaMigration
 ];
