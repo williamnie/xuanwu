@@ -12,7 +12,7 @@ test('Issue Detail supervisor panel reads diagnosis, retry wait, recovery histor
   assert.match(panelSource, /Diagnosis/);
   assert.match(panelSource, /Last provider error/);
   assert.match(panelSource, /429 \/ retry-after wait/);
-  assert.match(panelSource, /PI decision rationale/);
+  assert.match(panelSource, /Decision rationale/);
   assert.match(panelSource, /Executed recovery message/);
   assert.match(panelSource, /Recovery history/);
   assert.doesNotMatch(panelSource, /window\.alert|window\.confirm/);
