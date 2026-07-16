@@ -302,6 +302,7 @@
 .work-card-footer { border-top: 1px solid var(--border-light); justify-content: space-between; margin-top: 11px; padding-top: 9px; }
 .work-card-footer button { align-items: center; background: transparent; border: 0; color: var(--text-muted); cursor: pointer; display: inline-flex; font-size: 0.65rem; font-weight: 700; gap: 4px; padding: 2px 0; }
 .work-card-footer .work-issue-link { color: var(--primary); }
+.work-card-footer .work-evidence-link { color: var(--success); }
 .work-source-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-column-empty { border: 1px dashed var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; padding: 24px 12px; text-align: center; }
 .work-board-loading { align-items: center; background: color-mix(in srgb, var(--bg-primary) 72%, transparent); display: flex; font-family: var(--font-mono); inset: 0; justify-content: center; position: absolute; }
@@ -348,6 +349,14 @@
 .work-goal-input { min-height: 170px; resize: vertical; }
 .work-dialog footer { justify-content: flex-end; margin-top: 4px; }
 .work-dialog-error { background: var(--error-bg); border: 1px solid color-mix(in srgb, var(--error) 28%, var(--border-color)); border-radius: var(--radius-sm); color: var(--error); font-size: 0.75rem; padding: 9px 11px; }
+
+.work-evidence-overlay { align-items: center; display: flex; justify-content: center; padding: 24px; }
+.work-evidence-dialog { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-xl); display: flex; flex-direction: column; gap: 14px; max-height: min(820px, calc(100vh - 48px)); max-width: 860px; overflow: auto; padding: 18px; width: min(860px, calc(100vw - 48px)); }
+.work-evidence-dialog > header { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; }
+.work-evidence-dialog > header span { color: var(--success); font-size: 0.64rem; font-weight: 750; letter-spacing: 0.08em; }
+.work-evidence-dialog > header h2 { font-size: 1.05rem; margin: 4px 0; }
+.work-evidence-dialog > header p { color: var(--text-muted); font-size: 0.72rem; margin: 0; }
+.work-evidence-dialog > header button { background: transparent; border: 0; color: var(--text-muted); padding: 5px; }
 
 .is-spinning { animation: work-spin 0.9s linear infinite; }
 @keyframes work-spin { to { transform: rotate(360deg); } }

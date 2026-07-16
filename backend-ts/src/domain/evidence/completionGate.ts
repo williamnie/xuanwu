@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
+import { recordEvidenceRecords } from "../../db/repositories/evidence.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../../db/repositories/issues.ts";
 import { updateIssue, type UpdateIssueInput } from "../../db/repositories/issueUpdate.ts";
 import { makeDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
@@ -130,6 +131,10 @@ export function applyIssueCompletionGate(
   const policySnapshot = stableValue(policy);
   const transitionPath: string[] = [];
   const write = db.transaction(() => {
+    recordEvidenceRecords(db, issueID, input.evidence, {
+      recorded_at: canonicalNow(input.now),
+      source: input.source
+    });
     recordIssueEvent(db, issueID, ISSUE_VERIFICATION_GATE_EVENT_TYPES.intent, {
       actor: input.actor,
       correlation_id: input.correlation_id,

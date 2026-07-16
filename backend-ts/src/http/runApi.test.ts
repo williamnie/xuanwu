@@ -87,7 +87,7 @@ describe("Run HTTP API", () => {
         }],
         cost: { usage: { completeness: "unavailable" } },
         links: {
-          evidence: expect.stringContaining("event-summaries"),
+          evidence: expect.stringContaining("/api/evidence?run_id="),
           lifecycle_audit: expect.stringContaining("run.lifecycle.intent.v1"),
           logs: expect.stringContaining("type=issue.log")
         }

@@ -427,7 +427,7 @@ function runLinks(
     project: `/api/projects/${encodeURIComponent(projectID)}`,
     issue: `/api/issues/${issueID}`,
     logs: `${baseEvents}?type=issue.log`,
-    evidence: `/api/issues/${issueID}/event-summaries?exclude_type=issue.log`,
+    evidence: `/api/evidence?run_id=${encodeURIComponent(runID)}`,
     lifecycle_audit: `${baseEvents}?type=run.lifecycle.intent.v1,run.lifecycle.outcome.v1,run.lifecycle.run_requested.v1,run.lifecycle.run_materialized.v1`,
     legacy_run: `/api/issues/${issueID}/runs#${encodeURIComponent(legacyID)}`,
     ...(attemptID ? { current_attempt: `/api/runs/${encodeURIComponent(runID)}#${encodeURIComponent(attemptID)}` } : {})

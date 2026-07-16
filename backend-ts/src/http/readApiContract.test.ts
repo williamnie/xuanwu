@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
+import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./evidenceApi.ts";
 import { FRONTEND_COMPATIBILITY_POLICY, registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
@@ -13,6 +14,10 @@ describe("read API route contracts", () => {
     expect(READ_API_ROUTE_REGISTRY.map(({ id, responsibility }) => ({ id, responsibility })))
       .toMatchInlineSnapshot(`
         [
+          {
+            "id": "evidence",
+            "responsibility": "domain",
+          },
           {
             "id": "event-summaries",
             "responsibility": "projection",
@@ -51,6 +56,19 @@ describe("read API route contracts", () => {
           },
         ]
       `);
+  });
+
+  test("locks Evidence method, path, and authority contracts", () => {
+    expect(captureRoutes(registerEvidenceRoutes)).toEqual([
+      "GET /api/evidence",
+      "GET /api/evidence/:id",
+      "GET /api/evidence/:id/artifacts/:index"
+    ]);
+    expect(EVIDENCE_HTTP_COMPATIBILITY_POLICY).toMatchObject({
+      dual_write: expect.stringContaining("none"),
+      fact_authority: expect.stringContaining("originating"),
+      read_authority: "issue_events:evidence.recorded.v1"
+    });
   });
 
   test("locks Run method, path, and authority contracts", () => {

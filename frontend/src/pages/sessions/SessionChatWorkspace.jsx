@@ -1,4 +1,5 @@
 import TurtleLoader from '../../components/TurtleLoader';
+import EvidencePanel from '../../components/EvidencePanel';
 import ApprovalDialog from './ApprovalDialog';
 import SessionComposer from './SessionComposer';
 import SessionTranscript from './SessionTranscript';
@@ -69,6 +70,8 @@ export default function SessionChatWorkspace({
         ) : (
           <div className="session-empty">选择一个 provider session 查看历史，或创建新 session。</div>
         )}
+
+        {selectedId ? <EvidencePanel compact sessionRef={selectedId} title="Run Evidence" /> : null}
 
         <div className="client-chat-composer-section">
           <ApprovalDialog

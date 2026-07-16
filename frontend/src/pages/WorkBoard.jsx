@@ -9,9 +9,11 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { workApi } from '../api/work.js';
+import EvidencePanel from '../components/EvidencePanel.jsx';
 import { selectProjects, useDataStore } from '../store/dataStore';
 import { message } from '../store/toastStore';
 import {
@@ -63,6 +65,7 @@ export default function WorkBoard({ navigateTo }) {
   const [compatibility, setCompatibility] = useState(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [dialog, setDialog] = useState(null);
+  const [evidenceWork, setEvidenceWork] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -153,6 +156,7 @@ export default function WorkBoard({ navigateTo }) {
                 key={status}
                 navigateTo={navigateTo}
                 onEdit={work => setDialog({ mode: 'edit', work })}
+                onEvidence={setEvidenceWork}
                 projectNames={projectNames}
                 relationIndex={relationIndex}
                 status={status}
@@ -175,6 +179,10 @@ export default function WorkBoard({ navigateTo }) {
           projects={projects}
           work={dialog.work}
         />
+      ) : null}
+
+      {evidenceWork ? (
+        <WorkEvidenceDialog onClose={() => setEvidenceWork(null)} work={evidenceWork} />
       ) : null}
     </section>
   );
@@ -277,7 +285,7 @@ function FilterSelect({ children, label, onChange, value }) {
   );
 }
 
-function WorkColumn({ navigateTo, onEdit, projectNames, relationIndex, status, works }) {
+function WorkColumn({ navigateTo, onEdit, onEvidence, projectNames, relationIndex, status, works }) {
   const meta = STATUS_META[status] || { label: status, tone: 'slate' };
   return (
     <section className="work-column" data-tone={meta.tone}>
@@ -292,6 +300,7 @@ function WorkColumn({ navigateTo, onEdit, projectNames, relationIndex, status, w
             key={work.id}
             navigateTo={navigateTo}
             onEdit={onEdit}
+            onEvidence={onEvidence}
             projectName={projectNames.get(work.owner?.project_id) || work.owner?.project_id || 'Unscoped'}
             relations={relationIndex.get(work.id) || []}
             work={work}
@@ -304,7 +313,7 @@ function WorkColumn({ navigateTo, onEdit, projectNames, relationIndex, status, w
   );
 }
 
-function WorkCard({ navigateTo, onEdit, projectName, relations, work }) {
+function WorkCard({ navigateTo, onEdit, onEvidence, projectName, relations, work }) {
   const issueId = issueIdFromWorkId(work.id);
   const needsAttention = workNeedsAttention(work, relations);
   return (
@@ -328,6 +337,9 @@ function WorkCard({ navigateTo, onEdit, projectName, relations, work }) {
       ) : null}
       <div className="work-card-footer">
         <button onClick={() => onEdit(work)} type="button"><Pencil size={13} /> Edit</button>
+        <button className="work-evidence-link" onClick={() => onEvidence(work)} type="button">
+          <ShieldCheck size={13} /> Evidence
+        </button>
         {issueId ? (
           <button className="work-issue-link" onClick={() => navigateTo('issues', issueId)} type="button">
             Issue #{issueId} <ArrowUpRight size={13} />
@@ -335,6 +347,25 @@ function WorkCard({ navigateTo, onEdit, projectName, relations, work }) {
         ) : <span className="work-source-label">{work.id}</span>}
       </div>
     </article>
+  );
+}
+
+function WorkEvidenceDialog({ onClose, work }) {
+  return createPortal(
+    <div className="modal-overlay work-evidence-overlay" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+      <div aria-labelledby="work-evidence-title" aria-modal="true" className="work-evidence-dialog" role="dialog">
+        <header>
+          <div>
+            <span>WORK DECISIVE FACTS</span>
+            <h2 id="work-evidence-title">{work.title}</h2>
+            <p>区分 Agent 自述、兼容投影与系统可证明的结构化 Evidence。</p>
+          </div>
+          <button aria-label="关闭 Evidence" onClick={onClose} type="button"><X size={18} /></button>
+        </header>
+        <EvidencePanel title="Work Evidence" workId={work.id} />
+      </div>
+    </div>,
+    document.body,
   );
 }
 
