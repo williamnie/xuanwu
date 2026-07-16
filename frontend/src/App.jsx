@@ -37,6 +37,7 @@ const IssueDetail = lazy(() => import('./pages/IssueDetail'));
 const Runs = lazy(() => import('./pages/Runs'));
 const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
+const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
 const AttentionInbox = lazy(() => import('./pages/AttentionInbox'));
 const Cron = lazy(() => import('./pages/Cron'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -88,6 +89,8 @@ export default function App() {
     selectedRunId: '',
     selectedSessionId: '',
     selectedHandoffId: initialHandoffRoute?.handoffId || '',
+    selectedPiConversationId: '',
+    pageContext: null,
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
 
@@ -116,6 +119,8 @@ export default function App() {
     selectedRunId,
     selectedSessionId,
     selectedHandoffId,
+    selectedPiConversationId,
+    pageContext,
     filterProject,
     focusFilter,
     isNewIssueOpen,
@@ -207,6 +212,25 @@ export default function App() {
         draft.selectedSessionId = compatSessionRoute ? sessionId || '' : '';
       }
       draft.selectedHandoffId = targetHandoffId;
+      draft.pageContext = null;
+    });
+  }, [updateAppState]);
+
+  const setPageContext = useCallback((context) => {
+    updateAppState(draft => {
+      const next = context && context.page_id === draft.currentPage ? context : null;
+      if (JSON.stringify(draft.pageContext) !== JSON.stringify(next)) {
+        draft.pageContext = next;
+      }
+    });
+  }, [updateAppState]);
+
+  const openSupervisorConversation = useCallback((conversationId) => {
+    updateAppState(draft => {
+      draft.selectedPiConversationId = conversationId || '';
+      draft.currentPage = 'ask-xuanwu';
+      draft.selectedIssueId = null;
+      draft.pageContext = null;
     });
   }, [updateAppState]);
 
@@ -317,7 +341,7 @@ export default function App() {
       />
 
       {/* 右侧主工作区 */}
-      <main className="main-content">
+      <main className={`main-content ${currentPage === 'ask-xuanwu' ? '' : 'has-global-ask-composer'}`}>
         <GuardianAlertBanner />
         {loading ? (
           <div className="app-loading-stage">
@@ -328,7 +352,7 @@ export default function App() {
             {currentPage === 'command-center' ? (
               <Dashboard navigateTo={navigateTo} />
             ) : currentPage === 'work' ? (
-              <WorkBoard navigateTo={navigateTo} />
+              <WorkBoard navigateTo={navigateTo} onPageContextChange={setPageContext} />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />
             ) : currentPage === 'issues' && selectedIssueId ? (
@@ -347,11 +371,12 @@ export default function App() {
             ) : currentPage === 'runs' ? (
               <Runs
                 navigateTo={navigateTo}
+                onPageContextChange={setPageContext}
                 selectedRunId={selectedRunId}
                 selectedSessionId={selectedSessionId}
               />
             ) : currentPage === 'ask-xuanwu' ? (
-              <PiChat navigateTo={navigateTo} />
+              <PiChat navigateTo={navigateTo} initialConversationId={selectedPiConversationId} />
             ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
               <AttentionInbox />
             ) : isAssistantModulePage(currentPage) ? (
@@ -370,6 +395,19 @@ export default function App() {
           </Suspense>
         )}
       </main>
+      <Suspense fallback={null}>
+        <GlobalAskComposer
+          currentPage={currentPage}
+          filterProject={filterProject}
+          onConversationReady={openSupervisorConversation}
+          onOpenAskXuanwu={() => navigateTo('ask-xuanwu')}
+          pageContext={pageContext}
+          selectedHandoffId={selectedHandoffId}
+          selectedIssueId={selectedIssueId}
+          selectedRunId={selectedRunId}
+          selectedSessionId={selectedSessionId}
+        />
+      </Suspense>
     </div>
   );
 }

@@ -14,8 +14,8 @@ import './PiChatDiagnostics.css';
 import './PiChatSidebar.css';
 import './PiChatThread.css';
 
-export default function PiChat({ navigateTo }) {
-  const state = usePiChatState();
+export default function PiChat({ navigateTo, initialConversationId = '' }) {
+  const state = usePiChatState(initialConversationId);
   return <PiChatLayout navigateTo={navigateTo} state={state} />;
 }
 

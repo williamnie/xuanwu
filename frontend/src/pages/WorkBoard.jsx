@@ -58,7 +58,7 @@ const EMPTY_FILTERS = {
   type: '',
 };
 
-export default function WorkBoard({ navigateTo }) {
+export default function WorkBoard({ navigateTo, onPageContextChange }) {
   const projects = useDataStore(selectProjects);
   const [works, setWorks] = useState([]);
   const [relations, setRelations] = useState([]);
@@ -108,6 +108,13 @@ export default function WorkBoard({ navigateTo }) {
     () => works.filter(work => workDeliveryStage(work) === 'delivered').length,
     [works],
   );
+
+  useEffect(() => {
+    onPageContextChange?.({
+      page_id: 'work',
+      project_id: filters.project || '',
+    });
+  }, [filters.project, onPageContextChange]);
 
   const updateFilter = (key, value) => {
     setFilters(current => ({ ...current, [key]: value }));

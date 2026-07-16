@@ -1,6 +1,6 @@
 import { projectsApi } from '../api/projects.js';
 import { assistantApi } from '../api/assistant.js';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from '../store/toastStore';
 import { clearPiLiveAssistant, setPiLiveConversation, usePiConversationEvents } from './piChatLiveBridge';
 import { DEFAULT_PI_AGENT_ID } from './piAgentSettingsState';
@@ -10,8 +10,14 @@ const DEFAULT_TRANSCRIPT = [];
 const STOP_RETRY_COUNT = 4;
 const STOP_RETRY_DELAY_MS = 160;
 
-export function usePiChatState() {
+export function usePiChatState(initialConversationId = '') {
   const state = usePiChatFields();
+  const initialSelectionRef = useRef('');
+  const {
+    conversations,
+    loading,
+    selectConversation,
+  } = state;
   const liveRefs = usePiConversationEvents(state, state.selectedConversationId);
   const loadPiState = usePiChatLoader({
     setAgents: state.setAgents,
@@ -28,6 +34,13 @@ export function usePiChatState() {
   useEffect(() => {
     loadPiState();
   }, [loadPiState]);
+
+  useEffect(() => {
+    if (!initialConversationId || initialSelectionRef.current === initialConversationId || loading) return;
+    if (!conversations.some(conversation => conversation.id === initialConversationId)) return;
+    initialSelectionRef.current = initialConversationId;
+    selectConversation(initialConversationId);
+  }, [conversations, initialConversationId, loading, selectConversation]);
 
   return {
     ...state,

@@ -33,7 +33,7 @@ const RUN_REFRESH_EVENT_TYPES = new Set([
   'run.lifecycle.run_materialized.v1',
 ]);
 
-export default function Runs({ navigateTo, selectedRunId = '', selectedSessionId = '' }) {
+export default function Runs({ navigateTo, onPageContextChange, selectedRunId = '', selectedSessionId = '' }) {
   const [runs, setRuns] = useState([]);
   const [compatibility, setCompatibility] = useState(null);
   const [page, setPage] = useState(1);
@@ -136,6 +136,16 @@ export default function Runs({ navigateTo, selectedRunId = '', selectedSessionId
 
   const providerSessionRef = useMemo(() => runProviderSessionRef(runDetail), [runDetail]);
   const hasMore = page < totalPages;
+
+  useEffect(() => {
+    onPageContextChange?.({
+      page_id: 'runs',
+      project_id: surface === 'run' ? runDetail?.project_id || '' : '',
+      run_id: surface === 'run' ? runDetail?.id || activeRunId || '' : '',
+      session_id: surface === 'run' ? providerSessionRef : selectedSessionId,
+      work_id: surface === 'run' ? runDetail?.work_id || '' : '',
+    });
+  }, [activeRunId, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
 
   return (
     <section className="runs-page-shell">

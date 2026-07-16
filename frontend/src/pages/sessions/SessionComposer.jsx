@@ -52,6 +52,7 @@ export default function SessionComposer({
   onExecuteCommand = null,
   onCancelCommand = null,
   runtimeControls = null,
+  requirePrompt = false,
 }) {
   const selectedModel = models.find((model) => model.id === settings.model || model.model === settings.model);
   const defaultModel = models.find((model) => model.isDefault) || models[0] || null;
@@ -73,7 +74,7 @@ export default function SessionComposer({
   const hasQueuedMessages = queuedMessages.length > 0;
   const interrupting = isInterruptPending(interruptState, selectedId);
   const hasCommand = Boolean(commandState);
-  const hasContent = Boolean(value.trim() || referenceDetails.length || hasCommand);
+  const hasContent = Boolean(value.trim() || (!requirePrompt && referenceDetails.length) || hasCommand);
   const canSubmitMessage = Boolean(selectedId && hasContent && !hasCommand && !hasInvalidReferences && !sending && !interrupting);
   const submitFromEditor = (event) => onSubmit({
     preventDefault() {},

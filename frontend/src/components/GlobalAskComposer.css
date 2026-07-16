@@ -1,0 +1,222 @@
+.global-ask-composer-shell {
+  bottom: 14px;
+  left: calc(var(--sidebar-width) + 28px);
+  pointer-events: none;
+  position: fixed;
+  right: 28px;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 72;
+}
+
+.sidebar-collapsed .global-ask-composer-shell {
+  left: 64px;
+}
+
+.global-ask-composer-card {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--bg-card) 98%, var(--brand-mint)), var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
+  border-radius: 18px;
+  box-shadow: 0 18px 54px rgba(8, 45, 40, 0.16), 0 2px 10px rgba(8, 45, 40, 0.07);
+  margin: 0 auto;
+  max-width: 980px;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.global-ask-composer-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 6px 10px 6px 12px;
+}
+
+.global-ask-composer-shell.collapsed .global-ask-composer-header {
+  border-bottom: 0;
+}
+
+.global-ask-composer-brand {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  display: inline-flex;
+  gap: 9px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.global-ask-composer-mark {
+  align-items: center;
+  background: var(--brand-ink);
+  border-radius: 9px;
+  color: var(--brand-shell);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+[data-theme="dark"] .global-ask-composer-mark {
+  background: var(--brand-shell);
+  color: #0b2c27;
+}
+
+.global-ask-composer-brand > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.global-ask-composer-brand strong {
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.global-ask-composer-brand small {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  letter-spacing: 0.035em;
+  line-height: 1.3;
+}
+
+.global-ask-composer-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-muted);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.global-ask-composer-toggle:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.global-ask-composer-card .session-composer {
+  background: transparent;
+  border: 0;
+  padding: 8px 10px 10px;
+}
+
+.global-ask-composer-card .prompt-editor-composer-stack {
+  gap: 5px;
+}
+
+.global-ask-composer-card .prompt-editor-shell.composer,
+[data-theme="dark"] .global-ask-composer-card .prompt-editor-shell.composer {
+  background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  border: 1px solid transparent;
+  border-radius: 13px;
+  box-shadow: none;
+}
+
+.global-ask-composer-card .prompt-editor-shell.composer.focused {
+  background: var(--bg-card);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border-color));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.global-ask-composer-card .prompt-editor-content.composer {
+  color: var(--text-primary);
+  font-size: 0.91rem;
+  line-height: 1.45;
+  min-height: 48px !important;
+  padding: 11px 13px 4px;
+}
+
+.global-ask-composer-card .prompt-composer-footer {
+  padding: 4px 8px 7px 9px;
+}
+
+.global-ask-composer-card .session-composer-circle {
+  background: var(--brand-ink);
+  color: var(--brand-shell);
+}
+
+.global-composer-context-control {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 4px;
+  height: 28px;
+  padding: 0 7px;
+}
+
+.global-composer-context-control:hover,
+.global-composer-context-control.attached {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+}
+
+.global-ask-composer-card .prompt-reference-chip {
+  font-size: 0.67rem;
+  padding: 3px 6px;
+}
+
+.global-ask-composer-card .prompt-reference-label {
+  max-width: 180px;
+}
+
+.main-content.has-global-ask-composer {
+  padding-bottom: 190px;
+}
+
+@media (max-width: 768px) {
+  .global-ask-composer-shell {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 68px;
+    right: 8px;
+  }
+
+  .sidebar-collapsed .global-ask-composer-shell {
+    left: 8px;
+  }
+
+  .global-ask-composer-card {
+    border-radius: 15px;
+  }
+
+  .global-ask-composer-card .session-composer {
+    padding: 6px 7px 7px;
+  }
+
+  .global-ask-composer-card .prompt-editor-content.composer {
+    font-size: 0.86rem;
+    min-height: 44px !important;
+    padding: 9px 10px 3px;
+  }
+
+  .global-ask-composer-brand small,
+  .global-composer-context-control span {
+    display: none;
+  }
+
+  .global-ask-composer-card .session-composer-select-value {
+    max-width: 88px;
+  }
+
+  .main-content.has-global-ask-composer {
+    padding-bottom: 176px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-ask-composer-shell {
+    transition: none;
+  }
+}
