@@ -26,7 +26,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     automaticMemoryCandidatePolicy(),
     legacyWorkToolWorkflow(),
     "Issue state repair: issue_state_repair_proposal is only for deterministic issueStateManager/runtime mismatch repairs returned by issue_state_diagnose. Do not use it for natural-language requests to mark, move, cancel, reopen, fail, or otherwise freely change an issue status; state repair payloads must carry deterministic expected_state preconditions.",
-    "Token economy: prefer deterministic compact tools. For counts/status questions use issue_status_summary. For one issue's execution progress use issue_execution_status. Use issue_list only for compact cards, and issue_read only when full issue body is explicitly needed.",
+    "Token economy: prefer deterministic compact domain tools. Use work_list/work_read, run_list/run_read, evidence_list/evidence_read, and handoff_list/handoff_read before legacy issue/session reconstruction. Tool output is bounded to about 1500 tokens; narrow filters before requesting more records.",
     publicUrlSourceWorkflow(),
     repoAwareIssueProposalWorkflow(),
     `Current runner time: ${new Date().toISOString()} timezone=${Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}.`,
@@ -67,19 +67,21 @@ export function xuanwuSupervisorRoleContractPrompt(): string {
 
 export function xuanwuSupervisorCompatibilityPrompt(): string {
   return [
-    "Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation in user-facing reasoning while calling the currently exposed internal tools by their exact legacy names.",
+    "Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation in user-facing reasoning and prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools.",
     "Work compatibility: issues/issue_events and existing issue_* actions remain the authoritative write path in the current W1 window; works is a deterministic shadow/projection and cannot overrule legacy state before the migration gate cuts authority over.",
     "Run compatibility: issue_runs is the Run lifecycle authority, run_attempts holds Attempt facts, and agent_sessions/provider transcripts are observation or drill-down only.",
     "Handoff compatibility: issue_events handoff.* records are the Handoff projection; Git, Evidence, review, provider, tracker, and Work state remain authoritative for their own facts, and Handoff never marks Work done by itself.",
-    "Stable identifiers such as issue_*, session_*, /api/pi/*, pi_*, runner-default, and codex-issue-runner are internal compatibility names. Do not invent work_* tools, duplicate tables, parallel state machines, or model-driven dual writes to make the vocabulary look complete.",
+    "Legacy issue_*/session_* tools remain only for capabilities not yet covered by a target domain tool, such as scheduling and completion watches. Never duplicate tables, state machines, provider controls, or model-driven writes behind either tool family.",
     "This prompt introduces no dual write or dual read: deterministic SQLite/API/Runner records win over model assumptions. Rollback restores the prior core/default prompt and requires no data rollback. Remove this compatibility block only after the target tools are authoritative, parity and clean-baseline journeys pass, legacy consumers are zero for the required observation window, rollback evidence is retained, and the applicable P11/G7 deletion gates approve removal."
   ].join("\n");
 }
 
 function legacyWorkToolWorkflow(): string {
   return [
-    "Legacy Work tool workflow:",
-    "Treat `/issue <任务描述>` and concrete implementation/run requests as Work intent. Use issue_create_proposal, then issue_enqueue_proposal by default so an authorized Run can start; wait only when the user asks to record, defer, or schedule, and use issue_schedule_enqueue for a stated RFC3339 time.",
+    "Work control tool workflow:",
+    "For authoritative query use work_list/work_read, run_list/run_read, evidence_list/evidence_read, and handoff_list/handoff_read. Never infer Work completion from Run narrative.",
+    "For a concrete Work creation use work_create with a stable caller idempotency_key; use work_control with expected_revision for enqueue/retry/cancel. Use run_control only with the current Run/Attempt revisions and provider preconditions. Do not fabricate revisions or idempotency keys from mutable prose.",
+    "Legacy issue_create_proposal/issue_enqueue_proposal remain available when the user is asking for a proposal rather than an authorized direct Work mutation; issue_schedule_enqueue remains the compatibility path for a stated RFC3339 time.",
     "For exactly one next triage Work use issue_enqueue_next_triage. For a clearly requested batch or explicit issue range use issue_enqueue_batch_triage with user_phrase and ordered issue_ids when known; do not require magic wording or invent a count cap.",
     "For a requested completion notification use issue_completion_watch_create with the explicit target; only after tool success may you promise notification.",
     "IM channels are transports, not persistent project context. Resolve project_id or issue_id as a one-turn tool target and do not carry it to later messages unless the user states it again.",

@@ -16,6 +16,8 @@ import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 import { createPiRuntimeToolKit, recordPiRuntimeToolRegistryAudit } from "../pi/piRuntimeTools.ts";
 import type { SupervisorIntentRoute } from "../pi/supervisorIntentRouter.ts";
 import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -31,6 +33,7 @@ export type RuntimeSessionInput = {
   issueID?: number;
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   sessionFile?: string;
   source?: string;
   sourceTurn?: { id?: string; source?: string; userPrompt?: string };
@@ -46,7 +49,8 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   "issue.schedule_enqueue",
   "issue.state_repair",
   "issue_completion_watch.create",
-  "issue_completion_watch.cancel"
+  "issue_completion_watch.cancel",
+  ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 
 export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
@@ -55,7 +59,8 @@ export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "issue.schedule_enqueue",
   "issue.state_repair",
   "issue_completion_watch.create",
-  "issue_completion_watch.cancel"
+  "issue_completion_watch.cancel",
+  ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 
 const PI_RUNTIME_ROOT = "pi-runtime";
@@ -112,6 +117,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     heartbeatID: input.heartbeatID,
     issueID: input.issueID,
     onIssueEnqueued: input.onIssueEnqueued,
+    providers: input.providers,
     source: input.source,
     sourceTurn: input.sourceTurn
   };

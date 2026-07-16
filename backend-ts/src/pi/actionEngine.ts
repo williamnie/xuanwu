@@ -128,17 +128,52 @@ function executePiActionWithAudit(
   publishPiActionEvent(context.bus, "pi.action_executing", executing);
   try {
     const result = execute();
-    const auditResult = resultForAudit(result);
-    const completed = updatePiAction(db, action.id, { result_json: JSON.stringify(auditResult ?? null), status: "completed" });
-    recordPiActionAuditEvent(db, completed, "execution_result", { actor: "executor", result: auditResult });
-    publishPiActionEvent(context.bus, "pi.action_completed", completed);
-    return result;
+    if (isPromiseLike(result)) {
+      return Promise.resolve(result)
+        .then((resolved) => completePiActionExecution(db, context, action.id, resolved, resultForAudit))
+        .catch((error) => failPiActionExecution(db, context, action.id, error));
+    }
+    return completePiActionExecution(db, context, action.id, result, resultForAudit);
   } catch (error) {
-    const failed = updatePiAction(db, action.id, { result_json: JSON.stringify({ error: safeError(error) }), status: "failed" });
-    recordPiActionAuditEvent(db, failed, "execution_error", { actor: "executor", error: safeError(error) });
-    publishPiActionEvent(context.bus, "pi.action_failed", failed);
-    throw error;
+    return failPiActionExecution(db, context, action.id, error);
   }
+}
+
+function completePiActionExecution(
+  db: RunnerDatabase,
+  context: PiActionContext,
+  actionID: string,
+  result: unknown,
+  resultForAudit: (result: unknown) => unknown
+) {
+  const auditResult = resultForAudit(result);
+  const completed = updatePiAction(db, actionID, {
+    result_json: JSON.stringify(auditResult ?? null),
+    status: "completed"
+  });
+  recordPiActionAuditEvent(db, completed, "execution_result", { actor: "executor", result: auditResult });
+  publishPiActionEvent(context.bus, "pi.action_completed", completed);
+  return result;
+}
+
+function failPiActionExecution(
+  db: RunnerDatabase,
+  context: PiActionContext,
+  actionID: string,
+  error: unknown
+): never {
+  const failed = updatePiAction(db, actionID, {
+    result_json: JSON.stringify({ error: safeError(error) }),
+    status: "failed"
+  });
+  recordPiActionAuditEvent(db, failed, "execution_error", { actor: "executor", error: safeError(error) });
+  publishPiActionEvent(context.bus, "pi.action_failed", failed);
+  throw error;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return value !== null && typeof value === "object" && "then" in value &&
+    typeof (value as { then?: unknown }).then === "function";
 }
 
 function createPiActionRecord(

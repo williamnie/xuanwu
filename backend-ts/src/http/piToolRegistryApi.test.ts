@@ -62,6 +62,20 @@ describe("PI tool registry read API", () => {
           permission_summary: expect.objectContaining({ level: "read" }),
           provider: expect.objectContaining({ id: "runner-builtin" }),
           provider_id: "runner-builtin"
+        }),
+        expect.objectContaining({
+          input_schema: expect.objectContaining({
+            properties: expect.objectContaining({ idempotency_key: expect.objectContaining({ type: "string" }) }),
+            required: expect.arrayContaining(["action", "expected_revision", "idempotency_key", "reason", "work_id"])
+          }),
+          metadata: expect.objectContaining({ risk_level: "high" }),
+          name: "work_control",
+          output_schema: expect.objectContaining({
+            required: ["authority", "observed_at", "output_budget"]
+          }),
+          permission: "dangerous",
+          permission_summary: expect.objectContaining({ level: "dangerous", requires_confirmation: true }),
+          provider_id: "runner-builtin"
         })
       ]));
 

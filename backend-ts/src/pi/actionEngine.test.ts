@@ -22,6 +22,16 @@ describe("PI action engine risk classifier", () => {
       requiresConfirmation: true,
       riskLevel: "high"
     });
+    expect(classifyPiActionRisk("work.cancel")).toEqual({
+      gate: "high",
+      requiresConfirmation: true,
+      riskLevel: "high"
+    });
+    expect(classifyPiActionRisk("run.interrupt")).toEqual({
+      gate: "high",
+      requiresConfirmation: true,
+      riskLevel: "high"
+    });
     expect(classifyPiActionRisk("mcp.resource.read")).toEqual({
       gate: "safe",
       requiresConfirmation: false,

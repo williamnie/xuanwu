@@ -34,14 +34,21 @@ describe("PI runtime tool registry adapter", () => {
         URL_FETCH_TOOL_NAME,
         "issue_create_proposal",
         "issue_enqueue_proposal",
-        "memory_search"
+        "memory_search",
+        "work_list",
+        "run_control",
+        "evidence_read",
+        "handoff_read"
       ]));
       expect(kit.audit.custom_tool_names).toContain(URL_FETCH_TOOL_NAME);
       expect(kit.audit.provider_ids).toEqual(expect.arrayContaining(["runner-builtin", HTTP_READONLY_PROVIDER_ID]));
       expect(kit.readOnlyToolNames).toEqual(expect.arrayContaining([
-        "read", "issue_list", "memory_search", URL_FETCH_TOOL_NAME
+        "read", "issue_list", "memory_search", "work_list", "run_read", "evidence_read", "handoff_read", URL_FETCH_TOOL_NAME
       ]));
-      for (const name of ["issue_create_proposal", "manual_context_intake", "memory_write_candidate"]) {
+      for (const name of [
+        "issue_create_proposal", "manual_context_intake", "memory_write_candidate",
+        "work_create", "work_update", "work_control", "run_control"
+      ]) {
         expect(kit.readOnlyToolNames).not.toContain(name);
       }
     } finally {

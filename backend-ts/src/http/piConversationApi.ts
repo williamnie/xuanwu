@@ -387,6 +387,7 @@ async function openConversationRuntime(
       providers: context.providers
     }, projectID, { forceOnce: true }),
     project,
+    providers: context.providers,
     sessionFile: conversation.session_file,
     toolProject,
     source,

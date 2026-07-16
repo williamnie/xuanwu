@@ -1,0 +1,979 @@
+import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
+import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { RunnerDatabase } from "../db/database.ts";
+import { getPiActionByIdempotencyKey, type PiAction } from "../db/repositories/pi.ts";
+import type { Project } from "../db/repositories/projects.ts";
+import { workIDToIssueID } from "../domain/work/issueAdapter.ts";
+import { WORK_STATUSES } from "../domain/work/contracts.ts";
+import { RUN_STATUSES } from "../domain/run/contracts.ts";
+import { EVIDENCE_STATUSES } from "../domain/evidence/contracts.ts";
+import { DELIVERY_MODES, HANDOFF_STATUSES } from "../domain/handoff/contracts.ts";
+import { registerWorkRoutes, WORK_HTTP_COMPATIBILITY_POLICY } from "../http/workApi.ts";
+import { registerRunRoutes, RUN_HTTP_COMPATIBILITY_POLICY } from "../http/runApi.ts";
+import { registerEvidenceRoutes, EVIDENCE_HTTP_COMPATIBILITY_POLICY } from "../http/evidenceApi.ts";
+import { registerHandoffRoutes, HANDOFF_HTTP_COMPATIBILITY_POLICY } from "../http/handoffApi.ts";
+import { createRouter, type Router } from "../http/router.ts";
+import { executeSafePiAction } from "./actionEngine.ts";
+import type { PiRunnerActionContext } from "./runnerActions.ts";
+import {
+  SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES,
+  SUPERVISOR_CONTROL_READ_ACTION_TYPES,
+  SUPERVISOR_CONTROL_TOOL_NAMES,
+  SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS,
+  SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
+} from "./supervisorControlContracts.ts";
+
+export {
+  SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES,
+  SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES,
+  SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES,
+  SUPERVISOR_CONTROL_READ_ACTION_TYPES,
+  SUPERVISOR_CONTROL_READ_TOOL_NAMES,
+  SUPERVISOR_CONTROL_TOOL_NAMES,
+  SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS,
+  SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
+} from "./supervisorControlContracts.ts";
+
+type SupervisorControlToolName = typeof SUPERVISOR_CONTROL_TOOL_NAMES[number];
+type ToolExecutor<TParams extends TSchema> = (params: Static<TParams>) => Promise<unknown> | unknown;
+type DomainCall = { body: Record<string, unknown>; ok: boolean; status: number };
+type MutationActionType = typeof SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES[number];
+
+const objectOptions = { additionalProperties: false };
+const optionalString = Type.Optional(Type.String());
+const requiredText = Type.String({ minLength: 1, maxLength: 4096, pattern: "\\S" });
+const idempotencyKey = Type.String({ minLength: 1, maxLength: 256, pattern: "\\S" });
+const nonNegativeRevision = Type.Integer({ minimum: 0 });
+const boundedLimit = Type.Optional(Type.Integer({ minimum: 1, maximum: 20 }));
+const workID = Type.String({ pattern: "^xw:work:issues:[1-9][0-9]*$" });
+const runID = Type.String({ pattern: "^xw:run:issue_runs:.+$" });
+const evidenceID = Type.String({
+  pattern: "^xw:evidence:(issue_events|pi_action_events|issue_supervisor_events|git):[A-Za-z0-9._~%-]+$"
+});
+const handoffID = Type.String({ pattern: "^xw:handoff:derived:[A-Za-z0-9._~%-]+$" });
+
+export function createPiSupervisorControlTools(
+  db: RunnerDatabase,
+  project?: Project,
+  context: Omit<PiRunnerActionContext, "project"> = {}
+): ToolDefinition[] {
+  const actions = createSupervisorControlActions(db, project, context);
+  return [
+    controlTool("work_list", "Work List",
+      "List compact authoritative Work records with deterministic project/status filters.",
+      Type.Object({
+        limit: boundedLimit,
+        project_id: optionalString,
+        query: optionalString,
+        statuses: Type.Optional(Type.Array(Type.Union(WORK_STATUSES.map((status) => Type.Literal(status)))))
+      }, objectOptions), actions.workList),
+    controlTool("work_read", "Work Read",
+      "Read one authoritative Issue-backed Work with bounded relations and acceptance metadata.",
+      Type.Object({ work_id: workID }, objectOptions), actions.workRead),
+    controlTool("work_create", "Work Create",
+      "Create one Issue-backed engineering Work through the audited Work API. Requires an explicit idempotency key.",
+      Type.Object({
+        goal: requiredText,
+        idempotency_key: idempotencyKey,
+        project_id: optionalString,
+        reason: requiredText,
+        status: Type.Optional(Type.Union([Type.Literal("triage"), Type.Literal("todo")])),
+        title: requiredText
+      }, objectOptions), actions.workCreate),
+    controlTool("work_update", "Work Update",
+      "Update Work title or goal through optimistic revision and deterministic authorization gates.",
+      Type.Object({
+        expected_revision: nonNegativeRevision,
+        goal: optionalString,
+        idempotency_key: idempotencyKey,
+        reason: requiredText,
+        title: optionalString,
+        work_id: workID
+      }, objectOptions), actions.workUpdate),
+    controlTool("work_control", "Work Control",
+      "Enqueue, retry, or cancel one Work through the audited Work action API; cancellation is destructive.",
+      Type.Object({
+        action: Type.Union([Type.Literal("enqueue"), Type.Literal("retry"), Type.Literal("cancel")]),
+        expected_revision: nonNegativeRevision,
+        idempotency_key: idempotencyKey,
+        reason: requiredText,
+        work_id: workID
+      }, objectOptions), actions.workControl),
+    controlTool("run_list", "Run List",
+      "List compact authoritative Run projections with bounded filters.",
+      Type.Object({
+        limit: boundedLimit,
+        project_id: optionalString,
+        providers: Type.Optional(Type.Array(requiredText)),
+        statuses: Type.Optional(Type.Array(Type.Union(RUN_STATUSES.map((status) => Type.Literal(status))))),
+        work_id: Type.Optional(workID)
+      }, objectOptions), actions.runList),
+    controlTool("run_read", "Run Read",
+      "Read one authoritative Run with compact ordered Attempt projections.",
+      Type.Object({ run_id: runID }, objectOptions), actions.runRead),
+    controlTool("run_control", "Run Control",
+      "Interrupt, resume, or retry one Run through the audited Run command service and provider preconditions.",
+      Type.Object({
+        action: Type.Union([Type.Literal("interrupt"), Type.Literal("resume"), Type.Literal("retry")]),
+        expected_attempt_revision: Type.Optional(nonNegativeRevision),
+        expected_revision: nonNegativeRevision,
+        idempotency_key: idempotencyKey,
+        prompt: optionalString,
+        reason: requiredText,
+        run_id: runID
+      }, objectOptions), actions.runControl),
+    controlTool("evidence_list", "Evidence List",
+      "List bounded decisive Evidence summaries from the existing structured/compatibility read path.",
+      Type.Object({
+        before_event_id: Type.Optional(Type.Integer({ minimum: 1 })),
+        kinds: Type.Optional(Type.Array(requiredText)),
+        limit: boundedLimit,
+        project_id: optionalString,
+        run_ids: Type.Optional(Type.Array(runID)),
+        statuses: Type.Optional(Type.Array(Type.Union(EVIDENCE_STATUSES.map((status) => Type.Literal(status))))),
+        work_id: Type.Optional(workID)
+      }, objectOptions), actions.evidenceList),
+    controlTool("evidence_read", "Evidence Read",
+      "Read one Evidence record as a bounded decisive projection without artifact bytes or raw transcript expansion.",
+      Type.Object({ evidence_id: evidenceID }, objectOptions), actions.evidenceRead),
+    controlTool("handoff_list", "Handoff List",
+      "List compact Handoff summaries with fresh local delivery status and no external writes.",
+      Type.Object({
+        before_event_id: Type.Optional(Type.Integer({ minimum: 1 })),
+        delivery_modes: Type.Optional(Type.Array(Type.Union(DELIVERY_MODES.map((mode) => Type.Literal(mode))))),
+        limit: boundedLimit,
+        project_id: optionalString,
+        statuses: Type.Optional(Type.Array(Type.Union(HANDOFF_STATUSES.map((status) => Type.Literal(status))))),
+        work_id: Type.Optional(workID)
+      }, objectOptions), actions.handoffList),
+    controlTool("handoff_read", "Handoff Read",
+      "Read one reviewable Handoff as a bounded delivery, risk, rollback, and review projection.",
+      Type.Object({ handoff_id: handoffID }, objectOptions), actions.handoffRead)
+  ];
+}
+
+function createSupervisorControlActions(
+  db: RunnerDatabase,
+  project: Project | undefined,
+  context: Omit<PiRunnerActionContext, "project">
+) {
+  const actionContext: PiRunnerActionContext = { ...context, project };
+  const router = createDomainRouter(db, actionContext);
+  return {
+    workList: (input: WorkListInput) => readAction(db, actionContext, "work.list", projectID(input.project_id, project), input,
+      async () => compactWorkList(await callDomain(router, queryPath("/api/works", {
+        page_size: limit(input.limit),
+        project_id: projectID(input.project_id, project),
+        q: cleanString(input.query),
+        status: input.statuses
+      })))),
+    workRead: (input: WorkReadInput) => readAction(db, actionContext, "work.read", targetProjectID(db, input.work_id, project), input,
+      async () => compactWorkDetail(await callDomain(router, `/api/works/${encodeURIComponent(input.work_id)}`))),
+    workCreate: (input: WorkCreateInput) => workCreateAction(db, router, actionContext, project, input),
+    workUpdate: (input: WorkUpdateInput) => workUpdateAction(db, router, actionContext, project, input),
+    workControl: (input: WorkControlInput) => workControlAction(db, router, actionContext, project, input),
+    runList: (input: RunListInput) => readAction(db, actionContext, "run.list", projectID(input.project_id, project), input,
+      async () => compactRunList(await callDomain(router, queryPath("/api/runs", {
+        page_size: limit(input.limit),
+        project_id: projectID(input.project_id, project),
+        provider: input.providers,
+        status: input.statuses,
+        work_id: cleanString(input.work_id)
+      })))),
+    runRead: (input: RunReadInput) => readAction(db, actionContext, "run.read", runProjectID(db, input.run_id, project), input,
+      async () => compactRunDetail(await callDomain(router, `/api/runs/${encodeURIComponent(input.run_id)}`))),
+    runControl: (input: RunControlInput) => runControlAction(db, router, actionContext, project, input),
+    evidenceList: (input: EvidenceListInput) => readAction(
+      db, actionContext, "evidence.list", projectID(input.project_id, project), input,
+      async () => compactEvidenceList(await callDomain(router, queryPath("/api/evidence", {
+        cursor: input.before_event_id ? encodeCursor("evidence", input.before_event_id) : "",
+        kind: input.kinds,
+        limit: limit(input.limit),
+        project_id: projectID(input.project_id, project),
+        run_id: input.run_ids,
+        status: input.statuses,
+        work_id: cleanString(input.work_id)
+      })))
+    ),
+    evidenceRead: (input: EvidenceReadInput) => readAction(
+      db, actionContext, "evidence.read", evidenceProjectID(db, input.evidence_id, project), input,
+      async () => compactEvidenceDetail(await callDomain(router, `/api/evidence/${encodeURIComponent(input.evidence_id)}`))
+    ),
+    handoffList: (input: HandoffListInput) => readAction(
+      db, actionContext, "handoff.list", projectID(input.project_id, project), input,
+      async () => compactHandoffList(await callDomain(router, queryPath("/api/handoffs", {
+        cursor: input.before_event_id ? encodeCursor("handoff", input.before_event_id) : "",
+        delivery_mode: input.delivery_modes,
+        limit: limit(input.limit),
+        project_id: projectID(input.project_id, project),
+        status: input.statuses,
+        work_id: cleanString(input.work_id)
+      })))
+    ),
+    handoffRead: (input: HandoffReadInput) => readAction(
+      db, actionContext, "handoff.read", handoffProjectID(db, input.handoff_id, project), input,
+      async () => compactHandoffDetail(await callDomain(router, `/api/handoffs/${encodeURIComponent(input.handoff_id)}`))
+    )
+  };
+}
+
+type WorkListInput = { limit?: number; project_id?: string; query?: string; statuses?: string[] };
+type WorkReadInput = { work_id: string };
+type WorkCreateInput = {
+  goal: string; idempotency_key: string; project_id?: string; reason: string; status?: "triage" | "todo"; title: string;
+};
+type WorkUpdateInput = {
+  expected_revision: number; goal?: string; idempotency_key: string; reason: string; title?: string; work_id: string;
+};
+type WorkControlInput = {
+  action: "cancel" | "enqueue" | "retry"; expected_revision: number; idempotency_key: string; reason: string; work_id: string;
+};
+type RunListInput = { limit?: number; project_id?: string; providers?: string[]; statuses?: string[]; work_id?: string };
+type RunReadInput = { run_id: string };
+type RunControlInput = {
+  action: "interrupt" | "resume" | "retry"; expected_attempt_revision?: number; expected_revision: number;
+  idempotency_key: string; prompt?: string; reason: string; run_id: string;
+};
+type EvidenceListInput = {
+  before_event_id?: number; kinds?: string[]; limit?: number; project_id?: string; run_ids?: string[];
+  statuses?: string[]; work_id?: string;
+};
+type EvidenceReadInput = { evidence_id: string };
+type HandoffListInput = {
+  before_event_id?: number; delivery_modes?: string[]; limit?: number; project_id?: string; statuses?: string[]; work_id?: string;
+};
+type HandoffReadInput = { handoff_id: string };
+
+function workCreateAction(
+  db: RunnerDatabase,
+  router: Router,
+  context: PiRunnerActionContext,
+  project: Project | undefined,
+  input: WorkCreateInput
+) {
+  const targetProject = requiredProjectID(input.project_id, project);
+  const payload = {
+    goal: input.goal,
+    project_id: targetProject,
+    reason: input.reason,
+    status: input.status ?? "triage",
+    title: input.title
+  };
+  return mutationAction(db, context, {
+    actionType: "work.create",
+    idempotencyKey: input.idempotency_key,
+    payload,
+    projectID: targetProject,
+    reason: input.reason,
+    target: targetProject,
+    execute: async (eventID) => compactWorkMutation(await callDomain(router, "/api/works", {
+      audit: domainAudit(context, eventID, input.reason),
+      goal: input.goal,
+      project_id: targetProject,
+      status: input.status ?? "triage",
+      title: input.title,
+      type: "engineering_task"
+    }, "POST"))
+  });
+}
+
+function workUpdateAction(
+  db: RunnerDatabase,
+  router: Router,
+  context: PiRunnerActionContext,
+  project: Project | undefined,
+  input: WorkUpdateInput
+) {
+  const targetProject = targetProjectID(db, input.work_id, project);
+  const issueID = workIDToIssueID(input.work_id);
+  const payload = cleanObject({
+    expected_revision: input.expected_revision,
+    goal: input.goal,
+    reason: input.reason,
+    title: input.title,
+    work_id: input.work_id
+  });
+  return mutationAction(db, context, {
+    actionType: "work.update",
+    idempotencyKey: input.idempotency_key,
+    issueID,
+    payload,
+    projectID: targetProject,
+    reason: input.reason,
+    target: input.work_id,
+    execute: async (eventID) => compactWorkMutation(await callDomain(router, `/api/works/${encodeURIComponent(input.work_id)}`, {
+      audit: domainAudit(context, eventID, input.reason),
+      expected_revision: input.expected_revision,
+      ...(input.goal !== undefined ? { goal: input.goal } : {}),
+      ...(input.title !== undefined ? { title: input.title } : {})
+    }, "PATCH"))
+  });
+}
+
+function workControlAction(
+  db: RunnerDatabase,
+  router: Router,
+  context: PiRunnerActionContext,
+  project: Project | undefined,
+  input: WorkControlInput
+) {
+  const targetProject = targetProjectID(db, input.work_id, project);
+  const issueID = workIDToIssueID(input.work_id);
+  const actionType = `work.${input.action}` as MutationActionType;
+  const payload = {
+    action: input.action,
+    expected_revision: input.expected_revision,
+    reason: input.reason,
+    work_id: input.work_id
+  };
+  return mutationAction(db, context, {
+    actionType,
+    idempotencyKey: input.idempotency_key,
+    issueID,
+    payload,
+    projectID: targetProject,
+    reason: input.reason,
+    target: input.work_id,
+    execute: async (eventID) => compactWorkMutation(await callDomain(
+      router,
+      `/api/works/${encodeURIComponent(input.work_id)}/actions/${input.action}`,
+      { audit: domainAudit(context, eventID, input.reason), expected_revision: input.expected_revision },
+      "POST"
+    ))
+  });
+}
+
+function runControlAction(
+  db: RunnerDatabase,
+  router: Router,
+  context: PiRunnerActionContext,
+  project: Project | undefined,
+  input: RunControlInput
+) {
+  const run = requireRunTarget(db, input.run_id);
+  const targetProject = runProjectID(db, input.run_id, project);
+  const issueID = workIDToIssueID(requiredString(run.work_id, "Run work_id"));
+  const actionType = `run.${input.action}` as MutationActionType;
+  const payload = cleanObject({
+    action: input.action,
+    expected_attempt_revision: input.expected_attempt_revision,
+    expected_revision: input.expected_revision,
+    prompt: input.prompt,
+    reason: input.reason,
+    run_id: input.run_id
+  });
+  return mutationAction(db, context, {
+    actionType,
+    idempotencyKey: input.idempotency_key,
+    issueID,
+    payload,
+    projectID: targetProject,
+    reason: input.reason,
+    target: input.run_id,
+    execute: async (eventID) => compactRunMutation(await callDomain(
+      router,
+      `/api/runs/${encodeURIComponent(input.run_id)}/actions/${input.action}`,
+      cleanObject({
+        audit: domainAudit(context, eventID, input.reason),
+        expected_attempt_revision: input.expected_attempt_revision,
+        expected_revision: input.expected_revision,
+        prompt: input.prompt
+      }),
+      "POST"
+    ))
+  });
+}
+
+function readAction(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  actionType: typeof SUPERVISOR_CONTROL_READ_ACTION_TYPES[number],
+  targetProjectID: string,
+  payload: Record<string, unknown>,
+  execute: () => Promise<unknown>
+) {
+  return executeSafePiAction(db, context, {
+    actionType,
+    payload: cleanObject(payload),
+    projectID: targetProjectID,
+    execute
+  });
+}
+
+async function mutationAction(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: {
+    actionType: MutationActionType;
+    execute: (eventID: string) => Promise<unknown>;
+    idempotencyKey: string;
+    issueID?: number;
+    payload: Record<string, unknown>;
+    projectID: string;
+    reason: string;
+    target: string;
+  }
+) {
+  const key = scopedIdempotencyKey(input.actionType, input.projectID, input.target, input.idempotencyKey);
+  assertIdempotencyCompatible(db, key, input.actionType, input.projectID, input.issueID ?? 0, input.payload);
+  await executeSafePiAction(db, context, {
+    actionType: input.actionType,
+    idempotencyKey: key,
+    issueID: input.issueID,
+    payload: input.payload,
+    projectID: input.projectID,
+    rationale: input.reason,
+    execute: () => input.execute(key)
+  });
+  const action = getPiActionByIdempotencyKey(db, key);
+  if (!action) throw new Error("Supervisor control action missing after execution");
+  return compactActionRecord(action);
+}
+
+function createDomainRouter(db: RunnerDatabase, context: PiRunnerActionContext): Router {
+  const router = createRouter();
+  const apiContext = {
+    bus: context.bus,
+    database: db,
+    providers: context.providers
+  };
+  registerWorkRoutes(router, apiContext);
+  registerRunRoutes(router, apiContext);
+  registerEvidenceRoutes(router, apiContext);
+  registerHandoffRoutes(router, apiContext);
+  return router;
+}
+
+async function callDomain(
+  router: Router,
+  path: string,
+  body?: Record<string, unknown>,
+  method: "GET" | "PATCH" | "POST" = "GET"
+): Promise<DomainCall> {
+  const response = await router.handle(new Request(`http://supervisor.internal${path}`, {
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    headers: body ? { "content-type": "application/json" } : undefined,
+    method
+  }));
+  const parsed = await response.json().catch(() => ({ code: "invalid_domain_response", message: "Domain API returned non-JSON" }));
+  const output = isRecord(parsed) ? parsed : { value: parsed };
+  if (response.status >= 500) {
+    throw new Error(requiredString(output.message, "Domain API failure"));
+  }
+  return { body: output, ok: response.ok, status: response.status };
+}
+
+function compactWorkList(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("work", call);
+  const items = arrayValue(call.body.items).slice(0, 20).map((item) => compactWork(item, false));
+  return withBudget("issues-via-work-adapter", {
+    domain: "work",
+    items,
+    page: numberValue(call.body.page),
+    total: numberValue(call.body.total),
+    total_pages: numberValue(call.body.total_pages),
+    truncated: numberValue(call.body.total) > items.length
+  });
+}
+
+function compactWorkDetail(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("work", call);
+  const relations = objectValue(call.body.relations);
+  return withBudget("issues-via-work-adapter", {
+    domain: "work",
+    relations: {
+      items: arrayValue(relations.items).slice(0, 12).map((item) => select(item, [
+        "id", "kind", "lifecycle", "source_id", "target_id", "work_id"
+      ])),
+      total: numberValue(relations.total)
+    },
+    work: compactWork(call.body.work, true)
+  });
+}
+
+function compactWorkMutation(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("work", call);
+  const mutation = objectValue(call.body.mutation);
+  return withBudget(WORK_HTTP_COMPATIBILITY_POLICY.write_authority, {
+    domain: "work",
+    mutation: select(mutation, ["applied", "audit_event_id"]),
+    work: compactWork(call.body.work, true)
+  });
+}
+
+function compactWork(value: unknown, includeGoal: boolean): Record<string, unknown> {
+  const work = objectValue(value);
+  const owner = objectValue(work.owner);
+  const acceptance = objectValue(work.acceptance);
+  return cleanObject({
+    acceptance: includeGoal ? {
+      criteria_count: arrayValue(acceptance.criteria).length,
+      requires_handoff: booleanValue(acceptance.requires_handoff),
+      version: numberValue(acceptance.version)
+    } : undefined,
+    goal: includeGoal ? boundedText(work.goal, 1200) : undefined,
+    id: work.id,
+    project_id: owner.project_id,
+    revision: work.revision,
+    status: work.status,
+    title: boundedText(work.title, 240),
+    type: work.type,
+    updated_at: work.updated_at,
+    workflow_ref: boundedText(work.workflow_ref, 240)
+  });
+}
+
+function compactRunList(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("run", call);
+  const items = arrayValue(call.body.items).slice(0, 20).map(compactRun);
+  return withBudget(RUN_HTTP_COMPATIBILITY_POLICY.read_authority, {
+    domain: "run",
+    items,
+    page: numberValue(call.body.page),
+    total: numberValue(call.body.total),
+    total_pages: numberValue(call.body.total_pages),
+    truncated: numberValue(call.body.total) > items.length
+  });
+}
+
+function compactRunDetail(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("run", call);
+  const run = objectValue(call.body.run);
+  return withBudget(RUN_HTTP_COMPATIBILITY_POLICY.read_authority, {
+    domain: "run",
+    run: {
+      ...compactRun(run),
+      attempts: arrayValue(run.attempts).slice(-12).map((item) => {
+        const attempt = objectValue(item);
+        const provider = objectValue(attempt.provider_ref);
+        return cleanObject({
+          id: attempt.id,
+          kind: attempt.kind,
+          mapping_errors: arrayValue(attempt.mapping_errors).slice(0, 4),
+          provider: provider.provider,
+          revision: attempt.revision,
+          sequence: attempt.sequence,
+          session_ref: provider.session_ref,
+          started_at: attempt.started_at,
+          status: attempt.status,
+          turn_ref: provider.turn_ref,
+          updated_at: attempt.updated_at
+        });
+      })
+    }
+  });
+}
+
+function compactRunMutation(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("run", call);
+  return withBudget(RUN_HTTP_COMPATIBILITY_POLICY.write_authority, {
+    domain: "run",
+    mutation: objectValue(call.body.mutation),
+    run: compactRun(call.body.run)
+  });
+}
+
+function compactRun(value: unknown): Record<string, unknown> {
+  const run = objectValue(value);
+  const progress = objectValue(run.progress);
+  return cleanObject({
+    attempt_count: run.attempt_count,
+    id: run.id,
+    mapping_errors: arrayValue(run.mapping_errors).slice(0, 4),
+    progress: select(progress, ["attempt_sequence", "attempt_status", "phase", "updated_at"]),
+    project_id: run.project_id,
+    provider: run.provider,
+    revision: run.revision,
+    sequence: run.sequence,
+    status: run.status,
+    trigger: run.trigger,
+    updated_at: run.updated_at,
+    work_id: run.work_id,
+    work_title: boundedText(run.work_title, 240)
+  });
+}
+
+function compactEvidenceList(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("evidence", call);
+  return withBudget(EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority, {
+    compatibility: select(objectValue(call.body.compatibility), ["fallback_applied", "fallback_sources"]),
+    domain: "evidence",
+    has_more: booleanValue(call.body.has_more),
+    items: arrayValue(call.body.items).slice(0, 20).map((item) => select(item, [
+      "artifact_count", "attempt_id", "completed_at", "decisive_summary", "exit_code", "id", "kind",
+      "observed_at", "origin", "project_id", "run_id", "status", "storage_source", "work_id"
+    ])),
+    next_cursor: cleanString(call.body.next_cursor),
+    projection_errors: arrayValue(call.body.projection_errors).slice(0, 4),
+    skipped_invalid: numberValue(call.body.skipped_invalid)
+  });
+}
+
+function compactEvidenceDetail(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("evidence", call);
+  const evidence = objectValue(call.body.evidence);
+  const decisive = objectValue(evidence.decisive_output);
+  const provenance = objectValue(evidence.provenance);
+  return withBudget(EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority, {
+    artifacts: arrayValue(call.body.artifacts).slice(0, 12).map((item) => select(item, [
+      "download_url", "downloadable", "kind", "label", "media_type", "ref", "sha256", "unavailable_reason"
+    ])),
+    domain: "evidence",
+    evidence: cleanObject({
+      artifact_count: arrayValue(evidence.artifact_refs).length,
+      attempt_id: evidence.attempt_id,
+      completed_at: evidence.completed_at,
+      decisive_output: {
+        exit_code: decisive.exit_code ?? null,
+        fact_count: Object.keys(objectValue(decisive.facts)).length,
+        facts: boundedFacts(decisive.facts),
+        summary: boundedText(decisive.summary, 800)
+      },
+      id: evidence.id,
+      kind: evidence.kind,
+      observed_at: evidence.observed_at,
+      provenance: select(provenance, ["assertion_origin", "audit_event_ref", "source_kind", "source_ref"]),
+      revision: evidence.revision,
+      run_id: evidence.run_id,
+      status: evidence.status,
+      updated_at: evidence.updated_at,
+      work_id: evidence.work_id
+    }),
+    issue_id: call.body.issue_id,
+    project_id: call.body.project_id,
+    storage_source: call.body.storage_source,
+    verifier_review_refs: arrayValue(call.body.verifier_review_refs).slice(0, 8)
+  });
+}
+
+function compactHandoffList(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("handoff", call);
+  return withBudget(HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority, {
+    domain: "handoff",
+    has_more: booleanValue(call.body.has_more),
+    items: arrayValue(call.body.items).slice(0, 20).map((item) => {
+      const handoff = objectValue(item);
+      const deliveryStatus = objectValue(handoff.delivery_status);
+      return cleanObject({
+        changed_file_count: handoff.changed_file_count,
+        delivery: handoff.delivery,
+        delivery_status: deliveryStatus.overall,
+        evidence_count: handoff.evidence_count,
+        id: handoff.id,
+        next_step: boundedText(handoff.next_step, 320),
+        project_id: handoff.project_id,
+        risk_count: handoff.risk_count,
+        status: handoff.status,
+        summary: boundedText(handoff.summary, 320),
+        updated_at: handoff.updated_at,
+        work_id: handoff.work_id
+      });
+    }),
+    next_cursor: cleanString(call.body.next_cursor),
+    skipped_invalid: numberValue(call.body.skipped_invalid)
+  });
+}
+
+function compactHandoffDetail(call: DomainCall): Record<string, unknown> {
+  if (!call.ok) return compactDomainError("handoff", call);
+  const handoff = objectValue(call.body.handoff);
+  const deliveryStatus = objectValue(call.body.delivery_status);
+  return withBudget(HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority, {
+    delivery_status: {
+      actions: arrayValue(deliveryStatus.actions).slice(0, 12),
+      overall: deliveryStatus.overall,
+      refreshed_at: deliveryStatus.refreshed_at
+    },
+    domain: "handoff",
+    handoff: cleanObject({
+      changed_file_count: arrayValue(handoff.changed_files).length,
+      changed_files: arrayValue(handoff.changed_files).slice(0, 20).map((value) => boundedText(value, 240)),
+      delivery: handoff.delivery,
+      delivery_actions: arrayValue(handoff.delivery_actions).slice(0, 12).map((item) => select(item, [
+        "action", "audit_event_ref", "classification", "gate_decision", "outcome", "required", "target"
+      ])),
+      evidence_ids: arrayValue(handoff.evidence_ids).slice(0, 20),
+      final_revision: boundedText(handoff.final_revision, 240),
+      id: handoff.id,
+      review: handoff.review,
+      revision: handoff.revision,
+      risks: arrayValue(handoff.risks).slice(0, 12).map((item) => select(item, ["id", "mitigation", "severity", "summary"])),
+      rollback: handoff.rollback,
+      run_ids: arrayValue(handoff.run_ids).slice(0, 20),
+      status: handoff.status,
+      summary: boundedText(handoff.summary, 800),
+      updated_at: handoff.updated_at,
+      work_id: handoff.work_id
+    }),
+    issue_id: call.body.issue_id,
+    project_id: call.body.project_id,
+    storage: call.body.storage
+  });
+}
+
+function compactDomainError(domain: string, call: DomainCall): Record<string, unknown> {
+  return withBudget(domainAuthority(domain), {
+    domain,
+    error: cleanObject({
+      code: cleanString(call.body.code) || "domain_request_failed",
+      message: boundedText(call.body.message, 500),
+      violations: arrayValue(call.body.violations).slice(0, 12).map((item) => boundedText(item, 240))
+    }),
+    http_status: call.status,
+    ok: false
+  });
+}
+
+function compactActionRecord(action: PiAction): Record<string, unknown> {
+  return withBudget(domainAuthority(action.action_type.split(".")[0] ?? ""), cleanObject({
+    action_id: action.id,
+    action_type: action.action_type,
+    decision: action.gate_decision,
+    idempotency_key: action.idempotency_key,
+    issue_id: action.issue_id || undefined,
+    project_id: action.project_id,
+    requires_confirmation: action.requires_confirmation === 1,
+    result: action.status === "completed" ? jsonValue(action.result_json) : undefined,
+    risk_level: action.risk_level,
+    status: action.status
+  }));
+}
+
+function withBudget(authority: string, value: Record<string, unknown>): Record<string, unknown> {
+  const output = {
+    authority,
+    observed_at: new Date().toISOString(),
+    output_budget: {
+      max_chars: SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS,
+      max_tokens_estimate: SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
+    },
+    ...value
+  };
+  const serialized = JSON.stringify(output);
+  if (serialized.length <= SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS) return output;
+  let preview = serialized.slice(0, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS - 1000);
+  let bounded = truncatedProjection(authority, serialized.length, preview);
+  while (JSON.stringify(bounded).length > SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS && preview.length > 0) {
+    preview = preview.slice(0, Math.max(0, preview.length - 256));
+    bounded = truncatedProjection(authority, serialized.length, preview);
+  }
+  return bounded;
+}
+
+function truncatedProjection(authority: string, originalChars: number, preview: string): Record<string, unknown> {
+  return {
+    authority,
+    observed_at: new Date().toISOString(),
+    original_chars: originalChars,
+    output_budget: {
+      max_chars: SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS,
+      max_tokens_estimate: SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_TOKENS
+    },
+    preview,
+    truncated: true
+  };
+}
+
+function domainAuthority(domain: string): string {
+  if (domain === "work") return WORK_HTTP_COMPATIBILITY_POLICY.write_authority;
+  if (domain === "run") return RUN_HTTP_COMPATIBILITY_POLICY.write_authority;
+  if (domain === "evidence") return EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority;
+  if (domain === "handoff") return HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority;
+  return "unknown";
+}
+
+function controlTool<TParams extends TSchema>(
+  name: SupervisorControlToolName,
+  label: string,
+  description: string,
+  parameters: TParams,
+  executeAction: ToolExecutor<TParams>
+): ToolDefinition<TParams> {
+  return {
+    name,
+    label,
+    description,
+    parameters,
+    async execute(_toolCallID, params) {
+      const details = await executeAction(params);
+      return toolResult(details);
+    }
+  };
+}
+
+function toolResult(details: unknown): AgentToolResult<unknown> {
+  const text = JSON.stringify(details) ?? "null";
+  const visible = text.length <= SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS
+    ? text
+    : `${text.slice(0, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS - 100)}\n[tool output truncated; original_chars=${text.length}]`;
+  return { content: [{ type: "text", text: visible }], details };
+}
+
+function domainAudit(context: PiRunnerActionContext, eventID: string, reason: string) {
+  return {
+    actor: {
+      id: cleanString(context.conversationID) || cleanString(context.delegationID) || "xuanwu-supervisor",
+      kind: "supervisor"
+    },
+    correlation_id: cleanString(context.conversationID) || cleanString(context.heartbeatID) || eventID,
+    event_id: eventID,
+    occurred_at: new Date().toISOString(),
+    reason
+  };
+}
+
+function scopedIdempotencyKey(actionType: string, projectIDValue: string, target: string, value: string): string {
+  return ["supervisor-control", actionType, projectIDValue || "global", target, requiredString(value, "idempotency_key")].join(":");
+}
+
+function assertIdempotencyCompatible(
+  db: RunnerDatabase,
+  key: string,
+  actionType: string,
+  projectIDValue: string,
+  issueID: number,
+  payload: Record<string, unknown>
+): void {
+  const existing = getPiActionByIdempotencyKey(db, key);
+  if (!existing) return;
+  const matches = existing.action_type === actionType && existing.project_id === projectIDValue &&
+    existing.issue_id === issueID && stableJson(jsonValue(existing.payload_json)) === stableJson(payload);
+  if (!matches) throw new Error("idempotency_key conflicts with another Supervisor control command");
+}
+
+function targetProjectID(db: RunnerDatabase, workIDValue: string, fallback?: Project): string {
+  const issueID = workIDToIssueID(workIDValue);
+  const row = db.sqlite.query<{ project_id: string }, [number]>("select project_id from issues where id=?").get(issueID);
+  return row?.project_id ?? fallback?.id ?? "";
+}
+
+function runProjectID(db: RunnerDatabase, runIDValue: string, fallback?: Project): string {
+  const run = requireRunTarget(db, runIDValue);
+  return cleanString(run.project_id) || fallback?.id || "";
+}
+
+function requireRunTarget(db: RunnerDatabase, runIDValue: string): Record<string, unknown> {
+  const row = db.sqlite.query<Record<string, unknown>, [string]>(`
+    select issue.project_id, run.work_id from issue_runs run
+    join issues issue on issue.id=run.issue_id where run.run_id=?
+  `).get(runIDValue);
+  if (!row) throw new Error("Run not found");
+  return row;
+}
+
+function evidenceProjectID(db: RunnerDatabase, evidenceIDValue: string, fallback?: Project): string {
+  const row = db.sqlite.query<{ project_id: string }, [string]>(`
+    select issue.project_id from issue_events event join issues issue on issue.id=event.issue_id
+    where json_valid(event.payload) and json_extract(event.payload, '$.evidence.id')=?
+    order by event.id desc limit 1
+  `).get(evidenceIDValue);
+  return row?.project_id ?? fallback?.id ?? "";
+}
+
+function handoffProjectID(db: RunnerDatabase, handoffIDValue: string, fallback?: Project): string {
+  const row = db.sqlite.query<{ project_id: string }, [string]>(`
+    select issue.project_id from issue_events event join issues issue on issue.id=event.issue_id
+    where json_valid(event.payload) and json_extract(event.payload, '$.handoff.id')=?
+    order by event.id desc limit 1
+  `).get(handoffIDValue);
+  return row?.project_id ?? fallback?.id ?? "";
+}
+
+function projectID(value: unknown, fallback?: Project): string {
+  return cleanString(value) || fallback?.id || "";
+}
+
+function requiredProjectID(value: unknown, fallback?: Project): string {
+  const id = projectID(value, fallback);
+  if (id === "") throw new Error("project_id is required");
+  return id;
+}
+
+function queryPath(path: string, input: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [key, raw] of Object.entries(input)) {
+    for (const value of Array.isArray(raw) ? raw : [raw]) {
+      if (value === undefined || value === null) continue;
+      if (typeof value === "string" && value.trim() === "") continue;
+      params.append(key, String(value));
+    }
+  }
+  const query = params.toString();
+  return query === "" ? path : `${path}?${query}`;
+}
+
+function encodeCursor(domain: "evidence" | "handoff", eventID: number): string {
+  return Buffer.from(`${domain}:${eventID}`, "utf8").toString("base64url");
+}
+
+function limit(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? Math.min(value, 20) : 10;
+}
+
+function boundedFacts(value: unknown): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(objectValue(value)).slice(0, 12).map(([key, item]) => [
+    key,
+    typeof item === "string" ? boundedText(item, 240) : item
+  ]));
+}
+
+function boundedText(value: unknown, max: number): string {
+  const text = cleanString(value);
+  return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function select(value: unknown, keys: string[]): Record<string, unknown> {
+  const record = objectValue(value);
+  return cleanObject(Object.fromEntries(keys.map((key) => [key, record[key]])));
+}
+
+function cleanObject(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== ""));
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function booleanValue(value: unknown): boolean {
+  return value === true || value === 1;
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function requiredString(value: unknown, label: string): string {
+  const text = cleanString(value);
+  if (text === "") throw new Error(`${label} is required`);
+  return text;
+}
+
+function jsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}

@@ -1,6 +1,11 @@
 import type { PiGateDecisionValue, PiWorkMode } from "./policyTypes.ts";
 import { matchPiAuthorizationPolicyScope } from "./authorizationScope.ts";
 import { recoveryLimitDecision } from "./actionGateRecovery.ts";
+import {
+  SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES,
+  SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES,
+  SUPERVISOR_CONTROL_READ_ACTION_TYPES
+} from "./supervisorControlContracts.ts";
 
 export type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
@@ -84,7 +89,8 @@ export const PI_SAFE_ACTION_TYPES = [
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
-  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read"
+  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",
+  ...SUPERVISOR_CONTROL_READ_ACTION_TYPES
 ];
 export const PI_READ_ONLY_ACTION_TYPES = [
   "agent.profile_recommend",
@@ -96,16 +102,19 @@ export const PI_READ_ONLY_ACTION_TYPES = [
   "memory.search",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend",
-  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read"
+  "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",
+  ...SUPERVISOR_CONTROL_READ_ACTION_TYPES
 ];
 const SAFE_ACTIONS = new Set(PI_SAFE_ACTION_TYPES);
+const SUPERVISOR_HIGH_RISK_ACTIONS = new Set<string>(SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES);
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
   "issue_completion_watch.create", "issue_completion_watch.cancel",
   "issue.retry", "issue.state_repair", "needs_user.escalate",
-  "session.resume_followup"
+  "session.resume_followup",
+  ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES.filter((action) => !SUPERVISOR_HIGH_RISK_ACTIONS.has(action))
 ]);
-const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call"]);
+const HIGH_RISK_ACTIONS = new Set(["session.steer", "mcp.tool.call", ...SUPERVISOR_CONTROL_HIGH_RISK_ACTION_TYPES]);
 const READ_ONLY_ACTIONS = new Set(PI_READ_ONLY_ACTION_TYPES);
 
 export function classifyPiActionRisk(actionType: string, override: Partial<PiRiskClassification> = {}): PiRiskClassification {

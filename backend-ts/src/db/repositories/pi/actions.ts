@@ -102,6 +102,15 @@ export function getPiAction(db: RunnerDatabase, id: string): PiAction | null {
   return getByID(db, TABLE, COLUMNS, id, mapPiAction);
 }
 
+export function getPiActionByIdempotencyKey(db: RunnerDatabase, idempotencyKey: string): PiAction | null {
+  const key = cleanString(idempotencyKey);
+  if (key === "") return null;
+  const row = db.sqlite.query<Record<string, unknown>, [string]>(
+    `select ${COLUMNS} from ${TABLE} where idempotency_key=? order by created_at asc, id asc limit 1`
+  ).get(key);
+  return row ? mapPiAction(row) : null;
+}
+
 export function deletePiAction(db: RunnerDatabase, id: string): boolean {
   return deleteByID(db, TABLE, id);
 }

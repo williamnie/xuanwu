@@ -48,6 +48,7 @@ import {
   type ManualContextIntakeInput
 } from "./manualTrigger.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -82,6 +83,7 @@ export type PiRunnerActionContext = PiActionContext & {
   env?: Record<string, string | undefined>;
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   sourceTurn?: PiRunnerSourceTurn;
 };
 

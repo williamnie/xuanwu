@@ -1,6 +1,12 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { createPiProjectTools } from "../http/piProjectTools.ts";
 import type { AssistantTool, ToolJsonSchema, ToolPermission, ToolProvider } from "./toolProviderEnvelope.ts";
+import {
+  supervisorControlOutputSchema,
+  SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES,
+  SUPERVISOR_CONTROL_READ_TOOL_NAMES,
+  SUPERVISOR_CONTROL_TOOL_NAMES
+} from "./supervisorControlContracts.ts";
 
 export const RUNNER_BUILTIN_PROVIDER_ID = "runner-builtin";
 const PRIMITIVE_READ_TOOL_NAMES = ["read", "grep", "find", "ls"] as const;
@@ -27,8 +33,11 @@ const READ_TOOL_NAMES = new Set<string>([
   "mcp_requirement_recommend",
   "mcp_resource_list",
   "mcp_resource_read",
-  "memory_search"
+  "memory_search",
+  ...SUPERVISOR_CONTROL_READ_TOOL_NAMES
 ]);
+const DANGEROUS_TOOL_NAMES = new Set<string>(SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES);
+const SUPERVISOR_CONTROL_TOOLS = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
 
 export function listBuiltinToolProviders(): ToolProvider[] {
   return [{
@@ -48,16 +57,25 @@ export function listBuiltinAssistantTools(): AssistantTool[] {
 
 function piActionTools(): AssistantTool[] {
   const tools = createPiProjectTools({} as RunnerDatabase);
-  return tools.map((tool) => ({
-    audit: { redact: [] },
-    description: tool.description,
-    input_schema: plainSchema(tool.parameters),
-    metadata: { builtin: true, label: tool.label ?? tool.name },
-    name: tool.name,
-    output_schema: { type: "object" },
-    permission: builtinToolPermission(tool.name),
-    provider_id: RUNNER_BUILTIN_PROVIDER_ID
-  }));
+  return tools.map((tool) => {
+    const permission = builtinToolPermission(tool.name);
+    return {
+      audit: SUPERVISOR_CONTROL_TOOLS.has(tool.name)
+        ? { category: "supervisor_domain_control", redact: [], retention: "extended", tags: [permission] }
+        : { redact: [] },
+      description: tool.description,
+      input_schema: plainSchema(tool.parameters),
+      metadata: {
+        builtin: true,
+        label: tool.label ?? tool.name,
+        ...(SUPERVISOR_CONTROL_TOOLS.has(tool.name) ? { risk_level: toolRiskLevel(permission) } : {})
+      },
+      name: tool.name,
+      output_schema: supervisorControlOutputSchema(tool.name) ?? { type: "object" },
+      permission,
+      provider_id: RUNNER_BUILTIN_PROVIDER_ID
+    };
+  });
 }
 
 function primitiveReadTools(): AssistantTool[] {
@@ -74,7 +92,14 @@ function primitiveReadTools(): AssistantTool[] {
 }
 
 export function builtinToolPermission(name: string): ToolPermission {
+  if (DANGEROUS_TOOL_NAMES.has(name)) return "dangerous";
   return READ_TOOL_NAMES.has(name) ? "read" : "write";
+}
+
+function toolRiskLevel(permission: ToolPermission): "high" | "low" | "medium" {
+  if (permission === "read") return "low";
+  if (permission === "dangerous") return "high";
+  return "medium";
 }
 
 function primitiveDescription(name: string): string {
