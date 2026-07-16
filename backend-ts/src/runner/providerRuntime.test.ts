@@ -10,6 +10,7 @@ import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { isExecutorProviderId } from "../providers/types.ts";
+import { normalizeCodexEvent } from "../providers/codex/events.ts";
 import type { ExecutorProvider, ProviderEvent, ProviderRunInput } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
@@ -109,6 +110,44 @@ class LongSessionProvider implements ExecutorProvider {
   }
 }
 
+class NormalizedCodexFixtureProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution"] as const;
+
+  async run(input: ProviderRunInput) {
+    const notifications = [
+      { method: "turn/started", params: { threadId: "thread-normalized", turn: { id: "turn-normalized" } } },
+      { method: "future/event", params: { threadId: "thread-normalized", turnId: "turn-normalized", opaque: true } },
+      {
+        method: "thread/tokenUsage/updated",
+        params: {
+          threadId: "thread-normalized",
+          turnId: "turn-normalized",
+          tokenUsage: {
+            last: { cachedInputTokens: 1, inputTokens: 4, outputTokens: 2, reasoningOutputTokens: 1, totalTokens: 6 },
+            total: { cachedInputTokens: 3, inputTokens: 12, outputTokens: 5, reasoningOutputTokens: 2, totalTokens: 17 }
+          }
+        }
+      },
+      { method: "turn/completed", params: { threadId: "thread-normalized", turn: { id: "turn-normalized", status: "completed" } } }
+    ];
+    notifications.forEach((notification) => input.onEvent?.(normalizeCodexEvent(notification)));
+    return {
+      runId: "codex:thread-normalized:turn-normalized",
+      session: { provider: this.id, sessionId: "thread-normalized", turnId: "turn-normalized" }
+    };
+  }
+}
+
+class ThrowingProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution"] as const;
+
+  async run(): Promise<never> {
+    throw new Error("provider failed CODEX_API_KEY=fixture-secret");
+  }
+}
+
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-provider-runtime-"));
   tempRoots.push(root);
@@ -190,6 +229,28 @@ describe("executor provider runtime seam", () => {
     ]);
   });
 
+  test("normalizes thrown provider failures when no wire error was emitted", async () => {
+    const events: ProviderEvent[] = [];
+
+    await expect(runIssueWithProvider(new ThrowingProvider(), {
+      issueId: 160,
+      projectId: "demo",
+      cwd: "/tmp/project",
+      prompt: "issue prompt",
+      onLog: (event) => events.push(event)
+    })).rejects.toThrow("provider failed");
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      error: "provider failed CODEX_API_KEY=[redacted]",
+      raw: { method: "provider/run_error" },
+      runEvent: { kind: "error", outcome: "failed", terminal: true },
+      status: "failed",
+      type: "error"
+    });
+    expect(JSON.stringify(events)).not.toContain("fixture-secret");
+  });
+
   test("persists provider session refs into issue_runs and agent_sessions", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -227,6 +288,63 @@ describe("executor provider runtime seam", () => {
         type: "issue.log",
         payload: "{\"type\":\"provider.message\",\"provider\":\"fake-execution-only\",\"text\":\"fake provider log\"}"
       }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("persists normalized provider evidence and projects audited usage without acting on unknown events", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+
+      await runIssueWithProvider(new NormalizedCodexFixtureProvider(), {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "normalized fixture"
+      });
+
+      const events = listIssueEvents(db, issueId);
+      const payloads = events.map((event) => ({
+        event,
+        payload: JSON.parse(event.payload) as Record<string, unknown>
+      }));
+      const unknown = payloads.find(({ payload }) => payload.raw_method === "future/event");
+      const usage = payloads.find(({ payload }) => payload.raw_method === "thread/tokenUsage/updated");
+      const attempt = db.sqlite.query<{ cost_json: string; revision: number; status: string }, [number]>(`
+        select attempt.cost_json, attempt.revision, attempt.status
+        from run_attempts attempt
+        join issue_runs run on run.id=attempt.issue_run_id
+        where run.issue_id=?
+      `).get(issueId);
+      const cost = JSON.parse(attempt?.cost_json ?? "{}") as Record<string, unknown>;
+
+      expect(unknown?.payload.run_event).toMatchObject({
+        kind: "unknown",
+        outcome: "unknown",
+        terminal: false,
+        unknown: { policy: "preserve" }
+      });
+      expect(attempt?.status).toBe("running");
+      expect(attempt?.revision).toBe(1);
+      expect(cost).toMatchObject({
+        money: { amount_micros: null, basis: "unavailable", currency: "" },
+        usage: {
+          cached_input_tokens: 3,
+          completeness: "complete",
+          input_tokens: 12,
+          output_tokens: 5,
+          reasoning_output_tokens: 2,
+          total_tokens: 17
+        }
+      });
+      expect((cost.source_refs as string[])).toEqual(expect.arrayContaining([
+        "provider-event:codex:thread/tokenUsage/updated:thread-normalized:turn-normalized",
+        `issue_events:${usage?.event.id}`
+      ]));
     } finally {
       db.close();
     }

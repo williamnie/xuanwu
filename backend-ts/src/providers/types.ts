@@ -1,3 +1,5 @@
+import type { RunCost } from "../domain/run/contracts.ts";
+
 export const EXECUTOR_PROVIDER_IDS = ["codex", "claude", "fake-execution-only"] as const;
 
 export type ExecutorProviderId = (typeof EXECUTOR_PROVIDER_IDS)[number];
@@ -16,6 +18,41 @@ export type SessionRef = {
   turnId?: string;
 };
 
+export const NORMALIZED_RUN_EVENT_CONTRACT = "xw.run-event.v1" as const;
+
+export type NormalizedRunEventKind =
+  | "started"
+  | "progress"
+  | "approval_requested"
+  | "approval_resolved"
+  | "error"
+  | "completed"
+  | "unknown";
+
+export type NormalizedRunEventOutcome =
+  | "running"
+  | "waiting_approval"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "interrupted"
+  | "unknown";
+
+export type ProviderMetadataValue = boolean | number | string;
+
+export type NormalizedRunEvent = {
+  contract: typeof NORMALIZED_RUN_EVENT_CONTRACT;
+  cost?: RunCost;
+  kind: NormalizedRunEventKind;
+  metadata: Record<string, ProviderMetadataValue>;
+  outcome: NormalizedRunEventOutcome;
+  provider: ExecutorProviderId;
+  retryable?: boolean;
+  source: { method: string; ref: string };
+  terminal: boolean;
+  unknown?: { policy: "preserve"; reason: "unsupported_provider_event" };
+};
+
 export type ProviderEvent = {
   type: string;
   provider: ExecutorProviderId;
@@ -27,6 +64,7 @@ export type ProviderEvent = {
   error?: string;
   payload?: unknown;
   raw?: { method?: string; payload?: unknown };
+  runEvent?: NormalizedRunEvent;
 };
 
 export type ProviderPromptImage = {

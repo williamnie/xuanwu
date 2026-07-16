@@ -21,6 +21,12 @@ describe("Codex approval broker fast policy", () => {
         session_grant_ttl_ms: 0
       }),
       raw: expect.objectContaining({ method: "approval/fast_resolved" }),
+      runEvent: expect.objectContaining({
+        contract: "xw.run-event.v1",
+        kind: "approval_resolved",
+        outcome: "running",
+        terminal: false
+      }),
       status: "approve"
     })]);
     await expect(broker.resolveApproval("approval-approve-now", { decision: "approve" }))

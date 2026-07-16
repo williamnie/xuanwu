@@ -1,9 +1,19 @@
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { recordIssueLogEvent } from "../db/repositories/issueEvents.ts";
 import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
+import { projectNormalizedRunEvent } from "../db/repositories/runAttemptEvents.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
-import type { ExecutorProvider, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../providers/types.ts";
+import { normalizedRunEvent } from "../providers/runEvents.ts";
+import type {
+  ExecutorProvider,
+  ExecutorProviderId,
+  ProviderEvent,
+  ProviderRunInput,
+  ProviderRunResult,
+  SessionRef
+} from "../providers/types.ts";
+import { redactSensitiveText } from "../util/redact.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
 import { createIssueLogPersistence } from "./issueLogPersistence.ts";
@@ -50,6 +60,9 @@ export async function runIssueWithProvider(
   let result: ProviderRunResult;
   try {
     result = await provider.run(providerInput(input, eventSink.push));
+  } catch (error) {
+    if (!eventSink.hasFailure()) eventSink.push(providerRunErrorEvent(providerID, error));
+    throw error;
   } finally {
     eventSink.flush();
   }
@@ -66,9 +79,12 @@ export async function runIssueWithProvider(
 
 function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string) {
   const persistence = createIssueLogPersistence((event) => persistRuntimeEvent(input, event, activeRunID));
+  let failure = false;
   return {
     flush: persistence.flush,
+    hasFailure: () => failure,
     push(event: ProviderEvent) {
+      if (event.runEvent?.kind === "error") failure = true;
       input.onLog?.(event);
       persistence.push(event);
       input.onRuntimeEvent?.(event);
@@ -93,11 +109,17 @@ function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInp
   };
 }
 
-function persistRuntimeResult(input: RunnerIssueExecutionInput, provider: string, result: ProviderRunResult, activeRunID: string): void {
+function persistRuntimeResult(
+  input: RunnerIssueExecutionInput,
+  provider: string,
+  result: ProviderRunResult,
+  activeRunID: string
+): void {
   if (!input.database || !result.session) return;
   persistRuntime({
     db: input.database, input, provider, session: result.session,
-    status: resultSessionStatus(input.database, provider, result.session), metadata: runtimeMetadata(input, { run_id: result.runId }),
+    status: resultSessionStatus(input.database, provider, result.session),
+    metadata: runtimeMetadata(input, { run_id: result.runId }),
     issueRunId: activeRunID || openIssueRunID(input.database, input.issueId)
   });
 }
@@ -110,10 +132,12 @@ function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEv
   if (event.session) {
     persistRuntime({
       db: input.database, input, provider: event.session.provider, session: event.session,
-      status: eventSessionStatus(event), metadata: runtimeMetadata(input, { source: "provider_event" }),
+      status: eventSessionStatus(event),
+      metadata: runtimeMetadata(input, { source: "provider_event" }),
       issueRunId: activeRunID
     });
   }
+  projectNormalizedRunEvent(input.database, activeRunID, event.runEvent, persisted.id);
   signalProviderTerminalEvent({
     activeRunID,
     database: input.database,
@@ -232,4 +256,16 @@ function openIssueRunID(db: RunnerDatabase | undefined, issueID: number): string
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function providerRunErrorEvent(provider: ExecutorProviderId, error: unknown): ProviderEvent {
+  const message = redactSensitiveText(error instanceof Error ? error.message : String(error));
+  return {
+    error: message,
+    provider,
+    raw: { method: "provider/run_error", payload: message },
+    runEvent: normalizedRunEvent({ kind: "error", method: "provider/run_error", outcome: "failed", provider }),
+    status: "failed",
+    type: "error"
+  };
 }

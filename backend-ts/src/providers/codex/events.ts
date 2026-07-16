@@ -1,5 +1,6 @@
 import { redactSensitiveText } from "../../util/redact.ts";
-import type { ProviderEvent, SessionRef } from "../types.ts";
+import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRunEvent } from "../runEvents.ts";
+import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts";
 
 export type CodexWireNotification = { method: string; params?: unknown };
 
@@ -15,8 +16,104 @@ export function normalizeCodexEvent(notification: CodexWireNotification): Provid
   const session = sessionRef(raw);
   if (session) event.session = session;
   applyFields(event, method, raw);
+  event.runEvent = normalizedCodexRunEvent(method, raw, event);
   if (event.type === "raw") event.payload = rawSummary(method, payload);
   return event;
+}
+
+function normalizedCodexRunEvent(
+  method: string,
+  raw: Record<string, unknown>,
+  event: ProviderEvent
+): NormalizedRunEvent {
+  if (method === "turn/started") {
+    return normalizedRunEvent({ kind: "started", method, outcome: "running", provider: "codex", session: event.session });
+  }
+  if (method === "turn/completed") return codexCompletionRunEvent(method, event);
+  if (["approval/resolved", "approval/fast_resolved"].includes(method)) {
+    return normalizedRunEvent({ kind: "approval_resolved", method, outcome: "running", provider: "codex", session: event.session });
+  }
+  if (method === "approval/requested") {
+    return normalizedRunEvent({ kind: "approval_requested", method, outcome: "waiting_approval", provider: "codex", session: event.session });
+  }
+  if (["error", "protocol/error", "process/stderr"].includes(method)) {
+    return normalizedRunEvent({
+      kind: "error",
+      method,
+      outcome: "failed",
+      provider: "codex",
+      retryable: raw["willRetry"] === true,
+      session: event.session
+    });
+  }
+  if (method === "thread/status/changed" && terminalThreadStatus(event.status)) {
+    return normalizedRunEvent({ kind: "error", method, outcome: "failed", provider: "codex", session: event.session });
+  }
+  if (method === "thread/tokenUsage/updated") return codexUsageRunEvent(method, raw, event.session);
+  if (progressMethod(method)) {
+    return normalizedRunEvent({ kind: "progress", method, outcome: "running", provider: "codex", session: event.session });
+  }
+  return unknownRunEvent("codex", method, event.session);
+}
+
+function codexCompletionRunEvent(method: string, event: ProviderEvent): NormalizedRunEvent {
+  const status = (event.status ?? "").trim().toLowerCase();
+  if (["completed", "succeeded", "success"].includes(status)) {
+    return normalizedRunEvent({ kind: "completed", method, outcome: "succeeded", provider: "codex", session: event.session });
+  }
+  const outcome = status === "cancelled" || status === "canceled"
+    ? "cancelled"
+    : status === "interrupted" ? "interrupted" : "failed";
+  return normalizedRunEvent({ kind: "error", method, outcome, provider: "codex", session: event.session });
+}
+
+function codexUsageRunEvent(method: string, raw: Record<string, unknown>, session?: SessionRef): NormalizedRunEvent {
+  const tokenUsage = recordField(raw, "tokenUsage");
+  const total = recordField(tokenUsage, "total");
+  const sourceRef = providerEventSourceRef("codex", method, session);
+  const cost = providerRunCost({
+    sourceRef,
+    usage: {
+      cached_input_tokens: numericField(total, "cachedInputTokens"),
+      input_tokens: numericField(total, "inputTokens"),
+      output_tokens: numericField(total, "outputTokens"),
+      reasoning_output_tokens: numericField(total, "reasoningOutputTokens"),
+      total_tokens: numericField(total, "totalTokens")
+    }
+  });
+  return normalizedRunEvent({
+    ...(cost ? { cost } : {}),
+    kind: "progress",
+    metadata: {
+      model_context_window: numericField(tokenUsage, "modelContextWindow"),
+      usage_scope: "provider_session_total"
+    },
+    method,
+    outcome: "running",
+    provider: "codex",
+    session
+  });
+}
+
+function progressMethod(method: string): boolean {
+  return CODEX_PROGRESS_METHODS.has(method);
+}
+
+const CODEX_PROGRESS_METHODS = new Set([
+  "item/agentMessage/delta",
+  "item/commandExecution/outputDelta",
+  "item/fileChange/outputDelta",
+  "item/fileChange/patchUpdated",
+  "item/started",
+  "item/completed",
+  "thread/status/changed",
+  "turn/diff/updated",
+  "turn/plan/updated",
+  "turn/taskProgress/updated"
+]);
+
+function terminalThreadStatus(status: string | undefined): boolean {
+  return ["systemerror", "failed", "error"].includes((status ?? "").trim().toLowerCase());
 }
 
 function applyFields(event: ProviderEvent, method: string, raw: Record<string, unknown>): void {
@@ -174,8 +271,19 @@ function redactPayload(value: unknown): unknown {
 }
 
 function isSensitiveKey(key: string): boolean {
+  if (SAFE_USAGE_KEYS.has(key)) return false;
   return /(?:token|secret|password|api[_-]?key|access[_-]?key)/i.test(key);
 }
+
+const SAFE_USAGE_KEYS = new Set([
+  "tokenUsage",
+  "cachedInputTokens",
+  "inputTokens",
+  "outputTokens",
+  "reasoningOutputTokens",
+  "totalTokens",
+  "modelContextWindow"
+]);
 
 function rawSummary(method: string, payload: unknown): string {
   const body = stableJSON(payload);
@@ -200,4 +308,9 @@ function arrayField(raw: Record<string, unknown>, key: string): unknown[] {
 
 function stringField(raw: Record<string, unknown>, key: string): string {
   return typeof raw[key] === "string" ? raw[key].trim() : "";
+}
+
+function numericField(raw: Record<string, unknown>, key: string): number | undefined {
+  const value = raw[key];
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }

@@ -35,7 +35,17 @@ describe("Claude stream-json parser", () => {
     expect(result.events[4].payload).toContain("mystery");
     expect(String(result.events[4].payload).length).toBeLessThanOrEqual(248);
     expect(JSON.stringify(result.events[4])).not.toContain("fixture-secret");
-    expect(result.events.at(-1)).toMatchObject({ type: "done", status: "end_turn" });
+    expect(result.events[4].runEvent).toMatchObject({
+      kind: "unknown",
+      outcome: "unknown",
+      terminal: false,
+      unknown: { policy: "preserve" }
+    });
+    expect(result.events.at(-1)).toMatchObject({
+      type: "done",
+      status: "end_turn",
+      runEvent: { kind: "completed", outcome: "succeeded", terminal: true }
+    });
   });
 
   test("normalizes Claude result errors without emitting done", () => {
@@ -49,7 +59,12 @@ describe("Claude stream-json parser", () => {
     expect(result.completed).toBe(false);
     expect(result.error).toBe("model failed");
     expect(result.events.map((event) => event.type)).toEqual(["text", "error"]);
-    expect(result.events.at(-1)).toMatchObject({ type: "error", status: "failed", error: "model failed" });
+    expect(result.events.at(-1)).toMatchObject({
+      type: "error",
+      status: "failed",
+      error: "model failed",
+      runEvent: { kind: "error", outcome: "failed", terminal: true }
+    });
   });
 
   test("returns a transient diagnostic error for truncated streams", () => {

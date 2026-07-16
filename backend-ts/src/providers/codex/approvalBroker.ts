@@ -2,6 +2,7 @@ import { redactSensitiveText } from "../../util/redact.ts";
 import { evaluateApprovalFastPolicy, type ApprovalFastDecision } from "../../pi/approvalFastPolicy.ts";
 import { constrainApprovalGrantScope, type ScopedApprovalDecision } from "../../pi/approvalGrantScope.ts";
 import { parseCodexApprovalRequest } from "../../pi/approvalRequestParser.ts";
+import { normalizedRunEvent } from "../runEvents.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 
 type PendingApproval = {
@@ -217,13 +218,22 @@ function approvalScope(decision: ApprovalDecision): "session" | "turn" {
 function approvalEvent(method: string, payload: Record<string, unknown>, status: string): ProviderEvent {
   const safePayload = redactedPayload(payload) as Record<string, unknown>;
   const params = recordValue(safePayload.params);
+  const session = sessionRef(params);
+  const resolved = method === "approval/resolved" || method === "approval/fast_resolved";
   return {
     provider: "codex",
     type: "approval",
     status,
-    session: sessionRef(params),
+    session,
     raw: { method, payload: stableJSON(safePayload) },
-    payload: safePayload
+    payload: safePayload,
+    runEvent: normalizedRunEvent({
+      kind: resolved ? "approval_resolved" : "approval_requested",
+      method,
+      outcome: resolved ? "running" : "waiting_approval",
+      provider: "codex",
+      session
+    })
   };
 }
 

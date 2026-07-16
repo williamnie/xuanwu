@@ -88,12 +88,24 @@ describe("Codex executor provider", () => {
       runId: "codex:thread-1:turn-1",
       session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" }
     });
-    expect(events).toEqual([{
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
       provider: "codex",
       type: "turn_started",
       status: "inProgress",
-      session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" }
-    }]);
+      session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" },
+      runEvent: {
+        contract: "xw.run-event.v1",
+        kind: "started",
+        metadata: {
+          model: "codex-default",
+          protocol_version: "fixture",
+          service_tier: "priority"
+        },
+        outcome: "running",
+        terminal: false
+      }
+    });
     expect(adapter.calls).toEqual([
       { method: "initialize" },
       {

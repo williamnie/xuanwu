@@ -159,6 +159,7 @@ function issueLogArtifactSummary(
     status: boundedString(payload.status, 256),
     error: boundedString(payload.error, SUMMARY_ERROR_BYTES),
     raw_payload: diagnostic ? boundedString(payload.raw_payload, SUMMARY_ERROR_BYTES) : undefined,
+    run_event: payload.run_event,
     issue_log_artifact: artifact
   });
 }
@@ -174,7 +175,8 @@ function issueLogPayload(event: ProviderEvent): Record<string, unknown> {
     command: event.command,
     path: event.path,
     status: event.status,
-    error: event.error
+    error: event.error,
+    run_event: event.runEvent
   });
 }
 

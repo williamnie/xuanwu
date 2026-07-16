@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import { splitCommand } from "../codex/jsonRpc.ts";
 import { parseClaudeStreamJSONL } from "./stream.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
+import { normalizedRunEvent } from "../runEvents.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { ExecutorProvider, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../types.ts";
 
@@ -38,7 +39,7 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
     const session = runSession(runId);
     const aliases = new Set<string>();
     this.track(session, process, aliases);
-    input.onEvent?.(startEvent(session));
+    input.onEvent?.(startEvent(session, input, this.config));
     try {
       const [stdout, stderr, exitCode] = await waitForProcess(process, this.config.timeoutMs);
       const secrets = secretValues(this.config.env);
@@ -129,13 +130,21 @@ function runSession(runId: string): SessionRef {
   return { provider: PROVIDER, sessionId: runId, turnId: runId };
 }
 
-function startEvent(session: SessionRef): ProviderEvent {
+function startEvent(session: SessionRef, input: ProviderRunInput, config: ProviderRuntimeConfig): ProviderEvent {
   return {
     provider: PROVIDER,
     type: "text",
     status: "started",
     session,
-    raw: { method: "start", payload: "Claude Code child process started" }
+    raw: { method: "start", payload: "Claude Code child process started" },
+    runEvent: normalizedRunEvent({
+      kind: "started",
+      metadata: { model: clean(input.model) || clean(config.model) },
+      method: "start",
+      outcome: "running",
+      provider: PROVIDER,
+      session
+    })
   };
 }
 
@@ -182,7 +191,14 @@ function emitStderr(input: ProviderRunInput, stderr: string, runId: string, secr
       type: "stderr",
       text,
       session: { provider: PROVIDER, sessionId: runId, turnId: runId },
-      raw: { method: "stderr", payload: text }
+      raw: { method: "stderr", payload: text },
+      runEvent: normalizedRunEvent({
+        kind: "progress",
+        method: "stderr",
+        outcome: "running",
+        provider: PROVIDER,
+        session: { provider: PROVIDER, sessionId: runId, turnId: runId }
+      })
     });
   }
 }

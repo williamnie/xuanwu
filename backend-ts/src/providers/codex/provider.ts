@@ -1,5 +1,6 @@
 import { CodexAdapter } from "./adapter.ts";
 import { localImageInput, textInput } from "./threadLifecycle.ts";
+import { normalizedRunEvent } from "../runEvents.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { AppEvent } from "../../events/bus.ts";
 import type {
@@ -65,7 +66,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
   ) {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    await this.adapter.initialize();
+    const initialized = await this.adapter.initialize();
     const thread = await this.adapter.startThread({
       cwd: input.cwd,
       model: input.model,
@@ -86,7 +87,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
         approvalPolicy: input.approvalPolicy,
         sandbox: input.sandbox
       });
-      input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
+      input.onEvent?.(turnStartedEvent(turn, input, initialized));
       return { runId: runID(turn), session: sessionRef(turn) };
     } catch (error) {
       stopForwarding();
@@ -128,7 +129,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
-    await this.adapter.initialize();
+    const initialized = await this.adapter.initialize();
     const session = await this.adapter.resumeThread(input.session.sessionId);
     const threadID = session.provider_session_id || input.session.sessionId;
     const stopForwarding = this.forwardRunEvents(input, threadID);
@@ -140,7 +141,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
         approvalPolicy: input.approvalPolicy,
         sandbox: input.sandbox
       });
-      input.onEvent?.({ provider: PROVIDER_CODEX, type: "turn_started", status: "inProgress", session: sessionRef(turn) });
+      input.onEvent?.(turnStartedEvent(turn, input, initialized));
       return { runId: runID(turn), session: sessionRef(turn) };
     } catch (error) {
       stopForwarding();
@@ -237,6 +238,34 @@ function sessionRef(turn: TurnStartResult): ProviderRunResult["session"] {
 function runID(turn: TurnStartResult): string {
   const turnID = turn.turn_id || "pending-turn";
   return `${PROVIDER_CODEX}:${turn.provider_session_id}:${turnID}`;
+}
+
+function turnStartedEvent(
+  turn: TurnStartResult,
+  input: ProviderRunInput,
+  initialized: CodexInitializeResult
+): ProviderEvent {
+  const session = sessionRef(turn);
+  return {
+    provider: PROVIDER_CODEX,
+    type: "turn_started",
+    status: "inProgress",
+    session,
+    runEvent: normalizedRunEvent({
+      kind: "started",
+      metadata: {
+        model: input.model,
+        protocol_version: initialized.protocolVersion,
+        provider_name: initialized.serverInfo?.name,
+        provider_version: initialized.serverInfo?.version,
+        service_tier: input.serviceTier
+      },
+      method: "turn/start",
+      outcome: "running",
+      provider: PROVIDER_CODEX,
+      session
+    })
+  };
 }
 
 function createResult(threadID: string): SessionCreateResult {

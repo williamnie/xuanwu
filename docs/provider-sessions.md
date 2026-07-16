@@ -7,6 +7,7 @@
 - Sessions 页面可以列出、创建、读取、继续和中断 provider session。
 - Codex provider 使用 `codex app-server --listen stdio://` 的 thread/turn 能力。
 - issue 执行和手动 session 共用 provider session 记录，便于 UI 追踪。
+- Codex / Claude 生命周期 Evidence 统一遵循 [ADR-XW-0022](architecture/xuanwu/0022-provider-run-event-contract.md)；旧 provider fields 在迁移窗口内仅作兼容 projection。
 
 ## Run / Attempt 关系
 
