@@ -161,17 +161,20 @@ const RUN_COLUMNS = `
   (select count(*) from run_attempts child where child.issue_run_id=run.id) as attempt_count,
   coalesce((select max(cast(json_extract(event.payload, '$.after_revision') as integer))
     from issue_events event
-    where event.type in ('run.lifecycle.intent.v1', 'run.lifecycle.outcome.v1',
+    where event.issue_id=run.issue_id
+      and event.type in ('run.lifecycle.intent.v1', 'run.lifecycle.outcome.v1',
       'run.lifecycle.run_materialized.v1', 'run.lifecycle.run_requested.v1')
       and json_valid(event.payload)
       and json_extract(event.payload, '$.run_id')=run.run_id), 0) as revision,
   (select json_extract(event.payload, '$.trigger') from issue_events event
-    where event.type='run.lifecycle.run_materialized.v1'
+    where event.issue_id=run.issue_id
+      and event.type='run.lifecycle.run_materialized.v1'
       and json_valid(event.payload)
       and json_extract(event.payload, '$.run_id')=run.run_id
     order by event.id desc limit 1) as trigger,
   (select json_extract(event.payload, '$.supersedes_run_id') from issue_events event
-    where event.type='run.lifecycle.run_materialized.v1'
+    where event.issue_id=run.issue_id
+      and event.type='run.lifecycle.run_materialized.v1'
       and json_valid(event.payload)
       and json_extract(event.payload, '$.run_id')=run.run_id
     order by event.id desc limit 1) as supersedes_run_id,
