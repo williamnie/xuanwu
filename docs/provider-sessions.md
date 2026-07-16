@@ -8,6 +8,15 @@
 - Codex provider 使用 `codex app-server --listen stdio://` 的 thread/turn 能力。
 - issue 执行和手动 session 共用 provider session 记录，便于 UI 追踪。
 
+## Run / Attempt 关系
+
+统一生命周期合同见 [ADR-XW-0020](architecture/xuanwu/0020-run-attempt-lifecycle-contract.md)：
+
+- `issue_runs` 是 Run authority；`issue_runs.attempt` 当前投影为同一 Work 下的 Run 序号。
+- 一次真实 provider invocation 是该 Run 下的 Attempt；同一目标的 session continue/recovery 新建 Attempt，terminal retry 或 provider/目标替换新建 Run。
+- `agent_sessions` 和 provider session/thread 只提供 observation / drill-down，不生成 Run identity，也不决定 Run terminal status。
+- 中断 provider turn 只关闭当前 Attempt；是否取消、恢复或 supersede Run，必须由受审计的确定性 lifecycle command 决定。
+
 ## API 概览
 
 | API | 说明 |
