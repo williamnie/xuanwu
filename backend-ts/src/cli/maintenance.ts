@@ -8,6 +8,10 @@ import {
 } from "../events/maintenanceService.ts";
 import { rebuildEventSummaryProjection } from "../events/eventSummaryProjectionService.ts";
 import {
+  compactHistoricalIssueLogPayloads,
+  restoreHistoricalIssueLogPayloads
+} from "../events/payloadCompactionService.ts";
+import {
   auditWorkConsistency,
   backfillIssueWorks,
   rollbackIssueWorkBackfill
@@ -47,6 +51,44 @@ export function runMaintenance(args: string[]): string {
       dbPath: required(flags, "db"),
       maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
       reason: required(flags, "reason"),
+      resume: enabled(flags, "resume")
+    });
+  } else if (family === "events" && command === "compact-payloads") {
+    allowOnly(flags, [
+      "actor", "apply", "audit-ref", "batch-size", "checkpoint",
+      "confirm-backup-tested", "confirm-no-active-writers", "db", "json",
+      "max-batches", "minimum-savings-bytes", "reason", "report", "resume"
+    ]);
+    report = compactHistoricalIssueLogPayloads({
+      actor: optionalActor(flags),
+      apply: enabled(flags, "apply"),
+      batchSize: optionalInteger(flags["batch-size"], "--batch-size"),
+      checkpointPath: required(flags, "checkpoint"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
+      minimumSavingsBytes: optionalNonNegativeInteger(flags["minimum-savings-bytes"], "--minimum-savings-bytes"),
+      reportPath: required(flags, "report"),
+      resume: enabled(flags, "resume")
+    });
+  } else if (family === "events" && command === "restore-payloads") {
+    allowOnly(flags, [
+      "actor", "apply", "audit-ref", "batch-size", "checkpoint", "compaction-checkpoint",
+      "confirm-backup-tested", "confirm-no-active-writers", "db", "json",
+      "max-batches", "reason", "report", "resume"
+    ]);
+    report = restoreHistoricalIssueLogPayloads({
+      actor: optionalActor(flags),
+      apply: enabled(flags, "apply"),
+      batchSize: optionalInteger(flags["batch-size"], "--batch-size"),
+      checkpointPath: required(flags, "checkpoint"),
+      compactionCheckpointPath: required(flags, "compaction-checkpoint"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
+      reportPath: required(flags, "report"),
       resume: enabled(flags, "resume")
     });
   } else if (family === "events" && command === "archive") {
@@ -208,6 +250,11 @@ function actor(flags: Record<string, string>): { actor: string; auditRef: string
   };
 }
 
+function optionalActor(flags: Record<string, string>): { actor: string; auditRef: string; reason: string } | undefined {
+  if (!flags.actor && !flags["audit-ref"] && !flags.reason) return undefined;
+  return actor(flags);
+}
+
 function actorKind(value: string | undefined): "retention_worker" | "system" | "user" {
   const kind = value?.trim().toLowerCase();
   if (kind === "retention_worker" || kind === "system" || kind === "user") return kind;
@@ -235,6 +282,13 @@ function optionalInteger(value: string | undefined, label: string): number | und
   if (value === undefined) return undefined;
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${label} must be a positive integer`);
+  return parsed;
+}
+
+function optionalNonNegativeInteger(value: string | undefined, label: string): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${label} must be a non-negative integer`);
   return parsed;
 }
 

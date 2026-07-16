@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
-import { recordIssueEvent } from "../../db/repositories/issueEvents.ts";
+import { hydrateStoredIssueLogPayload, recordIssueEvent } from "../../db/repositories/issueEvents.ts";
 import { recordEvidenceRecords } from "../../db/repositories/evidence.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../../db/repositories/issues.ts";
 import { updateIssue, type UpdateIssueInput } from "../../db/repositories/issueUpdate.ts";
@@ -547,7 +547,10 @@ function recentCommandEvents(db: RunnerDatabase, issueID: number, run: IssueRun 
   return db.sqlite.query<IssueLogRow, Array<number | string>>(`
     select id, payload, created_at from issue_events
     where ${clauses.join(" and ")} order by id desc limit 200
-  `).all(...args).reverse();
+  `).all(...args).reverse().map((row) => ({
+    ...row,
+    payload: hydrateStoredIssueLogPayload(db, row.payload)
+  }));
 }
 
 function commandItem(payload: string): StoredCommandItem | undefined {

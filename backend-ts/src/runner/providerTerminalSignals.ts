@@ -1,4 +1,5 @@
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
+import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ProviderEvent } from "../providers/types.ts";
@@ -183,7 +184,7 @@ function latestTerminalSignal(db: RunnerDatabase, issueID: number, runStartedAt:
     order by id desc limit 10
   `).all(issueID, runStartedAt);
   for (const row of rows) {
-    const payload = parseJsonRecord(row.payload);
+    const payload = parseJsonRecord(hydrateStoredIssueLogPayload(db, row.payload));
     if (!terminalIssueLog(payload)) continue;
     const signal = parseIssueEventProviderError(payload, { now });
     if (clean(signal.diagnosis_code) !== "") return { eventID: row.id, signal };

@@ -46,13 +46,23 @@ const SUMMARY_ERROR_BYTES = 16 * 1024;
 const SUMMARY_COMMAND_BYTES = 4 * 1024;
 const SUMMARY_PATH_BYTES = 2 * 1024;
 
-type IssueLogArtifactRef = {
+export type IssueLogArtifactRef = {
   bytes: number;
   encoding: "gzip+json";
   ref: string;
   schema_version: typeof ISSUE_LOG_ARTIFACT_SCHEMA;
   sha256: string;
   stored_bytes: number;
+};
+
+export type IssueLogPayloadExternalizationPlan = {
+  artifact: IssueLogArtifactRef;
+  compressed: Buffer;
+  net_savings_bytes: number;
+  original_bytes: number;
+  original_payload: string;
+  stored_bytes: number;
+  stored_payload: string;
 };
 
 export function listIssueEvents(
@@ -119,29 +129,82 @@ function storedIssueLogPayload(db: RunnerDatabase, event: ProviderEvent): string
 }
 
 function writeIssueLogArtifact(db: RunnerDatabase, payload: string): IssueLogArtifactRef {
+  const built = buildIssueLogArtifact(payload);
+  persistIssueLogArtifact(db, built.artifact, built.compressed);
+  return built.artifact;
+}
+
+export function planIssueLogPayloadExternalization(
+  storedPayload: string,
+  minimumSavingsBytes = 1024
+): IssueLogPayloadExternalizationPlan | null {
+  if (!Number.isSafeInteger(minimumSavingsBytes) || minimumSavingsBytes < 0) {
+    throw new Error("minimum savings bytes must be a non-negative integer");
+  }
+  if (issueLogArtifactRef(storedPayload)) return null;
+  const body = jsonObject(storedPayload);
+  if (!body) return null;
+  const built = buildIssueLogArtifact(storedPayload);
+  const summary = JSON.stringify(issueLogArtifactSummary(body, built.artifact));
+  const storedBytes = Buffer.byteLength(summary);
+  if (storedBytes > ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES) return null;
+  const netSavings = built.artifact.bytes - storedBytes - built.artifact.stored_bytes;
+  if (netSavings < minimumSavingsBytes) return null;
+  return {
+    artifact: built.artifact,
+    compressed: built.compressed,
+    net_savings_bytes: netSavings,
+    original_bytes: built.artifact.bytes,
+    original_payload: storedPayload,
+    stored_bytes: storedBytes,
+    stored_payload: summary
+  };
+}
+
+export function persistPlannedIssueLogArtifact(
+  db: Pick<RunnerDatabase, "path">,
+  plan: IssueLogPayloadExternalizationPlan
+): boolean {
+  return persistIssueLogArtifact(db, plan.artifact, plan.compressed);
+}
+
+function buildIssueLogArtifact(payload: string): { artifact: IssueLogArtifactRef; compressed: Buffer } {
   const bytes = Buffer.from(payload);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const ref = `${ISSUE_LOG_ARTIFACT_ROOT}/${sha256.slice(0, 2)}/${sha256}.json.gz`;
-  const path = issueLogArtifactPath(db, ref);
   const compressed = gzipSync(bytes, { level: 9 });
-  if (!existsSync(path)) {
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
-    try {
-      writeFileSync(temporary, compressed, { flag: "wx", mode: 0o600 });
-      renameSync(temporary, path);
-    } finally {
-      rmSync(temporary, { force: true });
-    }
-  }
   return {
-    bytes: bytes.byteLength,
-    encoding: "gzip+json",
-    ref,
-    schema_version: ISSUE_LOG_ARTIFACT_SCHEMA,
-    sha256,
-    stored_bytes: compressed.byteLength
+    artifact: {
+      bytes: bytes.byteLength,
+      encoding: "gzip+json",
+      ref,
+      schema_version: ISSUE_LOG_ARTIFACT_SCHEMA,
+      sha256,
+      stored_bytes: compressed.byteLength
+    },
+    compressed
   };
+}
+
+function persistIssueLogArtifact(
+  db: Pick<RunnerDatabase, "path">,
+  artifact: IssueLogArtifactRef,
+  compressed: Buffer
+): boolean {
+  const path = issueLogArtifactPath(db, artifact.ref);
+  if (existsSync(path)) {
+    validateIssueLogArtifactBytes(artifact, readFileSync(path));
+    return false;
+  }
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, compressed, { flag: "wx", mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+  return true;
 }
 
 function issueLogArtifactSummary(
@@ -268,22 +331,43 @@ function mapIssueEventRow(db: RunnerDatabase, row: IssueEventRow, hydrateArtifac
   };
 }
 
-function hydratedIssueLogPayload(db: RunnerDatabase, storedPayload: string): string {
-  const artifact = issueLogArtifactRef(storedPayload);
-  if (!artifact) return storedPayload;
+export function hydrateStoredIssueLogPayload(
+  db: Pick<RunnerDatabase, "path">,
+  storedPayload: string
+): string {
   try {
-    const compressed = readFileSync(issueLogArtifactPath(db, artifact.ref));
-    if (compressed.byteLength !== artifact.stored_bytes) return storedPayload;
-    const raw = gunzipSync(compressed);
-    if (raw.byteLength !== artifact.bytes) return storedPayload;
-    if (createHash("sha256").update(raw).digest("hex") !== artifact.sha256) return storedPayload;
-    const payload = raw.toString("utf8");
-    JSON.parse(payload);
-    return payload;
+    return hydrateStoredIssueLogPayloadStrict(db, storedPayload);
   } catch {
     // The bounded inline diagnostic remains readable if an artifact is missing or corrupt.
     return storedPayload;
   }
+}
+
+export function hydrateStoredIssueLogPayloadStrict(
+  db: Pick<RunnerDatabase, "path">,
+  storedPayload: string
+): string {
+  const artifact = issueLogArtifactRef(storedPayload);
+  if (!artifact) throw new Error("stored issue.log payload does not reference an artifact");
+  const compressed = readFileSync(issueLogArtifactPath(db, artifact.ref));
+  const raw = validateIssueLogArtifactBytes(artifact, compressed);
+  const payload = raw.toString("utf8");
+  JSON.parse(payload);
+  return payload;
+}
+
+function validateIssueLogArtifactBytes(artifact: IssueLogArtifactRef, compressed: Buffer): Buffer {
+  if (compressed.byteLength !== artifact.stored_bytes) throw new Error("issue.log artifact stored byte count mismatch");
+  const raw = gunzipSync(compressed);
+  if (raw.byteLength !== artifact.bytes) throw new Error("issue.log artifact byte count mismatch");
+  if (createHash("sha256").update(raw).digest("hex") !== artifact.sha256) {
+    throw new Error("issue.log artifact checksum mismatch");
+  }
+  return raw;
+}
+
+function hydratedIssueLogPayload(db: RunnerDatabase, storedPayload: string): string {
+  return hydrateStoredIssueLogPayload(db, storedPayload);
 }
 
 function issueLogArtifactRef(payload: string): IssueLogArtifactRef | undefined {
@@ -310,12 +394,21 @@ function issueLogArtifactRef(payload: string): IssueLogArtifactRef | undefined {
   }
 }
 
-function issueLogArtifactPath(db: RunnerDatabase, ref: string): string {
+function issueLogArtifactPath(db: Pick<RunnerDatabase, "path">, ref: string): string {
   if (!safeArtifactRef(ref)) throw new Error("invalid issue.log artifact ref");
   const root = resolve(dirname(db.path), ISSUE_LOG_ARTIFACT_ROOT);
   const path = resolve(dirname(db.path), ref);
   if (path !== root && !path.startsWith(`${root}${sep}`)) throw new Error("issue.log artifact ref escapes state directory");
   return path;
+}
+
+function jsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 function safeArtifactRef(value: unknown): value is string {

@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { hydrateStoredIssueLogPayload } from "./issueEvents.ts";
 
 export const EVENT_SUMMARY_PROJECTION_ID = "issue_events_summary_v1";
 export const EVENT_SUMMARY_SOURCE = "issue_events";
@@ -73,7 +74,7 @@ export function listSourceIssueEvents(
       order by candidate.started_at desc, candidate.attempt desc limit 1
     )
     where e.id>? order by e.id asc limit ?
-  `).all(input.afterID, input.limit).map(mapSourceIssueEvent);
+  `).all(input.afterID, input.limit).map((row) => mapSourceIssueEvent(db, row));
 }
 
 export function upsertEventSummaryProjection(db: RunnerDatabase, row: EventSummaryProjectionWrite): boolean {
@@ -299,14 +300,16 @@ function emptyWatermark(): EventProjectionWatermark {
   };
 }
 
-function mapSourceIssueEvent(row: SourceIssueEventRow): SourceIssueEvent {
+function mapSourceIssueEvent(db: RunnerDatabase, row: SourceIssueEventRow): SourceIssueEvent {
+  const eventType = requiredText(row.event_type, "issue_events.type");
+  const storedPayload = optionalText(row.payload);
   return {
     id: positiveInteger(row.id, "issue_events.id"),
     issue_id: positiveInteger(row.issue_id, "issue_events.issue_id"),
     project_id: requiredText(row.project_id, "issues.project_id"),
     run_id: optionalText(row.run_id),
-    event_type: requiredText(row.event_type, "issue_events.type"),
-    payload: optionalText(row.payload),
+    event_type: eventType,
+    payload: eventType === "issue.log" ? hydrateStoredIssueLogPayload(db, storedPayload) : storedPayload,
     created_at: requiredText(row.created_at, "issue_events.created_at")
   };
 }

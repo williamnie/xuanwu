@@ -92,6 +92,43 @@ describe("maintenance CLI", () => {
     check.close();
   });
 
+  test("plans historical issue.log payload compaction without mutating the database", async () => {
+    const root = mkdtempSync(join(tmpdir(), "maintenance-payload-compaction-cli-"));
+    roots.push(root);
+    const dbPath = join(root, "runner-copy.db");
+    const database = await openDatabase({ dbPath, stateDir: root });
+    database.sqlite.run(`
+      insert into projects (id, name, cwd, created_at, updated_at)
+        values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+      insert into issues (project_id, title, status, created_at, updated_at)
+        values ('demo', 'Compact payloads', 'done', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    `);
+    database.sqlite.run(
+      "insert into issue_events (issue_id, type, payload, created_at) values (1, 'issue.log', ?, '2026-01-01T00:00:01Z')",
+      [JSON.stringify({ raw_method: "item/agentMessage/delta", raw_payload: "x".repeat(48_000) })]
+    );
+    database.close();
+    const checkpointPath = join(root, "maintenance", "compact-checkpoint.json");
+
+    const report = await maintenanceCli([
+      "events", "compact-payloads", "--db", dbPath,
+      "--checkpoint", checkpointPath,
+      "--report", join(root, "reports", "compact.json"), "--json"
+    ]);
+
+    expect(report).toMatchObject({
+      operation: "compact_issue_log_payloads",
+      dry_run: true,
+      minimum_savings_bytes: 4096,
+      plan: { candidate_rows: 1 }
+    });
+    expect(existsSync(checkpointPath)).toBe(false);
+    const check = new Database(dbPath, { readonly: true });
+    expect(check.query<{ payload: string }, []>("select payload from issue_events").get()?.payload)
+      .not.toContain("issue_log_artifact");
+    check.close();
+  });
+
   test("runs dry-run and applied Work backfill through the migration CLI", async () => {
     const root = mkdtempSync(join(tmpdir(), "maintenance-work-cli-"));
     roots.push(root);

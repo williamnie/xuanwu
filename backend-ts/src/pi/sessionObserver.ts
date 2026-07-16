@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession, listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
+import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
@@ -102,7 +103,7 @@ function listSessionEvents(db: RunnerDatabase, issueID: number, limit: number): 
   return db.sqlite.query<EventRow, [number, number]>(`
     select issue_id, type, payload, created_at from issue_events
     where issue_id=? order by created_at desc, id desc limit ?
-  `).all(issueID, limit).map(mapIssueEvent);
+  `).all(issueID, limit).map((row) => mapIssueEvent(db, row));
 }
 
 function mapRunRow(row: RunRow) {
@@ -118,8 +119,11 @@ function mapRunRow(row: RunRow) {
   };
 }
 
-function mapIssueEvent(row: EventRow): SessionProgressEvent {
-  const payload = parsePayload(optionalString(row.payload));
+function mapIssueEvent(db: RunnerDatabase, row: EventRow): SessionProgressEvent {
+  const storedPayload = optionalString(row.payload);
+  const payload = parsePayload(optionalString(row.type) === "issue.log"
+    ? hydrateStoredIssueLogPayload(db, storedPayload)
+    : storedPayload);
   const type = optionalString(payload.type) || optionalString(row.type, "issue.log");
   const status = optionalString(payload.status);
   return {

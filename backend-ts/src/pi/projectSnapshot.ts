@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listAgentSessions, type AgentSession } from "../db/repositories/agentSessions.ts";
+import { hydrateStoredIssueLogPayload } from "../db/repositories/issueEvents.ts";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -219,7 +220,8 @@ function eventErrors(db: RunnerDatabase, projectID: string): ProjectErrorSnapsho
     join issues i on i.id=e.issue_id
     where i.project_id=? and e.type in ('issue.log', 'issue.error', 'runner.hold')
     order by e.created_at desc, e.id desc limit ${PROJECT_STATUS_LIMIT}
-  `).all(projectID).map(mapEventError).filter((item): item is ProjectErrorSnapshot => item !== null);
+  `).all(projectID).map((row) => mapEventError(db, row))
+    .filter((item): item is ProjectErrorSnapshot => item !== null);
 }
 
 function sourceOrder(error: ProjectErrorSnapshot): number {
@@ -228,8 +230,12 @@ function sourceOrder(error: ProjectErrorSnapshot): number {
   return 2;
 }
 
-function mapEventError(row: EventRow): ProjectErrorSnapshot | null {
-  const message = eventErrorMessage(optionalString(row.payload));
+function mapEventError(db: RunnerDatabase, row: EventRow): ProjectErrorSnapshot | null {
+  const storedPayload = optionalString(row.payload);
+  const payload = optionalString(row.type) === "issue.log"
+    ? hydrateStoredIssueLogPayload(db, storedPayload)
+    : storedPayload;
+  const message = eventErrorMessage(payload);
   if (message === "") return null;
   return {
     issue_id: integerValue(row.issue_id),
