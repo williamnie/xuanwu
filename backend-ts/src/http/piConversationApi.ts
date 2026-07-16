@@ -42,6 +42,7 @@ import {
   resolveSupervisorContext,
   type SupervisorContextResolution
 } from "../pi/supervisorContextResolver.ts";
+import { linkSupervisorCommitmentsForConversation } from "../pi/supervisorCommitments.ts";
 import {
   isReviewConversationIntent,
   reviewConversationAuthorization,
@@ -189,6 +190,11 @@ async function sendPiConversationMessage(
     conversationID: titledConversation.id,
     turnID
   }, supervisorContext);
+  linkSupervisorCommitmentsForConversation(context.database, {
+    conversationID: titledConversation.id,
+    projectID: supervisorContext.target.project_id,
+    workIDs: supervisorContext.target.work_ids
+  });
   const runtime = await openConversationRuntime(
     context,
     titledConversation,

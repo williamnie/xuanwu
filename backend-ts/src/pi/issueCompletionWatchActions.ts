@@ -6,6 +6,12 @@ import {
   getPiIssueCompletionWatch,
   type PiIssueCompletionWatch
 } from "../db/repositories/pi.ts";
+import {
+  cancelSupervisorCommitment,
+  containsSupervisorCommitmentMetadata,
+  createSupervisorCommitment,
+  isSupervisorCommitmentWatch
+} from "./supervisorCommitments.ts";
 
 export type IssueCompletionWatchCreateInput = {
   condition?: unknown;
@@ -39,10 +45,10 @@ export function createIssueCompletionWatchAction(
   db: RunnerDatabase,
   input: IssueCompletionWatchCreateInput
 ) {
-  const watch = createPiIssueCompletionWatch(db, {
-    ...input,
-    condition: conditionWithNote(input.condition, input.note)
-  });
+  const condition = conditionWithNote(input.condition, input.note);
+  const watch = containsSupervisorCommitmentMetadata(condition)
+    ? createSupervisorCommitment(db, { ...input, condition }).watch
+    : createPiIssueCompletionWatch(db, { ...input, condition });
   return watchActionResult(db, watch);
 }
 
@@ -65,7 +71,17 @@ export function cancelIssueCompletionWatchAction(
   db: RunnerDatabase,
   input: IssueCompletionWatchCancelInput
 ) {
-  const watch = cancelPiIssueCompletionWatch(db, input.watch_id, cleanString(input.reason) || "cancelled_by_pi_action");
+  const current = getPiIssueCompletionWatch(db, input.watch_id);
+  if (!current) throw new Error(`PI issue completion watch ${cleanString(input.watch_id)} not found`);
+  const forget = forgetReason(input.reason);
+  const watch = isSupervisorCommitmentWatch(current)
+    ? cancelSupervisorCommitment(db, current.id, {
+      actor: "user",
+      conversationID: current.origin_conversation_id,
+      forget,
+      reason: cleanString(input.reason)
+    }).watch
+    : cancelPiIssueCompletionWatch(db, input.watch_id, cleanString(input.reason) || "cancelled_by_pi_action");
   return watchActionResult(db, watch);
 }
 
@@ -215,4 +231,9 @@ function cleanObject(input: Record<string, unknown>): Record<string, string> {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function forgetReason(value: unknown): boolean {
+  const reason = cleanString(value).toLowerCase();
+  return reason === "forget" || reason === "supervisor_commitment_forget" || reason === "forgotten_by_user";
 }

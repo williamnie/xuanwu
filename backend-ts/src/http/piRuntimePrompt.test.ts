@@ -97,6 +97,9 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("must not edit code");
       expect(prompt).toContain("issue_state_repair_proposal is only for deterministic");
       expect(prompt).toContain("最多追问一个关键问题");
+      expect(prompt).toContain("Supervisor commitment context (operational projection, not long-term memory)");
+      expect(prompt).toContain("xw.supervisor-commitment.v1");
+      expect(prompt).toContain("never call memory_write_candidate for a temporary commitment");
     });
   });
 

@@ -218,14 +218,19 @@ function createCompletionWatch(
   context: PiRunnerActionContext,
   input: IssueCompletionWatchCreateInput
 ) {
-  const projectID = watchProjectID(db, input);
+  const enrichedInput = {
+    ...input,
+    origin_conversation_id: cleanString(input.origin_conversation_id) || cleanString(context.conversationID),
+    source_event_id: cleanString(input.source_event_id) || cleanString(context.sourceTurn?.id)
+  };
+  const projectID = watchProjectID(db, enrichedInput);
   const actionContext = scopedRunnerChatActionContext(context, "issue_completion_watch.create", { projectID });
   return createPendingPiAction(db, actionContext, {
     actionType: "issue_completion_watch.create",
-    payload: cleanObjectPayload({ ...input, project_id: projectID }),
+    payload: cleanObjectPayload({ ...enrichedInput, project_id: projectID }),
     projectID,
-    rationale: input.note
-  }, () => createIssueCompletionWatchAction(db, { ...input, project_id: projectID }));
+    rationale: enrichedInput.note
+  }, () => createIssueCompletionWatchAction(db, { ...enrichedInput, project_id: projectID }));
 }
 
 function safeListCompletionWatches(

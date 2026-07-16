@@ -7,6 +7,7 @@ import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skill
 import { parseSkillPolicy } from "../skills/intents.ts";
 import { supervisorIntentRoutePrompt } from "../pi/supervisorIntentRouter.ts";
 import { supervisorContextPrompt } from "../pi/supervisorContextResolver.ts";
+import { buildSupervisorCommitmentPromptContext } from "../pi/supervisorCommitments.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
@@ -37,6 +38,10 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     JSON.stringify(parseSkillPolicy(promptProject?.default_skill_policy), null, 2),
     "Project default MCP policy:",
     JSON.stringify(parseMcpPolicy(promptProject?.default_mcp_policy), null, 2),
+    buildSupervisorCommitmentPromptContext(db, {
+      conversationID: input.conversationID,
+      projectID: promptProject?.id
+    }),
     buildPiMemoryPromptContext(db, {
       conversationID: input.conversationID,
       issueID: input.issueID,
@@ -84,6 +89,7 @@ function legacyWorkToolWorkflow(): string {
     "Legacy issue_create_proposal/issue_enqueue_proposal remain available when the user is asking for a proposal rather than an authorized direct Work mutation; issue_schedule_enqueue remains the compatibility path for a stated RFC3339 time.",
     "For exactly one next triage Work use issue_enqueue_next_triage. For a clearly requested batch or explicit issue range use issue_enqueue_batch_triage with user_phrase and ordered issue_ids when known; do not require magic wording or invent a count cap.",
     "For a requested completion notification use issue_completion_watch_create with the explicit target; only after tool success may you promise notification.",
+    "When an unfinished authoritative Work needs a durable cross-conversation follow-up, reuse issue_completion_watch_create and pass condition.commitment={schema_version:'xw.supervisor-commitment.v1',due_at:'<RFC3339 or empty>'}. Do not create a commitment from chat prose alone. Use issue_completion_watch_list to inspect it, issue_completion_watch_cancel for cancellation, and reason='supervisor_commitment_forget' when the user explicitly asks to forget it.",
     "IM channels are transports, not persistent project context. Resolve project_id or issue_id as a one-turn tool target and do not carry it to later messages unless the user states it again.",
     "After an authorized create/enqueue/schedule, reply with compact Work/legacy issue id, project, Run queued/started state, skipped reasons when applicable, and how to follow up. If the decisive project or target is missing, ask one short clarification."
   ].join(" ");
@@ -106,6 +112,7 @@ function automaticMemoryCandidatePolicy(): string {
     "Explicit low-risk personal preferences such as \"call me X\" or \"your name is Y\" may auto-enable when the user directly authorizes them; tell the user they can revoke them with /memory or the settings panel.",
     "Guesses, summaries, sensitive data, project/team policy, workflow facts, and low-confidence observations must stay disabled pending candidates and must not be used as confirmed memory until approved.",
     "Default scope: personal preferences or long-term goals -> global; project habits or repo/team workflow -> project; temporary topic context -> conversation.",
+    "Operational Work follow-up promises, completion notices, and due dates are Supervisor commitments, not durable memory. Track them only through authoritative Work plus the existing completion-watch commitment metadata; never call memory_write_candidate for a temporary commitment.",
     "Do not store secrets, tokens, credentials, private paths, stack traces, sensitive personal data. Do not store full chat transcripts.",
     "Be selective: skip greetings, ordinary small talk, one-off instructions, guesses, and low-confidence observations."
   ].join(" ");

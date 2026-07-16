@@ -103,7 +103,8 @@ export function updatePiIssueCompletionWatchItemStatus(
   const key = cleanString(watchID);
   const status = requiredString(lastStatus, "last_status");
   const current = requireWatchItem(db, key, issueID);
-  const terminalAt = terminalStatus(status) ? current.terminal_at || timestamp : "";
+  const watch = requirePiIssueCompletionWatch(db, key);
+  const terminalAt = terminalStatus(status, watch.condition) ? current.terminal_at || timestamp : "";
   db.sqlite.run(`update ${ITEM_TABLE} set last_status=?, terminal_at=?, updated_at=?
     where watch_id=? and issue_id=?`, [status, terminalAt, timestamp, key, current.issue_id]);
   refreshWatchIfSatisfied(db, key, timestamp);
@@ -166,7 +167,7 @@ function normalizeCreate(db: RunnerDatabase, input: PiIssueCompletionWatchInput)
     updated_at: timestamp
   };
   header.idempotency_key = idempotencyKey(header, issueIDs);
-  return { header, items: issues.map((issue) => itemSnapshot(header.id, issue, timestamp)) };
+  return { header, items: issues.map((issue) => itemSnapshot(header.id, issue, header.condition, timestamp)) };
 }
 
 function loadIssues(db: RunnerDatabase, issueIDs: number[]): Issue[] {
@@ -190,11 +191,16 @@ function watchProjectID(issues: Issue[], value: unknown): string {
   return projectID;
 }
 
-function itemSnapshot(watchID: string, issue: Issue, timestamp: string): PiIssueCompletionWatchItem {
+function itemSnapshot(
+  watchID: string,
+  issue: Issue,
+  condition: string,
+  timestamp: string
+): PiIssueCompletionWatchItem {
   return {
     created_at: timestamp, initial_status: issue.status, issue_id: issue.id,
     last_status: issue.status, project_id: issue.project_id,
-    terminal_at: terminalStatus(issue.status) ? timestamp : "", updated_at: timestamp, watch_id: watchID
+    terminal_at: terminalStatus(issue.status, condition) ? timestamp : "", updated_at: timestamp, watch_id: watchID
   };
 }
 
@@ -208,7 +214,7 @@ function insertWatchItem(db: RunnerDatabase, item: PiIssueCompletionWatchItem): 
 function refreshWatchIfSatisfied(db: RunnerDatabase, watchID: string, timestamp: string): void {
   const watch = getPiIssueCompletionWatch(db, watchID);
   if (!watch || watch.status !== "active") return;
-  if (watch.items.length === 0 || watch.items.some((item) => !terminalStatus(item.last_status))) return;
+  if (watch.items.length === 0 || watch.items.some((item) => !terminalStatus(item.last_status, watch.condition))) return;
   db.sqlite.run(`update ${WATCH_TABLE} set status='satisfied',
     completed_at=case when completed_at='' then ? else completed_at end,
     updated_at=? where id=? and status='active'`, [timestamp, timestamp, watch.id]);
@@ -280,8 +286,23 @@ function conditionText(value: unknown): string {
   return DEFAULT_CONDITION;
 }
 
-function terminalStatus(status: string): boolean {
-  return ISSUE_COMPLETION_TERMINAL_STATUSES.has(cleanString(status));
+function terminalStatus(status: string, condition: unknown): boolean {
+  const value = cleanString(status);
+  if (value === "pending_verification" && conditionObject(condition).pending_verification_satisfies === false) {
+    return false;
+  }
+  return ISSUE_COMPLETION_TERMINAL_STATUSES.has(value);
+}
+
+function conditionObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string" || value.trim() === "") return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }
 
 function watchStatus(value: unknown): PiIssueCompletionWatchStatus {

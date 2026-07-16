@@ -10,6 +10,10 @@ import {
 } from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import {
+  expireSupervisorCommitmentIfDue,
+  recordSupervisorCommitmentTerminalOutcome
+} from "./supervisorCommitments.ts";
 
 export const ISSUE_COMPLETION_WATCH_INTENT_KIND = "issue_completion_watch_satisfied";
 
@@ -59,11 +63,13 @@ export function evaluatePiIssueCompletionWatchesForIssue(
   const result = emptyResult(watches.length);
   if (!issue || status === "") return result;
   for (const watch of watches) {
+    if (expireSupervisorCommitmentIfDue(db, watch.id)) continue;
     updatePiIssueCompletionWatchItemStatus(db, watch.id, issue.id, status);
     result.updatedItems += 1;
     const refreshed = getPiIssueCompletionWatch(db, watch.id);
     if (refreshed?.status !== "satisfied") continue;
     queueSatisfiedWatchIntent(db, refreshed, { ...input, status });
+    recordSupervisorCommitmentTerminalOutcome(db, refreshed.id);
     result.satisfied += 1;
     result.intents += 1;
   }
@@ -76,6 +82,7 @@ export function sweepActivePiIssueCompletionWatches(
   const watches = listActivePiIssueCompletionWatches(db);
   const result = emptyResult(watches.length);
   for (const watch of watches) {
+    if (expireSupervisorCommitmentIfDue(db, watch.id)) continue;
     for (const item of watch.items) {
       const issue = getIssue(db, item.issue_id);
       if (!issue || !shouldRefreshItem(item, issue.status)) continue;
@@ -90,6 +97,7 @@ export function sweepActivePiIssueCompletionWatches(
       issueID: refreshed.items[0]?.issue_id ?? 0,
       projectID: refreshed.project_id
     });
+    recordSupervisorCommitmentTerminalOutcome(db, refreshed.id);
     result.satisfied += 1;
     result.intents += 1;
   }
