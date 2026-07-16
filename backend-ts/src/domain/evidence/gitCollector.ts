@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   realpathSync,
   renameSync,
@@ -90,18 +91,35 @@ type GitDiffSummary = {
   binary_file_count: number;
   changed_file_count: number;
   deletions: number;
+  files: GitChangedFileDiff[];
   insertions: number;
   paths: string[];
 };
 
-type GitSnapshotManifest = {
+type GitChangedFileDiff = {
+  additions: number | null;
+  binary: boolean;
+  deletions: number | null;
+  path: string;
+};
+
+export type GitChangedFileDetail = {
+  additions: number | null;
+  binary: boolean | null;
+  deletions: number | null;
+  path: string;
+  size_bytes: number | null;
+};
+
+export type GitSnapshotManifest = {
   base_revision: string | null;
+  changed_files: GitChangedFileDetail[];
   changed_paths: string[];
-  diff_stats: Omit<GitDiffSummary, "paths">;
+  diff_stats: Omit<GitDiffSummary, "files" | "paths">;
   head_ref: string | null;
   head_revision: string | null;
   ignored_policy: "exclude";
-  schema_version: 1;
+  schema_version: 2;
   status: Omit<GitStatusSummary, "paths">;
   untracked_policy: GitUntrackedPolicy;
   working_tree_paths: string[];
@@ -153,8 +171,19 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
       const status = parseGitStatus(statusResult.stdout, untrackedPolicy);
       const diff = parseGitNumstat((await runGit(diffArguments(baseRevision))).stdout);
       const changedPaths = sortedUnique([...status.paths, ...diff.paths]);
+      const diffFiles = new Map(diff.files.map((file) => [file.path, file]));
+      const changedFiles: GitChangedFileDetail[] = changedPaths.map((path) => {
+        const diffFile = diffFiles.get(path);
+        return {
+          additions: diffFile?.additions ?? null,
+          binary: diffFile?.binary ?? null,
+          deletions: diffFile?.deletions ?? null,
+          path,
+          size_bytes: workingTreeFileSize(repositoryRoot, path)
+        };
+      });
       const manifest: GitSnapshotManifest = {
-        schema_version: 1,
+        schema_version: 2,
         head_revision: headRevision,
         head_ref: headRef,
         base_revision: baseRevision,
@@ -167,6 +196,7 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
           untracked_count: status.untracked_count
         },
         working_tree_paths: status.paths,
+        changed_files: changedFiles,
         changed_paths: changedPaths,
         diff_stats: {
           changed_file_count: diff.changed_file_count,
@@ -179,9 +209,11 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
       };
       const canonicalManifest = `${JSON.stringify(manifest)}\n`;
       const snapshotSha256 = createHash("sha256").update(canonicalManifest).digest("hex");
+      const changedFilesJSON = JSON.stringify(changedFiles);
       const changedPathsJSON = JSON.stringify(changedPaths);
       const workingTreePathsJSON = JSON.stringify(status.paths);
-      const requiresArtifact = Buffer.byteLength(changedPathsJSON) > MAX_FACT_TEXT_BYTES ||
+      const requiresArtifact = Buffer.byteLength(changedFilesJSON) > MAX_FACT_TEXT_BYTES ||
+        Buffer.byteLength(changedPathsJSON) > MAX_FACT_TEXT_BYTES ||
         Buffer.byteLength(workingTreePathsJSON) > MAX_FACT_TEXT_BYTES;
       const artifactRefs = uniqueArtifactRefs(input.artifact_refs ?? []);
       if (requiresArtifact) {
@@ -222,6 +254,7 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
           facts: {
             base_revision: baseRevision,
             binary_file_count: diff.binary_file_count,
+            changed_file_details_json: requiresArtifact ? null : changedFilesJSON,
             changed_path_count: changedPaths.length,
             changed_paths_inline: !requiresArtifact,
             changed_paths_json: requiresArtifact ? null : changedPathsJSON,
@@ -295,7 +328,7 @@ export class FileSystemGitEvidenceArtifactStore implements GitEvidenceArtifactSt
     return {
       kind: "report",
       ref,
-      label: "Git Evidence changed-path manifest",
+      label: "Git Evidence snapshot manifest",
       media_type: "application/json",
       sha256
     };
@@ -401,6 +434,7 @@ function parseGitStatus(output: Buffer, policy: GitUntrackedPolicy): GitStatusSu
 }
 
 function parseGitNumstat(output: Buffer): GitDiffSummary {
+  const files: GitChangedFileDiff[] = [];
   const paths: string[] = [];
   let insertions = 0;
   let deletions = 0;
@@ -414,9 +448,11 @@ function parseGitNumstat(output: Buffer): GitDiffSummary {
     }
     const added = record.slice(0, firstTab);
     const removed = record.slice(firstTab + 1, secondTab);
-    paths.push(record.slice(secondTab + 1));
+    const path = record.slice(secondTab + 1);
+    paths.push(path);
     if (added === "-" && removed === "-") {
       binaryFileCount += 1;
+      files.push({ additions: null, binary: true, deletions: null, path });
       continue;
     }
     if (!/^\d+$/.test(added) || !/^\d+$/.test(removed)) {
@@ -424,14 +460,35 @@ function parseGitNumstat(output: Buffer): GitDiffSummary {
     }
     insertions += Number(added);
     deletions += Number(removed);
+    files.push({
+      additions: Number(added),
+      binary: false,
+      deletions: Number(removed),
+      path
+    });
   }
   return {
     binary_file_count: binaryFileCount,
     changed_file_count: records.length,
     deletions,
+    files: files.sort((left, right) => compareText(left.path, right.path)),
     insertions,
     paths: sortedUnique(paths)
   };
+}
+
+function workingTreeFileSize(repositoryRoot: string, gitPath: string): number | null {
+  const path = resolve(repositoryRoot, gitPath);
+  if (path === repositoryRoot || !path.startsWith(`${repositoryRoot}${sep}`)) {
+    throw new Error("Git changed path escapes repository root");
+  }
+  try {
+    const stat = lstatSync(path);
+    return stat.isFile() || stat.isSymbolicLink() ? stat.size : null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 function nulFields(output: Buffer): string[] {
@@ -554,7 +611,11 @@ function boundedPositiveInteger(value: number | undefined, fallback: number, max
 }
 
 function sortedUnique(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => Buffer.from(left).compare(Buffer.from(right)));
+  return [...new Set(values)].sort(compareText);
+}
+
+function compareText(left: string, right: string): number {
+  return Buffer.from(left).compare(Buffer.from(right));
 }
 
 function uniqueArtifactRefs(values: readonly EvidenceArtifactRef[]): EvidenceArtifactRef[] {

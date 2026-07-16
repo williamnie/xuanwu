@@ -82,6 +82,7 @@ describe("Git Evidence collector", () => {
 
     const evidence = await createGitEvidenceCollector().collect(fixture(repository, base));
     const paths = JSON.parse(String(evidence.decisive_output.facts.changed_paths_json));
+    const details = JSON.parse(String(evidence.decisive_output.facts.changed_file_details_json));
 
     expect(paths).toEqual(["staged.txt", "tracked.txt", "untracked.txt"]);
     expect(evidence.decisive_output.facts).toMatchObject({
@@ -96,7 +97,37 @@ describe("Git Evidence collector", () => {
       working_tree_dirty: true
     });
     expect(paths).not.toContain("private.ignored");
+    expect(details).toEqual([
+      { additions: 1, binary: false, deletions: 0, path: "staged.txt", size_bytes: 7 },
+      { additions: 1, binary: false, deletions: 0, path: "tracked.txt", size_bytes: 8 },
+      { additions: null, binary: null, deletions: null, path: "untracked.txt", size_bytes: 10 }
+    ]);
     expect(validateEvidence(evidence).ok).toBe(true);
+  });
+
+  test("records binary paths without inventing line stats", async () => {
+    const repository = initRepository();
+    writeFileSync(join(repository, "asset.bin"), Buffer.from([0, 1, 2]));
+    git(repository, "add", "asset.bin");
+    git(repository, "commit", "-m", "binary base");
+    const base = revision(repository);
+    writeFileSync(join(repository, "asset.bin"), Buffer.from([0, 1, 3, 4]));
+
+    const evidence = await createGitEvidenceCollector().collect(fixture(repository, base));
+
+    expect(evidence.decisive_output.facts).toMatchObject({
+      binary_file_count: 1,
+      diff_changed_file_count: 1,
+      insertions: 0,
+      deletions: 0
+    });
+    expect(JSON.parse(String(evidence.decisive_output.facts.changed_file_details_json))).toEqual([{
+      additions: null,
+      binary: true,
+      deletions: null,
+      path: "asset.bin",
+      size_bytes: 4
+    }]);
   });
 
   test("makes untracked exclusion explicit instead of reporting an invented zero", async () => {
@@ -192,6 +223,7 @@ describe("Git Evidence collector", () => {
     }).collect(input);
 
     expect(evidence.decisive_output.facts).toMatchObject({
+      changed_file_details_json: null,
       changed_path_count: 100,
       changed_paths_inline: false,
       changed_paths_json: null,
@@ -201,6 +233,10 @@ describe("Git Evidence collector", () => {
     const artifact = evidence.artifact_refs[0]!;
     expect(artifact).toMatchObject({ kind: "report", media_type: "application/json" });
     const artifactPath = join(stateDir, artifact.ref);
+    expect(JSON.parse(readFileSync(artifactPath, "utf8"))).toMatchObject({
+      schema_version: 2,
+      changed_files: expect.arrayContaining([expect.objectContaining({ size_bytes: 2 })])
+    });
     expect(JSON.parse(readFileSync(artifactPath, "utf8")).changed_paths).toHaveLength(100);
     expect(statSync(artifactPath).mode & 0o777).toBe(0o600);
     expect(validateEvidence(evidence).ok).toBe(true);

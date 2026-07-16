@@ -23,6 +23,7 @@ P04.03 新增 provider-neutral 的只读 collector。调用方显式提供项目
 - `base_revision/revision_changed_from_base`；调用方提供的 base 必须是完整、仓库内可解析的 commit id，未提供时以收集时 HEAD 为 base，避免把可变 branch name 当基线；
 - `working_tree_dirty/tracked_dirty`、staged/unstaged/conflict/untracked counts；
 - `changed_paths_json/working_tree_paths_json`、path counts；changed paths 是 base→当前 tracked worktree diff 与 status paths 的稳定并集；
+- `changed_file_details_json`：manifest v2 的逐文件 path、tracked numstat、binary 标记和当前 worktree `lstat` size；untracked/非 diff path 的 numstat/binary 为 null，删除文件或 submodule 的 size 为 null，不伪造未知值；
 - `diff_changed_file_count/insertions/deletions/binary_file_count`；有 base 时 scope 为 `base_to_worktree_tracked`，unborn 时为 `index_to_unborn`；untracked 内容不虚构行数；
 - `snapshot_sha256`：canonical snapshot manifest 的指纹，用于比较两次 observation，不替代 Git object id 或 artifact availability。
 
@@ -32,8 +33,8 @@ P04.03 新增 provider-neutral 的只读 collector。调用方显式提供项目
 
 - `ignored_policy` V1 固定为 `exclude`，collector 显式使用 `--ignored=no`，忽略文件不会进入 dirty/path/count 或 artifact；
 - `untracked_policy=include_all`（默认）递归记录所有 untracked paths，并纳入 dirty/path/count；`exclude` 使用 `--untracked-files=no`，此时 `untracked_count=null` 表示未观察，不能伪造为 0；
-- diff stat 只统计 Git 可比较的 tracked/index 内容；untracked path 会出现在 changed paths，但不读取其内容、也不计入 insertions/deletions；
-- changed-path JSON 超过 Evidence inline 8 KiB 上限时必须提供 `GitEvidenceArtifactStore`，否则拒绝收集，不静默截断。文件系统 store 写 content-addressed、redacted JSON report，目录 `0700`、文件 `0600`，Evidence 保留 sha256；inline facts 改为 null 并以 `changed_paths_inline=false` 指向 artifact。
+- diff stat 只统计 Git 可比较的 tracked/index 内容；untracked path 会出现在 changed paths，但只读取当前 path 的 `lstat` 元数据，不读取内容、也不计入 insertions/deletions/binary count；symlink 不跟随 target；
+- changed-file/path JSON 任一超过 Evidence inline 8 KiB 上限时必须提供 `GitEvidenceArtifactStore`，否则拒绝收集，不静默截断。文件系统 store 写 content-addressed、redacted manifest v2 JSON report，目录 `0700`、文件 `0600`，Evidence 保留 sha256；inline facts 改为 null 并以 `changed_paths_inline=false` 指向 artifact。
 
 ## 4. 读取范围与执行约束
 
@@ -51,7 +52,7 @@ collector 只接受带 `.git` marker 的显式 working-tree root，不从子目�
 ## 6. 兼容、回滚与删除门禁
 
 - **W1 写入：** 新 verification step 对一次 Git snapshot 只产生一条 structured Evidence；当前 `issue.log`、provider prose、发布脚本 revision label 与 `VerificationEvidenceV0` 不双写为竞争 authority。本期双写窗口为 0。
-- **双读：** V0/current event 继续按 ADR-XW-0027 的 W1/W2 最多两个正式 release window 兼容读取，但 legacy import 不能满足门禁；Git Evidence 始终回到 Git provenance，不从旧 summary 反推。
+- **双读：** V0/current event 继续按 ADR-XW-0027 的 W1/W2 最多两个正式 release window 兼容读取，但 legacy import 不能满足门禁；P05.02 builder 可读取旧 manifest v1/path-only Evidence，并显式标记逐文件 metadata 不可用。Git Evidence 始终回到 Git provenance，不从旧 summary 反推。
 - **回滚：** 停用 Git collector/policy consumer，恢复当前 Git/event/V0 读取；保留已生成的 additive Evidence/audit/artifact，不删除或反写 repository。
 - **最终删除门禁：** 仍须 P11.03/P11.06、G7、所有 provenance/audit consumer 映射完成、legacy producer/consumer 连续一个正式 release 为零、fixture 留档和 artifact/raw-event 恢复演练通过。本 issue 不删除发布脚本 Git 读取、V0、raw event 或 Git authority。
 
