@@ -8,6 +8,7 @@ import {
   ListTodo,
   MessageSquare,
   Moon,
+  PackageCheck,
   Settings,
   Sun,
   LayoutDashboard,
@@ -83,6 +84,10 @@ export default function AppSidebar({
             <NavIconLabel Icon={BriefcaseBusiness} label="Work" />
           </button>
         ) : null}
+
+        <button aria-label="Handoffs" className={`nav-item ${currentPage === 'handoffs' ? 'active' : ''}`} onClick={() => navigateTo('handoffs')}>
+          <NavIconLabel Icon={PackageCheck} label="Handoffs" />
+        </button>
 
         <button aria-label="Issues" className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
           <NavIconLabel Icon={ListTodo} label="Issues" />

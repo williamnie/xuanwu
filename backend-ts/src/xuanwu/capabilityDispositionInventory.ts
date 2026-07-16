@@ -346,6 +346,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/external-events", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/external-events/:id", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/external-events/:id/create-issue", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/handoffs", family: "evidence-handoff" },
+  { method: "GET", path: "/api/handoffs/:id", family: "evidence-handoff" },
   { method: "GET", path: "/api/im-reply-drafts", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/im-reply-drafts/:id", family: "integration-intake-delivery" },
   { method: "POST", path: "/api/im-reply-drafts/:id/approve", family: "integration-intake-delivery" },
@@ -551,8 +553,8 @@ export const PAGE_SURFACES = [
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
-    page_ids: ["pi-activity", "pi-approvals"],
-    source_files: ["frontend/src/pages/ActivityTimelinePanel.jsx"]
+    page_ids: ["handoffs", "pi-activity", "pi-approvals"],
+    source_files: ["frontend/src/pages/ActivityTimelinePanel.jsx", "frontend/src/pages/Handoffs.jsx"]
   },
   {
     id: "project-scope", disposition: "keep", target: "Project/local control-plane scope",

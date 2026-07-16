@@ -22,8 +22,8 @@
 统计：
 
 - 59 张表：keep=28、merge=22、migrate=7、delete=2
-- 196 条用户 API route：keep=116、merge=53、migrate=27、delete=0
-- 29 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
+- 198 条用户 API route：keep=116、merge=55、migrate=27、delete=0
+- 30 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 14 个后台调度/启动单元：keep=4、merge=8、migrate=2、delete=0
 - 143 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
@@ -126,7 +126,7 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 
 ## 5. API 清单
 
-API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `backend-ts/src/http/*.ts` 的生产 route 注册：排除非用户 probe `/health`，并将重复注册折叠成 196 条唯一用户 route。当前 `POST /api/system/restart` 有两个注册点；运行时按注册顺序命中 `systemRestartApi.ts`，后续只能合并实现，不得增加第三个 endpoint。
+API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `backend-ts/src/http/*.ts` 的生产 route 注册：排除非用户 probe `/health`，并将重复注册折叠成 198 条唯一用户 route。当前 `POST /api/system/restart` 有两个注册点；运行时按注册顺序命中 `systemRestartApi.ts`，后续只能合并实现，不得增加第三个 endpoint。
 
 | API family | route 数 | 结论 | 目标 | 当前 source of truth |
 | --- | ---: | --- | --- | --- |
@@ -134,7 +134,7 @@ API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `ba
 | `attention` | 21 | **merge** | Attention projections with deterministic resolution gates | attention_inbox_items and current Guardian/Approval carriers |
 | `automation` | 27 | **migrate** | Automation API with legacy cron/delegation compatibility | pi_automations plus legacy cron_tasks/pi_delegations |
 | `capability-policy` | 39 | **keep** | Capability registry and deterministic permission policy | tool/MCP registries and project_pi_policies |
-| `evidence-handoff` | 24 | **merge** | Evidence/Handoff read models and audited action requests | issue/pi audit authorities plus derived Handoff |
+| `evidence-handoff` | 26 | **merge** | Evidence/Handoff read models and audited action requests | issue/pi audit authorities plus derived Handoff |
 | `integration-intake-delivery` | 15 | **keep** | Audited intake and external delivery adapters | external_events/external_links/outbox authorities |
 | `project-scope` | 17 | **keep** | Project/local control-plane scope | projects and scoped settings |
 | `run-session-drilldown` | 8 | **merge** | Run with provider Session drill-down | issue_runs; agent_sessions remains a reference |
@@ -280,6 +280,8 @@ PUT /api/runner/settings
 <details><summary><code>evidence-handoff</code> 的逐项 routes</summary>
 
 ```text
+GET /api/handoffs
+GET /api/handoffs/:id
 GET /api/issues/:id/supervisor
 POST /api/issues/:id/verification
 POST /api/issues/:id/verifier-report
@@ -417,7 +419,7 @@ GET /api/issues/:id/runs
 | `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | `AttentionInbox.jsx` |
 | `automation` | `cron`, `pi-automations` | **migrate** | Automation API with legacy cron/delegation compatibility | `AutomationsRuntimePanel.jsx`, `Cron.jsx` |
 | `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsPlaceholders.jsx`, `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
-| `evidence-handoff` | `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx` |
+| `evidence-handoff` | `handoffs`, `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx`, `Handoffs.jsx` |
 | `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `Projects.jsx` |
 | `run-session-drilldown` | `sessions` | **merge** | Run with provider Session drill-down | `Sessions.jsx` |
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
@@ -739,4 +741,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：57 张 current source table + 2 张 live-only table = 59；196 条唯一用户 API route 全覆盖；29 个 JSX 页面组件与 143 个 PI 模块恰好归属一次；14 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：57 张 current source table + 2 张 live-only table = 59；198 条唯一用户 API route 全覆盖；30 个 JSX 页面组件与 143 个 PI 模块恰好归属一次；14 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

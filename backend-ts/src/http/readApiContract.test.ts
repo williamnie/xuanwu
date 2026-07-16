@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
 import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./evidenceApi.ts";
 import { FRONTEND_COMPATIBILITY_POLICY, registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
+import { HANDOFF_HTTP_COMPATIBILITY_POLICY, registerHandoffRoutes } from "./handoffApi.ts";
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
@@ -51,6 +52,10 @@ describe("read API route contracts", () => {
             "responsibility": "legacy-compatibility",
           },
           {
+            "id": "handoffs",
+            "responsibility": "domain",
+          },
+          {
             "id": "usage",
             "responsibility": "projection",
           },
@@ -68,6 +73,18 @@ describe("read API route contracts", () => {
       dual_write: expect.stringContaining("none"),
       fact_authority: expect.stringContaining("originating"),
       read_authority: "issue_events:evidence.recorded.v1"
+    });
+  });
+
+  test("locks Handoff method, path, and authority contracts", () => {
+    expect(captureRoutes(registerHandoffRoutes)).toEqual([
+      "GET /api/handoffs",
+      "GET /api/handoffs/:id"
+    ]);
+    expect(HANDOFF_HTTP_COMPATIBILITY_POLICY).toMatchObject({
+      dual_write: expect.stringContaining("none"),
+      fact_authority: expect.stringContaining("Git-Evidence"),
+      read_authority: "issue_events:handoff.*.v1"
     });
   });
 

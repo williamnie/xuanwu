@@ -19,6 +19,7 @@ import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
 import { resolveWorkBoardPage } from './pages/workBoardModel.js';
 import { resolveRunsPage } from './pages/runs/runPageModel.js';
+import { handoffRouteFromHash } from './pages/handoffPageModel.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
@@ -30,6 +31,7 @@ const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
 const Runs = lazy(() => import('./pages/Runs'));
+const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
 const AttentionInbox = lazy(() => import('./pages/AttentionInbox'));
 const Cron = lazy(() => import('./pages/Cron'));
@@ -56,6 +58,7 @@ const PAGE_DATA_SLICES = {
   issues: ['issues'],
   projects: ['projects', 'issues'],
   work: ['projects'],
+  handoffs: ['projects'],
 };
 
 function getReconcileSlices(currentPage, selectedIssueId) {
@@ -73,12 +76,14 @@ function PageLoadingFallback() {
 }
 
 export default function App() {
+  const initialHandoffRoute = handoffRouteFromHash(globalThis.location?.hash);
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
-    currentPage: 'dashboard', // 默认进入 Dashboard
+    currentPage: initialHandoffRoute?.page || 'dashboard', // 默认进入 Dashboard，通知深链进入对应 Handoff
     selectedIssueId: null,
     selectedRunId: '',
     selectedSessionId: '',
+    selectedHandoffId: initialHandoffRoute?.handoffId || '',
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
 
@@ -106,6 +111,7 @@ export default function App() {
     selectedIssueId,
     selectedRunId,
     selectedSessionId,
+    selectedHandoffId,
     filterProject,
     focusFilter,
     isNewIssueOpen,
@@ -177,8 +183,13 @@ export default function App() {
     });
   }, [updateAppState]);
 
-  const navigateTo = useCallback((page, issueId = null, sessionId = '') => {
+  const navigateTo = useCallback((page, issueId = null, sessionId = '', handoffId = '') => {
     const resolvedPage = resolveRunsPage(resolveWorkBoardPage(page));
+    const hashRoute = handoffRouteFromHash(globalThis.location?.hash);
+    const targetHandoffId = resolvedPage === 'handoffs' ? handoffId || hashRoute?.handoffId || '' : '';
+    if (resolvedPage !== 'handoffs' && hashRoute && globalThis.history && globalThis.location) {
+      globalThis.history.replaceState(null, '', `${globalThis.location.pathname}${globalThis.location.search}`);
+    }
     updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
         draft.currentPage = resolvedPage;
@@ -191,7 +202,23 @@ export default function App() {
         draft.selectedRunId = compatSessionRoute ? '' : sessionId || '';
         draft.selectedSessionId = compatSessionRoute ? sessionId || '' : '';
       }
+      draft.selectedHandoffId = targetHandoffId;
     });
+  }, [updateAppState]);
+
+  useEffect(() => {
+    if (!globalThis.addEventListener) return undefined;
+    const syncHandoffHash = () => {
+      const route = handoffRouteFromHash(globalThis.location?.hash);
+      if (!route) return;
+      updateAppState(draft => {
+        draft.currentPage = route.page;
+        draft.selectedHandoffId = route.handoffId;
+        draft.selectedIssueId = null;
+      });
+    };
+    globalThis.addEventListener('hashchange', syncHandoffHash);
+    return () => globalThis.removeEventListener('hashchange', syncHandoffHash);
   }, [updateAppState]);
 
   const refreshVisibleData = useCallback(() => {
@@ -296,6 +323,8 @@ export default function App() {
           <Suspense fallback={<PageLoadingFallback />}>
             {currentPage === 'work' ? (
               <WorkBoard navigateTo={navigateTo} />
+            ) : currentPage === 'handoffs' ? (
+              <Handoffs selectedHandoffId={selectedHandoffId} />
             ) : currentPage === 'issues' && selectedIssueId ? (
               <IssueDetail issueId={selectedIssueId} navigateTo={navigateTo} />
             ) : currentPage === 'issues' ? (

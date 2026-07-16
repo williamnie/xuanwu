@@ -1,6 +1,7 @@
 import { registerEventSummaryRoutes } from "./eventSummariesApi.ts";
 import { registerEvidenceRoutes } from "./evidenceApi.ts";
 import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
+import { registerHandoffRoutes } from "./handoffApi.ts";
 import { registerPiRoutes } from "./piApi.ts";
 import { registerPiSupervisorRoutes } from "./piSupervisorApi.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
@@ -28,6 +29,7 @@ export const READ_API_ROUTE_REGISTRY = [
   { id: "sessions", register: registerSessionRoutes, responsibility: "domain" },
   { id: "work", register: registerWorkRoutes, responsibility: "domain" },
   { id: "frontend-compat", register: registerFrontendCompatRoutes, responsibility: "legacy-compatibility" },
+  { id: "handoffs", register: registerHandoffRoutes, responsibility: "domain" },
   { id: "usage", register: registerUsageRoutes, responsibility: "projection" }
 ] as const satisfies readonly ReadApiRouteRegistration[];
 

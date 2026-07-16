@@ -2,6 +2,7 @@ import { assistantApi } from './assistant.js';
 import { automationApi } from './automation.js';
 import { connectorsApi } from './connectors.js';
 import { eventsApi } from './events.js';
+import { handoffsApi } from './handoffs.js';
 import { projectsApi } from './projects.js';
 import { runsApi } from './runs.js';
 import { systemApi } from './system.js';
@@ -12,6 +13,7 @@ export { assistantApi } from './assistant.js';
 export { automationApi } from './automation.js';
 export { connectorsApi } from './connectors.js';
 export { eventsApi } from './events.js';
+export { handoffsApi } from './handoffs.js';
 export { projectsApi } from './projects.js';
 export { runsApi } from './runs.js';
 export { systemApi } from './system.js';
@@ -33,4 +35,5 @@ export const api = {
   ...automationApi,
   ...connectorsApi,
   ...eventsApi,
+  ...handoffsApi,
 };
