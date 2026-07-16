@@ -53,6 +53,25 @@ describe("Bun backend config", () => {
           projectMappings: [],
           receiveMode: "websocket",
           verificationToken: ""
+        },
+        github: {
+          api_base_url: "https://api.github.com",
+          display_name: "GitHub",
+          git_base_url: "https://github.com",
+          graphql_base_url: "https://api.github.com/graphql",
+          provider_id: "github",
+          token: "",
+          token_ref: "env://GITHUB_TOKEN",
+          web_base_url: "https://github.com"
+        },
+        gitlab: {
+          api_base_url: "https://gitlab.com/api/v4",
+          display_name: "GitLab",
+          git_base_url: "https://gitlab.com",
+          provider_id: "gitlab",
+          token: "",
+          token_ref: "env://GITLAB_TOKEN",
+          web_base_url: "https://gitlab.com"
         }
       }
     });
@@ -81,7 +100,7 @@ describe("Bun backend config", () => {
     });
   });
 
-  test("loads Feishu connector from local settings file before falling back to env", async () => {
+  test("loads connector config from local settings before falling back to env", async () => {
     const stateDir = await tempStateDir();
     await writeFile(join(stateDir, "runner-settings.local.json"), JSON.stringify({
       integrations: {
@@ -96,6 +115,19 @@ describe("Bun backend config", () => {
           projectMappings: "chat:oc_local=local-project",
           receiveMode: "websocket",
           verificationToken: "local-token"
+        },
+        github: {
+          apiBaseUrl: "https://github.local/api/v3",
+          graphqlBaseUrl: "https://github.local/api/graphql",
+          token: "github-local-secret",
+          tokenRef: "local://github/handoff",
+          webBaseUrl: "https://github.local"
+        },
+        gitlab: {
+          apiBaseUrl: "https://gitlab.local/api/v4",
+          token: "gitlab-local-secret",
+          tokenRef: "local://gitlab/handoff",
+          webBaseUrl: "https://gitlab.local"
         }
       }
     }), "utf8");
@@ -104,7 +136,9 @@ describe("Bun backend config", () => {
       [ENV_KEYS.stateDir]: stateDir,
       [ENV_KEYS.feishuAppId]: "cli_env",
       [ENV_KEYS.feishuAppSecret]: "env-secret",
-      [ENV_KEYS.feishuVerificationToken]: "env-token"
+      [ENV_KEYS.feishuVerificationToken]: "env-token",
+      [ENV_KEYS.githubToken]: "github-env-secret",
+      [ENV_KEYS.gitlabToken]: "gitlab-env-secret"
     });
 
     expect(config.integrations.feishu).toMatchObject({
@@ -118,6 +152,21 @@ describe("Bun backend config", () => {
       projectMappings: [{ chatId: "oc_local", projectId: "local-project" }],
       receiveMode: "websocket",
       verificationToken: "local-token"
+    });
+    expect(config.integrations.github).toMatchObject({
+      api_base_url: "https://github.local/api/v3",
+      git_base_url: "https://github.local",
+      graphql_base_url: "https://github.local/api/graphql",
+      token: "github-local-secret",
+      token_ref: "local://github/handoff",
+      web_base_url: "https://github.local"
+    });
+    expect(config.integrations.gitlab).toMatchObject({
+      api_base_url: "https://gitlab.local/api/v4",
+      git_base_url: "https://gitlab.local",
+      token: "gitlab-local-secret",
+      token_ref: "local://gitlab/handoff",
+      web_base_url: "https://gitlab.local"
     });
   });
 
@@ -198,7 +247,16 @@ describe("Bun backend config", () => {
       [ENV_KEYS.feishuEncryptKey]: "encrypt-secret-value",
       [ENV_KEYS.feishuProjectMappings]: "chat:oc_a=codex-runner",
       [ENV_KEYS.feishuReceiveMode]: "callback",
-      [ENV_KEYS.feishuVerificationToken]: "verify-secret-value"
+      [ENV_KEYS.feishuVerificationToken]: "verify-secret-value",
+      [ENV_KEYS.githubApiUrl]: "https://github.example/api/v3",
+      [ENV_KEYS.githubGraphqlUrl]: "https://github.example/api/graphql",
+      [ENV_KEYS.githubServerUrl]: "https://github.example",
+      [ENV_KEYS.githubToken]: "github-secret-value",
+      [ENV_KEYS.githubTokenRef]: "env://GITHUB_HANDOFF_TOKEN",
+      [ENV_KEYS.gitlabApiUrl]: "https://gitlab.example/api/v4",
+      [ENV_KEYS.gitlabServerUrl]: "https://gitlab.example",
+      [ENV_KEYS.gitlabToken]: "gitlab-secret-value",
+      [ENV_KEYS.gitlabTokenRef]: "env://GITLAB_HANDOFF_TOKEN"
     });
 
     expect(config).toEqual({
@@ -244,6 +302,25 @@ describe("Bun backend config", () => {
           projectMappings: [{ chatId: "oc_a", projectId: "codex-runner" }],
           receiveMode: "callback",
           verificationToken: "verify-secret-value"
+        },
+        github: {
+          api_base_url: "https://github.example/api/v3",
+          display_name: "GitHub",
+          git_base_url: "https://github.example",
+          graphql_base_url: "https://github.example/api/graphql",
+          provider_id: "github",
+          token: "github-secret-value",
+          token_ref: "env://GITHUB_HANDOFF_TOKEN",
+          web_base_url: "https://github.example"
+        },
+        gitlab: {
+          api_base_url: "https://gitlab.example/api/v4",
+          display_name: "GitLab",
+          git_base_url: "https://gitlab.example",
+          provider_id: "gitlab",
+          token: "gitlab-secret-value",
+          token_ref: "env://GITLAB_HANDOFF_TOKEN",
+          web_base_url: "https://gitlab.example"
         }
       }
     });
@@ -316,6 +393,25 @@ describe("Bun backend config", () => {
           projectMappings: [],
           receiveMode: "websocket",
           verificationToken: ""
+        },
+        github: {
+          api_base_url: "https://api.github.com",
+          display_name: "GitHub",
+          git_base_url: "https://github.com",
+          graphql_base_url: "https://api.github.com/graphql",
+          provider_id: "github",
+          token: "",
+          token_ref: "env://GITHUB_TOKEN",
+          web_base_url: "https://github.com"
+        },
+        gitlab: {
+          api_base_url: "https://gitlab.com/api/v4",
+          display_name: "GitLab",
+          git_base_url: "https://gitlab.com",
+          provider_id: "gitlab",
+          token: "",
+          token_ref: "env://GITLAB_TOKEN",
+          web_base_url: "https://gitlab.com"
         }
       }
     });

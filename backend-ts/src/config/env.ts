@@ -10,6 +10,8 @@ import {
 } from "./codexServer.ts";
 import { buildFeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides } from "../integrations/feishu.ts";
+import { buildGitHubConnectorConfig, type GitHubConnectorConfig, type GitHubConnectorConfigInput } from "../integrations/github/config.ts";
+import { buildGitLabConnectorConfig, type GitLabConnectorConfig, type GitLabConnectorConfigInput } from "../integrations/gitlab/config.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
 
 export const ENV_KEYS = {
@@ -42,7 +44,16 @@ export const ENV_KEYS = {
   feishuEncryptKey: "FEISHU_ENCRYPT_KEY",
   feishuProjectMappings: "FEISHU_PROJECT_MAPPINGS",
   feishuReceiveMode: "FEISHU_RECEIVE_MODE",
-  feishuVerificationToken: "FEISHU_VERIFICATION_TOKEN"
+  feishuVerificationToken: "FEISHU_VERIFICATION_TOKEN",
+  githubApiUrl: "GITHUB_API_URL",
+  githubGraphqlUrl: "GITHUB_GRAPHQL_URL",
+  githubServerUrl: "GITHUB_SERVER_URL",
+  githubToken: "GITHUB_TOKEN",
+  githubTokenRef: "GITHUB_TOKEN_REF",
+  gitlabApiUrl: "GITLAB_API_URL",
+  gitlabServerUrl: "GITLAB_SERVER_URL",
+  gitlabToken: "GITLAB_TOKEN",
+  gitlabTokenRef: "GITLAB_TOKEN_REF"
 } as const;
 
 type Env = Record<string, string | undefined>;
@@ -52,7 +63,20 @@ type ConfigOverrides =
   FeishuConnectorOverrides & {
   cliConnectorDirs?: string | string[];
   cliConnectors?: { manifestDirs?: string | string[] };
-  integrations?: { feishu?: FeishuConfigInput };
+  githubApiUrl?: string;
+  githubGraphqlUrl?: string;
+  githubServerUrl?: string;
+  githubToken?: string;
+  githubTokenRef?: string;
+  gitlabApiUrl?: string;
+  gitlabServerUrl?: string;
+  gitlabToken?: string;
+  gitlabTokenRef?: string;
+  integrations?: {
+    feishu?: FeishuConfigInput;
+    github?: GitHubConnectorConfigInput;
+    gitlab?: GitLabConnectorConfigInput;
+  };
   runner?: { maxParallelProjects?: unknown };
   runnerMaxParallelProjects?: number | string;
 };
@@ -93,7 +117,11 @@ export type RunnerConfig = {
   codexServer: CodexServerConfig;
   providers: Partial<Record<ExecutorProviderId, ProviderRuntimeConfig>>;
   runner: RunnerConcurrencyConfig;
-  integrations: { feishu: FeishuConnectorConfig };
+  integrations: {
+    feishu: FeishuConnectorConfig;
+    github: GitHubConnectorConfig;
+    gitlab: GitLabConnectorConfig;
+  };
 };
 
 const FLAG_KEYS: Record<string, ConfigKey> = {
@@ -131,7 +159,11 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
     codexCommand: localCodex.cliCommand ?? baseOverrides.codexCommand,
     codexAppCommand: localCodex.appCommand ?? baseOverrides.codexAppCommand,
     runner: { maxParallelProjects: localOverrides.runner?.maxParallelProjects ?? baseOverrides.runnerMaxParallelProjects },
-    integrations: { feishu: localOverrides.integrations?.feishu ?? {} }
+    integrations: {
+      feishu: localOverrides.integrations?.feishu ?? {},
+      github: localOverrides.integrations?.github ?? {},
+      gitlab: localOverrides.integrations?.gitlab ?? {}
+    }
   });
 }
 
@@ -154,7 +186,9 @@ export function buildConfig(overrides: ConfigOverrides = {}): RunnerConfig {
       maxParallelProjects: overrides.runnerMaxParallelProjects
     }),
     integrations: {
-      feishu: buildFeishuConnectorConfig(effectiveFeishuInput(overrides))
+      feishu: buildFeishuConnectorConfig(effectiveFeishuInput(overrides)),
+      github: buildGitHubConnectorConfig(effectiveGitHubInput(overrides)),
+      gitlab: buildGitLabConnectorConfig(effectiveGitLabInput(overrides))
     }
   };
 }
@@ -189,6 +223,29 @@ function effectiveFeishuInput(overrides: ConfigOverrides): FeishuConfigInput {
   };
 }
 
+function effectiveGitHubInput(overrides: ConfigOverrides): GitHubConnectorConfigInput {
+  const local = overrides.integrations?.github ?? {};
+  return {
+    apiBaseUrl: local.apiBaseUrl ?? local.GITHUB_API_URL ?? overrides.githubApiUrl,
+    gitBaseUrl: local.gitBaseUrl ?? local.webBaseUrl ?? local.GITHUB_SERVER_URL ?? overrides.githubServerUrl,
+    graphqlBaseUrl: local.graphqlBaseUrl ?? local.GITHUB_GRAPHQL_URL ?? overrides.githubGraphqlUrl,
+    token: local.token ?? local.GITHUB_TOKEN ?? overrides.githubToken,
+    tokenRef: local.tokenRef ?? local.GITHUB_TOKEN_REF ?? overrides.githubTokenRef,
+    webBaseUrl: local.webBaseUrl ?? local.GITHUB_SERVER_URL ?? overrides.githubServerUrl
+  };
+}
+
+function effectiveGitLabInput(overrides: ConfigOverrides): GitLabConnectorConfigInput {
+  const local = overrides.integrations?.gitlab ?? {};
+  return {
+    apiBaseUrl: local.apiBaseUrl ?? local.GITLAB_API_URL ?? overrides.gitlabApiUrl,
+    gitBaseUrl: local.gitBaseUrl ?? local.webBaseUrl ?? local.GITLAB_SERVER_URL ?? overrides.gitlabServerUrl,
+    token: local.token ?? local.GITLAB_TOKEN ?? overrides.gitlabToken,
+    tokenRef: local.tokenRef ?? local.GITLAB_TOKEN_REF ?? overrides.gitlabTokenRef,
+    webBaseUrl: local.webBaseUrl ?? local.GITLAB_SERVER_URL ?? overrides.gitlabServerUrl
+  };
+}
+
 function readEnvOverrides(env: Env): ConfigOverrides {
   return {
     addr: cleanValue(env[ENV_KEYS.addr]),
@@ -220,7 +277,16 @@ function readEnvOverrides(env: Env): ConfigOverrides {
     feishuEncryptKey: cleanValue(env[ENV_KEYS.feishuEncryptKey]),
     feishuProjectMappings: cleanValue(env[ENV_KEYS.feishuProjectMappings]),
     feishuReceiveMode: cleanValue(env[ENV_KEYS.feishuReceiveMode]),
-    feishuVerificationToken: cleanValue(env[ENV_KEYS.feishuVerificationToken])
+    feishuVerificationToken: cleanValue(env[ENV_KEYS.feishuVerificationToken]),
+    githubApiUrl: cleanValue(env[ENV_KEYS.githubApiUrl]),
+    githubGraphqlUrl: cleanValue(env[ENV_KEYS.githubGraphqlUrl]),
+    githubServerUrl: cleanValue(env[ENV_KEYS.githubServerUrl]),
+    githubToken: cleanValue(env[ENV_KEYS.githubToken]),
+    githubTokenRef: cleanValue(env[ENV_KEYS.githubTokenRef]),
+    gitlabApiUrl: cleanValue(env[ENV_KEYS.gitlabApiUrl]),
+    gitlabServerUrl: cleanValue(env[ENV_KEYS.gitlabServerUrl]),
+    gitlabToken: cleanValue(env[ENV_KEYS.gitlabToken]),
+    gitlabTokenRef: cleanValue(env[ENV_KEYS.gitlabTokenRef])
   };
 }
 

@@ -5,7 +5,11 @@ import { dirname, join } from "node:path";
 export const LOCAL_SETTINGS_FILENAME = "runner-settings.local.json";
 
 export type RunnerLocalSettings = {
-  integrations?: { feishu?: Record<string, unknown> };
+  integrations?: {
+    feishu?: Record<string, unknown>;
+    github?: Record<string, unknown>;
+    gitlab?: Record<string, unknown>;
+  };
   providers?: {
     codex?: {
       appCommand?: string;
@@ -57,8 +61,15 @@ function normalizeLocalSettings(value: unknown): RunnerLocalSettings {
   const raw = recordValue(value);
   const integrations = recordValue(raw.integrations);
   const feishu = recordValue(integrations.feishu);
+  const github = recordValue(integrations.github);
+  const gitlab = recordValue(integrations.gitlab);
+  const normalizedIntegrations = {
+    ...(Object.keys(feishu).length === 0 ? {} : { feishu }),
+    ...(Object.keys(github).length === 0 ? {} : { github }),
+    ...(Object.keys(gitlab).length === 0 ? {} : { gitlab })
+  };
   return {
-    ...(Object.keys(feishu).length === 0 ? {} : { integrations: { feishu } }),
+    ...(Object.keys(normalizedIntegrations).length === 0 ? {} : { integrations: normalizedIntegrations }),
     ...normalizedProviderSettings(raw.providers),
     ...normalizedRunnerSettings(raw.runner)
   };
@@ -81,7 +92,7 @@ function normalizedProviderSettings(value: unknown): Pick<RunnerLocalSettings, "
   return Object.keys(codex).length === 0 ? {} : { providers: { codex } };
 }
 
-function normalizedCodexSettings(value: unknown): NonNullable<RunnerLocalSettings["providers"]>["codex"] {
+function normalizedCodexSettings(value: unknown): NonNullable<NonNullable<RunnerLocalSettings["providers"]>["codex"]> {
   const raw = recordValue(value);
   const serverMode = raw.serverMode === "app" ? "app" : raw.serverMode === "cli" ? "cli" : undefined;
   const cliCommand = stringValue(raw.cliCommand);
