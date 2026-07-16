@@ -50,12 +50,24 @@ write_custom_auth_token_file() {
   fi
 }
 
+stage_file_atomically() {
+  local source="$1" target="$2" mode="$3"
+  local target_dir staged
+  target_dir="$(dirname "$target")"
+  mkdir -p "$target_dir"
+  staged="$(mktemp "$target_dir/.codex-runner-stage.XXXXXX")"
+  if ! { cp "$source" "$staged" && chmod "$mode" "$staged" && mv -f "$staged" "$target"; }; then
+    rm -f "$staged"
+    return 1
+  fi
+}
+
 stage_launchd_binary() {
-  mkdir -p "$(dirname "$LAUNCHD_BINARY_PATH")"
-  cp "$BINARY_PATH" "$LAUNCHD_BINARY_PATH"
-  chmod +x "$LAUNCHD_BINARY_PATH"
+  # Never truncate a running Mach-O in place. macOS can mark that vnode's code
+  # pages as tainted, after which launchd rejects even a valid new signature.
+  stage_file_atomically "$BINARY_PATH" "$LAUNCHD_BINARY_PATH" 0755
   if [ -f "$BINARY_PATH.build.stamp" ]; then
-    cp "$BINARY_PATH.build.stamp" "$LAUNCHD_BINARY_PATH.build.stamp"
+    stage_file_atomically "$BINARY_PATH.build.stamp" "$LAUNCHD_BINARY_PATH.build.stamp" 0644
   fi
 }
 
