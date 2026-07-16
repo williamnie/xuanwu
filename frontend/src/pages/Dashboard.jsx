@@ -5,6 +5,7 @@ import { PRODUCT_NAV_LABELS } from '../brand.js';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
+import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
 import {
   selectBackendOnline,
   selectIssues,
@@ -153,6 +154,8 @@ export default function Dashboard({
 
         {/* 右栏：系统实时通知 / 活动流 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
+          <RecentDeliveriesSection navigateTo={navigateTo} projects={projects} />
+
           <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Terminal size={18} color="var(--primary)" /> 全局活动事件流
           </h3>
