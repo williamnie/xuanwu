@@ -1,5 +1,4 @@
 import { Buffer } from "node:buffer";
-import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -11,8 +10,9 @@ import {
   statSync,
   writeFileSync
 } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { DomainActor } from "../../xuanwu/coreDomainContracts.ts";
+import { createLocalGitAdapter } from "../git/adapter.ts";
 import {
   EVIDENCE_SCHEMA_VERSION,
   redactEvidenceRecord,
@@ -44,6 +44,7 @@ export type CollectGitEvidenceInput = {
   artifact_refs?: readonly EvidenceArtifactRef[];
   base_revision?: string;
   context: GitEvidenceContext;
+  pathspecs?: readonly string[];
   repository_path: string;
   untracked_policy?: GitUntrackedPolicy;
 };
@@ -69,12 +70,6 @@ export type GitEvidenceCollectorOptions = {
   artifact_store?: GitEvidenceArtifactStore;
   git_binary?: string;
   max_git_output_bytes?: number;
-};
-
-type GitCommandResult = {
-  code: number;
-  stderr: Buffer;
-  stdout: Buffer;
 };
 
 type GitStatusSummary = {
@@ -125,25 +120,23 @@ export type GitSnapshotManifest = {
   working_tree_paths: string[];
 };
 
-const DEFAULT_MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
 const MAX_FACT_TEXT_BYTES = 8 * 1024;
 const GIT_ARTIFACT_ROOT = "artifacts/evidence-git-snapshot";
 const OBJECT_ID_PATTERN = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/;
 
 export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions = {}): GitEvidenceCollector {
-  const gitBinary = cleanRequiredText(options.git_binary ?? "git", "git binary");
-  const outputLimit = boundedPositiveInteger(
-    options.max_git_output_bytes,
-    DEFAULT_MAX_GIT_OUTPUT_BYTES,
-    128 * 1024 * 1024
-  );
+  const gitAdapter = createLocalGitAdapter({
+    git_binary: options.git_binary,
+    max_output_bytes: options.max_git_output_bytes
+  });
 
   return {
     async collect(input) {
       validateInput(input);
       const repositoryRoot = repositoryRootPath(input.repository_path);
+      const pathspecs = normalizedPathspecs(input.pathspecs);
       const runGit = (args: readonly string[], allowedExitCodes: readonly number[] = [0]) =>
-        executeGit(gitBinary, repositoryRoot, args, outputLimit, allowedExitCodes);
+        gitAdapter.run({ args, allowed_exit_codes: allowedExitCodes, repository_path: repositoryRoot });
 
       const topLevel = await runGit(["rev-parse", "--show-toplevel"]);
       if (realpathSync(cleanOutput(topLevel.stdout, "Git repository root")) !== repositoryRoot) {
@@ -166,10 +159,11 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
         "-z",
         `--untracked-files=${untrackedPolicy === "include_all" ? "all" : "no"}`,
         "--ignored=no",
-        "--"
+        "--",
+        ...pathspecs
       ]);
       const status = parseGitStatus(statusResult.stdout, untrackedPolicy);
-      const diff = parseGitNumstat((await runGit(diffArguments(baseRevision))).stdout);
+      const diff = parseGitNumstat((await runGit(diffArguments(baseRevision, pathspecs))).stdout);
       const changedPaths = sortedUnique([...status.paths, ...diff.paths]);
       const diffFiles = new Map(diff.files.map((file) => [file.path, file]));
       const changedFiles: GitChangedFileDetail[] = changedPaths.map((path) => {
@@ -209,6 +203,7 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
       };
       const canonicalManifest = `${JSON.stringify(manifest)}\n`;
       const snapshotSha256 = createHash("sha256").update(canonicalManifest).digest("hex");
+      const pathspecSha256 = createHash("sha256").update(`${JSON.stringify(pathspecs)}\n`).digest("hex");
       const changedFilesJSON = JSON.stringify(changedFiles);
       const changedPathsJSON = JSON.stringify(changedPaths);
       const workingTreePathsJSON = JSON.stringify(status.paths);
@@ -250,7 +245,7 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
         updated_at: observedAt,
         completed_at: observedAt,
         decisive_output: {
-          summary: gitSnapshotSummary(headRevision, headRef, status.dirty, baseRevision),
+          summary: gitSnapshotSummary(headRevision, headRef, status.dirty, baseRevision, pathspecs.length > 0),
           facts: {
             base_revision: baseRevision,
             binary_file_count: diff.binary_file_count,
@@ -268,6 +263,9 @@ export function createGitEvidenceCollector(options: GitEvidenceCollectorOptions 
             insertions: diff.insertions,
             is_detached: headRevision !== null && headRef === null,
             is_unborn: headRevision === null,
+            pathspec_count: pathspecs.length,
+            pathspec_scope: pathspecs.length > 0 ? "selected_paths" : "repository",
+            pathspec_sha256: pathspecSha256,
             revision_changed_from_base: Boolean(headRevision && baseRevision && headRevision !== baseRevision),
             snapshot_sha256: snapshotSha256,
             staged_change_count: status.staged_change_count,
@@ -353,6 +351,7 @@ function validateInput(input: CollectGitEvidenceInput): void {
     throw new Error("unsupported Git untracked policy");
   }
   if (input.base_revision !== undefined) normalizedObjectID(input.base_revision, "Git base revision");
+  normalizedPathspecs(input.pathspecs);
 }
 
 function repositoryRootPath(value: string): string {
@@ -379,11 +378,11 @@ function normalizedObjectID(value: string, label: string): string {
   return normalized;
 }
 
-function diffArguments(baseRevision: string | null): string[] {
+function diffArguments(baseRevision: string | null, pathspecs: readonly string[]): string[] {
   const options = ["--no-ext-diff", "--no-textconv", "--no-renames", "--numstat", "-z"];
   return baseRevision
-    ? ["diff", ...options, baseRevision, "--"]
-    : ["diff", "--cached", ...options, "--"];
+    ? ["diff", ...options, baseRevision, "--", ...pathspecs]
+    : ["diff", "--cached", ...options, "--", ...pathspecs];
 }
 
 function parseGitStatus(output: Buffer, policy: GitUntrackedPolicy): GitStatusSummary {
@@ -497,91 +496,17 @@ function nulFields(output: Buffer): string[] {
   return output.subarray(0, -1).toString("utf8").split("\0");
 }
 
-async function executeGit(
-  binary: string,
-  repositoryRoot: string,
-  args: readonly string[],
-  outputLimit: number,
-  allowedExitCodes: readonly number[]
-): Promise<GitCommandResult> {
-  const result = await spawnAndCapture(binary, [
-    "-c", "core.fsmonitor=false",
-    "-c", "core.hooksPath=/dev/null",
-    "-c", "diff.external=",
-    "-C", repositoryRoot,
-    ...args
-  ], safeGitEnvironment(repositoryRoot), outputLimit);
-  if (!allowedExitCodes.includes(result.code)) {
-    const detail = redactEvidenceText(result.stderr.toString("utf8").trim()).slice(0, 1024);
-    throw new Error(`git ${args[0] ?? "command"} failed with exit ${result.code}${detail ? `: ${detail}` : ""}`);
-  }
-  return result;
-}
-
-function spawnAndCapture(
-  binary: string,
-  args: readonly string[],
-  env: NodeJS.ProcessEnv,
-  outputLimit: number
-): Promise<GitCommandResult> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(binary, [...args], { env, stdio: ["ignore", "pipe", "pipe"] });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let bytes = 0;
-    let overflow = false;
-    const capture = (target: Buffer[]) => (chunk: Buffer | string) => {
-      const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      bytes += value.byteLength;
-      if (bytes > outputLimit) {
-        overflow = true;
-        child.kill("SIGKILL");
-        return;
-      }
-      target.push(value);
-    };
-    child.stdout.on("data", capture(stdout));
-    child.stderr.on("data", capture(stderr));
-    child.once("error", rejectPromise);
-    child.once("close", (code) => {
-      if (overflow) return rejectPromise(new Error(`Git output exceeded ${outputLimit} bytes`));
-      if (code === null) return rejectPromise(new Error("Git process ended without an exit code"));
-      resolvePromise({ code, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) });
-    });
-  });
-}
-
-function safeGitEnvironment(repositoryRoot: string): NodeJS.ProcessEnv {
-  const environment: NodeJS.ProcessEnv = {
-    GIT_CEILING_DIRECTORIES: dirname(repositoryRoot),
-    GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_LITERAL_PATHSPECS: "1",
-    GIT_OPTIONAL_LOCKS: "0",
-    GIT_PAGER: "cat",
-    GIT_TERMINAL_PROMPT: "0",
-    HOME: repositoryRoot,
-    LANG: "C",
-    LC_ALL: "C",
-    NO_COLOR: "1",
-    PATH: process.env.PATH ?? ""
-  };
-  if (process.platform === "win32") {
-    environment.ComSpec = process.env.ComSpec;
-    environment.SystemRoot = process.env.SystemRoot;
-  }
-  return environment;
-}
-
 function gitSnapshotSummary(
   headRevision: string | null,
   headRef: string | null,
   dirty: boolean,
-  baseRevision: string | null
+  baseRevision: string | null,
+  scoped: boolean
 ): string {
   const head = headRevision ? headRevision.slice(0, 12) : `unborn ${headRef ?? "HEAD"}`;
   const revision = headRevision && baseRevision && headRevision !== baseRevision ? "; revision differs from base" : "";
-  return `Git snapshot collected at ${head}; working tree ${dirty ? "dirty" : "clean"}${revision}`;
+  return `Git ${scoped ? "selected-path " : ""}snapshot collected at ${head}; ` +
+    `working tree ${dirty ? "dirty" : "clean"}${revision}`;
 }
 
 function cleanOutput(output: Buffer, label: string): string {
@@ -602,16 +527,26 @@ function normalizedTimestamp(value: string, label: string): string {
   return normalized;
 }
 
-function boundedPositiveInteger(value: number | undefined, fallback: number, maximum: number): number {
-  if (value === undefined) return fallback;
-  if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) {
-    throw new Error(`collector byte limit must be between 1 and ${maximum}`);
-  }
-  return value;
-}
-
 function sortedUnique(values: readonly string[]): string[] {
   return [...new Set(values)].sort(compareText);
+}
+
+function normalizedPathspecs(values: readonly string[] | undefined): string[] {
+  if (!values) return [];
+  const paths = values.map((value) => {
+    if (typeof value !== "string" || value.length === 0 || value.length > 4096 || value.includes("\0")) {
+      throw new Error("Git pathspec must be a non-empty path up to 4096 characters");
+    }
+    if (isAbsolute(value) || value.includes("\\")) throw new Error("Git pathspec must be a repository-relative POSIX path");
+    const segments = value.split("/");
+    if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+      throw new Error("Git pathspec cannot contain empty, dot, or parent segments");
+    }
+    return value;
+  });
+  const unique = sortedUnique(paths);
+  if (unique.length !== paths.length) throw new Error("Git pathspecs must be unique");
+  return unique;
 }
 
 function compareText(left: string, right: string): number {

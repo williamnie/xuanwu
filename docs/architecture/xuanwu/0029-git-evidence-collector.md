@@ -26,6 +26,7 @@ P04.03 新增 provider-neutral 的只读 collector。调用方显式提供项目
 - `changed_file_details_json`：manifest v2 的逐文件 path、tracked numstat、binary 标记和当前 worktree `lstat` size；untracked/非 diff path 的 numstat/binary 为 null，删除文件或 submodule 的 size 为 null，不伪造未知值；
 - `diff_changed_file_count/insertions/deletions/binary_file_count`；有 base 时 scope 为 `base_to_worktree_tracked`，unborn 时为 `index_to_unborn`；untracked 内容不虚构行数；
 - `snapshot_sha256`：canonical snapshot manifest 的指纹，用于比较两次 observation，不替代 Git object id 或 artifact availability。
+- `pathspec_scope/pathspec_count/pathspec_sha256`：默认 `repository`；P05.03 显式提供 literal selected pathspecs 时为 `selected_paths`，保存 scope 数量与 canonical digest，exact scope 继续由同一 audit intent 持有，不能把 scoped Evidence 冒充整仓 snapshot。
 
 因此 clean 分支切换仍能被证明：working tree 可保持 clean，但只要 HEAD 与给定 base 不同，revision 和 base diff 都会记录。unborn repository 也作为合法 Git 状态收集，不把缺失 HEAD 误判为命令失败。
 
