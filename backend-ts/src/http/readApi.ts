@@ -3,6 +3,7 @@ import { registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { registerPiRoutes } from "./piApi.ts";
 import { registerPiSupervisorRoutes } from "./piSupervisorApi.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
+import { registerRunRoutes } from "./runApi.ts";
 import { registerSessionRoutes } from "./sessionApi.ts";
 import { registerUsageRoutes } from "./usageApi.ts";
 import { registerWorkRoutes } from "./workApi.ts";
@@ -21,6 +22,7 @@ export const READ_API_ROUTE_REGISTRY = [
   { id: "core-read", register: registerCoreReadRoutes, responsibility: "domain" },
   { id: "pi-supervisor", register: registerPiSupervisorRoutes, responsibility: "domain" },
   { id: "pi", register: registerPiRoutes, responsibility: "domain" },
+  { id: "runs", register: registerRunRoutes, responsibility: "domain" },
   { id: "sessions", register: registerSessionRoutes, responsibility: "domain" },
   { id: "work", register: registerWorkRoutes, responsibility: "domain" },
   { id: "frontend-compat", register: registerFrontendCompatRoutes, responsibility: "legacy-compatibility" },

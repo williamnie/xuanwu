@@ -4,6 +4,7 @@ import { FRONTEND_COMPATIBILITY_POLICY, registerFrontendCompatRoutes } from "./f
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
+import { registerRunRoutes, RUN_HTTP_COMPATIBILITY_POLICY } from "./runApi.ts";
 import type { Router } from "./router.ts";
 import { registerWorkRoutes } from "./workApi.ts";
 
@@ -29,6 +30,10 @@ describe("read API route contracts", () => {
             "responsibility": "domain",
           },
           {
+            "id": "runs",
+            "responsibility": "domain",
+          },
+          {
             "id": "sessions",
             "responsibility": "domain",
           },
@@ -46,6 +51,21 @@ describe("read API route contracts", () => {
           },
         ]
       `);
+  });
+
+  test("locks Run method, path, and authority contracts", () => {
+    expect(captureRoutes(registerRunRoutes)).toEqual([
+      "GET /api/runs",
+      "GET /api/runs/:id",
+      "POST /api/runs/:id/actions/:action"
+    ]);
+    expect(RUN_HTTP_COMPATIBILITY_POLICY).toMatchObject({
+      attempt_authority: "run_attempts-child-facts",
+      dual_write: "none",
+      read_authority: "issue_runs",
+      session_authority: "agent_sessions-observation-only",
+      write_authority: "domain-run-command-service-over-issue_runs"
+    });
   });
 
   test("locks core domain method and path contracts", () => {
