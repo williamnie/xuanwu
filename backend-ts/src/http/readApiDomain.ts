@@ -1,5 +1,5 @@
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { deleteIssue, enqueueIssue, retryIssue, type IssueActionOptions } from "../db/repositories/issueActions.ts";
+import { deleteIssue, enqueueIssue, type IssueActionOptions } from "../db/repositories/issueActions.ts";
 import {
   createIssueComment,
   listIssueEvents,
@@ -20,7 +20,7 @@ import {
   ProjectNotFoundError,
   updateProject
 } from "../db/repositories/projects.ts";
-import { cancelIssueWithInterrupt } from "../runner/interrupt.ts";
+import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/interrupt.ts";
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -61,7 +61,7 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       events: (id: number, options: ListIssueEventsOptions) => listIssueEvents(context.database, id, options),
       list: (filter: IssueListFilter) => publicIssues(context, listIssues(context.database, filter)),
       read: (id: number) => readIssue(context, id),
-      retry: (id: number, options: IssueActionOptions) => actionAndKickLoop(context, retryIssue, id, options),
+      retry: (id: number, options: IssueActionOptions) => retryIssueAndKickLoop(context, id, options),
       runs: (id: number) => publicIssueRuns(listIssueRuns(context.database, id)),
       update: (id: number, body: Record<string, unknown>) => updateIssueAndKickLoop(context, id, body),
       verify: (id: number, body: Record<string, unknown>) => reviewIssueVerificationAndKickLoop(context, id, body)
@@ -132,6 +132,21 @@ async function cancelIssue(context: ReadApiContext, id: number): Promise<Issue> 
     providers: context.providers
   });
   kickAutoProject(context, issue.project_id);
+  return issue;
+}
+
+async function retryIssueAndKickLoop(
+  context: ReadApiContext,
+  id: number,
+  options: IssueActionOptions
+): Promise<Issue> {
+  const issue = await retryIssueWithInterrupt(context.database, id, options, {
+    bus: context.bus,
+    interruptTimeoutMs: context.interruptTimeoutMs,
+    providers: context.providers
+  });
+  publishIssueStatusChange(context, issue, { status: issue.status });
+  if (isQueuedIssue(issue)) kickAutoProject(context, issue.project_id);
   return issue;
 }
 

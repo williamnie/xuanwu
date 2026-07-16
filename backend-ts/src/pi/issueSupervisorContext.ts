@@ -56,8 +56,9 @@ export function buildIssueSupervisorRecoveryContext(
   const latestRun = runs.at(-1) ?? null;
   const session = resolveSession(db, issue, latestRun);
   const events = listIssueEvents(db, issue.id);
+  const currentRunEvents = eventsForLatestRun(events, latestRun?.started_at ?? "");
   const recentEvents = events.slice(-recentLimit(options)).map(summarizeIssueEvent);
-  const providerError = latestProviderError(events, now);
+  const providerError = latestProviderError(currentRunEvents, now);
   const policy = readProjectPiPolicy(db, issue.project_id);
   const supervisorEvents = listIssueSupervisorEvents(db, { issueId: issue.id });
   const projectSupervisorEvents = listIssueSupervisorEvents(db, { projectId: issue.project_id });
@@ -75,7 +76,7 @@ export function buildIssueSupervisorRecoveryContext(
   );
   return {
     candidates: candidates({
-      events,
+      events: currentRunEvents,
       history,
       latestRun,
       now,
@@ -99,6 +100,15 @@ export function buildIssueSupervisorRecoveryContext(
     session: sessionContext({ session, latestRun, now, staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS }),
     workspace_snapshot: workspaceSnapshot(project.cwd, recentEvents)
   };
+}
+
+function eventsForLatestRun<T extends { created_at: string }>(events: T[], startedAt: string): T[] {
+  const startedMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedMs)) return events;
+  return events.filter((event) => {
+    const eventMs = Date.parse(event.created_at);
+    return Number.isFinite(eventMs) && eventMs >= startedMs;
+  });
 }
 
 function recentLimit(options: IssueSupervisorContextOptions): number {

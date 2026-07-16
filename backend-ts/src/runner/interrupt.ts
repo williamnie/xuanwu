@@ -1,4 +1,16 @@
-import { cancelIssue } from "../db/repositories/issueActions.ts";
+import {
+  cancelIssue,
+  forceRetryIssue,
+  retryIssue,
+  type IssueActionOptions
+} from "../db/repositories/issueActions.ts";
+import {
+  completeRunInterrupt,
+  failRunInterrupt,
+  prepareRunInterrupt,
+  readRunRevision,
+  type PreparedProviderMutation
+} from "../domain/run/service.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue } from "../db/repositories/issues.ts";
@@ -20,6 +32,7 @@ export type SessionInterruptResult = {
 
 const DEFAULT_INTERRUPT_TIMEOUT_MS = 2000;
 const ISSUE_CANCEL_REASON = "issue_cancel";
+const ISSUE_RETRY_REASON = "issue_retry";
 const SESSION_INTERRUPT_REASON = "session_interrupt";
 
 export async function cancelIssueWithInterrupt(
@@ -34,6 +47,22 @@ export async function cancelIssueWithInterrupt(
   return cancelIssue(db, issueID, ISSUE_CANCEL_REASON);
 }
 
+export async function retryIssueWithInterrupt(
+  db: RunnerDatabase,
+  issueID: number,
+  options: IssueActionOptions = {},
+  runtime: InterruptRuntime = {}
+): Promise<Issue> {
+  const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
+  if (!isOpenRunningIssue(issue)) return retryIssue(db, issueID, options);
+  if (!shouldInterruptIssue(issue)) {
+    throw new Error("Issue 正在启动 provider session，请稍后再重试");
+  }
+  const interrupted = await interruptLinkedIssue(db, issue, ISSUE_RETRY_REASON, runtime);
+  if (!interrupted) throw new Error("旧 Session 中断失败，Issue 未重新排队");
+  return forceRetryIssue(db, issueID, options);
+}
+
 export async function interruptSession(
   db: RunnerDatabase,
   rawSessionID: string,
@@ -42,20 +71,23 @@ export async function interruptSession(
   const session = sessionRef(rawSessionID, latestTurnID(db, rawSessionID));
   const linked = linkedRunningIssue(db, session.sessionId);
   if (linked) {
-    await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, runtime);
-    return { interrupted: true };
+    return { interrupted: await interruptLinkedIssue(db, linked, SESSION_INTERRUPT_REASON, runtime) };
   }
   if (!session.turnId) return { interrupted: false };
-  await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);
-  return { interrupted: true };
+  const error = await interruptProviderTurn(db, 0, session, SESSION_INTERRUPT_REASON, runtime);
+  return { interrupted: !error };
 }
 
 function shouldInterruptIssue(issue: Issue): boolean {
+  if (!isOpenRunningIssue(issue)) return false;
   const run = issue.latest_run;
-  if (issue.status !== "in_progress") return false;
-  if (!run || run.ended_at !== "") return false;
+  if (!run) return false;
   return (run.provider_session_id !== "" && run.provider_turn_id !== "") ||
     (issue.codex_thread_id !== "" && issue.codex_turn_id !== "");
+}
+
+function isOpenRunningIssue(issue: Issue): boolean {
+  return issue.status === "in_progress" && Boolean(issue.latest_run && issue.latest_run.ended_at === "");
 }
 
 async function interruptLinkedIssue(
@@ -63,11 +95,77 @@ async function interruptLinkedIssue(
   issue: Issue,
   reason: string,
   runtime: InterruptRuntime
-): Promise<void> {
+): Promise<boolean> {
   const session = issueSessionRef(issue);
+  const lifecycle = prepareLinkedRunInterrupt(db, issue, session, reason);
+  if (!lifecycle.should_invoke) return lifecycle.completed;
   recordInterruptEvent(db, issue.id, "issue.interrupt_requested", session, reason, runtime.bus);
-  await interruptProviderTurn(db, issue.id, session, reason, runtime);
+  const error = await interruptProviderTurn(db, issue.id, session, reason, runtime);
+  if (error) {
+    failRunInterrupt(db, lifecycleEventID(lifecycle, reason), error);
+    return false;
+  }
+  completeRunInterrupt(db, lifecycleEventID(lifecycle, reason));
   recordInterruptEvent(db, issue.id, "issue.interrupted", session, reason, runtime.bus);
+  return true;
+}
+
+function prepareLinkedRunInterrupt(
+  db: RunnerDatabase,
+  issue: Issue,
+  session: SessionRef,
+  reason: string
+): PreparedProviderMutation {
+  const run = issue.latest_run;
+  if (!run) throw new Error("Issue Run 不存在，无法中断");
+  const attempt = db.sqlite.query<{
+    attempt_id: string;
+    provider: string;
+    provider_invocation_ref: string;
+    provider_session_id: string;
+    provider_turn_id: string;
+    revision: number;
+  }, [string]>(`
+    select attempt_id, revision, provider, provider_invocation_ref,
+      provider_session_id, provider_turn_id
+    from run_attempts where issue_run_id=? order by sequence desc limit 1
+  `).get(run.id);
+  if (!attempt) throw new Error("Run Attempt 不存在，无法中断");
+  const runID = `xw:run:issue_runs:${run.id}` as const;
+  const eventID = interruptLifecycleEventID(attempt.attempt_id, reason);
+  return prepareRunInterrupt(db, {
+    attempt_id: attempt.attempt_id,
+    audit: {
+      actor: { id: "runner-interrupt", kind: "runner" },
+      correlation_id: `issue:${issue.id}:${eventID}`,
+      event_id: eventID,
+      gate: {
+        authority: "deterministic_policy",
+        decision: "allow",
+        policy_ref: "run-lifecycle:p03.04:interrupt"
+      },
+      occurred_at: issueTimestamp(),
+      reason
+    },
+    expected_attempt_revision: attempt.revision,
+    expected_revision: readRunRevision(db, runID),
+    issue_run_id: run.id,
+    provider_ref: {
+      invocation_ref: attempt.provider_invocation_ref || run.id,
+      provider: attempt.provider || session.provider,
+      session_ref: attempt.provider_session_id || session.sessionId,
+      turn_ref: attempt.provider_turn_id || session.turnId
+    },
+    run_id: runID
+  });
+}
+
+function lifecycleEventID(prepared: PreparedProviderMutation, reason: string): string {
+  return interruptLifecycleEventID(prepared.attempt_id, reason);
+}
+
+function interruptLifecycleEventID(attemptID: string, reason: string): string {
+  return `run-interrupt:${attemptID}:${reason}`;
 }
 
 function issueSessionRef(issue: Issue): SessionRef {
@@ -89,13 +187,18 @@ async function interruptProviderTurn(
   session: SessionRef,
   reason: string,
   runtime: InterruptRuntime
-): Promise<void> {
+): Promise<Error | null> {
   const provider = runtime.providers?.[session.provider];
-  if (!provider?.interrupt) return;
+  if (!provider?.interrupt) {
+    const error = new Error(`provider "${session.provider}" interrupt unavailable`);
+    if (issueID > 0) recordInterruptFailed(db, issueID, session, reason, error.message, runtime.bus);
+    return error;
+  }
   const error = await interruptWithTimeout(provider, { session, reason }, runtime.interruptTimeoutMs);
   if (error && issueID > 0) {
     recordInterruptFailed(db, issueID, session, reason, safeError(error), runtime.bus);
   }
+  return error;
 }
 
 async function interruptWithTimeout(

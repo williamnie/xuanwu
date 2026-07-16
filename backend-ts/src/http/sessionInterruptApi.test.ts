@@ -80,6 +80,35 @@ describe("Bun session interrupt API", () => {
       database.close();
     }
   });
+
+  test("retry endpoint interrupts an issue-linked turn before requeueing it", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new InterruptCaptureProvider();
+    try {
+      insertProject(database, "demo");
+      const issueID = insertIssue(database, "demo", "in_progress", "thread-linked", "turn-linked");
+      insertOpenRun(database, issueID);
+
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/issues/${issueID}/retry`, { method: "POST" }));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: issueID, status: "todo" });
+      expect(provider.interrupts).toEqual([{
+        session: { provider: "codex", sessionId: "thread-linked", turnId: "turn-linked" },
+        reason: "issue_retry"
+      }]);
+      expect(issueStatus(database, issueID)).toBe("todo");
+      expect(latestRun(database, issueID)).toMatchObject({
+        status: "cancelled",
+        exit_reason: `superseded_by:xw:run:issue_runs:issue-${issueID}-attempt-2`
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 class InterruptCaptureProvider implements ExecutorProvider {

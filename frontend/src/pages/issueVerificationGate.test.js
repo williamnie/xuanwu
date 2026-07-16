@@ -39,6 +39,13 @@ test('triage to todo avoids native confirm gates', () => {
 
 test('dragging to in progress starts runner execution instead of raw status patch', () => {
   assert.match(issuesPage, /moveIssueAfterDrop/);
-  assert.match(issuesPage, /await moveIssueAfterDrop\(issueId,\s*targetStatus\)/);
+  assert.match(issuesPage, /await moveIssueAfterDrop\(issueId,\s*currentStatus,\s*targetStatus\)/);
   assert.match(issuesPage, /targetStatus === 'in_progress'[\s\S]*workApi\.enqueueIssue\(issueId\)/);
+});
+
+test('dragging a running issue back to todo uses interrupt-aware retry', () => {
+  assert.match(
+    issuesPage,
+    /currentStatus === 'in_progress' && targetStatus === 'todo'[\s\S]*workApi\.retryIssue\(issueId\)/,
+  );
 });

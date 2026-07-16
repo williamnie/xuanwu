@@ -65,6 +65,23 @@ describe("Bun issue patch API", () => {
     }
   });
 
+  test("rejects raw in progress to todo patches so callers cannot orphan a running session", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo", "in_progress");
+      insertOpenRun(database, issueId);
+
+      const response = await patchIssue(database, issueId, { status: "todo" });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: "运行中的 Issue 请使用 retry 操作，避免重复创建 Session" });
+      expect(latestRun(database, issueId)).toMatchObject({ status: "in_progress", ended_at: "" });
+    } finally {
+      database.close();
+    }
+  });
+
   test("moves a triage issue to an existing project", async () => {
     const database = await openFixtureDatabase();
     try {

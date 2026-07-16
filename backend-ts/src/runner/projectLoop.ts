@@ -1,6 +1,6 @@
 import { claimNextIssue } from "../db/repositories/issueQueue.ts";
 import { getProject } from "../db/repositories/projects.ts";
-import { getIssue, type Issue } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -42,6 +42,7 @@ async function runClaimedIssue(
   project: Project,
   issue: Issue
 ): Promise<ProviderRunResult> {
+  const claimedRunID = openIssueRunID(input.database, issue.id);
   const selection = resolveExecutorSelection(input.database, project, issue);
   const provider = selectedProvider(project, selection, input.providers);
   const prompt = buildIssuePrompt(project, issue);
@@ -67,7 +68,7 @@ async function runClaimedIssue(
       selectionReason: selection.selection_reason
     });
   } catch (error) {
-    if (issueAlreadyClosed(input.database, issue.id)) return { runId: "interrupted" };
+    if (issueExecutionNoLongerCurrent(input.database, issue.id, claimedRunID)) return { runId: "interrupted" };
     if (isProviderInfraTransientFailure(error)) {
       deferIssueToPiAfterProviderFailure(input.database, issue.id, error, provider.id);
       const deferred = getIssue(input.database, issue.id);
@@ -112,9 +113,15 @@ function selectedProvider(
   return projectProvider(project, providers);
 }
 
-function issueAlreadyClosed(db: RunnerDatabase, issueID: number): boolean {
+function issueExecutionNoLongerCurrent(db: RunnerDatabase, issueID: number, runID: string): boolean {
   const issue = getIssue(db, issueID);
-  return issue ? CLOSED_ISSUE_STATUSES.has(issue.status) : false;
+  if (!issue || CLOSED_ISSUE_STATUSES.has(issue.status)) return true;
+  const run = listIssueRuns(db, issueID).find((item) => item.id === runID);
+  return !run || run.ended_at !== "";
+}
+
+function openIssueRunID(db: RunnerDatabase, issueID: number): string {
+  return listIssueRuns(db, issueID).filter((run) => run.ended_at === "").at(-1)?.id ?? "";
 }
 
 const CLOSED_ISSUE_STATUSES = new Set(["done", "failed", "cancelled", "pending_verification"]);

@@ -76,7 +76,7 @@ async function actionResponse(
   const body = await parseOptionalObjectBody(request);
   const id = issueID(request);
   const options = actionOptions(body);
-  return writeResponse(() => handlers.issues[action](id, options));
+  return asyncWriteResponse(async () => handlers.issues[action](id, options));
 }
 
 function readResponse(read: () => unknown): Response {

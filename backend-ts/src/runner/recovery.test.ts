@@ -93,7 +93,9 @@ describe("Bun in-progress issue recovery", () => {
         ended_at: ""
       }]);
       expect(listEventTypes(db)).toEqual([
+        "run.lifecycle.intent.v1",
         "issue.recovery_started",
+        "run.lifecycle.outcome.v1",
         "issue.recovery_turn_started"
       ]);
     } finally {
@@ -171,7 +173,9 @@ describe("Bun in-progress issue recovery", () => {
         error: "Claude Code run timed out after 10000ms"
       });
       expect(listEventTypes(db)).toEqual([
+        "run.lifecycle.intent.v1",
         "issue.recovery_started",
+        "run.lifecycle.outcome.v1",
         "issue.provider_deferred",
         "issue.recovery_deferred"
       ]);
@@ -219,6 +223,60 @@ describe("Bun in-progress issue recovery", () => {
       });
       expect(listEventTypes(db)).toEqual([
         "issue.provider_deferred",
+        "issue.status_changed",
+        "issue.recovery_requeued"
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("requeues a startup failure instead of resuming the previous attempt compatibility session", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, { id: "demo", provider: "codex" });
+      const issueId = insertIssue(db, {
+        codexThreadId: "thread-attempt-1",
+        projectId: "demo",
+        status: "in_progress",
+        title: "retry startup timeout"
+      });
+      db.sqlite.run(
+        `insert into issue_runs
+          (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id,
+           codex_thread_id, codex_turn_id, started_at, ended_at, exit_reason)
+         values (?, ?, 1, 'failed', 'codex', 'thread-attempt-1', 'turn-attempt-1',
+           'thread-attempt-1', 'turn-attempt-1', ?, ?, 'failed')`,
+        [`issue-${issueId}-attempt-1`, issueId, "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"]
+      );
+      db.sqlite.run(
+        `insert into issue_runs
+          (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
+         values (?, ?, 2, 'in_progress', 'codex', '', '', ?, '')`,
+        [`issue-${issueId}-attempt-2`, issueId, "2026-01-01T00:02:00Z"]
+      );
+      db.sqlite.run("update issues set error=? where id=?", [
+        "codex thread/start failed: codex app-server request timed out after 90000ms: thread/start",
+        issueId
+      ]);
+
+      const result = await recoverInProgressIssues({ database: db, providers: {} });
+
+      expect(result).toEqual({ deferred: 0, failed: 0, recovered: 0, requeued: 1 });
+      expect(getIssue(db, issueId)).toMatchObject({
+        status: "todo",
+        error: "",
+        codex_thread_id: "",
+        codex_turn_id: ""
+      });
+      expect(listIssueRuns(db, issueId).at(-1)).toMatchObject({
+        attempt: 2,
+        status: "todo",
+        provider_session_id: "",
+        provider_turn_id: "",
+        exit_reason: "status_changed"
+      });
+      expect(listEventTypes(db)).toEqual([
         "issue.status_changed",
         "issue.recovery_requeued"
       ]);

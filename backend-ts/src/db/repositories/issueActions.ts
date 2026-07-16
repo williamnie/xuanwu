@@ -1,6 +1,12 @@
 import type { RunnerDatabase } from "../database.ts";
+import {
+  pendingNewRunRequest,
+  readRunRevision,
+  requestNewRun,
+  type NewRunCommand
+} from "../../domain/run/service.ts";
 import { issueTimestamp } from "./issueCreate.ts";
-import { getIssue, type Issue } from "./issues.ts";
+import { getIssue, listIssueRuns, type Issue, type IssueRun } from "./issues.ts";
 import { syncPiRunGroupsForIssueStatus } from "./pi/runGroups.ts";
 import { getProject, ProjectNotFoundError } from "./projects.ts";
 
@@ -19,26 +25,29 @@ export function enqueueIssue(db: RunnerDatabase, id: number, options: IssueActio
 export function retryIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
   const issue = mustGetRunnableIssue(db, id);
   if (isIssueActivelyRunning(db, issue)) return issue;
-  return queueIssue(db, issue, options);
+  return requestIssueRun(db, issue, options, "retry");
 }
 
 export function forceRetryIssue(db: RunnerDatabase, id: number, options: IssueActionOptions = {}): Issue {
-  return queueIssue(db, mustGetRunnableIssue(db, id), options);
+  const issue = mustGetRunnableIssue(db, id);
+  return requestIssueRun(db, issue, options, isIssueActivelyRunning(db, issue) ? "supersede" : "retry");
 }
 
 export function requeueUnstartedIssueClaim(db: RunnerDatabase, id: number): Issue {
   const issue = mustGetRunnableIssue(db, id);
   if (!hasUnstartedOpenRun(db, issue.id)) return issue;
-  return queueIssue(db, issue, {});
+  return queueIssue(db, issue, {}, true);
 }
 
 export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_cancel"): Issue {
   const issue = mustGetIssue(db, id);
   const timestamp = issueTimestamp();
   const write = db.transaction((record: Issue) => {
+    const interruptedAttemptID = latestInterruptedAttemptID(db, record.id);
     db.sqlite.run(`update issues set status=?, error='', auto_retry_next_at='',
       auto_retry_reason='', updated_at=? where id=?`, [STATUS_CANCELLED, timestamp, record.id]);
     closeOpenIssueRun(db, { ...record, status: STATUS_CANCELLED }, STATUS_CANCELLED, reason, timestamp);
+    restoreInterruptedAttempt(db, interruptedAttemptID, reason, timestamp);
     recordStatusEvent(db, record.id, { status: STATUS_CANCELLED, reason }, timestamp);
     syncPiRunGroupsForIssueStatus(db, {
       completedAt: timestamp,
@@ -49,6 +58,32 @@ export function cancelIssue(db: RunnerDatabase, id: number, reason = "issue_canc
   });
   write(issue);
   return mustGetIssue(db, issue.id);
+}
+
+function latestInterruptedAttemptID(db: RunnerDatabase, issueID: number): string {
+  return db.sqlite.query<{ attempt_id: string }, [number]>(`
+    select attempt.attempt_id from run_attempts attempt
+    join issue_runs run on run.id=attempt.issue_run_id
+    where run.issue_id=? and run.ended_at='' and attempt.status='interrupted'
+    order by run.attempt desc, attempt.sequence desc limit 1
+  `).get(issueID)?.attempt_id ?? "";
+}
+
+function restoreInterruptedAttempt(
+  db: RunnerDatabase,
+  attemptID: string,
+  reason: string,
+  timestamp: string
+): void {
+  if (attemptID === "") return;
+  db.sqlite.run(`update run_attempts set status='interrupted', ended_at=?,
+    terminal_reason=?, terminal_source_ref=?, updated_at=? where attempt_id=?`, [
+    timestamp,
+    "provider turn interrupted before Run cancellation",
+    `issue-action:${reason}`,
+    timestamp,
+    attemptID
+  ]);
 }
 
 export function deleteIssue(db: RunnerDatabase, id: number): void {
@@ -79,16 +114,77 @@ function isIssueActivelyRunning(db: RunnerDatabase, issue: Issue): boolean {
   return issue.status === STATUS_IN_PROGRESS && hasOpenIssueRun(db, issue.id);
 }
 
-function queueIssue(db: RunnerDatabase, issue: Issue, options: IssueActionOptions): Issue {
+function requestIssueRun(
+  db: RunnerDatabase,
+  issue: Issue,
+  options: IssueActionOptions,
+  operation: NewRunCommand["operation"]
+): Issue {
+  if (pendingNewRunRequest(db, issue.id)) return mustGetIssue(db, issue.id);
+  const target = listIssueRuns(db, issue.id).at(-1);
+  if (!target) return queueIssue(db, issue, options);
+  const runID = canonicalRunID(target);
+  const revision = readRunRevision(db, runID);
+  const result = requestNewRun(db, {
+    audit: {
+      actor: { id: "issue-actions", kind: "runner" },
+      correlation_id: `issue:${issue.id}:run:${target.id}:${operation}:${revision}`,
+      event_id: lifecycleRequestID(issue, target, operation, revision, options),
+      gate: {
+        authority: "deterministic_policy",
+        decision: "allow",
+        policy_ref: "run-lifecycle:p03.04:issue-action"
+      },
+      occurred_at: issueTimestamp(),
+      reason: `${operation} issue Run`
+    },
+    expected_revision: revision,
+    issue_run_id: target.id,
+    operation,
+    run_id: runID,
+    service_tier: options.serviceTier,
+    service_tier_provided: options.serviceTierProvided
+  });
+  if (!result.applied) throw new Error(result.violations.join("; "));
+  return mustGetIssue(db, issue.id);
+}
+
+function canonicalRunID(run: IssueRun): `xw:run:issue_runs:${string}` {
+  return `xw:run:issue_runs:${run.id}`;
+}
+
+function lifecycleRequestID(
+  issue: Issue,
+  run: IssueRun,
+  operation: NewRunCommand["operation"],
+  revision: number,
+  options: IssueActionOptions
+): string {
+  const tier = options.serviceTierProvided === true ? cleanString(options.serviceTier) : "unchanged";
+  return `run-request:${operation}:${issue.id}:${run.id}:${revision}:${tier}`;
+}
+
+function queueIssue(
+  db: RunnerDatabase,
+  issue: Issue,
+  options: IssueActionOptions,
+  clearCompatibilitySession = false
+): Issue {
   const timestamp = issueTimestamp();
   const serviceTier = cleanString(options.serviceTier);
   const hasServiceTier = options.serviceTierProvided === true;
   const write = db.transaction((record: Issue) => {
-    db.sqlite.run(`update issues set status=?, error='', codex_turn_id='',
+    db.sqlite.run(`update issues set status=?, error='',
+      codex_thread_id=case when ?=1 then '' else codex_thread_id end, codex_turn_id='',
       service_tier=case when ?=1 then ? else service_tier end,
       auto_retry_next_at='', auto_retry_reason='', updated_at=? where id=?`,
-      [STATUS_TODO, hasServiceTier ? 1 : 0, serviceTier, timestamp, record.id]);
-    closeOpenIssueRun(db, queuedIssue(record), STATUS_TODO, "status_changed", timestamp);
+      [STATUS_TODO, clearCompatibilitySession ? 1 : 0,
+        hasServiceTier ? 1 : 0, serviceTier, timestamp, record.id]);
+    const queued = queuedIssue(record);
+    closeOpenIssueRun(db, clearCompatibilitySession ? {
+      ...queued,
+      codex_thread_id: ""
+    } : queued, STATUS_TODO, "status_changed", timestamp);
     recordStatusEvent(db, record.id, statusEventPayload(STATUS_TODO, hasServiceTier, serviceTier), timestamp);
   });
   write(issue);

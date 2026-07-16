@@ -147,6 +147,9 @@ function validateIssuePatch(
     if (current.status !== "triage") throw new Error("只有 Triage 状态的 Issue 可以更换所属项目");
     if (issue.project_id === "" || !getProject(db, issue.project_id)) throw new ProjectNotFoundError();
   }
+  if (Object.hasOwn(patch, "status") && current.status === "in_progress" && issue.status === "todo") {
+    throw new Error("运行中的 Issue 请使用 retry 操作，避免重复创建 Session");
+  }
   if (!VALID_ISSUE_STATUSES.has(issue.status)) throw new Error("status 不合法");
   if (issue.title === "") throw new Error("issue 内容不能为空");
 }

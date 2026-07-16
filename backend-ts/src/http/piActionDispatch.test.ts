@@ -222,6 +222,7 @@ describe("PI action dispatcher supervisor actions", () => {
 
   test("issue.retry queues a stale issue and records supervisor result", async () => {
     const db = await fixtureDb();
+    const provider = new SupervisorProvider();
     try {
       insertProject(db, "demo");
       insertIssueRunSession(db, { issueID: 309, projectID: "demo", sessionID: "thread-309", turnID: "turn-old" });
@@ -240,10 +241,14 @@ describe("PI action dispatcher supervisor actions", () => {
         status: "approved"
       });
 
-      await dispatchPiAction({ database: db }, action);
+      await dispatchPiAction({ database: db, providers: { codex: provider } }, action);
 
       expect(getIssue(db, 309)).toMatchObject({ status: "todo", auto_retry_next_at: "" });
-      expect(listIssueRuns(db, 309).at(-1)).toMatchObject({ ended_at: expect.stringMatching(/Z$/), status: "todo" });
+      expect(listIssueRuns(db, 309).at(-1)).toMatchObject({
+        ended_at: expect.stringMatching(/Z$/),
+        exit_reason: "superseded_by:xw:run:issue_runs:issue-309-attempt-2",
+        status: "cancelled"
+      });
       expect(listIssueEvents(db, 309).map((event) => event.type)).toEqual(expect.arrayContaining([
         "issue.status_changed",
         "issue.supervisor_retry"
@@ -508,7 +513,7 @@ function insertIssueRunSession(db: RunnerDatabase, input: {
 
 class SupervisorProvider implements ExecutorProvider {
   readonly calls: Record<string, unknown>[] = [];
-  readonly capabilities = ["issue_execution", "resume_session"] as const;
+  readonly capabilities = ["issue_execution", "resume_session", "interrupt"] as const;
   readonly id = "codex" as const;
   readonly inputs: ProviderRunInput[] = [];
 
@@ -518,6 +523,14 @@ class SupervisorProvider implements ExecutorProvider {
       runId: `codex-run-${input.issueId}`,
       session: { provider: this.id, sessionId: `codex-session-${input.issueId}`, turnId: `codex-turn-${input.issueId}` }
     };
+  }
+
+  async interrupt(input: { reason: string; session: { sessionId: string; turnId?: string } }): Promise<void> {
+    this.calls.push({
+      reason: input.reason,
+      sessionId: input.session.sessionId,
+      turnId: input.session.turnId ?? ""
+    });
   }
 
   async sendSessionMessage(input: SessionMessageInput) {

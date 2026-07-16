@@ -91,6 +91,46 @@ describe("issue run repository", () => {
       db.close();
     }
   });
+
+  test("does not let a late closed attempt overwrite the current issue session", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+      const first = createIssueRun(db, issueId);
+      updateIssueRuntime(db, issueId, {
+        issue_run_id: first.id,
+        provider: "codex",
+        provider_session_id: "thread-1",
+        provider_turn_id: "turn-1"
+      });
+      closeRun(db, first.id);
+      const second = createIssueRun(db, issueId);
+      updateIssueRuntime(db, issueId, {
+        issue_run_id: second.id,
+        provider: "codex",
+        provider_session_id: "thread-2",
+        provider_turn_id: "turn-2"
+      });
+
+      updateIssueRuntime(db, issueId, {
+        issue_run_id: first.id,
+        provider: "codex",
+        provider_session_id: "thread-1-late",
+        provider_turn_id: "turn-1-late"
+      });
+
+      expect(allRuns(db, issueId)).toEqual([
+        expect.objectContaining({ attempt: 1, provider_session_id: "thread-1-late", provider_turn_id: "turn-1-late" }),
+        expect.objectContaining({ attempt: 2, provider_session_id: "thread-2", provider_turn_id: "turn-2" })
+      ]);
+      expect(db.sqlite.query<Record<string, unknown>, [number]>(
+        "select codex_thread_id, codex_turn_id from issues where id=?"
+      ).get(issueId)).toEqual({ codex_thread_id: "thread-2", codex_turn_id: "turn-2" });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function insertProject(db: RunnerDatabase, id: string): void {

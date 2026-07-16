@@ -192,7 +192,7 @@ export default function Issues({
         return;
       }
 
-      await moveIssueAfterDrop(issueId, targetStatus);
+      await moveIssueAfterDrop(issueId, currentStatus, targetStatus);
 
       // 成功后重新加载数据，保证即时同步
       refreshData(['issues']);
@@ -202,10 +202,15 @@ export default function Issues({
     }
   };
 
-  const moveIssueAfterDrop = async (issueId, targetStatus) => {
+  const moveIssueAfterDrop = async (issueId, currentStatus, targetStatus) => {
     if (targetStatus === 'in_progress') {
       await workApi.enqueueIssue(issueId);
       message.success(`Issue #${issueId} 已加入执行队列`);
+      return;
+    }
+    if (currentStatus === 'in_progress' && targetStatus === 'todo') {
+      await workApi.retryIssue(issueId);
+      message.success(`Issue #${issueId} 的旧 Session 已中断并重新排队`);
       return;
     }
     await workApi.updateIssue(issueId, { status: targetStatus });

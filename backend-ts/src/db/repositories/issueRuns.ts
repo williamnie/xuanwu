@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../database.ts";
+import { pendingRunCreation, recordRunMaterialized } from "../../domain/run/service.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 
@@ -17,9 +18,11 @@ type RuntimeTarget = { args: Array<number | string>; sql: string };
 
 export function createIssueRun(db: RunnerDatabase, issueID: number): IssueRun {
   const attempt = nextAttempt(db, issueID);
+  const requested = pendingRunCreation(db, issueID, attempt);
   const id = `issue-${issueID}-attempt-${attempt}`;
   db.sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, provider, started_at)
     values (?, ?, ?, ?, ?, ?)`, [id, issueID, attempt, "in_progress", "codex", issueTimestamp()]);
+  if (requested) recordRunMaterialized(db, requested, id);
   return mustFindIssueRun(db, issueID, id);
 }
 
@@ -34,10 +37,19 @@ export function updateIssueRuntime(db: RunnerDatabase, issueID: number, input: I
   const sessionID = cleanString(input.provider_session_id);
   const turnID = cleanString(input.provider_turn_id);
   if (sessionID === "" && turnID === "") return;
+  if (!isCurrentOpenRun(db, issueID, cleanString(input.issue_run_id))) return;
   db.sqlite.run(`update issues set
     codex_thread_id=case when ?<>'' then ? else codex_thread_id end,
     codex_turn_id=case when ?<>'' then ? else codex_turn_id end,
     updated_at=? where id=?`, [sessionID, sessionID, turnID, turnID, issueTimestamp(), issueID]);
+}
+
+function isCurrentOpenRun(db: RunnerDatabase, issueID: number, targetRunID: string): boolean {
+  const row = db.sqlite.query<{ id: string }, [number]>(
+    "select id from issue_runs where issue_id=? and ended_at='' order by attempt desc limit 1"
+  ).get(issueID);
+  if (!row) return false;
+  return targetRunID === "" || row.id === targetRunID;
 }
 
 export function updateOpenIssueRunRuntime(db: RunnerDatabase, issueID: number, input: IssueRunRuntimeInput): void {

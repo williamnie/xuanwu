@@ -365,6 +365,47 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("ignores provider failures from a closed attempt while a new attempt is starting", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-new-attempt-"));
+      insertIssue(db, { id: 411, projectID: "runner", title: "Fresh attempt", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, {
+        issueID: 411,
+        id: "issue-411-attempt-1",
+        attempt: 1,
+        status: "failed",
+        endedAt: "2026-06-10T07:52:00Z",
+        sessionID: "",
+        turnID: "",
+        startedAt: "2026-06-10T07:50:00Z"
+      });
+      insertEvent(db, { issueID: 411, type: "issue.provider_deferred", payload: {
+        error: "app-server request timed out after 10000ms: initialize",
+        provider: "codex",
+        reason: "provider_infra_transient"
+      }, createdAt: "2026-06-10T07:51:00Z" });
+      insertRun(db, {
+        issueID: 411,
+        id: "issue-411-attempt-2",
+        attempt: 2,
+        status: "in_progress",
+        endedAt: "",
+        sessionID: "",
+        turnID: "",
+        startedAt: "2026-06-10T07:59:30Z"
+      });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 411, { now: NOW });
+
+      expect(context.provider_error).toBeNull();
+      expect(context.candidates.map((item) => item.diagnosis_code)).not.toContain("provider_runtime_unavailable");
+      expect(context.latest_run).toMatchObject({ id: "issue-411-attempt-2", status: "in_progress" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps a single transient stream disconnect recoverable when session exists", async () => {
     const db = await fixtureDb();
     try {
@@ -502,18 +543,21 @@ function insertIssue(db: RunnerDatabase, input: {
 }
 
 function insertRun(db: RunnerDatabase, input: {
+  attempt?: number;
   endedAt: string;
   id: string;
   issueID: number;
   provider?: string;
   sessionID: string;
   status: string;
+  startedAt?: string;
   turnID: string;
 }): void {
   db.sqlite.run(`insert into issue_runs
     (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
-    values (?, ?, 1, ?, ?, ?, ?, '2026-06-10T01:50:00Z', ?)`,
-    [input.id, input.issueID, input.status, input.provider ?? "codex", input.sessionID, input.turnID, input.endedAt]);
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [input.id, input.issueID, input.attempt ?? 1, input.status, input.provider ?? "codex", input.sessionID,
+      input.turnID, input.startedAt ?? "2026-06-10T01:50:00Z", input.endedAt]);
 }
 
 function insertSession(db: RunnerDatabase, input: {

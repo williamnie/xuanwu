@@ -1,9 +1,15 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
-import { forceRetryIssue } from "../db/repositories/issueActions.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import {
+  completeRunAttemptStart,
+  failRunAttemptStart,
+  prepareRunAttempt,
+  readRunRevision,
+  type PreparedProviderMutation
+} from "../domain/run/service.ts";
 import { createIssueSupervisorEvent, type PiAction } from "../db/repositories/pi.ts";
 import { updatePiRecoveryAttemptStatus } from "../db/repositories/pi/recoveryAttempts.ts";
 import {
@@ -19,6 +25,7 @@ import {
 } from "./piSupervisorResumeIdempotency.ts";
 import { prepareIssueRecoveryAttempt, issueRecoverySnapshot } from "./piSupervisorIssueRecoveryAttempts.ts";
 import { assertFreshSupervisorState } from "./piSupervisorPreconditions.ts";
+import { retryIssueWithInterrupt } from "../runner/interrupt.ts";
 
 export type SupervisorDispatchContext = {
   database: RunnerDatabase;
@@ -61,10 +68,40 @@ async function resumeSessionFollowup(
     recordSupervisorResult(context.database, action, payload, prepared.result);
     return prepared.result;
   }
-  const result = await provider.sendSessionMessage({ prompt, sessionId: sessionID });
+  const lifecycle = prepareSupervisorResumeAttempt(
+    context.database,
+    action,
+    payload,
+    prepared.attempt.id,
+    providerID,
+    sessionID
+  );
+  if (!lifecycle.should_invoke) {
+    const skipped = {
+      outcome: lifecycle.completed ? "already_started" : "attempt_executing",
+      provider_turn_id: "",
+      skipped: true
+    };
+    recordSupervisorResult(context.database, action, payload, skipped);
+    return skipped;
+  }
+  let result: SessionMessageResult;
+  try {
+    result = await provider.sendSessionMessage({ prompt, sessionId: sessionID });
+    const turnID = requiredText(result.turn_id, "provider turn id");
+    completeRunAttemptStart(context.database, resumeLifecycleEventID(action), {
+      invocation_ref: `${providerID}:${sessionID}:${turnID}`,
+      provider_session_id: cleanString(result.provider_session_id) || cleanString(result.sessionId) || sessionID,
+      provider_turn_id: turnID
+    });
+    persistFollowupRuntime(context.database, { action, issueID, providerID, result, sessionID });
+    markResumeFollowupAttemptStarted(context.database, prepared.attempt.id, turnID);
+  } catch (error) {
+    failRunAttemptStart(context.database, resumeLifecycleEventID(action), error);
+    updatePiRecoveryAttemptStatus(context.database, prepared.attempt.id, { error: safeError(error), status: "failed" });
+    throw error;
+  }
   const turnID = cleanString(result.turn_id);
-  persistFollowupRuntime(context.database, { action, issueID, providerID, result, sessionID });
-  markResumeFollowupAttemptStarted(context.database, prepared.attempt.id, turnID);
   recordIssueEvent(context.database, issueID, "issue.supervisor_resume_followup", {
     action_id: action.id,
     decision_id: cleanString(payload.decision_id),
@@ -76,11 +113,65 @@ async function resumeSessionFollowup(
   return result;
 }
 
-function retryIssueNow(
+function prepareSupervisorResumeAttempt(
+  db: RunnerDatabase,
+  action: PiAction,
+  payload: Record<string, unknown>,
+  recoveryAttemptID: string,
+  providerID: ExecutorProviderId,
+  sessionID: string
+): PreparedProviderMutation {
+  const issueRunID = requiredText(payload.expected_run_id, "expected_run_id");
+  const run = db.sqlite.query<{ provider: string; run_id: string }, [string]>(
+    "select provider, run_id from issue_runs where id=?"
+  ).get(issueRunID);
+  if (!run?.run_id.startsWith("xw:run:")) throw new Error(`Run ${issueRunID} 不存在`);
+  const attempt = db.sqlite.query<{
+    provider_session_id: string;
+    revision: number;
+    status: string | null;
+  }, [string]>(`
+    select revision, status, provider_session_id from run_attempts
+    where issue_run_id=? order by sequence desc limit 1
+  `).get(issueRunID);
+  if (!attempt) throw new Error(`Run ${issueRunID} 缺少 Attempt`);
+  const runID = run.run_id as `xw:run:${string}:${string}`;
+  return prepareRunAttempt(db, {
+    audit: {
+      actor: { id: action.id, kind: "guardian" },
+      correlation_id: cleanString(payload.decision_id) || action.guardian_decision_id || action.id,
+      event_id: resumeLifecycleEventID(action),
+      gate: {
+        authority: "deterministic_policy",
+        decision: "allow",
+        policy_ref: "run-lifecycle:p03.04:pi-resume-preconditions"
+      },
+      occurred_at: new Date().toISOString(),
+      reason: "PI supervisor resume follow-up"
+    },
+    expected_attempt_revision: attempt.revision,
+    expected_revision: readRunRevision(db, runID),
+    issue_run_id: issueRunID,
+    kind: "resume",
+    previous_attempt_terminal: {
+      reason: "previous provider turn completed before PI follow-up",
+      source_ref: `pi_recovery_attempts:${recoveryAttemptID}`,
+      status: "succeeded"
+    },
+    provider_ref: { provider: providerID, session_ref: sessionID },
+    run_id: runID
+  });
+}
+
+function resumeLifecycleEventID(action: PiAction): string {
+  return `run-resume:${action.id}`;
+}
+
+async function retryIssueNow(
   context: SupervisorDispatchContext,
   action: PiAction,
   payload: Record<string, unknown>
-): unknown {
+): Promise<unknown> {
   const issueID = positivePayloadID(payload, "issue_id");
   assertFreshSupervisorState(context.database, issueID, sessionProviderID(payload), "", payload, [
     "expected_issue_updated_at", "expected_run_id"
@@ -92,7 +183,7 @@ function retryIssueNow(
     status: "executing"
   });
   try {
-    const issue = forceRetryIssue(context.database, issueID);
+    const issue = await retryIssueWithInterrupt(context.database, issueID, {}, { providers: context.providers });
     updatePiRecoveryAttemptStatus(context.database, attempt.id, {
       after_snapshot_json: issueRecoverySnapshot(context.database, issueID, payload),
       progress_detected: 1,

@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { cancelIssueWithInterrupt } from "./interrupt.ts";
+import { getIssue } from "../db/repositories/issues.ts";
+import { runProjectLoopOnce } from "./projectLoop.ts";
+import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "./interrupt.ts";
 import type { ExecutorProvider, InterruptInput, ProviderRunInput } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
@@ -43,6 +45,7 @@ describe("Bun issue interrupt runtime", () => {
       expect(eventTypes).toContain("issue.interrupt_requested");
       expect(eventTypes).toContain("issue.interrupted");
       expect(latestRun(db, issueId)).toMatchObject({ status: "cancelled", exit_reason: "issue_cancel" });
+      expect(latestAttempt(db, issueId)).toMatchObject({ status: "interrupted" });
     } finally {
       db.close();
     }
@@ -71,6 +74,75 @@ describe("Bun issue interrupt runtime", () => {
       db.close();
     }
   });
+
+  test("retry interrupts the old turn before closing and requeueing its run", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new InterruptCaptureProvider();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "in_progress", "thread-retry", "turn-retry");
+      insertOpenRun(db, issueId);
+
+      const issue = await retryIssueWithInterrupt(db, issueId, {}, { providers: { codex: provider } });
+
+      expect(issue.status).toBe("todo");
+      expect(provider.interrupts).toEqual([{
+        session: { provider: "codex", sessionId: "thread-retry", turnId: "turn-retry" },
+        reason: "issue_retry"
+      }]);
+      expect(latestRun(db, issueId)).toMatchObject({
+        status: "cancelled",
+        exit_reason: `superseded_by:xw:run:issue_runs:issue-${issueId}-attempt-2`
+      });
+      expect(eventWithType(db, "issue.interrupted")?.payload).toContain("issue_retry");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retry leaves the running issue intact when the old turn cannot be interrupted", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new InterruptCaptureProvider({ reject: new Error("interrupt rejected") });
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "in_progress", "thread-reject", "turn-reject");
+      insertOpenRun(db, issueId);
+
+      await expect(retryIssueWithInterrupt(db, issueId, {}, { providers: { codex: provider } }))
+        .rejects.toThrow("旧 Session 中断失败");
+
+      expect(getIssue(db, issueId)).toMatchObject({ status: "in_progress" });
+      expect(latestRun(db, issueId)).toMatchObject({ status: "in_progress", ended_at: "" });
+      expect(eventWithType(db, "issue.interrupt_failed")?.payload).toContain("interrupt rejected");
+      expect(eventWithType(db, "issue.interrupted")).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("a late failure from the interrupted run cannot fail the newly queued attempt", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new RestartableExecutionProvider();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "todo", "", "");
+      const running = runProjectLoopOnce({ database: db, projectId: "demo", providers: { codex: provider } });
+      await waitFor(() => latestRun(db, issueId)?.provider_session_id === "thread-running");
+
+      const retried = await retryIssueWithInterrupt(db, issueId, {}, { providers: { codex: provider } });
+      await running;
+
+      expect(retried.status).toBe("todo");
+      expect(getIssue(db, issueId)).toMatchObject({ status: "todo", error: "" });
+      expect(latestRun(db, issueId)).toMatchObject({
+        status: "cancelled",
+        exit_reason: `superseded_by:xw:run:issue_runs:issue-${issueId}-attempt-2`,
+        error: ""
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 class InterruptCaptureProvider implements ExecutorProvider {
@@ -88,6 +160,29 @@ class InterruptCaptureProvider implements ExecutorProvider {
     this.interrupts.push(input);
     if (this.behavior.reject) throw this.behavior.reject;
     if (this.behavior.hang) return await new Promise(() => {});
+  }
+}
+
+class RestartableExecutionProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution", "interrupt"] as const;
+  private rejectRun?: (error: Error) => void;
+
+  async run(input: ProviderRunInput) {
+    input.onEvent?.({
+      provider: "codex",
+      type: "turn_started",
+      status: "inProgress",
+      session: { provider: "codex", sessionId: "thread-running", turnId: "turn-running" }
+    });
+    return await new Promise<never>((_resolve, reject) => {
+      this.rejectRun = reject;
+    });
+  }
+
+  async interrupt(_input: InterruptInput): Promise<void> {
+    const rejectRun = this.rejectRun;
+    setTimeout(() => rejectRun?.(new Error("old turn interrupted")), 0);
   }
 }
 
@@ -119,8 +214,17 @@ function insertOpenRun(db: RunnerDatabase, issueId: number): void {
 
 function latestRun(db: RunnerDatabase, issueId: number): Record<string, unknown> | null {
   return db.sqlite.query<Record<string, unknown>, [number]>(
-    "select status, ended_at, exit_reason from issue_runs where issue_id = ? order by attempt desc limit 1"
+    `select status, provider_session_id, provider_turn_id, ended_at, exit_reason, error
+     from issue_runs where issue_id = ? order by attempt desc limit 1`
   ).get(issueId) ?? null;
+}
+
+function latestAttempt(db: RunnerDatabase, issueId: number): Record<string, unknown> | null {
+  return db.sqlite.query<Record<string, unknown>, [number]>(`
+    select attempt.status, attempt.terminal_reason, attempt.terminal_source_ref
+    from run_attempts attempt join issue_runs run on run.id=attempt.issue_run_id
+    where run.issue_id=? order by run.attempt desc, attempt.sequence desc limit 1
+  `).get(issueId) ?? null;
 }
 
 function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }> {
@@ -131,4 +235,13 @@ function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }
 
 function eventWithType(db: RunnerDatabase, type: string): { payload: string; type: string } | undefined {
   return listEvents(db).find((event) => event.type === type);
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await Bun.sleep(10);
+  }
+  throw new Error("timed out waiting for condition");
 }
