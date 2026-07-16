@@ -130,7 +130,7 @@ describe("Feishu agent bridge /issue command", () => {
     database.close();
   });
 
-  test("does not run PI or reply twice when the same /issue message is replayed", async () => {
+  test("uses the mapped one-shot target once and does not reply twice when /issue is replayed", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
     const calls: string[] = [];
@@ -159,7 +159,7 @@ describe("Feishu agent bridge /issue command", () => {
     const replay = await bridge.handle(input);
 
     expect(replay).toEqual({ reason: "duplicate_reply", replied: false });
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
     expect(sent).toHaveLength(1);
     database.close();
   });

@@ -23,7 +23,13 @@ describe("Feishu project selection flow", () => {
     const database = await openFixtureDatabase();
     const sentCards: Record<string, unknown>[] = [];
     const sentTexts: string[] = [];
-    const calls: Array<{ conversationId: string; projectId: string; prompt: string; targetProjectId?: string }> = [];
+    const calls: Array<{
+      conversationId: string;
+      projectId: string;
+      prompt: string;
+      targetProjectId?: string;
+      targetProjectSource?: string;
+    }> = [];
     const config = configFixture();
     insertProject(database, "codex-issue-runner", "Codex Issue Runner");
     insertProject(database, "demo", "Demo Project");
@@ -31,8 +37,8 @@ describe("Feishu project selection flow", () => {
       clock: fixedClock(),
       config: () => config,
       database,
-      runConversation: async ({ conversationId, projectId, prompt, targetProjectId }) => {
-        calls.push({ conversationId, projectId, prompt, targetProjectId });
+      runConversation: async ({ conversationId, projectId, prompt, targetProjectId, targetProjectSource }) => {
+        calls.push({ conversationId, projectId, prompt, targetProjectId, targetProjectSource });
         return { conversationId, projectId, text: "runner continued" };
       },
       sender: {
@@ -74,7 +80,8 @@ describe("Feishu project selection flow", () => {
       conversationId: "feishu-chat-oc_group-20260613",
       projectId: "",
       prompt: "开始做吧",
-      targetProjectId: "demo"
+      targetProjectId: "demo",
+      targetProjectSource: "card_select"
     }]);
     expect(sentTexts).toEqual(["已选择 demo，我会用它处理刚才这句。", "runner continued"]);
     expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();

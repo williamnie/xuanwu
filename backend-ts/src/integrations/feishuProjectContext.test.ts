@@ -106,7 +106,7 @@ describe("Feishu PI project context resolver", () => {
     });
   });
 
-  test("does not treat Feishu channel mapping as IM project context", () => {
+  test("uses a current-source Feishu channel mapping as a one-shot project target", () => {
     const result = resolveFeishuProjectContext({
       mappings: [{ chatId: "oc_group", projectId: "demo" }],
       message: { chatId: "oc_group" },
@@ -115,11 +115,38 @@ describe("Feishu PI project context resolver", () => {
     });
 
     expect(result).toMatchObject({
-      confidence: "none",
+      confidence: "medium",
+      projectId: "demo",
+      reason: "source_mapping_project",
+      source: "mapping_default",
+      status: "resolved"
+    });
+  });
+
+  test("keeps source mappings scoped to the current chat or sender and reports conflicts", () => {
+    const missing = resolveFeishuProjectContext({
+      mappings: [{ chatId: "oc_group", projectId: "demo" }],
+      message: { chatId: "oc_other", senderOpenId: "ou_other" },
+      projects: PROJECTS,
+      text: "开始做吧"
+    });
+    const ambiguous = resolveFeishuProjectContext({
+      mappings: [
+        { chatId: "oc_group", projectId: "demo" },
+        { projectId: "codex-issue-runner", userId: "ou_user" }
+      ],
+      message: { chatId: "oc_group", senderOpenId: "ou_user" },
+      projects: PROJECTS,
+      text: "开始做吧"
+    });
+
+    expect(missing.status).toBe("missing");
+    expect(ambiguous).toMatchObject({
+      candidates: ["demo", "codex-issue-runner"],
       projectId: "",
-      reason: "no_project_context",
-      source: "none",
-      status: "missing"
+      reason: "ambiguous_source_mapping",
+      source: "mapping_default",
+      status: "ambiguous"
     });
   });
 
@@ -167,13 +194,15 @@ describe("Feishu PI project context resolver", () => {
         status: "resolved"
       });
       expect(resolveFeishuProjectContextFromDatabase(db, {
+        mappings: [{ chatId: "oc_group", projectId: "demo" }],
+        message: { chatId: "oc_group" },
         scopeKey: "feishu-chat-oc_group-20260613",
         text: "开始做吧"
       })).toMatchObject({
-        projectId: "",
-        reason: "no_project_context",
-        source: "none",
-        status: "missing"
+        projectId: "demo",
+        reason: "source_mapping_project",
+        source: "mapping_default",
+        status: "resolved"
       });
     } finally {
       db.close();

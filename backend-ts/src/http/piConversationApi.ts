@@ -38,6 +38,11 @@ import {
   type SupervisorIntentRoute
 } from "../pi/supervisorIntentRouter.ts";
 import {
+  recordSupervisorContextResolutionAudit,
+  resolveSupervisorContext,
+  type SupervisorContextResolution
+} from "../pi/supervisorContextResolver.ts";
+import {
   isReviewConversationIntent,
   reviewConversationAuthorization,
   reviewConversationSource
@@ -58,6 +63,7 @@ export type PiConversationPromptInput = {
   projectId?: string;
   prompt: string;
   targetProjectId?: string;
+  targetProjectSource?: string;
   title?: string;
 };
 
@@ -158,26 +164,40 @@ async function sendPiConversationMessage(
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
   const review = isReviewConversationIntent(intent);
   const source = review ? reviewConversationSource(titledConversation) : runnerChatSource(titledConversation);
+  const resolvedSource = source ?? (review ? "runner_review" : "runner_chat");
   const turnID = crypto.randomUUID();
   const intentRoute = routeSupervisorIntent({
     intentHint: intent,
     prompt,
-    source: source ?? (review ? "runner_review" : "runner_chat")
+    source: resolvedSource
+  });
+  if (targetProjectId !== "") optionalConversationProject(context.database, targetProjectId);
+  const supervisorContext = resolveSupervisorContext(context.database, {
+    conversationID: titledConversation.id,
+    conversationProjectID: titledConversation.project_id,
+    oneShotProjectID: targetProjectId,
+    oneShotSource: oneShotProjectSource(body.target_project_source ?? body.targetProjectSource, resolvedSource),
+    prompt,
+    source: resolvedSource
   });
   recordSupervisorIntentRouteAudit(context.database, {
     conversationID: titledConversation.id,
-    projectID: targetProjectId || titledConversation.project_id,
+    projectID: supervisorContext.target.project_id,
     turnID
   }, intentRoute);
+  recordSupervisorContextResolutionAudit(context.database, {
+    conversationID: titledConversation.id,
+    turnID
+  }, supervisorContext);
   const runtime = await openConversationRuntime(
     context,
     titledConversation,
     intentRoute,
+    supervisorContext,
     intent,
-    targetProjectId,
     prompt,
     turnID,
-    source
+    resolvedSource
   );
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
@@ -226,7 +246,8 @@ export async function runPiConversationPrompt(
   return sendPiConversationMessage(context, id, {
     intent: input.intent,
     prompt: input.prompt,
-    target_project_id: input.targetProjectId
+    target_project_id: input.targetProjectId || projectID,
+    target_project_source: input.targetProjectSource || (projectID === "" ? undefined : "request_project")
   });
 }
 
@@ -336,21 +357,27 @@ async function openConversationRuntime(
   context: PiConversationContext,
   conversation: PiConversation,
   intentRoute: SupervisorIntentRoute,
+  supervisorContext: SupervisorContextResolution,
   intent = "",
-  targetProjectId = "",
   userPrompt = "",
   turnID = "",
   source?: string
 ) {
-  const project = conversation.project_id === ""
+  const project = conversation.project_id === "" || (
+    !supervisorContext.provenance.context_inheritance_allowed &&
+    supervisorContext.target.project_id !== conversation.project_id
+  )
     ? undefined
     : requireConversationProject(context.database, conversation);
-  const toolProject = optionalConversationProject(context.database, cleanString(targetProjectId)) ?? project;
+  const toolProject = optionalConversationProject(
+    context.database,
+    supervisorContext.target.project_id
+  );
   const agent = requireConversationAgent(context.database, conversation);
   const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: conversationAuthorization(review, toolProject, intentRoute),
+    authorization: conversationAuthorization(review, toolProject, intentRoute, supervisorContext),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     conversationID: conversation.id,
@@ -364,6 +391,7 @@ async function openConversationRuntime(
     toolProject,
     source,
     sourceTurn: { id: turnID, source, userPrompt },
+    supervisorContext,
     supervisorIntentRoute: intentRoute
   });
 }
@@ -371,10 +399,12 @@ async function openConversationRuntime(
 function conversationAuthorization(
   review: boolean,
   project: Project | undefined,
-  intentRoute: SupervisorIntentRoute
+  intentRoute: SupervisorIntentRoute,
+  supervisorContext: SupervisorContextResolution
 ) {
   if (review) return reviewConversationAuthorization();
   if (project) return runnerChatAuthorization(project, intentRoute);
+  if (supervisorContext.status === "ambiguous") return readOnlyConversationAuthorization();
   if (!supervisorIntentRouteAllowsMutation(intentRoute)) return readOnlyConversationAuthorization();
   return undefined;
 }
@@ -474,4 +504,10 @@ function requireConversationAgent(db: RunnerDatabase, conversation: PiConversati
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function oneShotProjectSource(value: unknown, fallback: string): string {
+  const source = cleanString(value);
+  return ["card_select", "explicit_project", "issue_ref", "mapping_default", "request_project"]
+    .includes(source) ? source : fallback;
 }

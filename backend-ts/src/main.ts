@@ -37,7 +37,7 @@ setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
 const feishuBridge = createFeishuAgentBridge({
   config: () => config.integrations.feishu,
   database,
-  runConversation: async ({ conversationId, event, intent, projectId, prompt, targetProjectId }) => {
+  runConversation: async ({ conversationId, event, intent, projectId, prompt, targetProjectId, targetProjectSource }) => {
     const oneShotTargetProjectId = targetProjectId || projectId;
     const result = await runPiConversationPrompt({ bus, database, providers }, {
       clearProjectId: true,
@@ -46,6 +46,7 @@ const feishuBridge = createFeishuAgentBridge({
       projectId: "",
       prompt,
       targetProjectId: oneShotTargetProjectId,
+      targetProjectSource,
       title: `Feishu · ${event.chat_id || event.message_id}`
     });
     return { conversationId: result.conversation_id, projectId: "", targetProjectId: oneShotTargetProjectId, text: result.text };

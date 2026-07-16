@@ -32,6 +32,7 @@ export type FeishuRunnerInput = {
   prompt: string;
   projectId: string;
   targetProjectId?: string;
+  targetProjectSource?: string;
 };
 export type FeishuRunnerResult = {
   conversationId?: string;
@@ -220,6 +221,7 @@ async function runnerReply(
       intent: review ? "review" : undefined,
       projectId: "",
       targetProjectId,
+      targetProjectSource: projectContext.source,
       prompt
     });
     const text = review ? normalizeFeishuReviewReply(result.text) : normalChat ? appendFeishuMemoryCandidateNotice(

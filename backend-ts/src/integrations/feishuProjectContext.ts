@@ -48,6 +48,11 @@ export function resolveFeishuProjectContext(input: FeishuProjectContextInput): F
   const explicit = explicitProject(input.text, input.projects ?? []);
   if (explicit.status !== "missing") return explicit;
 
+  if (hasUnresolvedProjectHint(input.text)) return missing("unresolved_explicit_project_hint");
+
+  const mapped = mappedProject(input.mappings ?? [], input.message ?? {}, input.projects ?? []);
+  if (mapped.status !== "missing") return mapped;
+
   return missing("no_project_context");
 }
 
@@ -93,6 +98,38 @@ function explicitProject(
     return resolved(matches[0].id, "explicit_project", "high", "explicit_project_text");
   }
   return ambiguous(matches.map((match) => match.id), "explicit_project", "ambiguous_explicit_project");
+}
+
+function mappedProject(
+  mappings: FeishuProjectMapping[],
+  message: FeishuProjectContextMessage,
+  projects: FeishuProjectContextProject[]
+): FeishuProjectContextResult {
+  const known = new Set(projects.map((project) => clean(project.id)).filter(Boolean));
+  const ids = [...new Set(mappings
+    .filter((mapping) => mappingMatches(mapping, message))
+    .map((mapping) => clean(mapping.projectId))
+    .filter((projectID) => projectID !== "" && known.has(projectID)))];
+  if (ids.length === 0) return missing("no_source_mapping");
+  if (ids.length === 1) return resolved(ids[0], "mapping_default", "medium", "source_mapping_project");
+  return ambiguous(ids, "mapping_default", "ambiguous_source_mapping");
+}
+
+function hasUnresolvedProjectHint(text: string): boolean {
+  const value = clean(text);
+  return /@(?:project:)?[A-Za-z0-9][A-Za-z0-9._-]{2,}/i.test(value) ||
+    /(?:在|项目|切到|切换到)\s*[A-Za-z0-9][A-Za-z0-9._-]{2,}/i.test(value) ||
+    /\b(?:in|project)\s+[A-Za-z0-9][A-Za-z0-9._-]{2,}\b/i.test(value);
+}
+
+function mappingMatches(
+  mapping: FeishuProjectMapping,
+  message: FeishuProjectContextMessage
+): boolean {
+  const chatID = clean(message.chatId);
+  const senderIDs = new Set([clean(message.senderId), clean(message.senderOpenId)].filter(Boolean));
+  return (clean(mapping.chatId) !== "" && clean(mapping.chatId) === chatID) ||
+    (clean(mapping.userId) !== "" && senderIDs.has(clean(mapping.userId)));
 }
 
 function bestProjectMatches(

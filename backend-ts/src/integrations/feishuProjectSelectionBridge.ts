@@ -153,6 +153,7 @@ async function continuePendingPrompt(
       event: pendingEvent(selection),
       projectId: "",
       targetProjectId: projectId,
+      targetProjectSource: "card_select",
       prompt: selection.original_prompt
     });
     if (cleanString(runner.text) !== "") await sendActionText(options, selection.chat_id, runner.text);

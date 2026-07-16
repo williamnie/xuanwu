@@ -131,7 +131,12 @@ describe("Bun PI conversation message API", () => {
         conversationId: "conv-intent-route",
         eventType: "supervisor_intent_routed"
       });
+      const contextEvents = listPiActionEvents(database, {
+        conversationId: "conv-intent-route",
+        eventType: "supervisor_context_resolved"
+      });
       const route = JSON.parse(routeEvents[0]?.payload_json || "{}") as Record<string, unknown>;
+      const contextResolution = JSON.parse(contextEvents[0]?.payload_json || "{}") as Record<string, unknown>;
       const toolAudits = listPiActionEvents(database, {
         conversationId: "conv-intent-route",
         eventType: "tool_call_audit"
@@ -146,12 +151,22 @@ describe("Bun PI conversation message API", () => {
       expect(listIssues(database, { projectId: "demo" })).toEqual([]);
       expect(createAction).toBeUndefined();
       expect(routeEvents).toHaveLength(1);
+      expect(contextEvents).toHaveLength(1);
       expect(route).toMatchObject({
         decision: "ask_one_question",
         primary_intent: "execute",
         write_policy: { allow_mutation: false }
       });
       expect(routeEvents[0]?.payload_json).not.toContain("处理一下");
+      expect(contextResolution).toMatchObject({
+        status: "resolved",
+        target: { project_id: "demo", work_ids: [] },
+        candidates: [expect.objectContaining({
+          project_id: "demo",
+          sources: [expect.objectContaining({ kind: "current_page" })]
+        })]
+      });
+      expect(contextEvents[0]?.payload_json).not.toContain("处理一下");
       expect(deniedTool).toMatchObject({
         error: { type: "intent_route_denied" },
         status: "denied",

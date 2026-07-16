@@ -99,10 +99,11 @@ describe("Feishu agent bridge", () => {
     }
   });
 
-  test("does not treat Feishu project mapping as an IM conversation project", async () => {
+  test("passes a Feishu project mapping as an explainable one-shot target", async () => {
     const database = await openFixtureDatabase();
+    insertProject(database, "demo", "Demo");
     const sent: FeishuTextMessageInput[] = [];
-    const prompts: string[] = [];
+    const calls: Array<{ projectId: string; prompt: string; targetProjectId?: string; targetProjectSource?: string }> = [];
     const config = buildFeishuConnectorConfig({
       FEISHU_ALLOWED_CHAT_IDS: "oc_group",
       FEISHU_PROJECT_MAPPINGS: "chat:oc_group=demo",
@@ -115,8 +116,8 @@ describe("Feishu agent bridge", () => {
     const bridge = createFeishuAgentBridge({
       config: () => config,
       database,
-      runConversation: async ({ prompt }) => {
-        prompts.push(prompt);
+      runConversation: async ({ projectId, prompt, targetProjectId, targetProjectSource }) => {
+        calls.push({ projectId, prompt, targetProjectId, targetProjectSource });
         return { text: "hello from runner" };
       },
       sender: { sendTextMessage: async (input) => {
@@ -127,12 +128,17 @@ describe("Feishu agent bridge", () => {
 
     const result = await bridge.handle({ event, ingest });
 
-    expect(result).toEqual({ reason: "project_clarification_sent", replied: true });
-    expect(prompts).toEqual([]);
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(calls).toEqual([{
+      projectId: "",
+      prompt: "@PI 帮我修复这个 bug",
+      targetProjectId: "demo",
+      targetProjectSource: "mapping_default"
+    }]);
     expect(sent).toEqual([{
       receiveId: "oc_group",
       receiveIdType: "chat_id",
-      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请在消息里带上项目名或 issue id 后再发。"
+      text: "hello from runner"
     }]);
     database.close();
   });

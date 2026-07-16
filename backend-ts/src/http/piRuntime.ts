@@ -15,6 +15,7 @@ import { createPiRuntimeResourceLoader } from "./piRuntimeResources.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 import { createPiRuntimeToolKit, recordPiRuntimeToolRegistryAudit } from "../pi/piRuntimeTools.ts";
 import type { SupervisorIntentRoute } from "../pi/supervisorIntentRouter.ts";
+import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -33,6 +34,7 @@ export type RuntimeSessionInput = {
   sessionFile?: string;
   source?: string;
   sourceTurn?: { id?: string; source?: string; userPrompt?: string };
+  supervisorContext?: SupervisorContextResolution;
   supervisorIntentRoute?: SupervisorIntentRoute;
   toolProject?: Project;
 };
