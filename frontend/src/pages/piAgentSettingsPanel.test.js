@@ -51,6 +51,8 @@ test('Supervisor settings normalizes legacy default runtime instructions and nam
   assert.match(stateSource, /LEGACY_PI_AGENT_NAMES/);
   assert.match(stateSource, /normalizedInstructions\(agent\.instructions\)/);
   assert.match(stateSource, /玄武的 Supervisor runtime/);
+  assert.match(stateSource, /Engineering Chief of Staff/);
+  assert.match(stateSource, /Work，监督 Run，以 Evidence 判定完成/);
   assert.match(stateSource, /全局 PI Assistant runtime/);
   assert.match(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS\.has\(value\)/);
   assert.match(stateSource, /normalizedAgentName\(agent\.name\)/);

@@ -42,6 +42,7 @@ describe("Bun PI settings API", () => {
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",
+        instructions: expect.stringContaining("Engineering Chief of Staff"),
         enabled: 1
       });
 
@@ -67,7 +68,7 @@ describe("Bun PI settings API", () => {
         agent_id: "runner-default",
         runtime_prompt_summary: {
           custom_instructions_configured: true,
-          injected_after: "core PI role/safety/tool/MCP constraints"
+          injected_after: "core Supervisor role/safety/tool/MCP constraints"
         }
       });
 

@@ -4,182 +4,182 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase } from "../db/database.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
-import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
+import {
+  buildPiRuntimeSystemPrompt,
+  xuanwuSupervisorCompatibilityPrompt,
+  xuanwuSupervisorRoleContractPrompt
+} from "./piRuntimePrompt.ts";
 
-describe("PI runtime prompt", () => {
-  test("documents repo-aware issue proposal workflow", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
-    try {
-      const prompt = buildPiRuntimeSystemPrompt({
-        agent: agentRecord(),
-        conversationID: "conv-repo-aware",
-        project: projectRecord(join(root, "project"))
-      }, db);
+const DECISION_FIXTURES = [
+  {
+    kind: "question",
+    user: "你能做什么？",
+    expected: "1. Answer: for greetings, capability questions, explanations, and how-to questions"
+  },
+  {
+    kind: "investigation",
+    user: "先调查为什么最近的 Run 失败，不要改状态",
+    expected: "2. Investigate: for diagnosis or research, use bounded read-only"
+  },
+  {
+    kind: "query",
+    user: "这个项目还有多少 Work 没完成？",
+    expected: "3. Query: for counts, status, progress, or history, read the authoritative compact view"
+  },
+  {
+    kind: "execution",
+    user: "修复登录回归并开始执行",
+    expected: "4. Execute: for a concrete engineering outcome, resolve the project and Work scope"
+  },
+  {
+    kind: "automation",
+    user: "每天巡检失败的 Run，需要我时通知我",
+    expected: "5. Automate: distinguish a one-time schedule or completion watch from a recurring Automation/Standing Order"
+  }
+] as const;
 
-      expect(prompt).toContain("Repo-aware issue proposal workflow:");
-      expect(prompt).toContain("repo_search");
-      expect(prompt).toContain("repo_context_pack");
-      expect(prompt).toContain("issue_create_proposal");
-      expect(prompt).toContain("需求理解");
-      expect(prompt).toContain("最多追问一个关键问题");
-      expect(prompt).toContain("must not edit code");
-    } finally {
-      db.close();
-      await rm(root, { recursive: true, force: true });
-    }
+describe("Xuanwu Supervisor runtime prompt", () => {
+  test("snapshots the canonical role and compatibility contracts", () => {
+    expect([
+      "[ROLE CONTRACT]",
+      xuanwuSupervisorRoleContractPrompt(),
+      "[COMPATIBILITY CONTRACT]",
+      xuanwuSupervisorCompatibilityPrompt()
+    ].join("\n\n")).toMatchSnapshot();
   });
 
-  test("tells PI to answer Feishu chat naturally without forcing issue workflow", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
-    try {
-      const prompt = buildPiRuntimeSystemPrompt({
-        agent: agentRecord(),
-        conversationID: "feishu-oc_group",
-        project: undefined
-      }, db);
+  test("defines the Engineering Chief of Staff role, vocabulary, language, and deterministic gates", () => {
+    const prompt = xuanwuSupervisorRoleContractPrompt();
 
-      expect(prompt).toContain("Feishu/IM normal chat");
-      expect(prompt).toContain("reply naturally");
-      expect(prompt).toContain("Do not ask for a project mapping");
-      expect(prompt).toContain("same language as the user");
-    } finally {
-      db.close();
-      await rm(root, { recursive: true, force: true });
+    expect(prompt).toContain("Xuanwu Supervisor");
+    expect(prompt).toContain("Engineering Chief of Staff");
+    for (const term of ["Work", "Run", "Workflow", "Evidence", "Handoff", "Attention", "Automation"]) {
+      expect(prompt).toContain(term);
     }
+    expect(prompt).toContain("same language as the user's latest message");
+    expect(prompt).toContain("every state mutation, external write, and destructive action");
+    expect(prompt).toContain("deterministic tool permission/approval gate");
+    expect(prompt).toContain("cannot select the source of truth");
+    expect(prompt).toContain("a successful Run is only a candidate result");
   });
 
-  test("documents automatic memory candidate boundaries for normal chat", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
-    try {
-      const prompt = buildPiRuntimeSystemPrompt({
-        agent: agentRecord(),
-        conversationID: "feishu-memory-candidate",
-        project: projectRecord(join(root, "project"))
-      }, db);
+  for (const fixture of DECISION_FIXTURES) {
+    test(`covers the ${fixture.kind} decision fixture: ${fixture.user}`, () => {
+      expect(xuanwuSupervisorRoleContractPrompt()).toContain(fixture.expected);
+    });
+  }
 
-      expect(prompt).toContain("Automatic memory candidate policy");
-      expect(prompt).toContain("stable user preferences");
-      expect(prompt).toContain("memory_write_candidate");
-      expect(prompt).toContain("Explicit low-risk personal preferences");
-      expect(prompt).toContain("may auto-enable");
-      expect(prompt).toContain("Guesses, summaries, sensitive data, project/team policy, workflow facts, and low-confidence observations must stay disabled pending candidates");
-      expect(prompt).toContain("global");
-      expect(prompt).toContain("project");
-      expect(prompt).toContain("conversation");
-      expect(prompt).toContain("Do not store secrets");
-      expect(prompt).toContain("Do not store full chat transcripts");
-      expect(prompt).toContain("Be selective");
-    } finally {
-      db.close();
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
-  test("tells PI to start IM-created issues by default unless the user asks to wait", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
-    try {
-      const prompt = buildPiRuntimeSystemPrompt({
-        agent: agentRecord(),
-        conversationID: "conv-im-default-run",
-        project: projectRecord(join(root, "project"))
-      }, db);
-
-      expect(prompt).toContain("Feishu/IM task messages");
-      expect(prompt).toContain("call issue_enqueue_proposal by default");
-      expect(prompt).toContain("choose a compact natural summary");
-      expect(prompt).toContain("issue_enqueue_next_triage");
-      expect(prompt).toContain("继续做下一个");
-      expect(prompt).toContain("issue_enqueue_batch_triage");
-      expect(prompt).toContain("issue_completion_watch_create");
-      expect(prompt).toContain("only after the tool succeeds may you say you will notify them");
-      expect(prompt).toContain("#387-#391");
-      expect(prompt).toContain("issue_ids");
-      expect(prompt).toContain("完成所有");
-      expect(prompt).toContain("开始这25个issue");
-      expect(prompt).toContain("use your language understanding");
-      expect(prompt).toContain("Do not require the user to copy a template sentence");
-      expect(prompt).toContain("no artificial count cap");
-      expect(prompt).toContain("Your final IM reply is the user-facing start notification");
-      expect(prompt).toContain("do not rely on per-issue lifecycle start notices");
-      expect(prompt).toContain("继续做下一个");
-      expect(prompt).toContain("Only wait");
-    } finally {
-      db.close();
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
-  test("documents the Feishu /issue command contract", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
-    const db = await openDatabase({ stateDir: join(root, "state") });
-    try {
-      const prompt = buildPiRuntimeSystemPrompt({
-        agent: agentRecord(),
-        conversationID: "feishu-issue-command",
-        project: projectRecord(join(root, "project"))
-      }, db);
-
-      expect(prompt).toContain("Feishu /issue command");
-      expect(prompt).toContain("/issue <任务描述>");
+  test("keeps legacy tools as bounded compatibility adapters instead of the Supervisor identity", async () => {
+    await withRuntimePrompt("compatibility", (prompt) => {
+      expect(prompt).toContain("Compatibility prompt (temporary adapter, not a second product model)");
+      expect(prompt).toContain("issues/issue_events and existing issue_* actions remain the authoritative write path");
+      expect(prompt).toContain("issue_runs is the Run lifecycle authority");
+      expect(prompt).toContain("issue_events handoff.* records are the Handoff projection");
+      expect(prompt).toContain("This prompt introduces no dual write or dual read");
+      expect(prompt).toContain("Do not invent work_* tools");
       expect(prompt).toContain("issue_create_proposal");
       expect(prompt).toContain("issue_enqueue_proposal");
-      expect(prompt).toContain("issue id");
-      expect(prompt).toContain("session");
-    } finally {
-      db.close();
-      await rm(root, { recursive: true, force: true });
-    }
+      expect(prompt).toContain("issue_schedule_enqueue");
+      expect(prompt).toContain("issue_enqueue_next_triage");
+      expect(prompt).toContain("issue_enqueue_batch_triage");
+      expect(prompt).toContain("issue_completion_watch_create");
+    });
   });
 
-  test("keeps confirmed memory injection for new Feishu conversation ids without old conversation memory", async () => {
-    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-runtime-prompt-"));
+  test("keeps investigation, repo proposal, memory, and repair boundaries", async () => {
+    await withRuntimePrompt("boundaries", (prompt) => {
+      expect(prompt).toContain("Manual context trigger workflow:");
+      expect(prompt).toContain("manual_context_intake only builds context bundle -> intake -> proposal/draft output");
+      expect(prompt).toContain("Automatic memory candidate policy");
+      expect(prompt).toContain("memory_write_candidate");
+      expect(prompt).toContain("Repo-aware issue proposal workflow:");
+      expect(prompt).toContain("repo_context_pack");
+      expect(prompt).toContain("must not edit code");
+      expect(prompt).toContain("issue_state_repair_proposal is only for deterministic");
+      expect(prompt).toContain("最多追问一个关键问题");
+    });
+  });
+
+  test("keeps confirmed project/global memory scoped away from an old conversation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-supervisor-memory-"));
     const db = await openDatabase({ stateDir: join(root, "state") });
     try {
       createPiMemoryItem(db, {
-        content: "Project-level Feishu preference",
-        id: "feishu-project-memory",
+        content: "Project-level Supervisor preference",
+        id: "supervisor-project-memory",
         kind: "preference",
         scope: "project",
         scope_id: "demo"
       });
       createPiMemoryItem(db, {
-        content: "Global PI behavior",
-        id: "feishu-global-memory",
+        content: "Global Supervisor behavior",
+        id: "supervisor-global-memory",
         kind: "policy",
         scope: "global"
       });
       createPiMemoryItem(db, {
         content: "Old chat conversation memory",
-        id: "feishu-old-conversation-memory",
+        id: "supervisor-old-conversation-memory",
         kind: "conversation_note",
         scope: "conversation",
-        scope_id: "feishu-chat-oc_group-20260613"
+        scope_id: "feishu-chat-old"
       });
 
       const prompt = buildPiRuntimeSystemPrompt({
         agent: agentRecord(),
-        conversationID: "feishu-chat-oc_group-20260613-n1",
-        project: projectRecord(join(root, "project"))
+        conversationID: "feishu-chat-new",
+        project: projectRecord("/tmp/xuanwu-prompt-project")
       }, db);
 
       expect(prompt).toContain("Confirmed PI memory:");
-      expect(prompt).toContain("Project-level Feishu preference");
-      expect(prompt).toContain("Global PI behavior");
+      expect(prompt).toContain("Project-level Supervisor preference");
+      expect(prompt).toContain("Global Supervisor behavior");
       expect(prompt).not.toContain("Old chat conversation memory");
     } finally {
       db.close();
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("keeps the static and assembled prompt inside the token-size baseline", async () => {
+    const role = xuanwuSupervisorRoleContractPrompt();
+    await withRuntimePrompt("token-size", (prompt) => {
+      const benchmark = {
+        assembled_chars: prompt.length,
+        assembled_estimated_tokens: estimatedTokens(prompt),
+        role_chars: role.length,
+        role_estimated_tokens: estimatedTokens(role)
+      };
+
+      expect(benchmark).toMatchSnapshot();
+      expect(benchmark.role_estimated_tokens).toBeLessThanOrEqual(1_000);
+      expect(benchmark.assembled_estimated_tokens).toBeLessThanOrEqual(6_000);
+    });
+  });
 });
+
+async function withRuntimePrompt(name: string, assertion: (prompt: string) => void): Promise<void> {
+  const root = await mkdtemp(join(tmpdir(), `codex-runner-bun-supervisor-${name}-`));
+  const db = await openDatabase({ stateDir: join(root, "state") });
+  try {
+    assertion(buildPiRuntimeSystemPrompt({
+      agent: agentRecord(),
+      conversationID: `conv-${name}`,
+      project: projectRecord("/tmp/xuanwu-prompt-project")
+    }, db));
+  } finally {
+    db.close();
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+function estimatedTokens(prompt: string): number {
+  return Math.ceil(prompt.length / 4);
+}
 
 function agentRecord() {
   return {
-    id: "pi-faux", name: "PI Faux", provider: "pi-sdk", model_provider: "pi-tools", model_id: "faux-1",
+    id: "runner-default", name: "Xuanwu Supervisor", provider: "pi-sdk", model_provider: "pi-tools", model_id: "faux-1",
     thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
     created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
   } as never;

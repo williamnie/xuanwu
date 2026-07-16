@@ -12,7 +12,7 @@ export const DEFAULT_PI_AGENT_FORM = {
   apiKey: '',
   baseUrl: '',
   enabled: true,
-  instructions: '你是玄武的 Supervisor runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀工程记忆。',
+  instructions: '你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。',
   modelId: 'gpt-5.4',
   modelProvider: 'openai',
   thinkingLevel: 'medium',
@@ -20,6 +20,7 @@ export const DEFAULT_PI_AGENT_FORM = {
 };
 
 const LEGACY_PI_ASSISTANT_INSTRUCTIONS = new Set([
+  '你是玄武的 Supervisor runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀工程记忆。',
   '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
   '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',

@@ -484,12 +484,13 @@ describe("Bun SQLite database connection", () => {
 
     try {
       expect(connection.sqlite.query("select count(*) as count from pi_agents").get()).toEqual({ count: 1 });
-      expect(connection.sqlite.query("select id, name, provider, thinking_level, cwd_policy, enabled from pi_agents").get()).toEqual({
+      expect(connection.sqlite.query("select id, name, provider, thinking_level, cwd_policy, instructions, enabled from pi_agents").get()).toEqual({
         id: "runner-default",
         name: "Xuanwu Supervisor",
         provider: "pi-sdk",
         thinking_level: "medium",
         cwd_policy: "project",
+        instructions: "你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。",
         enabled: 1
       });
     } finally {
