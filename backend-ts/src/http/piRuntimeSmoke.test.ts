@@ -284,6 +284,7 @@ describe("Bun PI runtime v1 smoke", () => {
         issueID: issue.id,
         project: projectRecord("demo")
       });
+      await runtime.session.reload();
       const prompt = runtime.session.systemPrompt;
       runtime.dispose();
 
@@ -295,11 +296,15 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain('"id": "codex-issue-runner"');
       expect(prompt).not.toContain('"id": "verification-before-completion"');
+      expect(prompt).toContain("Controlled PI resource summary:");
+      expect(prompt).toContain("<name>codex-issue-runner</name>");
+      expect(prompt).not.toContain("<name>pi-domain-proposal</name>");
       expect(prompt).toContain("Issue-specific PI context");
       expect(prompt).toContain("pi_memory_items/issue-memory");
       expect(prompt).not.toContain("Disabled memory should stay hidden");
       const events = listPiActionEvents(database, { conversationId: "conv-skill-context" });
       expect(events.map((event) => event.event_type)).toContain("skill_prompt_context_injected");
+      expect(events.map((event) => event.event_type)).toContain("runtime_resource_snapshot");
       const audit = JSON.parse(events.find((event) => event.event_type === "skill_prompt_context_injected")?.payload_json ?? "{}");
       expect(audit).toMatchObject({
         injected_skill_ids: ["codex-issue-runner"],
@@ -307,6 +312,15 @@ describe("Bun PI runtime v1 smoke", () => {
         unauthorized_skill_intents: ["verification-before-completion"]
       });
       expect(JSON.stringify(audit)).toContain("Create, enqueue, inspect");
+      const resourceEvents = events.filter((event) => event.event_type === "runtime_resource_snapshot");
+      const resources = JSON.parse(resourceEvents.at(-1)?.payload_json ?? "{}");
+      expect(resources).toMatchObject({
+        counts: { skills: 1 },
+        generation: 2,
+        loaded: { skills: ["codex-issue-runner"] },
+        outcome: "loaded"
+      });
+      expect(resourceEvents).toHaveLength(2);
     } finally {
       database.close();
     }

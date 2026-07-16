@@ -11,6 +11,7 @@ import { PI_SAFE_ACTION_TYPES } from "../pi/actionGate.ts";
 import type { EventBus } from "../events/bus.ts";
 import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../spikes/piSmokeSupport.ts";
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
+import { createPiRuntimeResourceLoader } from "./piRuntimeResources.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 import { createPiRuntimeToolKit, recordPiRuntimeToolRegistryAudit } from "../pi/piRuntimeTools.ts";
 
@@ -84,13 +85,15 @@ export async function createOrRestorePiRuntime(
 export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeSessionInput) {
   const context = runtimeContext(db, input.project);
   const toolProject = input.toolProject ?? input.project;
-  const sdk = await loadSmokeRuntime(resolveDefaultRepoRoot(context.cwd));
+  const runtimeRoot = resolveDefaultRepoRoot(context.cwd);
+  const sdk = await loadSmokeRuntime(runtimeRoot);
   const paths = piRuntimePaths(db);
   await mkdir(dirname(paths.authPath), { recursive: true });
   await mkdir(context.sessionDir, { recursive: true });
 
   const authStorage = sdk.pi.AuthStorage.create(paths.authPath);
   const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
+  const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
   const sessionManager = input.sessionFile
     ? sdk.pi.SessionManager.open(input.sessionFile, context.sessionDir, context.cwd)
     : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });
@@ -117,15 +120,22 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     projectID: toolProject?.id ?? input.project?.id
   }, runtimeTools.audit);
   try {
+    const resourceLoader = await createPiRuntimeResourceLoader(sdk, db, input, {
+      agentDir: paths.agentDir,
+      cwd: context.cwd,
+      piPackageDir: process.env.PI_PACKAGE_DIR,
+      runtimeRoot,
+      systemPrompt: buildPiRuntimeSystemPrompt(input, db)
+    });
     const { session } = await sdk.pi.createAgentSession({
       cwd: context.cwd,
       agentDir: paths.agentDir,
       authStorage,
       model: resolvePiModel(modelRegistry, input.agent),
       modelRegistry,
-      resourceLoader: emptyResourceLoader(sdk, input, db),
+      resourceLoader,
       sessionManager,
-      settingsManager: sdk.pi.SettingsManager.create(context.cwd, paths.agentDir),
+      settingsManager,
       thinkingLevel: normalizeThinkingLevel(input.agent.thinking_level),
       tools: runtimeTools.tools,
       customTools: runtimeTools.customTools
@@ -183,21 +193,6 @@ function runtimeContext(db: RunnerDatabase, project: Project | undefined) {
   return {
     cwd,
     sessionDir: join(cwd, RUNNER_RUNTIME_ROOT, RUNNER_SESSIONS_DIR, RUNNER_AGENT_DIR)
-  };
-}
-
-function emptyResourceLoader(sdk: SmokeRuntime, input: RuntimeSessionInput, db: RunnerDatabase) {
-  const systemPrompt = buildPiRuntimeSystemPrompt(input, db);
-  return {
-    getAgentsFiles: () => ({ agentsFiles: [] }),
-    getAppendSystemPrompt: () => [],
-    getExtensions: () => ({ extensions: [], errors: [], runtime: sdk.pi.createExtensionRuntime() }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getSystemPrompt: () => systemPrompt,
-    getThemes: () => ({ themes: [], diagnostics: [] }),
-    extendResources: () => {},
-    reload: async () => {}
   };
 }
 

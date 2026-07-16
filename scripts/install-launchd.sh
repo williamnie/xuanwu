@@ -15,6 +15,8 @@ BINARY_PATH="${CODEX_RUNNER_BINARY:-$ROOT_DIR/dist/codex-issue-runner}"
 LAUNCHD_BINARY_PATH="${CODEX_RUNNER_LAUNCHD_BINARY:-$APP_SUPPORT_DIR/bin/codex-issue-runner}"
 PI_PACKAGE_ASSET_SOURCE="${CODEX_RUNNER_PI_PACKAGE_ASSET_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent}"
 PI_PACKAGE_ASSET_DIR="${CODEX_RUNNER_PI_PACKAGE_ASSET_DIR:-$APP_SUPPORT_DIR/pi-coding-agent}"
+RUNNER_SKILLS_SOURCE="${CODEX_RUNNER_SKILLS_SOURCE:-$ROOT_DIR/skills}"
+RUNNER_PLUGINS_SOURCE="${CODEX_RUNNER_PLUGINS_SOURCE:-$ROOT_DIR/plugins}"
 PHOTON_WASM_SOURCE="${CODEX_RUNNER_PHOTON_WASM_SOURCE:-$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
@@ -99,6 +101,8 @@ stage_pi_package_assets() {
   copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/dist/modes/interactive/theme" "$PI_PACKAGE_ASSET_DIR/theme"
   copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/dist/modes/interactive/assets" "$PI_PACKAGE_ASSET_DIR/assets"
   copy_if_exists "$PI_PACKAGE_ASSET_SOURCE/dist/core/export-html" "$PI_PACKAGE_ASSET_DIR/export-html"
+  copy_if_exists "$RUNNER_SKILLS_SOURCE" "$PI_PACKAGE_ASSET_DIR/skills"
+  copy_if_exists "$RUNNER_PLUGINS_SOURCE" "$PI_PACKAGE_ASSET_DIR/plugins"
   copy_if_exists "$PHOTON_WASM_SOURCE" "$(dirname "$LAUNCHD_BINARY_PATH")/photon_rs_bg.wasm"
 }
 

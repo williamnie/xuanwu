@@ -11,3 +11,10 @@ test('launchd deployment atomically replaces the running Mach-O inode', () => {
   assert.match(source, /stage_file_atomically "\$BINARY_PATH" "\$LAUNCHD_BINARY_PATH" 0755/);
   assert.doesNotMatch(source, /cp "\$BINARY_PATH" "\$LAUNCHD_BINARY_PATH"/);
 });
+
+test('launchd deployment stages controlled PI runtime resources with package assets', () => {
+  assert.match(source, /RUNNER_SKILLS_SOURCE=.*\$ROOT_DIR\/skills/);
+  assert.match(source, /copy_if_exists "\$RUNNER_SKILLS_SOURCE" "\$PI_PACKAGE_ASSET_DIR\/skills"/);
+  assert.match(source, /copy_if_exists "\$RUNNER_PLUGINS_SOURCE" "\$PI_PACKAGE_ASSET_DIR\/plugins"/);
+  assert.match(source, /<key>PI_PACKAGE_DIR<\/key>/);
+});
