@@ -67,6 +67,11 @@ export const workApi = {
     body: JSON.stringify(updates),
   }),
 
+  controlWork: (id, action, payload) => request(`/api/works/${encodeURIComponent(id)}/actions/${action}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   getIssueTemplates: () => request('/api/issue-templates'),
 
   createIssueTemplate: (template) => request('/api/issue-templates', {

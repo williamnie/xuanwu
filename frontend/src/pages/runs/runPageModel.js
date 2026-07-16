@@ -38,18 +38,20 @@ export function runAvailableActions(run) {
 }
 
 export function buildRunControlPayload(run, action, {
+  correlationPrefix = 'runs-ui',
   eventId,
   occurredAt = new Date().toISOString(),
   prompt = '',
+  reasonPrefix = 'Runs compatibility view',
 } = {}) {
   const latestAttempt = Array.isArray(run?.attempts) ? run.attempts.at(-1) : null;
   const payload = {
     audit: {
       actor: { id: 'frontend:user', kind: 'user' },
-      correlation_id: `runs-ui:${run?.id || 'unknown'}`,
+      correlation_id: `${correlationPrefix}:${run?.id || 'unknown'}`,
       event_id: text(eventId),
       occurred_at: occurredAt,
-      reason: `Runs compatibility view requested ${action}`,
+      reason: `${reasonPrefix} requested ${action}`,
     },
     expected_revision: Number(run?.revision || 0),
   };

@@ -4,6 +4,7 @@ import { useImmer } from 'use-immer';
 import { PRODUCT_NAV_LABELS } from '../brand.js';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
+import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
 import {
   selectBackendOnline,
   selectIssues,
@@ -16,9 +17,7 @@ import {
   ListTodo, 
   CheckCircle2, 
   Terminal, 
-  Clock, 
-  AlertTriangle, 
-  ArrowRight
+  AlertTriangle
 } from 'lucide-react';
 
 export default function Dashboard({
@@ -147,84 +146,9 @@ export default function Dashboard({
 
       {/* 双栏布局 */}
       <div className="grid-cols-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
-        {/* 左栏：活跃任务与快捷队列 */}
+        {/* 左栏：Active Work */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={18} color="var(--primary)" /> 运行中任务 ({inProgressIssues.length})
-          </h3>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {inProgressIssues.length === 0 ? (
-              <div className="glass-card" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                当前没有正在运行的 Issue 任务。
-              </div>
-            ) : (
-              inProgressIssues.map(issue => {
-                const proj = projects.find(p => p.id === issue.project_id);
-                return (
-                  <div key={issue.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>
-                          {proj ? proj.name : issue.project_id}
-                        </span>
-                        <h4 style={{ fontSize: '1rem', fontWeight: 600, marginTop: '4px' }}>{issue.title}</h4>
-                      </div>
-                      <span className="status-badge in_progress">
-                        <span className="status-dot running"></span>
-                        运行中
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
-                      <span>重试次数: {issue.attempt_count} 次</span>
-                      <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => navigateTo('issues', issue.id)}>
-                        查看流式日志 <ArrowRight size={12} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 600 }}>队列等待中 ({todoIssues.length})</h3>
-            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={() => navigateTo('issues')}>
-              管理队列
-            </button>
-          </div>
-
-          <div className="glass-card" style={{ padding: '0px', overflow: 'hidden' }}>
-            {todoIssues.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                待办队列为空
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {todoIssues.slice(0, 5).map((issue, index) => {
-                  const proj = projects.find(p => p.id === issue.project_id);
-                  return (
-                    <div key={issue.id} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      padding: '16px 20px', 
-                      borderBottom: index === todoIssues.slice(0, 5).length - 1 ? 'none' : '1px solid var(--border-color)',
-                      background: 'rgba(255, 255, 255, 0.01)'
-                    }}>
-                      <div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{issue.title}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                          项目: {proj ? proj.name : issue.project_id} | 优先级: {issue.priority}
-                        </div>
-                      </div>
-                      <span className="status-badge todo">Todo</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
         </div>
 
         {/* 右栏：系统实时通知 / 活动流 */}
