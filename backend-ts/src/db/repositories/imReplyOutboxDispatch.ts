@@ -36,7 +36,7 @@ export function listDispatchableSyncOutbox(db: RunnerDatabase, options: {
   const where = source === "" ? "" : " and source=?";
   return db.sqlite.query<Record<string, unknown>, SQLValue[]>(
     `select ${OUTBOX_COLUMNS} from sync_outbox
-     where status in ('pending', 'queued', 'retry') and feishu_message_id=''
+     where operation_kind='im_reply' and status in ('pending', 'queued', 'retry') and feishu_message_id=''
        and (cooldown_until='' or cooldown_until<=?)${where}
      order by created_at asc, id asc limit ?`
   ).all(...args).map(mapOutbox);

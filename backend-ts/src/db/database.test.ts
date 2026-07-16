@@ -196,7 +196,8 @@ describe("Bun SQLite database connection", () => {
         { id: "039_pi_mcp_discovery" },
         { id: "040_event_summary_projection" },
         { id: "041_work_ledger_schema" },
-        { id: "042_run_attempt_relations" }
+        { id: "042_run_attempt_relations" },
+        { id: "043_tracker_update_outbox" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -265,6 +266,11 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_issue_completion_watches")).toContain("ux_pi_issue_completion_watches_active_key");
       expect(indexNames(connection, "pi_issue_completion_watch_items")).toContain("idx_pi_issue_completion_watch_items_issue");
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
+      expect(indexNames(connection, "sync_outbox")).toEqual(expect.arrayContaining([
+        "idx_sync_outbox_operation_dispatch",
+        "ux_sync_outbox_tracker_dedupe"
+      ]));
+      expect(indexSQL(connection, "idx_sync_outbox_reply_draft")).toContain("where reply_draft_id > 0");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_updated");
       expect(indexNames(connection, "feishu_conversation_state")).toContain("idx_feishu_conversation_state_project");
       expect(indexNames(connection, "intake_runs")).toContain("idx_intake_runs_bundle");
@@ -328,13 +334,25 @@ describe("Bun SQLite database connection", () => {
         relationship: "'related'"
       });
       expect(columnDefaults(connection, "sync_outbox")).toMatchObject({
+        attention_ref: "''",
         attempt_count: "0",
         cooldown_until: "''",
+        correlation_id: "''",
+        dedupe_key: "''",
         feishu_message_id: "''",
+        handoff_id: "''",
         last_error: "''",
         max_attempts: "3",
+        operation_kind: "'im_reply'",
+        payload_json: "'{}'",
+        project_id: "''",
+        provider_request_ref: "''",
+        result_json: "'{}'",
         retry_after_seconds: "0",
-        sent_at: "''"
+        sent_at: "''",
+        target_external_id: "''",
+        target_external_type: "''",
+        work_id: "''"
       });
       expect(columnDefaults(connection, "feishu_conversation_state")).toMatchObject({
         active_project_id: "''",
@@ -721,7 +739,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 42 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 43 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -809,4 +827,11 @@ function columnDefaults(connection: RunnerDatabase, table: string): Record<strin
 function indexNames(connection: RunnerDatabase, table: string): string[] {
   return connection.sqlite.query(`pragma index_list(${table})`).all()
     .map((row) => (row as { name: string }).name);
+}
+
+function indexSQL(connection: RunnerDatabase, index: string): string {
+  const row = connection.sqlite.query<{ sql: string }, [string]>(
+    "select sql from sqlite_master where type='index' and name=?"
+  ).get(index);
+  return row?.sql ?? "";
 }

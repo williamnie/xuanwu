@@ -40,6 +40,7 @@ import { piMcpDiscoveryMigration } from "./039_pi_mcp_discovery.ts";
 import { eventSummaryProjectionMigration } from "./040_event_summary_projection.ts";
 import { workLedgerSchemaMigration } from "./041_work_ledger_schema.ts";
 import { runAttemptRelationsMigration } from "./042_run_attempt_relations.ts";
+import { trackerUpdateOutboxMigration } from "./043_tracker_update_outbox.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -83,5 +84,6 @@ export const migrations = [
   piMcpDiscoveryMigration,
   eventSummaryProjectionMigration,
   workLedgerSchemaMigration,
-  runAttemptRelationsMigration
+  runAttemptRelationsMigration,
+  trackerUpdateOutboxMigration
 ];
