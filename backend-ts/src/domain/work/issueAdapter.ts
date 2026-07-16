@@ -60,6 +60,15 @@ export type IssueWorkShadowResult = {
   work_id: WorkLedgerEntry["id"];
 };
 
+export type IssueWorkDualReadResult = {
+  authority: "issues";
+  legacy: WorkLedgerEntry;
+  mismatches: string[];
+  status: "matched" | "mismatch" | "missing_target";
+  target: WorkLedgerEntry | null;
+  work: WorkLedgerEntry;
+};
+
 export type IssueWorkMutationResult = {
   applied: boolean;
   audit_event_id: string;
@@ -260,6 +269,34 @@ export function applyIssueWorkAction(
   return attachShadow(db, write, command.audit, command.shadow_mode);
 }
 
+export function readIssueWorkDual(
+  db: RunnerDatabase,
+  issueID: number
+): IssueWorkDualReadResult | null {
+  const legacy = getIssueAsWork(db, issueID);
+  if (!legacy) return null;
+  const target = getWork(db, legacy.id);
+  if (!target) {
+    return {
+      authority: "issues",
+      legacy,
+      mismatches: ["target_missing"],
+      status: "missing_target",
+      target: null,
+      work: legacy
+    };
+  }
+  const mismatches = issueWorkShadowMismatches(legacy, target);
+  return {
+    authority: "issues",
+    legacy,
+    mismatches,
+    status: mismatches.length > 0 ? "mismatch" : "matched",
+    target,
+    work: legacy
+  };
+}
+
 export function syncIssueWorkShadow(
   db: RunnerDatabase,
   issueID: number,
@@ -312,7 +349,7 @@ export function syncIssueWorkShadow(
         changed ||= transitioned.applied;
       }
     }
-    const mismatches = issueShadowMismatches(projection, shadow);
+    const mismatches = issueWorkShadowMismatches(projection, shadow);
     if (mismatches.length > 0) {
       recordShadowMismatch(db, issueID, audit, projection.id, mismatches);
       return { mismatches, mode: "best_effort", status: "mismatch", work_id: projection.id };
@@ -597,7 +634,7 @@ function shadowPatch(projection: WorkLedgerEntry, shadow: WorkLedgerEntry) {
   };
 }
 
-function issueShadowMismatches(projection: WorkLedgerEntry, shadow: WorkLedgerEntry): string[] {
+export function issueWorkShadowMismatches(projection: WorkLedgerEntry, shadow: WorkLedgerEntry): string[] {
   const mismatches: string[] = [];
   if (projection.id !== shadow.id) mismatches.push("id");
   if (projection.owner.project_id !== shadow.owner.project_id) mismatches.push("owner.project_id");

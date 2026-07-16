@@ -7,6 +7,11 @@ import {
   vacuumEventDatabase
 } from "../events/maintenanceService.ts";
 import { rebuildEventSummaryProjection } from "../events/eventSummaryProjectionService.ts";
+import {
+  auditWorkConsistency,
+  backfillIssueWorks,
+  rollbackIssueWorkBackfill
+} from "../domain/work/migrationService.ts";
 import { formatJSON } from "./output.ts";
 
 const BOOLEAN_FLAGS = new Set([
@@ -21,7 +26,7 @@ const BOOLEAN_FLAGS = new Set([
 export function runMaintenance(args: string[]): string {
   const family = args[0]?.trim();
   const command = args[1]?.trim();
-  if (!family || !command) throw new Error("usage: maintenance <events|db> <command> [flags]");
+  if (!family || !command) throw new Error("usage: maintenance <events|db|work> <command> [flags]");
   const flags = parseFlags(args.slice(2));
   let report: Record<string, unknown>;
   if (family === "events" && command === "report") {
@@ -112,6 +117,55 @@ export function runMaintenance(args: string[]): string {
       pages: optionalInteger(flags.pages, "--pages"),
       reportPath: required(flags, "report")
     });
+  } else if (family === "work" && command === "audit") {
+    allowOnly(flags, ["db", "json", "report"]);
+    report = auditWorkConsistency({
+      dbPath: required(flags, "db"),
+      reportPath: required(flags, "report")
+    });
+  } else if (family === "work" && command === "backfill") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "batch-size", "checkpoint",
+      "confirm-backup-tested", "confirm-no-active-writers", "db", "json", "max-batches",
+      "reason", "report", "resume"
+    ]);
+    report = backfillIssueWorks({
+      actor: flags.actor,
+      actorKind: workActorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: flags["audit-ref"],
+      batchSize: optionalInteger(flags["batch-size"], "--batch-size"),
+      checkpointPath: required(flags, "checkpoint"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
+      reason: flags.reason,
+      reportPath: required(flags, "report"),
+      resume: enabled(flags, "resume")
+    });
+  } else if (family === "work" && command === "rollback") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "backfill-checkpoint", "batch-size",
+      "checkpoint", "confirm-backup-tested", "confirm-no-active-writers", "db", "json",
+      "max-batches", "reason", "report", "resume"
+    ]);
+    report = rollbackIssueWorkBackfill({
+      actor: flags.actor,
+      actorKind: workActorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: flags["audit-ref"],
+      backfillCheckpointPath: required(flags, "backfill-checkpoint"),
+      batchSize: optionalInteger(flags["batch-size"], "--batch-size"),
+      checkpointPath: required(flags, "checkpoint"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
+      reason: flags.reason,
+      reportPath: required(flags, "report"),
+      resume: enabled(flags, "resume")
+    });
   } else {
     throw new Error(`unknown maintenance command: ${family} ${command}`);
   }
@@ -158,6 +212,13 @@ function actorKind(value: string | undefined): "retention_worker" | "system" | "
   const kind = value?.trim().toLowerCase();
   if (kind === "retention_worker" || kind === "system" || kind === "user") return kind;
   throw new Error("--actor-kind must be user, system, or retention_worker");
+}
+
+function workActorKind(value: string | undefined): "automation" | "system" | "user" | undefined {
+  if (value === undefined) return undefined;
+  const kind = value.trim().toLowerCase();
+  if (kind === "automation" || kind === "system" || kind === "user") return kind;
+  throw new Error("--actor-kind must be user, system, or automation");
 }
 
 function required(flags: Record<string, string>, name: string): string {

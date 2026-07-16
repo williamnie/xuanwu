@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "./command.ts";
@@ -91,6 +91,45 @@ describe("maintenance CLI", () => {
     `).get()?.count).toBe(4);
     check.close();
   });
+
+  test("runs dry-run and applied Work backfill through the migration CLI", async () => {
+    const root = mkdtempSync(join(tmpdir(), "maintenance-work-cli-"));
+    roots.push(root);
+    const dbPath = join(root, "runner-copy.db");
+    const checkpointPath = join(root, "work-checkpoint.json");
+    const reportPath = join(root, "work-report.json");
+    const database = await openDatabase({ dbPath, stateDir: root });
+    database.sqlite.run(`
+      insert into projects (id, name, cwd, created_at, updated_at)
+        values ('demo', 'Demo', '/tmp/demo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+      insert into issues (project_id, title, description, status, created_at, updated_at)
+        values ('demo', 'Backfill', 'Backfill goal', 'todo', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    `);
+    database.close();
+
+    const dryRun = await maintenanceCli([
+      "work", "backfill", "--db", dbPath, "--checkpoint", checkpointPath,
+      "--report", reportPath, "--json"
+    ]);
+    expect(dryRun).toMatchObject({ dry_run: true, parity_passed: false });
+    expect(existsSync(checkpointPath)).toBe(false);
+
+    const applied = await maintenanceCli([
+      "work", "backfill", "--db", dbPath, "--checkpoint", checkpointPath,
+      "--report", reportPath, "--actor", "operator", "--actor-kind", "user",
+      "--audit-ref", "pi_action_events:work-cli-test", "--reason", "CLI backfill test",
+      "--apply", "--confirm-backup-tested", "--confirm-no-active-writers", "--json"
+    ]);
+    expect(applied).toMatchObject({ dry_run: false, parity_passed: true, created_rows: 1 });
+    expect(existsSync(checkpointPath)).toBe(true);
+
+    const rollback = await maintenanceCli([
+      "work", "rollback", "--db", dbPath, "--backfill-checkpoint", checkpointPath,
+      "--checkpoint", join(root, "rollback-checkpoint.json"),
+      "--report", join(root, "rollback-report.json"), "--json"
+    ]);
+    expect(rollback).toMatchObject({ blockers: [], dry_run: true, checkpoint: { total: 1 } });
+  });
 });
 
 async function cli(extra: string[], dbPath: string): Promise<Record<string, unknown>> {
@@ -101,6 +140,15 @@ async function cli(extra: string[], dbPath: string): Promise<Record<string, unkn
     "--actor", "operator", "--actor-kind", "user", "--audit-ref", "pi_action_events:test-rebuild",
     "--reason", "projection test", ...extra, "--json"
   ], stdout, stderr);
+  expect(code).toBe(0);
+  expect(stderr.text).toBe("");
+  return JSON.parse(stdout.text);
+}
+
+async function maintenanceCli(args: string[]): Promise<Record<string, unknown>> {
+  const stdout = new MemoryWriter();
+  const stderr = new MemoryWriter();
+  const code = await runCli(["maintenance", ...args], stdout, stderr);
   expect(code).toBe(0);
   expect(stderr.text).toBe("");
   return JSON.parse(stdout.text);
