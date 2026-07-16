@@ -3,7 +3,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS, PI_READ_ONLY_TOOLS } from "../http/piProjectTools.ts";
-import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
+import { builtinToolPermission, RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
 import { createReadOnlyRuntimeTools } from "./readOnlyRuntimeTools.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 
@@ -23,6 +23,7 @@ export type PiRuntimeToolRegistryAudit = {
 export type PiRuntimeToolKit = {
   audit: PiRuntimeToolRegistryAudit;
   customTools: ToolDefinition[];
+  readOnlyToolNames: string[];
   source: ToolSource;
   tools: string[];
 };
@@ -101,6 +102,7 @@ function registryToolKit(db: RunnerDatabase, project: Project | undefined, conte
   return {
     audit: auditSnapshot("registry", tools, filteredCustomTools, [provider.id, ...readOnlyTools.providerIDs], executable.skipped),
     customTools: filteredCustomTools,
+    readOnlyToolNames: readOnlyNames([...tools, ...filteredCustomTools.map((tool) => tool.name)], snapshot.tools),
     source: "registry",
     tools
   };
@@ -120,9 +122,18 @@ function fallbackToolKit(
       registry_error: safeError(error)
     },
     customTools,
+    readOnlyToolNames: [...new Set([...tools, ...customTools.map((tool) => tool.name)])]
+      .filter((name) => builtinToolPermission(name) === "read"),
     source: "fallback",
     tools
   };
+}
+
+function readOnlyNames(names: string[], registry: ReturnType<typeof loadAssistantToolRegistrySnapshot>["tools"]): string[] {
+  return [...new Set(names)].filter((name) => {
+    const matches = registry.filter((tool) => tool.name === name);
+    return matches.length > 0 && matches.every((tool) => tool.permission === "read");
+  });
 }
 
 function executableToolNames(

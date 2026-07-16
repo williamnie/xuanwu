@@ -38,6 +38,12 @@ describe("PI runtime tool registry adapter", () => {
       ]));
       expect(kit.audit.custom_tool_names).toContain(URL_FETCH_TOOL_NAME);
       expect(kit.audit.provider_ids).toEqual(expect.arrayContaining(["runner-builtin", HTTP_READONLY_PROVIDER_ID]));
+      expect(kit.readOnlyToolNames).toEqual(expect.arrayContaining([
+        "read", "issue_list", "memory_search", URL_FETCH_TOOL_NAME
+      ]));
+      for (const name of ["issue_create_proposal", "manual_context_intake", "memory_write_candidate"]) {
+        expect(kit.readOnlyToolNames).not.toContain(name);
+      }
     } finally {
       db.close();
     }
@@ -55,6 +61,8 @@ describe("PI runtime tool registry adapter", () => {
       .toEqual(createPiProjectTools(db).map((tool) => tool.name).sort());
     expect(kit.audit.registry_error).toEqual(expect.any(String));
     expect(kit.audit.provider_ids).toEqual(["hardcoded-pi-runtime"]);
+    expect(kit.readOnlyToolNames).toContain("issue_list");
+    expect(kit.readOnlyToolNames).not.toContain("issue_create_proposal");
   });
 });
 

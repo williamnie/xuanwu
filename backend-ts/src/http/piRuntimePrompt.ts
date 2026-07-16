@@ -5,6 +5,7 @@ import { publicMcpRegistry } from "../mcp/registry.ts";
 import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
+import { supervisorIntentRoutePrompt } from "../pi/supervisorIntentRouter.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
@@ -15,6 +16,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
   return [
     xuanwuSupervisorRoleContractPrompt(),
     xuanwuSupervisorCompatibilityPrompt(),
+    ...(input.supervisorIntentRoute ? [supervisorIntentRoutePrompt(input.supervisorIntentRoute)] : []),
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),

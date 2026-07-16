@@ -14,6 +14,7 @@ import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
 import { createPiRuntimeResourceLoader } from "./piRuntimeResources.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
 import { createPiRuntimeToolKit, recordPiRuntimeToolRegistryAudit } from "../pi/piRuntimeTools.ts";
+import type { SupervisorIntentRoute } from "../pi/supervisorIntentRouter.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -32,6 +33,7 @@ export type RuntimeSessionInput = {
   sessionFile?: string;
   source?: string;
   sourceTurn?: { id?: string; source?: string; userPrompt?: string };
+  supervisorIntentRoute?: SupervisorIntentRoute;
   toolProject?: Project;
 };
 
@@ -148,7 +150,9 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       heartbeatID: input.heartbeatID,
       issueID: input.issueID,
       projectID: toolProject?.id ?? input.project?.id,
-      source: input.source
+      readOnlyToolNames: runtimeTools.readOnlyToolNames,
+      source: input.source,
+      supervisorIntentRoute: input.supervisorIntentRoute
     });
     if (input.agent.name !== "") session.setSessionName(input.agent.name);
     return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, cleanupSdkAudit) };

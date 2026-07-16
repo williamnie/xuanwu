@@ -9,7 +9,7 @@ import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { listIssues } from "../db/repositories/issues.ts";
 import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
-import { getPiConversation, listPiActions } from "../db/repositories/pi.ts";
+import { getPiConversation, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
 import { runPiConversationPrompt } from "./piConversationApi.ts";
@@ -97,6 +97,66 @@ describe("Bun PI conversation message API", () => {
       });
       expect(message.status).toBe(201);
       expect(await message.json()).toMatchObject({ conversation_id: "conv-title", title: "帮我看下 Runner Markdown 渲染" });
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("audits intent routing and denies low-confidence write tools", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-intent-route-api", provider: "pi-intent-route" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage([
+          fauxToolCall("issue_create_proposal", {
+            description: "ambiguous request must not create Work",
+            title: "Should not exist"
+          }, { id: "ambiguous-create" })
+        ], { stopReason: "toolUse" }),
+        fauxAssistantMessage("请先确认是只调查，还是要执行变更。")
+      ]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-intent-route");
+      writeFauxModelsConfig(database, "pi-intent-route");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-intent-route", project_id: "demo", pi_agent_id: "pi-faux"
+      });
+
+      const message = await request(router, "/api/pi/conversations/conv-intent-route/messages", {
+        prompt: "处理一下"
+      });
+      const routeEvents = listPiActionEvents(database, {
+        conversationId: "conv-intent-route",
+        eventType: "supervisor_intent_routed"
+      });
+      const route = JSON.parse(routeEvents[0]?.payload_json || "{}") as Record<string, unknown>;
+      const toolAudits = listPiActionEvents(database, {
+        conversationId: "conv-intent-route",
+        eventType: "tool_call_audit"
+      });
+      const deniedTool = JSON.parse(toolAudits[0]?.payload_json || "{}") as Record<string, unknown>;
+      const createAction = listPiActions(database).find((action) => action.action_type === "issue.create");
+
+      expect(message.status).toBe(201);
+      expect(await message.json()).toMatchObject({
+        text: "请先确认是只调查，还是要执行变更。"
+      });
+      expect(listIssues(database, { projectId: "demo" })).toEqual([]);
+      expect(createAction).toBeUndefined();
+      expect(routeEvents).toHaveLength(1);
+      expect(route).toMatchObject({
+        decision: "ask_one_question",
+        primary_intent: "execute",
+        write_policy: { allow_mutation: false }
+      });
+      expect(routeEvents[0]?.payload_json).not.toContain("处理一下");
+      expect(deniedTool).toMatchObject({
+        error: { type: "intent_route_denied" },
+        status: "denied",
+        tool: "issue_create_proposal"
+      });
     } finally {
       faux.unregister();
       database.close();

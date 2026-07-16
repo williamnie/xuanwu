@@ -30,6 +30,13 @@ import {
   type PiRuntimeSession
 } from "./piRuntime.ts";
 import { publishPiSessionEvent } from "./piSessionEvents.ts";
+import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actionGate.ts";
+import {
+  recordSupervisorIntentRouteAudit,
+  routeSupervisorIntent,
+  supervisorIntentRouteAllowsMutation,
+  type SupervisorIntentRoute
+} from "../pi/supervisorIntentRouter.ts";
 import {
   isReviewConversationIntent,
   reviewConversationAuthorization,
@@ -149,7 +156,29 @@ async function sendPiConversationMessage(
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
-  const runtime = await openConversationRuntime(context, titledConversation, intent, targetProjectId, prompt);
+  const review = isReviewConversationIntent(intent);
+  const source = review ? reviewConversationSource(titledConversation) : runnerChatSource(titledConversation);
+  const turnID = crypto.randomUUID();
+  const intentRoute = routeSupervisorIntent({
+    intentHint: intent,
+    prompt,
+    source: source ?? (review ? "runner_review" : "runner_chat")
+  });
+  recordSupervisorIntentRouteAudit(context.database, {
+    conversationID: titledConversation.id,
+    projectID: targetProjectId || titledConversation.project_id,
+    turnID
+  }, intentRoute);
+  const runtime = await openConversationRuntime(
+    context,
+    titledConversation,
+    intentRoute,
+    intent,
+    targetProjectId,
+    prompt,
+    turnID,
+    source
+  );
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
   try {
@@ -306,9 +335,12 @@ function clearPiSessionProjectIndex(db: RunnerDatabase, providerSessionID: strin
 async function openConversationRuntime(
   context: PiConversationContext,
   conversation: PiConversation,
+  intentRoute: SupervisorIntentRoute,
   intent = "",
   targetProjectId = "",
-  userPrompt = ""
+  userPrompt = "",
+  turnID = "",
+  source?: string
 ) {
   const project = conversation.project_id === ""
     ? undefined
@@ -316,10 +348,9 @@ async function openConversationRuntime(
   const toolProject = optionalConversationProject(context.database, cleanString(targetProjectId)) ?? project;
   const agent = requireConversationAgent(context.database, conversation);
   const review = isReviewConversationIntent(intent);
-  const source = review ? reviewConversationSource(conversation) : runnerChatSource(conversation);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: review ? reviewConversationAuthorization() : toolProject ? runnerChatAuthorization(toolProject) : undefined,
+    authorization: conversationAuthorization(review, toolProject, intentRoute),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     conversationID: conversation.id,
@@ -332,22 +363,45 @@ async function openConversationRuntime(
     sessionFile: conversation.session_file,
     toolProject,
     source,
-    sourceTurn: { source, userPrompt }
+    sourceTurn: { id: turnID, source, userPrompt },
+    supervisorIntentRoute: intentRoute
   });
 }
 
-function runnerChatAuthorization(project: Project) {
+function conversationAuthorization(
+  review: boolean,
+  project: Project | undefined,
+  intentRoute: SupervisorIntentRoute
+) {
+  if (review) return reviewConversationAuthorization();
+  if (project) return runnerChatAuthorization(project, intentRoute);
+  if (!supervisorIntentRouteAllowsMutation(intentRoute)) return readOnlyConversationAuthorization();
+  return undefined;
+}
+
+function runnerChatAuthorization(project: Project, intentRoute: SupervisorIntentRoute) {
+  const actions = supervisorIntentRouteAllowsMutation(intentRoute)
+    ? [...PI_RUNNER_CHAT_ACTIONS]
+    : [...PI_READ_ONLY_ACTION_TYPES];
   return {
-    allowedActions: [...PI_RUNNER_CHAT_ACTIONS],
+    allowedActions: actions,
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,
-    authorizedActions: runnerChatAuthorizedActions(),
+    authorizedActions: runnerChatAuthorizedActions(actions),
     mode: "delegated" as const,
     scopes: [{ runner_resource: "issues" }, { project_id: project.id }]
   };
 }
 
-function runnerChatAuthorizedActions() {
-  return PI_RUNNER_CHAT_ACTIONS.map((action_type) => ({ action_type }));
+function readOnlyConversationAuthorization() {
+  return {
+    allowedActions: [...PI_READ_ONLY_ACTION_TYPES],
+    authorizedActions: runnerChatAuthorizedActions(PI_READ_ONLY_ACTION_TYPES),
+    mode: "attended" as const
+  };
+}
+
+function runnerChatAuthorizedActions(actions: readonly string[]) {
+  return actions.map((action_type) => ({ action_type }));
 }
 
 function runnerChatSource(conversation: PiConversation): string | undefined {

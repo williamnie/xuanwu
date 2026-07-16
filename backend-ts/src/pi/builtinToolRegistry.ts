@@ -55,7 +55,7 @@ function piActionTools(): AssistantTool[] {
     metadata: { builtin: true, label: tool.label ?? tool.name },
     name: tool.name,
     output_schema: { type: "object" },
-    permission: permissionForTool(tool.name),
+    permission: builtinToolPermission(tool.name),
     provider_id: RUNNER_BUILTIN_PROVIDER_ID
   }));
 }
@@ -73,7 +73,7 @@ function primitiveReadTools(): AssistantTool[] {
   }));
 }
 
-function permissionForTool(name: string): ToolPermission {
+export function builtinToolPermission(name: string): ToolPermission {
   return READ_TOOL_NAMES.has(name) ? "read" : "write";
 }
 
