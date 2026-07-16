@@ -1,0 +1,38 @@
+{
+  "schema_version": "xuanwu.workflow-manifest.v1",
+  "id": "workflow:fixture-invalid",
+  "revision": 1,
+  "name": "Invalid fixture",
+  "description": "This fixture must be rejected because the closed stage schema contains an unknown grant.",
+  "stages": [
+    {
+      "id": "execute",
+      "name": "Execute",
+      "agent": {
+        "role": "executor",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:fixture@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      },
+      "llm_can_bypass_gate": true
+    }
+  ]
+}

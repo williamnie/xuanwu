@@ -1,0 +1,41 @@
+{
+  "schema_version": "xuanwu.workflow-project-override.v1",
+  "project_id": "fixture-project",
+  "workflow_id": "workflow:fixture-implement",
+  "base_revision": 1,
+  "stage_overrides": [
+    {
+      "stage_id": "implement",
+      "agent_profile_id": "fixture-readonly",
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner:work.get"
+        ],
+        "allowed_actions": []
+      },
+      "retry": {
+        "max_attempts": 1
+      },
+      "approval": {
+        "mode": "before_stage",
+        "policy_ref": "approval-policy:fixture-strict@1"
+      },
+      "handoff_mode": "local_changes"
+    }
+  ],
+  "verification_overrides": [
+    {
+      "schema_version": 1,
+      "project_id": "fixture-project",
+      "policy_id": "verification-policy:fixture",
+      "base_policy_revision": 1,
+      "additional_required_groups": [],
+      "promote_optional_requirement_ids": [],
+      "disallow_skip_requirement_ids": [],
+      "deny_manual_override": true,
+      "audit_event_ref": "issue_events:fixture-project:verification-override:1"
+    }
+  ],
+  "audit_event_ref": "issue_events:fixture-project:workflow-override:1"
+}

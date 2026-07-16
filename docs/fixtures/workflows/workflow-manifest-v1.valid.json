@@ -1,0 +1,48 @@
+{
+  "schema_version": "xuanwu.workflow-manifest.v1",
+  "id": "workflow:fixture-implement",
+  "revision": 1,
+  "name": "Fixture implement workflow",
+  "description": "A deterministic fixture for the Workflow Manifest V1 contract.",
+  "stages": [
+    {
+      "id": "implement",
+      "name": "Implement and verify",
+      "agent": {
+        "role": "executor",
+        "profile_id": "fixture-codex",
+        "required_skill_ids": [
+          "fixture-executor"
+        ]
+      },
+      "permissions": {
+        "max_tool_permission": "write",
+        "allowed_tools": [
+          "runner:work.get"
+        ],
+        "allowed_actions": [
+          "work.update"
+        ]
+      },
+      "verification_policy_ref": "verification-policy:fixture@1",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_seconds": [
+          5
+        ]
+      },
+      "approval": {
+        "mode": "before_external_write",
+        "policy_ref": "approval-policy:fixture@1"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes",
+          "branch_commit"
+        ]
+      }
+    }
+  ]
+}
