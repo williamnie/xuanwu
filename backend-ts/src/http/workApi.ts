@@ -23,6 +23,7 @@ import {
   type WorkLedgerEntry,
   type WorkTransitionAudit
 } from "../domain/work/contracts.ts";
+import { queryWorkTimeline } from "../domain/work/timeline.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
@@ -51,6 +52,9 @@ type PageInput = {
 export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
   router.get("/api/works", (request) => workResponse(() => listResponse(context.database, request)));
   router.get("/api/works/:id", (request) => workResponse(() => detailResponse(context.database, request)));
+  router.get("/api/works/:id/timeline", (request) => (
+    workResponse(() => timelineResponse(context.database, request))
+  ));
   router.get("/api/works/:id/relations", (request) => (
     workResponse(() => workRelationsResponse(context.database, request))
   ));
@@ -164,6 +168,25 @@ function detailResponse(db: RunnerDatabase, request: Request): Record<string, un
     relations: relationsForWork(db, work.id),
     work
   };
+}
+
+function timelineResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+  const work = requireWork(db, workID(request));
+  const params = new URL(request.url).searchParams;
+  try {
+    return {
+      compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
+      ...queryWorkTimeline(db, work.id, {
+        cursor: optionalString(params.get("cursor")) || undefined,
+        limit: positiveIntegerParam(params.get("limit"), "limit", 50, 500)
+      })
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Work timeline cursor")) {
+      throw workError(400, "invalid_cursor", error.message);
+    }
+    throw error;
+  }
 }
 
 function workRelationsResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
