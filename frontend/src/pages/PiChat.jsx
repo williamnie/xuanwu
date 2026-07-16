@@ -1,5 +1,5 @@
 import { Bot, ChevronDown, Copy, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
-import { PRODUCT_TERMS } from '../brand';
+import { PRODUCT_NAV_LABELS, PRODUCT_TERMS } from '../brand';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import TurtleLoader from '../components/TurtleLoader';
 import SessionComposer from './sessions/SessionComposer';
@@ -57,7 +57,7 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
       <div className="pi-chat-sidebar-brand">
         <span className="pi-chat-sidebar-icon"><Bot size={16} /></span>
         <div>
-          <strong>{PRODUCT_TERMS.supervisor}</strong>
+          <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
           <span>Single runtime</span>
         </div>
       </div>

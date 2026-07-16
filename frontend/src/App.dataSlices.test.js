@@ -10,9 +10,14 @@ test('issues page initial reconcile only fetches issue list', () => {
   assert.doesNotMatch(appSource, /issues:\s*\[[^\]]*'cronTasks'/);
 });
 
-test('cron page initial reconcile only fetches cron tasks', () => {
-  assert.match(appSource, /cron:\s*\['cronTasks'\]/);
-  assert.doesNotMatch(appSource, /cron:\s*\[[^\]]*'projects'/);
+test('Automations page initial reconcile only fetches compatibility cron tasks', () => {
+  assert.match(appSource, /automations:\s*\['cronTasks'\]/);
+  assert.doesNotMatch(appSource, /automations:\s*\[[^\]]*'projects'/);
+});
+
+test('Command Center keeps the existing bounded dashboard data slices', () => {
+  assert.match(appSource, /'command-center':\s*\['projects',\s*'issues'\]/);
+  assert.doesNotMatch(appSource, /dashboard:\s*\[/);
 });
 
 test('Work board only reconciles project labels because it owns Work API loading', () => {

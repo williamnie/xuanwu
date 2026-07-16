@@ -15,7 +15,7 @@ const SETTINGS_TABS = [
   { id: 'policies', label: 'Policies' },
 ];
 
-export function SettingsHeader({ activeTab, onTabChange }) {
+export function SettingsHeader({ activeTab, onTabChange, title = 'Supervisor Settings' }) {
   return (
     <header className="settings-header">
       <div className="settings-title-row">
@@ -23,7 +23,7 @@ export function SettingsHeader({ activeTab, onTabChange }) {
           <div className="settings-eyebrow">
             <Boxes size={14} /> Xuanwu Supervisor · Single Runtime
           </div>
-          <h1>Supervisor Settings</h1>
+          <h1>{title}</h1>
         </div>
         <RestartAction />
       </div>

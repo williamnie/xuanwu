@@ -1,24 +1,102 @@
-export const PI_ASSISTANT_NAV_ITEMS = [
+import { PRODUCT_NAV_LABELS } from '../brand.js';
+
+export const PRODUCT_NAV_ITEMS = Object.freeze([
   {
-    page: 'pi-chat',
-    label: 'Chat',
-    title: 'Chat',
-    description: '查看和继续所有 Supervisor conversations。'
+    page: 'command-center',
+    label: PRODUCT_NAV_LABELS.commandCenter,
+    icon: 'command-center',
+    placement: 'primary',
+    availability: 'compatibility',
   },
   {
-    page: 'pi-inbox',
-    label: 'Inbox',
-    title: 'Inbox',
-    description: '多来源事项经过 intake 后进入这里，再由 skill 或人工处理。'
-  }
-];
+    page: 'ask-xuanwu',
+    label: PRODUCT_NAV_LABELS.askXuanwu,
+    icon: 'ask-xuanwu',
+    placement: 'primary',
+    availability: 'compatibility',
+  },
+  {
+    page: 'work',
+    label: PRODUCT_NAV_LABELS.work,
+    icon: 'work',
+    placement: 'primary',
+    availability: 'compatibility',
+    featureFlag: 'workBoard',
+  },
+  {
+    page: 'runs',
+    label: PRODUCT_NAV_LABELS.runs,
+    icon: 'runs',
+    placement: 'primary',
+    availability: 'compatibility',
+  },
+  {
+    page: 'handoffs',
+    label: PRODUCT_NAV_LABELS.handoffs,
+    icon: 'handoffs',
+    placement: 'primary',
+    availability: 'available',
+  },
+  {
+    page: 'automations',
+    label: PRODUCT_NAV_LABELS.automations,
+    icon: 'automations',
+    placement: 'primary',
+    availability: 'compatibility',
+  },
+  {
+    page: 'projects',
+    label: PRODUCT_NAV_LABELS.projects,
+    icon: 'projects',
+    placement: 'primary',
+    availability: 'available',
+  },
+  {
+    page: 'connections',
+    label: PRODUCT_NAV_LABELS.connections,
+    icon: 'connections',
+    placement: 'primary',
+    availability: 'compatibility',
+  },
+  {
+    page: 'settings',
+    label: PRODUCT_NAV_LABELS.settings,
+    icon: 'settings',
+    placement: 'footer',
+    availability: 'available',
+  },
+]);
 
-export const PI_ASSISTANT_SETTINGS_ITEM = {
-  page: 'settings',
-  label: 'Settings',
-  title: 'Settings',
-  description: 'Supervisor 与 Runner runtime 的高级配置集合。'
-};
+export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
+  dashboard: 'command-center',
+  'pi-chat': 'ask-xuanwu',
+  sessions: 'runs',
+  cron: 'automations',
+  'pi-connectors': 'connections',
+});
+
+const HIDDEN_COMPAT_ROUTE_PARENTS = Object.freeze({
+  issues: 'work',
+  'attention-inbox': 'command-center',
+  'pi-inbox': 'command-center',
+});
+
+export function productNavigationItems({ workBoardEnabled = true } = {}) {
+  return PRODUCT_NAV_ITEMS.filter(item => item.featureFlag !== 'workBoard' || workBoardEnabled);
+}
+
+export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
+  const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
+  if (resolvedPage === 'work' && !workBoardEnabled) return 'issues';
+  return resolvedPage;
+}
+
+export function productNavPageForRoute(page) {
+  const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
+  if (HIDDEN_COMPAT_ROUTE_PARENTS[resolvedPage]) return HIDDEN_COMPAT_ROUTE_PARENTS[resolvedPage];
+  if (isAssistantModulePage(resolvedPage)) return 'settings';
+  return resolvedPage;
+}
 
 export const PI_ASSISTANT_CONFIG_MODULES = [
   {
@@ -80,8 +158,6 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
 ];
 
 export const PI_ASSISTANT_MODULES = [
-  ...PI_ASSISTANT_NAV_ITEMS,
-  PI_ASSISTANT_SETTINGS_ITEM,
   ...PI_ASSISTANT_CONFIG_MODULES,
 ];
 

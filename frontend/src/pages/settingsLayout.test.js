@@ -48,30 +48,33 @@ test('Supervisor Settings IA reserves future capability placeholders', () => {
   assert.match(sectionsSource, /Policies/);
 });
 
-test('Xuanwu Supervisor sidebar keeps operational Inbox and moves Settings to bottom tools', () => {
+test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
 
-  for (const route of ['pi-chat', 'pi-overview', 'pi-inbox', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies', 'settings']) {
+  for (const route of ['pi-overview', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
-  assert.match(sidebarSource, /PRODUCT_TERMS\.supervisor/);
+  for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'handoffs', 'automations', 'projects', 'connections', 'settings']) {
+    assert.match(modulesSource, new RegExp(`page: '${route}'`));
+  }
+  assert.match(sidebarSource, /productNavigationItems/);
+  assert.match(sidebarSource, /primaryNavItems\.map/);
+  assert.match(sidebarSource, /footerNavItems\.map/);
   assert.doesNotMatch(sidebarSource, /PI Assistant/);
-  assert.match(sidebarSource, /PI_ASSISTANT_NAV_ITEMS\.map/);
-  assert.match(sidebarSource, /Chat:\s*MessageSquare/);
-  assert.match(modulesSource, /PI_ASSISTANT_SETTINGS_ITEM/);
-  assert.match(sidebarSource, /PI_ASSISTANT_SETTINGS_ITEM/);
-  assert.match(sidebarSource, /isAssistantModulePage\(currentPage\)/);
+  assert.doesNotMatch(sidebarSource, /PRODUCT_TERMS\.supervisor/);
+  assert.doesNotMatch(sidebarSource, /PI_ASSISTANT_NAV_ITEMS|pi-assistant-nav|pi-assistant-item/);
   assert.match(sidebarSource, /sidebar-footer-actions/);
   assert.match(appStylesSource, /\.sidebar-footer-actions \.nav-item/);
   assert.match(appSource, /currentPage === 'attention-inbox' \|\| currentPage === 'pi-inbox'/);
+  assert.match(appSource, /currentPage === 'command-center'/);
+  assert.match(appSource, /currentPage === 'ask-xuanwu'/);
+  assert.match(appSource, /currentPage === 'automations'/);
+  assert.match(appSource, /currentPage === 'connections'/);
   assert.match(appSource, /isAssistantModulePage\(currentPage\)/);
   assert.match(appSource, /<Settings initialTab=\{assistantModule\?\.tab\} navigateTo=\{navigateTo\} \/>/);
-  assert.doesNotMatch(sidebarSource, /Overview/);
-  assert.doesNotMatch(sidebarSource, /Connectors: Plug/);
   assert.doesNotMatch(appSource, /from '\.\/pages\/AssistantModulePage'/);
-  assert.doesNotMatch(sidebarSource, /> Runner</);
 });
 
 test('Settings restart action is a red in-page danger control', () => {

@@ -22,11 +22,8 @@ test('sidebar project list fills remaining menu height', () => {
 });
 
 test('collapsed sidebar navigation keeps accessible names when labels are visually hidden', () => {
-  for (const label of ['Dashboard', 'Runs', 'Work', 'Issues', 'Cron', 'Projects']) {
-    assert.match(source, new RegExp(`aria-label="${label}"`));
-  }
-  assert.match(source, /aria-label=\{module\.label\}/);
-  assert.match(source, /aria-label=\{PI_ASSISTANT_SETTINGS_ITEM\.label\}/);
+  assert.match(source, /aria-label=\{item\.label\}/);
+  assert.match(source, /productNavigationItems\(\{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(source, /aria-label=\{theme === 'dark' \? 'Light theme' : 'Dark theme'\}/);
 });
 

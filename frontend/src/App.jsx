@@ -3,7 +3,11 @@ import { lazy, Suspense, useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { systemApi } from './api/system.js';
 import { getAuthToken } from './api/authToken';
-import { assistantModuleForPage, isAssistantModulePage } from './pages/assistantModules';
+import {
+  assistantModuleForPage,
+  isAssistantModulePage,
+  resolveProductPage,
+} from './pages/assistantModules';
 import AppSidebar from './components/AppSidebar';
 import GuardianAlertBanner from './components/GuardianAlertBanner';
 import TurtleLoader from './components/TurtleLoader';
@@ -17,8 +21,8 @@ import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
-import { resolveWorkBoardPage } from './pages/workBoardModel.js';
-import { resolveRunsPage } from './pages/runs/runPageModel.js';
+import { PRODUCT_NAV_LABELS } from './brand.js';
+import { WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
 import { handoffRouteFromHash } from './pages/handoffPageModel.js';
 import './App.css';
 import './GeekWorkbench.css';
@@ -53,8 +57,8 @@ const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
 ]);
 
 const PAGE_DATA_SLICES = {
-  cron: ['cronTasks'],
-  dashboard: ['projects', 'issues'],
+  automations: ['cronTasks'],
+  'command-center': ['projects', 'issues'],
   issues: ['issues'],
   projects: ['projects', 'issues'],
   work: ['projects'],
@@ -79,7 +83,7 @@ export default function App() {
   const initialHandoffRoute = handoffRouteFromHash(globalThis.location?.hash);
   const [appState, updateAppState] = useImmer(() => ({
     // 路由与过滤状态
-    currentPage: initialHandoffRoute?.page || 'dashboard', // 默认进入 Dashboard，通知深链进入对应 Handoff
+    currentPage: initialHandoffRoute?.page || 'command-center', // 默认进入 Command Center，通知深链进入对应 Handoff
     selectedIssueId: null,
     selectedRunId: '',
     selectedSessionId: '',
@@ -184,7 +188,7 @@ export default function App() {
   }, [updateAppState]);
 
   const navigateTo = useCallback((page, issueId = null, sessionId = '', handoffId = '') => {
-    const resolvedPage = resolveRunsPage(resolveWorkBoardPage(page));
+    const resolvedPage = resolveProductPage(page, { workBoardEnabled: WORK_BOARD_ENABLED });
     const hashRoute = handoffRouteFromHash(globalThis.location?.hash);
     const targetHandoffId = resolvedPage === 'handoffs' ? handoffId || hashRoute?.handoffId || '' : '';
     if (resolvedPage !== 'handoffs' && hashRoute && globalThis.history && globalThis.location) {
@@ -287,7 +291,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'runs' || currentPage === 'pi-chat' ? 'in-sessions-page' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'runs' || currentPage === 'ask-xuanwu' ? 'in-sessions-page' : ''}`}>
       <ToastContainer />
       {sidebarCollapsed && (
         <button
@@ -321,7 +325,9 @@ export default function App() {
           </div>
         ) : (
           <Suspense fallback={<PageLoadingFallback />}>
-            {currentPage === 'work' ? (
+            {currentPage === 'command-center' ? (
+              <Dashboard navigateTo={navigateTo} />
+            ) : currentPage === 'work' ? (
               <WorkBoard navigateTo={navigateTo} />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />
@@ -344,7 +350,7 @@ export default function App() {
                 selectedRunId={selectedRunId}
                 selectedSessionId={selectedSessionId}
               />
-            ) : currentPage === 'pi-chat' ? (
+            ) : currentPage === 'ask-xuanwu' ? (
               <PiChat navigateTo={navigateTo} />
             ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
               <AttentionInbox />
@@ -352,8 +358,10 @@ export default function App() {
               <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
             ) : currentPage === 'projects' ? (
               <Projects />
-            ) : currentPage === 'cron' ? (
+            ) : currentPage === 'automations' ? (
               <Cron />
+            ) : currentPage === 'connections' ? (
+              <Settings initialTab="connectors" pageTitle={PRODUCT_NAV_LABELS.connections} navigateTo={navigateTo} />
             ) : currentPage === 'settings' ? (
               <Settings navigateTo={navigateTo} />
             ) : (

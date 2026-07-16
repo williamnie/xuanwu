@@ -3,12 +3,11 @@ import {
   BriefcaseBusiness,
   ChevronLeft,
   FolderGit2,
-  Inbox,
   Layers,
-  ListTodo,
   MessageSquare,
   Moon,
   PackageCheck,
+  Plug,
   Settings,
   Sun,
   LayoutDashboard,
@@ -25,16 +24,21 @@ import {
   useDataStore,
 } from '../store/dataStore';
 import {
-  isAssistantModulePage,
-  PI_ASSISTANT_NAV_ITEMS,
-  PI_ASSISTANT_SETTINGS_ITEM,
+  productNavigationItems,
+  productNavPageForRoute,
 } from '../pages/assistantModules';
-import { PRODUCT_TERMS } from '../brand';
 import { WORK_BOARD_ENABLED } from '../pages/workBoardModel.js';
 
-const ASSISTANT_ICONS = {
-  Chat: MessageSquare,
-  Inbox,
+const NAV_ICONS = {
+  'command-center': LayoutDashboard,
+  'ask-xuanwu': MessageSquare,
+  work: BriefcaseBusiness,
+  runs: Layers,
+  handoffs: PackageCheck,
+  automations: CalendarClock,
+  projects: FolderGit2,
+  connections: Plug,
+  settings: Settings,
 };
 
 export default function AppSidebar({
@@ -50,7 +54,10 @@ export default function AppSidebar({
   toggleSidebar,
 }) {
   const brandState = useRunnerBrandState();
-  const settingsActive = currentPage === PI_ASSISTANT_SETTINGS_ITEM.page || isAssistantModulePage(currentPage);
+  const activeNavPage = productNavPageForRoute(currentPage);
+  const navItems = productNavigationItems({ workBoardEnabled: WORK_BOARD_ENABLED });
+  const primaryNavItems = navItems.filter(item => item.placement === 'primary');
+  const footerNavItems = navItems.filter(item => item.placement === 'footer');
   useDynamicFavicon(brandState);
 
   return (
@@ -71,50 +78,15 @@ export default function AppSidebar({
 
 
       <div className="sidebar-nav-group">
-        <button aria-label="Dashboard" className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => navigateTo('dashboard')}>
-          <NavIconLabel Icon={LayoutDashboard} label="Dashboard" />
-        </button>
-
-        <button aria-label="Runs" className={`nav-item ${currentPage === 'runs' ? 'active' : ''}`} onClick={() => navigateTo('runs')}>
-          <NavIconLabel Icon={Layers} label="Runs" />
-        </button>
-
-        {WORK_BOARD_ENABLED ? (
-          <button aria-label="Work" className={`nav-item ${currentPage === 'work' ? 'active' : ''}`} onClick={() => navigateTo('work')}>
-            <NavIconLabel Icon={BriefcaseBusiness} label="Work" />
-          </button>
-        ) : null}
-
-        <button aria-label="Handoffs" className={`nav-item ${currentPage === 'handoffs' ? 'active' : ''}`} onClick={() => navigateTo('handoffs')}>
-          <NavIconLabel Icon={PackageCheck} label="Handoffs" />
-        </button>
-
-        <button aria-label="Issues" className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
-          <NavIconLabel Icon={ListTodo} label="Issues" />
-          <IssueCountBadge active={currentPage === 'issues'} />
-        </button>
-
-        <button aria-label="Cron" className={`nav-item ${currentPage === 'cron' ? 'active' : ''}`} onClick={() => navigateTo('cron')}>
-          <NavIconLabel Icon={CalendarClock} label="Cron" />
-          <CronCountBadge active={currentPage === 'cron'} />
-        </button>
-
-        <button aria-label="Projects" className={`nav-item ${currentPage === 'projects' ? 'active' : ''}`} onClick={() => navigateTo('projects')}>
-          <NavIconLabel Icon={FolderGit2} label="Projects" />
-          <ProjectCountBadge active={currentPage === 'projects'} />
-        </button>
-      </div>
-
-      <div className="sidebar-section-title">{PRODUCT_TERMS.supervisor}</div>
-      <div className="sidebar-nav-group pi-assistant-nav">
-        {PI_ASSISTANT_NAV_ITEMS.map((module) => (
+        {primaryNavItems.map((item) => (
           <button
-            aria-label={module.label}
-            className={`nav-item pi-assistant-item ${currentPage === module.page ? 'active' : ''}`}
-            key={module.page}
-            onClick={() => navigateTo(module.page)}
+            aria-label={item.label}
+            className={`nav-item ${activeNavPage === item.page ? 'active' : ''}`}
+            key={item.page}
+            onClick={() => navigateTo(item.page)}
           >
-            <NavIconLabel Icon={ASSISTANT_ICONS[module.label]} label={module.label} />
+            <NavIconLabel Icon={NAV_ICONS[item.icon]} label={item.label} />
+            <ProductNavBadge active={activeNavPage === item.page} page={item.page} />
           </button>
         ))}
       </div>
@@ -135,14 +107,17 @@ export default function AppSidebar({
 
       <div className="sidebar-footer">
         <div className="sidebar-footer-actions">
-          <button
-            aria-label={PI_ASSISTANT_SETTINGS_ITEM.label}
-            className={`nav-item nav-item-secondary ${settingsActive ? 'active' : ''}`}
-            onClick={() => navigateTo(PI_ASSISTANT_SETTINGS_ITEM.page)}
-            type="button"
-          >
-            <NavIconLabel Icon={Settings} label={PI_ASSISTANT_SETTINGS_ITEM.label} />
-          </button>
+          {footerNavItems.map((item) => (
+            <button
+              aria-label={item.label}
+              className={`nav-item nav-item-secondary ${activeNavPage === item.page ? 'active' : ''}`}
+              key={item.page}
+              onClick={() => navigateTo(item.page)}
+              type="button"
+            >
+              <NavIconLabel Icon={NAV_ICONS[item.icon]} label={item.label} />
+            </button>
+          ))}
           <button
             aria-label={theme === 'dark' ? 'Light theme' : 'Dark theme'}
             className="nav-item nav-item-secondary sidebar-theme-row"
@@ -178,14 +153,10 @@ function ApiStatus() {
   );
 }
 
-function IssueCountBadge({ active }) {
-  const issues = useDataStore(selectIssues);
-
-  return (
-    <span className="nav-badge" style={{ background: active ? 'var(--primary-glow)' : undefined, color: active ? 'var(--primary)' : undefined }}>
-      {issues.length}
-    </span>
-  );
+function ProductNavBadge({ active, page }) {
+  if (page === 'automations') return <CronCountBadge active={active} />;
+  if (page === 'projects') return <ProjectCountBadge active={active} />;
+  return null;
 }
 
 function ProjectCountBadge({ active }) {

@@ -1,4 +1,5 @@
 import { CalendarClock, CheckCircle2, PauseCircle, PlayCircle } from 'lucide-react';
+import { PRODUCT_NAV_LABELS } from '../brand.js';
 import CronTasksPanel from '../components/CronTasksPanel';
 import {
   selectCronTasks,
@@ -32,7 +33,7 @@ export default function Cron() {
       <div className="page-intro" style={{ flexShrink: 0, padding: '24px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <CalendarClock size={28} color="var(--primary)" /> Cron
+            <CalendarClock size={28} color="var(--primary)" /> {PRODUCT_NAV_LABELS.automations}
           </h1>
           <p style={{ color: 'var(--text-muted)' }}>
             管理 Triage 定时队列：查看、创建、暂停/恢复和删除当前 cron 任务。

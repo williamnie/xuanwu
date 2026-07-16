@@ -1,6 +1,7 @@
 import { eventsApi } from '../api/events.js';
 import { useEffect } from 'react';
 import { useImmer } from 'use-immer';
+import { PRODUCT_NAV_LABELS } from '../brand.js';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import {
@@ -81,7 +82,7 @@ export default function Dashboard({
       {/* 头部标题区域 */}
       <div className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>系统总览</h1>
+          <h1 style={{ fontFamily: 'var(--font-sans)', fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>{PRODUCT_NAV_LABELS.commandCenter}</h1>
           <p style={{ color: 'var(--text-muted)' }}>实时监控项目 Loop 运行状态与待处理 Issue 队列</p>
         </div>
         <div className="page-intro-status" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

@@ -55,16 +55,18 @@ test('board filters combine type, status, project, Attention and delivery', () =
   );
 });
 
-test('Work and Issues remain separate, lazy App routes backed by the domain client', () => {
+test('Work stays primary while hidden Issues compatibility routes keep the domain client', () => {
   const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
+  const navigation = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
   const client = readFileSync(new URL('../api/work.js', import.meta.url), 'utf8');
 
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/WorkBoard'\)\)/);
   assert.match(app, /currentPage === 'work'/);
-  assert.match(app, /resolveWorkBoardPage/);
-  assert.match(sidebar, /aria-label="Work"/);
-  assert.match(sidebar, /aria-label="Issues"/);
+  assert.match(app, /resolveProductPage/);
+  assert.match(sidebar, /productNavigationItems/);
+  assert.match(navigation, /issues: 'work'/);
+  assert.doesNotMatch(sidebar, /aria-label="Issues"/);
   assert.match(client, /request\('\/api\/works'/);
   assert.match(client, /request\(`\/api\/works\/\$\{encodeURIComponent\(id\)\}`/);
 });
