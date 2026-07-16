@@ -69,13 +69,10 @@ function outageEvidence(input: ProviderOutageDiagnosisInput): {
   refs: string[];
 } {
   const refs = ["provider_error"];
-  if (missingRecoverableSession(input.latestRun, input.session)) {
-    return {
-      hardOutage: true,
-      reason: "latest provider error has no recoverable provider session",
-      refs: [...refs, "latest_run", "session"]
-    };
-  }
+  // A startup timeout cannot have a recoverable session yet, but the Codex
+  // transport stops the timed-out app-server process. Treat the first failure
+  // as transient so PI can retry on a fresh process; escalate only after
+  // repeated issue/project deferrals prove a broader outage.
   if (issueDeferredCount(input.events, input.now) >= ISSUE_DEFERRED_THRESHOLD) {
     return {
       hardOutage: true,
@@ -91,10 +88,6 @@ function outageEvidence(input: ProviderOutageDiagnosisInput): {
     };
   }
   return { hardOutage: false, reason: "", refs };
-}
-
-function missingRecoverableSession(latestRun: IssueRun | null, session: AgentSession | null): boolean {
-  return clean(latestRun?.provider_session_id) === "" || !session;
 }
 
 function issueDeferredCount(events: IssueEvent[], now: Date): number {

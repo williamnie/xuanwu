@@ -124,6 +124,39 @@ describe("PI Guardian decision action outlet", () => {
     }
   });
 
+  test("automatically approves a fresh issue retry for a transient startup timeout", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      supervisorCandidateEvent(db, "supervisor-startup-timeout", {
+        allowed_actions: ["issue.retry", "needs_user.escalate"],
+        budget_remaining: 2,
+        diagnosis_code: "provider_transient_network_error",
+        provider: "codex",
+        provider_error_category: "network",
+        reason: "codex app-server request timed out after 90000ms: thread/start",
+        session_status: "unknown",
+        supervisor_mode: "autonomous"
+      }, 670);
+
+      runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
+      runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:31Z") });
+      const [action] = listPiActions(db, { issueId: 670 });
+
+      expect(action).toMatchObject({
+        action_type: "issue.retry",
+        gate_decision: "execute",
+        status: "approved"
+      });
+      expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+        diagnosis_code: "provider_transient_network_error",
+        issue_id: 670,
+        provider: "codex"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("routes needs-context supervisor candidates to needs-user escalation actions", async () => {
     const db = await openFixtureDatabase();
     try {

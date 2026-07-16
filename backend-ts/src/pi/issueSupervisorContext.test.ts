@@ -334,14 +334,14 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
-  test("promotes initialize timeout without a recoverable session to provider runtime unavailable", async () => {
+  test("keeps the first thread/start timeout without a session recoverable", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "runner", await tempRoot("runner-runtime-outage-"));
       insertIssue(db, { id: 406, projectID: "runner", title: "Initialize timeout", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
       insertRun(db, { issueID: 406, id: "issue-406-attempt-1", status: "in_progress", endedAt: "", sessionID: "", turnID: "" });
       insertEvent(db, { issueID: 406, type: "issue.provider_deferred", payload: {
-        error: "app-server request timed out after 10000ms: initialize cwd=/Users/xiaobei/private token=sk-live-secret",
+        error: "codex thread/start failed: codex app-server request timed out after 90000ms: thread/start cwd=/Users/xiaobei/private token=sk-live-secret",
         provider: "codex",
         reason: "provider_infra_transient"
       }, createdAt: "2026-06-10T07:59:45Z" });
@@ -354,9 +354,10 @@ describe("PI issue supervisor context builder", () => {
       });
       expect(context.session).toMatchObject({ provider_session_id: "", status: "unknown" });
       expect(context.candidates[0]).toMatchObject({
-        diagnosis_code: "provider_runtime_unavailable",
-        evidence_refs: expect.arrayContaining(["provider_error", "latest_run", "session"])
+        diagnosis_code: "provider_transient_network_error",
+        evidence_refs: ["provider_error"]
       });
+      expect(context.candidates.map((item) => item.diagnosis_code)).not.toContain("provider_runtime_unavailable");
       const serialized = JSON.stringify(context.candidates);
       expect(serialized).not.toContain("sk-live-secret");
       expect(serialized).not.toContain("/Users/xiaobei/private");

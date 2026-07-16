@@ -74,6 +74,36 @@ describe("supervisor recovery action planner", () => {
     }));
   });
 
+  test("plans a fresh issue retry for the first transient startup timeout without a session", () => {
+    expect(supervisorRecoveryActionCandidates({
+      eventID: "event-startup-timeout",
+      issueID: 670,
+      payload: {
+        allowed_actions: ["issue.retry", "needs_user.escalate"],
+        budget_remaining: 2,
+        diagnosis_code: "provider_transient_network_error",
+        issue_status: "in_progress",
+        issue_updated_at: "2026-07-16T11:40:21Z",
+        provider: "codex",
+        provider_error_category: "network",
+        ready: true,
+        reason: "codex app-server request timed out after 90000ms: thread/start",
+        run_id: "issue-670-attempt-1",
+        run_status: "in_progress",
+        signal_type: "supervisor.candidate",
+        supervisor_mode: "autonomous"
+      },
+      projectID: "codex-issue-runner"
+    })).toContainEqual(expect.objectContaining({
+      action_type: "issue.retry",
+      payload: expect.objectContaining({
+        diagnosis_code: "provider_transient_network_error",
+        issue_id: 670,
+        provider: "codex"
+      })
+    }));
+  });
+
   test("plans provider runtime unavailable as user escalation despite resume-only policy", () => {
     const [candidate] = supervisorRecoveryActionCandidates({
       eventID: "event-provider-outage",
