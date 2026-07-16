@@ -78,7 +78,13 @@ export type AttentionInboxItemRecord = Required<AttentionInboxItemInput> & {
 };
 
 export type AttentionInboxItemStatus = "new" | "triaged" | "proposal_created" | "actioned" | "ignored" | "failed";
-export type AttentionInboxItemFilter = { intakeRunId?: number; limit?: number; source?: string; status?: string };
+export type AttentionInboxItemFilter = {
+  intakeRunId?: number;
+  limit?: number;
+  source?: string;
+  status?: string;
+  statuses?: AttentionInboxItemStatus[];
+};
 
 const RUN_COLUMNS = `id, bundle_id, skill_id, model_policy_id, model,
   input_summary_json, schema_output_json, ignored_groups_json, error, status,
@@ -157,6 +163,16 @@ export function listAttentionInboxItems(
     `select ${ITEM_COLUMNS} from attention_inbox_items${query.where}
       order by created_at desc, id desc limit ?`
   ).all(...query.args).map(mapItem);
+}
+
+export function countAttentionInboxItems(
+  db: RunnerDatabase,
+  filter: Omit<AttentionInboxItemFilter, "limit"> = {}
+): number {
+  const query = itemWhere(filter);
+  return db.sqlite.query<{ count: number }, SQLValue[]>(
+    `select count(*) as count from attention_inbox_items${query.where}`
+  ).get(...query.args)?.count ?? 0;
 }
 
 export function getAttentionInboxItem(db: RunnerDatabase, id: number): AttentionInboxItemRecord | null {
@@ -256,12 +272,23 @@ function mapItem(row: Record<string, unknown>): AttentionInboxItemRecord {
 }
 
 function itemListQuery(filter: AttentionInboxItemFilter): { args: SQLValue[]; where: string } {
+  const query = itemWhere(filter);
+  return { args: [...query.args, listLimit(filter.limit, 100)], where: query.where };
+}
+
+function itemWhere(filter: Omit<AttentionInboxItemFilter, "limit">): { args: SQLValue[]; where: string } {
   const clauses: string[] = [];
   const args: SQLValue[] = [];
   if (filter.intakeRunId) addClause(clauses, args, "intake_run_id=?", filter.intakeRunId);
   if (cleanString(filter.source) !== "") addClause(clauses, args, "source=?", cleanString(filter.source));
-  if (cleanString(filter.status) !== "") addClause(clauses, args, "status=?", cleanString(filter.status));
-  args.push(listLimit(filter.limit, 100));
+  const statuses = [...new Set([
+    cleanString(filter.status),
+    ...(filter.statuses ?? [])
+  ].filter(Boolean))];
+  if (statuses.length > 0) {
+    clauses.push(`status in (${statuses.map(() => "?").join(", ")})`);
+    args.push(...statuses);
+  }
   return { args, where: clauses.length > 0 ? ` where ${clauses.join(" and ")}` : "" };
 }
 
@@ -280,8 +307,11 @@ function listLimit(value: unknown, fallback: number): number {
 
 function itemStatus(value: unknown): AttentionInboxItemStatus {
   const status = cleanString(value);
-  const allowed = ["new", "triaged", "proposal_created", "actioned", "ignored", "failed"];
-  return allowed.includes(status) ? status as AttentionInboxItemStatus : "new";
+  return isAttentionInboxItemStatus(status) ? status : "new";
+}
+
+function isAttentionInboxItemStatus(value: string): value is AttentionInboxItemStatus {
+  return ["new", "triaged", "proposal_created", "actioned", "ignored", "failed"].includes(value);
 }
 
 function runInsertColumns(): string {

@@ -208,6 +208,45 @@ export function countRuns(db: RunnerDatabase, filter: Omit<RunListFilter, "limit
   `).get(...query.args)?.count ?? 0;
 }
 
+export function countRunsByStatus(db: RunnerDatabase): Record<RunStatus, number> {
+  const counts = Object.fromEntries(RUN_STATUSES.map((status) => [status, 0])) as Record<RunStatus, number>;
+  const rows = db.sqlite.query<{ count: number; status: string | null }, []>(`
+    select unified_status as status, count(*) as count from (
+      select ${runStatusSql("run", "latest")} as unified_status
+      from issue_runs run
+      left join run_attempts latest
+        on latest.issue_run_id=run.id
+        and latest.sequence=(select max(candidate.sequence) from run_attempts candidate where candidate.issue_run_id=run.id)
+    ) grouped
+    group by unified_status
+  `).all();
+  for (const row of rows) {
+    if (RUN_STATUSES.includes(row.status as RunStatus)) counts[row.status as RunStatus] = row.count;
+  }
+  return counts;
+}
+
+export function listLatestRunsForWorkIDs(db: RunnerDatabase, workIDs: WorkID[]): RunView[] {
+  const requested = unique(workIDs.map(clean).filter(Boolean));
+  if (requested.length === 0) return [];
+  if (requested.length > 100) throw new Error("latest Runs query supports at most 100 Work ids");
+  const placeholders = requested.map(() => "?").join(", ");
+  return db.sqlite.query<RunRow, string[]>(`
+    select ${RUN_COLUMNS}
+    from issue_runs run
+    join issues issue on issue.id=run.issue_id
+    left join run_attempts latest
+      on latest.issue_run_id=run.id
+      and latest.sequence=(select max(candidate.sequence) from run_attempts candidate where candidate.issue_run_id=run.id)
+    where run.work_id in (${placeholders})
+      and not exists (
+        select 1 from issue_runs newer
+        where newer.work_id=run.work_id and newer.run_sequence>run.run_sequence
+      )
+    order by coalesce(nullif(run.ended_at, ''), latest.updated_at, run.started_at) desc, run.run_id asc
+  `).all(...requested).map((row) => mapRunRow(db, row, 0));
+}
+
 export function getRun(db: RunnerDatabase, runID: RunID): RunDetail | null {
   const row = db.sqlite.query<RunRow, [string]>(`
     select ${RUN_COLUMNS}

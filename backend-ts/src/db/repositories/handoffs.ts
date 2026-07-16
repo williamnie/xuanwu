@@ -143,6 +143,19 @@ export function listStoredHandoffs(db: RunnerDatabase, filter: HandoffListFilter
   };
 }
 
+export function countStoredHandoffs(
+  db: RunnerDatabase,
+  filter: Omit<HandoffListFilter, "before_event_id" | "limit"> = {}
+): number {
+  const query = handoffListWhere(filter);
+  return db.sqlite.query<{ count: number }, Array<number | string>>(`
+    select count(*) as count
+    from issue_events event
+    join issues issue on issue.id=event.issue_id
+    where ${query.clauses.join(" and ")}
+  `).get(...query.args)?.count ?? 0;
+}
+
 function assertRevisionUpdate(
   current: HandoffRecord,
   next: HandoffRecord,
@@ -187,6 +200,24 @@ function handoffListQuery(filter: HandoffListFilter): {
   row_limit: number;
   sql: string;
 } {
+  const query = handoffListWhere(filter);
+  const args = [...query.args];
+  const rowLimit = Math.min(filter.limit * 4 + 1, 401);
+  args.push(rowLimit);
+  return {
+    args,
+    row_limit: rowLimit,
+    sql: `select event.id as event_id, event.type as event_type, event.issue_id, event.payload, issue.project_id
+      from issue_events event
+      join issues issue on issue.id=event.issue_id
+      where ${query.clauses.join(" and ")}
+      order by event.id desc limit ?`
+  };
+}
+
+function handoffListWhere(
+  filter: Omit<HandoffListFilter, "limit">
+): { args: Array<number | string>; clauses: string[] } {
   const placeholders = HANDOFF_RECORD_EVENT_TYPES.map(() => "?").join(", ");
   const clauses = [
     `event.type in (${placeholders})`,
@@ -212,17 +243,7 @@ function handoffListQuery(filter: HandoffListFilter): {
   addFilter(clauses, args, "json_extract(event.payload, '$.handoff.work_id')=?", filter.work_id);
   addListFilter(clauses, args, "json_extract(event.payload, '$.handoff.status')", filter.statuses);
   addListFilter(clauses, args, "json_extract(event.payload, '$.handoff.delivery.mode')", filter.delivery_modes);
-  const rowLimit = Math.min(filter.limit * 4 + 1, 401);
-  args.push(rowLimit);
-  return {
-    args,
-    row_limit: rowLimit,
-    sql: `select event.id as event_id, event.type as event_type, event.issue_id, event.payload, issue.project_id
-      from issue_events event
-      join issues issue on issue.id=event.issue_id
-      where ${clauses.join(" and ")}
-      order by event.id desc limit ?`
-  };
+  return { args, clauses };
 }
 
 function storedHandoff(row: HandoffEventRow): StoredHandoffRecord | null {

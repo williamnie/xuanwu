@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
+import {
+  COMMAND_CENTER_COMPATIBILITY_POLICY,
+  COMMAND_CENTER_SUMMARY_CONTRACT,
+  registerCommandCenterRoutes
+} from "./commandCenterApi.ts";
 import { EVIDENCE_HTTP_COMPATIBILITY_POLICY, registerEvidenceRoutes } from "./evidenceApi.ts";
 import { FRONTEND_COMPATIBILITY_POLICY, registerFrontendCompatRoutes } from "./frontendCompatApi.ts";
 import { HANDOFF_HTTP_COMPATIBILITY_POLICY, registerHandoffRoutes } from "./handoffApi.ts";
@@ -15,6 +20,10 @@ describe("read API route contracts", () => {
     expect(READ_API_ROUTE_REGISTRY.map(({ id, responsibility }) => ({ id, responsibility })))
       .toMatchInlineSnapshot(`
         [
+          {
+            "id": "command-center",
+            "responsibility": "projection",
+          },
           {
             "id": "evidence",
             "responsibility": "domain",
@@ -61,6 +70,19 @@ describe("read API route contracts", () => {
           },
         ]
       `);
+  });
+
+  test("locks Command Center method, path, and read-only authority contracts", () => {
+    expect(captureRoutes(registerCommandCenterRoutes)).toEqual([
+      "GET /api/command-center/summary"
+    ]);
+    expect(COMMAND_CENTER_SUMMARY_CONTRACT).toBe("xw.command-center.summary.v1");
+    expect(COMMAND_CENTER_COMPATIBILITY_POLICY).toMatchObject({
+      dual_read: expect.stringContaining("none"),
+      dual_write: expect.stringContaining("none"),
+      handoff_read_authority: "issue_events:handoff.*.v1",
+      work_read_authority: "issues-via-Work-adapter"
+    });
   });
 
   test("locks Evidence method, path, and authority contracts", () => {
