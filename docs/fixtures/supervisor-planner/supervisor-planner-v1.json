@@ -1,0 +1,33 @@
+{
+  "schema_version": "xw.supervisor-planner-fixtures.v1",
+  "fixtures": [
+    {
+      "name": "simple",
+      "prompt": "实现登录页错误提示并补 focused test",
+      "expected_mode": "work_plan",
+      "expected_work_count": 1,
+      "approval_required": false
+    },
+    {
+      "name": "multi-step",
+      "prompt": "完成账户设置改造：\n1. 实现 API 校验\n2. 接入设置页面\n3. 补充双端回归测试",
+      "expected_mode": "work_plan",
+      "expected_work_count": 4,
+      "approval_required": true
+    },
+    {
+      "name": "read-only",
+      "prompt": "调查 Work #42 为什么失败，只读分析，不要修改状态",
+      "expected_mode": "read_only",
+      "expected_work_count": 0,
+      "approval_required": false
+    },
+    {
+      "name": "release",
+      "prompt": "先修复构建脚本，然后发布当前版本",
+      "expected_mode": "work_plan",
+      "expected_work_count": 3,
+      "approval_required": true
+    }
+  ]
+}
