@@ -100,6 +100,7 @@ describe("Bun SQLite database connection", () => {
         "project_pi_policies",
         "project_pi_settings",
         "projects",
+        "run_attempts",
         "schema_migrations",
         "session_command_events",
         "session_turn_references",
@@ -129,6 +130,11 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "pi_mcp_capabilities")).toEqual(expect.arrayContaining(["enabled", "permission", "read_only", "requires_confirmation", "risk_level"]));
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
+      expect(generatedColumnNames(connection, "issue_runs")).toEqual(expect.arrayContaining([
+        "run_id",
+        "run_sequence",
+        "work_id"
+      ]));
       expect(columnNames(connection, "cron_tasks")).toContain("claim_token");
       expect(columnNames(connection, "cron_tasks")).toContain("claim_started_at");
       expect(columnNames(connection, "pi_reports")).toEqual(expect.arrayContaining([
@@ -189,7 +195,8 @@ describe("Bun SQLite database connection", () => {
         { id: "038_pi_memory_store_metadata" },
         { id: "039_pi_mcp_discovery" },
         { id: "040_event_summary_projection" },
-        { id: "041_work_ledger_schema" }
+        { id: "041_work_ledger_schema" },
+        { id: "042_run_attempt_relations" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -714,7 +721,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 41 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 42 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
@@ -782,6 +789,12 @@ function tableNames(connection: RunnerDatabase): string[] {
 
 function columnNames(connection: RunnerDatabase, table: string): string[] {
   return connection.sqlite.query(`pragma table_info(${table})`).all()
+    .map((row) => (row as { name: string }).name);
+}
+
+function generatedColumnNames(connection: RunnerDatabase, table: string): string[] {
+  return connection.sqlite.query(`pragma table_xinfo(${table})`).all()
+    .filter((row) => (row as { hidden: number }).hidden !== 0)
     .map((row) => (row as { name: string }).name);
 }
 
