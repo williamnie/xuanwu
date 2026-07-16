@@ -40,7 +40,7 @@ describe("Bun issue patch API", () => {
     }
   });
 
-  test("final status update closes the latest open issue run", async () => {
+  test("routes a done claim without trusted Evidence to pending verification", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -51,15 +51,59 @@ describe("Bun issue patch API", () => {
       const run = latestRun(database, issueId);
 
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ id: issueId, status: "done", error: "" });
+      expect(await response.json()).toMatchObject({
+        id: issueId,
+        status: "pending_verification",
+        error: expect.stringContaining("Verification pending")
+      });
       expect(run).toMatchObject({
-        status: "done",
+        status: "pending_verification",
         provider_session_id: "thread-runtime",
         provider_turn_id: "turn-runtime",
         exit_reason: "explicit_status_update",
-        error: ""
+        error: expect.stringContaining("Verification pending")
       });
       expect(run?.ended_at).not.toBe("");
+      expect(listEvents(database).map((event) => event.type)).toEqual([
+        "issue.verification_gate_intent.v1",
+        "issue.status_changed",
+        "issue.verification_gate_outcome.v1"
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("allows runner completion after a trusted current-run test result", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo", "in_progress");
+      insertOpenRun(database, issueId);
+      insertCommandEvidenceEvent(database, issueId, "bun test src/http/issuePatchApi.test.ts", 0);
+
+      const response = await patchIssue(database, issueId, { status: "done", error: "" });
+      const events = listEvents(database);
+      const outcome = JSON.parse(events.at(-1)?.payload ?? "{}") as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: issueId, status: "done", error: "" });
+      expect(events.map((event) => event.type)).toEqual([
+        "issue.log",
+        "issue.verification_gate_intent.v1",
+        "issue.status_changed",
+        "issue.status_changed",
+        "issue.verification_gate_outcome.v1"
+      ]);
+      expect(outcome).toMatchObject({
+        evaluation: { decision: "passed", satisfied: true },
+        target_status: "done",
+        transition_path: ["in_progress->pending_verification", "pending_verification->done"]
+      });
+      expect(latestRun(database, issueId)).toMatchObject({
+        status: "pending_verification",
+        exit_reason: "explicit_status_update"
+      });
     } finally {
       database.close();
     }
@@ -210,6 +254,33 @@ function insertOpenRun(db: RunnerDatabase, issueId: number): void {
     `insert into issue_runs (id, issue_id, attempt, status, started_at)
      values (?, ?, ?, ?, ?)`,
     [`issue-${issueId}-attempt-1`, issueId, 1, "in_progress", "2026-01-01T00:00:00Z"]
+  );
+}
+
+function insertCommandEvidenceEvent(
+  db: RunnerDatabase,
+  issueId: number,
+  command: string,
+  exitCode: number
+): void {
+  const completedAtMs = Date.now();
+  const rawPayload = JSON.stringify({
+    item: {
+      type: "commandExecution",
+      id: `command-${issueId}`,
+      command,
+      cwd: "/tmp/demo",
+      status: exitCode === 0 ? "completed" : "failed",
+      commandActions: [{ type: "unknown", command }],
+      aggregatedOutput: "focused verification",
+      exitCode,
+      durationMs: 20,
+      completedAtMs
+    }
+  });
+  db.sqlite.run(
+    "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+    [issueId, JSON.stringify({ type: "tool", raw_method: "item/completed", raw_payload: rawPayload }), new Date(completedAtMs).toISOString()]
   );
 }
 

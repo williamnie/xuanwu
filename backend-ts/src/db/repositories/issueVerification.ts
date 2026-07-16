@@ -1,4 +1,9 @@
 import type { RunnerDatabase } from "../database.ts";
+import {
+  applyIssueCompletionGate,
+  createManualOverrideEvidence,
+  ISSUE_VERIFICATION_GATE_EVENT_TYPES
+} from "../../domain/evidence/completionGate.ts";
 import { cleanString, issueTimestamp } from "./issueCreate.ts";
 import { getIssue, type Issue } from "./issues.ts";
 import { ProjectNotFoundError } from "./projects.ts";
@@ -31,15 +36,38 @@ export function reviewIssueVerification(
   const comment = cleanString(input.comment);
   const patch = verificationPatch(action, comment);
   const timestamp = issueTimestamp();
-  const write = db.transaction(() => {
+  const write = db.transaction((): Issue => {
     const eventBase = { issueID: issue.id, timestamp };
-    updateIssueReview(db, { issueID: issue.id, patch, timestamp });
     if (comment !== "") recordIssueComment(db, { ...eventBase, comment });
+    if (action === "accept") {
+      const auditEventRef = `issue-verification-review:${issue.id}:${timestamp}`;
+      const manual = createManualOverrideEvidence(issue, {
+        audit_event_ref: auditEventRef,
+        comment,
+        now: timestamp
+      });
+      recordIssueEvent(db, {
+        ...eventBase,
+        type: ISSUE_VERIFICATION_GATE_EVENT_TYPES.humanEvidence,
+        payload: { action, audit_event_ref: auditEventRef, evidence: manual.evidence }
+      });
+      recordVerificationReviewed(db, { ...eventBase, action, comment, status: patch.status });
+      return applyIssueCompletionGate(db, issue.id, {
+        actor: { id: "issue-verification-api", kind: "user" },
+        correlation_id: auditEventRef,
+        evidence: [manual.evidence],
+        manual_override: manual.override,
+        now: timestamp,
+        patch,
+        source: "issue-verification-api"
+      }).issue;
+    }
+    updateIssueReview(db, { issueID: issue.id, patch, timestamp });
     recordVerificationReviewed(db, { ...eventBase, action, comment, status: patch.status });
     recordStatusChanged(db, { ...eventBase, status: patch.status });
+    return mustGetIssue(db, issue.id);
   });
-  write();
-  return mustGetIssue(db, issue.id);
+  return write.immediate();
 }
 
 function normalizeVerificationAction(value: unknown): string {
@@ -67,7 +95,7 @@ type IssueReviewUpdate = {
 
 type IssueEventInput = {
   issueID: number;
-  payload: Record<string, string>;
+  payload: Record<string, unknown>;
   timestamp: string;
   type: string;
 };

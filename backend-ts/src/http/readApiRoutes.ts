@@ -52,7 +52,7 @@ function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers
   router.get("/api/issues/:id", (request) => readResponse(() => handlers.issues.read(issueID(request))));
   router.patch("/api/issues/:id", async (request) => {
     const body = await parseObjectBody(request);
-    return writeResponse(() => handlers.issues.update(issueID(request), body));
+    return asyncWriteResponse(() => handlers.issues.update(issueID(request), body));
   });
   router.delete("/api/issues/:id", (request) => writeResponse(() => {
     handlers.issues.delete(issueID(request));

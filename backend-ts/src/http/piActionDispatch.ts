@@ -34,6 +34,7 @@ import {
   type IssueCompletionWatchCancelInput,
   type IssueCompletionWatchCreateInput
 } from "../pi/issueCompletionWatchActions.ts";
+import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -88,7 +89,7 @@ export async function dispatchPiAction(
     case "issue.state_repair":
       return applyIssueStateRepair(context.database, actionPayload(action, payload));
     case "agent.executor_assign":
-      return updateIssue(context.database, positivePayloadID(payload, "issue_id"), objectPayload(payload.patch));
+      return await updateExecutorIssue(context.database, action, payload);
     case "agent.workflow_request":
       return createWorkflowIssue(context, action, payload);
     case "needs_user.escalate":
@@ -103,6 +104,21 @@ export async function dispatchPiAction(
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+async function updateExecutorIssue(
+  db: RunnerDatabase,
+  action: PiAction,
+  payload: Record<string, unknown>
+): Promise<unknown> {
+  const issueID = positivePayloadID(payload, "issue_id");
+  const patch = objectPayload(payload.patch);
+  if (cleanString(patch.status) !== "done") return updateIssue(db, issueID, patch);
+  return (await completeIssueFromRuntimeEvidence(db, issueID, patch, {
+    actor: { id: `pi-action:${action.id}`, kind: "supervisor" },
+    correlation_id: action.idempotency_key || action.id,
+    source: "pi-agent-executor-assign"
+  })).issue;
 }
 
 function actionPayload(action: PiAction, payload: Record<string, unknown>): Record<string, unknown> {

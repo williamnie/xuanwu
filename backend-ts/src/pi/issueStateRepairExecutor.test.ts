@@ -107,6 +107,39 @@ describe("Issue state repair executor", () => {
       db.close();
     }
   });
+
+  test("does not let a legacy verifier report bypass the Evidence Policy done gate", async () => {
+    const db = await openFixture();
+    try {
+      const issueID = insertIssue(db, "pending_verification", "Legacy verifier report");
+      db.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)",
+        [issueID, "issue.verification_report", JSON.stringify({ recommendation: "accept", summary: "tests passed" }), "2026-01-01T00:01:00Z"]
+      );
+      const payload = recommendedRepairPayload(db, issueID, {
+        diagnosisCode: "pending_verification_has_evidence"
+      });
+
+      const result = applyIssueStateRepair(db, payload);
+      const events = listIssueEvents(db, issueID);
+
+      expect(result).toMatchObject({ status: "pending_verification" });
+      expect(getIssue(db, issueID)).toMatchObject({ status: "pending_verification" });
+      expect(events.map((event) => event.type)).toEqual([
+        "issue.verification_report",
+        "issue.verification_gate_intent.v1",
+        "issue.verification_gate_outcome.v1",
+        "issue.state_manager_repair"
+      ]);
+      expect(JSON.parse(events[2].payload)).toMatchObject({
+        evaluation: { decision: "pending", satisfied: false },
+        projection_errors: ["legacy state-repair evidence is not trusted structured Evidence"],
+        target_status: "pending_verification"
+      });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function objectPayload(value: unknown): Record<string, unknown> {

@@ -35,13 +35,24 @@ describe("Bun issue verification API", () => {
       expect(body).toMatchObject({ id: issueId, status: "done", error: "" });
       expect(events.map((event) => event.type)).toEqual([
         "issue.comment",
+        "issue.verification_human_evidence.v1",
         "issue.verification_reviewed",
-        "issue.status_changed"
+        "issue.verification_gate_intent.v1",
+        "issue.status_changed",
+        "issue.verification_gate_outcome.v1"
       ]);
-      expect(JSON.parse(events[1].payload)).toEqual({
+      expect(JSON.parse(events[2].payload)).toEqual({
         action: "accept",
         comment: "人工验收通过",
         status: "done"
+      });
+      expect(JSON.parse(events.at(-1)?.payload ?? "{}")).toMatchObject({
+        evaluation: {
+          decision: "overridden",
+          override: { applied: true },
+          satisfied: true
+        },
+        target_status: "done"
       });
     } finally {
       database.close();

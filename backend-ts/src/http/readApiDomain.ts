@@ -23,6 +23,7 @@ import {
 import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/interrupt.ts";
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
+import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 
@@ -83,9 +84,19 @@ function createIssueAndKickLoop(context: ReadApiContext, body: Record<string, un
   return issue;
 }
 
-function updateIssueAndKickLoop(context: ReadApiContext, id: number, body: Record<string, unknown>): Issue {
+async function updateIssueAndKickLoop(
+  context: ReadApiContext,
+  id: number,
+  body: Record<string, unknown>
+): Promise<Issue> {
   if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
-  const issue = updateIssue(context.database, id, body);
+  const issue = stringBody(body.status) === "done"
+    ? (await completeIssueFromRuntimeEvidence(context.database, id, body, {
+      actor: { id: "runner-completion-api", kind: "runner" },
+      correlation_id: `issue-${id}-completion`,
+      source: "issue-patch-api"
+    })).issue
+    : updateIssue(context.database, id, body);
   publishIssueStatusChange(context, issue, body);
   if (terminalForSkillAudit(issue.status)) safeAuditSkillIntents(context.database, issue.id);
   if (shouldKickAfterWrite(issue.status)) kickAutoProject(context, issue.project_id);
