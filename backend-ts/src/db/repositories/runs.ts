@@ -1,5 +1,9 @@
 import type { RunnerDatabase } from "../database.ts";
 import {
+  rebuildRunProgressProjection,
+  type RunProgressProjection
+} from "./runProgress.ts";
+import {
   ATTEMPT_KINDS,
   ATTEMPT_STATUSES,
   RUN_STATUSES,
@@ -64,7 +68,7 @@ export type RunView = {
   };
   links: Record<string, string>;
   mapping_errors: string[];
-  progress: {
+  progress: RunProgressProjection & {
     attempt_id: string;
     attempt_sequence: number;
     attempt_status: AttemptStatus | null;
@@ -185,7 +189,7 @@ export function listRuns(db: RunnerDatabase, filter: RunListFilter): RunView[] {
     ${query.where}
     ${runOrder(filter)}
     limit ? offset ?
-  `).all(...query.args, filter.limit, filter.offset).map(mapRunRow);
+  `).all(...query.args, filter.limit, filter.offset).map((row) => mapRunRow(db, row, 0));
 }
 
 export function countRuns(db: RunnerDatabase, filter: Omit<RunListFilter, "limit" | "offset">): number {
@@ -212,7 +216,7 @@ export function getRun(db: RunnerDatabase, runID: RunID): RunDetail | null {
     where run.run_id=?
   `).get(runID);
   if (!row) return null;
-  const run = mapRunRow(row);
+  const run = mapRunRow(db, row);
   const attempts = listRunAttempts(db, run.id, run.legacy.id, run.legacy.error);
   const contractAttempts = attempts.map(attemptContract).filter((attempt): attempt is RunAttempt => attempt !== null);
   return {
@@ -274,7 +278,7 @@ function runStatusSql(run: string, latest: string): string {
     else null end`;
 }
 
-function mapRunRow(row: RunRow): RunView {
+function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number): RunView {
   const id = row.run_id as RunID;
   const workID = row.work_id as WorkID;
   const status = RUN_STATUSES.includes(row.unified_status as RunStatus) ? row.unified_status as RunStatus : null;
@@ -285,6 +289,10 @@ function mapRunRow(row: RunRow): RunView {
     ? row.trigger as RunTrigger
     : row.run_sequence === 1 ? "initial" : null;
   const updatedAt = clean(row.ended_at) || clean(row.latest_attempt_updated_at) || row.started_at;
+  const progress = rebuildRunProgressProjection(db, id, {
+    ...(timelineLimit === undefined ? {} : { timelineLimit })
+  });
+  if (!progress) throw new Error(`Run progress projection source is missing: ${id}`);
   const mappingErrors = [
     ...(status ? [] : [`unsupported legacy issue_run status: ${row.legacy_status}`]),
     ...(row.latest_attempt_id && !attemptStatus ? [`latest Attempt status is unmapped: ${row.latest_attempt_status ?? "null"}`] : []),
@@ -306,11 +314,12 @@ function mapRunRow(row: RunRow): RunView {
     links: runLinks(id, workID, row.project_id, row.legacy_id, row.latest_attempt_id),
     mapping_errors: mappingErrors,
     progress: {
+      ...progress,
       attempt_id: row.latest_attempt_id ?? "",
       attempt_sequence: row.latest_attempt_sequence ?? 0,
       attempt_status: attemptStatus,
       phase: status,
-      updated_at: updatedAt
+      updated_at: progress.updated_at || updatedAt
     },
     project_id: row.project_id,
     provider: row.provider,
@@ -321,7 +330,7 @@ function mapRunRow(row: RunRow): RunView {
     supersedes_run_id: clean(row.supersedes_run_id) ? row.supersedes_run_id as RunID : null,
     ...(terminal ? { terminal } : {}),
     trigger,
-    updated_at: updatedAt,
+    updated_at: progress.updated_at || updatedAt,
     work_id: workID,
     work_title: row.work_title
   };

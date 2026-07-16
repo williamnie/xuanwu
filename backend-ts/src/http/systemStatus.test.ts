@@ -71,6 +71,14 @@ describe("Bun system status endpoints", () => {
         source_of_truth: "issue_events",
         status: "ready"
       });
+      expect(body.run_progress_projection).toMatchObject({
+        active_runs: 0,
+        projection_mode: "read_through_rebuild",
+        source_of_truth: "issue_runs+run_attempts+issue_events",
+        stalled_runs: 0,
+        status: "ready",
+        waiting_approval_runs: 0
+      });
       expect(body.codex).toMatchObject({
         command: "codex app-server --listen stdio://",
         command_ok: true,
@@ -428,6 +436,7 @@ type SystemStatusBody = {
   codex: Record<string, unknown>;
   connectors: Array<{ id: string } & Record<string, unknown>>;
   event_projection: Record<string, unknown>;
+  run_progress_projection: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
   runner: Record<string, number>;
   service: {

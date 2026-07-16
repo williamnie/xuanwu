@@ -11,6 +11,7 @@ import { codexAppServerRpcTimeoutMs } from "../providers/codex/jsonRpc.ts";
 import { projectLoopMaxParallelProjects, runningProjectLoopCount } from "../runner/projectLoopManager.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
+import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
 
 type SystemStatusContext = {
   authEnabled: boolean;
@@ -35,6 +36,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     providers,
     connectors: connectorStatus(context.config, context.feishuReceiverStatus?.()),
     event_projection: eventProjectionStatus(context.database),
+    run_progress_projection: runProgressProjectionStatus(context.database),
     runner: runnerStatus(context.database)
   };
 }
