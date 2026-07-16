@@ -67,7 +67,8 @@ describe("Bun issue patch API", () => {
       expect(listEvents(database).map((event) => event.type)).toEqual([
         "issue.verification_gate_intent.v1",
         "issue.status_changed",
-        "issue.verification_gate_outcome.v1"
+        "issue.verification_gate_outcome.v1",
+        "issue.verification_report"
       ]);
     } finally {
       database.close();
@@ -84,16 +85,18 @@ describe("Bun issue patch API", () => {
 
       const response = await patchIssue(database, issueId, { status: "done", error: "" });
       const events = listEvents(database);
-      const outcome = JSON.parse(events.at(-1)?.payload ?? "{}") as Record<string, unknown>;
+      const outcome = JSON.parse(events.find((event) => event.type === "issue.verification_gate_outcome.v1")?.payload ?? "{}") as Record<string, unknown>;
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ id: issueId, status: "done", error: "" });
       expect(events.map((event) => event.type)).toEqual([
         "issue.log",
+        "evidence.recorded.v1",
         "issue.verification_gate_intent.v1",
         "issue.status_changed",
         "issue.status_changed",
-        "issue.verification_gate_outcome.v1"
+        "issue.verification_gate_outcome.v1",
+        "issue.verification_report"
       ]);
       expect(outcome).toMatchObject({
         evaluation: { decision: "passed", satisfied: true },

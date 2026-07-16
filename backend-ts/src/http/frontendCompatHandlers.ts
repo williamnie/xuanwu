@@ -18,6 +18,11 @@ import { listSkillRegistry } from "../skills/registry.ts";
 import { isProjectLoopActive, startProjectLoop as startManagedProjectLoop } from "../runner/projectLoopManager.ts";
 import type { EventBus } from "../events/bus.ts";
 import { constrainApprovalGrantScope } from "../pi/approvalGrantScope.ts";
+import {
+  createIssueVerifierReview,
+  projectIssueRuntimeEvidence
+} from "../domain/evidence/completionGate.ts";
+import { verifierReviewEventPayload } from "../domain/evidence/verifierReview.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError } from "./errors.ts";
 import { searchProjectReferences } from "./projectReferences.ts";
@@ -190,22 +195,26 @@ function createIssueForCommand(db: RunnerDatabase, body: Record<string, unknown>
   });
 }
 
-function verifierReport(db: RunnerDatabase, id: number): Record<string, unknown> {
+async function verifierReport(db: RunnerDatabase, id: number): Promise<Record<string, unknown>> {
   const issue = getIssue(db, id);
   if (!issue) throw new ProjectNotFoundError();
   if (issue.status !== "pending_verification" && !(issue.status === "done" && issue.error.trim() !== "")) {
     throw new Error("只有 pending_verification 或带有弱证据的 done issue 可以生成 verifier report");
   }
-  const report = {
-    summary: issue.title,
-    acceptanceChecklist: "需人工复核",
-    evidenceFound: issue.error,
-    evidenceMissing: "smoke evidence",
-    risk: "medium",
-    recommendation: "retry"
-  };
-  const event = recordIssueEvent(db, id, "issue.verification_report", { ...report, thread_id: "", turn_id: "" });
-  return { report, thread_id: "", turn_id: "", event };
+  const now = new Date().toISOString();
+  const projection = await projectIssueRuntimeEvidence(db, id, now);
+  const analysis = createIssueVerifierReview(issue, {
+    evidence: projection.evidence,
+    now,
+    projection_errors: projection.errors,
+    run: projection.run
+  });
+  const report = verifierReviewEventPayload(analysis.review, {
+    thread_id: issue.codex_thread_id,
+    turn_id: issue.codex_turn_id
+  });
+  const event = recordIssueEvent(db, id, "issue.verification_report", report);
+  return { report, thread_id: issue.codex_thread_id, turn_id: issue.codex_turn_id, event };
 }
 
 async function resolveApproval(

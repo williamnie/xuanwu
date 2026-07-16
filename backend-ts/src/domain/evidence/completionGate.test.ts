@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { validateWorkflowVerificationPolicy } from "./policy.ts";
+import { parseStructuredVerifierReviewEventPayload } from "./verifierReview.ts";
 import {
   classifyVerificationCommand,
   completeIssueFromRuntimeEvidence,
@@ -54,6 +55,7 @@ describe("Evidence Policy completion gate", () => {
       });
       const events = gateEvents(db, issueID);
       const outcome = JSON.parse(events.at(-1)?.payload ?? "{}") as Record<string, unknown>;
+      const review = latestVerifierReview(db, issueID);
 
       expect(result).toMatchObject({
         evaluation: { decision: "failed", satisfied: false },
@@ -65,6 +67,11 @@ describe("Evidence Policy completion gate", () => {
         evaluation: { decision: "failed" },
         target_status: "failed",
         transition_path: ["in_progress->failed"]
+      });
+      expect(review).toMatchObject({
+        verdict: "fail",
+        recommended_next_action: { action: "fix_and_reverify" },
+        gate_consistency: { expected_status: "failed", policy_decision: "failed" }
       });
     } finally {
       db.close();
@@ -96,6 +103,11 @@ describe("Evidence Policy completion gate", () => {
         ISSUE_VERIFICATION_GATE_EVENT_TYPES.intent,
         ISSUE_VERIFICATION_GATE_EVENT_TYPES.outcome
       ]);
+      expect(latestVerifierReview(db, issueID)).toMatchObject({
+        verdict: "inconclusive",
+        missing_evidence: [expect.objectContaining({ requirement_id: "current-run-check" })],
+        gate_consistency: { expected_status: "pending_verification", policy_decision: "pending" }
+      });
     } finally {
       db.close();
     }
@@ -157,4 +169,12 @@ function gateEvents(db: RunnerDatabase, issueID: number): Array<{ payload: strin
     select payload, type from issue_events
     where issue_id=? and type in (?, ?) order by id
   `).all(issueID, ISSUE_VERIFICATION_GATE_EVENT_TYPES.intent, ISSUE_VERIFICATION_GATE_EVENT_TYPES.outcome);
+}
+
+function latestVerifierReview(db: RunnerDatabase, issueID: number) {
+  const payload = db.sqlite.query<{ payload: string }, [number]>(`
+    select payload from issue_events
+    where issue_id=? and type='issue.verification_report' order by id desc limit 1
+  `).get(issueID)?.payload;
+  return parseStructuredVerifierReviewEventPayload(payload);
 }

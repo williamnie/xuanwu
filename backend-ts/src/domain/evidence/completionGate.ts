@@ -22,6 +22,12 @@ import {
   type VerificationRiskLevel,
   type WorkflowVerificationPolicy
 } from "./policy.ts";
+import {
+  buildStructuredVerifierReview,
+  verifierGateStatusForPolicyDecision,
+  verifierReviewEventPayload,
+  type StructuredVerifierReview
+} from "./verifierReview.ts";
 
 export const ISSUE_WORK_VERIFICATION_POLICY: WorkflowVerificationPolicy = {
   schema_version: 1,
@@ -83,6 +89,16 @@ export type RuntimeEvidenceProjection = {
   run?: IssueRun;
 };
 
+export type IssueVerifierReviewInput = Pick<
+  IssueCompletionGateInput,
+  "evidence" | "manual_override" | "now" | "policy" | "projection_errors" | "risk" | "run"
+>;
+
+export type IssueVerifierReviewResult = {
+  evaluation: VerificationPolicyEvaluation;
+  review: StructuredVerifierReview;
+};
+
 type StoredCommandItem = {
   aggregatedOutput?: unknown;
   command?: unknown;
@@ -120,8 +136,9 @@ export function applyIssueCompletionGate(
   }
 
   const policy = input.policy ?? ISSUE_WORK_VERIFICATION_POLICY;
-  const evaluation = evaluateCompletion(current, { ...input, policy });
-  const targetStatus = completionTarget(evaluation);
+  const analysis = createIssueVerifierReview(current, { ...input, policy });
+  const evaluation = analysis.evaluation;
+  const targetStatus = verifierGateStatusForPolicyDecision(evaluation.decision);
   const fingerprint = completionFingerprint(current, input, policy, evaluation);
   const replay = completionReplay(db, issueID, fingerprint, targetStatus);
   if (replay) return { evaluation, issue: replay, target_status: targetStatus, transition_path: [] };
@@ -186,6 +203,7 @@ export function applyIssueCompletionGate(
       transition_path: transitionPath,
       work_id: issueAsWork(issue).id
     });
+    recordIssueEvent(db, issueID, "issue.verification_report", verifierReviewEventPayload(analysis.review));
     return issue;
   });
 
@@ -194,6 +212,25 @@ export function applyIssueCompletionGate(
     issue: write.immediate(),
     target_status: targetStatus,
     transition_path: transitionPath
+  };
+}
+
+export function createIssueVerifierReview(
+  issue: Issue,
+  input: IssueVerifierReviewInput
+): IssueVerifierReviewResult {
+  const policy = input.policy ?? ISSUE_WORK_VERIFICATION_POLICY;
+  const evaluation = evaluateCompletion(issue, { ...input, policy });
+  return {
+    evaluation,
+    review: buildStructuredVerifierReview({
+      evaluated_at: canonicalNow(input.now),
+      evidence: input.evidence,
+      evaluation,
+      policy,
+      projection_errors: input.projection_errors,
+      work: issueAsWork(issue)
+    })
   };
 }
 
@@ -342,7 +379,7 @@ export function classifyVerificationCommand(command: string): CommandEvidenceKin
   return undefined;
 }
 
-function evaluateCompletion(issue: Issue, input: IssueCompletionGateInput): VerificationPolicyEvaluation {
+function evaluateCompletion(issue: Issue, input: IssueVerifierReviewInput): VerificationPolicyEvaluation {
   const runContext = evaluationRunContext(input);
   return evaluateWorkflowVerificationPolicy({
     context: {
@@ -358,7 +395,7 @@ function evaluateCompletion(issue: Issue, input: IssueCompletionGateInput): Veri
   });
 }
 
-function evaluationRunContext(input: IssueCompletionGateInput): {
+function evaluationRunContext(input: IssueVerifierReviewInput): {
   attempt_id?: EvidenceRecord["attempt_id"];
   run_id?: EvidenceRecord["run_id"];
 } {
@@ -370,14 +407,6 @@ function evaluationRunContext(input: IssueCompletionGateInput): {
   return linked?.run_id
     ? { run_id: linked.run_id, ...(linked.attempt_id ? { attempt_id: linked.attempt_id } : {}) }
     : {};
-}
-
-function completionTarget(
-  evaluation: VerificationPolicyEvaluation
-): "done" | "failed" | "pending_verification" {
-  if (evaluation.decision === "passed" || evaluation.decision === "overridden") return "done";
-  if (evaluation.decision === "pending") return "pending_verification";
-  return "failed";
 }
 
 function transitionIssue(

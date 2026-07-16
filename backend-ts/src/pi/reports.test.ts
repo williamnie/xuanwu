@@ -54,6 +54,7 @@ describe("PI report generator", () => {
     try {
       insertProject(db, "demo");
       const included = insertIssue(db, "demo", "done", "Included", "bun test passed");
+      insertStructuredVerifierReport(db, included, "pass");
       insertIssue(db, "demo", "failed", "Outside delegation");
       createPiDelegation(db, { id: "delegation-a", project_id: "demo", title: "Night window" });
       createPiHeartbeatRun(db, {
@@ -84,8 +85,15 @@ describe("PI report generator", () => {
         project_id: "demo",
         source: "delegation",
         status: "generated",
-        summary: { completed: 1, failed: 0, total: 1 }
+        summary: { completed: 1, failed: 0, total: 1, verifier_pass: 1 }
       });
+      expect(report.verifier_reviews).toEqual([
+        expect.objectContaining({
+          issue_id: included,
+          verdict: "pass",
+          recommended_next_action: expect.objectContaining({ action: "complete_via_gate" })
+        })
+      ]);
     } finally {
       db.close();
     }
@@ -227,5 +235,47 @@ function insertSupervisorEvent(db: RunnerDatabase, issueID: number, eventType: s
      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [issueID, "demo", eventType, input.diagnosisCode ?? "", input.decision ?? "",
       input.actionType ?? "", input.retryAfterAt ?? "", "{}", "2026-06-03T21:09:00Z"]
+  );
+}
+
+function insertStructuredVerifierReport(db: RunnerDatabase, issueID: number, verdict: "pass"): void {
+  const review = {
+    schema_version: 1,
+    schema_id: "xw.verifier-review.v1",
+    input_context: {
+      acceptance_contract_version: 1,
+      acceptance_criteria: [{
+        description: "Deliver the Issue",
+        id: "issue-delivery",
+        required: true,
+        verification_policy_ref: "agent-execution-contract"
+      }],
+      evaluated_at: "2026-06-03T21:07:00.000Z",
+      evidence: [],
+      policy_ref: "verification-policy:agent-execution-contract@1",
+      projection_errors: [],
+      work_id: `xw:work:issues:${issueID}`,
+      work_revision: 1,
+      work_status: "pending_verification"
+    },
+    findings: [{
+      acceptance_criterion_ids: ["issue-delivery"],
+      evidence_ids: [],
+      finding_id: "acceptance:issue-delivery",
+      kind: "acceptance_criterion",
+      result: verdict,
+      summary: "Acceptance criterion is supported by the policy decision."
+    }],
+    verdict,
+    missing_evidence: [],
+    recommended_next_action: {
+      action: "complete_via_gate",
+      reason: "Request the audited deterministic completion gate."
+    },
+    gate_consistency: { expected_status: "done", policy_decision: "passed", satisfied: true }
+  };
+  db.sqlite.run(
+    "insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)",
+    [issueID, "issue.verification_report", JSON.stringify({ structured_review: review }), "2026-06-03T21:07:00Z"]
   );
 }

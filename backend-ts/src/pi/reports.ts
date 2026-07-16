@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import {
   createPiReportRecord,
@@ -6,6 +7,7 @@ import {
   listPiActionEvents,
   listPiDelegations,
   listPiHeartbeatRuns,
+  type IssueSupervisorEvent,
   type PiActionEvent,
   type PiHeartbeatRun
 } from "../db/repositories/pi.ts";
@@ -18,6 +20,7 @@ import { reportWarnings, summarizeProviderHealth } from "./reportHealth.ts";
 import { issueReportSummary } from "./reportIssueSummary.ts";
 import { listReportSupervisorEvents, supervisorReportSummary } from "./reportSupervisorSummary.ts";
 import { buildUsageCostSummary } from "./reportUsage.ts";
+import { parseStructuredVerifierReviewEventPayload } from "../domain/evidence/verifierReview.ts";
 
 export type PiReportInput = {
   bus?: Pick<EventBus, "publish">; codexSessionsDir?: string; database: RunnerDatabase;
@@ -88,6 +91,8 @@ function assembleReport(db: RunnerDatabase, input: {
   const issueIDs = input.issues.map((issue) => issue.id);
   const heartbeatIDs = input.evidence.heartbeat_runs.map((run) => run.id);
   const nightSummary = nightRunSummary(input, issueSummaries, completedSummaries, failedSummaries, heartbeatIDs);
+  const verifierReviews = latestVerifierReviews(db, input.issues);
+  const verifierVerdicts = verifierReviewVerdicts(verifierReviews);
   return {
     blocked_escalations: escalations,
     completed_issues: completedSummaries,
@@ -114,6 +119,9 @@ function assembleReport(db: RunnerDatabase, input: {
       supervisor_recovery_actions: supervisor.recovery_actions,
       total: input.issues.length,
       usage_warnings: usageWarnings,
+      verifier_fail: verifierVerdicts.fail,
+      verifier_inconclusive: verifierVerdicts.inconclusive,
+      verifier_pass: verifierVerdicts.pass,
       verification_gaps: gaps.length,
       warnings: warnings.length
     },
@@ -123,10 +131,42 @@ function assembleReport(db: RunnerDatabase, input: {
     supervisor_summary: supervisor,
     type: input.type,
     usage_cost: input.usage,
+    verifier_reviews: verifierReviews,
     verification_gaps: gaps,
     warnings,
     window: input.window
   };
+}
+
+function latestVerifierReviews(db: RunnerDatabase, issues: Issue[]): Array<Record<string, unknown>> {
+  return issues.flatMap((issue) => {
+    const events = listIssueEvents(db, issue.id, { limit: 20, types: ["issue.verification_report"] });
+    for (const event of [...events].reverse()) {
+      const review = parseStructuredVerifierReviewEventPayload(event.payload);
+      if (!review) continue;
+      return [{
+        event_id: event.id,
+        evidence_ids: [...new Set(review.findings.flatMap((finding) => finding.evidence_ids))],
+        gate_consistency: review.gate_consistency,
+        issue_id: issue.id,
+        missing_evidence: review.missing_evidence,
+        policy_ref: review.input_context.policy_ref,
+        recommended_next_action: review.recommended_next_action,
+        verdict: review.verdict,
+        work_id: review.input_context.work_id
+      }];
+    }
+    return [];
+  });
+}
+
+function verifierReviewVerdicts(reviews: Array<Record<string, unknown>>): Record<"fail" | "inconclusive" | "pass", number> {
+  const counts = { fail: 0, inconclusive: 0, pass: 0 };
+  for (const review of reviews) {
+    const verdict = review.verdict;
+    if (verdict === "pass" || verdict === "fail" || verdict === "inconclusive") counts[verdict] += 1;
+  }
+  return counts;
 }
 
 function nightRunSummary(

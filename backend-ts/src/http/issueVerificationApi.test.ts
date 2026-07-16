@@ -37,22 +37,31 @@ describe("Bun issue verification API", () => {
         "issue.comment",
         "issue.verification_human_evidence.v1",
         "issue.verification_reviewed",
+        "evidence.recorded.v1",
         "issue.verification_gate_intent.v1",
         "issue.status_changed",
-        "issue.verification_gate_outcome.v1"
+        "issue.verification_gate_outcome.v1",
+        "issue.verification_report"
       ]);
       expect(JSON.parse(events[2].payload)).toEqual({
         action: "accept",
         comment: "人工验收通过",
         status: "done"
       });
-      expect(JSON.parse(events.at(-1)?.payload ?? "{}")).toMatchObject({
+      expect(JSON.parse(events.find((event) => event.type === "issue.verification_gate_outcome.v1")?.payload ?? "{}")).toMatchObject({
         evaluation: {
           decision: "overridden",
           override: { applied: true },
           satisfied: true
         },
         target_status: "done"
+      });
+      expect(JSON.parse(events.find((event) => event.type === "issue.verification_report")?.payload ?? "{}")).toMatchObject({
+        structured_review: {
+          verdict: "pass",
+          gate_consistency: { expected_status: "done", policy_decision: "overridden" },
+          recommended_next_action: { action: "complete_via_gate" }
+        }
       });
     } finally {
       database.close();

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, resolve, sep } from "node:path";
 import { getIssue } from "../db/repositories/issues.ts";
+import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
   getStoredEvidence,
@@ -22,6 +23,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
+import { parseStructuredVerifierReviewEventPayload } from "../domain/evidence/verifierReview.ts";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -297,8 +299,32 @@ function evidenceDetail(db: RunnerDatabase, item: ApiEvidenceRecord): Record<str
     evidence: item.evidence,
     issue_id: item.issue_id,
     project_id: item.project_id,
-    storage_source: item.storage_source
+    storage_source: item.storage_source,
+    verifier_review_refs: verifierReviewRefs(db, item.issue_id, item.evidence.id)
   };
+}
+
+function verifierReviewRefs(
+  db: RunnerDatabase,
+  issueID: number,
+  evidenceID: string
+): Array<Record<string, unknown>> {
+  const events = listIssueEvents(db, issueID, { limit: 50, types: ["issue.verification_report"] });
+  return events.flatMap((event) => {
+    const review = parseStructuredVerifierReviewEventPayload(event.payload);
+    if (!review) return [];
+    const findingIDs = review.findings
+      .filter((finding) => finding.evidence_ids.includes(evidenceID))
+      .map((finding) => finding.finding_id);
+    if (findingIDs.length === 0) return [];
+    return [{
+      event_id: event.id,
+      finding_ids: findingIDs,
+      policy_ref: review.input_context.policy_ref,
+      recommended_next_action: review.recommended_next_action,
+      verdict: review.verdict
+    }];
+  }).reverse();
 }
 
 function artifactAvailability(

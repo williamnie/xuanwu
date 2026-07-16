@@ -133,7 +133,7 @@ function registerUploadRoutes(router: Router, handlers: FrontendCompatHandlers):
 }
 
 function registerAdvisoryIssueRoutes(router: Router, handlers: FrontendCompatHandlers): void {
-  router.post("/api/issues/:id/verifier-report", (request) => writeResponse(() => (
+  router.post("/api/issues/:id/verifier-report", (request) => asyncResponse(() => (
     handlers.issues.verifierReport(issueID(request))
   ), 201));
 }

@@ -109,6 +109,9 @@ describe("Evidence HTTP API", () => {
       ));
       const passedBody = await passedEvidence.json() as Record<string, any>;
       const failedBody = await failedEvidence.json() as Record<string, any>;
+      const passedDetail = await router.handle(new Request(
+        `${BASE_URL}/api/evidence/${encodeURIComponent(passedBody.items[0].id)}`
+      ));
 
       expect(passed).toMatchObject({ status: "done", error: "" });
       expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("Verification failed") });
@@ -123,6 +126,14 @@ describe("Evidence HTTP API", () => {
           status: "failed"
         })
       ]);
+      expect(await passedDetail.json()).toMatchObject({
+        verifier_review_refs: [{
+          finding_ids: expect.arrayContaining(["requirement:current-run-check"]),
+          policy_ref: "verification-policy:agent-execution-contract@1",
+          recommended_next_action: { action: "complete_via_gate" },
+          verdict: "pass"
+        }]
+      });
       expect(db.sqlite.query<{ count: number }, [string]>(
         "select count(*) as count from issue_events where type=?"
       ).get(EVIDENCE_RECORDED_EVENT_TYPE)?.count).toBe(2);
