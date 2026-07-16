@@ -22,7 +22,7 @@ test('sidebar project list fills remaining menu height', () => {
 });
 
 test('collapsed sidebar navigation keeps accessible names when labels are visually hidden', () => {
-  for (const label of ['Dashboard', 'Sessions', 'Issues', 'Cron', 'Projects']) {
+  for (const label of ['Dashboard', 'Sessions', 'Work', 'Issues', 'Cron', 'Projects']) {
     assert.match(source, new RegExp(`aria-label="${label}"`));
   }
   assert.match(source, /aria-label=\{module\.label\}/);

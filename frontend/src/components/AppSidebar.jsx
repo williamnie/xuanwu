@@ -1,5 +1,6 @@
 import {
   CalendarClock,
+  BriefcaseBusiness,
   ChevronLeft,
   FolderGit2,
   Inbox,
@@ -28,6 +29,7 @@ import {
   PI_ASSISTANT_SETTINGS_ITEM,
 } from '../pages/assistantModules';
 import { PRODUCT_TERMS } from '../brand';
+import { WORK_BOARD_ENABLED } from '../pages/workBoardModel.js';
 
 const ASSISTANT_ICONS = {
   Chat: MessageSquare,
@@ -75,6 +77,12 @@ export default function AppSidebar({
         <button aria-label="Sessions" className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
           <NavIconLabel Icon={Layers} label="Sessions" />
         </button>
+
+        {WORK_BOARD_ENABLED ? (
+          <button aria-label="Work" className={`nav-item ${currentPage === 'work' ? 'active' : ''}`} onClick={() => navigateTo('work')}>
+            <NavIconLabel Icon={BriefcaseBusiness} label="Work" />
+          </button>
+        ) : null}
 
         <button aria-label="Issues" className={`nav-item ${currentPage === 'issues' ? 'active' : ''}`} onClick={() => navigateTo('issues')}>
           <NavIconLabel Icon={ListTodo} label="Issues" />

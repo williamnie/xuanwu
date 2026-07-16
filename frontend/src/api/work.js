@@ -1,7 +1,72 @@
 import { request } from './base.js';
 import { eventSummaryParams } from './events.js';
 
+const WORK_PAGE_SIZE = 100;
+
+function appendMany(params, key, values) {
+  const items = Array.isArray(values) ? values : values ? [values] : [];
+  items.forEach(value => params.append(key, value));
+}
+
+function workListParams({ order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', query = '', sort = 'updated_at', statuses = [], types = [] } = {}) {
+  const params = new URLSearchParams({
+    order,
+    page: String(page),
+    page_size: String(pageSize),
+    sort,
+  });
+  if (projectId) params.set('project_id', projectId);
+  if (query) params.set('q', query);
+  appendMany(params, 'status', statuses);
+  appendMany(params, 'type', types);
+  return params;
+}
+
+function workRelationParams({ kinds = [], lifecycles = [], page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', workId = '' } = {}) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (projectId) params.set('project_id', projectId);
+  if (workId) params.set('work_id', workId);
+  appendMany(params, 'kind', kinds);
+  appendMany(params, 'lifecycle', lifecycles);
+  return params;
+}
+
+async function allPages(fetchPage) {
+  const first = await fetchPage(1);
+  const totalPages = Number(first?.total_pages) || 0;
+  if (totalPages <= 1) return first;
+  const rest = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 2)),
+  );
+  return {
+    ...first,
+    items: [first, ...rest].flatMap(page => page?.items || []),
+  };
+}
+
 export const workApi = {
+  getWorks: (filters = {}) => request(`/api/works?${workListParams(filters)}`),
+
+  getAllWorks: (filters = {}) => allPages(page => (
+    request(`/api/works?${workListParams({ ...filters, page, pageSize: WORK_PAGE_SIZE })}`)
+  )),
+
+  getWorkRelations: (filters = {}) => request(`/api/work-relations?${workRelationParams(filters)}`),
+
+  getAllWorkRelations: (filters = {}) => allPages(page => (
+    request(`/api/work-relations?${workRelationParams({ ...filters, page, pageSize: WORK_PAGE_SIZE })}`)
+  )),
+
+  createWork: (work) => request('/api/works', {
+    method: 'POST',
+    body: JSON.stringify(work),
+  }),
+
+  updateWork: (id, updates) => request(`/api/works/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  }),
+
   getIssueTemplates: () => request('/api/issue-templates'),
 
   createIssueTemplate: (template) => request('/api/issue-templates', {

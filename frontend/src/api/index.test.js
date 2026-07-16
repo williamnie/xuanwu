@@ -25,7 +25,7 @@ test('flat compatibility client delegates every method to one domain source of t
   ];
   const entries = domains.flatMap(domain => Object.entries(domain));
 
-  assert.equal(entries.length, 129);
+  assert.equal(entries.length, 135);
   assert.equal(new Set(entries.map(([name]) => name)).size, entries.length);
   for (const [name, implementation] of entries) {
     assert.equal(api[name], implementation, name);

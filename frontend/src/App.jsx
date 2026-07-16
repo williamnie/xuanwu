@@ -17,6 +17,7 @@ import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
+import { resolveWorkBoardPage } from './pages/workBoardModel.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
@@ -24,6 +25,7 @@ import './GeekWorkbenchPages.css';
 // 页面仅在用户实际访问时下载，避免 Dashboard 首屏载入编辑器和会话历史等重型依赖。
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Projects = lazy(() => import('./pages/Projects'));
+const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
 const Sessions = lazy(() => import('./pages/Sessions'));
@@ -52,6 +54,7 @@ const PAGE_DATA_SLICES = {
   dashboard: ['projects', 'issues'],
   issues: ['issues'],
   projects: ['projects', 'issues'],
+  work: ['projects'],
 };
 
 function getReconcileSlices(currentPage, selectedIssueId) {
@@ -172,14 +175,15 @@ export default function App() {
   }, [updateAppState]);
 
   const navigateTo = useCallback((page, issueId = null, sessionId = '') => {
+    const resolvedPage = resolveWorkBoardPage(page);
     updateAppState(draft => {
-      if (draft.currentPage !== page) {
-        draft.currentPage = page;
+      if (draft.currentPage !== resolvedPage) {
+        draft.currentPage = resolvedPage;
       }
       if (draft.selectedIssueId !== issueId) {
         draft.selectedIssueId = issueId;
       }
-      if (page === 'sessions') {
+      if (resolvedPage === 'sessions') {
         const nextSessionId = sessionId || '';
         if (draft.selectedSessionId !== nextSessionId) {
           draft.selectedSessionId = nextSessionId;
@@ -288,7 +292,9 @@ export default function App() {
           </div>
         ) : (
           <Suspense fallback={<PageLoadingFallback />}>
-            {currentPage === 'issues' && selectedIssueId ? (
+            {currentPage === 'work' ? (
+              <WorkBoard navigateTo={navigateTo} />
+            ) : currentPage === 'issues' && selectedIssueId ? (
               <IssueDetail issueId={selectedIssueId} navigateTo={navigateTo} />
             ) : currentPage === 'issues' ? (
               <Issues
