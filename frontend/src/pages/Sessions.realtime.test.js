@@ -30,3 +30,11 @@ test('live thinking state avoids duplicate thinking labels', () => {
     /<div className="chat-bubble-sender">Agent <span className="streaming-badge">Thinking\.\.\.<\/span><\/div>\s*<div className="chat-bubble-body thinking-placeholder">/,
   );
 });
+
+test('issue execution start events immediately upsert and preserve a running session', () => {
+  assert.match(
+    sessionsSource,
+    /setSessions\(\(prev\) => upsertRunningSessionFromEvent\(prev, event, projects\)\)/,
+  );
+  assert.match(sessionsSource, /preserveLoaded \? mergeRefreshedSessions\(current, data\) : data/);
+});

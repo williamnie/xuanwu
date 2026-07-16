@@ -14,6 +14,7 @@ export default function SessionChatWorkspace({
   sessionRunning,
   optimisticUserMessages,
   pendingApproval,
+  readOnlyNotice,
   navigateTo,
   approvalRequest,
   approvalSubmitting,
@@ -73,14 +74,17 @@ export default function SessionChatWorkspace({
 
         {selectedId ? <EvidencePanel compact sessionRef={selectedId} title="Run Evidence" /> : null}
 
-        <div className="client-chat-composer-section">
-          <ApprovalDialog
-            request={approvalRequest}
-            submitting={approvalSubmitting}
-            queueCount={currentApprovals.length}
-            onResolve={resolveApproval}
-          />
-          <SessionComposer
+        {readOnlyNotice ? (
+          <div className="session-read-only-notice">{readOnlyNotice}</div>
+        ) : (
+          <div className="client-chat-composer-section">
+            <ApprovalDialog
+              request={approvalRequest}
+              submitting={approvalSubmitting}
+              queueCount={currentApprovals.length}
+              onResolve={resolveApproval}
+            />
+            <SessionComposer
             value={message}
             onChange={setMessage}
             settings={messageSettings}
@@ -119,8 +123,9 @@ export default function SessionChatWorkspace({
             onStop={interrupt}
             onCancelQueuedMessage={cancelQueuedMessage}
             onRetryQueuedMessage={retryQueuedMessage}
-          />
-        </div>
+            />
+          </div>
+        )}
       </div>
     </div>
   );

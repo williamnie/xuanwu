@@ -74,8 +74,8 @@ export default function AppSidebar({
           <NavIconLabel Icon={LayoutDashboard} label="Dashboard" />
         </button>
 
-        <button aria-label="Sessions" className={`nav-item ${currentPage === 'sessions' ? 'active' : ''}`} onClick={() => navigateTo('sessions')}>
-          <NavIconLabel Icon={Layers} label="Sessions" />
+        <button aria-label="Runs" className={`nav-item ${currentPage === 'runs' ? 'active' : ''}`} onClick={() => navigateTo('runs')}>
+          <NavIconLabel Icon={Layers} label="Runs" />
         </button>
 
         {WORK_BOARD_ENABLED ? (
@@ -124,7 +124,7 @@ export default function AppSidebar({
         />
       )}
 
-      {currentPage === 'sessions' && (
+      {currentPage === 'runs' && (
         <div id="sessions-app-sidebar-slot" className="sessions-app-sidebar-slot" />
       )}
 

@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   eventSessionKey,
+  isAgentEvent,
   isSessionRunning,
+  isSessionStartEvent,
   mergeRefreshedSessions,
   normalizePendingApprovals,
   parseApprovalPayload,
   providerSessionKey,
   sessionIDFromCreateResult,
   syncSessionRuntimeInList,
+  upsertRunningSessionFromEvent,
   visibleApprovalsForSession,
 } from './sessionPageRuntime.js';
 
@@ -17,6 +20,35 @@ test('provider session keys preserve the existing provider-prefixed identity', (
   assert.equal(providerSessionKey('codex', 'codex:thread-1'), 'codex:thread-1');
   assert.equal(eventSessionKey({ provider: 'claude', threadId: 'session-2' }), 'claude:session-2');
   assert.equal(sessionIDFromCreateResult({ provider: 'codex', thread_id: 'thread-3' }), 'codex:thread-3');
+});
+
+test('issue execution events create a visible running session before provider list refresh', () => {
+  const event = {
+    type: 'issue.log',
+    agent_event_type: 'turn_started',
+    provider: 'codex',
+    threadId: 'thread-new',
+    projectId: 'demo',
+    issueId: 642,
+    created_at: '2026-07-15T19:11:48Z',
+  };
+
+  assert.equal(isAgentEvent(event), true);
+  assert.equal(isSessionStartEvent(event), true);
+  assert.deepEqual(upsertRunningSessionFromEvent([], event, [{ id: 'demo', cwd: '/tmp/demo' }]), [{
+    id: 'codex:thread-new',
+    provider: 'codex',
+    provider_session_id: 'thread-new',
+    thread_id: 'thread-new',
+    project_id: 'demo',
+    cwd: '/tmp/demo',
+    name: 'Issue #642',
+    preview: 'Issue #642 正在执行',
+    status: 'running',
+    isRunning: true,
+    createdAt: 1784142708,
+    updatedAt: 1784142708,
+  }]);
 });
 
 test('runtime status and list refresh keep loaded sessions without duplicating identities', () => {

@@ -60,6 +60,7 @@ import {
   sessionIDFromCreateResult,
   setSessionRunningInList,
   syncSessionRuntimeInList,
+  upsertRunningSessionFromEvent,
   visibleApprovalsForSession,
 } from './sessions/sessionPageRuntime';
 import './sessions/Sessions.css';
@@ -72,7 +73,13 @@ const SESSION_LIST_RECONCILE_INTERVAL_MS = 30_000;
 const SESSION_LIST_REFRESH_DELAY_MS = 800;
 const DEFAULT_SESSION_PROVIDER = 'codex';
 
-export default function Sessions({ selectedSessionId = '', navigateTo }) {
+export default function Sessions({
+  autoSelectFirstSession = true,
+  navigateTo,
+  readOnlyNotice = '',
+  selectedSessionId = '',
+  showSidebar = true,
+}) {
   const projects = useDataStore(selectProjects);
   const refreshData = useDataStore(selectRefreshData);
   const setProjects = useDataStore(selectSetProjects);
@@ -117,7 +124,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
   const selectedIdRef = useRef(selectedId);
   const lastSelectedIdRef = useRef(selectedId);
   const ignorePropSelectionRef = useRef(false);
-  const autoSelectFirstSessionRef = useRef(true);
+  const autoSelectFirstSessionRef = useRef(autoSelectFirstSession);
   const interruptStateRef = useRef(interruptState);
   const messageQueueRef = useRef(messageQueue);
   const activeQueuedSendsRef = useRef(new Set());
@@ -207,7 +214,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       const data = result.data || [];
       const nextCursor = result.nextCursor || '';
       setSessions((current) => (
-        preserveLoaded && nextCursor ? mergeRefreshedSessions(current, data) : data
+        preserveLoaded ? mergeRefreshedSessions(current, data) : data
       ));
       setCursor(nextCursor);
       setSelectedId((current) => current || (autoSelectFirstSessionRef.current ? data[0]?.id || '' : ''));
@@ -363,7 +370,8 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
       setApprovalQueue((current) => removeApprovalRequest(current, parseApprovalResolvedPayload(event.payload)));
     }
     if (event.threadId && isSessionStartEvent(event)) {
-      setSessions((prev) => setSessionRunningInList(prev, eventKey, true));
+      setSessions((prev) => upsertRunningSessionFromEvent(prev, event, projects));
+      scheduleListRefresh();
     }
     if (event.threadId && isSessionStopEvent(event)) {
       setSessions((prev) => setSessionRunningInList(prev, eventKey, false));
@@ -397,6 +405,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
     scheduleSelectedRefresh,
     selectedId,
     applyInterruptNotice,
+    projects,
   ]);
 
   useEffect(() => () => {
@@ -737,20 +746,22 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
 
   return (
     <>
-      <SessionSidebar
-        activeView={activeView}
-        cursor={cursor}
-        loading={loading && sessions.length === 0}
-        loadingMore={loadingMore}
-        projects={projects}
-        savingProjectOrder={savingProjectOrder}
-        selectedId={selectedId}
-        sessions={sessions}
-        onLoadMore={loadMore}
-        onNewSession={openNewSession}
-        onReorderProjects={handleReorderProjects}
-        onSelectSession={selectSession}
-      />
+      {showSidebar ? (
+        <SessionSidebar
+          activeView={activeView}
+          cursor={cursor}
+          loading={loading && sessions.length === 0}
+          loadingMore={loadingMore}
+          projects={projects}
+          savingProjectOrder={savingProjectOrder}
+          selectedId={selectedId}
+          sessions={sessions}
+          onLoadMore={loadMore}
+          onNewSession={openNewSession}
+          onReorderProjects={handleReorderProjects}
+          onSelectSession={selectSession}
+        />
+      ) : null}
       <SessionWorkspace
         loading={loading && sessions.length === 0}
         activeView={activeView}
@@ -762,6 +773,7 @@ export default function Sessions({ selectedSessionId = '', navigateTo }) {
           sessionRunning,
           optimisticUserMessages,
           pendingApproval: hasApprovalForSession(approvalQueue, selectedId),
+          readOnlyNotice,
           navigateTo,
           approvalRequest,
           approvalSubmitting,

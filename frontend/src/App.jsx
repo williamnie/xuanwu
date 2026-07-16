@@ -18,6 +18,7 @@ import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
 import { resolveWorkBoardPage } from './pages/workBoardModel.js';
+import { resolveRunsPage } from './pages/runs/runPageModel.js';
 import './App.css';
 import './GeekWorkbench.css';
 import './GeekWorkbenchPages.css';
@@ -28,7 +29,7 @@ const Projects = lazy(() => import('./pages/Projects'));
 const WorkBoard = lazy(() => import('./pages/WorkBoard'));
 const Issues = lazy(() => import('./pages/Issues'));
 const IssueDetail = lazy(() => import('./pages/IssueDetail'));
-const Sessions = lazy(() => import('./pages/Sessions'));
+const Runs = lazy(() => import('./pages/Runs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
 const AttentionInbox = lazy(() => import('./pages/AttentionInbox'));
 const Cron = lazy(() => import('./pages/Cron'));
@@ -76,6 +77,7 @@ export default function App() {
     // 路由与过滤状态
     currentPage: 'dashboard', // 默认进入 Dashboard
     selectedIssueId: null,
+    selectedRunId: '',
     selectedSessionId: '',
     filterProject: '', // '' 表示 Any project
     focusFilter: 'all', // 'all' | 'triage' | 'active' | 'failed' | 'archive'
@@ -102,6 +104,7 @@ export default function App() {
   const {
     currentPage,
     selectedIssueId,
+    selectedRunId,
     selectedSessionId,
     filterProject,
     focusFilter,
@@ -175,7 +178,7 @@ export default function App() {
   }, [updateAppState]);
 
   const navigateTo = useCallback((page, issueId = null, sessionId = '') => {
-    const resolvedPage = resolveWorkBoardPage(page);
+    const resolvedPage = resolveRunsPage(resolveWorkBoardPage(page));
     updateAppState(draft => {
       if (draft.currentPage !== resolvedPage) {
         draft.currentPage = resolvedPage;
@@ -183,11 +186,10 @@ export default function App() {
       if (draft.selectedIssueId !== issueId) {
         draft.selectedIssueId = issueId;
       }
-      if (resolvedPage === 'sessions') {
-        const nextSessionId = sessionId || '';
-        if (draft.selectedSessionId !== nextSessionId) {
-          draft.selectedSessionId = nextSessionId;
-        }
+      if (resolvedPage === 'runs') {
+        const compatSessionRoute = page === 'sessions';
+        draft.selectedRunId = compatSessionRoute ? '' : sessionId || '';
+        draft.selectedSessionId = compatSessionRoute ? sessionId || '' : '';
       }
     });
   }, [updateAppState]);
@@ -258,7 +260,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'sessions' || currentPage === 'pi-chat' ? 'in-sessions-page' : ''}`}>
+    <div className={`app-container ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${currentPage === 'runs' || currentPage === 'pi-chat' ? 'in-sessions-page' : ''}`}>
       <ToastContainer />
       {sidebarCollapsed && (
         <button
@@ -307,13 +309,11 @@ export default function App() {
                 handleOpenNewIssue={handleOpenNewIssue}
                 navigateTo={navigateTo}
               />
-            ) : currentPage === 'sessions' ? (
-              <Sessions
-                handleOpenNewIssue={handleOpenNewIssue}
+            ) : currentPage === 'runs' ? (
+              <Runs
                 navigateTo={navigateTo}
+                selectedRunId={selectedRunId}
                 selectedSessionId={selectedSessionId}
-                theme={theme}
-                toggleTheme={toggleTheme}
               />
             ) : currentPage === 'pi-chat' ? (
               <PiChat navigateTo={navigateTo} />

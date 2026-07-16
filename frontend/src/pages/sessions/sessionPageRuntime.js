@@ -80,11 +80,16 @@ export function isSessionFileEvent(event) {
 }
 
 export function isAgentEvent(event) {
-  return event?.type === 'agent.event' || event?.type === 'codex.event';
+  return event?.type === 'agent.event' ||
+    event?.type === 'codex.event' ||
+    (event?.type === 'issue.log' && Boolean(event?.threadId && event?.agent_event_type));
 }
 
 export function isSessionStartEvent(event) {
-  return event?.agent_event_type === 'agent.turn.started' || event?.method === 'turn/started';
+  return event?.agent_event_type === 'agent.turn.started' ||
+    event?.agent_event_type === 'turn_started' ||
+    event?.method === 'turn/started' ||
+    event?.raw_method === 'turn/started';
 }
 
 export function providerSessionKey(provider = DEFAULT_SESSION_PROVIDER, sessionId = '') {
@@ -166,6 +171,34 @@ export function setSessionRunningInList(list, id, running) {
     return { ...session, isRunning: running };
   });
   return changed ? next : list;
+}
+
+export function upsertRunningSessionFromEvent(list, event, projects) {
+  const id = eventSessionKey(event);
+  if (!id) return list;
+  if (list.some((session) => session.id === id)) return setSessionRunningInList(list, id, true);
+  const project = projects.find((item) => item.id === event.projectId);
+  const issueLabel = event.issueId ? `Issue #${event.issueId}` : 'Running issue';
+  const timestamp = sessionEventTimestamp(event.created_at);
+  return [{
+    id,
+    provider: event.provider || DEFAULT_SESSION_PROVIDER,
+    provider_session_id: event.threadId,
+    thread_id: event.threadId,
+    project_id: event.projectId || '',
+    cwd: project?.cwd || '',
+    name: issueLabel,
+    preview: `${issueLabel} 正在执行`,
+    status: 'running',
+    isRunning: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }, ...list];
+}
+
+function sessionEventTimestamp(value) {
+  const ms = Date.parse(value || '');
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : Math.floor(Date.now() / 1000);
 }
 
 export function syncSessionRuntimeInList(list, detail, running = isSessionRunning(detail)) {

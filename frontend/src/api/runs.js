@@ -1,6 +1,22 @@
 import { request } from './base.js';
 
 export const runsApi = {
+  getRuns: ({ page = 1, pageSize = 50, projectId = '', provider = '', status = '', workId = '' } = {}) => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (projectId) params.append('project_id', projectId);
+    if (provider) params.append('provider', provider);
+    if (status) params.append('status', status);
+    if (workId) params.append('work_id', workId);
+    return request(`/api/runs?${params.toString()}`);
+  },
+
+  getRun: (id) => request(`/api/runs/${encodeURIComponent(id)}`),
+
+  controlRun: (id, action, payload) => request(`/api/runs/${encodeURIComponent(id)}/actions/${action}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+
   getIssueRuns: (id) => request(`/api/issues/${id}/runs`),
 
   getSessions: ({ limit = 50, cursor = '' } = {}) => {

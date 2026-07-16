@@ -16,7 +16,8 @@ test('new session composer uses PromptEditor suggestions instead of plain textar
 
 test('new chat shortcut clears parent selected session route before opening composer', () => {
   assert.match(sessionsSource, /ignorePropSelectionRef = useRef\(false\)/);
-  assert.match(sessionsSource, /autoSelectFirstSessionRef = useRef\(true\)/);
+  assert.match(sessionsSource, /autoSelectFirstSession = true/);
+  assert.match(sessionsSource, /autoSelectFirstSessionRef = useRef\(autoSelectFirstSession\)/);
   assert.match(sessionsSource, /const openNewSession = useCallback[\s\S]*ignorePropSelectionRef\.current = true/);
   assert.match(sessionsSource, /const openNewSession = useCallback[\s\S]*autoSelectFirstSessionRef\.current = false/);
   assert.match(sessionsSource, /const openNewSession = useCallback[\s\S]*navigateTo\?\.\('sessions'\)/);
