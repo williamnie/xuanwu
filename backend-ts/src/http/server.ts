@@ -25,7 +25,7 @@ import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
 import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
 import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
-import { registerSystemRestartRoute } from "./systemRestartApi.ts";
+import { registerSystemRestartRoute, type SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
@@ -33,6 +33,7 @@ import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 type ListenAddress = { hostname: string; port: number };
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
+  auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
   bus?: EventBus;
   codexSessionsDir?: string;
   config?: RunnerConfig;
@@ -48,6 +49,7 @@ type DefaultRouterOptions = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
+  supervisorManaged?: boolean;
 };
 
 export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
@@ -56,9 +58,11 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
   const bus = runtime.bus ?? new EventBus();
   router.get("/health", () => json({ status: "ok" }));
   registerSystemRestartRoute(router, {
+    audit: runtime.auditSystemRestart,
     providers: runtime.providers,
     restartDelayMs: runtime.restartDelayMs,
-    restartProcess: runtime.restartProcess
+    restartProcess: runtime.restartProcess,
+    supervisorManaged: runtime.supervisorManaged
   });
   registerEventRoutes(router, { bus });
   registerFeishuEventRoutes(router, {

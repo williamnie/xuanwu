@@ -1,9 +1,11 @@
 import { join } from "node:path";
 import type { RunnerConfig } from "../config/env.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { summarizeRuntimePath } from "./systemStatus.ts";
 
 const DEFAULT_LINE_LIMIT = 120;
 const MAX_LINE_LIMIT = 500;
+const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 
 type RuntimeLogLine = { level: string; path: string; source: string; text: string; time: string };
 
@@ -14,6 +16,8 @@ type RuntimeLogFile = {
   path: string;
   source: string;
 };
+
+type RuntimeLogPath = { path: string; readPath: string; source: string };
 
 export type RuntimeLogsSummary = {
   generated_at: string;
@@ -44,17 +48,19 @@ function sanitizeLineLimit(value: number): number {
   return Math.min(value, MAX_LINE_LIMIT);
 }
 
-function runtimeLogPaths(config: RunnerConfig): Array<{ path: string; source: string }> {
+function runtimeLogPaths(config: RunnerConfig): RuntimeLogPath[] {
   const base = join(config.stateDir, "logs");
-  return [
-    { source: "server", path: join(base, "launchd.out.log") },
-    { source: "runner", path: join(base, "launchd.err.log") }
-  ];
+  return [runtimeLogPath(config, "server", join(base, "launchd.out.log")),
+    runtimeLogPath(config, "runner", join(base, "launchd.err.log"))];
 }
 
-async function readRuntimeLog(logPath: { path: string; source: string }, limit: number): Promise<RuntimeLogFile> {
+function runtimeLogPath(config: RunnerConfig, source: string, readPath: string): RuntimeLogPath {
+  return { source, readPath, path: summarizeRuntimePath(readPath, config.stateDir) };
+}
+
+async function readRuntimeLog(logPath: RuntimeLogPath, limit: number): Promise<RuntimeLogFile> {
   try {
-    const content = await Bun.file(logPath.path).text();
+    const content = await Bun.file(logPath.readPath).text();
     return {
       source: logPath.source,
       path: logPath.path,
@@ -76,9 +82,9 @@ function tailLines(content: string, limit: number): string[] {
   return content.split(/\r?\n/).filter((line) => line !== "").slice(-limit);
 }
 
-function normalizeRuntimeLogLines(logPath: { path: string; source: string }, lines: string[]): RuntimeLogLine[] {
+function normalizeRuntimeLogLines(logPath: RuntimeLogPath, lines: string[]): RuntimeLogLine[] {
   return lines.map((line) => {
-    const text = redactSensitiveText(line);
+    const text = redactSensitiveText(line).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
     return {
       source: logPath.source,
       path: logPath.path,

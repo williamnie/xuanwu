@@ -1,6 +1,7 @@
 const AUTH_HEADER_PATTERN = /Authorization:\s*[^\r\n]+/gi;
 const BEARER_PATTERN = /Bearer\s+[^\s,;]+/gi;
 const SECRET_ASSIGNMENT_PATTERN = /([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*\s*[=:]\s*)[^\s,;]+/gi;
+const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
 
 export function formatRuntimeLogsSummary(summary) {
   const lines = [
@@ -29,7 +30,8 @@ export function redactRuntimeText(text) {
     .replace(AUTH_HEADER_PATTERN, 'Authorization: [redacted]')
     .replace(BEARER_PATTERN, 'Bearer [redacted]')
     .replace(/.*(?:auth_token|auth-token|codex_runner_auth_token).*$/gim, '[redacted sensitive log line]')
-    .replace(SECRET_ASSIGNMENT_PATTERN, '$1[redacted]');
+    .replace(SECRET_ASSIGNMENT_PATTERN, '$1[redacted]')
+    .replace(ABSOLUTE_PATH_PATTERN, '[redacted-path]');
 }
 
 function formatLogFiles(logs) {

@@ -5,6 +5,7 @@ import { message } from '../store/toastStore';
 import RuntimeLogsPanel from '../components/RuntimeLogsPanel';
 import { PanelLoader } from '../components/TurtleLoader';
 import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
+import { buildRuntimeDiagnosticsBundle, formatRuntimeDiagnosticsBundle } from '../utils/runtimeDiagnostics';
 import { APP_VERSION, buildVersionSummary } from '../version';
 import SettingsTabContent from './AssistantSettingsSections';
 import { SettingsHeader } from './SettingsChrome';
@@ -43,7 +44,7 @@ function RuntimeStatusPanel() {
   }, []);
 
   const handleCopyDoctor = () => copyDoctor(setDoctorLoading);
-  const handleDownloadDoctor = () => downloadDoctor(setDoctorLoading);
+  const handleDownloadDiagnostics = () => downloadDiagnostics(setDoctorLoading);
   const handleCopyLogs = () => copyLogs(logs);
   const handleRefresh = () => {
     loadStatus(setStatus, setError, setLoading);
@@ -66,9 +67,9 @@ function RuntimeStatusPanel() {
             <Copy size={15} />
             复制诊断摘要
           </button>
-          <button className="btn btn-secondary" onClick={handleDownloadDoctor} disabled={doctorLoading}>
+          <button className="btn btn-secondary" onClick={handleDownloadDiagnostics} disabled={doctorLoading}>
             <Download size={15} />
-            下载 JSON
+            下载诊断包
           </button>
           <button className="btn btn-secondary" onClick={handleRefresh} disabled={loading || logsLoading}>
             <RefreshCw size={15} className={(loading || logsLoading) ? 'spin-animation' : ''} />
@@ -106,11 +107,21 @@ async function copyDoctor(setDoctorLoading) {
   });
 }
 
-async function downloadDoctor(setDoctorLoading) {
-  await withDoctor(setDoctorLoading, async (summary) => {
-    downloadText(`codex-runtime-doctor-${safeTimestamp(summary.generated_at)}.json`, formatDoctor(summary));
-    message.success('诊断 JSON 已下载');
-  });
+async function downloadDiagnostics(setDoctorLoading) {
+  setDoctorLoading(true);
+  try {
+    const [doctor, logs] = await Promise.all([
+      systemApi.getRuntimeDoctor(),
+      systemApi.getRuntimeLogs(120),
+    ]);
+    const bundle = buildRuntimeDiagnosticsBundle({ doctor, logs });
+    downloadText(`xuanwu-runtime-diagnostics-${safeTimestamp(bundle.generated_at)}.json`, formatRuntimeDiagnosticsBundle(bundle));
+    message.success('脱敏诊断包已下载');
+  } catch (err) {
+    message.error(err.message || '生成诊断包失败');
+  } finally {
+    setDoctorLoading(false);
+  }
 }
 
 async function copyLogs(logs) {

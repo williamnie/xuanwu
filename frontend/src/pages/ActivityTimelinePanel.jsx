@@ -3,30 +3,40 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Link2, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { message } from '../store/toastStore';
+import {
+  DEFAULT_ACTIVITY_FILTERS,
+  activityAuditFilterOptions,
+  cleanActivityFilters,
+  filterActivityAuditItems,
+} from './activityAuditFilters';
 import './ActivityTimelinePanel.css';
 
-const DEFAULT_FILTERS = { inboxItemId: '', issueId: '', limit: 100, proposalId: '', since: '', source: '', until: '' };
-
 export default function ActivityTimelinePanel({ navigateTo }) {
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [applied, setApplied] = useState(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState(DEFAULT_ACTIVITY_FILTERS);
+  const [applied, setApplied] = useState(DEFAULT_ACTIVITY_FILTERS);
   const [timeline, setTimeline] = useState({ items: [] });
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
-  const items = useMemo(() => timeline.items || [], [timeline]);
+  const allItems = useMemo(() => timeline.items || [], [timeline]);
+  const items = useMemo(() => filterActivityAuditItems(allItems, applied), [allItems, applied]);
+  const filterOptions = useMemo(() => activityAuditFilterOptions(allItems), [allItems]);
 
   useEffect(() => { loadTimeline(applied, setTimeline, setNotice, setLoading); }, [applied]);
   const applyFilters = (event) => {
     event.preventDefault();
-    setApplied(cleanFilters(filters));
+    setApplied(cleanActivityFilters(filters));
+  };
+  const resetFilters = () => {
+    setFilters(DEFAULT_ACTIVITY_FILTERS);
+    setApplied(DEFAULT_ACTIVITY_FILTERS);
   };
 
   return (
     <section className="glass-card activity-panel">
       <PanelHeader loading={loading} onRefresh={() => loadTimeline(applied, setTimeline, setNotice, setLoading)} />
-      <FilterForm filters={filters} onChange={setFilters} onSubmit={applyFilters} />
+      <FilterForm filters={filters} onChange={setFilters} onReset={resetFilters} onSubmit={applyFilters} options={filterOptions} />
       {notice && <div className="activity-empty compact">{notice}</div>}
-      {!notice && <TimelineSummary generatedAt={timeline.generated_at} items={items} />}
+      {!notice && <TimelineSummary generatedAt={timeline.generated_at} items={items} total={allItems.length} />}
       {!notice && <TimelineList items={items} loading={loading} navigateTo={navigateTo} />}
     </section>
   );
@@ -47,25 +57,39 @@ function PanelHeader({ loading, onRefresh }) {
   );
 }
 
-function FilterForm({ filters, onChange, onSubmit }) {
+function FilterForm({ filters, onChange, onReset, onSubmit, options }) {
   const update = (field) => (event) => onChange((current) => ({ ...current, [field]: event.target.value }));
   return (
     <form className="activity-filter" onSubmit={onSubmit}>
       <label>Source<input value={filters.source} onChange={update('source')} placeholder="fixture-cli" /></label>
+      <label>Conversation<input value={filters.conversationId} onChange={update('conversationId')} placeholder="conversation id" /></label>
       <label>Inbox item<input value={filters.inboxItemId} onChange={update('inboxItemId')} placeholder="123" /></label>
       <label>Proposal<input value={filters.proposalId} onChange={update('proposalId')} placeholder="proposal id" /></label>
       <label>Issue<input value={filters.issueId} onChange={update('issueId')} placeholder="602" /></label>
       <label>Since<input value={filters.since} onChange={update('since')} placeholder="2026-07-06T00:00:00Z" /></label>
       <label>Until<input value={filters.until} onChange={update('until')} placeholder="2026-07-07T00:00:00Z" /></label>
+      <AuditSelect label="Stage" onChange={update('stage')} options={options.stages} value={filters.stage} />
+      <AuditSelect label="Status" onChange={update('status')} options={options.statuses} value={filters.status} />
+      <AuditSelect label="Decision" onChange={update('decision')} options={options.decisions} value={filters.decision} />
       <button className="btn btn-secondary" type="submit"><Search size={15} /> 查询</button>
+      <button className="btn btn-secondary" onClick={onReset} type="button">重置</button>
     </form>
   );
 }
 
-function TimelineSummary({ generatedAt, items }) {
+function AuditSelect({ label, onChange, options, value }) {
+  return (
+    <label>{label}<select onChange={onChange} value={value}>
+      <option value="">All</option>
+      {options.map(option => <option key={option} value={option}>{option}</option>)}
+    </select></label>
+  );
+}
+
+function TimelineSummary({ generatedAt, items, total }) {
   return (
     <div className="activity-summary">
-      <span>{items.length} nodes</span>
+      <span>{items.length} / {total} nodes</span>
       <span>generated {formatTime(generatedAt)}</span>
       <span><ShieldCheck size={13} /> summaries are redacted</span>
     </div>
@@ -113,10 +137,6 @@ function NodeLinks({ navigateTo, node }) {
       {links.map(([label, href]) => <a href={href} key={`${label}:${href}`} rel="noreferrer" target="_blank"><Link2 size={13} /> {label}</a>)}
     </div>
   );
-}
-
-function cleanFilters(filters) {
-  return Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value]));
 }
 
 function loadTimeline(filters, setTimeline, setNotice, setLoading) {

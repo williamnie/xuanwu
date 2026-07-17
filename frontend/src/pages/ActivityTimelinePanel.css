@@ -58,13 +58,18 @@
   gap: 5px;
 }
 
-.activity-filter input {
+.activity-filter input,
+.activity-filter select {
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: 10px;
   color: var(--text-primary);
   height: 36px;
   padding: 0 10px;
+}
+
+.activity-filter select {
+  min-width: 128px;
 }
 
 .activity-summary {

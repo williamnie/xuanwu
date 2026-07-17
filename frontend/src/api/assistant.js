@@ -5,9 +5,10 @@ export const assistantApi = {
 
   getPiSkill: (id) => request(`/api/pi/skills/${encodeURIComponent(id)}`),
 
-  getPiActivityTimeline: ({ source = '', inboxItemId = '', proposalId = '', issueId = '', since = '', until = '', limit = 100 } = {}) => {
+  getPiActivityTimeline: ({ source = '', conversationId = '', inboxItemId = '', proposalId = '', issueId = '', since = '', until = '', limit = 100 } = {}) => {
     const params = new URLSearchParams();
     if (source) params.append('source', source);
+    if (conversationId) params.append('conversation_id', conversationId);
     if (inboxItemId) params.append('inbox_item_id', String(inboxItemId));
     if (proposalId) params.append('proposal_id', proposalId);
     if (issueId) params.append('issue_id', String(issueId));

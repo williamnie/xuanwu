@@ -6,18 +6,31 @@ const DEFAULT_RESTART_DELAY_MS = 250;
 const PROVIDER_STOP_TIMEOUT_MS = 2_500;
 const SUPERVISOR_ENV_KEYS = ["XPC_SERVICE_NAME", "INVOCATION_ID"] as const;
 
+export type SystemRestartAuditEvent = {
+  action: "system.restart";
+  actor: "authorized_api";
+  at: string;
+  decision: "accepted" | "rejected";
+  reason: string;
+  source: "advanced_runtime";
+};
+
 export type SystemRestartContext = {
+  audit?: (event: SystemRestartAuditEvent) => void;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
+  supervisorManaged?: boolean;
 };
 
 export function registerSystemRestartRoute(router: Router, context: SystemRestartContext): void {
   router.post("/api/system/restart", () => {
     if (!canRestart(context)) {
+      recordRestartAudit(context, "rejected", "service is not managed by launchd/systemd");
       return json({ ok: false, message: "当前服务不是 launchd/systemd 托管，无法从 UI 安全重启" }, { status: 501 });
     }
     const delayMs = restartDelayMs(context.restartDelayMs);
+    recordRestartAudit(context, "accepted", `restart scheduled after ${delayMs}ms`);
     setTimeout(() => { void stopProvidersThenRestart(context); }, delayMs);
     return json({
       ok: true,
@@ -29,7 +42,21 @@ export function registerSystemRestartRoute(router: Router, context: SystemRestar
 }
 
 function canRestart(context: SystemRestartContext): boolean {
+  if (context.supervisorManaged !== undefined) return context.supervisorManaged || Boolean(context.restartProcess);
   return Boolean(context.restartProcess) || isSupervisorManaged();
+}
+
+function recordRestartAudit(context: SystemRestartContext, decision: SystemRestartAuditEvent["decision"], reason: string): void {
+  const event: SystemRestartAuditEvent = {
+    action: "system.restart",
+    actor: "authorized_api",
+    at: new Date().toISOString(),
+    decision,
+    reason,
+    source: "advanced_runtime"
+  };
+  if (context.audit) context.audit(event);
+  else console.info(JSON.stringify({ audit: event }));
 }
 
 function isSupervisorManaged(): boolean {

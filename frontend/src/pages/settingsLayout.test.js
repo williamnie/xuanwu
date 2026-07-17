@@ -17,6 +17,7 @@ const connectorsApiSource = readFileSync(new URL('../api/connectors.js', import.
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
 const piAgentSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
+const runtimeDiagnosticsSource = readFileSync(new URL('../utils/runtimeDiagnostics.js', import.meta.url), 'utf8');
 
 test('Settings renders five primary sections and gates internal panels behind Advanced', () => {
   assert.match(settingsSource, /initialTab = 'general'/);
@@ -109,6 +110,16 @@ test('Settings restart action moves from the page header into Advanced Runtime',
   assert.doesNotMatch(chromeSource, /window\\.confirm|window\\.alert/);
 });
 
+test('Advanced Runtime exports one redacted diagnostics bundle from existing system APIs', () => {
+  assert.match(settingsSource, /downloadDiagnostics/);
+  assert.match(settingsSource, /systemApi\.getRuntimeDoctor\(\)/);
+  assert.match(settingsSource, /systemApi\.getRuntimeLogs\(120\)/);
+  assert.match(settingsSource, /下载诊断包/);
+  assert.match(runtimeDiagnosticsSource, /xuanwu\.runtime-diagnostics\.v1/);
+  assert.match(runtimeDiagnosticsSource, /redactDiagnosticValue/);
+  assert.doesNotMatch(settingsSource, /window\.confirm|window\.alert/);
+});
+
 test('Connectors tab shows read-only connector diagnostics from API', () => {
   assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
   assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
@@ -136,7 +147,10 @@ test('Activity tab shows traceable redacted timeline from API', () => {
   assert.match(assistantApiSource, /getPiActivityTimeline/);
   assert.match(activityTimelineSource, /Raw → Intake → Action trace/);
   assert.match(activityTimelineSource, /source/);
+  assert.match(activityTimelineSource, /conversationId/);
   assert.match(activityTimelineSource, /proposalId/);
+  assert.match(activityTimelineSource, /Stage/);
+  assert.match(activityTimelineSource, /Decision/);
   assert.match(activityTimelineSource, /summaries are redacted/);
   assert.doesNotMatch(activityTimelineSource, /window\.confirm|window\.alert/);
 });

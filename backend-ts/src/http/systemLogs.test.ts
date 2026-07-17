@@ -38,13 +38,18 @@ describe("Bun system logs API", () => {
       expect(body.logs).toHaveLength(2);
       expect(body.logs[0]).toMatchObject({ source: "server", available: true });
       expect(body.logs[1]).toMatchObject({ source: "runner", available: true });
+      expect(body.logs[0]?.path).toBe("<stateDir>/logs/launchd.out.log");
+      expect(body.logs[1]?.path).toBe("<stateDir>/logs/launchd.err.log");
       expect(body.recent_errors.length).toBeGreaterThan(0);
       expect(body.recent_warnings.length).toBeGreaterThan(0);
+      expect(bodyText).not.toContain(config.stateDir);
       for (const forbidden of ["secret-token", "super-secret", "env-secret", "hidden-pass", "auth_token"]) {
         expect(bodyText).not.toContain(forbidden);
       }
+      expect(bodyText).not.toContain("/Users/alice/private");
       expect(bodyText).toContain("token=[redacted]");
       expect(bodyText).toContain("SECRET_KEY=[redacted]");
+      expect(bodyText).toContain("cwd=[redacted-path]");
     } finally {
       database.close();
     }
@@ -64,7 +69,8 @@ describe("Bun system logs API", () => {
       for (const logFile of body.logs) {
         expect(logFile.available).toBe(false);
         expect(logFile.error).toContain("log file does not exist");
-        expect(logFile.path).toContain(join(config.stateDir, "logs"));
+        expect(logFile.path).toStartWith("<stateDir>/logs/");
+        expect(logFile.path).not.toContain(config.stateDir);
         expect(logFile.path).not.toContain(join("data", "logs"));
       }
     } finally {
@@ -92,6 +98,7 @@ async function writeRuntimeLogs(stateDir: string): Promise<void> {
     "2026-05-28T01:03:04Z warn provider probe slow",
     "Authorization: Bearer secret-token",
     "Codex Issue Runner generated auth token file: /tmp/auth_token",
+    "2026-05-28T01:03:05Z warn cwd=/Users/alice/private/project",
     "2026-05-28T01:04:05Z error runner failed token=super-secret SECRET_KEY=env-secret"
   ].join("\n"));
   await writeFile(join(logDir, "launchd.err.log"), "panic: runner password=hidden-pass\n");

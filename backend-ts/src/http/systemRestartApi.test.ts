@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider } from "../providers/types.ts";
+import type { SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -29,8 +30,10 @@ describe("System restart API", () => {
     const database = await openFixtureDatabase();
     let stopped = 0;
     let restarted = 0;
+    const audit: SystemRestartAuditEvent[] = [];
     try {
       const router = createDefaultRouter({
+        auditSystemRestart: (event) => audit.push(event),
         database,
         providers: { codex: fakeCodexProvider(async () => { stopped += 1; }) },
         restartDelayMs: 0,
@@ -47,9 +50,39 @@ describe("System restart API", () => {
       expect(await response.json()).toMatchObject({ ok: true, restart_scheduled: true });
       await waitFor(() => restarted === 1);
       expect(stopped).toBe(1);
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({
+        action: "system.restart",
+        actor: "authorized_api",
+        decision: "accepted",
+        source: "advanced_runtime"
+      });
     } finally {
       database.close();
     }
+  });
+
+  test("rejects unmanaged restart and records the failed attempt", async () => {
+    const audit: SystemRestartAuditEvent[] = [];
+    const router = createDefaultRouter({
+      auditSystemRestart: (event) => audit.push(event),
+      supervisorManaged: false
+    });
+
+    const response = await router.handle(new Request(`${BASE_URL}/api/system/restart`, {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: { "content-type": "application/json" }
+    }));
+
+    expect(response.status).toBe(501);
+    expect(await response.json()).toMatchObject({ ok: false });
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "system.restart",
+      decision: "rejected",
+      reason: "service is not managed by launchd/systemd"
+    });
   });
 });
 
