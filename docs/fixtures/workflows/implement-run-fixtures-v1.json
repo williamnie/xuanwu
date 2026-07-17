@@ -1,0 +1,837 @@
+{
+  "schema_version": "xw.implement-workflow-fixtures.v1",
+  "fixtures": [
+    {
+      "name": "local_changes",
+      "evidence": [
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:implement-local-confirm",
+          "work_id": "xw:work:issues:688-local",
+          "revision": 0,
+          "kind": "human",
+          "status": "passed",
+          "created_at": "2026-07-17T03:00:00.000Z",
+          "observed_at": "2026-07-17T03:00:00.000Z",
+          "updated_at": "2026-07-17T03:00:00.000Z",
+          "completed_at": "2026-07-17T03:00:00.000Z",
+          "decisive_output": {
+            "summary": "confirm completed with trusted observation",
+            "facts": {
+              "decision": "target_confirmed",
+              "workflow_ref": "workflow:implement@1"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "human_attestation",
+            "source_kind": "human_attestation",
+            "source_ref": "fixture:local:confirm",
+            "audit_event_ref": "issue_events:688:local:confirm",
+            "producer": {
+              "id": "user:fixture",
+              "kind": "user"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:git:implement-local-change",
+          "work_id": "xw:work:issues:688-local",
+          "revision": 0,
+          "kind": "git",
+          "status": "passed",
+          "created_at": "2026-07-17T03:01:00.000Z",
+          "observed_at": "2026-07-17T03:01:00.000Z",
+          "updated_at": "2026-07-17T03:01:00.000Z",
+          "completed_at": "2026-07-17T03:01:00.000Z",
+          "decisive_output": {
+            "summary": "change completed with trusted observation",
+            "facts": {
+              "changed_path_count": 1,
+              "conflict_count": 0,
+              "outcome": "passed"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "git_repository",
+            "source_ref": "fixture:local:change",
+            "audit_event_ref": "issue_events:688:local:change",
+            "producer": {
+              "id": "runner:fixture",
+              "kind": "runner"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          },
+          "run_id": "xw:run:issue_runs:688-local"
+        },
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:implement-local-focused",
+          "work_id": "xw:work:issues:688-local",
+          "revision": 0,
+          "kind": "test",
+          "status": "passed",
+          "created_at": "2026-07-17T03:02:00.000Z",
+          "observed_at": "2026-07-17T03:02:00.000Z",
+          "updated_at": "2026-07-17T03:02:00.000Z",
+          "completed_at": "2026-07-17T03:02:00.000Z",
+          "decisive_output": {
+            "summary": "focused completed with trusted observation",
+            "facts": {
+              "command": "bun test src/feature.test.ts",
+              "outcome": "passed"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "test_runner",
+            "source_ref": "fixture:local:focused",
+            "audit_event_ref": "issue_events:688:local:focused",
+            "producer": {
+              "id": "runner:fixture",
+              "kind": "runner"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          },
+          "run_id": "xw:run:issue_runs:688-local"
+        },
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:implement-local-regression",
+          "work_id": "xw:work:issues:688-local",
+          "revision": 0,
+          "kind": "test",
+          "status": "passed",
+          "created_at": "2026-07-17T03:03:00.000Z",
+          "observed_at": "2026-07-17T03:03:00.000Z",
+          "updated_at": "2026-07-17T03:03:00.000Z",
+          "completed_at": "2026-07-17T03:03:00.000Z",
+          "decisive_output": {
+            "summary": "regression completed with trusted observation",
+            "facts": {
+              "command": "bun test src/related.test.ts",
+              "outcome": "passed"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "test_runner",
+            "source_ref": "fixture:local:regression",
+            "audit_event_ref": "issue_events:688:local:regression",
+            "producer": {
+              "id": "runner:fixture",
+              "kind": "runner"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          },
+          "run_id": "xw:run:issue_runs:688-local"
+        }
+      ],
+      "handoff": {
+        "schema_version": 1,
+        "id": "xw:handoff:derived:implement-local",
+        "work_id": "xw:work:issues:688-local",
+        "run_ids": [
+          "xw:run:issue_runs:688-local"
+        ],
+        "evidence_ids": [
+          "xw:evidence:issue_events:implement-local-confirm",
+          "xw:evidence:git:implement-local-change",
+          "xw:evidence:issue_events:implement-local-focused",
+          "xw:evidence:issue_events:implement-local-regression"
+        ],
+        "revision": 0,
+        "status": "ready",
+        "summary": "Implement fixture ready as local_changes",
+        "created_at": "2026-07-17T03:04:30.000Z",
+        "updated_at": "2026-07-17T03:04:30.000Z",
+        "baseline_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "final_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "review_ref": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "changed_files": [
+          "src/feature.ts"
+        ],
+        "delivery": {
+          "mode": "local_changes",
+          "working_tree_ref": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "delivery_actions": [],
+        "risks": [],
+        "rollback": {
+          "availability": "not_required",
+          "destructive": false,
+          "refs": []
+        },
+        "review": {
+          "required": false,
+          "state": "not_requested",
+          "reviewer_refs": []
+        }
+      },
+      "runs": [
+        {
+          "id": "xw:run:issue_runs:688-local",
+          "work_id": "xw:work:issues:688-local"
+        }
+      ],
+      "receipt": {
+        "schema_version": "xw.implement-workflow-run.v1",
+        "workflow_ref": "workflow:implement@1",
+        "project_id": "fixture-project",
+        "work_id": "xw:work:issues:688-local",
+        "run_id": "xw:run:issue_runs:688-local",
+        "status": "completed",
+        "completed_at": "2026-07-17T03:05:00.000Z",
+        "target_confirmation": {
+          "goal": "Implement the fixture change without unrelated refactoring.",
+          "acceptance_criteria": [
+            {
+              "id": "focused",
+              "description": "Focused verification passes."
+            },
+            {
+              "id": "regression",
+              "description": "Related regression passes."
+            },
+            {
+              "id": "handoff",
+              "description": "local_changes Handoff is ready."
+            }
+          ],
+          "decision": "confirmed",
+          "evidence_id": "xw:evidence:issue_events:implement-local-confirm",
+          "audit_event_ref": "issue_events:688:local:confirm"
+        },
+        "stages": [
+          {
+            "id": "confirm-target",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-local-confirm"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:local:confirm"
+            ]
+          },
+          {
+            "id": "modify",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:git:implement-local-change"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:local:modify"
+            ]
+          },
+          {
+            "id": "focused-verify",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-local-focused"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:local:focused"
+            ]
+          },
+          {
+            "id": "regression",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-local-regression"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:local:regression"
+            ]
+          },
+          {
+            "id": "handoff",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-local-confirm",
+              "xw:evidence:git:implement-local-change",
+              "xw:evidence:issue_events:implement-local-focused",
+              "xw:evidence:issue_events:implement-local-regression"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:local:handoff:outcome",
+              "issue_events:688:local:completion-gate"
+            ]
+          }
+        ],
+        "transitions": [
+          {
+            "from": "confirm-target",
+            "to": "modify",
+            "signal": "passed",
+            "confirmation_decision": "confirmed",
+            "reason": "confirm-target completion gate passed",
+            "gate": {
+              "authority": "human_approval",
+              "decision": "allow",
+              "policy_ref": "approval-policy:implement-target-confirmed@1"
+            },
+            "audit_event_ref": "issue_events:688:local:transition:confirm-target",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "modify",
+            "to": "focused-verify",
+            "signal": "passed",
+            "change_audit_outcome": "succeeded",
+            "reason": "modify completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "workflow-policy:implement-change@1"
+            },
+            "audit_event_ref": "issue_events:688:local:transition:modify",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "focused-verify",
+            "to": "regression",
+            "signal": "passed",
+            "verification_decision": "passed",
+            "reason": "focused-verify completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "verification-policy:implement-command-verification@1"
+            },
+            "audit_event_ref": "issue_events:688:local:transition:focused-verify",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "regression",
+            "to": "handoff",
+            "signal": "passed",
+            "verification_decision": "passed",
+            "reason": "regression completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "verification-policy:implement-command-verification@1"
+            },
+            "audit_event_ref": "issue_events:688:local:transition:regression",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "handoff",
+            "to": "completed",
+            "signal": "passed",
+            "verification_decision": "passed",
+            "handoff_status": "ready",
+            "reason": "handoff completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "verification-policy:implement-command-verification@1"
+            },
+            "audit_event_ref": "issue_events:688:local:transition:handoff",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          }
+        ],
+        "evidence_ids": [
+          "xw:evidence:issue_events:implement-local-confirm",
+          "xw:evidence:git:implement-local-change",
+          "xw:evidence:issue_events:implement-local-focused",
+          "xw:evidence:issue_events:implement-local-regression"
+        ],
+        "verification": {
+          "policy_ref": "verification-policy:implement-command-verification@1",
+          "focused_evidence_ids": [
+            "xw:evidence:issue_events:implement-local-focused"
+          ],
+          "regression_evidence_ids": [
+            "xw:evidence:issue_events:implement-local-regression"
+          ],
+          "decision": "passed",
+          "completion_gate_audit_ref": "issue_events:688:local:completion-gate"
+        },
+        "mutation_audit": [
+          {
+            "operation_id": "workspace-change",
+            "action": "workspace.modify",
+            "classification": "state_change",
+            "target": "git-repository:fixture#working-tree",
+            "gate": {
+              "authority": "human_approval",
+              "decision": "allow",
+              "policy_ref": "approval-policy:implement-target-confirmed@1"
+            },
+            "outcome": "succeeded",
+            "audit_event_ref": "issue_events:688:local:modify",
+            "before_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "after_ref": "b",
+            "rollback_ref": "issue_events:688:local:modify:rollback"
+          }
+        ],
+        "handoff": {
+          "id": "xw:handoff:derived:implement-local",
+          "mode": "local_changes",
+          "status": "ready",
+          "audit_event_refs": [
+            "issue_events:688:local:handoff:outcome"
+          ]
+        }
+      }
+    },
+    {
+      "name": "branch_commit",
+      "evidence": [
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:implement-commit-confirm",
+          "work_id": "xw:work:issues:688-commit",
+          "revision": 0,
+          "kind": "human",
+          "status": "passed",
+          "created_at": "2026-07-17T03:00:00.000Z",
+          "observed_at": "2026-07-17T03:00:00.000Z",
+          "updated_at": "2026-07-17T03:00:00.000Z",
+          "completed_at": "2026-07-17T03:00:00.000Z",
+          "decisive_output": {
+            "summary": "confirm completed with trusted observation",
+            "facts": {
+              "decision": "target_confirmed",
+              "workflow_ref": "workflow:implement@1"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "human_attestation",
+            "source_kind": "human_attestation",
+            "source_ref": "fixture:commit:confirm",
+            "audit_event_ref": "issue_events:688:commit:confirm",
+            "producer": {
+              "id": "user:fixture",
+              "kind": "user"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          }
+        },
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:git:implement-commit-change",
+          "work_id": "xw:work:issues:688-commit",
+          "revision": 0,
+          "kind": "git",
+          "status": "passed",
+          "created_at": "2026-07-17T03:01:00.000Z",
+          "observed_at": "2026-07-17T03:01:00.000Z",
+          "updated_at": "2026-07-17T03:01:00.000Z",
+          "completed_at": "2026-07-17T03:01:00.000Z",
+          "decisive_output": {
+            "summary": "change completed with trusted observation",
+            "facts": {
+              "changed_path_count": 1,
+              "conflict_count": 0,
+              "outcome": "passed"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "git_repository",
+            "source_ref": "fixture:commit:change",
+            "audit_event_ref": "issue_events:688:commit:change",
+            "producer": {
+              "id": "runner:fixture",
+              "kind": "runner"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          },
+          "run_id": "xw:run:issue_runs:688-commit"
+        },
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:implement-commit-focused",
+          "work_id": "xw:work:issues:688-commit",
+          "revision": 0,
+          "kind": "test",
+          "status": "passed",
+          "created_at": "2026-07-17T03:02:00.000Z",
+          "observed_at": "2026-07-17T03:02:00.000Z",
+          "updated_at": "2026-07-17T03:02:00.000Z",
+          "completed_at": "2026-07-17T03:02:00.000Z",
+          "decisive_output": {
+            "summary": "focused completed with trusted observation",
+            "facts": {
+              "command": "bun test src/feature.test.ts",
+              "outcome": "passed"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "test_runner",
+            "source_ref": "fixture:commit:focused",
+            "audit_event_ref": "issue_events:688:commit:focused",
+            "producer": {
+              "id": "runner:fixture",
+              "kind": "runner"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          },
+          "run_id": "xw:run:issue_runs:688-commit"
+        },
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:implement-commit-regression",
+          "work_id": "xw:work:issues:688-commit",
+          "revision": 0,
+          "kind": "test",
+          "status": "passed",
+          "created_at": "2026-07-17T03:03:00.000Z",
+          "observed_at": "2026-07-17T03:03:00.000Z",
+          "updated_at": "2026-07-17T03:03:00.000Z",
+          "completed_at": "2026-07-17T03:03:00.000Z",
+          "decisive_output": {
+            "summary": "regression completed with trusted observation",
+            "facts": {
+              "command": "bun test src/related.test.ts",
+              "outcome": "passed"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "test_runner",
+            "source_ref": "fixture:commit:regression",
+            "audit_event_ref": "issue_events:688:commit:regression",
+            "producer": {
+              "id": "runner:fixture",
+              "kind": "runner"
+            }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:fixture@1",
+            "redacted_paths": []
+          },
+          "run_id": "xw:run:issue_runs:688-commit"
+        }
+      ],
+      "handoff": {
+        "schema_version": 1,
+        "id": "xw:handoff:derived:implement-commit",
+        "work_id": "xw:work:issues:688-commit",
+        "run_ids": [
+          "xw:run:issue_runs:688-commit"
+        ],
+        "evidence_ids": [
+          "xw:evidence:issue_events:implement-commit-confirm",
+          "xw:evidence:git:implement-commit-change",
+          "xw:evidence:issue_events:implement-commit-focused",
+          "xw:evidence:issue_events:implement-commit-regression"
+        ],
+        "revision": 0,
+        "status": "ready",
+        "summary": "Implement fixture ready as branch_commit",
+        "created_at": "2026-07-17T03:04:30.000Z",
+        "updated_at": "2026-07-17T03:04:30.000Z",
+        "baseline_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "final_revision": "cccccccccccccccccccccccccccccccccccccccc",
+        "review_ref": "cccccccccccccccccccccccccccccccccccccccc",
+        "changed_files": [
+          "src/feature.ts"
+        ],
+        "delivery": {
+          "mode": "branch_commit",
+          "branch_ref": "refs/heads/xw/688-commit",
+          "commit_ref": "cccccccccccccccccccccccccccccccccccccccc"
+        },
+        "delivery_actions": [
+          {
+            "action": "commit",
+            "required": true,
+            "classification": "state_change",
+            "target": "git-repository:fixture#refs/heads/xw/688-commit",
+            "gate": {
+              "authority": "deterministic_policy",
+              "policy_ref": "project-policy:fixture:handoff-local-git@1"
+            },
+            "gate_decision": "allow",
+            "outcome": "succeeded",
+            "audit_event_ref": "issue_events:688:commit:handoff:outcome",
+            "before_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "after_ref": "cccccccccccccccccccccccccccccccccccccccc",
+            "rollback_ref": "issue_events:688:commit:handoff:rollback"
+          }
+        ],
+        "risks": [],
+        "rollback": {
+          "availability": "available",
+          "destructive": false,
+          "plan": "CAS delete refs/heads/xw/688-commit if it still points to cccccccccccccccccccccccccccccccccccccccc",
+          "refs": [
+            "issue_events:688:commit:handoff:rollback",
+            "refs/heads/xw/688-commit"
+          ]
+        },
+        "review": {
+          "required": false,
+          "state": "not_requested",
+          "reviewer_refs": []
+        }
+      },
+      "runs": [
+        {
+          "id": "xw:run:issue_runs:688-commit",
+          "work_id": "xw:work:issues:688-commit"
+        }
+      ],
+      "receipt": {
+        "schema_version": "xw.implement-workflow-run.v1",
+        "workflow_ref": "workflow:implement@1",
+        "project_id": "fixture-project",
+        "work_id": "xw:work:issues:688-commit",
+        "run_id": "xw:run:issue_runs:688-commit",
+        "status": "completed",
+        "completed_at": "2026-07-17T03:05:00.000Z",
+        "target_confirmation": {
+          "goal": "Implement the fixture change without unrelated refactoring.",
+          "acceptance_criteria": [
+            {
+              "id": "focused",
+              "description": "Focused verification passes."
+            },
+            {
+              "id": "regression",
+              "description": "Related regression passes."
+            },
+            {
+              "id": "handoff",
+              "description": "branch_commit Handoff is ready."
+            }
+          ],
+          "decision": "confirmed",
+          "evidence_id": "xw:evidence:issue_events:implement-commit-confirm",
+          "audit_event_ref": "issue_events:688:commit:confirm"
+        },
+        "stages": [
+          {
+            "id": "confirm-target",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-commit-confirm"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:commit:confirm"
+            ]
+          },
+          {
+            "id": "modify",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:git:implement-commit-change"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:commit:modify"
+            ]
+          },
+          {
+            "id": "focused-verify",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-commit-focused"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:commit:focused"
+            ]
+          },
+          {
+            "id": "regression",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-commit-regression"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:commit:regression"
+            ]
+          },
+          {
+            "id": "handoff",
+            "status": "completed",
+            "evidence_ids": [
+              "xw:evidence:issue_events:implement-commit-confirm",
+              "xw:evidence:git:implement-commit-change",
+              "xw:evidence:issue_events:implement-commit-focused",
+              "xw:evidence:issue_events:implement-commit-regression"
+            ],
+            "audit_event_refs": [
+              "issue_events:688:commit:handoff:outcome",
+              "issue_events:688:commit:completion-gate"
+            ]
+          }
+        ],
+        "transitions": [
+          {
+            "from": "confirm-target",
+            "to": "modify",
+            "signal": "passed",
+            "confirmation_decision": "confirmed",
+            "reason": "confirm-target completion gate passed",
+            "gate": {
+              "authority": "human_approval",
+              "decision": "allow",
+              "policy_ref": "approval-policy:implement-target-confirmed@1"
+            },
+            "audit_event_ref": "issue_events:688:commit:transition:confirm-target",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "modify",
+            "to": "focused-verify",
+            "signal": "passed",
+            "change_audit_outcome": "succeeded",
+            "reason": "modify completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "workflow-policy:implement-change@1"
+            },
+            "audit_event_ref": "issue_events:688:commit:transition:modify",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "focused-verify",
+            "to": "regression",
+            "signal": "passed",
+            "verification_decision": "passed",
+            "reason": "focused-verify completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "verification-policy:implement-command-verification@1"
+            },
+            "audit_event_ref": "issue_events:688:commit:transition:focused-verify",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "regression",
+            "to": "handoff",
+            "signal": "passed",
+            "verification_decision": "passed",
+            "reason": "regression completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "verification-policy:implement-command-verification@1"
+            },
+            "audit_event_ref": "issue_events:688:commit:transition:regression",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          },
+          {
+            "from": "handoff",
+            "to": "completed",
+            "signal": "passed",
+            "verification_decision": "passed",
+            "handoff_status": "ready",
+            "reason": "handoff completion gate passed",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "verification-policy:implement-command-verification@1"
+            },
+            "audit_event_ref": "issue_events:688:commit:transition:handoff",
+            "occurred_at": "2026-07-17T03:04:00.000Z"
+          }
+        ],
+        "evidence_ids": [
+          "xw:evidence:issue_events:implement-commit-confirm",
+          "xw:evidence:git:implement-commit-change",
+          "xw:evidence:issue_events:implement-commit-focused",
+          "xw:evidence:issue_events:implement-commit-regression"
+        ],
+        "verification": {
+          "policy_ref": "verification-policy:implement-command-verification@1",
+          "focused_evidence_ids": [
+            "xw:evidence:issue_events:implement-commit-focused"
+          ],
+          "regression_evidence_ids": [
+            "xw:evidence:issue_events:implement-commit-regression"
+          ],
+          "decision": "passed",
+          "completion_gate_audit_ref": "issue_events:688:commit:completion-gate"
+        },
+        "mutation_audit": [
+          {
+            "operation_id": "workspace-change",
+            "action": "workspace.modify",
+            "classification": "state_change",
+            "target": "git-repository:fixture#working-tree",
+            "gate": {
+              "authority": "human_approval",
+              "decision": "allow",
+              "policy_ref": "approval-policy:implement-target-confirmed@1"
+            },
+            "outcome": "succeeded",
+            "audit_event_ref": "issue_events:688:commit:modify",
+            "before_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "after_ref": "workspace-dirty",
+            "rollback_ref": "issue_events:688:commit:modify:rollback"
+          },
+          {
+            "operation_id": "local-branch-commit",
+            "action": "handoff.commit",
+            "classification": "state_change",
+            "target": "git-repository:fixture#refs/heads/xw/688-commit",
+            "gate": {
+              "authority": "deterministic_policy",
+              "decision": "allow",
+              "policy_ref": "project-policy:fixture:handoff-local-git@1"
+            },
+            "outcome": "succeeded",
+            "audit_event_ref": "issue_events:688:commit:handoff:outcome",
+            "before_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "after_ref": "cccccccccccccccccccccccccccccccccccccccc",
+            "rollback_ref": "issue_events:688:commit:handoff:rollback"
+          }
+        ],
+        "handoff": {
+          "id": "xw:handoff:derived:implement-commit",
+          "mode": "branch_commit",
+          "status": "ready",
+          "audit_event_refs": [
+            "issue_events:688:commit:handoff:outcome"
+          ]
+        }
+      }
+    }
+  ]
+}

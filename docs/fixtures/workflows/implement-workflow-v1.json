@@ -1,0 +1,213 @@
+{
+  "schema_version": "xuanwu.workflow-manifest.v1",
+  "id": "workflow:implement",
+  "revision": 1,
+  "name": "Implement",
+  "description": "Confirm the target, modify scoped files, run focused verification and regression, then create an audited local Handoff.",
+  "stages": [
+    {
+      "id": "confirm-target",
+      "name": "Confirm goal and acceptance target",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:project_status",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:issue_read",
+          "runner-builtin:issue_execution_status"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:implement-target-confirmation@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "modify",
+      "name": "Apply the scoped implementation",
+      "agent": {
+        "role": "executor",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "write",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:work_update",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read"
+        ],
+        "allowed_actions": [
+          "work.update"
+        ]
+      },
+      "verification_policy_ref": "verification-policy:implement-change-snapshot@1",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_seconds": [
+          5
+        ]
+      },
+      "approval": {
+        "mode": "before_stage",
+        "policy_ref": "approval-policy:implement-target-confirmed@1"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "focused-verify",
+      "name": "Run focused verification",
+      "agent": {
+        "role": "verifier",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:implement-command-verification@1",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_seconds": [
+          5
+        ]
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "regression",
+      "name": "Run related regression",
+      "agent": {
+        "role": "verifier",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:implement-command-verification@1",
+      "retry": {
+        "max_attempts": 2,
+        "backoff_seconds": [
+          5
+        ]
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "handoff",
+      "name": "Prepare the audited Handoff",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "write",
+        "allowed_tools": [
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_list",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": [
+          "handoff.commit"
+        ]
+      },
+      "verification_policy_ref": "verification-policy:implement-command-verification@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "branch_commit",
+        "required": true,
+        "project_override_modes": [
+          "local_changes",
+          "branch_commit"
+        ]
+      }
+    }
+  ]
+}
