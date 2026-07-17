@@ -31,7 +31,13 @@ export type IssueWorkCreateCommand = {
   audit: WorkTransitionAudit;
   goal: string;
   project_id: string;
-  status: "todo" | "triage";
+  source?: {
+    authority: string;
+    external_id: string;
+    kind: "automation_trigger";
+    source_event_id: string;
+  };
+  status: "todo" | "triage" | "in_progress";
   title: string;
   type: "engineering_task";
 };
@@ -190,7 +196,8 @@ export function createIssueBackedWork(
         gate: command.audit.gate,
         operation: "create",
         outcome: "applied",
-        reason: command.audit.reason
+        reason: command.audit.reason,
+        ...(command.source ? { source: command.source } : {})
       }
     });
     return {
@@ -387,6 +394,17 @@ function issueProvenance(issue: Issue, createdEvent?: IssueEvent): WorkProvenanc
   const eventPayload = parsedObject(createdEvent?.payload);
   const actor = domainActor(eventPayload?.actor);
   const correlationID = stringValue(eventPayload?.correlation_id);
+  const source = automationSource(eventPayload?.source, actor, correlationID, createdEvent?.created_at || issue.created_at);
+  if (source) {
+    return {
+      causes: [{
+        authority: "issues", completeness: "complete", correlation_id: correlationID,
+        external_id: String(issue.id), kind: "issue", occurred_at: createdEvent?.created_at || issue.created_at,
+        actor: actor!, source_event_id: makeDomainID("evidence", "issue_events", createdEvent!.id)
+      }],
+      origin: source
+    };
+  }
   const common = {
     authority: "issues",
     external_id: String(issue.id),
@@ -407,6 +425,24 @@ function issueProvenance(issue: Issue, createdEvent?: IssueEvent): WorkProvenanc
       completeness: "legacy_incomplete",
       missing_fields: missingFields
     }
+  };
+}
+
+function automationSource(
+  value: unknown,
+  actor: DomainActor | undefined,
+  correlationID: string,
+  occurredAt: string
+): WorkProvenance["origin"] | undefined {
+  if (!actor || !correlationID || !value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const authority = stringValue(source.authority);
+  const externalID = stringValue(source.external_id);
+  const sourceEventID = stringValue(source.source_event_id);
+  if (authority !== "automation_definitions" || !externalID || !sourceEventID || source.kind !== "automation_trigger") return undefined;
+  return {
+    actor, authority, completeness: "complete", correlation_id: correlationID,
+    external_id: externalID, kind: "automation_trigger", occurred_at: occurredAt, source_event_id: sourceEventID
   };
 }
 
@@ -476,8 +512,9 @@ function createViolations(command: IssueWorkCreateCommand): string[] {
   if (command.type !== "engineering_task") {
     violations.push("Issue-backed Work type must be engineering_task");
   }
-  if (command.status !== "triage" && command.status !== "todo") {
-    violations.push("Issue-backed Work must be created in triage or todo");
+  if (command.status !== "triage" && command.status !== "todo" &&
+    !(command.status === "in_progress" && command.source?.kind === "automation_trigger")) {
+    violations.push("Issue-backed Work must be created in triage or todo unless a governed Automation dispatch starts its Run");
   }
   return violations;
 }
