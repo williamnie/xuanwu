@@ -1,5 +1,6 @@
 import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   createPiMemoryItem,
@@ -246,7 +247,7 @@ function memoryCandidateEvent(item: PiMemoryItem): AppEvent {
 
 function toolResult(details: unknown): AgentToolResult<unknown> {
   return {
-    content: [{ type: "text", text: JSON.stringify(details, null, 2) ?? "null" }],
+    content: [{ type: "text", text: formatModelVisibleToolOutput(details, { source: "memory" }) }],
     details
   };
 }

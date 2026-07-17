@@ -66,6 +66,8 @@ describe("context bundle builder", () => {
         `external_event:${screenshot.id}#attachment:0`
       ]);
       expect(JSON.stringify(bundle)).not.toContain("raw-secret-that-must-not-enter-bundle");
+      expect(bundle.context.every((item) => item.source_ref.startsWith("untrusted://external_message/"))).toBe(true);
+      expect(bundle.context.every((item) => item.source_ref.includes("instruction_authority=none"))).toBe(true);
 
       const saved = createContextBundle(db, bundle, new Date("2026-07-06T01:04:00Z"));
       expect(saved).toMatchObject({

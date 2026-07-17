@@ -2,6 +2,7 @@ import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createPiMcpActionTools, PI_MCP_TOOL_NAMES } from "./mcpToolDefinitions.ts";
 import type { PiRunnerActionLayer } from "./runnerActions.ts";
+import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 
 export const PI_RUNNER_ACTION_TOOL_NAMES = [
   "agent_profile_recommend",
@@ -349,7 +350,5 @@ function toolResult(details: unknown): AgentToolResult<unknown> {
 }
 
 function boundedToolResultText(details: unknown): string {
-  const text = JSON.stringify(details, null, 2) ?? "null";
-  if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
-  return `${text.slice(0, TOOL_RESULT_MAX_CHARS)}\n\n[tool result truncated: ${text.length - TOOL_RESULT_MAX_CHARS} chars omitted; full result preserved in tool details.]`;
+  return formatModelVisibleToolOutput(details, { maxChars: TOOL_RESULT_MAX_CHARS });
 }

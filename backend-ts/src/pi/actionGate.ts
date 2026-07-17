@@ -6,6 +6,7 @@ import {
   SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES,
   SUPERVISOR_CONTROL_READ_ACTION_TYPES
 } from "./supervisorControlContracts.ts";
+import { assessDataEgress, isExternalEgressAction } from "../security/promptInjectionDefense.ts";
 
 export type PiRiskGate = "safe" | "confirm" | "high";
 export type PiRiskLevel = "low" | "medium" | "high";
@@ -139,6 +140,10 @@ export function decidePiAuthorization(
   envelope: PiActionEnvelope,
   policy: PiGatePolicy = {}
 ): PiGateDecision {
+  if (isExternalEgressAction(envelope.action_type)) {
+    const egress = assessDataEgress(envelope.payload);
+    if (!egress.allowed) return { decision: "deny", reason: egress.reason };
+  }
   const riskGate = actionRiskGate(envelope);
   if (riskGate === "forbidden" || forbiddenByPolicy(envelope, policy)) {
     return { decision: "deny", reason: "action is forbidden by policy" };

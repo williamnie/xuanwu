@@ -87,6 +87,14 @@ describe("read-only assistant tool invocation", () => {
         auditContext: { conversationID: "conv-mcp", source: "test" },
         db,
         env,
+        input: { query: "deploy" },
+        providerID: "mcp-docs",
+        toolName: "search"
+      });
+      const egressDenied = await invokeReadOnlyAssistantTool({
+        auditContext: { conversationID: "conv-mcp-egress", source: "test" },
+        db,
+        env,
         input: { query: "deploy", token: "secret-token-value" },
         providerID: "mcp-docs",
         toolName: "search"
@@ -116,11 +124,13 @@ describe("read-only assistant tool invocation", () => {
       });
 
       expect(succeeded).toMatchObject({ output: { results: ["runbook"] }, status: "succeeded" });
+      expect(egressDenied).toMatchObject({ error: { code: "sensitive_egress_denied" }, status: "denied" });
       expect(failed).toMatchObject({ error: { code: "fixture_failed" }, status: "failed" });
       expect(timeout).toMatchObject({ error: { code: "mcp_timeout" }, status: "timeout" });
       expect(stored).toMatchObject({ output: { results: ["runbook"] }, status: "succeeded" });
       expect(auditPayloads(db, "conv-mcp")[0]).toMatchObject({ provider_id: "mcp-docs", status: "succeeded", tool: "search" });
       expect(JSON.stringify(auditPayloads(db, "conv-mcp"))).not.toContain("secret-token-value");
+      expect(JSON.stringify(auditPayloads(db, "conv-mcp-egress"))).not.toContain("secret-token-value");
       expect(auditPayloads(db, "conv-mcp-failed")[0]).toMatchObject({ provider_id: "mcp-docs", status: "failed", tool: "fails" });
       expect(auditPayloads(db, "conv-mcp-timeout")[0]).toMatchObject({ provider_id: "mcp-docs", status: "timeout", tool: "slow" });
       expect(auditPayloads(db, "conv-stored")[0]).toMatchObject({ provider_id: "stored-mcp", status: "succeeded", tool: "stored_search" });

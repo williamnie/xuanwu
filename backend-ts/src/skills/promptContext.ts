@@ -3,6 +3,7 @@ import { createPiActionEvent, getPiDelegation } from "../db/repositories/pi.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
+import { formatUntrustedContent } from "../security/promptInjectionDefense.ts";
 import { mergeSkillIntents, parseSkillIntentList, parseSkillPolicy } from "./intents.ts";
 import { listSkillRegistry, type SkillMetadata } from "./registry.ts";
 
@@ -145,7 +146,7 @@ function promptContextAudit(
 function formatPromptSection(audit: SkillPromptContextAudit): string {
   return [
     "Relevant Skill Metadata:",
-    JSON.stringify(audit.injected_skills, null, 2),
+    formatUntrustedContent(audit.injected_skills, "skill"),
     "Skill metadata policy: only project/issue/delegation-authorized skill summaries above are visible in this prompt.",
     "Authorized injected skill ids:",
     JSON.stringify(audit.injected_skill_ids)

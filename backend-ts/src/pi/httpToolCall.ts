@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "./httpToolProvider.ts";
 import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import { unsafeUrlEgressReason } from "../security/promptInjectionDefense.ts";
 
 export type HttpToolCallInput = {
   input?: Record<string, unknown>;
@@ -138,7 +139,13 @@ function parseFetchOptions(
 function normalizedUrl(value: unknown): { value: string } | { error: ToolResultError; status: "denied" | "failed" } {
   try {
     const url = new URL(cleanString(value));
-    if (url.protocol === "http:" || url.protocol === "https:") return { value: url.toString() };
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      const unsafeReason = unsafeUrlEgressReason(url);
+      if (unsafeReason !== "") {
+        return { error: { code: "sensitive_url_denied", message: unsafeReason }, status: "denied" };
+      }
+      return { value: url.toString() };
+    }
     return { error: { code: "url_scheme_denied", message: "url_fetch only supports http and https URLs" }, status: "denied" };
   } catch {
     return { error: { code: "invalid_url", message: "url_fetch requires a valid URL" }, status: "failed" };

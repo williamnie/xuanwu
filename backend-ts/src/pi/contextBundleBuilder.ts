@@ -6,6 +6,7 @@ import type {
   ContextBundleTrigger
 } from "../db/repositories/contextBundles.ts";
 import type { ExternalEventRecord } from "../db/repositories/externalEvents.ts";
+import { untrustedSourceReference } from "../security/promptInjectionDefense.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -120,7 +121,7 @@ function evidenceContext(
     attachment_refs: attachmentRefsForEvent(event),
     event_ref: event.id,
     occurred_at: isoTime(event),
-    source_ref: sourceRef(event),
+    source_ref: untrustedSourceReference(sourceRef(event), "external_message"),
     summary: truncateRunes(summaryText(event), maxChars)
   }));
 }

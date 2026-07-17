@@ -8,6 +8,7 @@ import { parseSkillPolicy } from "../skills/intents.ts";
 import { supervisorIntentRoutePrompt } from "../pi/supervisorIntentRouter.ts";
 import { supervisorContextPrompt } from "../pi/supervisorContextResolver.ts";
 import { buildSupervisorCommitmentPromptContext } from "../pi/supervisorCommitments.ts";
+import { promptInjectionDefenseSystemPrompt } from "../security/promptInjectionDefense.ts";
 import type { RuntimeSessionInput } from "./piRuntime.ts";
 
 export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: RunnerDatabase): string {
@@ -17,6 +18,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
   recordSkillPromptContextAudit(db, promptInput, skillContext.audit);
   return [
     xuanwuSupervisorRoleContractPrompt(),
+    promptInjectionDefenseSystemPrompt(),
     xuanwuSupervisorCompatibilityPrompt(),
     ...(input.supervisorIntentRoute ? [supervisorIntentRoutePrompt(input.supervisorIntentRoute)] : []),
     ...(input.supervisorContext ? [supervisorContextPrompt(input.supervisorContext)] : []),

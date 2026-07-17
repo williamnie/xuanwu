@@ -1,5 +1,6 @@
 import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { getPiActionByIdempotencyKey, type PiAction } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -802,11 +803,13 @@ function controlTool<TParams extends TSchema>(
 }
 
 function toolResult(details: unknown): AgentToolResult<unknown> {
-  const text = JSON.stringify(details) ?? "null";
-  const visible = text.length <= SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS
-    ? text
-    : `${text.slice(0, SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS - 100)}\n[tool output truncated; original_chars=${text.length}]`;
-  return { content: [{ type: "text", text: visible }], details };
+  return {
+    content: [{
+      type: "text",
+      text: formatModelVisibleToolOutput(details, { maxChars: SUPERVISOR_CONTROL_VISIBLE_OUTPUT_MAX_CHARS })
+    }],
+    details
+  };
 }
 
 function domainAudit(context: PiRunnerActionContext, eventID: string, reason: string) {

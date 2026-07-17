@@ -9,6 +9,7 @@ import { callMcpTool } from "./mcpToolCall.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "./toolCallAudit.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { AssistantTool, ToolProvider, ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
+import { assessDataEgress } from "../security/promptInjectionDefense.ts";
 
 export type ReadOnlyToolInvocationInput = {
   auditContext?: Partial<ToolCallAuditContext>;
@@ -39,6 +40,10 @@ export async function invokeReadOnlyAssistantTool(input: ReadOnlyToolInvocationI
   if (!target) throw new ToolInvocationNotFoundError(`tool 不存在: ${input.providerID}:${input.toolName}`);
   if (target.tool.permission !== "read") return auditLocalResult(input, target.tool, deniedResult(clock, target.tool));
   const kind = target.provider?.kind ?? providerKindFromMetadata(target.tool);
+  if (kind !== "builtin") {
+    const egress = assessDataEgress(input.input ?? {});
+    if (!egress.allowed) return auditLocalResult(input, target.tool, sensitiveEgressDeniedResult(clock, egress.reason));
+  }
   if (kind === "cli") return callCli(input, clock);
   if (kind === "mcp") return callMcp(input, target.tool, clock);
   if (kind === "http") return callHttp(input, target.tool, clock);
@@ -183,6 +188,10 @@ function deniedResult(clock: InvocationClock, tool: AssistantTool): ToolResult {
     code: "permission_denied",
     message: `Read-only invocation cannot execute ${tool.permission} tool ${tool.provider_id}:${tool.name}`
   });
+}
+
+function sensitiveEgressDeniedResult(clock: InvocationClock, reason: string): ToolResult {
+  return finishResult(clock, "denied", { code: "sensitive_egress_denied", message: reason });
 }
 
 function unsupportedProviderResult(clock: InvocationClock, kind: string): ToolResult {

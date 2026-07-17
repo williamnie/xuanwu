@@ -73,7 +73,7 @@ describe("PI MCP registry and envelope tools", () => {
 
       const result = await runTool(tools, "mcp_tool_call", {
         capability_id: "docs:tool:search",
-        input: { query: "deploy", token: "secret-token-value" }
+        input: { query: "deploy" }
       });
       const action = listPiActions(db).find((item) => item.action_type === "mcp.tool.call");
       const audit = listPiActionEvents(db, { eventType: "tool_call_audit" }).at(-1);
@@ -131,7 +131,7 @@ describe("PI MCP registry and envelope tools", () => {
 
       const tool = await runTool(tools, "mcp_tool_call", {
         capability_id: "docs:tool:search",
-        input: { query: "deploy", token: "secret-token-value" }
+        input: { query: "deploy" }
       });
       const resource = actions.readMcpResource({ capability_id: "docs:resource:runbook" });
       const audits = listPiActionEvents(db, { eventType: "tool_call_audit" })

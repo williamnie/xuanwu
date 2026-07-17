@@ -1,6 +1,7 @@
 import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { PiMcpActionLayer } from "./mcpActionTools.ts";
+import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 
 export const PI_MCP_TOOL_NAMES = [
   "mcp_registry_list",
@@ -59,5 +60,5 @@ function mcpTool<TParams extends TSchema>(
 }
 
 function toolResult(details: unknown): AgentToolResult<unknown> {
-  return { content: [{ type: "text", text: JSON.stringify(details, null, 2) ?? "null" }], details };
+  return { content: [{ type: "text", text: formatModelVisibleToolOutput(details, { source: "mcp" }) }], details };
 }

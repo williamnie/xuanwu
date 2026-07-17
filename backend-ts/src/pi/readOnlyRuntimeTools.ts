@@ -3,6 +3,7 @@ import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-
 import type { RunnerDatabase } from "../db/database.ts";
 import { invokeReadOnlyAssistantTool } from "./readOnlyToolInvocation.ts";
 import type { AssistantTool, ToolProvider } from "./toolProviderEnvelope.ts";
+import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 
 export type RuntimeReadOnlyToolContext = {
   cliConnectorDirs?: string[];
@@ -108,9 +109,7 @@ function toolResult(details: unknown): AgentToolResult<unknown> {
 }
 
 function boundedToolResultText(details: unknown): string {
-  const text = JSON.stringify(details, null, 2) ?? "null";
-  if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
-  return `${text.slice(0, TOOL_RESULT_MAX_CHARS)}\n\n[tool result truncated: ${text.length - TOOL_RESULT_MAX_CHARS} chars omitted; full result preserved in tool details.]`;
+  return formatModelVisibleToolOutput(details, { maxChars: TOOL_RESULT_MAX_CHARS, source: "web" });
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
