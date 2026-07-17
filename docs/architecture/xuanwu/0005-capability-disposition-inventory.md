@@ -579,13 +579,14 @@ backend-ts/src/pi/notificationPreferenceService.ts
 ```text
 backend-ts/src/pi/contextBundleBuilder.ts
 backend-ts/src/pi/contextPackTrace.ts
-backend-ts/src/pi/domainSkillFixture.ts
 backend-ts/src/pi/domainSkillRun.ts
 backend-ts/src/pi/eventRouter.ts
 backend-ts/src/pi/intakeSkillInput.ts
 backend-ts/src/pi/intakeSourcePolicy.ts
 backend-ts/src/pi/llmIntake.ts
 backend-ts/src/pi/manualSourcePull.ts
+backend-ts/src/skills/builtinDomainProposal.ts
+backend-ts/src/skills/runtime.ts
 ```
 
 </details>

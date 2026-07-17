@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { SkillRegistryDiagnostic } from "./registry.ts";
 
 export type SkillRuntimeKind = "intake" | "domain";
+export type SkillRuntimeSandbox = "capability";
 export type SkillInputObject = "context_bundle" | "inbox_item";
 export type SkillOutputObject = "inbox_items" | "ignored_groups" | "action_proposals";
 export type SkillToolPermission = "read" | "write" | "dangerous";
@@ -25,7 +26,15 @@ export type SkillRegistryTool = {
   provider_id?: string;
 };
 
+export type SkillRuntimeExecution = {
+  adapter: "builtin";
+  handler: string;
+  sandbox: SkillRuntimeSandbox;
+  timeout_ms: number;
+};
+
 export type SkillRuntimeMetadata = {
+  execution?: SkillRuntimeExecution;
   input_object?: SkillInputObject;
   input_schema?: Record<string, unknown>;
   intent_tags: string[];
@@ -47,7 +56,9 @@ type RuntimeManifestInput = {
 type ValidationIssue = { message: string; path: string };
 
 const MANIFEST_VERSION = "pi-skill.v0";
+const EXECUTION_ADAPTER = "builtin";
 const KINDS: SkillRuntimeKind[] = ["intake", "domain"];
+const SANDBOXES: SkillRuntimeSandbox[] = ["capability"];
 const INPUT_OBJECTS: SkillInputObject[] = ["context_bundle", "inbox_item"];
 const OUTPUT_OBJECTS: SkillOutputObject[] = ["inbox_items", "ignored_groups", "action_proposals"];
 const TOOL_PERMISSIONS: SkillToolPermission[] = ["read", "write", "dangerous"];
@@ -105,6 +116,7 @@ function validateSkillManifest(value: unknown): ValidationIssue[] {
   recordValue(issues, value.output_schema, "output_schema");
   recordValue(issues, value.permissions, "permissions");
   permissionValue(issues, recordOrEmpty(value.permissions).max_tool_permission);
+  executionValue(issues, value.execution);
   stageContract(issues, value);
   return issues;
 }
@@ -129,6 +141,9 @@ function stageContract(issues: ValidationIssue[], value: Record<string, unknown>
 
 function normalizedManifest(value: Record<string, unknown>, sourcePath: string): SkillRuntimeMetadata {
   return {
+    ...(value.execution === undefined
+      ? {}
+      : { execution: normalizedExecution(value.execution as Record<string, unknown>) }),
     input_object: value.input_object as SkillInputObject,
     input_schema: value.input_schema as Record<string, unknown>,
     intent_tags: uniqueStrings(value.intent_tags),
@@ -139,6 +154,15 @@ function normalizedManifest(value: Record<string, unknown>, sourcePath: string):
     primary_intents: uniqueEnums(value.primary_intents, PRIMARY_INTENTS),
     required_tools: uniqueStrings(value.required_tools),
     runtime_manifest_path: sourcePath
+  };
+}
+
+function normalizedExecution(value: Record<string, unknown>): SkillRuntimeExecution {
+  return {
+    adapter: EXECUTION_ADAPTER,
+    handler: cleanString(value.handler),
+    sandbox: value.sandbox as SkillRuntimeSandbox,
+    timeout_ms: Number(value.timeout_ms)
   };
 }
 
@@ -205,6 +229,33 @@ function permissionValue(issues: ValidationIssue[], value: unknown): void {
   }
 }
 
+function executionValue(issues: ValidationIssue[], value: unknown): void {
+  if (value === undefined) return;
+  if (!isRecord(value)) {
+    issues.push({ path: "execution", message: "must be an object" });
+    return;
+  }
+  literal(issues, value.adapter, EXECUTION_ADAPTER, "execution.adapter");
+  nonEmptyString(issues, value.handler, "execution.handler");
+  enumValue(issues, value.sandbox, SANDBOXES, "execution.sandbox");
+  boundedTimeout(issues, value.timeout_ms, "execution.timeout_ms");
+  for (const key of Object.keys(value)) {
+    if (!["adapter", "handler", "sandbox", "timeout_ms"].includes(key)) {
+      issues.push({ path: `execution.${key}`, message: "is not supported" });
+    }
+  }
+}
+
+function nonEmptyString(issues: ValidationIssue[], value: unknown, path: string): void {
+  if (typeof value !== "string" || value.trim() === "") issues.push({ path, message: "must be a non-empty string" });
+}
+
+function boundedTimeout(issues: ValidationIssue[], value: unknown, path: string): void {
+  if (!Number.isSafeInteger(value) || Number(value) < 1 || Number(value) > 30_000) {
+    issues.push({ path, message: "must be an integer between 1 and 30000" });
+  }
+}
+
 function uniqueEnums<T extends string>(value: unknown, allowed: T[]): T[] {
   return uniqueStrings(value).filter((item): item is T => (allowed as string[]).includes(item));
 }
@@ -244,4 +295,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function safeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

@@ -4,12 +4,17 @@ import { updateAttentionInboxItemStatus, type AttentionInboxItemRecord } from ".
 import {
   createActionProposal,
   createPiAction,
-  createPiActionEvent,
   type ActionProposalRecord,
   type PiAction
 } from "../db/repositories/pi.ts";
-import { runFixtureDomainSkill, type DomainSkillOutput } from "./domainSkillFixture.ts";
+import {
+  DEFAULT_DOMAIN_SKILL_ID,
+  type DomainSkillOutput
+} from "../skills/builtinDomainProposal.ts";
+import { readSkillRegistry, type SkillMetadata } from "../skills/registry.ts";
+import { executeSkillRuntime, type ExecuteSkillRuntimeInput, type SkillRuntimeRun } from "../skills/runtime.ts";
 import { retrievePiMemoryContext, type PiMemoryRetrievalResult } from "./memoryContext.ts";
+import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -17,36 +22,51 @@ export type DomainSkillRunResult = {
   action: PiAction;
   output: DomainSkillOutput;
   proposal: ActionProposalRecord;
+  runtime: SkillRuntimeRun;
 };
 
-export function createDomainSkillProposal(
+export type DomainSkillRunOptions = {
+  cliConnectorDirs?: string[];
+  env?: Record<string, string | undefined>;
+  skill?: SkillMetadata;
+  toolSnapshot?: ExecuteSkillRuntimeInput["toolSnapshot"];
+};
+
+export async function createDomainSkillProposal(
   db: RunnerDatabase,
   item: AttentionInboxItemRecord,
-  skillID = "fixture-domain"
-): DomainSkillRunResult {
-  const contextRetrieval = domainContextRetrieval(db, item, skillID);
-  const output = runFixtureDomainSkill(item, skillID);
-  const action = createPiAction(db, domainSkillAction(item, output, skillID, contextRetrieval));
-  const proposal = createActionProposal(db, actionProposal(item, output, action));
-  createPiActionEvent(db, {
-    action_id: action.id,
-    event_type: "attention_inbox.domain_skill_requested",
-    payload_json: JSON.stringify({
-      action_count: output.action_proposals.length,
-      item_id: item.id,
-      primary_intent: item.primary_intent,
-      skill_id: skillID
-    })
+  skillID = DEFAULT_DOMAIN_SKILL_ID,
+  options: DomainSkillRunOptions = {}
+): Promise<DomainSkillRunResult> {
+  const skill = options.skill ?? requireDomainSkill(db, skillID, options);
+  const contextRetrieval = domainContextRetrieval(db, item, skill.id);
+  const execution = await executeSkillRuntime<DomainSkillOutput>({
+    auditContext: {
+      projectID: confidentProjectID(item),
+      source: "attention_inbox.domain_skill"
+    },
+    cliConnectorDirs: options.cliConnectorDirs,
+    db,
+    env: options.env,
+    evidenceRefs: item.evidence_refs,
+    input: { context_retrieval: contextRetrieval, inbox_item: item as unknown as JsonObject },
+    runID: domainSkillActionID(item.id, skill.id),
+    skill,
+    toolSnapshot: options.toolSnapshot
   });
-  return { action, output, proposal };
+  const output = execution.output;
+  const action = createPiAction(db, domainSkillAction(item, output, skill.id, contextRetrieval, execution.run));
+  const proposal = createActionProposal(db, actionProposal(item, output, action));
+  return { action, output, proposal, runtime: execution.run };
 }
 
-export function runDomainSkillAndMarkProposal(
+export async function runDomainSkillAndMarkProposal(
   db: RunnerDatabase,
   item: AttentionInboxItemRecord,
-  skillID = "fixture-domain"
-): DomainSkillRunResult & { item: AttentionInboxItemRecord } {
-  const result = createDomainSkillProposal(db, item, skillID);
+  skillID = DEFAULT_DOMAIN_SKILL_ID,
+  options: DomainSkillRunOptions = {}
+): Promise<DomainSkillRunResult & { item: AttentionInboxItemRecord }> {
+  const result = await createDomainSkillProposal(db, item, skillID, options);
   return { ...result, item: updateAttentionInboxItemStatus(db, item.id, "proposal_created") };
 }
 
@@ -54,7 +74,8 @@ function domainSkillAction(
   item: AttentionInboxItemRecord,
   output: DomainSkillOutput,
   skillID: string,
-  contextRetrieval: PiMemoryRetrievalResult
+  contextRetrieval: PiMemoryRetrievalResult,
+  runtime: SkillRuntimeRun
 ): JsonObject {
   return {
     action_type: "attention_inbox.domain_skill",
@@ -67,7 +88,8 @@ function domainSkillAction(
       item_id: item.id,
       primary_intent: item.primary_intent,
       suggested_actions: item.suggested_actions,
-      title: item.title
+      title: item.title,
+      skill_runtime: runtime
     }),
     rationale: `Manual domain skill request for attention inbox item #${item.id}`,
     requires_confirmation: 1,
@@ -118,12 +140,41 @@ function actionProposal(
 }
 
 export function domainSkillActionID(itemID: number, skillID: string): string {
-  const suffix = skillID === "fixture-domain" ? "" : `-${safeID(skillID)}`;
-  return `attention-inbox-item-${itemID}${suffix}-domain-skill`;
+  return `attention-inbox-item-${itemID}-${safeID(skillID)}-domain-skill`;
+}
+
+function requireDomainSkill(
+  db: RunnerDatabase,
+  skillID: string,
+  options: DomainSkillRunOptions
+): SkillMetadata {
+  const snapshot = options.toolSnapshot ?? loadAssistantToolRegistrySnapshot(db, {
+    cliConnectorDirs: options.cliConnectorDirs ?? [],
+    env: options.env
+  });
+  const availableTools = snapshot.tools.map((tool) => ({
+    aliases: [cleanString(tool.metadata?.capability_id)].filter(Boolean),
+    name: tool.name,
+    permission: tool.permission,
+    provider_id: tool.provider_id
+  }));
+  const wanted = normalizeSkillID(skillID);
+  const registry = readSkillRegistry({ availableTools });
+  const skill = registry.items.find((item) => item.id === wanted || item.name === wanted);
+  if (!skill) throw new Error(`domain skill not found: ${skillID}`);
+  if (skill.kind !== "domain") throw new Error(`skill kind must be domain: ${skillID}`);
+  const path = skill.runtime_manifest_path || skill.source_path;
+  const diagnostics = registry.diagnostics.filter((item) => item.source_path === path);
+  if (diagnostics.length > 0) throw new Error(`domain skill has diagnostics: ${diagnostics.map((item) => item.code).join(", ")}`);
+  return skill;
 }
 
 function safeID(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "skill";
+}
+
+function normalizeSkillID(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_:-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 function confidence(value: unknown): number {

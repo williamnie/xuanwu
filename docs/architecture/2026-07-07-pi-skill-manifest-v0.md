@@ -2,6 +2,10 @@
 
 > 状态：P04.01 最小规范。范围只覆盖 manifest 解析、registry 展示与 loader 诊断，不包含 skill 执行、run history、proposal 持久化或自动路由。
 
+> P06.12 的 additive `execution` 扩展、受控 handler、权限审计与迁移规则见
+> `docs/architecture/xuanwu/0058-executable-skill-runtime.md`；未声明 `execution` 的旧 manifest 继续作为 metadata/legacy
+> runtime declaration 读取，但不能经新的 Domain execution route 执行。
+
 ## 两类 skill
 
 PI Assistant 的主动处理链路按对象边界拆成两类 skill：

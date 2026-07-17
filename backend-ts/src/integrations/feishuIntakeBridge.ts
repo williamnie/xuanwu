@@ -45,7 +45,7 @@ export async function routeFeishuMessageToGenericIntake(
   if (route.status !== "routed" || !route.result) {
     return { domain_routes: [], intake_route: route, reason: route.reason, status: "skipped" };
   }
-  const domainRoutes = route.result.created_items.map((item) => routeInboxItemToDomainSkill(
+  const domainRoutes = await Promise.all(route.result.created_items.map((item) => routeInboxItemToDomainSkill(
     options.database,
     item,
     {
@@ -53,7 +53,7 @@ export async function routeFeishuMessageToGenericIntake(
       project: { project_confirmed: event.project_id !== "", project_id: event.project_id },
       skillID: options.domainSkillID
     }
-  ));
+  )));
   return { domain_routes: domainRoutes, intake_route: route, reason: "generic_intake_routed", status: "routed" };
 }
 

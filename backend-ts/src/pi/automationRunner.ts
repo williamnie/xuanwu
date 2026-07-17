@@ -52,7 +52,7 @@ export async function runPiAutomationPipeline(
     })
     : undefined;
   const proposed = steps.includes("domain_skill")
-    ? routeDomainItems(context.database, automation, intake?.result?.created_items ?? [])
+    ? await routeDomainItems(context.database, automation, intake?.result?.created_items ?? [])
     : 0;
   return {
     detail: detailText({ bundle: bundle?.id, events: events.length, intake: intake?.result?.created_items.length ?? 0, proposed }),
@@ -61,10 +61,14 @@ export async function runPiAutomationPipeline(
   };
 }
 
-function routeDomainItems(db: RunnerDatabase, automation: PiAutomationRecord, items: AttentionInboxItemRecord[]): number {
+async function routeDomainItems(
+  db: RunnerDatabase,
+  automation: PiAutomationRecord,
+  items: AttentionInboxItemRecord[]
+): Promise<number> {
   let proposed = 0;
   for (const item of items.slice(0, automation.max_actions_per_run)) {
-    const result = routeInboxItemToDomainSkill(db, item, {
+    const result = await routeInboxItemToDomainSkill(db, item, {
       policy: automationPolicy(automation),
       skillID: stepSkillID(automation, "domain_skill")
     });

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
-import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
+import { createAttentionInboxItem, createIntakeRun, getAttentionInboxItem } from "../db/repositories/intakeRuns.ts";
 import { createPiMemoryItem } from "../db/repositories/pi.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -102,6 +102,12 @@ describe("PI skill metadata API", () => {
         output_objects: ["inbox_items", "ignored_groups"]
       });
       expect(byID.get("fixture-domain")).toMatchObject({
+        executable: true,
+        execution: {
+          handler: "builtin:pi-domain-proposal",
+          sandbox: "capability",
+          timeout_ms: 1000
+        },
         input_object: "inbox_item",
         kind: "domain",
         output_objects: ["action_proposals"]
@@ -127,6 +133,56 @@ describe("PI skill metadata API", () => {
       expect(await missing.json()).toEqual({ message: "skill 不存在: not-found" });
       expect(post.status).toBe(405);
       expect(await post.json()).toEqual({ message: "method not allowed" });
+    } finally {
+      fixture.db.close();
+    }
+  });
+
+  test("keeps legacy domain manifests visible but refuses execution without an allowlisted handler", async () => {
+    const fixture = await openFixture();
+    await writeManifestSkill(fixture.root, "manifest-only-domain", domainManifest({ execution: undefined }));
+    Bun.env.CODEX_HOME = fixture.root;
+    try {
+      const router = createDefaultRouter({ database: fixture.db });
+      const listed = await jsonRequest(router, "/api/pi/skills") as Record<string, any>;
+      const skill = listed.skills.find((item: Record<string, unknown>) => item.id === "manifest-only-domain");
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/skills/manifest-only-domain/domain-runs`, {
+        body: JSON.stringify({ item_id: 1 }),
+        method: "POST"
+      }));
+
+      expect(skill).toMatchObject({ enabled: false, executable: false, runtime_status: "manifest_only" });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: "domain skill 缺少可执行 runtime" });
+    } finally {
+      fixture.db.close();
+    }
+  });
+
+  test("exposes isolated handler failures in domain run history without mutating the inbox item", async () => {
+    const fixture = await openFixture();
+    await writeManifestSkill(fixture.root, "bad-handler", domainManifest({
+      execution: { adapter: "builtin", handler: "builtin:not-registered", sandbox: "capability", timeout_ms: 1000 }
+    }));
+    Bun.env.CODEX_HOME = fixture.root;
+    try {
+      const seed = seedSkillRunFixture(fixture.db);
+      const router = createDefaultRouter({ database: fixture.db });
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/skills/bad-handler/domain-runs`, {
+        body: JSON.stringify({ item_id: seed.itemID }),
+        method: "POST"
+      }));
+      const history = await jsonRequest(router, "/api/pi/skills/domain-runs?skill_id=bad-handler") as Array<Record<string, any>>;
+
+      expect(response.status).toBe(500);
+      expect(history).toEqual([expect.objectContaining({
+        item_id: seed.itemID,
+        proposal_status: "",
+        skill_id: "bad-handler",
+        status: "failed"
+      })]);
+      expect(history[0]?.error).toContain("not allowlisted");
+      expect(getAttentionInboxItem(fixture.db, seed.itemID)?.status).toBe("new");
     } finally {
       fixture.db.close();
     }
@@ -238,6 +294,12 @@ function intakeManifest(overrides: Record<string, unknown> = {}): Record<string,
 
 function domainManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    execution: {
+      adapter: "builtin",
+      handler: "builtin:pi-domain-proposal",
+      sandbox: "capability",
+      timeout_ms: 1000
+    },
     input_object: "inbox_item",
     input_schema: { type: "object" },
     kind: "domain",

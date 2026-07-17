@@ -12,6 +12,8 @@ import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
 import { buildIntakeSkillInput } from "../pi/intakeSkillInput.ts";
 import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
 import { readSkillRegistry, type SkillMetadata, type SkillRegistryDiagnostic } from "../skills/registry.ts";
+import { DEFAULT_DOMAIN_SKILL_ID } from "../skills/builtinDomainProposal.ts";
+import { SKILL_RUNTIME_COMPLETED_EVENT } from "../skills/runtime.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { publicIntakeRun, redactedJsonObject, runDiagnostics } from "./piSkillRunViews.ts";
 import type { Router } from "./router.ts";
@@ -20,7 +22,7 @@ type SkillRouteContext = { config?: RunnerConfig; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
 type SkillRegistryView = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
 
-const DOMAIN_EVENT_TYPE = "attention_inbox.domain_skill_requested";
+const LEGACY_DOMAIN_EVENT_TYPE = "attention_inbox.domain_skill_requested";
 const RUN_STATUSES = new Set(["running", "succeeded", "failed"]);
 
 export function registerPiSkillRoutes(router: Router, context?: SkillRouteContext): void {
@@ -65,7 +67,7 @@ function domainRunsResponse(context: SkillRouteContext | undefined, request: Req
   const skill = cleanParam(params.get("skill_id") || params.get("skillId"));
   const itemID = queryID(params.get("item_id") || params.get("itemId"));
   const status = cleanParam(params.get("status"));
-  return listPiActionEvents(db, { eventType: DOMAIN_EVENT_TYPE })
+  return domainRunEvents(db)
     .map((event) => domainRunView(db, event))
     .filter((run) => skill === "" || run.skill_id === skill)
     .filter((run) => !itemID || run.item_id === itemID)
@@ -96,13 +98,23 @@ async function startDomainRun(context: SkillRouteContext | undefined, request: R
   const body = await objectBody(request);
   const item = getAttentionInboxItem(db, positiveBodyID(body, "item_id"));
   if (!item) throw new HttpError(404, "attention inbox item not found");
-  const result = runDomainSkillAndMarkProposal(db, item, skill.id);
+  const result = await runDomainSkillAndMarkProposal(db, item, skill.id, {
+    cliConnectorDirs: context?.config?.cliConnectors.manifestDirs ?? [],
+    skill
+  });
   return json({ action: result.action, item: result.item, run: latestDomainRun(db, result.action.id) }, { status: 202 });
 }
 
 function latestDomainRun(db: RunnerDatabase, actionID: string): JsonObject | null {
-  const event = listPiActionEvents(db, { actionId: actionID, eventType: DOMAIN_EVENT_TYPE }).at(-1);
+  const event = domainRunEvents(db).filter((item) => item.action_id === actionID).at(-1);
   return event ? domainRunView(db, event) : null;
+}
+
+function domainRunEvents(db: RunnerDatabase): PiActionEvent[] {
+  const current = listPiActionEvents(db, { eventType: SKILL_RUNTIME_COMPLETED_EVENT })
+    .filter((event) => cleanString(jsonObject(parseJson(event.payload_json)).kind) === "domain");
+  const legacy = listPiActionEvents(db, { eventType: LEGACY_DOMAIN_EVENT_TYPE });
+  return [...legacy, ...current].sort((left, right) => left.id - right.id);
 }
 
 function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
@@ -115,9 +127,9 @@ function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
   return {
     id: event.id,
     kind: "domain",
-    status: error ? "failed" : "succeeded",
+    status: cleanString(eventPayload.status) || (error ? "failed" : "succeeded"),
     proposal_status: action?.status || "",
-    skill_id: cleanString(actionPayload.skill_id || eventPayload.skill_id) || "fixture-domain",
+    skill_id: cleanString(actionPayload.skill_id || eventPayload.skill_id) || DEFAULT_DOMAIN_SKILL_ID,
     item_id: itemID,
     bundle_id: item?.bundle_id ?? 0,
     input_id: itemID,
@@ -144,11 +156,16 @@ function decorateSkills(registry: SkillRegistryView): JsonObject[] {
 
 function decoratedSkill(skill: SkillMetadata, registry: SkillRegistryView): JsonObject {
   const diagnostics = skillDiagnostics(skill, registry.diagnostics);
+  const executable = Boolean(skill.execution);
+  const manifestOnly = skill.kind === "domain" && !executable;
   return {
     ...skill,
     diagnostics,
-    enabled: skill.kind ? diagnostics.length === 0 : true,
-    runtime_status: skill.kind ? (diagnostics.length === 0 ? "enabled" : "diagnostic") : "metadata_only"
+    enabled: skill.kind ? diagnostics.length === 0 && !manifestOnly : true,
+    executable,
+    runtime_status: manifestOnly
+      ? "manifest_only"
+      : skill.kind ? (diagnostics.length === 0 ? "enabled" : "diagnostic") : "metadata_only"
   };
 }
 
@@ -167,6 +184,7 @@ function requireRuntimeSkill(
   const skill = findSkill(registry.items, id);
   if (!skill) throw new HttpError(404, `skill 不存在: ${id}`);
   if (skill.kind !== kind) throw new HttpError(400, `skill kind 必须是 ${kind}`);
+  if (kind === "domain" && !skill.execution) throw new HttpError(400, "domain skill 缺少可执行 runtime");
   const diagnostics = skillDiagnostics(skill, registry.diagnostics);
   if (diagnostics.length > 0) throw new HttpError(400, "skill 存在诊断，不能手动运行");
   return skill;
@@ -234,6 +252,10 @@ function queryLimit(value: string | null): number {
 
 function parseJson(value: unknown): unknown {
   try { return JSON.parse(cleanString(value) || "{}"); } catch { return {}; }
+}
+
+function jsonObject(value: unknown): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
 }
 
 function positiveNumber(value: unknown): number {

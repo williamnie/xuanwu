@@ -614,7 +614,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "intake-context", disposition: "merge", target: "Attention intake and Evidence context", source_of_truth: "external events, context bundles and intake audit",
-    source_files: ["backend-ts/src/pi/contextBundleBuilder.ts", "backend-ts/src/pi/contextPackTrace.ts", "backend-ts/src/pi/domainSkillFixture.ts", "backend-ts/src/pi/domainSkillRun.ts", "backend-ts/src/pi/eventRouter.ts", "backend-ts/src/pi/intakeSkillInput.ts", "backend-ts/src/pi/intakeSourcePolicy.ts", "backend-ts/src/pi/llmIntake.ts", "backend-ts/src/pi/manualSourcePull.ts"]
+    source_files: ["backend-ts/src/pi/contextBundleBuilder.ts", "backend-ts/src/pi/contextPackTrace.ts", "backend-ts/src/pi/domainSkillRun.ts", "backend-ts/src/pi/eventRouter.ts", "backend-ts/src/pi/intakeSkillInput.ts", "backend-ts/src/pi/intakeSourcePolicy.ts", "backend-ts/src/pi/llmIntake.ts", "backend-ts/src/pi/manualSourcePull.ts", "backend-ts/src/skills/builtinDomainProposal.ts", "backend-ts/src/skills/runtime.ts"]
   },
   {
     id: "memory", disposition: "keep", target: "Supporting knowledge store", source_of_truth: "pi_memory_items",

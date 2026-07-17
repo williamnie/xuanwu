@@ -10,6 +10,7 @@ import { listIntakeRuns, type AttentionInboxItemRecord } from "../db/repositorie
 import { getPiAction } from "../db/repositories/pi.ts";
 import { buildContextBundleFromEvents } from "./contextBundleBuilder.ts";
 import { domainSkillActionID, runDomainSkillAndMarkProposal } from "./domainSkillRun.ts";
+import { DEFAULT_DOMAIN_SKILL_ID } from "../skills/builtinDomainProposal.ts";
 import { DEFAULT_INTAKE_SKILL_ID, runIntakeSkill, type LlmIntakeModel, type LlmIntakeOptions, type LlmIntakeResult } from "./llmIntake.ts";
 import { sourcePolicyBlockReason, type IntakeMode, type IntakeSourcePolicy } from "./intakeSourcePolicy.ts";
 
@@ -130,12 +131,12 @@ export function decideInboxRoute(
   return { decision: "proposal", reason: "proposal_required" };
 }
 
-export function routeInboxItemToDomainSkill(
+export async function routeInboxItemToDomainSkill(
   db: RunnerDatabase,
   item: AttentionInboxItemRecord,
   options: { policy?: EventRouterSourcePolicy; project?: ProjectRouteState; retry?: boolean; skillID?: string } = {}
-): DomainRouteResult {
-  const skillID = clean(options.skillID) || "fixture-domain";
+): Promise<DomainRouteResult> {
+  const skillID = clean(options.skillID) || DEFAULT_DOMAIN_SKILL_ID;
   const decision = decideInboxRoute(item, options.policy, options.project);
   if (decision.decision === "no_action" || decision.decision === "ask_user") {
     return domainSkipped(decision.decision, decision.reason);
@@ -143,7 +144,7 @@ export function routeInboxItemToDomainSkill(
   if (!options.retry && inboxItemAlreadyRouted(db, item, skillID)) {
     return domainSkipped(decision.decision, "duplicate_inbox_item");
   }
-  const run = runDomainSkillAndMarkProposal(db, item, skillID);
+  const run = await runDomainSkillAndMarkProposal(db, item, skillID);
   return {
     action_id: run.action.id,
     decision: decision.decision,

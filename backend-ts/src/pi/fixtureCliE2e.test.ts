@@ -101,7 +101,7 @@ async function runFixtureFlow(
     skillId: "fixture-cli-intake"
   });
   const items = listAttentionInboxItems(db, { limit: 20, source: SOURCE });
-  for (const item of items) routeInboxItemToDomainSkill(db, item, domainRouteOptions());
+  for (const item of items) await routeInboxItemToDomainSkill(db, item, domainRouteOptions());
   for (const proposal of listActionProposals(db)) await approveProposal(router, proposal.id);
   return { events, items, route, sync };
 }

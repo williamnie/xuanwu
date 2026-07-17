@@ -138,15 +138,15 @@ describe("PI event router", () => {
         decision: "ask_user",
         reason: "project_confirmation_required"
       });
-      const first = routeInboxItemToDomainSkill(db, lowRisk, {
+      const first = await routeInboxItemToDomainSkill(db, lowRisk, {
         policy: { profile: "private_dm" },
         project: { project_confirmed: true, project_id: "demo" }
       });
-      const duplicate = routeInboxItemToDomainSkill(db, lowRisk, {
+      const duplicate = await routeInboxItemToDomainSkill(db, lowRisk, {
         policy: { profile: "private_dm" },
         project: { project_confirmed: true, project_id: "demo" }
       });
-      const retried = routeInboxItemToDomainSkill(db, lowRisk, {
+      const retried = await routeInboxItemToDomainSkill(db, lowRisk, {
         policy: { profile: "private_dm" },
         project: { project_confirmed: true, project_id: "demo" },
         retry: true

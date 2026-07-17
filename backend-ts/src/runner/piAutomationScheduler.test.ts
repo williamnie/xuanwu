@@ -12,6 +12,7 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
 import { listActionProposals, listPiActions } from "../db/repositories/pi.ts";
+import { DEFAULT_DOMAIN_SKILL_ID } from "../skills/builtinDomainProposal.ts";
 import { runDuePiAutomations } from "./piAutomationScheduler.ts";
 
 const tempRoots: string[] = [];
@@ -210,7 +211,7 @@ function insertAutomation(db: RunnerDatabase, input: {
       { cursor: "cursor-1", idempotency_key: "step-1", type: "source_sync", watermark: "wm-1" },
       { cursor: "cursor-1", idempotency_key: "step-2", type: "context_bundle", watermark: "wm-1" },
       { cursor: "cursor-1", idempotency_key: "step-3", skill_id: "fixture-intake", type: "intake", watermark: "wm-1" },
-      { cursor: "cursor-1", idempotency_key: "step-4", skill_id: "fixture-domain", type: "domain_skill", watermark: "wm-1" }
+      { cursor: "cursor-1", idempotency_key: "step-4", skill_id: DEFAULT_DOMAIN_SKILL_ID, type: "domain_skill", watermark: "wm-1" }
     ],
     trigger: { every: "5m", type: input.triggerType ?? "schedule" }
   }, new Date("2026-06-02T09:00:00Z"));

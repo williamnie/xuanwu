@@ -1,6 +1,12 @@
 {
   "manifest_version": "pi-skill.v0",
   "kind": "domain",
+  "execution": {
+    "adapter": "builtin",
+    "handler": "builtin:pi-domain-proposal",
+    "sandbox": "capability",
+    "timeout_ms": 1000
+  },
   "input_object": "inbox_item",
   "output_objects": ["action_proposals"],
   "required_tools": ["issue_create_proposal", "issue_status_summary"],
@@ -8,14 +14,28 @@
   "intent_tags": ["proposal-only", "approval-gated", "connector-neutral"],
   "input_schema": {
     "type": "object",
-    "required": ["inbox_item"],
+    "required": ["inbox_item", "context_retrieval"],
     "properties": {
-      "inbox_item": { "type": "object" }
+      "inbox_item": {
+        "type": "object",
+        "required": ["id", "evidence_refs", "primary_intent", "source", "suggested_actions", "summary", "target_hints", "title"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "primary_intent": { "type": "string", "minLength": 1 },
+          "source": { "type": "string" },
+          "suggested_actions": { "type": "array", "items": { "type": "string" } },
+          "summary": { "type": "string", "minLength": 1 },
+          "target_hints": { "type": "array", "items": { "type": "object" } },
+          "title": { "type": "string", "minLength": 1 }
+        }
+      },
+      "context_retrieval": { "type": "object" }
     }
   },
   "output_schema": {
     "type": "object",
-    "required": ["action_proposals"],
+    "required": ["action_proposals", "item_id", "primary_intent", "skill_id", "summary"],
     "properties": {
       "action_proposals": {
         "type": "array",

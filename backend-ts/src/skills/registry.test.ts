@@ -81,6 +81,9 @@ describe("PI skill registry", () => {
     const root = await fixtureRoot();
     await writeManifestSkill(root, "healthy", intakeManifest({ required_tools: ["available.read"] }));
     await writeManifestSkill(root, "bad-schema", { ...intakeManifest(), input_schema: [] });
+    await writeManifestSkill(root, "bad-execution", intakeManifest({
+      execution: { adapter: "module", handler: "../escape.ts", sandbox: "none", timeout_ms: 0 }
+    }));
     await writeManifestSkill(root, "needs-tool", intakeManifest({ required_tools: ["missing.tool"] }));
     await writeManifestSkill(root, "conflict", intakeManifest({
       permissions: { max_tool_permission: "read" },
@@ -95,11 +98,13 @@ describe("PI skill registry", () => {
       roots: [{ label: "fixture", path: join(root, "skills") }]
     });
 
-    expect(registry.items.map((item) => item.id)).toEqual(["bad-schema", "conflict", "healthy", "needs-tool"]);
+    expect(registry.items.map((item) => item.id)).toEqual(["bad-execution", "bad-schema", "conflict", "healthy", "needs-tool"]);
+    expect(registry.items.find((item) => item.id === "bad-execution")).not.toHaveProperty("kind");
     expect(registry.items.find((item) => item.id === "bad-schema")).not.toHaveProperty("kind");
     expect(registry.items.find((item) => item.id === "healthy")).toMatchObject({ kind: "intake" });
     expect(registry.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "manifest_invalid", source_path: "fixture:bad-schema/manifest.json" }),
+      expect.objectContaining({ code: "manifest_invalid", source_path: "fixture:bad-execution/manifest.json" }),
       expect.objectContaining({ code: "missing_tool", source_path: "fixture:needs-tool/manifest.json" }),
       expect.objectContaining({ code: "permission_conflict", source_path: "fixture:conflict/manifest.json" })
     ]));
@@ -158,10 +163,21 @@ describe("PI skill registry", () => {
 
   test("default registry includes repo-local skills", () => {
     const skill = getSkillMetadata("codex-issue-runner");
+    const executable = getSkillMetadata("pi-domain-proposal");
 
     expect(skill).toMatchObject({
       id: "codex-issue-runner",
       source_path: "repo:skills/codex-issue-runner/SKILL.md"
+    });
+    expect(executable).toMatchObject({
+      execution: {
+        adapter: "builtin",
+        handler: "builtin:pi-domain-proposal",
+        sandbox: "capability",
+        timeout_ms: 1000
+      },
+      id: "pi-domain-proposal",
+      kind: "domain"
     });
   });
 });

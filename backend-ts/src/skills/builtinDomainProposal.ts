@@ -37,7 +37,13 @@ export type DomainSkillOutput = {
 const STATUS_DRAFT = "我先查一下相关 issue 状态，并以当前记录为准同步进展。";
 const REPLY_DRAFT = "已收到，我会基于当前上下文整理一个回复草稿，确认后再发送。";
 
-export function runFixtureDomainSkill(item: AttentionInboxItemRecord, skillID = "fixture-domain"): DomainSkillOutput {
+export const BUILTIN_DOMAIN_PROPOSAL_HANDLER = "builtin:pi-domain-proposal";
+export const DEFAULT_DOMAIN_SKILL_ID = "pi-domain-proposal";
+
+export function runBuiltinDomainProposalSkill(
+  item: AttentionInboxItemRecord,
+  skillID = DEFAULT_DOMAIN_SKILL_ID
+): DomainSkillOutput {
   const actionInputs = actionInputsForItem(item);
   return {
     action_proposals: actionInputs.map((input, index) => proposal(item, input, index)),

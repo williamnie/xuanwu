@@ -85,7 +85,8 @@ export async function runManualContextIntake(
   const intake = await runIntakeSkill(db, bundle, (llmRequest) => manualIntakeModel(llmRequest, input), {
     model: "manual-trigger-intake"
   });
-  const proposals = intake.created_items.map((item) => runDomainSkillAndMarkProposal(db, item).action);
+  const domainRuns = await Promise.all(intake.created_items.map((item) => runDomainSkillAndMarkProposal(db, item)));
+  const proposals = domainRuns.map((run) => run.action);
   return {
     bundle,
     inbox_items: intake.created_items,

@@ -121,9 +121,9 @@ function reintakeInboxItem(context: AttentionInboxContext, request: Request): Re
   return json({ created: true, item_id: item.id, run }, { status: 202 });
 }
 
-function domainSkillProposal(context: AttentionInboxContext, request: Request): Response {
+async function domainSkillProposal(context: AttentionInboxContext, request: Request): Promise<Response> {
   const item = requireInboxItem(context, request);
-  const result = runDomainSkillAndMarkProposal(context.database, item);
+  const result = await runDomainSkillAndMarkProposal(context.database, item);
   return json({ action: result.action, item: result.item, proposal: result.proposal, proposal_status: "created" }, { status: 202 });
 }
 
