@@ -12,6 +12,18 @@ export const runsApi = {
 
   getRun: (id) => request(`/api/runs/${encodeURIComponent(id)}`),
 
+  getRunEvents: (issueId, { beforeId = '', limit = 100, types = [] } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (beforeId) params.append('before_id', String(beforeId));
+    types.forEach(type => params.append('type', type));
+    return request(`/api/issues/${encodeURIComponent(issueId)}/events?${params.toString()}`);
+  },
+
+  getRunApprovals: (legacyRunId) => {
+    const params = new URLSearchParams({ run_id: legacyRunId });
+    return request(`/api/pi/approval-requests?${params.toString()}`);
+  },
+
   controlRun: (id, action, payload) => request(`/api/runs/${encodeURIComponent(id)}/actions/${action}`, {
     method: 'POST',
     body: JSON.stringify(payload),

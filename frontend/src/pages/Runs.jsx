@@ -12,6 +12,7 @@ import { runsApi } from '../api/runs.js';
 import TurtleLoader from '../components/TurtleLoader';
 import { message as toast } from '../store/toastStore';
 import Sessions from './Sessions.jsx';
+import RunDetail from './runs/RunDetail.jsx';
 import RunSidebar from './runs/RunSidebar.jsx';
 import {
   buildRunControlPayload,
@@ -182,7 +183,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
       ) : detailLoading && !runDetail ? (
         <div className="run-detail-loading"><TurtleLoader label="正在重建 Run 视图…" /></div>
       ) : runDetail ? (
-        <div className="run-session-surface">
+        <div className="run-detail-surface">
           <RunContextBar
             compatibility={compatibility}
             navigateTo={navigateTo}
@@ -193,21 +194,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
             }}
             run={runDetail}
           />
-          {providerSessionRef ? (
-            <Sessions
-              autoSelectFirstSession={false}
-              navigateTo={navigateTo}
-              readOnlyNotice="Run 视图中的 provider session 仅用于观测和追溯；继续、中断与重试必须使用上方可审计 Run 操作。"
-              selectedSessionId={providerSessionRef}
-              showSidebar={false}
-            />
-          ) : (
-            <div className="run-provider-empty">
-              <History size={24} />
-              <strong>尚无 provider session observation</strong>
-              <span>Run 仍以 Work 与 lifecycle 为主线；provider 建立 session 后会在此提供 drill-down。</span>
-            </div>
-          )}
+          <RunDetail navigateTo={navigateTo} run={runDetail} />
         </div>
       ) : (
         <div className="run-provider-empty">
