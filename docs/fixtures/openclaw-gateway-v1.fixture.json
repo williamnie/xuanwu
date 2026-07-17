@@ -1,0 +1,12 @@
+{
+  "session_a": {
+    "channel_id": "slack",
+    "user_id": "user-a",
+    "session_id": "thread-722-a"
+  },
+  "session_b": {
+    "channel_id": "telegram",
+    "user_id": "user-b",
+    "session_id": "thread-722-b"
+  }
+}
