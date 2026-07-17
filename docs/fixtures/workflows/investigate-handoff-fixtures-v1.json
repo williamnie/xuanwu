@@ -1,0 +1,302 @@
+{
+  "schema_version": "xw.investigate-handoff-fixtures.v1",
+  "fixtures": [
+    {
+      "name": "confirmed",
+      "report": {
+        "schema_version": "xw.investigate-handoff-report.v1",
+        "workflow_ref": "workflow:investigate@1",
+        "work_id": "xw:work:issues:investigate-confirmed",
+        "outcome": "confirmed",
+        "summary": "The read-only reproduction confirmed the reported response mismatch and isolated the stale cache key as the root cause.",
+        "stages": [
+          {
+            "id": "scope",
+            "status": "completed",
+            "finding": "The investigation is limited to the fixture request and cache lookup path.",
+            "evidence_ids": []
+          },
+          {
+            "id": "reproduce",
+            "status": "completed",
+            "finding": "The bounded read request reproduced the stale response without changing service state.",
+            "evidence_ids": ["xw:evidence:issue_events:investigate-confirmed"]
+          },
+          {
+            "id": "root-cause",
+            "status": "completed",
+            "finding": "The observed response and source lookup agree that the cache key omitted the locale dimension.",
+            "evidence_ids": ["xw:evidence:issue_events:investigate-confirmed"]
+          },
+          {
+            "id": "report",
+            "status": "completed",
+            "finding": "The conclusion, supporting Evidence, risks, and next step are ready for handoff.",
+            "evidence_ids": []
+          }
+        ],
+        "evidence_ids": ["xw:evidence:issue_events:investigate-confirmed"],
+        "reproduction": {
+          "status": "reproduced",
+          "steps": [
+            "Read the fixture response with the locale set to zh-CN.",
+            "Compare the response cache key with the locale-aware request facts."
+          ],
+          "expected": "The zh-CN request returns the zh-CN fixture payload.",
+          "observed": "The request returns the previously cached en-US payload."
+        },
+        "root_cause": {
+          "status": "confirmed",
+          "summary": "The read path constructs a cache key without the locale dimension."
+        },
+        "handoff": {
+          "report_ref": "artifact:investigate/confirmed/report.json",
+          "recommended_next_steps": ["Create a separate Implement Work to include locale in the cache key and add a regression test."],
+          "unresolved_questions": []
+        },
+        "read_only_audit": {
+          "policy_ref": "workflow-policy:investigate-read-only@1",
+          "confirmation": "no_write_operations_observed",
+          "tool_audit_refs": ["pi_action_events:tool-call:investigate-confirmed"],
+          "allowed_actions": [],
+          "changed_files": [],
+          "state_mutations": [],
+          "external_writes": [],
+          "destructive_operations": []
+        }
+      },
+      "evidence": [
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:investigate-confirmed",
+          "work_id": "xw:work:issues:investigate-confirmed",
+          "revision": 0,
+          "kind": "shell",
+          "status": "passed",
+          "created_at": "2026-07-17T00:00:00.000Z",
+          "observed_at": "2026-07-17T00:00:01.000Z",
+          "updated_at": "2026-07-17T00:00:01.000Z",
+          "completed_at": "2026-07-17T00:00:01.000Z",
+          "decisive_output": {
+            "summary": "The bounded read-only reproduction completed and observed the stale fixture response.",
+            "exit_code": 0,
+            "facts": {
+              "command": "curl -fsS http://fixture.invalid/repro",
+              "outcome": "passed",
+              "observation_result": "reproduced"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "command_execution",
+            "source_ref": "command_execution:investigate-confirmed",
+            "audit_event_ref": "pi_action_events:tool-call:investigate-confirmed",
+            "producer": { "id": "runner-fixture", "kind": "runner" }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:v1",
+            "redacted_paths": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "not_reproduced",
+      "report": {
+        "schema_version": "xw.investigate-handoff-report.v1",
+        "workflow_ref": "workflow:investigate@1",
+        "work_id": "xw:work:issues:investigate-not-reproduced",
+        "outcome": "not_reproduced",
+        "summary": "The supplied steps completed on the fixture baseline, but the reported failure did not occur.",
+        "stages": [
+          {
+            "id": "scope",
+            "status": "completed",
+            "finding": "The investigation used the supplied steps and pinned fixture baseline only.",
+            "evidence_ids": []
+          },
+          {
+            "id": "reproduce",
+            "status": "completed",
+            "finding": "Three bounded attempts completed without the reported failure.",
+            "evidence_ids": ["xw:evidence:issue_events:investigate-not-reproduced"]
+          },
+          {
+            "id": "root-cause",
+            "status": "inconclusive",
+            "finding": "No causal branch can be confirmed without a failing observation.",
+            "evidence_ids": ["xw:evidence:issue_events:investigate-not-reproduced"]
+          },
+          {
+            "id": "report",
+            "status": "completed",
+            "finding": "The exact baseline, attempts, and missing differentiators are recorded for handoff.",
+            "evidence_ids": []
+          }
+        ],
+        "evidence_ids": ["xw:evidence:issue_events:investigate-not-reproduced"],
+        "reproduction": {
+          "status": "not_reproduced",
+          "steps": ["Run the existing focused fixture test three times on the pinned baseline."],
+          "expected": "The fixture test fails with the reported validation error.",
+          "observed": "All three attempts passed and returned the expected fixture value."
+        },
+        "root_cause": {
+          "status": "unknown",
+          "summary": "There is no failing runtime observation from which to establish a root cause."
+        },
+        "handoff": {
+          "report_ref": "artifact:investigate/not-reproduced/report.json",
+          "recommended_next_steps": ["Capture the failing input, environment fingerprint, and original timestamp before retrying."],
+          "unresolved_questions": ["Which input or runtime version differs from the pinned fixture baseline?"]
+        },
+        "read_only_audit": {
+          "policy_ref": "workflow-policy:investigate-read-only@1",
+          "confirmation": "no_write_operations_observed",
+          "tool_audit_refs": ["pi_action_events:tool-call:investigate-not-reproduced"],
+          "allowed_actions": [],
+          "changed_files": [],
+          "state_mutations": [],
+          "external_writes": [],
+          "destructive_operations": []
+        }
+      },
+      "evidence": [
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:investigate-not-reproduced",
+          "work_id": "xw:work:issues:investigate-not-reproduced",
+          "revision": 0,
+          "kind": "test",
+          "status": "passed",
+          "created_at": "2026-07-17T00:01:00.000Z",
+          "observed_at": "2026-07-17T00:01:02.000Z",
+          "updated_at": "2026-07-17T00:01:02.000Z",
+          "completed_at": "2026-07-17T00:01:02.000Z",
+          "decisive_output": {
+            "summary": "The focused reproduction fixture passed on all bounded attempts.",
+            "exit_code": 0,
+            "facts": {
+              "command": "bun test src/login/repro.test.ts",
+              "outcome": "passed",
+              "observation_result": "not_reproduced"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "test_runner",
+            "source_ref": "test_runner:investigate-not-reproduced",
+            "audit_event_ref": "pi_action_events:tool-call:investigate-not-reproduced",
+            "producer": { "id": "runner-fixture", "kind": "runner" }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:v1",
+            "redacted_paths": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "insufficient_information",
+      "report": {
+        "schema_version": "xw.investigate-handoff-report.v1",
+        "workflow_ref": "workflow:investigate@1",
+        "work_id": "xw:work:issues:investigate-insufficient",
+        "outcome": "insufficient_information",
+        "summary": "The available fixture contains no failing input or trace, so reproduction and root-cause analysis are blocked.",
+        "stages": [
+          {
+            "id": "scope",
+            "status": "completed",
+            "finding": "The available issue text and bounded artifact list were inspected.",
+            "evidence_ids": ["xw:evidence:issue_events:investigate-insufficient"]
+          },
+          {
+            "id": "reproduce",
+            "status": "blocked",
+            "finding": "No failing input, request, trace, or reproducible step is available.",
+            "evidence_ids": ["xw:evidence:issue_events:investigate-insufficient"]
+          },
+          {
+            "id": "root-cause",
+            "status": "blocked",
+            "finding": "A causal claim would exceed the available Evidence.",
+            "evidence_ids": []
+          },
+          {
+            "id": "report",
+            "status": "completed",
+            "finding": "The missing information and deterministic next request are recorded for handoff.",
+            "evidence_ids": []
+          }
+        ],
+        "evidence_ids": ["xw:evidence:issue_events:investigate-insufficient"],
+        "reproduction": {
+          "status": "insufficient_information",
+          "steps": [],
+          "expected": "A failing input and observable expected-versus-actual result are available.",
+          "observed": "The fixture contains issue text only and no failing input or runtime trace."
+        },
+        "root_cause": {
+          "status": "unknown",
+          "summary": "No root cause can be established without a decisive runtime or source observation."
+        },
+        "handoff": {
+          "report_ref": "artifact:investigate/insufficient/report.json",
+          "recommended_next_steps": ["Request the failing input, exact timestamp, environment fingerprint, and relevant trace reference."],
+          "unresolved_questions": ["What exact input failed?", "Which runtime and revision produced the failure?"]
+        },
+        "read_only_audit": {
+          "policy_ref": "workflow-policy:investigate-read-only@1",
+          "confirmation": "no_write_operations_observed",
+          "tool_audit_refs": ["pi_action_events:tool-call:investigate-insufficient"],
+          "allowed_actions": [],
+          "changed_files": [],
+          "state_mutations": [],
+          "external_writes": [],
+          "destructive_operations": []
+        }
+      },
+      "evidence": [
+        {
+          "schema_version": 1,
+          "id": "xw:evidence:issue_events:investigate-insufficient",
+          "work_id": "xw:work:issues:investigate-insufficient",
+          "revision": 0,
+          "kind": "shell",
+          "status": "passed",
+          "created_at": "2026-07-17T00:02:00.000Z",
+          "observed_at": "2026-07-17T00:02:01.000Z",
+          "updated_at": "2026-07-17T00:02:01.000Z",
+          "completed_at": "2026-07-17T00:02:01.000Z",
+          "decisive_output": {
+            "summary": "The bounded artifact inventory completed and found no failing input or trace.",
+            "exit_code": 0,
+            "facts": {
+              "command": "find logs -maxdepth 1 -type f -print",
+              "outcome": "passed",
+              "observation_result": "required_inputs_absent"
+            }
+          },
+          "artifact_refs": [],
+          "provenance": {
+            "assertion_origin": "tool_result",
+            "source_kind": "command_execution",
+            "source_ref": "command_execution:investigate-insufficient",
+            "audit_event_ref": "pi_action_events:tool-call:investigate-insufficient",
+            "producer": { "id": "runner-fixture", "kind": "runner" }
+          },
+          "redaction": {
+            "status": "not_required",
+            "policy_ref": "evidence-redaction:v1",
+            "redacted_paths": []
+          }
+        }
+      ]
+    }
+  ]
+}
