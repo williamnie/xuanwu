@@ -1,44 +1,71 @@
 import { systemApi } from '../api/system.js';
 import { useState } from 'react';
-import { AlertTriangle, Boxes, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Boxes, ChevronLeft, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { message } from '../store/toastStore';
+import { SETTINGS_ADVANCED_TABS, SETTINGS_PRIMARY_TABS } from './settingsNavigation';
 
-const SETTINGS_TABS = [
-  { id: 'assistant', label: 'Supervisor' },
-  { id: 'runner-brain', label: 'Runtime' },
-  { id: 'connectors', label: 'Connectors' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'automations', label: 'Automations' },
-  { id: 'approvals', label: 'Approvals' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'activity', label: 'Activity' },
-  { id: 'policies', label: 'Policies' },
-];
-
-export function SettingsHeader({ activeTab, onTabChange, title = 'Supervisor Settings' }) {
+export function SettingsHeader({ onRouteChange, route, title = 'Settings' }) {
   return (
     <header className="settings-header">
       <div className="settings-title-row">
         <div>
           <div className="settings-eyebrow">
-            <Boxes size={14} /> Xuanwu Supervisor · Single Runtime
+            <Boxes size={14} /> Xuanwu · Product Settings
           </div>
           <h1>{title}</h1>
         </div>
-        <RestartAction />
       </div>
-      <SettingsTabs activeTab={activeTab} onTabChange={onTabChange} />
+      <SettingsNavigation onRouteChange={onRouteChange} route={route} />
     </header>
   );
 }
 
-function SettingsTabs({ activeTab, onTabChange }) {
+function SettingsNavigation({ onRouteChange, route }) {
+  const advanced = route.tier === 'advanced';
   return (
-    <nav className="settings-tabs" role="tablist" aria-label="Supervisor Settings sections">
-      {SETTINGS_TABS.map((tab) => (
-        <TabButton key={tab.id} active={activeTab === tab.id} onClick={() => onTabChange(tab.id)} tab={tab} />
-      ))}
-    </nav>
+    <div className="settings-navigation-stack">
+      <div className="settings-navigation-row">
+        <nav className="settings-tabs" role="tablist" aria-label="Settings sections">
+          {SETTINGS_PRIMARY_TABS.map((tab) => (
+            <TabButton
+              key={tab.id}
+              active={!advanced && route.tab === tab.id}
+              onClick={() => onRouteChange({ tier: 'primary', tab: tab.id })}
+              tab={tab}
+            />
+          ))}
+        </nav>
+        <button
+          aria-pressed={advanced}
+          className={`settings-advanced-gate ${advanced ? 'active' : ''}`}
+          onClick={() => onRouteChange({ tier: 'advanced', tab: 'runtime' })}
+          type="button"
+        >
+          <SlidersHorizontal size={15} /> Advanced
+        </button>
+      </div>
+      {advanced && (
+        <div className="settings-advanced-navigation">
+          <button
+            className="settings-advanced-back"
+            onClick={() => onRouteChange({ tier: 'primary', tab: 'general' })}
+            type="button"
+          >
+            <ChevronLeft size={15} /> 普通设置
+          </button>
+          <nav className="settings-tabs settings-advanced-tabs" role="tablist" aria-label="Advanced Settings sections">
+            {SETTINGS_ADVANCED_TABS.map((tab) => (
+              <TabButton
+                key={tab.id}
+                active={route.tab === tab.id}
+                onClick={() => onRouteChange({ tier: 'advanced', tab: tab.id })}
+                tab={tab}
+              />
+            ))}
+          </nav>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -56,7 +83,7 @@ function TabButton({ active, onClick, tab }) {
   );
 }
 
-function RestartAction() {
+export function RestartAction() {
   const [confirming, setConfirming] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const handleRestart = async () => restartSystem(setRestarting, setConfirming);

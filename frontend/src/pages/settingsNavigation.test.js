@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  SETTINGS_ADVANCED_TABS,
+  SETTINGS_PRIMARY_TABS,
+  resolveSettingsRoute,
+  settingsRouteId,
+} from './settingsNavigation.js';
+
+test('Settings exposes five primary tabs and keeps runtime details in Advanced', () => {
+  assert.deepEqual(SETTINGS_PRIMARY_TABS.map(tab => tab.label), [
+    'General',
+    'Models & Agents',
+    'Connections',
+    'Permissions',
+    'Notifications',
+  ]);
+  assert.deepEqual(SETTINGS_ADVANCED_TABS.map(tab => tab.id), [
+    'runtime',
+    'model-runtime',
+    'mcp',
+    'skills',
+    'automations',
+    'memory',
+    'activity',
+    'policies',
+  ]);
+});
+
+test('Settings deterministically migrates all nine legacy tabs', () => {
+  assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'models-agents' });
+  assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'advanced', tab: 'runtime' });
+  assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'primary', tab: 'connections' });
+  assert.deepEqual(resolveSettingsRoute('skills'), { tier: 'advanced', tab: 'skills' });
+  assert.deepEqual(resolveSettingsRoute('automations'), { tier: 'advanced', tab: 'automations' });
+  assert.deepEqual(resolveSettingsRoute('approvals'), { tier: 'primary', tab: 'permissions' });
+  assert.deepEqual(resolveSettingsRoute('memory'), { tier: 'advanced', tab: 'memory' });
+  assert.deepEqual(resolveSettingsRoute('activity'), { tier: 'advanced', tab: 'activity' });
+  assert.deepEqual(resolveSettingsRoute('policies'), { tier: 'advanced', tab: 'policies' });
+});
+
+test('Settings canonical routes round-trip and unknown routes fail safe to General', () => {
+  const advanced = resolveSettingsRoute('advanced:model-runtime');
+  assert.deepEqual(advanced, { tier: 'advanced', tab: 'model-runtime' });
+  assert.equal(settingsRouteId(advanced), 'advanced:model-runtime');
+  assert.equal(settingsRouteId(resolveSettingsRoute('notifications')), 'notifications');
+  assert.deepEqual(resolveSettingsRoute('unknown'), { tier: 'primary', tab: 'general' });
+});

@@ -8,20 +8,21 @@ import { formatRuntimeLogsSummary } from '../utils/runtimeLogs';
 import { APP_VERSION, buildVersionSummary } from '../version';
 import SettingsTabContent from './AssistantSettingsSections';
 import { SettingsHeader } from './SettingsChrome';
+import { resolveSettingsRoute } from './settingsNavigation';
 import './Settings.css';
 
-export default function Settings({ initialTab = 'assistant', navigateTo, pageTitle }) {
-  const [activeTab, setActiveTab] = useState(initialTab);
+export default function Settings({ initialTab = 'general', navigateTo, pageTitle }) {
+  const [route, setRoute] = useState(() => resolveSettingsRoute(initialTab));
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    setRoute(resolveSettingsRoute(initialTab));
   }, [initialTab]);
 
   return (
     <div className="settings-page animate-fade-in">
-      <SettingsHeader activeTab={activeTab} onTabChange={setActiveTab} title={pageTitle} />
+      <SettingsHeader onRouteChange={setRoute} route={route} title={pageTitle} />
       <div className="settings-tab-content" role="tabpanel">
-        <SettingsTabContent activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
+        <SettingsTabContent activeTab={route.tab} tier={route.tier} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />
       </div>
     </div>
   );

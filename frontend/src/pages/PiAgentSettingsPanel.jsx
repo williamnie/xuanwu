@@ -2,43 +2,45 @@ import { Bot, Eye, KeyRound, Loader2, RefreshCw, Save } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 
-export default function PiAgentSettingsPanel() {
+export default function PiAgentSettingsPanel({ advanced = false }) {
   const state = usePiAgentSettingsState();
 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <PanelHeader loading={state.loading} onRefresh={state.loadSettings} />
+      <PanelHeader advanced={advanced} loading={state.loading} onRefresh={state.loadSettings} />
       {state.loading ? (
         <PanelLoader label="玄武正在读取 Supervisor 配置…" />
       ) : (
-        <PiSettingsForm state={state} />
+        <PiSettingsForm advanced={advanced} state={state} />
       )}
     </section>
   );
 }
 
-function PiSettingsForm({ state }) {
+function PiSettingsForm({ advanced, state }) {
   return (
     <>
-      <PiSettingsGrid form={state.form} updateField={state.updateField} />
-      <ProviderCredentialFields state={state} />
+      <PiSettingsGrid advanced={advanced} form={state.form} updateField={state.updateField} />
+      {advanced && <ProviderCredentialFields state={state} />}
       <CodexOAuthPanel state={state} />
       <AgentEnableField form={state.form} updateField={state.updateField} />
-      <SaveRow onSave={state.handleSave} saving={state.saving} />
-      <ProviderSummary providers={state.providers} />
+      <SaveRow advanced={advanced} onSave={state.handleSave} saving={state.saving} />
+      {advanced && <ProviderSummary providers={state.providers} />}
     </>
   );
 }
 
-function PanelHeader({ loading, onRefresh }) {
+function PanelHeader({ advanced, loading, onRefresh }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
       <div>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={18} color="var(--primary)" /> Xuanwu Supervisor · Runtime
+          <Bot size={18} color="var(--primary)" /> {advanced ? 'Xuanwu Supervisor · Runtime' : 'Models & Agents'}
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          配置这个唯一 Supervisor 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。
+          {advanced
+            ? '配置这个唯一 Supervisor 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。'
+            : '选择默认 Supervisor 的 provider、模型与 thinking；不会创建多个独立 agent。'}
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -57,13 +59,13 @@ function Field({ children, label }) {
   );
 }
 
-function PiSettingsGrid({ form, updateField }) {
+function PiSettingsGrid({ advanced, form, updateField }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
       <TextField form={form} label="Supervisor Display Name" name="agentName" updateField={updateField} />
       <TextField form={form} label="Model Provider" name="modelProvider" placeholder="openai / anthropic / local" updateField={updateField} />
       <TextField form={form} label="Model ID" name="modelId" placeholder="gpt-5.4" updateField={updateField} />
-      <ApiTypeField form={form} updateField={updateField} />
+      {advanced && <ApiTypeField form={form} updateField={updateField} />}
       <ThinkingField form={form} updateField={updateField} />
     </div>
   );
@@ -207,7 +209,7 @@ function AgentEnableField({ form, updateField }) {
   );
 }
 
-function SaveRow({ onSave, saving }) {
+function SaveRow({ advanced, onSave, saving }) {
   return (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
       <button className="btn btn-primary" onClick={onSave} disabled={saving}>
@@ -215,7 +217,9 @@ function SaveRow({ onSave, saving }) {
         保存 Supervisor Settings
       </button>
       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-        API key 只写入后端 provider 配置；读取时只显示是否 configured，不回显明文。
+        {advanced
+          ? 'API key 只写入后端 provider 配置；读取时只显示是否 configured，不回显明文。'
+          : '保存时沿用现有底层连接参数，不会在普通设置中回显。'}
       </span>
     </div>
   );

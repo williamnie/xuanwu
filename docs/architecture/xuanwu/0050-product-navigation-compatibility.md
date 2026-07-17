@@ -25,6 +25,12 @@
 
 `availability` 只描述当前 UI carrier，不改变底层完成状态、权限或 authority。受 feature flag 关闭的页面不得留下可点击死入口。
 
+### 1.1 Settings 两层 IA
+
+Settings 普通层固定为 General、Models & Agents、Connections、Permissions、Notifications。Runtime、原始 model/provider 参数、MCP、Skills、Automations、Memory、Activity、Policies、诊断导出与 Restart 只能从显式 Advanced gate 进入。General 的项目设置入口跳转现有 Projects 编辑面，不复制项目表单或状态。
+
+九个旧 tab 按确定性规则继续可读：`assistant → Models & Agents`、`runner-brain → Advanced / Runtime`、`connectors → Connections`、`skills → Advanced / Skills`、`automations → Advanced / Automations`、`approvals → Permissions`、`memory → Advanced / Memory`、`activity → Advanced / Activity`、`policies → Advanced / Policies`。新入口使用 canonical tab id；旧 id 只作为读取兼容输入。
+
 ## 2. 旧 deep link 与隐藏兼容入口
 
 纯 UI page id 做确定性跳转：`dashboard → command-center`、`pi-chat → ask-xuanwu`、`sessions → runs`、`cron → automations`、`pi-connectors → connections`。
@@ -36,7 +42,7 @@
 - 本变更没有 schema、API、状态机、双写或双读；SQLite、Work/Run/Handoff API、Cron 与 `/api/pi/*` 仍按各自现有迁移合同 authoritative。新 page id 只是前端内存路由 projection。
 - 兼容 page id 最多保留 W1/W2 两个正式 release window。删除必须满足 P11.05、一个正式 release 的 consumer-zero 证明、旧 deep-link 测试清单、retained compatibility artifact 和 G7；不能在普通 UI 清理中顺手删除。
 - 回滚只需恢复旧导航配置与默认 page id。没有数据回放、DB downgrade 或外部状态恢复动作。
-- Settings 内部 tabs 暂时保留读取兼容；P07.11/P07.14 负责把普通配置与 Advanced runtime/diagnostics 分层。在该迁移完成前，不新增第二套配置存储或 API。
+- Settings IA 不新增 schema、API、双写或双读：Projects API、PI agent/provider API、integration settings、runner settings 与 policy/runtime API 仍分别是唯一 source of truth；普通层与 Advanced 只是对同一组件和数据的 UI projection。旧 tab id 在 W1/W2 两个正式 release window 内保留读取兼容，回滚只需恢复旧 tab 配置。删除旧 id 必须满足 P11.05、一个正式 release 的 consumer-zero 证明、旧 deep-link 测试清单、retained compatibility artifact 与 G7。
 
 ## 4. 验证门禁
 

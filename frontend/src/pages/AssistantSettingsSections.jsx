@@ -10,17 +10,103 @@ import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
 import AutomationsRuntimePanel from './AutomationsRuntimePanel';
-import { AssistantOverviewPanel, SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
+import { SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
+import { RestartAction } from './SettingsChrome';
 
-export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo }) {
+export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navigateTo, tier }) {
+  if (tier === 'advanced') {
+    return <AdvancedSettingsTab activeTab={activeTab} RuntimeStatusPanel={RuntimeStatusPanel} navigateTo={navigateTo} />;
+  }
   return (
     <>
-      {activeTab === 'assistant' && <AssistantSettingsTab />}
-      {activeTab === 'runner-brain' && <RunnerBrainSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
-      {activeTab === 'connectors' && <ConnectorsSettingsTab />}
-      {activeTab === 'skills' && <SkillsSettingsTab />}
+      {activeTab === 'general' && <GeneralSettingsTab navigateTo={navigateTo} />}
+      {activeTab === 'models-agents' && <ModelsAgentsSettingsTab />}
+      {activeTab === 'connections' && <ConnectionsSettingsTab />}
+      {activeTab === 'permissions' && <PermissionsSettingsTab />}
+      {activeTab === 'notifications' && <NotificationsSettingsTab />}
+    </>
+  );
+}
+
+function GeneralSettingsTab({ navigateTo }) {
+  return (
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="General"
+        title="玄武工作方式"
+        description="Settings 只组织现有配置入口；项目、Supervisor 与 Runner 继续使用现有后端和持久化数据作为唯一 source of truth。"
+        items={['普通设置面向日常配置，不展示内部诊断、日志或底层连接参数。', '每个项目的模型、权限与自动执行参数继续在 Projects 中维护。']}
+      />
+      <section className="glass-card settings-project-entry">
+        <div>
+          <div className="settings-entry-eyebrow">Per-project settings</div>
+          <h2>项目设置</h2>
+          <p>打开 Projects 编辑现有项目；这里不复制项目表单，也不会产生双写。</p>
+        </div>
+        <button className="btn btn-secondary" onClick={() => navigateTo?.('projects')} type="button">
+          管理项目设置
+        </button>
+      </section>
+    </>
+  );
+}
+
+function ModelsAgentsSettingsTab() {
+  return (
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Models & Agents"
+        title="默认 Supervisor"
+        description="管理日常使用的模型与 Supervisor 状态。底层连接参数与运行诊断只在 Advanced 中显示。"
+      />
+      <PiAgentSettingsPanel />
+    </>
+  );
+}
+
+function ConnectionsSettingsTab() {
+  return (
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Connections"
+        title="已连接服务"
+        description="连接日常协作服务；MCP discovery、capability 和 connector diagnostics 已移入 Advanced。"
+        items={['飞书继续使用现有集成配置。', '连接详情与凭据读取保持后端脱敏合同。']}
+      />
+      <FeishuSettingsPanel />
+    </>
+  );
+}
+
+function PermissionsSettingsTab() {
+  return (
+    <SettingsPlaceholderPanel
+      eyebrow="Permissions"
+      title="权限与审批"
+      description="日常权限入口保留确定性审批边界；底层 source policy 与自动化控制位于 Advanced。"
+      items={['LLM 输出不会直接授予工具或外部写权限。', '后续权限矩阵继续复用现有 approval 与 policy 能力。']}
+    />
+  );
+}
+
+function NotificationsSettingsTab() {
+  return (
+    <SettingsPlaceholderPanel
+      eyebrow="Notifications"
+      title="通知偏好"
+      description="通知设置保留为普通用户入口；P07.13 将在这里接入现有通知偏好与连接状态，不新增并行通知存储。"
+    />
+  );
+}
+
+function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
+  return (
+    <>
+      {activeTab === 'runtime' && <AdvancedRuntimeSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
+      {activeTab === 'model-runtime' && <PiAgentSettingsPanel advanced />}
+      {activeTab === 'mcp' && <AdvancedConnectionsSettingsTab />}
+      {activeTab === 'skills' && <AdvancedSkillsSettingsTab />}
       {activeTab === 'automations' && <AutomationsRuntimePanel />}
-      {activeTab === 'approvals' && <ApprovalsPlaceholder />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
       {activeTab === 'policies' && <SourcePoliciesPanel />}
@@ -28,18 +114,17 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
   );
 }
 
-function AssistantSettingsTab() {
+function AdvancedRuntimeSettingsTab({ RuntimeStatusPanel }) {
   return (
     <>
-      <AssistantOverviewPanel />
-      <PiAgentSettingsPanel />
-    </>
-  );
-}
-
-function RunnerBrainSettingsTab({ RuntimeStatusPanel }) {
-  return (
-    <>
+      <section className="glass-card settings-advanced-danger-zone">
+        <div>
+          <div className="settings-entry-eyebrow">Advanced runtime</div>
+          <h2>服务生命周期</h2>
+          <p>重启会短暂中断当前服务，仅在确认后发送现有受审计的 restart 请求。</p>
+        </div>
+        <RestartAction />
+      </section>
       <RuntimeStatusPanel />
       <RunnerSettingsPanel />
       <ProviderAvailabilityPanel />
@@ -47,27 +132,25 @@ function RunnerBrainSettingsTab({ RuntimeStatusPanel }) {
   );
 }
 
-function ConnectorsSettingsTab() {
+function AdvancedConnectionsSettingsTab() {
   return (
     <>
       <SettingsPlaceholderPanel
-        eyebrow="Connectors"
-        title="Connector slots"
-        description="外部来源会作为 Supervisor 的 connector/tool provider 接入；当前提供只读健康摘要和已有 IM 配置入口。"
-        items={['CLI connector 通过 manifest 暴露配置/health 诊断。', 'Feishu 仍走现有 integration settings API。']}
+        eyebrow="Advanced · MCP"
+        title="Connector runtime"
+        description="查看 MCP discovery、capability 与 connector diagnostics；这些内部细节不出现在普通 Connections 路径。"
       />
       <PiMcpManagementPanel />
       <ConnectorDiagnosticsPanel />
-      <FeishuSettingsPanel />
     </>
   );
 }
 
-function SkillsSettingsTab() {
+function AdvancedSkillsSettingsTab() {
   return (
     <>
       <SettingsPlaceholderPanel
-        eyebrow="Skills"
+        eyebrow="Advanced · Skills"
         title="Skill registry"
         description="Skills 在同一个 Supervisor 下声明 intake/domain 能力、所需工具、schema 与运行历史。"
         items={['Intake skill 负责从 context bundle 识别入箱事项。', 'Domain skill 负责从 inbox item 生成 approval-gated action proposal。']}
@@ -89,8 +172,4 @@ function MemorySettingsTab() {
       <PiMemoryPanel />
     </>
   );
-}
-
-function ApprovalsPlaceholder() {
-  return <SettingsPlaceholderPanel eyebrow="Approvals" title="Approval policy" description="预留 action proposal 审批与外部写操作权限入口；默认不引入新的自动外部写操作。" />;
 }

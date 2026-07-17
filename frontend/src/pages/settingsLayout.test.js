@@ -16,36 +16,57 @@ const automationApiSource = readFileSync(new URL('../api/automation.js', import.
 const connectorsApiSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 const stylesSource = readFileSync(new URL('./Settings.css', import.meta.url), 'utf8');
 const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+const piAgentSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
 
-test('Settings groups panels behind Assistant Settings tabs and removes duplicate cron panel', () => {
-  assert.match(settingsSource, /initialTab = 'assistant'/);
-  assert.match(sectionsSource, /activeTab === 'assistant'/);
-  assert.match(sectionsSource, /activeTab === 'runner-brain'/);
-  assert.match(sectionsSource, /activeTab === 'connectors'/);
-  assert.match(sectionsSource, /activeTab === 'skills'/);
-  assert.match(sectionsSource, /activeTab === 'automations'/);
-  assert.match(sectionsSource, /activeTab === 'approvals'/);
-  assert.match(sectionsSource, /activeTab === 'memory'/);
-  assert.match(sectionsSource, /activeTab === 'activity'/);
-  assert.match(sectionsSource, /activeTab === 'policies'/);
-  assert.match(chromeSource, /id: 'policies'/);
+test('Settings renders five primary sections and gates internal panels behind Advanced', () => {
+  assert.match(settingsSource, /initialTab = 'general'/);
+  assert.match(settingsSource, /resolveSettingsRoute\(initialTab\)/);
+  for (const tab of ['general', 'models-agents', 'connections', 'permissions', 'notifications']) {
+    assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
+  }
+  for (const tab of ['runtime', 'model-runtime', 'mcp', 'skills', 'automations', 'memory', 'activity', 'policies']) {
+    assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
+  }
+  assert.match(sectionsSource, /tier === 'advanced'/);
+  assert.match(chromeSource, /SETTINGS_PRIMARY_TABS/);
+  assert.match(chromeSource, /SETTINGS_ADVANCED_TABS/);
+  assert.match(chromeSource, /settings-advanced-gate/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
 });
 
-test('Supervisor Settings IA reserves future capability placeholders', () => {
-  assert.match(chromeSource, /Supervisor Settings/);
-  assert.match(chromeSource, /Xuanwu Supervisor · Single Runtime/);
-  assert.match(placeholderSource, /Single Supervisor Runtime/);
+test('Settings primary IA includes project settings without duplicating its source of truth', () => {
+  assert.match(chromeSource, /title = 'Settings'/);
+  assert.match(chromeSource, /Xuanwu · Product Settings/);
+  assert.match(sectionsSource, /Per-project settings/);
+  assert.match(sectionsSource, /navigateTo\?\.\('projects'\)/);
+  assert.match(sectionsSource, /不会产生双写/);
+  assert.match(sectionsSource, /Models & Agents/);
+  assert.match(sectionsSource, /Connections/);
+  assert.match(sectionsSource, /Permissions/);
+  assert.match(sectionsSource, /Notifications/);
+  assert.match(sectionsSource, /<PiAgentSettingsPanel \/>/);
+  assert.match(sectionsSource, /<PiAgentSettingsPanel advanced \/>/);
+  assert.match(piAgentSource, /advanced && <ProviderCredentialFields state=\{state\} \/>/);
+  assert.match(piAgentSource, /advanced && <ApiTypeField form=\{form\} updateField=\{updateField\} \/>/);
+  assert.match(piAgentSource, /advanced && <ProviderSummary providers=\{state\.providers\} \/>/);
   assert.doesNotMatch(placeholderSource, /Runner Brain/);
-  assert.match(placeholderSource, /不恢复多个独立 agent/);
-  assert.match(sectionsSource, /Connectors/);
   assert.match(sectionsSource, /Skills/);
   assert.match(sectionsSource, /Automations/);
-  assert.match(sectionsSource, /Approvals/);
   assert.match(sectionsSource, /Memory/);
   assert.match(sectionsSource, /Activity/);
   assert.match(sectionsSource, /Policies/);
+});
+
+test('ordinary Settings route does not render raw runtime controls', () => {
+  const primaryStart = sectionsSource.indexOf('function GeneralSettingsTab');
+  const advancedStart = sectionsSource.indexOf('function AdvancedSettingsTab');
+  const primarySource = sectionsSource.slice(primaryStart, advancedStart);
+  assert.doesNotMatch(primarySource, /Runtime API Type|User-Agent|Prompt 摘要|PiMcpManagementPanel|RuntimeStatusPanel/);
+  assert.match(piAgentSource, /advanced = false/);
+  assert.match(piAgentSource, /\{advanced && <ProviderCredentialFields/);
+  assert.match(piAgentSource, /\{advanced && <ApiTypeField/);
+  assert.match(piAgentSource, /\{advanced && <ProviderSummary/);
 });
 
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
@@ -77,9 +98,12 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   assert.doesNotMatch(appSource, /from '\.\/pages\/AssistantModulePage'/);
 });
 
-test('Settings restart action is a red in-page danger control', () => {
+test('Settings restart action moves from the page header into Advanced Runtime', () => {
   assert.match(chromeSource, /settings-danger-button/);
   assert.match(chromeSource, /settings-restart-confirm/);
+  assert.match(chromeSource, /export function RestartAction/);
+  assert.match(sectionsSource, /AdvancedRuntimeSettingsTab/);
+  assert.match(sectionsSource, /<RestartAction \/>/);
   assert.ok(stylesSource.includes('.settings-danger-button'));
   assert.ok(stylesSource.includes('var(--error)'));
   assert.doesNotMatch(chromeSource, /window\\.confirm|window\\.alert/);
