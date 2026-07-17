@@ -69,6 +69,33 @@ export function completeAutomationRun(
   return updated.immediate();
 }
 
+export function skipAutomationRun(
+  db: RunnerDatabase,
+  run: ClaimedAutomationRun,
+  now: Date,
+  detail = "automation run skipped"
+): boolean {
+  const definition = getAutomation(db, run.automation_id);
+  const trigger = definition && getAutomationTrigger(db, run.automation_id, run.trigger_version);
+  if (!definition || !trigger) return false;
+  const nextRunAt = nextRunAfter(trigger, new Date(run.scheduled_for));
+  const updated = db.transaction(() => {
+    db.sqlite.run(`update automation_runs set status='skipped', completed_at=?, summary_json=?,
+      lease_token='', lease_expires_at='', next_attempt_at=?
+      where run_id=? and status='running' and lease_token=?`, [
+      now.toISOString(), JSON.stringify({ detail: cleanDetail(detail), outcome: "skipped" }),
+      now.toISOString(), run.run_id, run.lease_token
+    ]);
+    if (changes(db) !== 1) return false;
+    db.sqlite.run(`update automation_definitions set next_run_at=?, updated_at=? where id=?`, [
+      nextRunAt, now.toISOString(), run.automation_id
+    ]);
+    appendRunEvent(db, run, "automation.run_skipped.v1", now, cleanDetail(detail));
+    return true;
+  });
+  return updated.immediate();
+}
+
 export function failAutomationRun(
   db: RunnerDatabase,
   run: ClaimedAutomationRun,

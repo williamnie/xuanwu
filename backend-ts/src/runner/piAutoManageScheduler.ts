@@ -39,6 +39,7 @@ import {
   type AutomationExecutor,
   type AutomationSchedulerResult
 } from "./automationScheduler.ts";
+import { createNativeAutomationExecutor } from "./automationRuntime.ts";
 import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
@@ -109,6 +110,7 @@ const activeProjectCycles = new Set<string>();
 export function createPiAutoManageScheduler<Timer = unknown>(
   input: PiAutoManageSchedulerInput<Timer>
 ): PiAutoManageScheduler {
+  const runtimeInput = withNativeAutomationExecutor(input);
   const clock = input.clock ?? defaultClock<Timer>();
   const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
   const supervisorIntervalMs = input.supervisorIntervalMs ?? DEFAULT_SUPERVISOR_INTERVAL_MS;
@@ -123,7 +125,7 @@ export function createPiAutoManageScheduler<Timer = unknown>(
     const now = Date.now();
     const runSupervisor = shouldRunSupervisor(now, lastSupervisorScanAt, supervisorIntervalMs);
     if (runSupervisor) lastSupervisorScanAt = now;
-    void runScheduleLayerCycle({ ...input, runSupervisor }).catch((error) => {
+    void runScheduleLayerCycle({ ...runtimeInput, runSupervisor }).catch((error) => {
       input.onError?.(error);
     }).finally(() => {
       if (!stopped) schedule();
@@ -180,7 +182,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const automationCore = await runDueAutomations({
     database: input.database,
-    executeAutomation: input.runAutomationCore,
+    executeAutomation: input.runAutomationCore ?? createNativeAutomationExecutor(input),
     now: optionalDate(input.watchdogNow)
   });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
@@ -227,6 +229,11 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     supervisor,
     watchdog
   };
+}
+
+function withNativeAutomationExecutor<T extends PiAutoManageCycleInput>(input: T): T {
+  if (input.runAutomationCore) return input;
+  return { ...input, runAutomationCore: createNativeAutomationExecutor(input) };
 }
 
 function shouldRunSupervisor(now: number, lastAt: number, intervalMs: number): boolean {

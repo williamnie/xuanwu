@@ -3,12 +3,13 @@ import {
   claimDueAutomationRuns,
   completeAutomationRun,
   failAutomationRun,
+  skipAutomationRun,
   type ClaimedAutomationRun
 } from "../db/repositories/automationScheduler.ts";
 import { getAutomation, getAutomationTrigger } from "../db/repositories/automations.ts";
 import type { AutomationDefinition, VersionedAutomationTrigger } from "../domain/automation/contracts.ts";
 
-export type AutomationExecutionResult = { detail?: string } | void;
+export type AutomationExecutionResult = { detail?: string; outcome?: "skipped" | "succeeded" } | void;
 export type AutomationExecutor = (input: {
   automation: AutomationDefinition;
   run: ClaimedAutomationRun;
@@ -55,7 +56,11 @@ export async function runDueAutomations(input: AutomationSchedulerInput): Promis
     }
     try {
       const output = await input.executeAutomation({ automation, database: input.database, now, run, trigger });
-      if (completeAutomationRun(input.database, run, now, output?.detail)) result.executed += 1;
+      if (output?.outcome === "skipped") {
+        if (skipAutomationRun(input.database, run, now, output.detail)) result.skipped += 1;
+      } else if (completeAutomationRun(input.database, run, now, output?.detail)) {
+        result.executed += 1;
+      }
     } catch (error) {
       const outcome = failAutomationRun(input.database, run, now, error);
       if (outcome === "dead_lettered") result.deadLettered += 1;

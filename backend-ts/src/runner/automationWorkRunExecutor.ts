@@ -13,6 +13,7 @@ import { createIssueBackedWork, getIssueAsWork } from "../domain/work/issueAdapt
 import type { WorkLedgerEntry } from "../domain/work/contracts.ts";
 import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
 import type { HandoffRecord } from "../domain/handoff/contracts.ts";
+import type { AutomationDefinition } from "../domain/automation/contracts.ts";
 import type { AutomationExecutor } from "./automationScheduler.ts";
 import type { WorkflowRegistry, WorkflowResolution } from "../workflows/registry.ts";
 
@@ -22,6 +23,7 @@ export type AutomationWorkflowDispatchResult = {
 };
 
 export type AutomationWorkflowDispatcher = (input: {
+  automation: AutomationDefinition;
   automation_run_id: string;
   automation_id: string;
   run_id: RunID;
@@ -43,15 +45,16 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
   return async ({ automation, database, now, run }) => {
     const projectID = automation.owner.kind === "project" ? automation.owner.project_id : "";
     if (projectID === "") throw new Error("automation Work/Run dispatch requires a project scope");
-    const resolved = options.workflow_registry.resolve(automation.workflow_ref, projectID);
-    if (!resolved.ok) {
-      throw new Error(`workflow dispatch blocked: ${resolved.diagnostics.map((item) => item.message).join("; ")}`);
-    }
     const link = ensureLink(database, automation.id, automation.name, automation.workflow_ref, run.run_id, projectID, now);
     const work = getIssueAsWork(database, link.issue_id);
     if (!work) throw new Error(`automation execution Work ${link.work_id} is missing`);
     try {
+      const resolved = options.workflow_registry.resolve(automation.workflow_ref, projectID);
+      if (!resolved.ok) {
+        throw new Error(`workflow dispatch blocked: ${resolved.diagnostics.map((item) => item.message).join("; ")}`);
+      }
       const output = await options.dispatch({
+        automation,
         automation_id: automation.id,
         automation_run_id: run.run_id,
         run_id: link.run_id as RunID,
@@ -59,11 +62,11 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
         workflow: resolved.resolution
       });
       const detail = clean(output.detail) || `workflow ${automation.workflow_ref} ${output.outcome}`;
-      persistOutcome(database, link, run.run_id, run.attempt_count, now, output.outcome, detail);
-      return { detail: `${detail}; work=${link.work_id}; run=${link.run_id}` };
+      persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, output.outcome, detail);
+      return { detail: `${detail}; work=${link.work_id}; run=${link.run_id}`, outcome: output.outcome };
     } catch (error) {
       const detail = safeError(error);
-      persistOutcome(database, link, run.run_id, run.attempt_count, now, "failed", detail);
+      persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, "failed", detail);
       if (run.attempt_count >= run.max_attempts) {
         updateIssue(database, link.issue_id, { error: detail, status: "failed" });
       }
@@ -130,6 +133,7 @@ function ensureLink(
 function persistOutcome(
   database: Parameters<AutomationExecutor>[0]["database"],
   link: AutomationExecutionLink,
+  automation: AutomationDefinition,
   automationRunID: string,
   attempt: number,
   now: Date,
@@ -137,7 +141,7 @@ function persistOutcome(
   detail: string
 ): void {
   const timestamp = now.toISOString();
-  const evidence = outcomeEvidence(link, automationRunID, attempt, timestamp, outcome, detail);
+  const evidence = outcomeEvidence(link, automation, automationRunID, attempt, timestamp, outcome, detail);
   recordEvidenceRecords(database, link.issue_id, [evidence], { recorded_at: timestamp, source: "automation-work-run-executor" });
   const handoff = outcomeHandoff(link, automationRunID, attempt, timestamp, evidence, outcome, detail);
   recordHandoff(database, link.issue_id, handoff, { recorded_at: timestamp, source: "automation-work-run-executor" });
@@ -147,6 +151,7 @@ function persistOutcome(
 
 function outcomeEvidence(
   link: AutomationExecutionLink,
+  automation: AutomationDefinition,
   automationRunID: string,
   attempt: number,
   timestamp: string,
@@ -166,7 +171,16 @@ function outcomeEvidence(
     observed_at: timestamp,
     updated_at: timestamp,
     completed_at: timestamp,
-    decisive_output: { summary: detail, facts: { attempt, outcome, workflow_ref: link.workflow_ref } },
+    decisive_output: {
+      summary: detail,
+      facts: {
+        attempt,
+        automation_mode: automation.mode,
+        outcome,
+        permission_policy_ref: automation.permission_policy_ref,
+        workflow_ref: link.workflow_ref
+      }
+    },
     artifact_refs: [{ kind: "report", label: "native Automation run", ref: `automation_runs:${automationRunID}` }],
     provenance: {
       assertion_origin: "system_observation",
