@@ -48,9 +48,10 @@ test('Settings primary IA includes project settings without duplicating its sour
   assert.match(sectionsSource, /Notifications/);
   assert.match(sectionsSource, /<PiAgentSettingsPanel \/>/);
   assert.match(sectionsSource, /<PiAgentSettingsPanel advanced \/>/);
-  assert.match(piAgentSource, /advanced && <ProviderCredentialFields state=\{state\} \/>/);
+  assert.match(piAgentSource, /if \(!advanced\) return <RecommendedProviderSettings state=\{state\} \/>/);
+  assert.match(piAgentSource, /<ProviderCredentialFields state=\{state\} \/>/);
   assert.match(piAgentSource, /advanced && <ApiTypeField form=\{form\} updateField=\{updateField\} \/>/);
-  assert.match(piAgentSource, /advanced && <ProviderSummary providers=\{state\.providers\} \/>/);
+  assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
   assert.doesNotMatch(placeholderSource, /Runner Brain/);
   assert.match(sectionsSource, /Skills/);
   assert.match(sectionsSource, /Automations/);
@@ -65,9 +66,11 @@ test('ordinary Settings route does not render raw runtime controls', () => {
   const primarySource = sectionsSource.slice(primaryStart, advancedStart);
   assert.doesNotMatch(primarySource, /Runtime API Type|User-Agent|Prompt 摘要|PiMcpManagementPanel|RuntimeStatusPanel/);
   assert.match(piAgentSource, /advanced = false/);
-  assert.match(piAgentSource, /\{advanced && <ProviderCredentialFields/);
+  assert.match(piAgentSource, /if \(!advanced\) return <RecommendedProviderSettings/);
+  assert.match(piAgentSource, /<PiSettingsGrid advanced/);
+  assert.match(piAgentSource, /<ProviderCredentialFields/);
   assert.match(piAgentSource, /\{advanced && <ApiTypeField/);
-  assert.match(piAgentSource, /\{advanced && <ProviderSummary/);
+  assert.match(piAgentSource, /<ProviderSummary/);
 });
 
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {

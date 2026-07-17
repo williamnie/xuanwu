@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readFile, rm, mkdtemp } from "node:fs/promises";
+import { mkdir, readFile, rm, mkdtemp } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { getModel } from "@earendil-works/pi-ai";
@@ -8,6 +8,7 @@ import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
+const testServers: Array<ReturnType<typeof Bun.serve>> = [];
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-pi-provider-"));
@@ -16,6 +17,7 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 }
 
 afterEach(async () => {
+  while (testServers.length > 0) testServers.pop()?.stop(true);
   while (tempRoots.length > 0) {
     const path = tempRoots.pop();
     if (path) await rm(path, { recursive: true, force: true });
@@ -23,6 +25,33 @@ afterEach(async () => {
 });
 
 describe("Bun PI provider settings API", () => {
+  test("returns stable provider presets and built-in model discovery without secrets", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/provider-settings/catalog`));
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as { presets: Array<{ id: string; models: Array<{ id: string }> }> };
+      expect(body.presets).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          api: "openai-responses",
+          auth: "api_key",
+          id: "openai",
+          recommended: true,
+          recommended_model: "gpt-5.4"
+        }),
+        expect.objectContaining({ auth: "oauth", id: "openai-codex" }),
+        expect.objectContaining({ auth: "api_key", id: "anthropic" })
+      ]));
+      const openai = body.presets.find((item: { id: string }) => item.id === "openai");
+      expect(openai?.models).toEqual(expect.arrayContaining([expect.objectContaining({ id: "gpt-5.4" })]));
+      expect(JSON.stringify(body)).not.toContain("apiKey");
+    } finally {
+      database.close();
+    }
+  });
+
   test("upserts models.json providers without echoing API keys", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -53,6 +82,14 @@ describe("Bun PI provider settings API", () => {
       expect(raw.providers.openai.apiKey).toBe("secret-key");
       expect(raw.providers.openai.models).toEqual([]);
       expect(Object.keys(raw.providers.openai.modelOverrides)).toEqual(["gpt-5.4", "gpt-5.5"]);
+      const audit = database.sqlite.query<{ payload_json: string; result_json: string }, []>(
+        "select payload_json, result_json from pi_action_events where event_type='provider_settings_updated' order by id desc limit 1"
+      ).get();
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
+        credential_changed: true,
+        provider_id: "openai"
+      });
+      expect(JSON.stringify(audit)).not.toContain("secret-key");
 
       await request(router, "/api/pi/provider-settings/openai", {
         api: "openai-responses",
@@ -168,11 +205,142 @@ describe("Bun PI provider settings API", () => {
       database.close();
     }
   });
+
+  test("tests a custom OpenAI-compatible provider, discovers models, and records redacted audit", async () => {
+    const database = await openFixtureDatabase();
+    let authorization = "";
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        authorization = request.headers.get("authorization") ?? "";
+        if (new URL(request.url).pathname === "/v1/models") {
+          return Response.json({ data: [{ id: "custom-reasoner" }, { id: "custom-fast" }] });
+        }
+        return new Response("missing", { status: 404 });
+      }
+    });
+    testServers.push(server);
+    try {
+      const router = createDefaultRouter({ database });
+      const secret = "custom-secret-key";
+      await request(router, "/api/pi/provider-settings/acme", {
+        api: "openai-responses",
+        api_key: secret,
+        base_url: `http://127.0.0.1:${server.port}/v1`,
+        models: "custom-reasoner"
+      });
+
+      const response = await post(router, "/api/pi/provider-settings/acme/test-connection", {});
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({
+        auth: "api_key",
+        http_status: 200,
+        models: ["custom-reasoner", "custom-fast"],
+        ok: true,
+        provider_id: "acme",
+        status: "connected"
+      });
+      expect(authorization).toBe(`Bearer ${secret}`);
+      expect(JSON.stringify(body)).not.toContain(secret);
+      const audit = database.sqlite.query<{ payload_json: string; result_json: string }, []>(
+        "select payload_json, result_json from pi_action_events where event_type='provider_connection_tested' order by id desc limit 1"
+      ).get();
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
+        api: "openai-responses",
+        base_url: `http://127.0.0.1:${server.port}/v1`,
+        provider_id: "acme"
+      });
+      expect(JSON.parse(audit?.result_json ?? "{}")).toMatchObject({ discovered_model_count: 2, status: "connected" });
+      expect(JSON.stringify(audit)).not.toContain(secret);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("returns a sanitized failed connection result without exposing provider response or key", async () => {
+    const database = await openFixtureDatabase();
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response("denied for failed-secret-key", { status: 401 });
+      }
+    });
+    testServers.push(server);
+    try {
+      const router = createDefaultRouter({ database });
+      const response = await post(router, "/api/pi/provider-settings/broken/test-connection", {
+        api: "openai-responses",
+        api_key: "failed-secret-key",
+        base_url: `http://127.0.0.1:${server.port}/v1`
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({
+        error: "provider_http_error",
+        http_status: 401,
+        models: [],
+        ok: false,
+        provider_id: "broken",
+        status: "failed"
+      });
+      expect(JSON.stringify(body)).not.toContain("failed-secret-key");
+      const audit = database.sqlite.query<{ error: string; payload_json: string; result_json: string }, []>(
+        "select error, payload_json, result_json from pi_action_events where event_type='provider_connection_tested' order by id desc limit 1"
+      ).get();
+      expect(JSON.stringify(audit)).not.toContain("failed-secret-key");
+      expect(JSON.parse(audit?.result_json ?? "{}")).toMatchObject({ http_status: 401, status: "failed" });
+    } finally {
+      database.close();
+    }
+  });
+
+  test("reports Codex OAuth credential connection state without echoing OAuth tokens", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const missing = await post(router, "/api/pi/provider-settings/openai-codex/test-connection", {});
+      expect(await missing.json()).toMatchObject({
+        auth: "oauth",
+        error: "oauth_not_configured",
+        ok: false,
+        provider_id: "openai-codex"
+      });
+
+      const authPath = join(dirname(database.path), "pi-runtime", "agent", "auth.json");
+      await mkdir(dirname(authPath), { recursive: true });
+      await Bun.write(authPath, JSON.stringify({
+        "openai-codex": { type: "oauth", access: "oauth-access-secret", refresh: "oauth-refresh-secret", expires: Date.now() + 60_000 }
+      }));
+      const configured = await post(router, "/api/pi/provider-settings/openai-codex/test-connection", {});
+      const body = await configured.json() as { models: string[]; [key: string]: unknown };
+      expect(body).toMatchObject({ auth: "oauth", ok: true, provider_id: "openai-codex", status: "connected" });
+      expect(body.models).toContain("gpt-5.4");
+      expect(JSON.stringify(body)).not.toContain("oauth-access-secret");
+      const audits = database.sqlite.query<{ payload_json: string; result_json: string }, []>(
+        "select payload_json, result_json from pi_action_events where event_type='provider_connection_tested' order by id"
+      ).all();
+      expect(JSON.stringify(audits)).not.toContain("oauth-access-secret");
+      expect(JSON.stringify(audits)).not.toContain("oauth-refresh-secret");
+    } finally {
+      database.close();
+    }
+  });
 });
 
 function request(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {
   return router.handle(new Request(`${BASE_URL}${path}`, {
     method: "PUT",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" }
+  }));
+}
+
+function post(router: ReturnType<typeof createDefaultRouter>, path: string, body: Record<string, unknown>) {
+  return router.handle(new Request(`${BASE_URL}${path}`, {
+    method: "POST",
     body: JSON.stringify(body),
     headers: { "content-type": "application/json" }
   }));

@@ -123,8 +123,15 @@ export const assistantApi = {
 
   getPiProviderSettings: () => request('/api/pi/provider-settings'),
 
+  getPiProviderCatalog: () => request('/api/pi/provider-settings/catalog'),
+
   updatePiProviderSettings: (id, settings) => request(`/api/pi/provider-settings/${encodeURIComponent(id)}`, {
     method: 'PUT',
+    body: JSON.stringify(settings),
+  }),
+
+  testPiProviderConnection: (id, settings) => request(`/api/pi/provider-settings/${encodeURIComponent(id)}/test-connection`, {
+    method: 'POST',
     body: JSON.stringify(settings),
   }),
 

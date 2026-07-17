@@ -1,4 +1,4 @@
-import { Bot, Eye, KeyRound, Loader2, RefreshCw, Save } from 'lucide-react';
+import { Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 
@@ -18,16 +18,160 @@ export default function PiAgentSettingsPanel({ advanced = false }) {
 }
 
 function PiSettingsForm({ advanced, state }) {
+  if (!advanced) return <RecommendedProviderSettings state={state} />;
   return (
     <>
-      <PiSettingsGrid advanced={advanced} form={state.form} updateField={state.updateField} />
-      {advanced && <ProviderCredentialFields state={state} />}
+      <div className="provider-advanced-heading">
+        <SlidersHorizontal size={17} />
+        <div>
+          <strong>Custom advanced</strong>
+          <span>直接编辑 provider ID、API type、base URL、thinking 与 runtime instructions。</span>
+        </div>
+      </div>
+      <PiSettingsGrid advanced form={state.form} updateField={state.updateField} />
+      <ProviderCredentialFields state={state} />
       <CodexOAuthPanel state={state} />
       <AgentEnableField form={state.form} updateField={state.updateField} />
-      <SaveRow advanced={advanced} onSave={state.handleSave} saving={state.saving} />
-      {advanced && <ProviderSummary providers={state.providers} />}
+      <SaveRow advanced onSave={state.handleSave} saving={state.saving} />
+      <ProviderSummary providers={state.providers} />
     </>
   );
+}
+
+function RecommendedProviderSettings({ state }) {
+  return (
+    <>
+      <ProviderPresetCards state={state} />
+      {state.selectedPreset ? (
+        <RecommendedProviderConfiguration state={state} />
+      ) : (
+        <div className="provider-custom-notice">
+          <SlidersHorizontal size={18} />
+          <div>
+            <strong>当前使用自定义 provider：{state.form.modelProvider || '未命名'}</strong>
+            <span>为避免默认页面暴露底层连接参数，请在 Advanced · Model runtime 中维护。</span>
+          </div>
+        </div>
+      )}
+      <AgentEnableField form={state.form} updateField={state.updateField} />
+      <SaveRow onSave={state.handleSave} saving={state.saving} />
+    </>
+  );
+}
+
+function ProviderPresetCards({ state }) {
+  return (
+    <div className="provider-preset-grid" aria-label="推荐 provider">
+      {state.providerCatalog.presets.map((preset) => {
+        const selected = preset.id === state.form.modelProvider;
+        const status = providerCardStatus(state, preset);
+        return (
+          <button
+            aria-pressed={selected}
+            className={`provider-preset-card ${selected ? 'selected' : ''}`}
+            key={preset.id}
+            onClick={() => state.selectProviderPreset(preset)}
+            type="button"
+          >
+            <div className="provider-preset-card-topline">
+              <span className="provider-preset-mark">{preset.label.slice(0, 1)}</span>
+              {preset.recommended && <span className="provider-recommended-badge"><Sparkles size={11} /> 推荐</span>}
+            </div>
+            <div>
+              <strong>{preset.label}</strong>
+              <p>{preset.description}</p>
+            </div>
+            <span className={`provider-connection-chip ${status.tone}`}>
+              <status.Icon size={13} /> {status.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function RecommendedProviderConfiguration({ state }) {
+  const preset = state.selectedPreset;
+  const configured = preset.auth === 'oauth'
+    ? state.oauthStatus?.pi_oauth?.configured
+    : state.selectedProvider?.api_key_configured;
+  return (
+    <div className="provider-recommended-config">
+      <div className="provider-config-heading">
+        <div>
+          <span className="settings-entry-eyebrow">Selected connection</span>
+          <h3>{preset.label}</h3>
+          <p>{configured ? '凭据已安全配置；更新时不会回显旧密钥。' : preset.auth === 'oauth' ? '使用 OAuth 完成连接。' : '输入 API key 后可先测试连接再保存。'}</p>
+        </div>
+        <span className="provider-default-model"><ShieldCheck size={14} /> 默认 {preset.recommended_model}</span>
+      </div>
+      {preset.auth === 'oauth' ? <CodexOAuthPanel state={state} /> : <RecommendedApiKeyField state={state} />}
+      <div className="provider-recommended-actions">
+        <RecommendedModelField state={state} />
+        <ConnectionTestAction state={state} />
+      </div>
+      <ConnectionResult state={state} />
+    </div>
+  );
+}
+
+function RecommendedApiKeyField({ state }) {
+  const configured = state.selectedProvider?.api_key_configured;
+  return (
+    <Field label={`API Key${configured ? '（已配置；留空保留）' : ''}`}>
+      <input
+        autoComplete="new-password"
+        className="form-control"
+        onChange={(event) => state.updateField('apiKey', event.target.value)}
+        placeholder={configured ? '••••••••  输入新 key 可覆盖' : '粘贴 API key'}
+        type="password"
+        value={state.form.apiKey}
+      />
+    </Field>
+  );
+}
+
+function RecommendedModelField({ state }) {
+  return (
+    <Field label="Model">
+      <select className="form-control" value={state.form.modelId} onChange={(event) => state.updateField('modelId', event.target.value)}>
+        {state.modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+function ConnectionTestAction({ state }) {
+  const busy = state.connectionTest.busy && state.connectionTest.providerId === state.form.modelProvider;
+  return (
+    <button className="btn btn-secondary provider-test-button" disabled={busy} onClick={state.testConnection} type="button">
+      {busy ? <Loader2 size={15} className="spin-animation" /> : <PlugZap size={15} />}
+      测试连接并发现模型
+    </button>
+  );
+}
+
+function ConnectionResult({ state }) {
+  const test = state.connectionTest;
+  if (test.providerId !== state.form.modelProvider || !test.result) return null;
+  return (
+    <div className={`provider-test-result ${test.result.ok ? 'success' : 'error'}`} role="status">
+      {test.result.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+      <span>{test.result.message || (test.result.ok ? '连接成功' : '连接失败')}</span>
+    </div>
+  );
+}
+
+function providerCardStatus(state, preset) {
+  const test = state.connectionTest.providerId === preset.id ? state.connectionTest.result : null;
+  if (test?.ok) return { Icon: CheckCircle2, label: '连接成功', tone: 'success' };
+  if (test && !test.ok) return { Icon: XCircle, label: '连接失败', tone: 'error' };
+  const configured = preset.auth === 'oauth'
+    ? state.oauthStatus?.pi_oauth?.configured
+    : state.providers.find((provider) => provider.id === preset.id)?.api_key_configured;
+  if (configured) return { Icon: ShieldCheck, label: '已配置', tone: 'configured' };
+  return { Icon: CircleDashed, label: '未连接', tone: 'idle' };
 }
 
 function PanelHeader({ advanced, loading, onRefresh }) {
@@ -40,7 +184,7 @@ function PanelHeader({ advanced, loading, onRefresh }) {
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
           {advanced
             ? '配置这个唯一 Supervisor 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。'
-            : '选择默认 Supervisor 的 provider、模型与 thinking；不会创建多个独立 agent。'}
+            : '从推荐连接开始，只在需要自定义兼容端点时进入 Advanced；不会创建多个独立 agent。'}
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -128,7 +272,7 @@ function CodexOAuthPanel({ state }) {
     <div style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', display: 'grid', gap: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
-          <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>Codex OAuth（实验）</strong>
+          <strong style={{ color: 'var(--text-primary)', fontSize: '0.84rem' }}>Codex OAuth</strong>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.76rem', margin: '3px 0 0' }}>
             点击后只生成登录地址；你可以复制到已登录 ChatGPT 的浏览器打开。Runner 不读取或导入 Codex token。
           </p>

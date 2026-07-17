@@ -5,6 +5,7 @@ import { AuthStorage } from "@earendil-works/pi-coding-agent";
 import { loginOpenAICodex } from "@earendil-works/pi-ai/oauth";
 import type { OAuthAuthInfo, OAuthCredentials, OAuthPrompt } from "@earendil-works/pi-ai";
 import type { RunnerDatabase } from "../db/database.ts";
+import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -35,6 +36,7 @@ async function startOpenAICodexLogin(context: PiOAuthContext) {
   const authInfo = await beginLogin(context, state);
   state.authUrl = authInfo.url;
   state.instructions = authInfo.instructions;
+  recordOAuthAudit(context.database, "provider_oauth_login_started", "pending");
   return loginResponse(context.database, state);
 }
 
@@ -51,7 +53,7 @@ function beginLogin(context: PiOAuthContext, state: LoginState): Promise<OAuthAu
     onPrompt: async () => { throw new Error("Manual OAuth code paste is not supported from Runner Settings yet."); }
   }).then((credentials) => storeCredentials(context.database, credentials, state))
     .catch((error) => {
-      markLoginFailed(state, error);
+      markLoginFailed(context.database, state, error);
       rejectAuth(error);
     });
   return authInfo;
@@ -69,17 +71,24 @@ async function defaultOpenAICodexLogin(callbacks: PiOAuthLoginCallbacks): Promis
 function storeCredentials(db: RunnerDatabase, credentials: OAuthCredentials, state: LoginState): void {
   AuthStorage.create(piAuthPath(db)).set(OPENAI_CODEX_PROVIDER, { type: "oauth", ...credentials });
   state.status = "authenticated";
+  recordOAuthAudit(db, "provider_oauth_configured", "succeeded");
 }
 
-function markLoginFailed(state: LoginState, error: unknown): void {
+function markLoginFailed(db: RunnerDatabase, state: LoginState, error: unknown): void {
   state.status = "error";
   state.error = error instanceof Error ? error.message : String(error);
+  recordOAuthAudit(db, "provider_oauth_failed", "failed", "oauth_login_failed");
 }
 
 function logoutOpenAICodex(db: RunnerDatabase) {
   AuthStorage.create(piAuthPath(db)).remove(OPENAI_CODEX_PROVIDER);
   loginStates.delete(piAuthPath(db));
+  recordOAuthAudit(db, "provider_oauth_logged_out", "succeeded");
   return oauthStatus(db);
+}
+
+export function isPiOpenAICodexOAuthConfigured(db: RunnerDatabase): boolean {
+  return AuthStorage.create(piAuthPath(db)).getAuthStatus(OPENAI_CODEX_PROVIDER).configured;
 }
 
 function oauthStatus(db: RunnerDatabase) {
@@ -138,4 +147,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function recordOAuthAudit(db: RunnerDatabase, eventType: string, status: string, error = ""): void {
+  createPiActionEvent(db, {
+    action_id: `provider-oauth:${OPENAI_CODEX_PROVIDER}:${crypto.randomUUID()}`,
+    actor: "user",
+    error,
+    event_type: eventType,
+    payload_json: JSON.stringify({ provider_id: OPENAI_CODEX_PROVIDER, source: "settings_http" }),
+    reason: `${eventType} for ${OPENAI_CODEX_PROVIDER}`,
+    result_json: JSON.stringify({ status })
+  });
 }

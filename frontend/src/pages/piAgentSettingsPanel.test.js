@@ -34,6 +34,32 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
   assert.match(assistantSource, /\/api\/pi\/oauth\/openai-codex\/login/);
 });
 
+test('normal model settings use recommended provider cards, connection state, and discovered models', () => {
+  assert.match(panelSource, /if \(!advanced\) return <RecommendedProviderSettings state=\{state\} \/>/);
+  assert.match(panelSource, /ProviderPresetCards/);
+  assert.match(panelSource, /provider-connection-chip/);
+  assert.match(panelSource, /测试连接并发现模型/);
+  assert.match(panelSource, /state\.modelOptions\.map/);
+  assert.match(panelSource, /Custom advanced/);
+  assert.match(panelSource, /Advanced · Model runtime/);
+  assert.match(stateSource, /getPiProviderCatalog/);
+  assert.match(stateSource, /testPiProviderConnection/);
+  assert.match(stateSource, /providerModelOptions/);
+  assert.match(assistantSource, /\/api\/pi\/provider-settings\/catalog/);
+  assert.match(assistantSource, /\/api\/pi\/provider-settings\/\$\{encodeURIComponent\(id\)\}\/test-connection/);
+  assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
+});
+
+test('recommended defaults remain stable and API keys stay write-only in local state', () => {
+  assert.match(stateSource, /modelId: 'gpt-5\.4'/);
+  assert.match(stateSource, /modelProvider: 'openai'/);
+  assert.match(stateSource, /apiKey: ''/);
+  assert.match(stateSource, /configured\?\.models\?\.\[0\] \|\| preset\.recommended_model/);
+  assert.match(panelSource, /type="password"/);
+  assert.match(panelSource, /留空保留/);
+  assert.doesNotMatch(panelSource, /state\.selectedProvider\.api_key/);
+});
+
 test('Supervisor settings no longer expose multi-agent creation controls', () => {
   assert.match(panelSource, /Xuanwu Supervisor · Runtime/);
   assert.doesNotMatch(panelSource, /PI Assistant/);

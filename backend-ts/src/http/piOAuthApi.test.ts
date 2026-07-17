@@ -81,6 +81,15 @@ describe("Bun PI OAuth API", () => {
       const raw = JSON.parse(await readFile(piAuthPath(database), "utf8"));
       expect(raw["openai-codex"]).toMatchObject({ type: "oauth", accountId: "acct-new" });
       expect(raw["openai-codex"].access).toBe("new-access");
+      const audit = database.sqlite.query<{ event_type: string; payload_json: string; result_json: string }, []>(
+        "select event_type, payload_json, result_json from pi_action_events where event_type like 'provider_oauth_%' order by id"
+      ).all();
+      expect(audit.map((item) => item.event_type)).toEqual(expect.arrayContaining([
+        "provider_oauth_login_started",
+        "provider_oauth_configured"
+      ]));
+      expect(JSON.stringify(audit)).not.toContain("new-access");
+      expect(JSON.stringify(audit)).not.toContain("new-refresh");
     } finally {
       database.close();
     }
@@ -105,6 +114,12 @@ describe("Bun PI OAuth API", () => {
       expect(piRaw["openai-codex"]).toBeUndefined();
       const codexRaw = JSON.parse(await readFile(join(codexHome, "auth.json"), "utf8"));
       expect(codexRaw.tokens.access_token).toBe("codex-access");
+      const audit = database.sqlite.query<{ event_type: string; payload_json: string }, []>(
+        "select event_type, payload_json from pi_action_events where event_type='provider_oauth_logged_out'"
+      ).get();
+      expect(audit?.event_type).toBe("provider_oauth_logged_out");
+      expect(JSON.stringify(audit)).not.toContain("pi-access");
+      expect(JSON.stringify(audit)).not.toContain("codex-access");
     } finally {
       database.close();
     }
