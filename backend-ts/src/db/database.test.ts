@@ -67,6 +67,8 @@ describe("Bun SQLite database connection", () => {
         "external_links",
         "feishu_conversation_state",
         "feishu_project_selections",
+        "git_repo_mapping_events",
+        "git_repo_mappings",
         "im_reply_drafts",
         "intake_runs",
         "issue_events",
@@ -209,7 +211,8 @@ describe("Bun SQLite database connection", () => {
         { id: "043_tracker_update_outbox" },
         { id: "044_attention_command_events" },
         { id: "045_automation_model" },
-        { id: "046_automation_scheduler" }
+        { id: "046_automation_scheduler" },
+        { id: "047_git_provider_events" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -752,7 +755,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 46 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 47 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
