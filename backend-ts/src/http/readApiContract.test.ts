@@ -101,7 +101,8 @@ describe("read API route contracts", () => {
   test("locks Handoff method, path, and authority contracts", () => {
     expect(captureRoutes(registerHandoffRoutes)).toEqual([
       "GET /api/handoffs",
-      "GET /api/handoffs/:id"
+      "GET /api/handoffs/:id",
+      "POST /api/handoffs/:id/reviews"
     ]);
     expect(HANDOFF_HTTP_COMPATIBILITY_POLICY).toMatchObject({
       dual_write: expect.stringContaining("none"),

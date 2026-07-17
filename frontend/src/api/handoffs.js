@@ -11,4 +11,9 @@ export const handoffsApi = {
   },
 
   getHandoff: (id) => request(`/api/handoffs/${encodeURIComponent(id)}`),
+
+  reviewHandoff: (id, review) => request(`/api/handoffs/${encodeURIComponent(id)}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify(review),
+  }),
 };

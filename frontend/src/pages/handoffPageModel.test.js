@@ -6,7 +6,10 @@ import {
   deliveryTone,
   handoffCopyText,
   handoffHref,
+  handoffReviewActions,
+  handoffReviewPayload,
   handoffRouteFromHash,
+  handoffRiskPresentation,
   safeExternalUrl,
 } from './handoffPageModel.js';
 
@@ -45,15 +48,77 @@ test('open actions only accept HTTP(S) URLs and delivery tones remain determinis
   assert.equal(deliveryTone('delivered'), 'green');
   assert.equal(deliveryTone('failed'), 'red');
   assert.equal(deliveryTone('sending'), 'amber');
+  assert.equal(deliveryTone('approved'), 'green');
+  assert.equal(deliveryTone('changes_requested'), 'red');
+  assert.equal(deliveryTone('pending'), 'blue');
+});
+
+test('review actions follow the current delivery/review state and build audited optimistic writes', () => {
+  const pending = {
+    handoff: {
+      id: handoffId,
+      revision: 7,
+      review: { state: 'pending' },
+      status: 'ready',
+    },
+    review_summary: { available_actions: ['accept', 'request_changes'], state: 'pending' },
+  };
+  assert.deepEqual(handoffReviewActions(pending), ['accept', 'request_changes']);
+  assert.deepEqual(handoffReviewActions({
+    ...pending,
+    review_summary: { available_actions: [], state: 'changes_requested' },
+  }), []);
+  assert.deepEqual(handoffReviewActions({
+    ...pending,
+    handoff: { ...pending.handoff, status: 'delivered' },
+  }), []);
+
+  assert.deepEqual(handoffReviewPayload(pending, 'request_changes', '  Add rollback smoke  ', {
+    actorRef: 'user:reviewer',
+    nonce: 'fixture-1',
+    occurredAt: '2026-07-17T08:30:00.000Z',
+  }), {
+    action: 'request_changes',
+    audit: {
+      actor: { id: 'user:reviewer', kind: 'user' },
+      correlation_id: `handoff-review:${handoffId}`,
+      event_id: 'handoff-review-ui:fixture-1',
+      occurred_at: '2026-07-17T08:30:00.000Z',
+      reason: 'Add rollback smoke',
+    },
+    comment: 'Add rollback smoke',
+    expected_revision: 7,
+  });
+  assert.throws(() => handoffReviewPayload(pending, 'request_changes', ''), /requires a comment/);
+});
+
+test('risk presentation orders every delivery state by severity without mutating API data', () => {
+  const risks = [
+    { id: 'low', severity: 'low' },
+    { id: 'critical', severity: 'critical' },
+    { id: 'high', severity: 'high' },
+  ];
+  const result = handoffRiskPresentation(risks);
+  assert.equal(result.highest, 'critical');
+  assert.deepEqual(result.items.map(item => item.id), ['critical', 'high', 'low']);
+  assert.deepEqual(result.counts, { critical: 1, high: 1, medium: 0, low: 1 });
+  assert.deepEqual(risks.map(item => item.id), ['low', 'critical', 'high']);
 });
 
 test('Handoffs stays a lazy page backed by the domain API and sidebar route', () => {
   const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const client = readFileSync(new URL('../api/handoffs.js', import.meta.url), 'utf8');
+  const page = readFileSync(new URL('./Handoffs.jsx', import.meta.url), 'utf8');
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/Handoffs'\)\)/);
   assert.match(app, /currentPage === 'handoffs'/);
-  assert.match(sidebar, /aria-label="Handoffs"/);
+  assert.match(sidebar, /handoffs: PackageCheck/);
+  assert.match(sidebar, /aria-label=\{item\.label\}/);
   assert.match(client, /request\(`\/api\/handoffs\?/);
   assert.match(client, /request\(`\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}`/);
+  assert.match(client, /\/api\/handoffs\/\$\{encodeURIComponent\(id\)\}\/reviews/);
+  assert.match(page, /title="Diff summary"/);
+  assert.match(page, /title="Rollback"/);
+  assert.match(page, /Request changes/);
+  assert.match(page, /aria-modal="true"/);
 });
