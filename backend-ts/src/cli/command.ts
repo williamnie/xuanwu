@@ -1,4 +1,5 @@
 import { sanitizeError } from "./common.ts";
+import { runBackup } from "./backup.ts";
 import { runIssue } from "./issue.ts";
 import { runMaintenance } from "./maintenance.ts";
 import { runProject } from "./project.ts";
@@ -25,6 +26,7 @@ export async function runCli(
 async function dispatch(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const command = args[0]?.trim();
   if (!command) throw new Error("missing command");
+  if (command === "backup") return await runBackup(args.slice(1), env);
   if (command === "issue") return await runIssue(args.slice(1), env, fetcher);
   if (command === "maintenance") return runMaintenance(args.slice(1));
   if (command === "project") return await runProject(args.slice(1), env, fetcher);
