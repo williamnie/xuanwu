@@ -313,6 +313,63 @@ describe("Bun in-progress issue recovery", () => {
       db.close();
     }
   });
+
+  test("reopens the persisted database after a crash, recovers once, and leaves a terminal issue untouched", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codex-runner-restart-e2e-"));
+    tempRoots.push(root);
+    const stateDir = join(root, "state");
+    const beforeCrash = await openDatabase({ stateDir });
+    const provider = new RecoveringCodexProvider();
+    let recoverableIssueID = 0;
+    let terminalIssueID = 0;
+    try {
+      insertProject(beforeCrash, { id: "demo", provider: "codex" });
+      recoverableIssueID = insertIssue(beforeCrash, {
+        codexThreadId: "thread-crash", codexTurnId: "turn-before-crash", projectId: "demo", status: "in_progress", title: "resume after crash"
+      });
+      insertOpenRun(beforeCrash, {
+        issueId: recoverableIssueID, provider: "codex", providerSessionId: "thread-crash", providerTurnId: "turn-before-crash"
+      });
+      terminalIssueID = insertIssue(beforeCrash, { projectId: "demo", status: "done", title: "already terminal" });
+      beforeCrash.sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, provider, started_at, ended_at, exit_reason)
+        values (?, ?, 1, 'done', 'codex', ?, ?, 'status_changed')`, [
+        `issue-${terminalIssueID}-attempt-1`, terminalIssueID, "2026-01-01T00:00:00Z", "2026-01-01T00:01:00Z"
+      ]);
+    } finally {
+      beforeCrash.close();
+    }
+
+    const restarted = await openDatabase({ stateDir });
+    try {
+      const result = await recoverInProgressIssues({ database: restarted, providers: { codex: provider } });
+
+      expect(result).toEqual({ deferred: 0, failed: 0, recovered: 1, requeued: 0 });
+      expect(provider.inputs).toHaveLength(1);
+      expect(getIssue(restarted, recoverableIssueID)).toMatchObject({ status: "in_progress" });
+      expect(getIssue(restarted, terminalIssueID)).toMatchObject({ status: "done" });
+      expect(listIssueRuns(restarted, terminalIssueID)).toMatchObject([{ status: "done", ended_at: "2026-01-01T00:01:00Z" }]);
+    } finally {
+      restarted.close();
+    }
+  });
+
+  test("makes a second reconciliation of an already requeued claim a no-op", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, { id: "demo", provider: "codex" });
+      const issueID = insertIssue(db, { projectId: "demo", status: "in_progress", title: "requeue once" });
+      insertOpenRun(db, { issueId: issueID, provider: "codex" });
+
+      expect(await recoverInProgressIssues({ database: db, providers: {} }))
+        .toEqual({ deferred: 0, failed: 0, recovered: 0, requeued: 1 });
+      expect(await recoverInProgressIssues({ database: db, providers: {} }))
+        .toEqual({ deferred: 0, failed: 0, recovered: 0, requeued: 0 });
+      expect(getIssue(db, issueID)).toMatchObject({ status: "todo" });
+      expect(listEventTypes(db).filter((type) => type === "issue.recovery_requeued")).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 type ProjectFixture = { id: string; provider: string };
