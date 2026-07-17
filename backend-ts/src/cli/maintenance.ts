@@ -16,6 +16,11 @@ import {
   backfillIssueWorks,
   rollbackIssueWorkBackfill
 } from "../domain/work/migrationService.ts";
+import {
+  forwardDatabaseMigration,
+  preflightDatabaseMigration,
+  rollbackDatabaseMigration
+} from "../db/migrationRehearsal.ts";
 import { formatJSON } from "./output.ts";
 
 const BOOLEAN_FLAGS = new Set([
@@ -157,6 +162,49 @@ export function runMaintenance(args: string[]): string {
       enableIncremental: enabled(flags, "enable-incremental"),
       mode: vacuumMode(flags.mode),
       pages: optionalInteger(flags.pages, "--pages"),
+      reportPath: required(flags, "report")
+    });
+  } else if (family === "db" && command === "migration-preflight") {
+    allowOnly(flags, ["compat-version", "db", "json", "report"]);
+    report = preflightDatabaseMigration({
+      compatVersion: flags["compat-version"],
+      dbPath: required(flags, "db"),
+      reportPath: required(flags, "report")
+    });
+  } else if (family === "db" && command === "migration-forward") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "backup", "compat-version",
+      "confirm-backup-tested", "confirm-no-active-writers", "db", "json", "reason", "report"
+    ]);
+    report = forwardDatabaseMigration({
+      actor: flags.actor,
+      actorKind: workActorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: flags["audit-ref"],
+      backupPath: flags.backup,
+      compatVersion: flags["compat-version"],
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      reason: flags.reason,
+      reportPath: required(flags, "report")
+    });
+  } else if (family === "db" && command === "migration-rollback") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "backup", "compat-version",
+      "confirm-backup-tested", "confirm-no-active-writers", "db", "json", "reason", "report"
+    ]);
+    report = rollbackDatabaseMigration({
+      actor: flags.actor,
+      actorKind: workActorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: flags["audit-ref"],
+      backupPath: flags.backup,
+      compatVersion: flags["compat-version"],
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      reason: flags.reason,
       reportPath: required(flags, "report")
     });
   } else if (family === "work" && command === "audit") {
