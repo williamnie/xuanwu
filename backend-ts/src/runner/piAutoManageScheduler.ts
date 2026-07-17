@@ -35,6 +35,11 @@ import {
   type PiAutomationSchedulerResult
 } from "./piAutomationScheduler.ts";
 import {
+  runDueAutomations,
+  type AutomationExecutor,
+  type AutomationSchedulerResult
+} from "./automationScheduler.ts";
+import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
 } from "./providerTerminalSignals.ts";
@@ -47,6 +52,7 @@ export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: str
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
+  automationCore: AutomationSchedulerResult;
   automations: PiAutomationSchedulerResult;
   cron: { executed: number; failed: number; scanned: number; skipped: number };
   delegations: { scanned: number; skipped: number; started: number };
@@ -69,6 +75,7 @@ export type PiAutoManageCycleInput = {
   database: RunnerDatabase;
   guardianDirectFeishuSender?: FeishuMessageClient;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  runAutomationCore?: AutomationExecutor;
   runAutomation?: PiAutomationExecutor;
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
@@ -171,6 +178,11 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     executeAutomation: input.runAutomation,
     now: optionalDate(input.watchdogNow)
   });
+  const automationCore = await runDueAutomations({
+    database: input.database,
+    executeAutomation: input.runAutomationCore,
+    now: optionalDate(input.watchdogNow)
+  });
   const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
   const providerTerminalSignals = signalOpenRunTerminalProviderErrors(input.database);
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
@@ -200,6 +212,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const projects = await runPiAutoManageCycle(input);
   return {
     ...projects,
+    automationCore,
     automations,
     cron,
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },

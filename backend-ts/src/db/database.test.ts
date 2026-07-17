@@ -55,6 +55,7 @@ describe("Bun SQLite database connection", () => {
         "attention_inbox_items",
         "automation_definitions",
         "automation_events",
+        "automation_run_events",
         "automation_runs",
         "automation_trigger_configs",
         "context_bundles",
@@ -117,6 +118,9 @@ describe("Bun SQLite database connection", () => {
         "works"
       ]);
       expect(columnNames(connection, "projects")).toContain("default_agent_profile_id");
+      expect(columnNames(connection, "automation_runs")).toEqual(expect.arrayContaining([
+        "attempt_count", "lease_expires_at", "lease_token", "max_attempts", "next_attempt_at", "scheduled_for"
+      ]));
       expect(columnNames(connection, "projects")).toContain("default_service_tier");
       expect(columnNames(connection, "issues")).toContain("workflow_snapshot_json");
       expect(columnNames(connection, "issues")).toContain("service_tier");
@@ -204,7 +208,8 @@ describe("Bun SQLite database connection", () => {
         { id: "042_run_attempt_relations" },
         { id: "043_tracker_update_outbox" },
         { id: "044_attention_command_events" },
-        { id: "045_automation_model" }
+        { id: "045_automation_model" },
+        { id: "046_automation_scheduler" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -747,7 +752,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 45 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 46 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

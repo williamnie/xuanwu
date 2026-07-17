@@ -43,6 +43,7 @@ import { runAttemptRelationsMigration } from "./042_run_attempt_relations.ts";
 import { trackerUpdateOutboxMigration } from "./043_tracker_update_outbox.ts";
 import { attentionCommandEventsMigration } from "./044_attention_command_events.ts";
 import { automationModelMigration } from "./045_automation_model.ts";
+import { automationSchedulerMigration } from "./046_automation_scheduler.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -89,5 +90,6 @@ export const migrations = [
   runAttemptRelationsMigration,
   trackerUpdateOutboxMigration,
   attentionCommandEventsMigration,
-  automationModelMigration
+  automationModelMigration,
+  automationSchedulerMigration
 ];
