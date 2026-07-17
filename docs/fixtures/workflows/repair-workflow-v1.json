@@ -1,0 +1,188 @@
+{
+  "schema_version": "xuanwu.workflow-manifest.v1",
+  "id": "workflow:repair",
+  "revision": 1,
+  "name": "Repair",
+  "description": "Diagnose a failure, apply the existing deterministic recovery budget and Guardian action gate, verify progress, then continue the Handoff or produce an audited replan.",
+  "stages": [
+    {
+      "id": "diagnose",
+      "name": "Classify the failure from trusted Evidence",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:issue_read",
+          "runner-builtin:issue_execution_status",
+          "runner-builtin:session_read_summary"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:repair-diagnosis@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "recovery-budget",
+      "name": "Read the canonical recovery budget",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:issue_read",
+          "runner-builtin:issue_execution_status",
+          "runner-builtin:session_read_summary"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:repair-diagnosis@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "recover",
+      "name": "Execute one authorized recovery action",
+      "agent": {
+        "role": "executor",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "write",
+        "allowed_tools": [],
+        "allowed_actions": [
+          "issue.retry",
+          "issue.retry_after",
+          "session.resume_followup"
+        ]
+      },
+      "verification_policy_ref": "verification-policy:repair-diagnosis@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "before_stage",
+        "policy_ref": "approval-policy:guardian-recovery-action@1"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "verify",
+      "name": "Verify recovery progress with fresh Evidence",
+      "agent": {
+        "role": "verifier",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:issue_read",
+          "runner-builtin:issue_execution_status",
+          "runner-builtin:session_read_summary"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:repair-recovery-verification@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "handoff-replan",
+      "name": "Continue the Handoff or emit an audited replan",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "write",
+        "allowed_tools": [
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_list",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": [
+          "needs_user.escalate"
+        ]
+      },
+      "verification_policy_ref": "verification-policy:repair-diagnosis@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "before_stage",
+        "policy_ref": "approval-policy:repair-handoff-replan@1"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    }
+  ]
+}
