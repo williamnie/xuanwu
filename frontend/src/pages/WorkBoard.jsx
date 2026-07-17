@@ -4,7 +4,8 @@ import {
   AlertTriangle,
   ArrowUpRight,
   BriefcaseBusiness,
-  CheckCircle2,
+  Columns3,
+  List,
   Pencil,
   Plus,
   RefreshCw,
@@ -15,7 +16,8 @@ import {
 import { workApi } from '../api/work.js';
 import EvidencePanel from '../components/EvidencePanel.jsx';
 import { selectProjects, useDataStore } from '../store/dataStore';
-import { message } from '../store/toastStore';
+import WorkDetail from './WorkDetail.jsx';
+import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import {
   filterWorkBoardItems,
   groupWorksByStatus,
@@ -58,12 +60,13 @@ const EMPTY_FILTERS = {
   type: '',
 };
 
-export default function WorkBoard({ navigateTo, onPageContextChange }) {
+export default function WorkBoard({ navigateTo, onPageContextChange, selectedWorkId = '' }) {
   const projects = useDataStore(selectProjects);
   const [works, setWorks] = useState([]);
   const [relations, setRelations] = useState([]);
   const [compatibility, setCompatibility] = useState(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [view, setView] = useState('board');
   const [dialog, setDialog] = useState(null);
   const [evidenceWork, setEvidenceWork] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -110,17 +113,30 @@ export default function WorkBoard({ navigateTo, onPageContextChange }) {
   );
 
   useEffect(() => {
+    if (selectedWorkId) return;
     onPageContextChange?.({
       page_id: 'work',
       project_id: filters.project || '',
     });
-  }, [filters.project, onPageContextChange]);
+  }, [filters.project, onPageContextChange, selectedWorkId]);
 
   const updateFilter = (key, value) => {
     setFilters(current => ({ ...current, [key]: value }));
   };
 
   const refresh = () => setRefreshVersion(version => version + 1);
+
+  if (selectedWorkId) {
+    return (
+      <WorkDetail
+        navigateTo={navigateTo}
+        onPageContextChange={onPageContextChange}
+        onWorkChanged={refresh}
+        projects={projects}
+        workId={selectedWorkId}
+      />
+    );
+  }
 
   return (
     <section className="work-board-page">
@@ -131,7 +147,9 @@ export default function WorkBoard({ navigateTo, onPageContextChange }) {
         loading={loading}
         onCreate={() => setDialog({ mode: 'create' })}
         onRefresh={refresh}
+        onViewChange={setView}
         total={works.length}
+        view={view}
       />
 
       <CompatibilityNotice compatibility={compatibility} navigateTo={navigateTo} />
@@ -153,24 +171,35 @@ export default function WorkBoard({ navigateTo, onPageContextChange }) {
           <button type="button" onClick={refresh}>重试</button>
         </div>
       ) : (
-        <div className="work-board-scroll" aria-busy={loading}>
-          <div
-            className="work-board-columns"
-            style={{ minWidth: `${Math.max(visibleStatuses.length, 1) * 276}px` }}
-          >
-            {visibleStatuses.map(status => (
-              <WorkColumn
-                key={status}
-                navigateTo={navigateTo}
-                onEdit={work => setDialog({ mode: 'edit', work })}
-                onEvidence={setEvidenceWork}
-                projectNames={projectNames}
-                relationIndex={relationIndex}
-                status={status}
-                works={groupedWorks.get(status) || []}
-              />
-            ))}
-          </div>
+        <div className={`work-board-scroll ${view === 'list' ? 'is-list' : ''}`} aria-busy={loading}>
+          {view === 'list' ? (
+            <WorkList
+              navigateTo={navigateTo}
+              onEdit={work => setDialog({ mode: 'edit', work })}
+              onEvidence={setEvidenceWork}
+              projectNames={projectNames}
+              relationIndex={relationIndex}
+              works={filteredWorks}
+            />
+          ) : (
+            <div
+              className="work-board-columns"
+              style={{ minWidth: `${Math.max(visibleStatuses.length, 1) * 276}px` }}
+            >
+              {visibleStatuses.map(status => (
+                <WorkColumn
+                  key={status}
+                  navigateTo={navigateTo}
+                  onEdit={work => setDialog({ mode: 'edit', work })}
+                  onEvidence={setEvidenceWork}
+                  projectNames={projectNames}
+                  relationIndex={relationIndex}
+                  status={status}
+                  works={groupedWorks.get(status) || []}
+                />
+              ))}
+            </div>
+          )}
           {loading ? <div className="work-board-loading">正在读取统一 Work Ledger…</div> : null}
         </div>
       )}
@@ -195,7 +224,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange }) {
   );
 }
 
-function WorkBoardHeader({ attentionCount, deliveredCount, filteredCount, loading, onCreate, onRefresh, total }) {
+function WorkBoardHeader({ attentionCount, deliveredCount, filteredCount, loading, onCreate, onRefresh, onViewChange, total, view }) {
   return (
     <header className="work-ledger-header">
       <div className="work-ledger-title">
@@ -204,6 +233,10 @@ function WorkBoardHeader({ attentionCount, deliveredCount, filteredCount, loadin
         <p>把 Issue、Action、Delegation 与 Watch 放回同一条可审计工作主线。</p>
       </div>
       <div className="work-ledger-actions">
+        <div className="work-view-toggle" aria-label="Work view" role="group">
+          <button aria-pressed={view === 'board'} onClick={() => onViewChange('board')} type="button"><Columns3 size={14} /> Board</button>
+          <button aria-pressed={view === 'list'} onClick={() => onViewChange('list')} type="button"><List size={14} /> List</button>
+        </div>
         <button className="work-action-secondary" disabled={loading} onClick={onRefresh} type="button">
           <RefreshCw className={loading ? 'is-spinning' : ''} size={15} /> 刷新
         </button>
@@ -343,6 +376,9 @@ function WorkCard({ navigateTo, onEdit, onEvidence, projectName, relations, work
         </div>
       ) : null}
       <div className="work-card-footer">
+        <button className="work-detail-link" onClick={() => navigateTo('work', work.id)} type="button">
+          Open <ArrowUpRight size={13} />
+        </button>
         <button onClick={() => onEdit(work)} type="button"><Pencil size={13} /> Edit</button>
         <button className="work-evidence-link" onClick={() => onEvidence(work)} type="button">
           <ShieldCheck size={13} /> Evidence
@@ -354,6 +390,44 @@ function WorkCard({ navigateTo, onEdit, onEvidence, projectName, relations, work
         ) : <span className="work-source-label">{work.id}</span>}
       </div>
     </article>
+  );
+}
+
+function WorkList({ navigateTo, onEdit, onEvidence, projectNames, relationIndex, works }) {
+  return (
+    <div className="work-list" role="table" aria-label="Work list">
+      <div className="work-list-header" role="row">
+        <span>Status</span>
+        <span>Work</span>
+        <span>Project</span>
+        <span>Relationships</span>
+        <span>Delivery</span>
+        <span>Updated</span>
+        <span aria-label="Actions" />
+      </div>
+      {works.length > 0 ? works.map(work => {
+        const meta = STATUS_META[work.status] || { label: work.status, tone: 'slate' };
+        const relations = relationIndex.get(work.id) || [];
+        return (
+          <article className="work-list-row" key={work.id} role="row">
+            <span className="work-list-status" data-tone={meta.tone}><i />{meta.label}</span>
+            <button className="work-list-title" onClick={() => navigateTo('work', work.id)} title={work.title} type="button">
+              <strong>{work.title}</strong>
+              <small>{work.id}</small>
+            </button>
+            <span className="work-list-project">{projectNames.get(work.owner?.project_id) || work.owner?.project_id || 'Unscoped'}</span>
+            <span className="work-list-relations">{relations.length > 0 ? `${relations.length} linked` : 'None'}</span>
+            <span className="work-list-delivery">{workDeliveryStage(work)}</span>
+            <time>{formatWorkTime(work.updated_at)}</time>
+            <span className="work-list-actions">
+              <button aria-label={`Edit ${work.title}`} onClick={() => onEdit(work)} type="button"><Pencil size={13} /></button>
+              <button aria-label={`Evidence for ${work.title}`} onClick={() => onEvidence(work)} type="button"><ShieldCheck size={13} /></button>
+              <button aria-label={`Open ${work.title}`} onClick={() => navigateTo('work', work.id)} type="button"><ArrowUpRight size={13} /></button>
+            </span>
+          </article>
+        );
+      }) : <div className="work-column-empty">No Work matches these filters</div>}
+    </div>
   );
 }
 
@@ -376,125 +450,7 @@ function WorkEvidenceDialog({ onClose, work }) {
   );
 }
 
-function WorkEditorDialog({ mode, onClose, onSaved, projects, work }) {
-  const editing = mode === 'edit';
-  const [draft, setDraft] = useState(() => editorDraft(work, projects));
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const setField = (field, value) => setDraft(current => ({ ...current, [field]: value }));
-
-  const submit = async (event) => {
-    event.preventDefault();
-    if (!draft.title.trim() || !draft.goal.trim() || (!editing && !draft.project_id)) {
-      setError('请填写标题、目标和项目。');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      const audit = workBoardAudit(editing ? 'edit' : 'create');
-      if (editing) {
-        await workApi.updateWork(work.id, {
-          audit,
-          expected_revision: work.revision,
-          goal: draft.goal.trim(),
-          title: draft.title.trim(),
-        });
-        message.success('Work 已更新');
-      } else {
-        await workApi.createWork({
-          audit,
-          goal: draft.goal.trim(),
-          project_id: draft.project_id,
-          status: draft.status,
-          title: draft.title.trim(),
-          type: 'engineering_task',
-        });
-        message.success('Work 已创建');
-      }
-      onSaved();
-    } catch (saveError) {
-      setError(saveError.message || '保存 Work 失败');
-      setSaving(false);
-    }
-  };
-
-  return createPortal(
-    <div className="modal-overlay work-dialog-overlay">
-      <div aria-labelledby="work-dialog-title" aria-modal="true" className="work-dialog" role="dialog">
-        <header>
-          <div>
-            <span>{editing ? 'ISSUE-AUTHORITATIVE EDIT' : 'AUDITED CREATE'}</span>
-            <h2 id="work-dialog-title">{editing ? '编辑 Work' : '新建 Work'}</h2>
-            <p>{editing ? '仅修改 Work 合同允许的标题与目标。' : '当前创建 Engineering task，并由 Issue 保持写入权威。'}</p>
-          </div>
-          <button aria-label="关闭" disabled={saving} onClick={onClose} type="button"><X size={18} /></button>
-        </header>
-        <form onSubmit={submit}>
-          {error ? <div className="work-dialog-error" role="alert">{error}</div> : null}
-          {!editing ? (
-            <div className="work-dialog-grid">
-              <label>
-                <span>Project</span>
-                <select className="form-control" onChange={event => setField('project_id', event.target.value)} required value={draft.project_id}>
-                  <option value="">Select project</option>
-                  {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Initial status</span>
-                <select className="form-control" onChange={event => setField('status', event.target.value)} value={draft.status}>
-                  <option value="triage">Triage</option>
-                  <option value="todo">Todo</option>
-                </select>
-              </label>
-            </div>
-          ) : (
-            <div className="work-dialog-contract">
-              <span>{TYPE_LABELS[work.type] || work.type}</span>
-              <span>{STATUS_META[work.status]?.label || work.status}</span>
-              <span>Revision {work.revision}</span>
-            </div>
-          )}
-          <label>
-            <span>Title</span>
-            <input autoFocus className="form-control" maxLength={180} onChange={event => setField('title', event.target.value)} required value={draft.title} />
-          </label>
-          <label>
-            <span>Goal</span>
-            <textarea className="form-control work-goal-input" onChange={event => setField('goal', event.target.value)} required value={draft.goal} />
-          </label>
-          <footer>
-            <button className="work-action-secondary" disabled={saving} onClick={onClose} type="button">取消</button>
-            <button className="work-action-primary" disabled={saving} type="submit">
-              {editing ? <Pencil size={15} /> : <CheckCircle2 size={15} />}
-              {saving ? '保存中…' : editing ? '保存修改' : '创建 Work'}
-            </button>
-          </footer>
-        </form>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function editorDraft(work, projects) {
-  return {
-    goal: work?.goal || '',
-    project_id: work?.owner?.project_id || projects[0]?.id || '',
-    status: 'triage',
-    title: work?.title || '',
-  };
-}
-
-function workBoardAudit(operation) {
-  const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return {
-    actor: { id: 'work-board-user', kind: 'user' },
-    correlation_id: `work-board:${nonce}`,
-    event_id: `work-board:${operation}:${nonce}`,
-    occurred_at: new Date().toISOString(),
-    reason: `User requested Work ${operation} from Work Board`,
-  };
+function formatWorkTime(value) {
+  const date = new Date(value || '');
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : '—';
 }

@@ -55,6 +55,25 @@ test('board filters combine type, status, project, Attention and delivery', () =
   );
 });
 
+test('large Work lists preserve deterministic combined filtering', () => {
+  const large = Array.from({ length: 1200 }, (_, index) => work(
+    `xw:work:issues:${index + 1}`,
+    index % 3 === 0 ? 'done' : 'triage',
+    index % 2 === 0 ? 'alpha' : 'beta',
+    'engineering_task',
+  ));
+  const result = filterWorkBoardItems(large, new Map(), {
+    attention: '',
+    delivery: 'delivered',
+    project: 'alpha',
+    query: '',
+    status: 'done',
+    type: '',
+  });
+  assert.equal(result.length, 200);
+  assert.equal(result.every(item => item.owner.project_id === 'alpha' && item.status === 'done'), true);
+});
+
 test('Work stays primary while hidden Issues compatibility routes keep the domain client', () => {
   const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
@@ -63,12 +82,15 @@ test('Work stays primary while hidden Issues compatibility routes keep the domai
 
   assert.match(app, /lazy\(\(\) => import\('\.\/pages\/WorkBoard'\)\)/);
   assert.match(app, /currentPage === 'work'/);
+  assert.match(app, /selectedWorkId=\{selectedWorkId\}/);
   assert.match(app, /resolveProductPage/);
   assert.match(sidebar, /productNavigationItems/);
   assert.match(navigation, /issues: 'work'/);
   assert.doesNotMatch(sidebar, /aria-label="Issues"/);
   assert.match(client, /request\('\/api\/works'/);
   assert.match(client, /request\(`\/api\/works\/\$\{encodeURIComponent\(id\)\}`/);
+  assert.match(client, /\/timeline\?\$\{workTimelineParams\(options\)\}/);
+  assert.match(client, /\/verification/);
 });
 
 function work(id, status, projectId, type) {

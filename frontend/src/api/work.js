@@ -31,6 +31,18 @@ function workRelationParams({ kinds = [], lifecycles = [], page = 1, pageSize = 
   return params;
 }
 
+function workTimelineParams({ cursor = '', limit = 50 } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return params;
+}
+
+function issueIdFromWorkId(id) {
+  const match = /^xw:work:issues:([1-9]\d*)$/.exec(String(id || ''));
+  if (!match) throw new Error('Work id is not backed by a compatible Issue');
+  return Number(match[1]);
+}
+
 async function allPages(fetchPage) {
   const first = await fetchPage(1);
   const totalPages = Number(first?.total_pages) || 0;
@@ -51,6 +63,12 @@ export const workApi = {
     request(`/api/works?${workListParams({ ...filters, page, pageSize: WORK_PAGE_SIZE })}`)
   )),
 
+  getWork: (id) => request(`/api/works/${encodeURIComponent(id)}`),
+
+  getWorkTimeline: (id, options = {}) => (
+    request(`/api/works/${encodeURIComponent(id)}/timeline?${workTimelineParams(options)}`)
+  ),
+
   getWorkRelations: (filters = {}) => request(`/api/work-relations?${workRelationParams(filters)}`),
 
   getAllWorkRelations: (filters = {}) => allPages(page => (
@@ -70,6 +88,11 @@ export const workApi = {
   controlWork: (id, action, payload) => request(`/api/works/${encodeURIComponent(id)}/actions/${action}`, {
     method: 'POST',
     body: JSON.stringify(payload),
+  }),
+
+  reviewWork: (id, review) => request(`/api/issues/${issueIdFromWorkId(id)}/verification`, {
+    method: 'POST',
+    body: JSON.stringify(review),
   }),
 
   getIssueTemplates: () => request('/api/issue-templates'),

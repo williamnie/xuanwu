@@ -22,7 +22,7 @@ import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import AuthGate from './components/AuthGate';
 import { PRODUCT_NAV_LABELS } from './brand.js';
-import { WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
+import { issueIdFromWorkId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
 import { handoffRouteFromHash } from './pages/handoffPageModel.js';
 import './App.css';
 import './GeekWorkbench.css';
@@ -86,6 +86,7 @@ export default function App() {
     // 路由与过滤状态
     currentPage: initialHandoffRoute?.page || 'command-center', // 默认进入 Command Center，通知深链进入对应 Handoff
     selectedIssueId: null,
+    selectedWorkId: '',
     selectedRunId: '',
     selectedSessionId: '',
     selectedHandoffId: initialHandoffRoute?.handoffId || '',
@@ -116,6 +117,7 @@ export default function App() {
   const {
     currentPage,
     selectedIssueId,
+    selectedWorkId,
     selectedRunId,
     selectedSessionId,
     selectedHandoffId,
@@ -196,6 +198,10 @@ export default function App() {
     const resolvedPage = resolveProductPage(page, { workBoardEnabled: WORK_BOARD_ENABLED });
     const hashRoute = handoffRouteFromHash(globalThis.location?.hash);
     const targetHandoffId = resolvedPage === 'handoffs' ? handoffId || hashRoute?.handoffId || '' : '';
+    const targetIssueId = resolvedPage === 'issues'
+      ? page === 'work' ? issueIdFromWorkId(issueId) : issueId
+      : null;
+    const targetWorkId = resolvedPage === 'work' ? String(issueId || '') : '';
     if (resolvedPage !== 'handoffs' && hashRoute && globalThis.history && globalThis.location) {
       globalThis.history.replaceState(null, '', `${globalThis.location.pathname}${globalThis.location.search}`);
     }
@@ -203,8 +209,11 @@ export default function App() {
       if (draft.currentPage !== resolvedPage) {
         draft.currentPage = resolvedPage;
       }
-      if (draft.selectedIssueId !== issueId) {
-        draft.selectedIssueId = issueId;
+      if (draft.selectedIssueId !== targetIssueId) {
+        draft.selectedIssueId = targetIssueId;
+      }
+      if (draft.selectedWorkId !== targetWorkId) {
+        draft.selectedWorkId = targetWorkId;
       }
       if (resolvedPage === 'runs') {
         const compatSessionRoute = page === 'sessions';
@@ -230,6 +239,7 @@ export default function App() {
       draft.selectedPiConversationId = conversationId || '';
       draft.currentPage = 'ask-xuanwu';
       draft.selectedIssueId = null;
+      draft.selectedWorkId = '';
       draft.pageContext = null;
     });
   }, [updateAppState]);
@@ -243,6 +253,7 @@ export default function App() {
         draft.currentPage = route.page;
         draft.selectedHandoffId = route.handoffId;
         draft.selectedIssueId = null;
+        draft.selectedWorkId = '';
       });
     };
     globalThis.addEventListener('hashchange', syncHandoffHash);
@@ -299,6 +310,7 @@ export default function App() {
       draft.isNewIssueOpen = true;
       draft.currentPage = 'issues';
       draft.selectedIssueId = null;
+      draft.selectedWorkId = '';
     });
   };
 
@@ -352,7 +364,7 @@ export default function App() {
             {currentPage === 'command-center' ? (
               <Dashboard navigateTo={navigateTo} />
             ) : currentPage === 'work' ? (
-              <WorkBoard navigateTo={navigateTo} onPageContextChange={setPageContext} />
+              <WorkBoard navigateTo={navigateTo} onPageContextChange={setPageContext} selectedWorkId={selectedWorkId} />
             ) : currentPage === 'handoffs' ? (
               <Handoffs selectedHandoffId={selectedHandoffId} />
             ) : currentPage === 'issues' && selectedIssueId ? (
