@@ -95,6 +95,19 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 访问:   http://127.0.0.1:3008/（局域网使用 http://<本机LAN-IP>:3008/）
 ```
 
+安装可重复执行：新二进制会先写入临时文件再原子替换，随后由 launchd/systemd 重启；`runner.db`、token 和日志不会被升级脚本替换。Linux 额外执行 `loginctl enable-linger "$USER"`，使 user systemd 在退出登录和重启后仍会启动。macOS 的 LaunchAgent 使用 `ProcessType=Background`，作为非 GUI daemon 运行，不依赖前台 App 的 App Nap 调度。
+
+安装后使用随 release 一起安装的 daemon CLI 统一查看和管理边界：
+
+```bash
+codex-issue-runner-daemon status
+codex-issue-runner-daemon doctor
+codex-issue-runner-daemon restart
+codex-issue-runner-daemon uninstall  # 仅移除 launchd/systemd 注册，保留所有数据
+```
+
+每次 `start`、`stop`、`restart` 和 `uninstall` 会追加到 `${CODEX_RUNNER_LOG_DIR:-$HOME/.local/state/codex-issue-runner/logs}/daemon-lifecycle.log`；命令不会显示 token。`status` 和 `doctor` 是只读命令，其中 doctor 复用现有 `/api/system/doctor` 权限与健康检查。
+
 ## 从源码后台部署（macOS launchd）
 
 本仓库提供 macOS LaunchAgent 源码部署脚本，会构建前端与 Bun 单文件二进制，并把服务注册为后台长期运行：
@@ -121,6 +134,8 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 # 停止并移除后台服务
 ./scripts/uninstall-launchd.sh
 ```
+
+源码部署同样以 `ProcessType=Background` 运行；其 state 与 release 安装 state 分离，升级和卸载都不删除 `runner.db`。
 
 默认配置：
 

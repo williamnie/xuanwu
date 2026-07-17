@@ -175,6 +175,8 @@ cat > "$PLIST" <<PLIST
   <true/>
   <key>KeepAlive</key>
   <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
   <key>StandardOutPath</key>
   <string>$(xml_escape "$LOG_DIR/launchd.out.log")</string>
   <key>StandardErrorPath</key>

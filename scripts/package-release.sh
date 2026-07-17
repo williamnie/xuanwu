@@ -115,6 +115,7 @@ package_target() {
   cp -R "$ROOT_DIR/frontend/dist" "$pkg_dir/web"
   cp "$ROOT_DIR/README.md" "$pkg_dir/README.md"
   cp "$ROOT_DIR/scripts/install-release.sh" "$pkg_dir/install-release.sh"
+  cp "$ROOT_DIR/scripts/daemon.sh" "$pkg_dir/daemon.sh"
   stage_pi_package_assets "$pkg_dir"
   (cd "$pkg_dir" && LC_ALL=C tar -czf "$OUT_DIR/$asset.tar.gz" .)
 }

@@ -13,6 +13,7 @@ DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
+DAEMON_PATH="$INSTALL_DIR/codex-issue-runner-daemon"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
 CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
@@ -35,6 +36,9 @@ Useful environment variables:
   CODEX_RUNNER_CODEX_APP_CMD=/path/to/app/codex Codex App bundled server command
   CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
   CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
+
+After installation, use `codex-issue-runner-daemon status|doctor|restart|uninstall`.
+`uninstall` keeps the state directory and database.
 HELP
 }
 
@@ -80,7 +84,7 @@ detect_platform() {
     x86_64|amd64) arch="amd64" ;;
     *) fail "unsupported architecture: $(uname -m)" ;;
   esac
-  printf '%s %s' "$os" "$arch"
+  printf '%s %s\n' "$os" "$arch"
 }
 
 asset_url() {
@@ -105,7 +109,7 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" url tmp archive
+  local os="$1" arch="$2" url tmp archive staged
   url="$(asset_url "$os" "$arch")"
   tmp="$(mktemp -d)"
   archive="$tmp/codex-issue-runner.tar.gz"
@@ -114,7 +118,12 @@ download_binary() {
   LC_ALL=C tar -xzf "$archive" -C "$tmp"
   [ -x "$tmp/codex-issue-runner" ] || fail "release asset does not contain executable binary"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
-  install -m 0755 "$tmp/codex-issue-runner" "$BIN_PATH"
+  staged="$INSTALL_DIR/.codex-issue-runner.stage.$$"
+  install -m 0755 "$tmp/codex-issue-runner" "$staged"
+  mv -f "$staged" "$BIN_PATH"
+  if [ -f "$tmp/daemon.sh" ]; then
+    install -m 0755 "$tmp/daemon.sh" "$DAEMON_PATH"
+  fi
   if [ -d "$tmp/web" ]; then
     rm -rf "$STATE_DIR/web"
     mkdir -p "$STATE_DIR"
@@ -184,6 +193,8 @@ $(auth_token_file_macos_args)
   <true/>
   <key>KeepAlive</key>
   <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
   <key>StandardOutPath</key>
   <string>$(xml_escape "$LOG_DIR/launchd.out.log")</string>
   <key>StandardErrorPath</key>
@@ -236,6 +247,8 @@ install_macos_launchd() {
 install_linux_systemd() {
   local codex_cmd unit_dir unit_file url
   require_cmd systemctl
+  require_cmd loginctl
+  loginctl enable-linger "$USER" || fail "failed to enable user linger; systemd user service would stop after logout"
   codex_cmd="$(resolve_codex_cmd)"
   unit_dir="$HOME/.config/systemd/user"
   unit_file="$unit_dir/$SERVICE_NAME.service"
@@ -256,6 +269,8 @@ Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
 ExecStart=$BIN_PATH serve --addr $ADDR --state-dir $STATE_DIR --db $DB_PATH --web-dir $STATE_DIR/web --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=30
 
 [Install]
 WantedBy=default.target
