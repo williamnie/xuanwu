@@ -4,6 +4,85 @@
   gap: 8px;
 }
 
+.pi-chat-main-header .pi-chat-header-actions {
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pi-chat-status-summary {
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  display: inline-flex;
+  flex-direction: row;
+  gap: 7px;
+  padding: 6px 9px;
+}
+
+.pi-chat-status-dot {
+  background: var(--text-muted);
+  border-radius: 999px;
+  height: 7px;
+  width: 7px;
+}
+
+.pi-chat-status-summary[data-tone="ready"] .pi-chat-status-dot {
+  background: var(--success);
+}
+
+.pi-chat-status-summary[data-tone="running"] .pi-chat-status-dot {
+  background: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-glow);
+}
+
+.pi-chat-status-summary[data-tone="error"] .pi-chat-status-dot {
+  background: var(--error);
+}
+
+.pi-chat-main-header .pi-chat-status-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pi-chat-main-header .pi-chat-status-copy > span,
+.pi-chat-main-header .pi-chat-status-copy > small {
+  font-size: 0.68rem;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.pi-chat-main-header .pi-chat-status-copy > span {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.pi-chat-advanced-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 750;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.pi-chat-advanced-toggle:hover,
+.pi-chat-advanced-toggle.active {
+  background: var(--primary-glow);
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border-color));
+  color: var(--primary);
+}
+
 .pi-chat-copy-button,
 .pi-chat-bubble-meta button {
   align-items: center;
@@ -42,4 +121,15 @@
   height: 20px;
   padding: 0;
   width: 20px;
+}
+
+@media (max-width: 720px) {
+  .pi-chat-main-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .pi-chat-main-header .pi-chat-header-actions {
+    justify-content: flex-start;
+  }
 }

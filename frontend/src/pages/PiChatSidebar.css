@@ -106,6 +106,15 @@
   border-color: var(--warning-glow);
 }
 
+.pi-chat-agent-status > svg {
+  flex: 0 0 auto;
+}
+
+.pi-chat-agent-status strong {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
 .pi-chat-agent-status div {
   display: flex;
   flex-direction: column;
@@ -160,6 +169,11 @@
 .pi-chat-empty-mini {
   color: var(--text-muted);
   font-size: 0.72rem;
+}
+
+.pi-chat-empty-mini {
+  line-height: 1.5;
+  padding: 8px 10px;
 }
 
 /* DEEIX-inspired Runner sidebar */

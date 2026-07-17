@@ -1,4 +1,18 @@
-import { Bot, ChevronDown, Copy, Loader2, MessageSquarePlus, RefreshCw, Settings2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Bot,
+  BriefcaseBusiness,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Loader2,
+  MessageSquarePlus,
+  RefreshCw,
+  Settings2,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { useState } from 'react';
 import { PRODUCT_NAV_LABELS, PRODUCT_TERMS } from '../brand';
 import MarkdownPreview from '../components/editor/MarkdownPreview';
 import TurtleLoader from '../components/TurtleLoader';
@@ -7,6 +21,7 @@ import PiChatComposerMeta from './PiChatComposerMeta';
 import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
 import { copyPiDebugText, formatPiConversationDebugInfo, formatPiMessageDebugInfo } from './piChatDiagnostics';
 import { projectFromPrompt } from './piChatProjectContext';
+import { displayPiConversationTitle, piChatStatusSummary, piChatWorkLinks } from './piChatPresentation';
 import { shortId, usePiChatState } from './piChatState';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
 import './PiChat.css';
@@ -16,21 +31,22 @@ import './PiChatThread.css';
 
 export default function PiChat({ navigateTo, initialConversationId = '' }) {
   const state = usePiChatState(initialConversationId);
-  return <PiChatLayout navigateTo={navigateTo} state={state} />;
+  const [advanced, setAdvanced] = useState(false);
+  return <PiChatLayout advanced={advanced} navigateTo={navigateTo} setAdvanced={setAdvanced} state={state} />;
 }
 
-function PiChatLayout({ navigateTo, state }) {
+function PiChatLayout({ advanced, navigateTo, setAdvanced, state }) {
   return (
     <div className="pi-chat-page animate-fade-in">
       <section className="pi-chat-shell">
-        <PiChatSidebar navigateTo={navigateTo} state={state} />
-        <PiChatMain navigateTo={navigateTo} state={state} />
+        <PiChatSidebar advanced={advanced} navigateTo={navigateTo} state={state} />
+        <PiChatMain advanced={advanced} navigateTo={navigateTo} setAdvanced={setAdvanced} state={state} />
       </section>
     </div>
   );
 }
 
-function PiChatSidebar({ navigateTo, state }) {
+function PiChatSidebar({ advanced, navigateTo, state }) {
   return (
     <aside className="pi-chat-sidebar glass-card">
       <PiChatSidebarHeader
@@ -38,11 +54,12 @@ function PiChatSidebar({ navigateTo, state }) {
         navigateTo={navigateTo}
         onRefresh={state.loadPiState}
       />
-      <AgentStatus agent={state.selectedAgent} />
+      <AgentStatus advanced={advanced} agent={state.selectedAgent} />
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
-        <MessageSquarePlus size={15} /> 新建 Supervisor 会话
+        <MessageSquarePlus size={15} /> 新建 Chat
       </button>
       <ConversationList
+        advanced={advanced}
         conversations={state.conversations}
         selectedId={state.selectedConversationId}
         onSelect={state.handleConversationChange}
@@ -58,14 +75,14 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
         <span className="pi-chat-sidebar-icon"><Bot size={16} /></span>
         <div>
           <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
-          <span>Single runtime</span>
+          <span>Chat</span>
         </div>
       </div>
       <div className="pi-chat-sidebar-actions">
-        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Supervisor 会话">
+        <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Chat">
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="Supervisor Settings">
+        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="打开 Settings">
           <Settings2 size={15} />
         </button>
       </div>
@@ -73,66 +90,122 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
   );
 }
 
-function PiChatMain({ navigateTo, state }) {
+function PiChatMain({ advanced, navigateTo, setAdvanced, state }) {
   return (
     <main className="pi-chat-main glass-card">
-      {state.error && <div className="pi-chat-error">{state.error}</div>}
-      {!state.error && state.loading ? <LoadingState /> : (
+      {state.error ? (
+        <ChatErrorState
+          advanced={advanced}
+          error={state.error}
+          navigateTo={navigateTo}
+          onAdvancedChange={setAdvanced}
+          onRetry={state.loadPiState}
+        />
+      ) : state.loading ? <LoadingState /> : (
         <>
-          <ChatHeader state={state} />
-          <ChatThread navigateTo={navigateTo} state={state} />
-          <ChatComposer state={state} />
+          <ChatHeader advanced={advanced} onAdvancedChange={setAdvanced} state={state} />
+          <ChatContextBar navigateTo={navigateTo} transcript={state.transcript} />
+          <ChatThread advanced={advanced} navigateTo={navigateTo} state={state} />
+          <ChatComposer advanced={advanced} state={state} />
         </>
       )}
     </main>
   );
 }
 
-function ChatHeader({ state }) {
-  const title = state.selectedConversation?.title || 'New conversation';
-  const count = state.transcript.length;
+function ChatHeader({ advanced, onAdvancedChange, state }) {
+  const title = displayPiConversationTitle(state.selectedConversation);
+  const summary = piChatStatusSummary({
+    conversation: state.selectedConversation,
+    error: state.error,
+    loading: state.loading,
+    sending: state.sending,
+    transcript: state.transcript,
+  });
   return (
     <header
       className="pi-chat-main-header"
-      onContextMenu={(event) => copyConversationDebugInfo(event, state.selectedConversation)}
-      title="右键复制当前 Supervisor 会话诊断信息"
+      onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, state.selectedConversation) : undefined}
+      title={advanced ? '右键复制当前 Chat 诊断信息' : undefined}
     >
-      <div>
-        <span>{PRODUCT_TERMS.supervisorShort}</span>
+      <div className="pi-chat-title-group">
+        <span>Chat</span>
         <strong>{title}</strong>
       </div>
       <div className="pi-chat-header-actions">
-        <small>{count} message{count === 1 ? '' : 's'}</small>
+        <ChatStatusSummary summary={summary} />
         <button
-          aria-label="复制当前会话诊断信息"
-          className="pi-chat-copy-button"
-          disabled={!state.selectedConversation}
-          onClick={() => copyConversationDebugInfo(null, state.selectedConversation)}
-          title="复制当前会话诊断信息"
+          aria-pressed={advanced}
+          className={`pi-chat-advanced-toggle ${advanced ? 'active' : ''}`}
+          onClick={() => onAdvancedChange(value => !value)}
+          title="切换模型、runtime ID 与复制诊断信息"
           type="button"
         >
-          <Copy size={13} />
+          <SlidersHorizontal size={13} /> Advanced
         </button>
+        {advanced && (
+          <button
+            aria-label="复制当前 Chat 诊断信息"
+            className="pi-chat-copy-button"
+            disabled={!state.selectedConversation}
+            onClick={() => copyConversationDebugInfo(null, state.selectedConversation)}
+            title="复制当前 Chat 诊断信息"
+            type="button"
+          >
+            <Copy size={13} />
+          </button>
+        )}
       </div>
     </header>
   );
 }
 
-function ConversationList({ conversations, onSelect, selectedId }) {
+function ChatStatusSummary({ summary }) {
+  return (
+    <div className="pi-chat-status-summary" data-tone={summary.tone} role="status">
+      <span className="pi-chat-status-dot" />
+      <span className="pi-chat-status-copy">
+        <span>{summary.label}</span>
+        <small>{summary.detail}</small>
+      </span>
+    </div>
+  );
+}
+
+function ChatContextBar({ navigateTo, transcript }) {
+  const workLinks = piChatWorkLinks(transcript);
+  return (
+    <nav className="pi-chat-context-bar" aria-label="Chat 关联 Work">
+      <span><BriefcaseBusiness size={13} /> Work</span>
+      {workLinks.map((work) => (
+        <button key={work.id} onClick={() => navigateTo('work', work.id)} type="button">
+          {work.label} <ArrowUpRight size={11} />
+        </button>
+      ))}
+      <button className="pi-chat-all-work-link" onClick={() => navigateTo('work')} type="button">
+        {workLinks.length > 0 ? '查看全部' : '打开 Work'} <ArrowUpRight size={11} />
+      </button>
+    </nav>
+  );
+}
+
+function ConversationList({ advanced, conversations, onSelect, selectedId }) {
   return (
     <div className="pi-chat-conversation-list">
-      <div className="pi-chat-sidebar-title">Conversations</div>
-      {conversations.length === 0 ? <div className="pi-chat-empty-mini">暂无 Supervisor 会话</div> : (
+      <div className="pi-chat-sidebar-title">Chats</div>
+      {conversations.length === 0 ? (
+        <div className="pi-chat-empty-mini">暂无 Chat。点击上方按钮开始。</div>
+      ) : (
         conversations.map((conversation) => (
           <button
             key={conversation.id}
             className={`pi-chat-conversation ${selectedId === conversation.id ? 'active' : ''}`}
             onClick={() => onSelect(conversation.id)}
-            onContextMenu={(event) => copyConversationDebugInfo(event, conversation)}
-            title="右键复制 Supervisor 会话诊断信息"
+            onContextMenu={advanced ? (event) => copyConversationDebugInfo(event, conversation) : undefined}
+            title={advanced ? '右键复制 Chat 诊断信息' : undefined}
           >
-            <span>{conversation.title || conversation.id}</span>
-            <small>{shortId(conversation.pi_session_id || conversation.id)}</small>
+            <span>{displayPiConversationTitle(conversation)}</span>
+            {advanced && <small>{shortId(conversation.pi_session_id || conversation.id)}</small>}
           </button>
         ))
       )}
@@ -140,7 +213,7 @@ function ConversationList({ conversations, onSelect, selectedId }) {
   );
 }
 
-function ChatThread({ navigateTo, state }) {
+function ChatThread({ advanced, navigateTo, state }) {
   const lastMessage = state.transcript[state.transcript.length - 1];
   const autoScrollWatchKey = [
     state.transcript.length,
@@ -165,9 +238,9 @@ function ChatThread({ navigateTo, state }) {
           {state.transcript.length === 0 ? (
             <EmptyChat navigateTo={navigateTo} hasRuntime={state.agents.length > 0} />
           ) : state.transcript.map((item) => (
-            <ChatBubble key={item.id} conversation={state.selectedConversation} item={item} />
+            <ChatBubble advanced={advanced} key={item.id} conversation={state.selectedConversation} item={item} />
           ))}
-          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Supervisor 正在思考...</div>}
+          {state.sending && <div className="pi-chat-thinking"><Loader2 className="spin-animation" size={14} /> Xuanwu 正在处理...</div>}
         </div>
       </div>
       {showScrollButton && (
@@ -182,7 +255,7 @@ function ChatThread({ navigateTo, state }) {
 
 const PI_CHAT_COMPOSER_SETTINGS = { model: '', reasoningEffort: '', approvalPolicy: 'never', sandbox: 'workspace-write' };
 
-function ChatComposer({ state }) {
+function ChatComposer({ advanced, state }) {
   const messageRunning = Boolean(state.sending && state.runningConversationId);
   const selectedId = state.runningConversationId || state.selectedConversationId || 'runner-draft';
   return (
@@ -199,13 +272,13 @@ function ChatComposer({ state }) {
         running={messageRunning}
         interruptState={messageRunning ? piChatInterruptState(state, selectedId) : null}
         selectedId={selectedId}
-        placeholder="@项目后直接说需求，例如：@codex-issue-runner 创建一个 issue，修复 Supervisor 输入体验..."
+        placeholder="Ask Xuanwu… @项目后描述目标、进展或期望交付"
         onSubmit={state.handleSend}
         suggestions={buildPiChatProjectSuggestions(state.projects)}
         referenceDetails={buildPiChatReferenceDetails(state.references, state.projects)}
         onAttachReference={state.attachReference}
         onRemoveReference={state.removeReference}
-        runtimeControls={<PiChatComposerMeta agent={state.selectedAgent} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
+        runtimeControls={<PiChatComposerMeta advanced={advanced} agent={state.selectedAgent} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
         onStop={state.handleStop}
       />
     </div>
@@ -217,28 +290,67 @@ function piChatInterruptState(state, selectedId) {
   return {
     sessionId: selectedId,
     status: 'pending',
-    text: '正在停止 Supervisor...',
+    text: '正在停止 Xuanwu...',
     tone: 'info'
   };
 }
 
-function AgentStatus({ agent }) {
-  if (!agent) return <div className="pi-chat-agent-status warning">未配置可用 Supervisor runtime</div>;
+function AgentStatus({ advanced, agent }) {
+  if (!agent) {
+    return (
+      <div className="pi-chat-agent-status warning">
+        <AlertTriangle size={14} />
+        <div>
+          <strong>Xuanwu 还未连接</strong>
+          <span>请在 Settings 完成配置</span>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="pi-chat-agent-status">
-      <Bot size={14} />
+    <div className={`pi-chat-agent-status ${agent.enabled ? '' : 'warning'}`}>
+      {agent.enabled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
       <div>
-        <strong>{agent.model_provider || 'provider 未设'}</strong>
-        <span>{agent.model_id || 'model 未设'} · {agent.enabled ? 'enabled' : 'disabled'}</span>
+        <strong>{agent.enabled ? 'Xuanwu 已连接' : 'Xuanwu 暂不可用'}</strong>
+        <span>{advanced ? advancedAgentLabel(agent) : agent.enabled ? '可以开始对话' : '请在 Settings 检查配置'}</span>
       </div>
     </div>
   );
 }
 
+function advancedAgentLabel(agent) {
+  const provider = agent.model_provider || 'provider 未设';
+  const model = agent.model_id || 'model 未设';
+  return `${provider} / ${model} · ${shortId(agent.id)}`;
+}
+
 function LoadingState() {
   return (
     <div className="pi-chat-empty">
-      <TurtleLoader label="玄武正在连接 Supervisor…" />
+      <TurtleLoader label="正在载入 Chat…" />
+    </div>
+  );
+}
+
+function ChatErrorState({ advanced, error, navigateTo, onAdvancedChange, onRetry }) {
+  return (
+    <div className="pi-chat-empty pi-chat-error" role="alert">
+      <AlertTriangle size={34} />
+      <strong>Chat 暂不可用</strong>
+      <span>暂时无法读取对话记录。请重试；若问题持续，再到 Advanced 查看诊断。</span>
+      {advanced && <code>{error}</code>}
+      <div className="pi-chat-empty-actions">
+        <button className="btn btn-primary" onClick={onRetry} type="button"><RefreshCw size={14} /> 重试</button>
+        <button
+          aria-pressed={advanced}
+          className="btn btn-secondary"
+          onClick={() => onAdvancedChange(value => !value)}
+          type="button"
+        >
+          <SlidersHorizontal size={14} /> Advanced
+        </button>
+        <button className="btn btn-secondary" onClick={() => navigateTo('settings')} type="button">打开 Settings</button>
+      </div>
     </div>
   );
 }
@@ -247,26 +359,29 @@ function EmptyChat({ hasRuntime, navigateTo }) {
   return (
     <div className="pi-chat-empty">
       <Bot size={34} />
-      <strong>{hasRuntime ? '开始一次 Supervisor 对话' : '先配置 Supervisor'}</strong>
-      <span>{hasRuntime ? '输入 @ 选择项目，然后自然语言告诉 Supervisor 要创建/梳理什么 issue。' : 'Supervisor Settings 里填写 provider、API path、API key 和模型后即可聊天。'}</span>
-      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Supervisor Settings</button>}
+      <strong>{hasRuntime ? '开始新的 Chat' : 'Xuanwu 还未连接'}</strong>
+      <span>{hasRuntime ? '说明你的目标、约束和期望交付；进展、证据与 Work 会留在这里。' : '请在 Settings 完成 Xuanwu 配置后再开始对话。'}</span>
+      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Settings</button>}
     </div>
   );
 }
 
-function ChatBubble({ conversation, item }) {
+function ChatBubble({ advanced, conversation, item }) {
   const copyDebugInfo = () => copyMessageDebugInfo(null, item, conversation);
   const conversationId = item.meta?.conversation_id || conversation?.id || '';
   const sessionId = item.meta?.pi_session_id || conversation?.pi_session_id || '';
+  const displayText = item.role === 'error' && !advanced
+    ? '此轮未完成。请重试；若问题持续，可在 Advanced 查看诊断。'
+    : item.text;
   return (
     <article
       className={`pi-chat-bubble ${item.role}`}
-      onContextMenu={(event) => copyMessageDebugInfo(event, item, conversation)}
-      title="右键复制消息诊断信息"
+      onContextMenu={advanced ? (event) => copyMessageDebugInfo(event, item, conversation) : undefined}
+      title={advanced ? '右键复制消息诊断信息' : undefined}
     >
-      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? PRODUCT_TERMS.supervisorShort : item.role === 'error' ? 'Error' : 'You'}</div>
-      <MarkdownPreview text={item.text} className="pi-chat-markdown" />
-      {(conversationId || sessionId) && (
+      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? PRODUCT_TERMS.productLatin : item.role === 'error' ? '未完成' : 'You'}</div>
+      <MarkdownPreview text={displayText} className="pi-chat-markdown" />
+      {advanced && (conversationId || sessionId) && (
         <div className="pi-chat-bubble-meta">
           <span>{piBubbleMetaLabel(conversationId, sessionId)}</span>
           <button aria-label="复制消息诊断信息" onClick={copyDebugInfo} title="复制消息诊断信息" type="button">
@@ -287,10 +402,10 @@ function piBubbleMetaLabel(conversationId, sessionId) {
 function copyConversationDebugInfo(event, conversation) {
   if (!conversation) return;
   event?.preventDefault();
-  copyPiDebugText(formatPiConversationDebugInfo(conversation), '已复制 Supervisor 会话诊断信息');
+  copyPiDebugText(formatPiConversationDebugInfo(conversation), '已复制 Chat 诊断信息');
 }
 
 function copyMessageDebugInfo(event, item, conversation) {
   event?.preventDefault();
-  copyPiDebugText(formatPiMessageDebugInfo(item, conversation), '已复制 Supervisor 消息诊断信息');
+  copyPiDebugText(formatPiMessageDebugInfo(item, conversation), '已复制 Chat 消息诊断信息');
 }

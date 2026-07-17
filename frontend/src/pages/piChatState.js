@@ -87,7 +87,7 @@ function usePiChatFields() {
       setTranscript(conversationTranscript(detail));
       setError('');
     } catch (err) {
-      setError(err.message || '读取 Supervisor 会话详情失败');
+      setError(err.message || '读取 Chat 详情失败');
     } finally {
       setLoading(false);
     }
@@ -142,7 +142,7 @@ function usePiChatLoader(setters) {
         setError('');
         setSelectedAgentId(defaultRuntimeAgent(agentList || [])?.id || '');
       })
-      .catch((err) => setError(err.message || '读取 Supervisor 状态失败'))
+      .catch((err) => setError(err.message || '读取 Chat 状态失败'))
       .finally(() => setLoading(false));
   }, [
     setAgents,
@@ -166,10 +166,10 @@ function useCreatePiConversation(state) {
       state.setSelectedConversationId(conversation.id);
       state.setTranscript([]);
       state.setReferences([]);
-      if (options.notify) message.success('Supervisor 会话已创建');
+      if (options.notify) message.success('Chat 已创建');
       return conversation.id;
-    } catch (err) {
-      message.error(err.message || '创建 Supervisor 会话失败');
+    } catch {
+      message.error('创建 Chat 失败，请重试');
       return '';
     } finally {
       state.setSending(false);
@@ -200,14 +200,14 @@ function useStopPiMessage(state) {
     try {
       const result = await interruptActivePiConversation(conversationId);
       if (result?.interrupted) {
-        message.success('已请求停止 Supervisor');
+        message.success('已请求停止 Xuanwu');
         return;
       }
       state.setStopping(false);
-      message.error('当前没有可停止的 Supervisor 执行');
-    } catch (err) {
+      message.error('当前没有可停止的 Xuanwu 执行');
+    } catch {
       state.setStopping(false);
-      message.error(err.message || '停止 Supervisor 失败');
+      message.error('停止 Xuanwu 失败，请重试');
     }
   }, [state]);
 }
@@ -225,7 +225,7 @@ async function sendPromptToPi(state, conversationId, text, loadPiState, targetPr
     await hydrateConversationTranscript(state, conversationId, result);
   } catch (err) {
     state.setTranscript((items) => [...items, transcriptMessage('error', err.message || '发送失败')]);
-    message.error(err.message || '发送 Supervisor 消息失败');
+    message.error('发送给 Xuanwu 失败，请重试');
   } finally {
     clearPiLiveAssistant(liveRefs);
     state.setRunningConversationId('');
@@ -271,8 +271,8 @@ function applyConversationTitle(state, conversationId, title) {
 function runnerReplyText(result) {
   const text = String(result?.text || '').trim();
   if (text) return text;
-  if (result?.status === 'failed') return 'Supervisor 执行失败，未返回错误详情';
-  return 'Supervisor 未返回文本';
+  if (result?.status === 'failed') return 'Xuanwu 执行失败，未返回错误详情';
+  return 'Xuanwu 未返回内容';
 }
 
 

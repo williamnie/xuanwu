@@ -23,10 +23,11 @@ test('PI Assistant chat sends PI prompt with project context instead of session 
 });
 
 
-test('Supervisor chat uses a failure fallback instead of empty-text wording', () => {
+test('Xuanwu Chat uses a failure fallback instead of empty-text wording', () => {
   assert.match(source, /runnerReplyText\(result\)/);
   assert.match(source, /result\?\.status === 'failed'/);
-  assert.match(source, /Supervisor 执行失败，未返回错误详情/);
+  assert.match(source, /Xuanwu 执行失败，未返回错误详情/);
+  assert.match(source, /Xuanwu 未返回内容/);
 });
 
 test('PI Assistant chat switches conversations by loading persisted transcript detail', () => {
