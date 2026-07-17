@@ -5,6 +5,7 @@ import { PRODUCT_NAV_LABELS } from '../brand.js';
 import CodexUsagePanel from '../components/CodexUsagePanel';
 import RuntimeHealthStrip from '../components/RuntimeHealthStrip';
 import ActiveWorkSection from './command-center/ActiveWorkSection.jsx';
+import AttentionSection from './command-center/AttentionSection.jsx';
 import RecentDeliveriesSection from './command-center/RecentDeliveriesSection.jsx';
 import {
   selectBackendOnline,
@@ -149,6 +150,7 @@ export default function Dashboard({
       <div className="grid-cols-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         {/* 左栏：Active Work */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
+          <AttentionSection navigateTo={navigateTo} />
           <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
         </div>
 

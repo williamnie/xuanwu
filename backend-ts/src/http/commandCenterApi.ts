@@ -5,11 +5,11 @@ import {
   type StoredHandoffRecord
 } from "../db/repositories/handoffs.ts";
 import {
-  countAttentionInboxItems,
-  listAttentionInboxItems,
-  type AttentionInboxItemRecord,
-  type AttentionInboxItemStatus
-} from "../db/repositories/intakeRuns.ts";
+  getPersistedAttention,
+  listPersistedAttention,
+  persistAttentionCommand
+} from "../domain/attention/persistence.ts";
+import type { AttentionCommand, AttentionRecord, AttentionTransitionAudit } from "../domain/attention/contracts.ts";
 import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
 import {
   countRunsByStatus,
@@ -23,16 +23,17 @@ import {
 } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry, WorkStatus } from "../domain/work/contracts.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
-import { json } from "./errors.ts";
+import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 
 export const COMMAND_CENTER_SUMMARY_CONTRACT = "xw.command-center.summary.v1" as const;
 
 export const COMMAND_CENTER_COMPATIBILITY_POLICY = {
-  attention_read_authority: "attention_inbox_items-compatibility-projection-until-P08.07",
+  attention_command_audit_authority: "attention_command_events-append-only-overlay",
+  attention_read_authority: "legacy-attention-adapters-with-command-overlay",
   dual_read: "none-request-time-projection-over-current-authorities",
-  dual_write: "none-read-only-aggregate",
+  dual_write: "none-legacy-facts-remain-single-writer",
   final_removal_gate: "P07.03/P07.04/P07.05-migrated-and-legacy-Dashboard-zero-consumer-for-one-release",
   handoff_read_authority: "issue_events:handoff.*.v1",
   rollback: "unregister-command-center-route-and-restore-bounded-legacy-Dashboard-reads-without-data-migration",
@@ -96,7 +97,6 @@ const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 25;
 const SUMMARY_TEXT_LIMIT = 320;
 const ACTIVE_WORK_STATUSES: WorkStatus[] = ["todo", "in_progress", "pending_verification"];
-const ACTIVE_ATTENTION_STATUSES: AttentionInboxItemStatus[] = ["new", "triaged", "proposal_created", "failed"];
 const RECENT_HANDOFF_STATUSES = ["draft", "ready", "delivered"];
 
 export function registerCommandCenterRoutes(
@@ -107,6 +107,9 @@ export function registerCommandCenterRoutes(
   router.get("/api/command-center/summary", (request) => commandCenterResponse(() => (
     buildCommandCenterSummary(context, request, options)
   )));
+  router.post("/api/command-center/attention/:id/actions/:action", async (request) => (
+    attentionCommandResponse(context.database, request)
+  ));
 }
 
 export function buildCommandCenterSummary(
@@ -146,16 +149,16 @@ export function commandCenterSectionReaders(db: RunnerDatabase): CommandCenterSe
 }
 
 function attentionSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
-  const filter = { statuses: ACTIVE_ATTENTION_STATUSES };
-  const items = listAttentionInboxItems(db, { ...filter, limit: input.limit });
+  const all = listPersistedAttention(db).filter((item) => item.status !== "resolved" && item.status !== "dismissed");
+  const items = all.slice(0, input.limit);
   return {
     counts: {
       returned: items.length,
-      total: countAttentionInboxItems(db, filter)
+      total: all.length
     },
-    freshness: freshness(input.now, items.map((item) => item.updated_at), 5 * 60),
+    freshness: freshness(input.now, all.map((item) => item.updated_at), 5 * 60),
     items: items.map(attentionSummary),
-    links: { collection: "/api/pi/attention-inbox/items" }
+    links: { collection: "/api/command-center/summary?sections=attention" }
   };
 }
 
@@ -237,26 +240,27 @@ function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCe
   };
 }
 
-function attentionSummary(item: AttentionInboxItemRecord): Record<string, unknown> {
+function attentionSummary(item: AttentionRecord): Record<string, unknown> {
+  const primary = item.source_refs[0];
   return {
-    confidence: item.confidence,
     created_at: item.created_at,
-    id: makeDomainID("attention", "attention_inbox_items", item.id),
-    legacy_id: item.id,
+    id: item.id,
     links: {
-      context_bundle: `/api/pi/attention-inbox/context-bundles/${item.bundle_id}`,
-      intake_run: `/api/pi/attention-inbox/intake-runs/${item.intake_run_id}`,
-      self: `/api/pi/attention-inbox/items/${item.id}`
+      action: `/api/command-center/attention/${encodeURIComponent(item.id)}/actions`,
+      self: attentionSourceLink(primary.authority, primary.local_id),
+      view: primary.authority === "attention_inbox_items" ? "#/attention-inbox" : "#/command-center"
     },
-    primary_intent: item.primary_intent,
-    source: item.source,
-    status: canonicalAttentionStatus(item.status),
-    legacy_status: item.status,
-    suggested_actions: item.suggested_actions,
+    next_action: item.next_action,
+    priority: item.priority,
+    required_actor: item.required_actor,
+    revision: item.revision,
+    snoozed_until: item.snoozed_until,
+    source_refs: item.source_refs,
+    status: item.status,
     summary: boundedText(item.summary),
-    title: item.title,
+    type: item.type,
     updated_at: item.updated_at,
-    urgency: item.urgency
+    severity: item.severity
   };
 }
 
@@ -316,10 +320,61 @@ function handoffSummary(record: StoredHandoffRecord): Record<string, unknown> {
   };
 }
 
-function canonicalAttentionStatus(status: string): "acknowledged" | "open" | "waiting" {
-  if (status === "triaged") return "acknowledged";
-  if (status === "proposal_created") return "waiting";
-  return "open";
+function attentionSourceLink(authority: string, localID: string): string {
+  if (authority === "attention_inbox_items") return `/api/pi/attention-inbox/items/${encodeURIComponent(localID)}`;
+  if (authority === "pi_guardian_alerts") return "/api/pi/guardian/alerts?status=all";
+  if (authority === "pi_approval_requests") return "/api/pi/approval-requests?status=open";
+  return "/api/issues";
+}
+
+async function attentionCommandResponse(db: RunnerDatabase, request: Request): Promise<Response> {
+  const id = routeValue(request, "attention");
+  const action = routeValue(request, "actions");
+  if (action !== "acknowledge" && action !== "snooze") throw new HttpError(400, "unsupported Attention action");
+  if (!getPersistedAttention(db, id)) throw new HttpError(404, "Attention not found");
+  const body = await parseJsonBody(request);
+  const command = attentionCommandInput(action, body);
+  try {
+    const result = persistAttentionCommand(db, id, command);
+    return json({ attention: attentionSummary(result.attention), mutation: { audit_event: result.audit_event, replayed: false } });
+  } catch (error) {
+    throw new HttpError(409, error instanceof Error ? error.message : "Attention command failed");
+  }
+}
+
+function attentionCommandInput(action: "acknowledge" | "snooze", value: unknown): AttentionCommand {
+  const body = objectValue(value, "Attention command body");
+  const expectedRevision = body.expected_revision;
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    throw new HttpError(400, "expected_revision must be a non-negative integer");
+  }
+  const audit = objectValue(body.audit, "audit") as AttentionTransitionAudit;
+  if (!audit.actor || !audit.gate || typeof audit.event_id !== "string" || typeof audit.reason !== "string" ||
+      typeof audit.correlation_id !== "string" || typeof audit.occurred_at !== "string") {
+    throw new HttpError(400, "invalid Attention audit");
+  }
+  if (action === "snooze" && typeof body.snoozed_until !== "string") {
+    throw new HttpError(400, "snoozed_until is required for snooze");
+  }
+  return {
+    action,
+    audit,
+    expected_revision: expectedRevision,
+    ...(action === "snooze" ? { snoozed_until: body.snoozed_until as string } : {})
+  };
+}
+
+function objectValue(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new HttpError(400, `${label} must be an object`);
+  return value as Record<string, unknown>;
+}
+
+function routeValue(request: Request, before: string): string {
+  const parts = new URL(request.url).pathname.split("/").filter(Boolean);
+  const index = parts.indexOf(before);
+  const value = index >= 0 ? parts[index + 1] : "";
+  if (!value) throw new HttpError(400, `${before} route value is required`);
+  return decodeURIComponent(value);
 }
 
 function readSection(

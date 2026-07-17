@@ -6,4 +6,8 @@ export const commandCenterApi = {
     if (sections.length > 0) params.set('sections', sections.join(','));
     return request(`/api/command-center/summary?${params.toString()}`);
   },
+  controlAttention: (id, action, payload) => request(`/api/command-center/attention/${encodeURIComponent(id)}/actions/${encodeURIComponent(action)}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
 };

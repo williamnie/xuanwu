@@ -41,6 +41,7 @@ import { eventSummaryProjectionMigration } from "./040_event_summary_projection.
 import { workLedgerSchemaMigration } from "./041_work_ledger_schema.ts";
 import { runAttemptRelationsMigration } from "./042_run_attempt_relations.ts";
 import { trackerUpdateOutboxMigration } from "./043_tracker_update_outbox.ts";
+import { attentionCommandEventsMigration } from "./044_attention_command_events.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -85,5 +86,6 @@ export const migrations = [
   eventSummaryProjectionMigration,
   workLedgerSchemaMigration,
   runAttemptRelationsMigration,
-  trackerUpdateOutboxMigration
+  trackerUpdateOutboxMigration,
+  attentionCommandEventsMigration
 ];

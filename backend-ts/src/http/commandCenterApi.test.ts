@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { recordHandoff } from "../db/repositories/handoffs.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
+import { createPiApprovalRequest, upsertPiGuardianAlert } from "../db/repositories/pi.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
@@ -56,7 +57,8 @@ describe("Command Center aggregate API", () => {
       expect(response.status).toBe(200);
       expect(body).toMatchObject({
         compatibility: {
-          dual_write: "none-read-only-aggregate",
+          attention_command_audit_authority: "attention_command_events-append-only-overlay",
+          dual_write: "none-legacy-facts-remain-single-writer",
           handoff_read_authority: "issue_events:handoff.*.v1",
           work_read_authority: "issues-via-Work-adapter"
         },
@@ -75,7 +77,6 @@ describe("Command Center aggregate API", () => {
               latest_run: {
                 id: runID,
                 phase: "running",
-                progress: { stalled: { detected: false } },
                 status: "running"
               },
               links: { self: expect.stringContaining("/api/works/") },
@@ -87,7 +88,7 @@ describe("Command Center aggregate API", () => {
             counts: { returned: 1, total: 1 },
             items: [{
               id: "xw:attention:attention_inbox_items:1",
-              legacy_status: "new",
+              priority: "p1",
               links: { self: "/api/pi/attention-inbox/items/1" },
               status: "open"
             }],
@@ -155,6 +156,65 @@ describe("Command Center aggregate API", () => {
       });
       expect(body.sections).not.toHaveProperty("active_work");
       expect(readers.attention({ limit: 1, now: new Date(NOW) }).counts.returned).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("projects multiple legacy Attention types and persists audited acknowledge/snooze commands", async () => {
+    const db = await fixtureDatabase();
+    try {
+      insertAttention(db);
+      upsertPiGuardianAlert(db, {
+        alert_type: "provider_unavailable",
+        id: "guardian-connection",
+        issue_id: 0,
+        message: "Provider connection is unavailable",
+        project_id: "demo",
+        severity: "critical"
+      });
+      createPiApprovalRequest(db, {
+        approval_id: "approval-pending",
+        issue_id: 0,
+        project_id: "demo",
+        request_type: "deploy",
+        risk: "high",
+        status: "pending",
+        summary: "Approve the deployment"
+      });
+      const router = createDefaultRouter({ database: db });
+      const before = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
+      const beforeBody = await before.json() as Record<string, any>;
+      const items = beforeBody.sections.attention.items as Array<Record<string, any>>;
+      expect(before.status).toBe(200);
+      expect(items.map((item) => item.type)).toEqual(expect.arrayContaining([
+        "approval_required", "connection_issue"
+      ]));
+      expect(items.map((item) => item.priority)).toEqual(expect.arrayContaining(["p0", "p1"]));
+
+      const target = items.find((item) => item.type === "connection_issue");
+      const snooze = await router.handle(jsonRequest(
+        `/api/command-center/attention/${encodeURIComponent(target.id)}/actions/snooze`,
+        attentionCommand(target.revision, "snooze")
+      ));
+      const snoozed = await snooze.json() as Record<string, any>;
+      expect(snooze.status).toBe(200);
+      expect(snoozed).toMatchObject({
+        attention: { id: target.id, revision: 1, status: "waiting", snoozed_until: "2026-07-17T09:00:00.000Z" },
+        mutation: { audit_event: { operation: "snooze", gate: { decision: "allow" } } }
+      });
+      expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from attention_command_events").get()?.count).toBe(1);
+
+      const refreshed = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
+      const refreshedItems = ((await refreshed.json()) as Record<string, any>).sections.attention.items;
+      expect(refreshedItems.find((item: Record<string, any>) => item.id === target.id)).toMatchObject({ revision: 1, status: "waiting" });
+
+      const stale = await router.handle(jsonRequest(
+        `/api/command-center/attention/${encodeURIComponent(target.id)}/actions/acknowledge`,
+        attentionCommand(0, "acknowledge")
+      ));
+      expect(stale.status).toBe(409);
+      expect((await stale.json()) as Record<string, unknown>).toMatchObject({ message: expect.stringContaining("revision conflict") });
     } finally {
       db.close();
     }
@@ -255,6 +315,29 @@ function insertAttention(db: RunnerDatabase): void {
     title: "Approval needed",
     urgency: "high"
   }, new Date(SOURCE_TIME));
+}
+
+function attentionCommand(revision: number, action: "acknowledge" | "snooze"): Record<string, unknown> {
+  return {
+    audit: {
+      actor: { id: "user:fixture", kind: "user" },
+      correlation_id: "command-center:fixture",
+      event_id: `attention-${action}-${revision}`,
+      gate: { authority: "human_approval", decision: "allow", policy_ref: "command-center:test" },
+      occurred_at: NOW,
+      reason: `Fixture Attention ${action}`
+    },
+    expected_revision: revision,
+    ...(action === "snooze" ? { snoozed_until: "2026-07-17T09:00:00.000Z" } : {})
+  };
+}
+
+function jsonRequest(path: string, body: Record<string, unknown>): Request {
+  return new Request(`${BASE_URL}${path}`, {
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  });
 }
 
 function handoff(issueID: number): HandoffRecord {
