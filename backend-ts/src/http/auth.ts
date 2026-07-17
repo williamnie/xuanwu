@@ -37,7 +37,10 @@ function isApiRequest(request: Request): boolean {
 
 function isPublicIntegrationCallback(request: Request): boolean {
   const pathname = new URL(request.url).pathname;
-  return request.method === "POST" && pathname === "/api/integrations/feishu/events";
+  return request.method === "POST" && (
+    pathname === "/api/integrations/feishu/events" ||
+    pathname === "/api/integrations/webhook/events"
+  );
 }
 
 function requestToken(request: Request): string {

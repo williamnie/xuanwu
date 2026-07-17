@@ -13,6 +13,7 @@ import { registerExternalEventRoutes } from "./externalEventsApi.ts";
 import { registerFeishuEventRoutes } from "./feishuEventsApi.ts";
 import { registerFeishuSettingsRoutes } from "./feishuSettingsApi.ts";
 import { registerImReplyOutboxRoutes } from "./imReplyOutboxApi.ts";
+import { registerWebhookEventRoutes } from "./webhookEventsApi.ts";
 import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import type { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
@@ -50,6 +51,7 @@ type DefaultRouterOptions = {
   restartDelayMs?: number;
   restartProcess?: () => void;
   supervisorManaged?: boolean;
+  webhookSigningSecret?: string;
 };
 
 export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router {
@@ -94,6 +96,10 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       providers: runtime.providers
     });
     registerExternalEventRoutes(router, { database: runtime.database });
+    registerWebhookEventRoutes(router, {
+      database: runtime.database,
+      signingSecret: runtime.webhookSigningSecret
+    });
     registerImReplyOutboxRoutes(router, {
       config: runtime.config?.integrations.feishu,
       database: runtime.database,
