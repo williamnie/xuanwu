@@ -166,6 +166,8 @@ function productionSourceText(): string {
   const files = roots.flatMap((directory) => walk(resolve(REPO_ROOT, directory)))
     .filter((path) => !path.endsWith("/capabilityDispositionInventory.ts"))
     .filter((path) => !path.endsWith("/capabilityDispositionInventory.test.ts"))
+    .filter((path) => !path.endsWith("/automationSemantics.ts"))
+    .filter((path) => !path.endsWith("/automationSemantics.test.ts"))
     .filter((path) => [".js", ".jsx", ".ts", ".tsx"].includes(extname(path)));
   return files.map((path) => readFileSync(path, "utf8")).join("\n");
 }
