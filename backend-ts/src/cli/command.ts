@@ -5,6 +5,7 @@ import { runMaintenance } from "./maintenance.ts";
 import { runProject } from "./project.ts";
 import { getSystemDoctor, runSystem } from "./system.ts";
 import { runWork } from "./work.ts";
+import { runSecrets } from "./secrets.ts";
 import type { CliOptions, EnvReader, Fetcher, Writer } from "./types.ts";
 
 export async function runCli(
@@ -30,6 +31,7 @@ async function dispatch(args: string[], env: EnvReader, fetcher: Fetcher): Promi
   if (command === "issue") return await runIssue(args.slice(1), env, fetcher);
   if (command === "maintenance") return runMaintenance(args.slice(1));
   if (command === "project") return await runProject(args.slice(1), env, fetcher);
+  if (command === "secrets") return await runSecrets(args.slice(1), env);
   if (command === "work") return await runWork(args.slice(1), env, fetcher);
   if (command === "system") return await runSystem(args.slice(1), env, fetcher);
   if (command === "doctor") return await getSystemDoctor(args.slice(1), env, fetcher);

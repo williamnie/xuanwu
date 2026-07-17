@@ -1,6 +1,6 @@
 import { dirname } from "node:path";
 import type { RunnerConfig } from "../config/env.ts";
-import { localSettingsPath, updateLocalSettingsFile } from "../config/localSettings.ts";
+import { localSettingsPath, readLocalSettingsFile, updateLocalSettingsFile } from "../config/localSettings.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   buildFeishuConnectorConfig,
@@ -12,11 +12,14 @@ import {
 import { cleanString, splitList } from "../integrations/feishuShared.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
+import { createPiActionEvent } from "../db/repositories/pi.ts";
+import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 
 type FeishuSettingsContext = {
   config?: RunnerConfig;
   database: RunnerDatabase;
   onConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
+  secrets?: SecretService;
 };
 type LocalFeishuSettings = {
   allowedChatIds: string[];
@@ -32,9 +35,10 @@ type LocalFeishuSettings = {
 };
 
 export function registerFeishuSettingsRoutes(router: Router, context: FeishuSettingsContext): void {
-  router.get("/api/integrations/feishu/settings", () => json(publicFeishuSettings(currentConfig(context), settingsPath(context))));
+  const activeContext = { ...context, secrets: context.secrets ?? createDatabaseSecretService(context.database) };
+  router.get("/api/integrations/feishu/settings", () => json(publicFeishuSettings(currentConfig(activeContext), settingsPath(activeContext))));
   router.put("/api/integrations/feishu/settings", async (request) => {
-    return json(await saveFeishuSettings(context, await objectBody(request)));
+    return json(await saveFeishuSettings(activeContext, await objectBody(request)));
   });
 }
 
@@ -42,14 +46,76 @@ async function saveFeishuSettings(context: FeishuSettingsContext, body: Record<s
   const path = settingsPath(context);
   const current = localSettingsFromConfig(currentConfig(context));
   const nextLocal = normalizeFeishuSettings(body, current);
+  const persisted = await persistedFeishuSettings(path, nextLocal, body, context.secrets!);
   await updateLocalSettingsFile(path, (settings) => ({
     ...settings,
-    integrations: { ...settings.integrations, feishu: nextLocal }
+    integrations: { ...settings.integrations, feishu: persisted }
   }));
   const nextConfig = buildFeishuConnectorConfig(nextLocal);
   applyRuntimeFeishuConfig(context.config, nextConfig);
+  recordFeishuSettingsAudit(context.database, body, nextConfig);
   await context.onConfigChanged?.(nextConfig);
   return publicFeishuSettings(nextConfig, path);
+}
+
+async function persistedFeishuSettings(
+  path: string,
+  next: LocalFeishuSettings,
+  body: Record<string, unknown>,
+  secrets: SecretService
+): Promise<Record<string, unknown>> {
+  const existing = (await readLocalSettingsFile(path)).integrations?.feishu ?? {};
+  const stored: Record<string, unknown> = {
+    allowedChatIds: next.allowedChatIds,
+    allowedUserIds: next.allowedUserIds,
+    appId: next.appId,
+    defaultChatId: next.defaultChatId,
+    defaultUserId: next.defaultUserId,
+    projectMappings: next.projectMappings,
+    receiveMode: next.receiveMode
+  };
+  persistSecretField(stored, existing, body, secrets, "app_secret", "appSecret", "appSecretRef", "integrations/feishu/app-secret");
+  persistSecretField(stored, existing, body, secrets, "encrypt_key", "encryptKey", "encryptKeyRef", "integrations/feishu/encrypt-key");
+  persistSecretField(stored, existing, body, secrets, "verification_token", "verificationToken", "verificationTokenRef", "integrations/feishu/verification-token");
+  return stored;
+}
+
+function persistSecretField(
+  output: Record<string, unknown>,
+  existing: Record<string, unknown>,
+  body: Record<string, unknown>,
+  secrets: SecretService,
+  bodyKey: string,
+  legacyKey: string,
+  refKey: string,
+  name: string
+): void {
+  const submitted = hasOwn(body, bodyKey) ? cleanString(body[bodyKey]) : "";
+  if (submitted !== "") {
+    output[refKey] = secrets.putOrRotate(name, submitted, "user", `updated Feishu ${bodyKey}`).ref;
+    return;
+  }
+  const existingRef = cleanString(existing[refKey]);
+  if (existingRef !== "") output[refKey] = existingRef;
+  else {
+    const legacy = cleanString(existing[legacyKey]);
+    if (legacy !== "") output[legacyKey] = legacy;
+  }
+}
+
+function recordFeishuSettingsAudit(database: RunnerDatabase, body: Record<string, unknown>, config: FeishuConnectorConfig): void {
+  createPiActionEvent(database, {
+    action_id: `feishu-settings:${crypto.randomUUID()}`,
+    actor: "user",
+    event_type: "connector_settings_updated",
+    payload_json: JSON.stringify({
+      connector_id: "feishu",
+      credential_fields_changed: ["app_secret", "encrypt_key", "verification_token"].filter((key) => cleanString(body[key]) !== ""),
+      receive_mode: config.receiveMode
+    }),
+    reason: "updated Feishu connector settings",
+    result_json: JSON.stringify({ status: "succeeded" })
+  });
 }
 
 function publicFeishuSettings(config: FeishuConnectorConfig, path: string): Record<string, unknown> {

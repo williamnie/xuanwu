@@ -13,6 +13,8 @@ import type { FeishuConfigInput, FeishuConnectorConfig, FeishuConnectorOverrides
 import { buildGitHubConnectorConfig, type GitHubConnectorConfig, type GitHubConnectorConfigInput } from "../integrations/github/config.ts";
 import { buildGitLabConnectorConfig, type GitLabConnectorConfig, type GitLabConnectorConfigInput } from "../integrations/gitlab/config.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
+import { resolveLocalSettingsSecretRefs } from "../security/secrets/configRefs.ts";
+import { createSecretService } from "../security/secrets/service.ts";
 
 export const ENV_KEYS = {
   addr: "CODEX_RUNNER_ADDR",
@@ -151,7 +153,12 @@ export function loadConfig(argv = Bun.argv.slice(2), env: Env = Bun.env): Runner
   const envOverrides = readEnvOverrides(env);
   const cliOverrides = parseCliOverrides(stripCommand(argv));
   const baseOverrides = { ...envOverrides, ...cliOverrides };
-  const localOverrides = readLocalSettingsSync(buildRunnerPaths(baseOverrides).stateDir);
+  const stateDir = buildRunnerPaths(baseOverrides).stateDir;
+  const localOverrides = resolveLocalSettingsSecretRefs(
+    readLocalSettingsSync(stateDir),
+    createSecretService({ stateDir }),
+    env
+  );
   const localCodex = localOverrides.providers?.codex ?? {};
   return buildConfig({
     ...baseOverrides,

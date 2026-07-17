@@ -79,7 +79,10 @@ describe("Bun PI provider settings API", () => {
       expect(JSON.stringify(savedBody)).not.toContain("secret-key");
 
       const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
-      expect(raw.providers.openai.apiKey).toBe("secret-key");
+      expect(raw.providers.openai.apiKey).toBeUndefined();
+      expect(raw.providers.openai.apiKeyRef).toBe("secret://pi/provider/openai/api-key");
+      const secretStore = await readFile(join(dirname(database.path), "secrets", "store.json"), "utf8");
+      expect(secretStore).not.toContain("secret-key");
       expect(raw.providers.openai.models).toEqual([]);
       expect(Object.keys(raw.providers.openai.modelOverrides)).toEqual(["gpt-5.4", "gpt-5.5"]);
       const audit = database.sqlite.query<{ payload_json: string; result_json: string }, []>(
@@ -90,6 +93,13 @@ describe("Bun PI provider settings API", () => {
         provider_id: "openai"
       });
       expect(JSON.stringify(audit)).not.toContain("secret-key");
+      const secretAudit = database.sqlite.query<{ payload_json: string; result_json: string }, []>(
+        "select payload_json, result_json from pi_action_events where event_type='secret.created' order by id desc limit 1"
+      ).get();
+      expect(JSON.parse(secretAudit?.payload_json ?? "{}")).toMatchObject({
+        secret_ref: "secret://pi/provider/openai/api-key",
+        version: 1
+      });
 
       await request(router, "/api/pi/provider-settings/openai", {
         api: "openai-responses",
@@ -99,7 +109,7 @@ describe("Bun PI provider settings API", () => {
       });
       const updated = JSON.parse(await readFile(modelsPath(database), "utf8"));
       expect(updated.providers.openai).toMatchObject({
-        apiKey: "secret-key",
+        apiKeyRef: "secret://pi/provider/openai/api-key",
         baseUrl: "https://proxy.example/v1",
         models: [],
         modelOverrides: { "gpt-5.5": {} }

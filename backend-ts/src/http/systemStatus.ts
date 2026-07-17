@@ -12,6 +12,7 @@ import { projectLoopMaxParallelProjects, runningProjectLoopCount } from "../runn
 import { redactSensitiveText } from "../util/redact.ts";
 import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
 import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
+import { isSensitiveFieldName } from "../security/redactionRegistry.ts";
 
 type SystemStatusContext = {
   authEnabled: boolean;
@@ -266,11 +267,7 @@ function claudeCapabilities(): ExecutorCapability[] {
 }
 
 function diagnosticEnvKeys(env: Record<string, string>): string[] {
-  return Object.keys(env).filter((key) => !isSensitiveEnvKey(key)).sort();
-}
-
-function isSensitiveEnvKey(key: string): boolean {
-  return /(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)/i.test(key);
+  return Object.keys(env).filter((key) => !isSensitiveFieldName(key)).sort();
 }
 
 function hasConfiguredApiKey(env: Record<string, string>, provider: string): boolean {

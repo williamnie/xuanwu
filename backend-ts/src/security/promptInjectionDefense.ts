@@ -1,4 +1,5 @@
 import { redactSensitiveText } from "../util/redact.ts";
+import { containsSecretLikeValue, isSensitiveFieldName } from "./redactionRegistry.ts";
 
 export const PROMPT_TRUST_MARKER_VERSION = "xw.untrusted-data.v1" as const;
 
@@ -18,14 +19,6 @@ export type DataEgressDecision = {
   reason: string;
 };
 
-const SENSITIVE_KEY = /^(?:access[_-]?key|api[_-]?key|authorization|cookie|credential|password|secret|session[_-]?token|token)$/i;
-const SECRET_VALUE_PATTERNS = [
-  /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/i,
-  /\bBearer\s+(?!\[redacted\])\S+/i,
-  /\b[A-Z0-9_-]*(?:TOKEN|SECRET|PASSWORD|API[_-]?KEY|ACCESS[_-]?KEY)[A-Z0-9_-]*\s*[:=]\s*(?!\[redacted\])[^\s,;]+/i,
-  /\bAKIA[0-9A-Z]{16}\b/,
-  /\b(?:sk|rk|pk)-(?:live|prod)-[A-Za-z0-9_-]{12,}\b/i
-] as const;
 
 const EXTERNAL_ACTION = /(?:^mcp\.tool\.call$|^message\.reply_send$|(?:^|\.)(?:deploy|deliver|external_write|publish|push|send|tracker_update|upload)$)/i;
 const REDACTED_VALUES = new Set(["", "[redacted]", "[redacted sensitive line]", "***", "<redacted>"]);
@@ -118,7 +111,7 @@ function inspectValue(value: unknown, path: string, seen: WeakSet<object>): Data
   }
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     const itemPath = `${path}.${key}`;
-    if (SENSITIVE_KEY.test(key) && !safeRedactedValue(item)) {
+    if (isSensitiveFieldName(key) && !safeRedactedValue(item)) {
       return { allowed: false, code: "secret_key", path: itemPath, reason: `sensitive field ${itemPath} cannot cross an egress boundary` };
     }
     const decision = inspectValue(item, itemPath, seen);
@@ -129,7 +122,7 @@ function inspectValue(value: unknown, path: string, seen: WeakSet<object>): Data
 
 function secretString(value: string, path: string): DataEgressDecision | null {
   if (REDACTED_VALUES.has(value.trim().toLowerCase())) return null;
-  if (!SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(value))) return null;
+  if (!containsSecretLikeValue(value)) return null;
   return { allowed: false, code: "secret_value", path, reason: `secret-like value at ${path} cannot cross an egress boundary` };
 }
 

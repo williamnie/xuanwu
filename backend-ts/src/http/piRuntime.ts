@@ -18,6 +18,7 @@ import type { SupervisorIntentRoute } from "../pi/supervisorIntentRouter.ts";
 import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
+import { installPiProviderSecretOverride } from "../security/secrets/piProviderRuntime.ts";
 
 export type PiRuntimeResult = { piSessionId: string; sessionFile: string };
 export type PiRuntimeSession = Awaited<ReturnType<typeof createPiRuntimeSession>>;
@@ -101,6 +102,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   await mkdir(context.sessionDir, { recursive: true });
 
   const authStorage = sdk.pi.AuthStorage.create(paths.authPath);
+  installPiProviderSecretOverride(authStorage, paths.modelsPath, dirname(db.path), input.agent.model_provider);
   const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
   const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
   const sessionManager = input.sessionFile

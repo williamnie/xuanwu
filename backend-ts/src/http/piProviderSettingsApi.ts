@@ -6,8 +6,11 @@ import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { isPiOpenAICodexOAuthConfigured } from "./piOAuthApi.ts";
 import type { Router } from "./router.ts";
+import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
+import { SecretStoreError } from "../security/secrets/contracts.ts";
+import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 
-type PiProviderSettingsContext = { database: RunnerDatabase };
+type PiProviderSettingsContext = { database: RunnerDatabase; secrets?: SecretService };
 type ModelsConfig = { providers: Record<string, ProviderConfig> };
 type ProviderModelConfig = {
   id: string;
@@ -28,6 +31,7 @@ type ProviderModelOverrideConfig = Omit<ProviderModelConfig, "id" | "api" | "bas
 type ProviderConfig = {
   api?: string;
   apiKey?: string;
+  apiKeyRef?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
   models?: ProviderModelConfig[];
@@ -102,19 +106,20 @@ export function registerPiProviderSettingsRoutes(
   router: Router,
   context: PiProviderSettingsContext
 ): void {
-  router.get("/api/pi/provider-settings", async () => json(await listProviderSettings(context)));
+  const activeContext = { ...context, secrets: context.secrets ?? createDatabaseSecretService(context.database) };
+  router.get("/api/pi/provider-settings", async () => json(await listProviderSettings(activeContext)));
   router.get("/api/pi/provider-settings/catalog", () => json(providerCatalog()));
   router.put("/api/pi/provider-settings/:id", async (request) => {
-    return json(await upsertProviderSettings(context, providerID(request), await parseObjectBody(request)));
+    return json(await upsertProviderSettings(activeContext, providerID(request), await parseObjectBody(request)));
   });
   router.post("/api/pi/provider-settings/:id/test-connection", async (request) => {
-    return json(await testProviderConnection(context, providerID(request), await parseObjectBody(request)));
+    return json(await testProviderConnection(activeContext, providerID(request), await parseObjectBody(request)));
   });
 }
 
 async function listProviderSettings(context: PiProviderSettingsContext) {
   const config = await readModelsConfig(modelsPath(context.database));
-  return { providers: Object.entries(config.providers).map(publicProviderSettings) };
+  return { providers: Object.entries(config.providers).map((entry) => publicProviderSettings(entry, context.secrets)) };
 }
 
 async function upsertProviderSettings(
@@ -125,10 +130,15 @@ async function upsertProviderSettings(
   const path = modelsPath(context.database);
   const config = await readModelsConfig(path);
   const current = config.providers[id] ?? {};
-  const next = normalizeProviderConfig(id, body, current);
+  if ((cleanString(body.api) || current.api || "") === "") throw new HttpError(400, "api is required");
+  const submittedKey = cleanString(body.api_key) || cleanString(body.apiKey);
+  const keyRef = submittedKey === ""
+    ? cleanString(current.apiKeyRef)
+    : context.secrets!.putOrRotate(providerSecretName(id), submittedKey, "user", `updated provider credential for ${id}`).ref;
+  const next = normalizeProviderConfig(id, body, current, keyRef, submittedKey !== "");
   config.providers[id] = next;
   await writeModelsConfig(path, config);
-  const publicSettings = publicProviderSettings([id, next]);
+  const publicSettings = publicProviderSettings([id, next], context.secrets);
   recordProviderSettingsAudit(context.database, id, body, publicSettings);
   return publicSettings;
 }
@@ -156,7 +166,7 @@ async function testProviderConnection(
   if (auth === "oauth") {
     result = oauthConnectionResult(context.database, id);
   } else {
-    result = await probeApiKeyProvider(id, body, current, preset);
+    result = await probeApiKeyProvider(id, body, current, preset, context.secrets!);
   }
   recordProviderConnectionAudit(context.database, id, body, current, preset, result, Date.now() - startedAt);
   return result;
@@ -180,10 +190,12 @@ async function probeApiKeyProvider(
   id: string,
   body: Record<string, unknown>,
   current: ProviderConfig,
-  preset: ProviderPreset | undefined
+  preset: ProviderPreset | undefined,
+  secrets: SecretService
 ): Promise<ProviderConnectionResult> {
   const api = cleanString(body.api) || current.api || preset?.api || "";
-  const apiKey = cleanString(body.api_key) || cleanString(body.apiKey) || current.apiKey || "";
+  const submittedKey = cleanString(body.api_key) || cleanString(body.apiKey);
+  if (submittedKey !== "") registerSecretForRedaction(submittedKey);
   const baseUrl = cleanString(body.base_url) || cleanString(body.baseUrl) || current.baseUrl || preset?.base_url || "";
   const failure = (error: string, message: string, httpStatus?: number): ProviderConnectionResult => ({
     auth: "api_key",
@@ -196,6 +208,15 @@ async function probeApiKeyProvider(
     provider_id: id,
     status: "failed"
   });
+  let apiKey = submittedKey || cleanString(current.apiKey);
+  if (apiKey === "" && cleanString(current.apiKeyRef) !== "") {
+    try {
+      apiKey = secrets.resolve(current.apiKeyRef!);
+    } catch (error) {
+      if (error instanceof SecretStoreError) return failure(error.code, error.message);
+      throw error;
+    }
+  }
   if (!apiKey) return failure("api_key_required", "请先输入或保存 API key");
   let url: URL;
   try {
@@ -286,6 +307,7 @@ function normalizeModelsConfig(value: unknown): ModelsConfig {
       ...provider,
       api: cleanString(provider.api),
       apiKey: cleanString(provider.apiKey),
+      apiKeyRef: cleanString(provider.apiKeyRef),
       baseUrl: cleanString(provider.baseUrl),
       headers: isStringRecord(provider.headers) ? provider.headers : undefined,
       models: normalizeModels(provider.models, id),
@@ -298,22 +320,25 @@ function normalizeModelsConfig(value: unknown): ModelsConfig {
 function normalizeProviderConfig(
   id: string,
   body: Record<string, unknown>,
-  current: ProviderConfig
+  current: ProviderConfig,
+  apiKeyRef: string,
+  credentialChanged: boolean
 ): ProviderConfig {
   const api = cleanString(body.api) || current.api || "";
   if (api === "") throw new HttpError(400, "api is required");
   const selection = hasOwn(body, "models")
     ? normalizeModelSelection(body.models, id)
     : { models: current.models ?? [], modelOverrides: current.modelOverrides ?? {} };
-  return {
+  return stripUndefined({
     ...current,
     api,
-    apiKey: cleanString(body.api_key) || cleanString(body.apiKey) || current.apiKey || "",
+    apiKey: credentialChanged ? undefined : cleanString(current.apiKey) || undefined,
+    apiKeyRef: apiKeyRef || undefined,
     baseUrl: cleanString(body.base_url) || cleanString(body.baseUrl) || current.baseUrl || "",
     headers: nextHeaders(current.headers, body),
     models: selection.models,
     modelOverrides: selection.modelOverrides
-  };
+  });
 }
 
 function normalizeModels(value: unknown, providerID: string): ProviderModelConfig[] {
@@ -406,15 +431,26 @@ function modelIDsFromText(value: string): string[] {
   return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
 }
 
-function publicProviderSettings([id, provider]: [string, ProviderConfig]): PublicProviderSettings {
+function publicProviderSettings([id, provider]: [string, ProviderConfig], secrets?: SecretService): PublicProviderSettings {
   return {
     id,
     api: provider.api ?? "",
-    api_key_configured: cleanString(provider.apiKey) !== "",
+    api_key_configured: providerCredentialConfigured(provider, secrets),
     base_url: provider.baseUrl ?? "",
     models: publicModelIDs(provider),
     user_agent: userAgentFromHeaders(provider.headers)
   };
+}
+
+function providerCredentialConfigured(provider: ProviderConfig, secrets?: SecretService): boolean {
+  if (cleanString(provider.apiKey) !== "") return true;
+  const ref = cleanString(provider.apiKeyRef);
+  if (ref === "" || !secrets) return false;
+  return secrets.describe(ref)?.status === "active";
+}
+
+function providerSecretName(providerID: string): string {
+  return `pi/provider/${encodeURIComponent(providerID)}/api-key`;
 }
 
 function nextHeaders(current: Record<string, string> | undefined, body: Record<string, unknown>): Record<string, string> | undefined {

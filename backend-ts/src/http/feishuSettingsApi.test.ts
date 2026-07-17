@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFile, rm, mkdtemp, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildConfig } from "../config/env.ts";
+import { buildConfig, ENV_KEYS, loadConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -78,16 +78,26 @@ describe("Feishu connector settings API", () => {
         allowedChatIds: ["oc_a", "oc_b"],
         allowedUserIds: ["ou_1"],
         appId: "cli_app_id",
-        appSecret: "app-secret-value",
+        appSecretRef: "secret://integrations/feishu/app-secret",
         defaultChatId: "oc_default",
         defaultUserId: "ou_default",
-        encryptKey: "encrypt-secret-value",
+        encryptKeyRef: "secret://integrations/feishu/encrypt-key",
         projectMappings: "chat:oc_a=demo,user:ou_1=mobile",
         receiveMode: "websocket",
-        verificationToken: "verify-secret-value"
+        verificationTokenRef: "secret://integrations/feishu/verification-token"
       });
+      const secretStore = await readFile(join(dirname(database.path), "secrets", "store.json"), "utf8");
+      expect(secretStore).not.toContain("app-secret-value");
+      expect(secretStore).not.toContain("encrypt-secret-value");
+      expect(secretStore).not.toContain("verify-secret-value");
       const mode = (await stat(localSettingsPath(database))).mode & 0o777;
       expect(mode).toBe(0o600);
+      const reloaded = loadConfig([], { [ENV_KEYS.stateDir]: dirname(database.path) });
+      expect(reloaded.integrations.feishu).toMatchObject({
+        appSecret: "app-secret-value",
+        encryptKey: "encrypt-secret-value",
+        verificationToken: "verify-secret-value"
+      });
     } finally {
       database.close();
     }
@@ -120,8 +130,8 @@ describe("Feishu connector settings API", () => {
       const raw = JSON.parse(await readFile(localSettingsPath(database), "utf8"));
       expect(raw.integrations.feishu).toMatchObject({
         appId: "cli_new",
-        appSecret: "old-secret",
-        verificationToken: "old-token"
+        appSecretRef: "secret://integrations/feishu/app-secret",
+        verificationTokenRef: "secret://integrations/feishu/verification-token"
       });
     } finally {
       database.close();

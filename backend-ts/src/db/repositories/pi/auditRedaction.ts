@@ -1,8 +1,7 @@
 import { redactSensitiveText } from "../../../util/redact.ts";
+import { isSensitiveFieldName } from "../../../security/redactionRegistry.ts";
 
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/g;
-const SAFE_TOKEN_KEYS = new Set(["input_tokens", "last_token_usage", "output_tokens", "token_count", "total_tokens"]);
-const SENSITIVE_KEY_PATTERN = /(^|[_-])(access[_-]?key|api[_-]?key|auth[_-]?token|authorization|bearer|password|secret|token)([_-]|$)/i;
 
 export function redactAuditText(value: string): string {
   return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
@@ -28,11 +27,6 @@ function redactAuditValue(value: unknown): unknown {
 function redactAuditObject(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
     key,
-    isSensitiveKey(key) ? "[redacted]" : redactAuditValue(entry)
+    isSensitiveFieldName(key) ? "[redacted]" : redactAuditValue(entry)
   ]));
-}
-
-function isSensitiveKey(key: string): boolean {
-  const normalized = key.trim().toLowerCase();
-  return !SAFE_TOKEN_KEYS.has(normalized) && SENSITIVE_KEY_PATTERN.test(normalized);
 }
