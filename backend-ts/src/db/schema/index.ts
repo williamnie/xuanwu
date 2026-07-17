@@ -42,6 +42,7 @@ import { workLedgerSchemaMigration } from "./041_work_ledger_schema.ts";
 import { runAttemptRelationsMigration } from "./042_run_attempt_relations.ts";
 import { trackerUpdateOutboxMigration } from "./043_tracker_update_outbox.ts";
 import { attentionCommandEventsMigration } from "./044_attention_command_events.ts";
+import { automationModelMigration } from "./045_automation_model.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -87,5 +88,6 @@ export const migrations = [
   workLedgerSchemaMigration,
   runAttemptRelationsMigration,
   trackerUpdateOutboxMigration,
-  attentionCommandEventsMigration
+  attentionCommandEventsMigration,
+  automationModelMigration
 ];

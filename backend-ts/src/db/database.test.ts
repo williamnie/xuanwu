@@ -51,7 +51,12 @@ describe("Bun SQLite database connection", () => {
         "app_preferences",
         "assistant_tool_providers",
         "assistant_tools",
+        "attention_command_events",
         "attention_inbox_items",
+        "automation_definitions",
+        "automation_events",
+        "automation_runs",
+        "automation_trigger_configs",
         "context_bundles",
         "cron_task_schedules",
         "cron_tasks",
@@ -197,7 +202,9 @@ describe("Bun SQLite database connection", () => {
         { id: "040_event_summary_projection" },
         { id: "041_work_ledger_schema" },
         { id: "042_run_attempt_relations" },
-        { id: "043_tracker_update_outbox" }
+        { id: "043_tracker_update_outbox" },
+        { id: "044_attention_command_events" },
+        { id: "045_automation_model" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -740,7 +747,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 43 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 45 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
