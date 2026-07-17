@@ -1,0 +1,172 @@
+{
+  "schema_version": "xuanwu.workflow-manifest.v1",
+  "id": "workflow:release",
+  "revision": 1,
+  "name": "Release",
+  "description": "Freeze a verified revision, obtain an explicit checkpoint for external or destructive publication, publish through an audited integration receipt, verify, and retain an executable rollback in Handoff.",
+  "stages": [
+    {
+      "id": "prepare",
+      "name": "Freeze revision, Evidence, Handoff, and rollback",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:release-readiness@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "release",
+        "required": true,
+        "project_override_modes": [
+          "deploy",
+          "release"
+        ]
+      }
+    },
+    {
+      "id": "publish",
+      "name": "Execute the approved release integration",
+      "agent": {
+        "role": "executor",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "dangerous",
+        "allowed_tools": [
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": [
+          "release.execute"
+        ]
+      },
+      "verification_policy_ref": "verification-policy:release-readiness@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "before_external_write",
+        "policy_ref": "approval-policy:release-external-write@1"
+      },
+      "handoff": {
+        "mode": "release",
+        "required": true,
+        "project_override_modes": [
+          "deploy",
+          "release"
+        ]
+      }
+    },
+    {
+      "id": "verify",
+      "name": "Verify the published revision",
+      "agent": {
+        "role": "verifier",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:release-readiness@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "release",
+        "required": true,
+        "project_override_modes": [
+          "deploy",
+          "release"
+        ]
+      }
+    },
+    {
+      "id": "handoff",
+      "name": "Deliver release receipt and rollback",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:release-readiness@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "release",
+        "required": true,
+        "project_override_modes": [
+          "deploy",
+          "release"
+        ]
+      }
+    }
+  ]
+}

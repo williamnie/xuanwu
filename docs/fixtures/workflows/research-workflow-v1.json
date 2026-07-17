@@ -1,0 +1,175 @@
+{
+  "schema_version": "xuanwu.workflow-manifest.v1",
+  "id": "workflow:research",
+  "revision": 1,
+  "name": "Research",
+  "description": "Bound the question, collect trusted source Evidence, map every claim to its sources, and deliver a read-only research Handoff.",
+  "stages": [
+    {
+      "id": "scope",
+      "name": "Bound the research question",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:research-source-evidence@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "collect",
+      "name": "Collect source Evidence",
+      "agent": {
+        "role": "verifier",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read",
+          "http-readonly:url_fetch",
+          "browser-readonly:read_page_context"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:research-source-evidence@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "synthesize",
+      "name": "Synthesize only source-backed claims",
+      "agent": {
+        "role": "reviewer",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:research-source-evidence@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    },
+    {
+      "id": "handoff",
+      "name": "Deliver the cited research report",
+      "agent": {
+        "role": "reporter",
+        "required_skill_ids": []
+      },
+      "permissions": {
+        "max_tool_permission": "read",
+        "allowed_tools": [
+          "runner-builtin:read",
+          "runner-builtin:grep",
+          "runner-builtin:find",
+          "runner-builtin:ls",
+          "runner-builtin:repo_tree",
+          "runner-builtin:repo_search",
+          "runner-builtin:repo_read_excerpt",
+          "runner-builtin:work_read",
+          "runner-builtin:run_read",
+          "runner-builtin:evidence_list",
+          "runner-builtin:evidence_read",
+          "runner-builtin:handoff_read"
+        ],
+        "allowed_actions": []
+      },
+      "verification_policy_ref": "verification-policy:research-source-evidence@1",
+      "retry": {
+        "max_attempts": 1,
+        "backoff_seconds": []
+      },
+      "approval": {
+        "mode": "none"
+      },
+      "handoff": {
+        "mode": "local_changes",
+        "required": true,
+        "project_override_modes": [
+          "local_changes"
+        ]
+      }
+    }
+  ]
+}
