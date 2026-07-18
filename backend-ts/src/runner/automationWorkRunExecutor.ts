@@ -26,13 +26,25 @@ export type AutomationWorkflowDispatcher = (input: {
   automation: AutomationDefinition;
   automation_run_id: string;
   automation_id: string;
+  context?: Record<string, unknown>;
   run_id: RunID;
   work: WorkLedgerEntry;
   workflow: WorkflowResolution;
 }) => Promise<AutomationWorkflowDispatchResult>;
 
+export type AutomationExecutionPreparation = {
+  context?: Record<string, unknown>;
+  detail?: string;
+  outcome?: "skipped";
+};
+
+export type AutomationExecutionPreparationInput = Parameters<AutomationExecutor>[0] & {
+  existing_link: AutomationExecutionLink | null;
+};
+
 export type AutomationWorkRunExecutorOptions = {
   dispatch: AutomationWorkflowDispatcher;
+  prepare?: (input: AutomationExecutionPreparationInput) => AutomationExecutionPreparation | Promise<AutomationExecutionPreparation>;
   workflow_registry: Pick<WorkflowRegistry, "resolve">;
 };
 
@@ -42,10 +54,16 @@ export type AutomationWorkRunExecutorOptions = {
  * deterministic observation as Evidence plus a reviewable Handoff.
  */
 export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecutorOptions): AutomationExecutor {
-  return async ({ automation, database, now, run }) => {
+  return async (input) => {
+    const { automation, database, now, run } = input;
     const projectID = automation.owner.kind === "project" ? automation.owner.project_id : "";
     if (projectID === "") throw new Error("automation Work/Run dispatch requires a project scope");
-    const link = ensureLink(database, automation.id, automation.name, automation.workflow_ref, run.run_id, projectID, now);
+    const existingLink = getAutomationExecutionLink(database, run.run_id);
+    const preparation = await options.prepare?.({ ...input, existing_link: existingLink }) ?? {};
+    if (!existingLink && preparation.outcome === "skipped") {
+      return { detail: preparation.detail, outcome: "skipped" };
+    }
+    const link = existingLink ?? ensureLink(database, automation.id, automation.name, automation.workflow_ref, run.run_id, projectID, now);
     const work = getIssueAsWork(database, link.issue_id);
     if (!work) throw new Error(`automation execution Work ${link.work_id} is missing`);
     try {
@@ -57,16 +75,17 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
         automation,
         automation_id: automation.id,
         automation_run_id: run.run_id,
+        context: preparation.context,
         run_id: link.run_id as RunID,
         work,
         workflow: resolved.resolution
       });
       const detail = clean(output.detail) || `workflow ${automation.workflow_ref} ${output.outcome}`;
-      persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, output.outcome, detail);
+      persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, output.outcome, detail, preparation.context);
       return { detail: `${detail}; work=${link.work_id}; run=${link.run_id}`, outcome: output.outcome };
     } catch (error) {
       const detail = safeError(error);
-      persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, "failed", detail);
+      persistOutcome(database, link, automation, run.run_id, run.attempt_count, now, "failed", detail, preparation.context);
       if (run.attempt_count >= run.max_attempts) {
         updateIssue(database, link.issue_id, { error: detail, status: "failed" });
       }
@@ -138,10 +157,11 @@ function persistOutcome(
   attempt: number,
   now: Date,
   outcome: "succeeded" | "skipped" | "failed",
-  detail: string
+  detail: string,
+  context?: Record<string, unknown>
 ): void {
   const timestamp = now.toISOString();
-  const evidence = outcomeEvidence(link, automation, automationRunID, attempt, timestamp, outcome, detail);
+  const evidence = outcomeEvidence(link, automation, automationRunID, attempt, timestamp, outcome, detail, context);
   recordEvidenceRecords(database, link.issue_id, [evidence], { recorded_at: timestamp, source: "automation-work-run-executor" });
   const handoff = outcomeHandoff(link, automationRunID, attempt, timestamp, evidence, outcome, detail);
   recordHandoff(database, link.issue_id, handoff, { recorded_at: timestamp, source: "automation-work-run-executor" });
@@ -156,7 +176,8 @@ function outcomeEvidence(
   attempt: number,
   timestamp: string,
   outcome: "succeeded" | "skipped" | "failed",
-  detail: string
+  detail: string,
+  context?: Record<string, unknown>
 ): EvidenceRecord {
   const status = outcome === "succeeded" ? "passed" : outcome === "skipped" ? "blocked" : "failed";
   return {
@@ -176,6 +197,7 @@ function outcomeEvidence(
       facts: {
         attempt,
         automation_mode: automation.mode,
+        ...(context ? { execution_context_json: JSON.stringify(context) } : {}),
         outcome,
         permission_policy_ref: automation.permission_policy_ref,
         workflow_ref: link.workflow_ref

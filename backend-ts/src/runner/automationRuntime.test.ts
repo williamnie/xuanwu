@@ -7,8 +7,16 @@ import { getAutomationExecutionLink } from "../db/repositories/automationExecuti
 import { createAutomation, listAutomationRuns } from "../db/repositories/automations.ts";
 import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { listStoredHandoffs } from "../db/repositories/handoffs.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import {
+  createPiConversation,
+  createProjectPiSettings,
+  pausePiHeartbeat,
+  upsertProjectPiPolicy
+} from "../db/repositories/pi.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
+import { createSupervisorCommitment } from "../pi/supervisorCommitments.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { INVESTIGATE_WORKFLOW_REF } from "../workflows/investigate.ts";
 import { createPiAutoManageScheduler, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
@@ -120,6 +128,15 @@ describe("native Automation scheduler composition", () => {
           run_id: link.run_id
         } }
       ]);
+      const context = JSON.parse(String(listStoredEvidence(db, {
+        issue_ids: [link.issue_id], limit: 10
+      }).items[0]?.evidence.decisive_output.facts.execution_context_json));
+      expect(context).toMatchObject({
+        budget: { consumed: 0, limit: 5 },
+        items: [{ kind: "supervisor_commitment" }],
+        schema_version: "xw.standing-order-context.v1",
+        scope: { kind: "project", project_id: "demo" }
+      });
       expect(listStoredHandoffs(db, { work_id: link.work_id, limit: 10 }).items).toMatchObject([
         { handoff: { status: "ready", run_ids: [link.run_id], review_ref: `automation_runs:${automationRun.run_id}` } }
       ]);
@@ -174,6 +191,131 @@ describe("native Automation scheduler composition", () => {
       db.close();
     }
   });
+
+  test("records a deterministic no-op without manufacturing Work when no context changed", async () => {
+    const db = await fixture();
+    const provider = new FixtureProvider();
+    try {
+      const automation = createFixture(db, "no-op", "execute_allowed", { commitment: false });
+      const result = await cycle(db, provider, NOW);
+      const run = listAutomationRuns(db, automation.id)[0]!;
+
+      expect(result.automationCore).toMatchObject({ executed: 0, scanned: 1, skipped: 1 });
+      expect(run).toMatchObject({ status: "skipped" });
+      expect(run.summary.detail).toContain("standing order no-op");
+      expect(provider.inputs).toHaveLength(0);
+      expect(getAutomationExecutionLink(db, run.run_id)).toBeNull();
+      expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from issues").get()?.count).toBe(0);
+      expect(db.sqlite.query<{ detail: string; event_type: string }, [string]>(`
+        select event_type, detail from automation_run_events where run_id=? order by rowid desc limit 1
+      `).get(run.run_id)).toMatchObject({
+        detail: "standing order no-op: no changed heartbeat action or active Supervisor commitment",
+        event_type: "automation.run_skipped.v1"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("honors project quiet hours before selecting context or creating Work", async () => {
+    const db = await fixture();
+    const provider = new FixtureProvider();
+    try {
+      const automation = createFixture(db, "quiet", "execute_allowed");
+      upsertProjectPiPolicy(db, {
+        project_id: "demo",
+        quiet_hours_json: { daily: [{ end: "11:00", start: "09:00" }] },
+        timezone: "UTC"
+      });
+
+      const result = await cycle(db, provider, NOW);
+      const run = listAutomationRuns(db, automation.id)[0]!;
+
+      expect(result.automationCore).toMatchObject({ executed: 0, scanned: 1, skipped: 1 });
+      expect(run.summary.detail).toContain("quiet hours until 2026-07-18T11:00:00.000Z");
+      expect(provider.inputs).toHaveLength(0);
+      expect(getAutomationExecutionLink(db, run.run_id)).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("honors the existing project heartbeat pause control", async () => {
+    const db = await fixture();
+    const provider = new FixtureProvider();
+    try {
+      const automation = createFixture(db, "paused", "execute_allowed");
+      pausePiHeartbeat(db, { reason: "maintenance", scopeId: "demo", scopeType: "project" });
+
+      const result = await cycle(db, provider, NOW);
+      const run = listAutomationRuns(db, automation.id)[0]!;
+
+      expect(result.automationCore).toMatchObject({ executed: 0, scanned: 1, skipped: 1 });
+      expect(run.summary.detail).toContain("project heartbeat is paused for demo");
+      expect(provider.inputs).toHaveLength(0);
+      expect(getAutomationExecutionLink(db, run.run_id)).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("enforces the persisted project cycle budget across standing orders", async () => {
+    const db = await fixture();
+    const provider = new FixtureProvider();
+    try {
+      createProjectPiSettings(db, {
+        max_actions_per_cycle: 1,
+        pi_agent_id: "fixture-agent",
+        project_id: "demo"
+      });
+      const first = createFixture(db, "budget-a", "execute_allowed");
+      const second = createFixture(db, "budget-b", "execute_allowed");
+
+      const result = await cycle(db, provider, NOW);
+      const runs = [...listAutomationRuns(db, first.id), ...listAutomationRuns(db, second.id)];
+
+      expect(result.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+      expect(provider.inputs).toHaveLength(1);
+      expect(runs.filter((run) => run.status === "succeeded")).toHaveLength(1);
+      expect(runs.find((run) => run.status === "skipped")?.summary.detail).toContain("budget exhausted (1/1)");
+
+      const next = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
+      expect(next.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+      expect(provider.inputs).toHaveLength(2);
+      expect(listAutomationRuns(db, first.id).filter((run) => run.status === "succeeded")).toHaveLength(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("restores the standing-order cursor after restart and isolates project context", async () => {
+    let db = await fixture();
+    const provider = new FixtureProvider();
+    const automation = createFixture(db, "restart", "execute_allowed");
+    insertProject(db, "other", "/tmp/standing-order-other");
+    const isolated = createFixture(db, "isolated", "execute_allowed", { commitment: false, projectID: "other" });
+    try {
+      const first = await cycle(db, provider, NOW);
+      expect(first.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+      expect(provider.inputs).toHaveLength(1);
+      expect(provider.inputs[0]?.projectId).toBe("demo");
+      expect(listAutomationRuns(db, isolated.id)[0]?.summary.detail).toContain("standing order no-op");
+
+      const stateDir = stateDirFor(db);
+      db.close();
+      db = await openDatabase({ stateDir });
+      const resumed = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
+
+      expect(resumed.automationCore).toMatchObject({ executed: 0, scanned: 2, skipped: 2 });
+      expect(provider.inputs).toHaveLength(1);
+      expect(listAutomationRuns(db, automation.id).map((run) => run.status).sort()).toEqual(["skipped", "succeeded"]);
+      expect(db.sqlite.query<{ count: number }, [string]>(`
+        select count(*) as count from automation_execution_links where automation_id=?
+      `).get(automation.id)?.count).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function cycle(db: RunnerDatabase, provider: FixtureProvider, now: Date) {
@@ -192,25 +334,61 @@ async function fixture(): Promise<RunnerDatabase> {
   const cwd = join(root, "repo");
   await mkdir(cwd);
   const db = await openDatabase({ stateDir: join(root, "state") });
-  db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
-    values ('demo', 'Demo', ?, 'fake-execution-only', ?, ?)`, [cwd, NOW.toISOString(), NOW.toISOString()]);
+  insertProject(db, "demo", cwd);
   return db;
 }
 
-function createFixture(db: RunnerDatabase, suffix: string, mode: "execute_allowed" | "observe") {
+function createFixture(
+  db: RunnerDatabase,
+  suffix: string,
+  mode: "execute_allowed" | "observe",
+  options: { commitment?: boolean; projectID?: string } = {}
+) {
+  const projectID = options.projectID ?? "demo";
+  if (options.commitment !== false) createCommitmentFixture(db, projectID, suffix);
   return createAutomation(db, {
     id: `automation:${suffix}`,
     idempotency_namespace: `automation:${suffix}`,
     mode,
     name: `Automation ${suffix}`,
     next_run_at: "2026-07-18T09:59:30.000Z",
-    owner: { kind: "project", project_id: "demo" },
-    permission_policy_ref: "project-policy:demo",
+    owner: { kind: "project", project_id: projectID },
+    permission_policy_ref: `project-policy:${projectID}`,
     status: "active",
     workflow_ref: INVESTIGATE_WORKFLOW_REF,
     trigger_created_by: "system",
     trigger: { type: "continuous", config: { poll_interval_seconds: 60 } }
   }, "2026-07-18T09:00:00.000Z");
+}
+
+function createCommitmentFixture(db: RunnerDatabase, projectID: string, suffix: string): void {
+  const conversationID = `standing-order-${projectID}-${suffix}`;
+  createPiConversation(db, { id: conversationID, pi_agent_id: "fixture-agent", project_id: projectID, title: suffix });
+  const issue = createIssue(db, {
+    description: `Standing Order context ${suffix}`,
+    project_id: projectID,
+    status: "in_progress",
+    title: `Commitment ${suffix}`
+  });
+  createSupervisorCommitment(db, {
+    condition: { commitment: { schema_version: "xw.supervisor-commitment.v1" } },
+    issue_ids: [issue.id],
+    origin_conversation_id: conversationID,
+    project_id: projectID,
+    requested_by: "fixture-user",
+    source_event_id: `standing-order-source-${projectID}-${suffix}`
+  });
+}
+
+function insertProject(db: RunnerDatabase, id: string, cwd: string): void {
+  db.sqlite.run(`insert into projects (id, name, cwd, provider, created_at, updated_at)
+    values (?, ?, ?, 'fake-execution-only', ?, ?)`, [id, id, cwd, NOW.toISOString(), NOW.toISOString()]);
+}
+
+function stateDirFor(db: RunnerDatabase): string {
+  const row = db.sqlite.query<{ file: string }, []>("pragma database_list").all()
+    .find((item) => item.file.endsWith("runner.db"));
+  return row?.file.slice(0, -"/runner.db".length) ?? "";
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {

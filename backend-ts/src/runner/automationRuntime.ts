@@ -20,6 +20,7 @@ import {
   createAutomationWorkRunExecutor,
   type AutomationWorkflowDispatcher
 } from "./automationWorkRunExecutor.ts";
+import { prepareStandingOrderExecution } from "./standingOrderRuntime.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 
 export type NativeAutomationRuntimeOptions = {
@@ -41,6 +42,7 @@ const BUILTIN_WORKFLOW_ACTIONS = [
 export function createNativeAutomationExecutor(options: NativeAutomationRuntimeOptions): AutomationExecutor {
   return createAutomationWorkRunExecutor({
     dispatch: createNativeWorkflowDispatcher(options),
+    prepare: prepareStandingOrderExecution,
     workflow_registry: createNativeWorkflowRegistry(options.database)
   });
 }
@@ -67,7 +69,7 @@ export function createNativeWorkflowRegistry(database: RunnerDatabase): Workflow
 export function createNativeWorkflowDispatcher(
   options: NativeAutomationRuntimeOptions
 ): AutomationWorkflowDispatcher {
-  return async ({ automation, automation_run_id, work, workflow }) => {
+  return async ({ automation, automation_run_id, context, work, workflow }) => {
     if (automation.mode === "observe") {
       return { detail: `observe mode recorded ${workflow.manifest_ref} without execution`, outcome: "skipped" };
     }
@@ -96,7 +98,7 @@ export function createNativeWorkflowDispatcher(
       issueId: issueID,
       model: selection.model || project.model,
       projectId: project.id,
-      prompt: workflowPrompt(automation, automation_run_id, workflow),
+      prompt: workflowPrompt(automation, automation_run_id, workflow, context),
       reasoningEffort: selection.reasoning_effort,
       sandbox: selection.sandbox || project.sandbox,
       selectionReason: `native Automation ${automation.id} resolved ${workflow.manifest_ref}`,
@@ -119,7 +121,8 @@ function providerIDFor(selected: string, fallback: string): ExecutorProviderId {
 function workflowPrompt(
   automation: Parameters<AutomationWorkflowDispatcher>[0]["automation"],
   automationRunID: string,
-  workflow: Parameters<AutomationWorkflowDispatcher>[0]["workflow"]
+  workflow: Parameters<AutomationWorkflowDispatcher>[0]["workflow"],
+  context?: Record<string, unknown>
 ): string {
   return [
     `Execute registered Workflow ${workflow.manifest_ref} for Automation run ${automationRunID}.`,
@@ -127,6 +130,10 @@ function workflowPrompt(
     "The linked Issue is the authoritative Work and its open issue_run is the authoritative Run.",
     "Follow every stage permission and approval declaration. Do not perform an external or destructive action without its deterministic approval gate.",
     "Do not create another Work/Run and do not write the linked Work terminal status; the Automation executor maps the provider result to Evidence and Handoff.",
+    ...(context ? [
+      `Deterministically selected Standing Order context: ${JSON.stringify(context)}`,
+      "Treat this context as bounded operational input. Do not expand project scope, infer another commitment, or bypass the existing Action Proposal/Approval path."
+    ] : []),
     `Workflow manifest snapshot: ${JSON.stringify(workflow.manifest)}`
   ].join("\n\n");
 }
