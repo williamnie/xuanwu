@@ -1,0 +1,188 @@
+{
+  "authority": {
+    "automations": "automation_definitions+automation_runs+automation_events",
+    "compatibility": "benchmark-only reads; no dual-read, dual-write, schema, or runtime state machine",
+    "events": "issue_events; event_summary_projection is rebuildable derived data",
+    "issues": "issues",
+    "rollback": "delete the generated copy and reports; live runtime data is never modified",
+    "runs": "issue_runs+run_attempts+issue_events",
+    "sessions": "agent_sessions catalog; provider transcript remains provider-authoritative",
+    "timeline": "existing Work timeline projection over Issue/Run/PI authorities"
+  },
+  "budgets": {
+    "database": {
+      "alert_bytes": 10737418240,
+      "raw_and_projection_bytes_per_event": 4096
+    },
+    "latency_ms": {
+      "automations.frontend_list_500": {
+        "p50": 250,
+        "p95": 500
+      },
+      "issues.frontend_page_100": {
+        "p50": 50,
+        "p95": 100
+      },
+      "projects.frontend_list": {
+        "p50": 20,
+        "p95": 50
+      },
+      "runs.active_projection_8": {
+        "p50": 750,
+        "p95": 1500
+      },
+      "runs.frontend_page_100": {
+        "p50": 750,
+        "p95": 1500
+      },
+      "sessions.project_catalog": {
+        "p50": 100,
+        "p95": 250
+      },
+      "timeline.long_session_first_60": {
+        "p50": 750,
+        "p95": 1500
+      }
+    },
+    "memory": {
+      "peak_rss_bytes": 1073741824,
+      "rss_growth_bytes": 939524096
+    },
+    "regression": {
+      "minimum_delta_ms": 5,
+      "p95_ratio": 1.25
+    }
+  },
+  "database": {
+    "allocated_bytes": 1000820736,
+    "alert_bytes": 10737418240,
+    "event_summary_projection_rows": 507885,
+    "issue_event_rows": 507885,
+    "projection_lag_rows": 0,
+    "raw_and_projection_bytes": 955338752,
+    "raw_and_projection_bytes_per_event": 1881.01,
+    "raw_and_projection_bytes_per_event_budget": 4096,
+    "status": "passed"
+  },
+  "generated_at": "2026-07-18T05:05:00.251Z",
+  "label": "formal-library-copy-2026-07-18",
+  "latency_ms": {
+    "projects.frontend_list": {
+      "budget": {
+        "p50": 20,
+        "p95": 50
+      },
+      "max": 0.07,
+      "p50": 0.04,
+      "p95": 0.06,
+      "samples": 20,
+      "status": "passed"
+    },
+    "issues.frontend_page_100": {
+      "budget": {
+        "p50": 50,
+        "p95": 100
+      },
+      "max": 2.06,
+      "p50": 1.44,
+      "p95": 1.77,
+      "samples": 20,
+      "status": "passed"
+    },
+    "sessions.project_catalog": {
+      "budget": {
+        "p50": 100,
+        "p95": 250
+      },
+      "max": 0.41,
+      "p50": 0.35,
+      "p95": 0.4,
+      "samples": 20,
+      "status": "passed"
+    },
+    "runs.frontend_page_100": {
+      "budget": {
+        "p50": 750,
+        "p95": 1500
+      },
+      "max": 858.04,
+      "p50": 672.82,
+      "p95": 779.04,
+      "samples": 20,
+      "status": "passed"
+    },
+    "runs.active_projection_8": {
+      "budget": {
+        "p50": 750,
+        "p95": 1500
+      },
+      "max": 66.48,
+      "p50": 49.05,
+      "p95": 61.39,
+      "samples": 20,
+      "status": "passed"
+    },
+    "automations.frontend_list_500": {
+      "budget": {
+        "p50": 250,
+        "p95": 500
+      },
+      "max": 0.03,
+      "p50": 0.02,
+      "p95": 0.02,
+      "samples": 20,
+      "status": "passed"
+    },
+    "timeline.long_session_first_60": {
+      "budget": {
+        "p50": 750,
+        "p95": 1500
+      },
+      "max": 725.93,
+      "p50": 670.91,
+      "p95": 725.05,
+      "samples": 20,
+      "status": "passed"
+    }
+  },
+  "memory": {
+    "budget_peak_rss_bytes": 1073741824,
+    "budget_rss_growth_bytes": 939524096,
+    "peak_rss_bytes": 732954624,
+    "rss_growth_bytes": 648331264,
+    "start_rss_bytes": 84623360,
+    "status": "passed"
+  },
+  "query_plans": {
+    "issue_frontend_page": [
+      "SEARCH issues USING COVERING INDEX idx_issues_queue (project_id=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "run_frontend_page": [
+      "SEARCH issue USING COVERING INDEX idx_issues_queue (project_id=?)",
+      "SEARCH run USING INDEX idx_issue_runs_issue (issue_id=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "timeline_summary_page": [
+      "SEARCH event_summary_projection USING INDEX idx_event_summary_projection_issue (issue_id=?)"
+    ]
+  },
+  "regressions": [],
+  "scale": {
+    "active_runs": 1,
+    "agent_sessions": 566,
+    "automation_definitions": 0,
+    "automation_events": 0,
+    "automation_runs": 0,
+    "event_summary_projection": 507885,
+    "issue_events": 507885,
+    "issue_runs": 718,
+    "issues": 744,
+    "max_events_per_issue": 11304,
+    "max_issues_per_project": 619,
+    "projects": 11,
+    "run_attempts": 718
+  },
+  "schema_version": "xuanwu.capacity-benchmark.v1",
+  "status": "passed"
+}
