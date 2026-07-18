@@ -1,5 +1,8 @@
 # PI Assistant CLI Connector Manifest v0
 
+> [!WARNING]
+> **历史 v0 规范（2026-07-19 归档）**：本文仅解释 legacy manifest 背景，不再是 connector authority。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Channel / Connector 合同](xuanwu/0064-channel-connector-contract.md)、[CLI / Webhook Adapter](xuanwu/0065-cli-webhook-channel-adapter.md) 与 [Connector Diagnostics](xuanwu/0076-connector-health-secrets-diagnostics.md)。
+
 > 状态：P02.01 v0 规范。范围只覆盖 manifest 解析与校验，不包含 CLI 执行器、注册到 Tool Registry、健康 UI/API。
 
 ## 目标

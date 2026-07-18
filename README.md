@@ -2,7 +2,7 @@
 
 **玄武**是本地优先、验证优先的 AI Engineering Control Plane：把工程目标变成可追踪的工作，交给 Coding Agents 长时间执行，并以可审计的监督、恢复、验证和交付闭环收口。`codex-issue-runner` 仅作为当前仓库、CLI 与兼容 API 的稳定标识保留。
 
-产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准；产品、Supervisor、Runner 与兼容标识的命名以 [玄武品牌术语合同](docs/architecture/xuanwu/0002-brand-terminology.md) 和 [用户可见命名迁移清单](docs/architecture/xuanwu/0082-user-facing-naming-migration.md) 为准；六条核心工作如何端到端验收以 [Golden Journey 合同](docs/architecture/xuanwu/0003-golden-journey-contracts.md) 为准。
+当前规范统一从 [canonical 架构文档索引](docs/architecture/README.md) 进入。产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准；产品、Supervisor、Runner 与兼容标识的命名以 [玄武品牌术语合同](docs/architecture/xuanwu/0002-brand-terminology.md) 和 [用户可见命名迁移清单](docs/architecture/xuanwu/0082-user-facing-naming-migration.md) 为准；六条核心工作如何端到端验收以 [Golden Journey 合同](docs/architecture/xuanwu/0003-golden-journey-contracts.md) 为准。
 
 当前后端已经切到 Bun/TypeScript，live 默认监听 `0.0.0.0:3008`，CLI 默认连接 `127.0.0.1:3008`。
 

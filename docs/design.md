@@ -1,5 +1,8 @@
 # Design Notes
 
+> [!WARNING]
+> **历史概览（2026-07-19 归档）**：本文只保留早期五节点概览，不再完整描述当前玄武架构。当前 source of truth 见 [canonical 架构文档索引](architecture/README.md)、根 [README](../README.md) 与 [运行可观测性合同](architecture/xuanwu/0078-runtime-observability-diagnostics.md)。
+
 当前实现已经迁移到 Bun/TypeScript 后端，入口在 `backend-ts/src/main.ts`，默认 live 端口为 `3008`。
 
 ## 高层结构

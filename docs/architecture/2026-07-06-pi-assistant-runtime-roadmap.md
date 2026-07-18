@@ -1,5 +1,8 @@
 # PI Assistant Runtime Roadmap：多来源 Inbox / Skills / Tool Provider
 
+> [!WARNING]
+> **历史路线（2026-07-19 归档）**：本文的通用私人助理/OpenClaw 方向已被玄武产品合同 supersede。当前 source of truth 见 [canonical 架构文档索引](README.md)、[玄武产品定位](xuanwu/0001-product-positioning.md)、[Supervisor 角色合同](xuanwu/0044-supervisor-role-prompt-contract.md) 与 [产品导航合同](xuanwu/0050-product-navigation-compatibility.md)；不得恢复平行的 PI Assistant 产品心智。
+
 > 状态：产品与工程路线规划。
 > 日期：2026-07-06。
 > 范围：`codex-issue-runner` 内的 PI 从“项目 issue 总控 agent”升级为“个人助理 runtime”。

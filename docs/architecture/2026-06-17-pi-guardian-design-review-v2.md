@@ -1,5 +1,8 @@
 # 2026-06-17 PI Guardian 设计评审 v2：重构版的残留缺口
 
+> [!WARNING]
+> **历史归档（2026-07-19）**：本文只保留评审 provenance，不再是当前实现规范。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Approval / Action Gate](xuanwu/0063-approval-action-gate.md)、[统一通知 Outbox](xuanwu/0075-unified-notification-outbox.md) 与 [决策层收敛](xuanwu/0079-pi-decision-layer-consolidation.md)；不得据本文复制旧 PI/Guardian 状态或 writer。
+
 > 状态：第二轮评审，针对重写后的 [`2026-06-17-pi-guardian-notification-supervisor-design.md`](./2026-06-17-pi-guardian-notification-supervisor-design.md)。
 > 日期：2026-06-17。
 > 关系：本文**不重复** [v1 评审](./2026-06-17-pi-guardian-design-review.md) 的 S1–S5 / M1–M6。那一轮的问题已在重写版中系统性解决（见下方“闭环确认”）。本文只列**重写后才出现、或只有在这个细化粒度下才暴露**的新缺口。

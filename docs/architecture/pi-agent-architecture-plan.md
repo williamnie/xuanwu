@@ -1,5 +1,8 @@
 # PI Agent 独立架构计划
 
+> [!WARNING]
+> **历史路线（2026-07-19 归档）**：本文的独立 PI Agent 产品路线已被玄武产品合同 supersede。当前 source of truth 见 [canonical 架构文档索引](README.md)、[玄武产品定位](xuanwu/0001-product-positioning.md)、[Supervisor 角色合同](xuanwu/0044-supervisor-role-prompt-contract.md) 与 [产品导航合同](xuanwu/0050-product-navigation-compatibility.md)；不得据本文建立第二 control plane。
+
 > 状态：架构/产品计划文档，不是实现记录。  
 > 目标读者：后续实现 agent、人工 reviewer、产品决策者。  
 > 当前日期：2026-05-28。  

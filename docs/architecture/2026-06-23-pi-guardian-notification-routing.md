@@ -1,5 +1,8 @@
 # PI Guardian 通知路由边界
 
+> [!WARNING]
+> **历史归档（2026-07-19）**：本文保留旧路由决策背景，不再是当前通知规范。当前 source of truth 见 [canonical 架构文档索引](README.md)、[统一通知 Outbox](xuanwu/0075-unified-notification-outbox.md) 与 [Feishu Connector 迁移](xuanwu/0077-feishu-channel-connector-migration.md)；不得据本文新增直连 provider 旁路。
+
 本页固化 Guardian 告警的用户通知策略，避免把系统级告警误接回普通 digest pipeline。
 
 ## 三条通知路径

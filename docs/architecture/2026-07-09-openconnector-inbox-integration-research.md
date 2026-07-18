@@ -1,5 +1,8 @@
 # OpenConnector 与 PI Assistant Inbox 接入价值调研
 
+> [!WARNING]
+> **历史调研（2026-07-19 归档）**：本文保留外部产品研究 provenance，不是当前 connector 或 inbox 规范。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Provider / Connections](xuanwu/0059-provider-presets-connections.md)、[Channel / Connector 合同](xuanwu/0064-channel-connector-contract.md) 与 [Connector Diagnostics](xuanwu/0076-connector-health-secrets-diagnostics.md)。
+
 > 日期：2026-07-09
 > Issue：#617
 > 范围：只读调研与建议；不改 public schema、runtime 状态机、provider adapter 或根配置。

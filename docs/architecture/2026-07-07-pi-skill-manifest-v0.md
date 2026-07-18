@@ -1,5 +1,8 @@
 # PI Skill Manifest v0：Intake 与 Domain Skill 边界
 
+> [!WARNING]
+> **历史 v0 规范（2026-07-19 归档）**：本文仅解释 legacy manifest 背景，不再是可执行 Skill authority。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Workflow Registry](xuanwu/0049-workflow-manifest-registry.md)、[可执行 Skill Runtime](xuanwu/0058-executable-skill-runtime.md) 与 [生产 fixture 退出](xuanwu/0077-production-fixture-retirement.md)。
+
 > 状态：P04.01 最小规范。范围只覆盖 manifest 解析、registry 展示与 loader 诊断，不包含 skill 执行、run history、proposal 持久化或自动路由。
 
 > P06.12 的 additive `execution` 扩展、受控 handler、权限审计与迁移规则见

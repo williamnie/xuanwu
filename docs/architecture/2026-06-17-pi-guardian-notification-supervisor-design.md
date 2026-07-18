@@ -1,5 +1,8 @@
 # 2026-06-17 PI Guardian 完整技术设计：通知决策、授权托管与 Issue 管家
 
+> [!WARNING]
+> **历史归档（2026-07-19）**：本文描述迁移前的完整设计，不再是当前实现规范。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Automation 语义](xuanwu/0060-automation-semantics.md)、[Approval / Action Gate](xuanwu/0063-approval-action-gate.md)、[统一通知 Outbox](xuanwu/0075-unified-notification-outbox.md) 与 [决策层收敛](xuanwu/0079-pi-decision-layer-consolidation.md)；不得据本文建立第二套 authority。
+
 > 状态：完整技术设计，非实现记录。
 > 日期：2026-06-17。
 > 范围：`codex-issue-runner` 中 PI 对 issue/session/notification/approval/recovery/watchdog 的托管能力。

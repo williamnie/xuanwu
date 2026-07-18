@@ -20,7 +20,7 @@
 | 外部通知 | 前缀统一为 `玄武 Supervisor`；能力名使用 Guardian/Runner | `backend-ts/src/notifications`、Feishu formatter/card、digest、watch 与 Guardian fallback | event type、outbox kind、payload 字段和幂等键保持不变 |
 | Prompt/工具描述 | `Xuanwu Supervisor` 或 `Supervisor` | intake、issue recovery、manager cycle、memory、repo context、tool descriptions | tool ID、skill ID、action type 和 `pi_*` carrier 不变 |
 | 当前文档 | 玄武作为产品，Supervisor 作为监督运行时 | `README.md`、`frontend/README.md`、当前 runbook、connector/smoke/context-pack 文档 | 命令、环境变量、路径、API/DB 名按代码原值书写 |
-| 历史设计记录 | 保留原始术语作为 provenance | `docs/architecture/2026-*`、旧 review/roadmap | 由 P11.08 建立归档索引；不得把历史快照当作当前产品文案 |
+| 历史设计记录 | 保留原始术语作为 provenance | `docs/architecture/2026-*`、旧 review/roadmap | 由 [canonical 架构文档索引](../README.md) 归档；不得把历史快照当作当前产品文案 |
 
 ## 3. Compatibility aliases 与现有配置升级
 

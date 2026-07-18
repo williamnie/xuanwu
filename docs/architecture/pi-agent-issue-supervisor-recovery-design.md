@@ -1,5 +1,8 @@
 # PI Agent Issue Supervisor Recovery 设计
 
+> [!WARNING]
+> **历史设计（2026-07-19 归档）**：本文保留旧 recovery 方案 provenance，不再定义当前 supervisor lifecycle。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Run / Attempt 生命周期](xuanwu/0020-run-attempt-lifecycle-contract.md)、[Run command service](xuanwu/0023-run-lifecycle-command-service.md) 与 [重启恢复不变量](xuanwu/0069-restart-recovery-invariants.md)。
+
 > 状态：完整功能设计与 backlog 拆分，不是实现记录。  
 > 日期：2026-06-10  
 > 范围：`codex-issue-runner` 的 PI Agent 对执行中 issue/session 进行巡查、判断、恢复、等待或升级。  

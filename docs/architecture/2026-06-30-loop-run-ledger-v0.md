@@ -1,5 +1,8 @@
 # loop_run / loop_step v0 ledger 设计草案
 
+> [!WARNING]
+> **历史草案（2026-07-19 归档）**：本文未成为当前 runtime authority，不得作为新增 ledger 或 scheduler 的实现依据。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Run / Attempt 生命周期](xuanwu/0020-run-attempt-lifecycle-contract.md) 与 [运行可观测性合同](xuanwu/0078-runtime-observability-diagnostics.md)。
+
 - 日期：2026-06-30
 - 范围：Loop Engineering L3 可观察性设计；覆盖 project loop、cron、heartbeat、guardian、supervisor、completion watch 的现状映射
 - 非目标：不写 DB migration；不改 scheduler；不改现有事件表；不引入 durable step orchestrator / JS workflow sandbox / 多 daemon

@@ -1,5 +1,8 @@
 # Codex Issue Runner Loop Engineering L3 架构快照与成熟度清单
 
+> [!WARNING]
+> **历史快照（2026-07-19 归档）**：本文只用于追溯 2026-06-30 的实现状态，不再是当前架构规范。当前 source of truth 见 [canonical 架构文档索引](README.md)、[核心对象合同](xuanwu/0004-core-domain-objects.md) 与 [运行可观测性合同](xuanwu/0078-runtime-observability-diagnostics.md)。
+
 - 日期：2026-06-30
 - 范围：当前仓库真实代码入口与 Loop Engineering L3 边界
 - 文档性质：项目内架构说明；不替代 README，不引用外部博客/竞品措辞，不引入新 runtime 约束

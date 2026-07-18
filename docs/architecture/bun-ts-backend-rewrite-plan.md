@@ -1,5 +1,8 @@
 # Bun/TypeScript Backend Migration
 
+> [!WARNING]
+> **已完成迁移记录（2026-07-19 归档）**：本文保留迁移 provenance，不再是当前构建、发布或运行规范。当前入口见 [canonical 架构文档索引](README.md)、根 [README](../../README.md) 与 [发布/升级/回滚 runbook](../runbooks/release-upgrade-rollback.md)。
+
 > 状态：已完成。Go 后端源码、Go module、Go release/build 脚本已经移除；live 后端由 Bun/TypeScript 提供。
 
 ## 当前运行态

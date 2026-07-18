@@ -1,5 +1,8 @@
 # 2026-06-17 PI Guardian 设计评审：漏洞与缺口
 
+> [!WARNING]
+> **历史归档（2026-07-19）**：本文只保留评审 provenance，不再是当前实现规范。当前 source of truth 见 [canonical 架构文档索引](README.md)、[Approval / Action Gate](xuanwu/0063-approval-action-gate.md)、[统一通知 Outbox](xuanwu/0075-unified-notification-outbox.md) 与 [决策层收敛](xuanwu/0079-pi-decision-layer-consolidation.md)；不得据本文复制旧 PI/Guardian 状态或 writer。
+
 > 状态：评审记录，针对 [`2026-06-17-pi-guardian-notification-supervisor-design.md`](./2026-06-17-pi-guardian-notification-supervisor-design.md)。
 > 日期：2026-06-17
 > 方法：文档逐节核对 + 当前实现 ground-truth（带 `file:line` 证据）。
