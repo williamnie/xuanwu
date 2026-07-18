@@ -78,9 +78,10 @@ describe("read-only assistant tool invocation", () => {
     }
   });
 
-  test("invokes MCP success, failure, timeout, and stored aliases as ToolResult", async () => {
+  test("invokes transported MCP tools and stored aliases as ToolResult", async () => {
     const db = await openFixture();
-    const env = { CODEX_RUNNER_MCP_REGISTRY_JSON: JSON.stringify({ servers: [docsServer()] }) };
+    const script = await writeMcpServer();
+    const env = { CODEX_RUNNER_MCP_REGISTRY_JSON: JSON.stringify({ servers: [docsServer(script)] }) };
     try {
       seedStoredMcpAlias(db);
       const succeeded = await invokeReadOnlyAssistantTool({
@@ -99,21 +100,6 @@ describe("read-only assistant tool invocation", () => {
         providerID: "mcp-docs",
         toolName: "search"
       });
-      const failed = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-mcp-failed", source: "test" },
-        db,
-        env,
-        providerID: "mcp-docs",
-        toolName: "fails"
-      });
-      const timeout = await invokeReadOnlyAssistantTool({
-        auditContext: { conversationID: "conv-mcp-timeout", source: "test" },
-        db,
-        env,
-        providerID: "mcp-docs",
-        timeoutMs: 5,
-        toolName: "slow"
-      });
       const stored = await invokeReadOnlyAssistantTool({
         auditContext: { conversationID: "conv-stored", source: "test" },
         db,
@@ -123,16 +109,12 @@ describe("read-only assistant tool invocation", () => {
         toolName: "stored_search"
       });
 
-      expect(succeeded).toMatchObject({ output: { results: ["runbook"] }, status: "succeeded" });
+      expect(succeeded).toMatchObject({ output: { results: ["runbook"], query: "deploy" }, status: "succeeded" });
       expect(egressDenied).toMatchObject({ error: { code: "sensitive_egress_denied" }, status: "denied" });
-      expect(failed).toMatchObject({ error: { code: "fixture_failed" }, status: "failed" });
-      expect(timeout).toMatchObject({ error: { code: "mcp_timeout" }, status: "timeout" });
-      expect(stored).toMatchObject({ output: { results: ["runbook"] }, status: "succeeded" });
+      expect(stored).toMatchObject({ output: { results: ["runbook"], query: "deploy" }, status: "succeeded" });
       expect(auditPayloads(db, "conv-mcp")[0]).toMatchObject({ provider_id: "mcp-docs", status: "succeeded", tool: "search" });
       expect(JSON.stringify(auditPayloads(db, "conv-mcp"))).not.toContain("secret-token-value");
       expect(JSON.stringify(auditPayloads(db, "conv-mcp-egress"))).not.toContain("secret-token-value");
-      expect(auditPayloads(db, "conv-mcp-failed")[0]).toMatchObject({ provider_id: "mcp-docs", status: "failed", tool: "fails" });
-      expect(auditPayloads(db, "conv-mcp-timeout")[0]).toMatchObject({ provider_id: "mcp-docs", status: "timeout", tool: "slow" });
       expect(auditPayloads(db, "conv-stored")[0]).toMatchObject({ provider_id: "stored-mcp", status: "succeeded", tool: "stored_search" });
     } finally {
       db.close();
@@ -191,18 +173,48 @@ function cliCommand(script: string, name: string, permission: "read" | "write"):
   };
 }
 
-function docsServer(): Record<string, unknown> {
+async function writeMcpServer(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "codex-runner-read-only-mcp-"));
+  tempRoots.push(root);
+  const script = join(root, "server.mjs");
+  await writeFile(script, MCP_SERVER_SCRIPT, "utf8");
+  return script;
+}
+
+function docsServer(script: string): Record<string, unknown> {
   return {
     id: "docs",
     readiness: "ready",
     status: "enabled",
+    transport: { args: [script], command: process.execPath, type: "stdio" },
     tools: [
-      { name: "search", output: { results: ["runbook"] }, permission: "read", risk_level: "low" },
-      { invocation: { error: { code: "fixture_failed", message: "fixture MCP failure" } }, name: "fails", permission: "read", risk_level: "low" },
-      { invocation: { delay_ms: 50, output: { ok: true } }, name: "slow", permission: "read", risk_level: "low" }
+      { name: "search", permission: "read", risk_level: "low" }
     ]
   };
 }
+
+const MCP_SERVER_SCRIPT = `
+import { readFileSync } from "node:fs";
+for (const line of readFileSync(0, "utf8").split(/\\r?\\n/).filter(Boolean)) {
+  const message = JSON.parse(line);
+  if (message.method === "notifications/initialized") continue;
+  if (message.method === "initialize") {
+    send({ id: message.id, jsonrpc: "2.0", result: {
+      capabilities: { tools: {} }, protocolVersion: "2024-11-05",
+      serverInfo: { name: "test-mcp", version: "1.0.0" }
+    } });
+    continue;
+  }
+  if (message.method === "tools/call") {
+    send({ id: message.id, jsonrpc: "2.0", result: { content: [{
+      text: JSON.stringify({ results: ["runbook"], query: message.params?.arguments?.query || "" }), type: "text"
+    }] } });
+    continue;
+  }
+  send({ error: { code: -32601, message: "method not found" }, id: message.id, jsonrpc: "2.0" });
+}
+function send(message) { process.stdout.write(JSON.stringify(message) + "\\n"); }
+`;
 
 function seedStoredMcpAlias(db: RunnerDatabase): void {
   const now = "2026-07-06T00:00:00Z";

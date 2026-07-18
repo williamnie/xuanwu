@@ -22,7 +22,6 @@ type SkillRouteContext = { config?: RunnerConfig; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
 type SkillRegistryView = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
 
-const LEGACY_DOMAIN_EVENT_TYPE = "attention_inbox.domain_skill_requested";
 const RUN_STATUSES = new Set(["running", "succeeded", "failed"]);
 
 export function registerPiSkillRoutes(router: Router, context?: SkillRouteContext): void {
@@ -111,10 +110,8 @@ function latestDomainRun(db: RunnerDatabase, actionID: string): JsonObject | nul
 }
 
 function domainRunEvents(db: RunnerDatabase): PiActionEvent[] {
-  const current = listPiActionEvents(db, { eventType: SKILL_RUNTIME_COMPLETED_EVENT })
+  return listPiActionEvents(db, { eventType: SKILL_RUNTIME_COMPLETED_EVENT })
     .filter((event) => cleanString(jsonObject(parseJson(event.payload_json)).kind) === "domain");
-  const legacy = listPiActionEvents(db, { eventType: LEGACY_DOMAIN_EVENT_TYPE });
-  return [...legacy, ...current].sort((left, right) => left.id - right.id);
 }
 
 function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
@@ -129,7 +126,7 @@ function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
     kind: "domain",
     status: cleanString(eventPayload.status) || (error ? "failed" : "succeeded"),
     proposal_status: action?.status || "",
-    skill_id: cleanString(actionPayload.skill_id || eventPayload.skill_id) || DEFAULT_DOMAIN_SKILL_ID,
+    skill_id: cleanString(eventPayload.skill_id || actionPayload.skill_id) || DEFAULT_DOMAIN_SKILL_ID,
     item_id: itemID,
     bundle_id: item?.bundle_id ?? 0,
     input_id: itemID,

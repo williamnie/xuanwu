@@ -1,7 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   readMcpCapability,
-  readMcpResource,
   readMcpServer,
   type McpCapability,
   type McpRegistryOptions,
@@ -49,25 +48,21 @@ function resourceResult(
     const resultError = error("mcp_server_unavailable", "MCP server is not registered");
     return finish(invocationID, startedAt, started, "failed", resultError);
   }
-  if (!server.transport) return fixtureResourceResult(input, invocationID, startedAt, started);
+  if (!server.transport) {
+    return finish(
+      invocationID,
+      startedAt,
+      started,
+      "failed",
+      error("mcp_server_unavailable", "MCP server has no executable transport")
+    );
+  }
   const timeoutMs = capability.timeout_ms ?? DEFAULT_TIMEOUT_MS;
   const result = invokeMcpTransport({ capability, operation: "resource.read", server, timeoutMs });
   return fixed(invocationID, startedAt, result.durationMs, result.status, result.error, result.output, {
     mcp: mcpMetadata(capability, server, timeoutMs),
     ...(result.metadata ?? {})
   });
-}
-
-function fixtureResourceResult(
-  input: McpResourceReadAdapterInput,
-  invocationID: string,
-  startedAt: Date,
-  started: number
-): ToolResult {
-  const output = readMcpResource(input.capabilityID, input.registry);
-  const status = fixtureStatus(output);
-  const resultError = status === "succeeded" ? undefined : fixtureError(output, status);
-  return finish(invocationID, startedAt, started, status, resultError, output);
 }
 
 function legacyResourceOutput(capability: McpCapability | null, result: ToolResult): unknown {
@@ -101,21 +96,6 @@ function auditResult(
     toolCallID: result.invocation_id,
     toolName: capability ? `resource:${capability.name}` : "resource"
   });
-}
-
-function fixtureStatus(output: unknown): ToolResult["status"] {
-  const object = recordValue(output);
-  if (object.forbidden || object.unauthorized) return "denied";
-  if (object.missing) return "failed";
-  return "succeeded";
-}
-
-function fixtureError(output: unknown, status: ToolResult["status"]): ToolResultError {
-  const object = recordValue(output);
-  return {
-    code: status === "denied" ? "permission_denied" : "mcp_resource_error",
-    message: cleanString(object.reason) || "MCP resource read failed"
-  };
 }
 
 function finish(
@@ -161,8 +141,7 @@ function mcpMetadata(capability: McpCapability, server: McpServerRegistry, timeo
 }
 
 function publicCapability(capability: McpCapability): McpCapability {
-  const { content: _content, invocation: _invocation, ...safe } = capability;
-  return safe;
+  return capability;
 }
 
 function error(code: string, message: string): ToolResultError {

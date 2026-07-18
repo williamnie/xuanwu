@@ -10,11 +10,9 @@ export type McpPermission = "read" | "write" | "admin";
 
 export type McpCapability = {
   allowed_actions: string[];
-  content?: unknown;
   description: string;
   id: string;
   input_schema?: Record<string, unknown>;
-  invocation?: Record<string, unknown>;
   kind: McpCapabilityKind;
   name: string;
   output_schema?: Record<string, unknown>;
@@ -112,24 +110,6 @@ export function listMcpResources(serverID = "", options: McpRegistryOptions = {}
     .flatMap((server) => server.resources)
     .filter((resource) => resource.read_only)
     .map(publicCapability);
-}
-
-export function readMcpResource(capabilityID: string, options: McpRegistryOptions = {}) {
-  const registry = listMcpRegistry(options);
-  const capability = registry.flatMap((server) => server.resources).find((item) => item.id === normalizeID(capabilityID));
-  if (!capability || capability.kind !== "resource") return { capability_id: normalizeID(capabilityID), missing: true };
-  const server = registry.find((item) => item.id === capability.server_id);
-  if (!server || !isMcpServerAuthorized(server)) {
-    return {
-      capability: publicCapability(capability),
-      reason: "MCP server is not authorized or ready",
-      unauthorized: true
-    };
-  }
-  if (capability.permission !== "read") {
-    return { capability: publicCapability(capability), forbidden: true, reason: "MCP resource is not read-only" };
-  }
-  return { capability: publicCapability(capability), content: capability.content ?? null };
 }
 
 export function recommendMcpRequirements(
@@ -239,10 +219,8 @@ function normalizeCapability(serverID: string, kind: McpCapabilityKind, raw: Raw
   const readOnly = booleanValue(raw.read_only ?? raw.readOnly, permission === "read" && risk_level === "low");
   return {
     allowed_actions: allowedActions(kind, permission),
-    content: raw.content ?? raw.value ?? raw.output ?? raw.result,
     description: cleanString(raw.description ?? raw.summary),
     id: `${serverID}:${kind}:${name}`,
-    invocation: objectValue(raw.invocation ?? raw.fixture ?? raw.call),
     ...(kind === "tool" ? {
       input_schema: jsonSchema(raw.input_schema ?? raw.inputSchema ?? raw.parameters ?? raw.schema, emptyObjectSchema()),
       output_schema: jsonSchema(raw.output_schema ?? raw.outputSchema, { type: "object" })
@@ -357,8 +335,7 @@ function publicServer(server: McpServerRegistry): McpServerRegistry {
 }
 
 function publicCapability(capability: McpCapability): McpCapability {
-  const { content: _content, invocation: _invocation, ...safe } = capability;
-  return safe;
+  return capability;
 }
 
 function serverDiagnostics(id: string, status: string, readiness: string): McpRegistryDiagnostic[] {

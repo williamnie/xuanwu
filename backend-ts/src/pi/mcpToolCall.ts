@@ -39,13 +39,6 @@ export type McpToolCallInput = {
 const DEFAULT_TIMEOUT_MS = 10_000;
 const PERMISSION_LEVEL: Record<ToolPermission, number> = { read: 0, write: 1, dangerous: 2 };
 
-type ToolFixture = {
-  delay_ms?: number;
-  echo_input?: boolean;
-  error?: unknown;
-  output?: unknown;
-};
-
 export function callMcpTool(request: McpToolCallInput): ToolResult {
   const invocationID = request.invocationID || crypto.randomUUID();
   const startedAt = new Date();
@@ -80,7 +73,13 @@ function mcpToolResult(
     return timedResult(invocationID, startedAt, started, "denied", toolError("permissionDenied", message));
   }
   if (server.transport) return executeTransportTool(request, invocationID, startedAt, capability, server);
-  return executeFixtureTool(request, invocationID, startedAt, started, capability, server);
+  return timedResult(
+    invocationID,
+    startedAt,
+    started,
+    "failed",
+    toolError("serverUnavailable", "MCP server has no executable transport")
+  );
 }
 
 function executeTransportTool(
@@ -110,36 +109,6 @@ function executeTransportTool(
     metadata,
     result.error,
     result.output
-  );
-}
-
-function executeFixtureTool(
-  request: McpToolCallInput,
-  invocationID: string,
-  startedAt: Date,
-  started: number,
-  capability: McpCapability,
-  server: McpServerRegistry
-): ToolResult {
-  const fixture = fixtureInvocation(capability);
-  const timeoutMs = request.timeoutMs ?? capability.timeout_ms ?? DEFAULT_TIMEOUT_MS;
-  const delayMs = positiveInteger(fixture.delay_ms);
-  const metadata = mcpMetadata(capability, server, timeoutMs, delayMs);
-  if (delayMs > timeoutMs) {
-    return fixedDurationResult(invocationID, startedAt, timeoutMs, "timeout", metadata, toolError("timeout", "MCP tool call timed out"));
-  }
-  if (fixture.error !== undefined) {
-    return fixedDurationResult(invocationID, startedAt, delayMs, "failed", metadata, normalizedToolError(fixture.error));
-  }
-  const durationMs = delayMs || Math.round(performance.now() - started);
-  return fixedDurationResult(
-    invocationID,
-    startedAt,
-    durationMs,
-    "succeeded",
-    metadata,
-    undefined,
-    fixtureOutput(fixture, capability, request.input ?? {})
   );
 }
 
@@ -193,40 +162,14 @@ function fixedDurationResult(
   };
 }
 
-function fixtureInvocation(capability: McpCapability): ToolFixture {
-  const raw = recordValue(capability.invocation);
-  return {
-    delay_ms: positiveInteger(raw.delay_ms ?? raw.delayMs),
-    echo_input: raw.echo_input === true || raw.echoInput === true,
-    error: raw.error,
-    output: raw.output ?? capability.content
-  };
-}
-
-function fixtureOutput(fixture: ToolFixture, capability: McpCapability, input: Record<string, unknown>): unknown {
-  if (fixture.echo_input) return { capability_id: capability.id, input };
-  if (fixture.output !== undefined) return fixture.output;
-  return { capability_id: capability.id, input, ok: true };
-}
-
-function normalizedToolError(value: unknown): ToolResultError {
-  const object = recordValue(value);
-  return {
-    code: cleanString(object.code) || MCP_TOOL_ERROR_CODES.toolError,
-    message: cleanString(object.message) || "MCP tool call failed",
-    ...(object.details === undefined ? {} : { details: object.details })
-  };
-}
-
 function toolError(code: keyof typeof MCP_TOOL_ERROR_CODES, message: string, details?: unknown): ToolResultError {
   return { code: MCP_TOOL_ERROR_CODES[code], message, ...(details === undefined ? {} : { details }) };
 }
 
-function mcpMetadata(capability: McpCapability, server: McpServerRegistry, timeoutMs: number, delayMs = 0): Record<string, unknown> {
+function mcpMetadata(capability: McpCapability, server: McpServerRegistry, timeoutMs: number): Record<string, unknown> {
   return {
     mcp: {
       capability_id: capability.id,
-      delay_ms: delayMs,
       provider_id: mcpToolProviderID(server.id),
       server_id: server.id,
       timeout_ms: timeoutMs,
@@ -255,15 +198,6 @@ function assistantPermission(capability: McpCapability): ToolPermission {
 
 function permissionAllows(max: ToolPermission, required: ToolPermission): boolean {
   return PERMISSION_LEVEL[max] >= PERMISSION_LEVEL[required];
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function positiveInteger(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number.parseInt(cleanString(value), 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function cleanString(value: unknown): string {

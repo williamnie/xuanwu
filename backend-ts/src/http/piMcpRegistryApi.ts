@@ -42,7 +42,6 @@ function capabilityID(request: Request): string {
   return decodeURIComponent(value);
 }
 
-function publicCapability(capability: McpCapability): Omit<McpCapability, "content"> {
-  const { content: _content, ...safe } = capability;
-  return safe;
+function publicCapability(capability: McpCapability): McpCapability {
+  return capability;
 }

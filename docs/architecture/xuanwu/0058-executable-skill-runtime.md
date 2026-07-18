@@ -48,8 +48,8 @@ scope 或 Action Gate decision。
 - 成功后的 `pi_action` 与 `pi_action_proposal` 仍是 proposal/action authority，runtime event 只保存执行审计与关联 ID。
 
 坏 input/output、越权、缺工具、handler error 或 timeout 不写 proposal、不修改 inbox 状态，也不影响其他 Skill Run。
-`GET /api/pi/skills/domain-runs` 同时读取新 `skill_runtime.completed` 与 legacy
-`attention_inbox.domain_skill_requested`，返回形状保持兼容，失败也可回读。
+`GET /api/pi/skills/domain-runs` 只读取 `skill_runtime.completed`。P11.01 的一次性数据迁移会把 legacy
+`attention_inbox.domain_skill_requested` 追加投影为 `legacy-domain-proposal` run event，原审计事件保持不变。
 
 ## 4. Authority、兼容、迁移与回滚
 
@@ -62,13 +62,12 @@ scope 或 Action Gate decision。
 
 迁移窗口：
 
-- **W1（本期）：** 新 Domain Run 只写 `skill_runtime.*`，默认 Skill 只用 `pi-domain-proposal`；旧
-  `fixture-domain` action/event 保留只读，不回填、不双写。API 对两种历史事件双读，最长两个正式 release window。
+- **W2（P11.01）：** 新 Domain Run 只写 `skill_runtime.*`，默认 Skill 只用 `pi-domain-proposal`；active Automation 与
+  skill-scoped Memory 中的旧 ID 一次性迁移到默认 Skill。legacy run 追加兼容投影后删除 API 双读，原 action/event 仅作审计留存。
 - **回滚：** 回退 runtime selector/caller 到上一 scoped commit；保留所有新 Skill/tool audit、proposal 和旧记录，不删除、
   不反写、不让 legacy 与新 runtime 同时处理同一 inbox item。
-- **最终删除门禁：** P10 evaluation 与 clean-baseline Golden Journey 覆盖成功、坏 schema、越权、超时、Evidence 越界、
-  retry/replay；连续一个正式 release 无 legacy new-run producer；双读窗口结束并经 P11/G7 批准后，才可删除 legacy
-  event reader 与 fixture-only artifacts。
+- **删除门禁结果：** P10.08 Golden Journey 与 P06.12 均已完成；live Automation/Memory/Action/Run 配置中的旧 Skill ID
+  引用为零，默认 Registry 使用真实 manifest。P11.01 删除 legacy event reader，并把 fixture manifests 移到 test-only 目录。
 
 ## 5. 最小验证
 

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getSkillMetadata, listSkillRegistry, readSkillRegistry, recommendSkillIntents } from "./registry.ts";
 
-const FIXTURE_SKILLS = join(import.meta.dir, "../../../docs/fixtures/pi-skills");
+const FIXTURE_SKILLS = join(import.meta.dir, "../../test-fixtures/pi-skills");
 const tempRoots: string[] = [];
 
 afterEach(async () => {
@@ -180,6 +180,22 @@ describe("PI skill registry", () => {
       kind: "domain"
     });
   });
+
+  test("loads canonical runner skills from packaged binary assets", async () => {
+    const root = await fixtureRoot();
+    await writeManifestSkill(root, "pi-domain-proposal", executableDomainManifest());
+
+    const executable = getSkillMetadata("pi-domain-proposal", {
+      roots: [{ label: "runner-package", path: join(root, "skills") }]
+    });
+
+    expect(executable).toMatchObject({
+      id: "pi-domain-proposal",
+      kind: "domain",
+      runtime_manifest_path: "runner-package:skills/pi-domain-proposal/manifest.json",
+      source_path: "runner-package:skills/pi-domain-proposal/SKILL.md"
+    });
+  });
 });
 
 async function fixtureRoot(): Promise<string> {
@@ -224,4 +240,18 @@ function intakeManifest(overrides: Record<string, unknown> = {}): Record<string,
     required_tools: [],
     ...overrides
   };
+}
+
+function executableDomainManifest(): Record<string, unknown> {
+  return intakeManifest({
+    execution: {
+      adapter: "builtin",
+      handler: "builtin:pi-domain-proposal",
+      sandbox: "capability",
+      timeout_ms: 1000
+    },
+    input_object: "inbox_item",
+    kind: "domain",
+    output_objects: ["action_proposals"]
+  });
 }

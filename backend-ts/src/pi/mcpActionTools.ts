@@ -180,10 +180,9 @@ function auditContext(context: McpActionContext) {
   };
 }
 
-function publicMcpCapability(capability: McpCapability | null): Omit<McpCapability, "content" | "invocation"> | null {
+function publicMcpCapability(capability: McpCapability | null): McpCapability | null {
   if (!capability) return null;
-  const { content: _content, invocation: _invocation, ...safe } = capability;
-  return safe;
+  return capability;
 }
 
 function cleanString(value: unknown): string {

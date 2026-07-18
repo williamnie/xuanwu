@@ -77,9 +77,16 @@ export function recommendSkillIntents(
 function registryRoots(options: SkillRegistryOptions): SkillRegistryRoot[] {
   if (options.roots?.length) return options.roots;
   const home = Bun.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
-  const repo = repoRoot();
+  const packageDir = Bun.env.PI_PACKAGE_DIR?.trim();
+  const repoSkills = join(repoRoot(), "skills");
+  const runnerRoots: SkillRegistryRoot[] = [];
+  if (existsSync(repoSkills)) runnerRoots.push({ label: "repo", path: repoSkills });
+  if (packageDir && existsSync(join(packageDir, "skills"))) {
+    runnerRoots.push({ label: "runner-package", path: join(packageDir, "skills") });
+  }
+  if (runnerRoots.length === 0) runnerRoots.push({ label: "repo", path: repoSkills });
   return [
-    { label: "repo", path: join(repo, "skills") },
+    ...runnerRoots,
     { label: "codex-home", path: join(home, "skills") },
     { label: "codex-superpowers", path: join(home, "superpowers", "skills"), prefix: "superpowers" },
     { label: "codex-plugins", path: join(home, "plugins", "cache") }
@@ -188,7 +195,7 @@ function parentName(path: string): string {
 
 function publicPath(path: string, root: SkillRegistryRoot): string {
   const label = clean(root.label) || clean(root.prefix) || "skill-root";
-  const base = label === "repo" ? repoRoot() : root.path;
+  const base = label === "repo" || label === "runner-package" ? dirname(root.path) : root.path;
   return `${label}:${relative(base, path).replaceAll("\\", "/")}`;
 }
 

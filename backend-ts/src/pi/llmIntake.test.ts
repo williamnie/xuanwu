@@ -12,7 +12,7 @@ import { readSkillRegistry } from "../skills/registry.ts";
 import { runIntakeSkill, runLlmIntake, type LlmIntakeRequest } from "./llmIntake.ts";
 
 const tempRoots: string[] = [];
-const FIXTURE_SKILLS = join(import.meta.dir, "../../../docs/fixtures/pi-skills");
+const FIXTURE_SKILLS = join(import.meta.dir, "../../test-fixtures/pi-skills");
 
 type ChatBundleFixture = {
   bug: number;

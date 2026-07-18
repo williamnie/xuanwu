@@ -53,4 +53,5 @@ Context Bundle → Intake Skill → Attention Inbox Item → Domain Skill → Ac
 - `missing_tool`：`required_tools` 中的工具没有出现在当前 Tool Registry snapshot。
 - `permission_conflict`：required tool 的权限高于 manifest 声明的 `max_tool_permission`。
 
-Fixture 示例位于 `docs/fixtures/pi-skills/fixture-intake` 与 `docs/fixtures/pi-skills/fixture-domain`。
+测试 fixture 位于 `backend-ts/test-fixtures/pi-skills/fixture-intake` 与
+`backend-ts/test-fixtures/pi-skills/fixture-domain`，默认 Skill Registry 不加载该目录。

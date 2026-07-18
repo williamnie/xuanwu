@@ -56,7 +56,7 @@ describe("PI MCP registry and envelope tools", () => {
     }
   });
 
-  test("calls fixture MCP tools through the shared gate and audit envelope", async () => {
+  test("fails closed when configured MCP tools have no executable transport", async () => {
     const { db, project } = await openFixture();
     Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
     try {
@@ -79,8 +79,8 @@ describe("PI MCP registry and envelope tools", () => {
       const audit = listPiActionEvents(db, { eventType: "tool_call_audit" }).at(-1);
 
       expect(result.details).toMatchObject({
-        output: { items: ["runbook"], ok: true },
-        status: "succeeded"
+        error: { code: "mcp_server_unavailable", message: "MCP server has no executable transport" },
+        status: "failed"
       });
       expect(action).toMatchObject({
         gate_decision: "execute",
@@ -101,10 +101,38 @@ describe("PI MCP registry and envelope tools", () => {
       });
       expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
         provider_id: "mcp-docs",
-        status: "succeeded",
+        status: "failed",
         tool: "search"
       });
       expect(audit?.payload_json).not.toContain("secret-token-value");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("fails closed when configured MCP resources have no executable transport", async () => {
+    const { db, project } = await openFixture();
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    try {
+      const actions = createPiRunnerActions(db, {
+        authorization: {
+          allowed_mcp_capabilities: ["docs:resource:runbook"],
+          authorizedActions: [{ action_type: "mcp.resource.read", project_id: project.id }],
+          mode: "delegated",
+          scope: { project_id: project.id }
+        },
+        project
+      });
+
+      const result = actions.readMcpResource({ capability_id: "docs:resource:runbook" });
+
+      expect(result).toMatchObject({
+        error: { code: "mcp_server_unavailable", message: "MCP server has no executable transport" },
+        status: "failed"
+      });
+      expect(listPiActionEvents(db, { eventType: "tool_call_audit" }).map((event) =>
+        JSON.parse(event.payload_json)
+      )).toEqual([expect.objectContaining({ provider_id: "mcp-docs", status: "failed", tool: "resource:runbook" })]);
     } finally {
       db.close();
     }
@@ -226,42 +254,10 @@ describe("PI MCP registry and envelope tools", () => {
     }
   });
 
-  test("normalizes MCP tool failures and timeouts", async () => {
-    const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
-    try {
-      const tools = createPiRunnerActionTools(createPiRunnerActions(db, {
-        authorization: {
-          allowed_mcp_capabilities: ["docs:tool:fails", "docs:tool:slow"],
-          authorizedActions: [{ action_type: "mcp.tool.call", project_id: project.id }],
-          mode: "delegated",
-          scope: { project_id: project.id }
-        },
-        project
-      }));
-
-      const failed = await runTool(tools, "mcp_tool_call", { capability_id: "docs:tool:fails" });
-      const timeout = await runTool(tools, "mcp_tool_call", { capability_id: "docs:tool:slow", timeout_ms: 5 });
-
-      expect(failed.details).toMatchObject({
-        error: { code: "fixture_failed", message: "fixture MCP failure" },
-        status: "failed"
-      });
-      expect(timeout.details).toMatchObject({
-        error: { code: "mcp_timeout", message: "MCP tool call timed out" },
-        status: "timeout"
-      });
-      expect(listPiActionEvents(db, { eventType: "tool_call_audit" }).map((event) =>
-        JSON.parse(event.payload_json).status
-      )).toEqual(["failed", "timeout"]);
-    } finally {
-      db.close();
-    }
-  });
-
   test("executes read-only MCP resources only when delegated allowlist covers them", async () => {
-    const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    const { db, project, root } = await openFixture();
+    const serverScript = await writeRealMcpServer(root);
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [realMcpServer(serverScript)] });
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
@@ -277,7 +273,7 @@ describe("PI MCP registry and envelope tools", () => {
       const denied = actions.readMcpResource({ capability_id: "docs:resource:secret" }) as { decision: string; status: string };
       const allowedAction = listPiActions(db).find((action) => action.action_type === "mcp.resource.read" && action.status === "completed");
 
-      expect(allowed).toMatchObject({ capability: { id: "docs:resource:runbook" }, content: "deploy safely" });
+      expect(allowed).toMatchObject({ capability: { id: "docs:resource:runbook" }, content: "real deploy safely" });
       expect(denied).toMatchObject({ decision: "deny", status: "denied" });
       expect(allowedAction).toMatchObject({ project_id: project.id, source: "pi_mcp_tool" });
       expect(listPiActionEvents(db, { actionId: allowedAction?.id ?? "" }).map((event) => event.event_type)).toEqual([
@@ -383,8 +379,9 @@ describe("PI MCP registry and envelope tools", () => {
   });
 
   test("executes delegated read-permission MCP resources when allowlist covers them", async () => {
-    const { db, project } = await openFixture();
-    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [docsServer()] });
+    const { db, project, root } = await openFixture();
+    const serverScript = await writeRealMcpServer(root);
+    Bun.env.CODEX_RUNNER_MCP_REGISTRY_JSON = JSON.stringify({ servers: [realMcpServer(serverScript)] });
     try {
       const actions = createPiRunnerActions(db, {
         authorization: {
@@ -402,7 +399,7 @@ describe("PI MCP registry and envelope tools", () => {
       };
       const action = listPiActions(db).find((item) => item.action_type === "mcp.resource.read");
 
-      expect(result).toMatchObject({ content: "needs approval" });
+      expect(result).toMatchObject({ content: "real deploy safely" });
       expect(action).toMatchObject({
         action_type: "mcp.resource.read",
         gate_decision: "execute",
@@ -476,20 +473,6 @@ function docsServer() {
         output: { items: ["runbook"], ok: true },
         timeout_ms: 50
       },
-      {
-        name: "fails",
-        description: "Failing fixture tool",
-        permission: "read",
-        risk_level: "low",
-        invocation: { error: { code: "fixture_failed", message: "fixture MCP failure" } }
-      },
-      {
-        name: "slow",
-        description: "Slow fixture tool",
-        permission: "read",
-        risk_level: "low",
-        invocation: { delay_ms: 50, output: { ok: true } }
-      },
       { name: "delete_doc", description: "Delete documentation", permission: "write", risk_level: "high" }
     ]
   };
@@ -516,6 +499,20 @@ function realMcpServer(
         risk_level: "low",
         timeout_ms: options.resourceTimeoutMs ?? 500,
         uri: `mcp://${id}/runbook`
+      },
+      {
+        name: "internal",
+        permission: "read",
+        risk_level: "medium",
+        timeout_ms: options.resourceTimeoutMs ?? 500,
+        uri: `mcp://${id}/internal`
+      },
+      {
+        name: "secret",
+        permission: "admin",
+        risk_level: "high",
+        timeout_ms: options.resourceTimeoutMs ?? 500,
+        uri: `mcp://${id}/secret`
       }
     ],
     tools: [
