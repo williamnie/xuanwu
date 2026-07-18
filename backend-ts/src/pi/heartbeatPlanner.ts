@@ -81,7 +81,7 @@ function supervisorDecisionCandidates(signals: HeartbeatSignals, context: Planne
         wait_until: item.wait_until
       },
       projectID: item.project_id || context.projectID,
-      rationale: `Ask PI supervisor to decide recovery for issue #${item.issue_id}: ${item.diagnosis_code}`
+      rationale: `Ask Supervisor to decide recovery for issue #${item.issue_id}: ${item.diagnosis_code}`
     }));
 }
 

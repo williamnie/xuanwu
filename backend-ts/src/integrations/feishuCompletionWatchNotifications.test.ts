@@ -66,7 +66,7 @@ describe("Feishu completion watch notifications", () => {
       });
       expect(storedIntent).toMatchObject({ error: "", sent_outbox_id: outbox[0]?.id, state: "sent" });
       expect(getPiIssueCompletionWatch(db, watch.id)).toMatchObject({ status: "satisfied" });
-      expect(content).toContain("Pi：你关注的 2 个 issue 已结束");
+      expect(content).toContain("玄武 Supervisor：你关注的 2 个 issue 已结束");
       expect(content).toContain("done：1");
       expect(content).toContain("failed：1");
       expect(content).toContain("cancelled：0");

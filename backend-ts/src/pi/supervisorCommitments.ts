@@ -332,7 +332,7 @@ export function buildSupervisorCommitmentPromptContext(
     projection.length > 0 ? JSON.stringify(projection, null, 2) : "- No active commitments for this context.",
     "Authority: Work goal/status comes from issues-via-work-adapter; lifecycle and completion notification come from the existing audited completion-watch path.",
     "Never treat chat prose as a commitment. Create one only after authoritative Work exists and issue_completion_watch_create succeeds with xw.supervisor-commitment.v1 metadata.",
-    "A temporary follow-up promise, due date, cancellation, or resume link must stay in this operational projection and must not be written to PI long-term memory."
+    "A temporary follow-up promise, due date, cancellation, or resume link must stay in this operational projection and must not be written to Supervisor long-term memory."
   ].join("\n");
 }
 

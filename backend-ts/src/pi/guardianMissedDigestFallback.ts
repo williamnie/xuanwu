@@ -5,6 +5,7 @@ import {
   sendDirectFeishuGuardianAlert,
   type PiGuardianDirectFeishuOptions
 } from "../integrations/feishuGuardianAlerts.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
 export async function sendMissedDigestPendingFeishuFallback(
   db: RunnerDatabase,
@@ -21,12 +22,12 @@ export async function sendMissedDigestPendingFeishuFallback(
 
 function missedDigestText(alert: PiGuardianAlert): string {
   return [
-    "【PI Guardian】通知摘要待处理",
+    `【${SUPERVISOR_NOTIFICATION_PREFIX} · Guardian】通知摘要待处理`,
     `项目：${field(alert.project_id)}`,
     `级别：${severityLabel(alert.severity)}`,
     `时间：${field(alert.watchdog_seen_at)}`,
     "说明：摘要发送暂不可用或缺少可用目标，可能有通知未被汇总送达。",
-    "请查看 PI Guardian 横幅和恢复摘要；摘要管道恢复前，不会强行发送摘要。"
+    "请查看 Guardian 横幅和 Supervisor 恢复摘要；摘要管道恢复前，不会强行发送摘要。"
   ].join("\n");
 }
 

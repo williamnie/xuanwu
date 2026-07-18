@@ -110,7 +110,7 @@ describe("PI repo context pack contract", () => {
 
     const markdown = renderRepoContextPack(pack);
 
-    expect(markdown).toContain("## PI repo_context_pack");
+    expect(markdown).toContain("## Supervisor repo_context_pack");
     expect(markdown).toContain(REPO_CONTEXT_PACK_NOTICE);
     expect(markdown).toContain("帮我实现这个折叠面板功能");
     expect(markdown).toContain("src/components/Accordion.tsx");

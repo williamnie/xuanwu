@@ -98,7 +98,7 @@ function requirementLines(pack: RepoContextPack, description: unknown): string[]
   const original = cleanText(description);
   return [
     original && `- 原始描述：${singleLine(original)}`,
-    `- PI 理解：${pack.intent || "(未提供)"}`,
+    `- Supervisor 理解：${pack.intent || "(未提供)"}`,
     `- 项目：${projectLabel(pack.project)}`,
     `- 置信度：${pack.confidence}；生成时间：${pack.generated_at}`,
     `- 来源：${sourceLabel(pack.source)}`,

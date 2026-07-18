@@ -43,7 +43,7 @@ describe("Feishu external event inbox", () => {
 
       const issue = await getIssue(handle, Number(proposalBody.issue_id));
       expect(issue).toMatchObject({ project_id: "demo", status: "triage" });
-      expect(String(issue.description)).toContain("PI repo_context_pack");
+      expect(String(issue.description)).toContain("Supervisor repo_context_pack");
 
       const drafts = await getReplyDrafts(handle, "source=feishu");
       expect(drafts).toHaveLength(1);
@@ -206,7 +206,7 @@ describe("Feishu external event inbox", () => {
       expect(String(issue.description)).toContain("Thread: omt_thread_1");
       expect(String(issue.description)).toContain("spec.png");
       expect(String(issue.description)).toContain("## 需求理解");
-      expect(String(issue.description)).toContain("PI repo_context_pack");
+      expect(String(issue.description)).toContain("Supervisor repo_context_pack");
       expect(String(issue.description)).toContain("## 验收标准");
       expect(String(issue.description)).toContain("## 验证建议");
       expect(link).toMatchObject({

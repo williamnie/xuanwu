@@ -41,7 +41,7 @@ const memoryWriteCandidateParams = Type.Object({
 
 export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext = {}): ToolDefinition[] {
   return [
-    memoryTool("memory_search", "Memory Search", "Search active PI memory items; candidates are opt-in.",
+    memoryTool("memory_search", "Memory Search", "Search active Supervisor memory items; candidates are opt-in.",
       memorySearchParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
         actionType: "memory.search",
         payload: params,
@@ -49,7 +49,7 @@ export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext =
         execute: () => searchMemory(db, context, params)
       })),
     memoryTool("memory_write_candidate", "Memory Write Candidate",
-      "Write a PI memory candidate; explicit low-risk user preferences from normal chat may be enabled immediately, while other observations stay disabled for review.",
+      "Write a Supervisor memory candidate; explicit low-risk user preferences from normal chat may be enabled immediately, while other observations stay disabled for review.",
       memoryWriteCandidateParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
         actionType: "memory.write_candidate",
         payload: params,

@@ -38,7 +38,7 @@ export function workflowIssuePayload(
 export function needsUserComment(input: NeedsUserEscalationInput): string {
   const action = cleanString(input.requested_action);
   return [
-    `PI needs_user escalation: ${cleanString(input.reason)}`,
+    `Supervisor needs_user escalation: ${cleanString(input.reason)}`,
     action ? `Requested action: ${action}` : ""
   ].filter(Boolean).join("\n");
 }

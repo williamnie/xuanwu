@@ -171,7 +171,7 @@ async function runPiCycle(input: ScheduleActionInput, task: CronTask): Promise<S
   if (isProjectHeartbeatPaused(input.database, projectID)) return { detail: "heartbeat paused", skipped: true };
   if (input.runProjectCycle) await input.runProjectCycle({ maxActions: 5, projectId: projectID });
   else await runPiHeartbeatOnce({ database: input.database, kind: "cron", now: input.now, projectID, trigger: "cron" });
-  return { detail: `ran PI cycle for ${projectID}`, projectIDs: [projectID] };
+  return { detail: `ran Supervisor cycle for ${projectID}`, projectIDs: [projectID] };
 }
 
 async function generateReport(input: ScheduleActionInput, task: CronTask, now: Date): Promise<ScheduleActionResult> {

@@ -2,6 +2,7 @@ import type { Issue } from "../db/repositories/issues.ts";
 import type { PiMemoryItem } from "../db/repositories/pi.ts";
 import { containsSensitiveMemoryContent } from "../pi/memoryPolicy.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
 const SUMMARY_LIMIT = 180;
 const WATCH_ISSUE_LIMIT = 20;
@@ -19,17 +20,17 @@ export function formatApprovalNotification(issue: Issue, command: string, path: 
   const detail = [command ? `命令：${safeSummary(command, SUMMARY_LIMIT)}` : "",
     path ? `路径：${safeSummary(path, SUMMARY_LIMIT)}` : ""].filter(Boolean).join("；");
   return [
-    `Pi：issue #${issue.id} 需要 Codex 授权/确认才能继续。`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要 Codex 授权/确认才能继续。`,
     detail || "授权详情请到 Runner/Codex 面板查看。",
     "可选操作：批准一次 / 本 session 批准 / 拒绝 / 暂缓。",
-    "风险：会影响当前 Codex session 的执行授权；页面 PI 控制台仅作为备用入口。"
+    "风险：会影响当前 Codex session 的执行授权；页面 Supervisor 控制台仅作为备用入口。"
   ].join("\n");
 }
 
 export function formatMemoryCandidateNotification(item: PiMemoryItem): string {
   const id = shortID(item.id);
   return [
-    `Pi：memory candidate 待确认：${id}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：memory candidate 待确认：${id}`,
     `- [${safeSummary(item.scope, 24)} | ${safeSummary(item.kind, 40)}] ${memoryContent(item)}`,
     `操作：发送 /memory approve ${id} 确认，或 /memory reject ${id} 删除。`
   ].join("\n");
@@ -38,9 +39,9 @@ export function formatMemoryCandidateNotification(item: PiMemoryItem): string {
 export function formatPiActionPendingNotification(input: { actionID: string; actionType: string; issueID?: number }): string {
   const issue = input.issueID ? `issue #${input.issueID}` : "当前任务";
   const actionID = safeSummary(input.actionID, 80);
-  const actionType = safeSummary(input.actionType || "PI action", 80);
+  const actionType = safeSummary(input.actionType || "Supervisor action", 80);
   return [
-    `Pi：${issue} 需要用户确认才能继续。`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 需要用户确认才能继续。`,
     `待确认动作：${actionType}（${actionID}）`,
     "下一步：可直接在本 Feishu 卡片批准、拒绝、要求修改或暂缓；Runner issue/后端 API 仍作为备用入口。"
   ].join("\n");
@@ -59,10 +60,10 @@ export function formatPiNeedsUserNotification(input: {
   const issue = input.issueID ? `issue #${input.issueID}` : "当前任务";
   const provider = safeSummary(input.provider || "unknown", 80);
   const diagnosis = safeSummary(input.diagnosis || "needs_user", 100);
-  const message = safeSummary(input.message || "PI 判断当前无法继续自动恢复。", SUMMARY_LIMIT);
+  const message = safeSummary(input.message || "Supervisor 判断当前无法继续自动恢复。", SUMMARY_LIMIT);
   const nextStep = safeSummary(input.nextStep || "请查看 Runner issue 并补充授权、凭证或下一步处理方式。", SUMMARY_LIMIT);
   return [
-    `Pi：${issue} 需要用户介入。`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：${issue} 需要用户介入。`,
     `Provider：${provider}`,
     `诊断：${diagnosis}`,
     `摘要：${message}`,
@@ -75,7 +76,7 @@ export function formatIssueCompletionWatchNotification(payload: Record<string, u
   const issues = watchIssues(payload.issues);
   const total = numberField(stats.total) || issues.length;
   return [
-    `Pi：你关注的 ${total} 个 issue 已结束`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：你关注的 ${total} 个 issue 已结束`,
     watchStatsLine(stats),
     "列表：",
     ...watchIssueLines(issues),
@@ -85,21 +86,21 @@ export function formatIssueCompletionWatchNotification(payload: Record<string, u
 
 function startText(issueID: number, title: string, status: string): string {
   return [
-    `Pi：issue #${issueID} ${status}：${title}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issueID} ${status}：${title}`,
     "状态：我会在需要授权、完成、失败或阻塞时继续通知。"
   ].join("\n");
 }
 
 function doneText(issue: Issue, title: string): string {
   return [
-    `Pi：issue #${issue.id} 已完成：${title}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 已完成：${title}`,
     `验证状态：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "已标记完成，未附加验证摘要。"}`
   ].join("\n");
 }
 
 function pendingVerificationText(issue: Issue, title: string): string {
   return [
-    `Pi：issue #${issue.id} 已进入待验收：${title}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 已进入待验收：${title}`,
     `验证状态：${issue.error ? safeSummary(issue.error, SUMMARY_LIMIT) : "等待用户验收。"}`
   ].join("\n");
 }
@@ -107,7 +108,7 @@ function pendingVerificationText(issue: Issue, title: string): string {
 function failedText(issue: Issue, title: string): string {
   const error = safeSummary(issue.error || "未提供错误摘要", SUMMARY_LIMIT);
   return [
-    `Pi：issue #${issue.id} 执行失败/阻塞：${title}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 执行失败/阻塞：${title}`,
     `错误摘要：${error}`,
     `下一步：请查看 Runner issue #${issue.id} 的日志，补充授权/信息后 retry 或重新排队。`
   ].join("\n");

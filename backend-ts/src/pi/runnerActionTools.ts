@@ -212,7 +212,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Enqueue an issue when the user asks to run now; delegated Runner Chat can execute this directly.",
       Type.Object({ issue_id: positiveID, rationale: optionalString }, objectOptions), actions.enqueueIssueProposal),
     actionTool("issue_enqueue_batch_triage", "Issue Enqueue Batch Triage",
-      "Batch-enqueue all matching status=triage issues in the requested/default Runner issue project when PI understands the user wants a batch start; execution remains serial.",
+      "Batch-enqueue all matching status=triage issues in the requested/default Runner issue project when Supervisor understands the user wants a batch start; execution remains serial.",
       Type.Object({
         issue_ids: Type.Optional(Type.Array(positiveID)),
         project_id: optionalString,
@@ -312,7 +312,7 @@ function sessionActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
 
 function skillActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
-    actionTool("skill_list", "Skill List", "List Codex skills metadata visible to PI.",
+    actionTool("skill_list", "Skill List", "List Codex skills metadata visible to Supervisor.",
       Type.Object({}, objectOptions), actions.listSkills),
     actionTool("skill_read", "Skill Read", "Read one Codex skill metadata record by id.",
       Type.Object({ id: requiredText }, objectOptions), actions.readSkill),

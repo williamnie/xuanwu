@@ -50,7 +50,7 @@ describe("PI memory prompt context", () => {
 
       const context = buildPiMemoryPromptContext(db, { projectID: "demo" });
 
-      expect(context).toContain("Confirmed PI memory");
+      expect(context).toContain("Confirmed Supervisor memory");
       expect(context).toContain("Project policy: verify before commit");
       expect(context).toContain("User prefers concise Chinese status updates");
       expect(context).not.toContain("Unconfirmed guess");

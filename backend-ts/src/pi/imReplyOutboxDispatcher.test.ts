@@ -56,7 +56,7 @@ describe("IM reply outbox dispatcher", () => {
       createApprovalRequest(database, "approval-card-1");
       const outbox = createApprovedOutbox(database, {
         approvalActionID: "approval-card-1",
-        content: "Pi：issue #1 需要 Codex 授权才能继续。"
+        content: "玄武 Supervisor：issue #1 需要 Codex 授权才能继续。"
       });
 
       const result = await dispatchFeishuOutbox({ database, sender, config: config("oc_group"), now: NOW });

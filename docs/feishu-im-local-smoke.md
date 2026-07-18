@@ -2,7 +2,7 @@
 
 本文用于把真实飞书应用事件接到本地 `codex-issue-runner`，并验证这条链路：
 
-`Feishu long connection → message event → external_events inbox → PI attention decision → OK reaction → Runner/PI conversation → Feishu reply`
+`Feishu long connection → message event → external_events inbox → Supervisor attention decision → OK reaction → Runner/Supervisor conversation → Feishu reply`
 
 ## 1. 创建飞书应用
 
@@ -17,7 +17,7 @@
 5. 权限建议最小化：
    - 接收消息事件：按飞书后台提示开通接收 IM 消息相关权限。
    - 发送回复：开通发送消息相关权限。
-   - 快速回执表情：开通添加消息表情回复相关权限，用于 PI 收到消息后先在原消息上点一个 `OK` reaction。
+   - 快速回执表情：开通添加消息表情回复相关权限，用于 Supervisor 收到消息后先在原消息上点一个 `OK` reaction。
    - 不需要通讯录/文件内容读取权限；附件当前只记录 metadata。
 
 > 注意：HTTP callback endpoint 仍保留为兼容模式，不走 runner bearer token；回调鉴权依赖 verification token 与可选签名/加密。其它 `/api/*` 仍需要 runner token。
@@ -55,7 +55,7 @@ codex-issue-runner system status
 - `disabled`：未配置任何飞书必需项，服务仍可启动，本地测试不依赖真实飞书。
 - `misconfigured`：有部分配置但缺少 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`；只有 `FEISHU_RECEIVE_MODE=callback` 时才还要求 `FEISHU_VERIFICATION_TOKEN`。
 - `configured`：长连接会在 runner 进程内启动；`/api/system/status` 的 `connectors[].runtime` 可看连接状态。
-- `reply_mode=draft`：issue 写回仍走 draft/outbox；普通 IM 对话会直接把 Runner/PI 回复发回原 chat，避免“发 hi 没反应”。
+- `reply_mode=draft`：issue 写回仍走 draft/outbox；普通 IM 对话会直接把 Runner/Supervisor 回复发回原 chat，避免“发 hi 没反应”。
 
 ## 3. 本地 fixture smoke（无真实飞书配置）
 
@@ -70,7 +70,7 @@ bun test src/http/feishuInboxApi.test.ts src/http/imReplyOutboxApi.test.ts src/i
 
 - 长连接模式不需要 challenge / Request URL。
 - message event 被归一化并写入 `external_events`。
-- 可信消息会进入 Runner/PI conversation，并把回复发回原 chat。
+- 可信消息会进入 Runner/Supervisor conversation，并把回复发回原 chat。
 - attention decision 为 `propose_issue` 时，`/api/external-events/:id/create-issue` 创建 `triage` issue。
 - issue 创建后生成 `im_reply_drafts`；approve 后进入 `sync_outbox`。
 - 测试输出不包含 `app_secret`、`encrypt_key`、verification token 或本地临时路径。
@@ -133,6 +133,8 @@ scripts/feishu-smoke.mjs \
   --text "@PI 帮我实现这个折叠面板功能"
 ```
 
+`@PI` 仅作为既有飞书 mention 兼容别名保留；用户可见回复和文档术语统一显示为玄武/Supervisor。
+
 如果显式选择 `FEISHU_RECEIVE_MODE=callback` 并配置了公开 URL，也可以用脚本打公开 URL：
 
 ```bash
@@ -143,7 +145,7 @@ scripts/feishu-smoke.mjs --mode challenge --url https://<public-host>/api/integr
 
 ## 6. IM 对话回复与 reply draft / outbox
 
-长连接收到可信普通消息后，runner 会把消息送进 Runner/PI conversation，并把返回文本发回原 chat。
+长连接收到可信普通消息后，runner 会把消息送进 Runner/Supervisor conversation，并把返回文本发回原 chat。
 
 issue 关联写回仍走 draft/outbox 安全边界。查看草稿：
 
@@ -178,5 +180,5 @@ curl -fsS -X POST -H "Authorization: Bearer $CODEX_RUNNER_AUTH_TOKEN" \
 - callback message 收到 401：verification token 不匹配，或启用 `FEISHU_ENCRYPT_KEY` 后签名头缺失/错误。
 - message 收到 202 但没有 issue：检查 `FEISHU_PROJECT_MAPPINGS`、allowlist，以及 `external_events.summary.attention_decision`。
 - 真实飞书发消息没进入 runner：优先看长连接 runtime 状态，不要先排公网域名。
-- 飞书没收到 Runner 回复：检查发送消息权限、allowed chat/user、`external_links` 是否已有 `feishu_agent_reply` 去重记录，以及 Runner/PI conversation 是否报错。
+- 飞书没收到 Runner 回复：检查发送消息权限、allowed chat/user、`external_links` 是否已有 `feishu_agent_reply` 去重记录，以及 Runner/Supervisor conversation 是否报错。
 - 线上调试只贴 `raw_payload_ref=sha256:...`、状态码和脱敏摘要，不贴飞书 token/secret 原文。

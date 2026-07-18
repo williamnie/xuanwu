@@ -84,21 +84,21 @@ function approveMemoryCandidate(db: RunnerDatabase, input: FeishuMemoryCommandIn
     return handled("memory_candidate_sensitive", `候选 ${shortID(resolved.item.id)} 含敏感内容，未确认。请先 /memory reject ${shortID(resolved.item.id)} 或人工重写。`);
   }
   const item = updatePiMemoryItem(db, resolved.item.id, { disabled: 0 });
-  return handled("memory_candidate_approved", `已确认记忆 ${shortID(item.id)}（${scopeText(item)}，${safeText(item.kind, 40)}）。后续会按 scope 注入 PI prompt。`);
+  return handled("memory_candidate_approved", `已确认记忆 ${shortID(item.id)}（${scopeText(item)}，${safeText(item.kind, 40)}）。后续会按 scope 注入 Supervisor prompt。`);
 }
 
 function disableActiveMemory(db: RunnerDatabase, input: FeishuMemoryCommandInput, id: string): FeishuMemoryCommandResult {
   const resolved = resolveMemoryItem(scopedMemoryItems(db, input, 0), id, "已启用记忆");
   if (resolved.status !== "resolved") return handled(activeMemoryReason(resolved.reason), resolved.text);
   const item = updatePiMemoryItem(db, resolved.item.id, { disabled: 1 });
-  return handled("memory_disabled", `已禁用记忆 ${shortID(item.id)}（${scopeText(item)}，${safeText(item.kind, 40)}）。后续不会注入 PI prompt。`);
+  return handled("memory_disabled", `已禁用记忆 ${shortID(item.id)}（${scopeText(item)}，${safeText(item.kind, 40)}）。后续不会注入 Supervisor prompt。`);
 }
 
 function rejectMemoryCandidate(db: RunnerDatabase, input: FeishuMemoryCommandInput, id: string): FeishuMemoryCommandResult {
   const resolved = resolvePendingCandidate(scopedMemoryItems(db, input, 1), id);
   if (resolved.status !== "resolved") return handled(resolved.reason, resolved.text);
   deletePiMemoryItem(db, resolved.item.id);
-  return handled("memory_candidate_rejected", `已删除候选记忆 ${shortID(resolved.item.id)}，后续不会注入 PI prompt。`);
+  return handled("memory_candidate_rejected", `已删除候选记忆 ${shortID(resolved.item.id)}，后续不会注入 Supervisor prompt。`);
 }
 
 function searchConfirmedMemory(

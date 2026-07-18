@@ -72,7 +72,7 @@ export function buildIntakeSkillInput(db: RunnerDatabase, bundle: ContextBundleR
 
 export function buildIntakeSkillPrompt(input: JsonObject): string {
   return [
-    "You are the PI Assistant intake skill runtime.",
+    "You are the Xuanwu Supervisor intake skill runtime.",
     "Classify this controlled context bundle into attention inbox items or ignored groups.",
     "Return only JSON matching the provided schema.",
     "Use top-level keys inbox_items and ignored_groups.",

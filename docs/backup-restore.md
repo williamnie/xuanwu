@@ -1,6 +1,6 @@
 # 备份、导出、导入与恢复演练
 
-`runner.db` 是当前唯一的持久化 source of truth；state dir 中的配置、PI runtime 文件和 `artifacts/`、`uploads/` 是随库恢复的 companion data。本工具不增加数据库表、HTTP API、双读/双写或第二个状态机。
+`runner.db` 是当前唯一的持久化 source of truth；state dir 中的配置、Supervisor runtime 文件和 `artifacts/`、`uploads/` 是随库恢复的 companion data。本工具不增加数据库表、HTTP API、双读/双写或第二个状态机。
 
 ## 安全边界
 
@@ -49,7 +49,7 @@ rm -rf "$RESTORE_ROOT" # import 要求 target 不存在或为空
   --actor restore-operator --actor-kind user --audit-ref drill:restore-20260718 \
   --reason 'isolated restore drill' --json
 
-# Golden Journey 读取 smoke：仅从恢复库读取权威 Issue/Session/Guardian/PI 数据，不启动 writer。
+# Golden Journey 读取 smoke：仅从恢复库读取权威 Issue/Session/Guardian/Supervisor 数据，不启动 writer。
 bun -e 'import { openDatabase } from "./backend-ts/src/db/database.ts"; const db = await openDatabase({ readonlyImportPath: process.argv[1] + "/runner.db" }); console.log(db.sqlite.query("select count(*) as count from issues").get()); db.close()' "$RESTORE_ROOT"
 ```
 

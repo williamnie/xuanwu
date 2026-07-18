@@ -5,6 +5,7 @@ import {
   type PiGuardianAlert
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import {
   failedGuardianAlertRetryPatch,
   sentGuardianAlertRetryPatch,
@@ -108,7 +109,7 @@ function recordFailure(
 
 function directText(alert: PiGuardianAlert): string {
   return [
-    "[PI Guardian watchdog]",
+    `[${SUPERVISOR_NOTIFICATION_PREFIX} · Guardian watchdog]`,
     `alert=${field(alert.alert_type)}`,
     `severity=${field(alert.severity)}`,
     `project=${field(alert.project_id)}`,

@@ -49,7 +49,7 @@ describe("PI auto-manage missed digest direct fallback", () => {
       expect(result.missedIntentSweep).toMatchObject({ pending: 1, skipped: 1, summaries: 0, windows: 1 });
       expect(result.digestNotifications).toMatchObject({ queued: 0, scanned: 0 });
       expect(missedMessage).toMatchObject({ receiveId: "oc_default", receiveIdType: "chat_id" });
-      expect(missedMessage?.text).toContain("请查看 PI Guardian");
+      expect(missedMessage?.text).toContain("请查看 Guardian");
       expect(missedMessage?.text).not.toContain("digest_pipeline_unavailable");
       expect(alert).toMatchObject({
         direct_feishu_message_id: "om_missed_digest",

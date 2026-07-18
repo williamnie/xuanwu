@@ -120,7 +120,7 @@ describe("Feishu notification queue", () => {
       expect(sender.calls).toEqual([{
         receiveId: "oc_group",
         receiveIdType: "chat_id",
-        text: "Pi：issue #1 已完成：Feishu task\n" +
+        text: "玄武 Supervisor：issue #1 已完成：Feishu task\n" +
           "验证状态：已标记完成，未附加验证摘要。\n" +
           "查看：/api/issues/1"
       }]);
@@ -155,7 +155,7 @@ describe("Feishu notification queue", () => {
       expect(sender.calls).toEqual([{
         receiveId: "oc_default",
         receiveIdType: "chat_id",
-        text: "Pi：issue #1 执行失败/阻塞：Needs human\n" +
+        text: "玄武 Supervisor：issue #1 执行失败/阻塞：Needs human\n" +
           "错误摘要：backend contract missing\n" +
           "下一步：请查看 Runner issue #1 的日志，补充授权/信息后 retry 或重新排队。\n" +
           "查看：/api/issues/1"

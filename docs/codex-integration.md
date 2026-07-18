@@ -1,6 +1,6 @@
 # Codex 后端 Server 对接说明
 
-本文说明 Codex Issue Runner 的 Bun/TypeScript 后端如何对接 Codex 后端 server（`codex app-server`），以及 issue 自动执行、Sessions 页面、审批和事件流在两边之间如何流转。
+本文说明玄武的 Bun/TypeScript 后端如何通过 `codex-issue-runner` 兼容运行时对接 Codex 后端 server（`codex app-server`），以及 issue 自动执行、Sessions 页面、审批和事件流在两边之间如何流转。
 
 ## 术语边界
 
@@ -41,7 +41,7 @@ CODEX_RUNNER_WEB_DIR          默认空；源码/Release 部署会传入已构�
 2. 创建 provider runtime（Codex / Claude）。
 3. 注册 HTTP API、SSE、system status/logs、静态前端。
 4. 恢复 in-progress issue 状态。
-5. 启动 auto-run project loop 和 PI auto-manage scheduler。
+5. 启动 auto-run project loop 和 Supervisor auto-manage scheduler。
 
 ## Codex app-server 协议
 

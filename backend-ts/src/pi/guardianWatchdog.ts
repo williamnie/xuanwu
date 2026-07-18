@@ -144,7 +144,7 @@ function piRuntimeChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdog
   if (rows.length === 0) return [ok("pi_runtime")];
   return rows.map((row) => alert("pi_runtime", "pi_runtime_down", {
     evidence: row,
-    message: `PI runtime unavailable for project ${row.project_id}: ${row.reason}`,
+    message: `Supervisor runtime unavailable for project ${row.project_id}: ${row.reason}`,
     project_id: row.project_id
   }));
 }
@@ -204,7 +204,7 @@ function schedulerChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdog
   }
   return [alert("scheduler", "scheduler_stalled", {
     evidence: { last_seen_at: context.previousLastSeenAt },
-    message: "PI auto-manage scheduler watchdog tick is stale"
+    message: "Supervisor auto-manage scheduler watchdog tick is stale"
   })];
 }
 function inboxChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdogCheck[] {

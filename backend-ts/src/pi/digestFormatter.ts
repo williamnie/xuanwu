@@ -1,5 +1,6 @@
 import type { PiNotificationIntent } from "../db/repositories/pi.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
 type DigestIssue = { bucket: string; issueID: number; reason: string; status: string; title: string };
 type DigestView = {
@@ -14,7 +15,7 @@ const SUMMARY_LIMIT = 140;
 export function formatRunGroupDigest(intent: PiNotificationIntent): string {
   const view = digestView(intent);
   return [
-    `Pi：运行组 ${safeSummary(view.runGroupID || intent.run_group_id || "digest", 80)} 摘要`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：运行组 ${safeSummary(view.runGroupID || intent.run_group_id || "digest", 80)} 摘要`,
     `原因：${safeSummary(intent.flush_reason || "digest", 40)}；批次：${intent.flush_sequence || intent.flush_bucket || "-"}`,
     [
       `总数：${view.total}`,

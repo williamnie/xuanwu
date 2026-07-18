@@ -144,7 +144,7 @@ export async function runIntakeSkill(
 
 export function buildIntakePrompt(bundle: ContextBundleRecord): string {
   return [
-    "You are the PI Assistant LLM intake skill.",
+    "You are the Xuanwu Supervisor LLM intake skill.",
     "Read the context bundle and return only JSON matching the provided schema.",
     "Create attention items for matters needing attention, reply, follow-up, tracking, or handling.",
     "If there are no attention items, return inbox_items=[] and at least one ignored_groups reason.",

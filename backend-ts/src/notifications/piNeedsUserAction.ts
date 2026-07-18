@@ -9,6 +9,7 @@ import type { EventBus } from "../events/bus.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { composePiNeedsUserMessage } from "./piNeedsUserMessageComposer.ts";
 import { publishPiNeedsUserNotification } from "./piNotifier.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
 export type PiNeedsUserActionContext = {
   bus?: Pick<EventBus, "publish">;
@@ -155,11 +156,11 @@ function needsUserCommentBody(action: PiAction, issue: Issue, payload: Record<st
   const provider = redactCommentText(payload.provider);
   const diagnosis = redactCommentText(payload.diagnosis_code) || redactCommentText(payload.reason) ||
     redactCommentText(action.rationale) || "needs_user";
-  const message = redactCommentText(payload.body) || redactCommentText(payload.message) || "PI 判断当前无法继续自动恢复。";
+  const message = redactCommentText(payload.body) || redactCommentText(payload.message) || "Supervisor 判断当前无法继续自动恢复。";
   const nextStep = redactCommentText(payload.next_step) || redactCommentText(payload.nextStep) ||
     "请查看 Runner issue 并补充授权、凭证或下一步处理方式。";
   return [
-    `Pi：issue #${issue.id} 需要用户介入。`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issue.id} 需要用户介入。`,
     provider ? `Provider：${provider}` : "",
     `诊断：${diagnosis}`,
     `摘要：${message}`,
@@ -177,7 +178,7 @@ function releaseNeedsUserSlot(db: RunnerDatabase, issue: Issue, payload: Record<
 
 function needsUserIssueError(payload: Record<string, unknown>): string {
   const diagnosis = redactCommentText(payload.diagnosis_code) || redactCommentText(payload.reason) || "needs_user";
-  const message = redactCommentText(payload.message) || redactCommentText(payload.body) || "PI 判断当前无法继续自动恢复。";
+  const message = redactCommentText(payload.message) || redactCommentText(payload.body) || "Supervisor 判断当前无法继续自动恢复。";
   const nextStep = redactCommentText(payload.next_step) || redactCommentText(payload.nextStep);
   return [
     `needs_user: ${diagnosis}`,

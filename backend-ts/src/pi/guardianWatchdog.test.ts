@@ -55,7 +55,7 @@ describe("PI Guardian watchdog detector", () => {
         receiveId: "oc_guardian",
         receiveIdType: "chat_id",
         text: [
-          "[PI Guardian watchdog]",
+          "[玄武 Supervisor · Guardian watchdog]",
           "alert=pi_runtime_down",
           "severity=urgent",
           "project=demo",

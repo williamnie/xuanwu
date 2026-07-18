@@ -194,7 +194,7 @@ function needsUserMessage(
 }
 
 function providerOutageMessage(input: RecoveryActionPlanInput, fallback: string): string {
-  return "PI 判断 executor provider 当前不可用，无法继续自动恢复。" +
+  return "Supervisor 判断 executor provider 当前不可用，无法继续自动恢复。" +
     `provider：${providerName(input.payload)}；issue id：${input.issueID}；` +
     `诊断码：${clean(input.payload.diagnosis_code)}；错误摘要：${errorSummary(input.payload, fallback)}。` +
     providerOutageNextStep();
@@ -211,7 +211,7 @@ function providerOutageNextStep(): string {
 }
 
 function exhaustedRecoveryMessage(input: RecoveryActionPlanInput, fallback: string): string {
-  return "PI 判断自动恢复预算或重试次数已耗尽，无法继续自动恢复。" +
+  return "Supervisor 判断自动恢复预算或重试次数已耗尽，无法继续自动恢复。" +
     `provider：${providerName(input.payload)}；issue id：${input.issueID}；` +
     `诊断码：${clean(input.payload.diagnosis_code)}；错误摘要：${errorSummary(input.payload, fallback)}。` +
     "请检查 issue 状态、补充必要上下文或修复 provider 后再 retry。";

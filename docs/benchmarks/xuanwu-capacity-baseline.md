@@ -118,7 +118,7 @@ bun scripts/xuanwu-capacity-benchmark.ts generate \
 ## Authority、兼容和回滚
 
 - Issues：`issues`；events：`issue_events`；summary projection 可重建且不是 source of truth。
-- Runs：`issue_runs + run_attempts + issue_events`；Timeline 继续复用既有 Work/Issue/Run/PI authority。
+- Runs：`issue_runs + run_attempts + issue_events`；Timeline 继续复用既有 Work/Issue/Run/Supervisor authority（内部仍由 `pi_*` 兼容载体承载）。
 - Sessions：`agent_sessions` 仅为 catalog；provider transcript 保持 provider-authoritative。
 - Automations：`automation_definitions + automation_runs + automation_events`。
 - 本交付不引入新 schema、双写、双读、公共 contract 或共享状态机，也没有新旧模型迁移期限。

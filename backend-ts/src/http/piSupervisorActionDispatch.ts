@@ -147,14 +147,14 @@ function prepareSupervisorResumeAttempt(
         policy_ref: "run-lifecycle:p03.04:pi-resume-preconditions"
       },
       occurred_at: new Date().toISOString(),
-      reason: "PI supervisor resume follow-up"
+      reason: "Supervisor resume follow-up"
     },
     expected_attempt_revision: attempt.revision,
     expected_revision: readRunRevision(db, runID),
     issue_run_id: issueRunID,
     kind: "resume",
     previous_attempt_terminal: {
-      reason: "previous provider turn completed before PI follow-up",
+      reason: "previous provider turn completed before Supervisor follow-up",
       source_ref: `pi_recovery_attempts:${recoveryAttemptID}`,
       status: "succeeded"
     },

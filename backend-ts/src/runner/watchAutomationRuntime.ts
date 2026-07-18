@@ -17,6 +17,7 @@ import type { AutomationAudit } from "../domain/automation/contracts.ts";
 import { createFeishuNotificationDraft } from "../integrations/feishuNotificationDrafts.ts";
 import { markNotificationIntentSent } from "../pi/notificationCoordinator.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
 export type WatchAutomationCycleResult = {
   cursor_advanced: number;
@@ -270,7 +271,7 @@ function notificationText(watch: AutomationWatch, match: Match): string {
     timeout: "观察已到期"
   };
   return [
-    `Pi：Watch Automation ${labels[match.outcome]}`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：Watch Automation ${labels[match.outcome]}`,
     `Watch：${redactSensitiveText(watch.automation_id)}`,
     `结果：${redactSensitiveText(match.matchedRef)}`
   ].join("\n");

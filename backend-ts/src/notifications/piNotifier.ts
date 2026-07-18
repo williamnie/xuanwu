@@ -2,6 +2,7 @@ import type { AppEvent, EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createNotification } from "../db/repositories/notifications.ts";
 import type { ProjectFinding } from "../pi/projectFindings.ts";
+import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 
 export type PiNeedsUserNotificationPayload = {
@@ -111,10 +112,10 @@ function actionMessage(
   nextStep: string
 ): string {
   return [
-    `Pi：issue #${issueID} 需要用户介入。`,
+    `${SUPERVISOR_NOTIFICATION_PREFIX}：issue #${issueID} 需要用户介入。`,
     provider ? `Provider：${provider}` : "",
     `诊断：${diagnosis}`,
-    `摘要：${redactNotificationText(message ?? "PI 判断当前无法继续自动恢复。")}`,
+    `摘要：${redactNotificationText(message ?? "Supervisor 判断当前无法继续自动恢复。")}`,
     `下一步：${nextStep}`
   ].filter(Boolean).join("\n");
 }

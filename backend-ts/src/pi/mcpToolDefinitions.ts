@@ -21,13 +21,13 @@ const requiredText = Type.String({ minLength: 1, pattern: "\\S" });
 
 export function createPiMcpActionTools(actions: PiMcpActionLayer): ToolDefinition[] {
   return [
-    mcpTool("mcp_registry_list", "MCP Registry List", "List MCP servers and capabilities visible to PI.",
+    mcpTool("mcp_registry_list", "MCP Registry List", "List MCP servers and capabilities visible to Supervisor.",
       Type.Object({}, objectOptions), actions.listMcpRegistry),
     mcpTool("mcp_capability_read", "MCP Capability Read", "Read one MCP capability record by id.",
       Type.Object({ capability_id: requiredText }, objectOptions), actions.readMcpCapability),
     mcpTool("mcp_requirement_recommend", "MCP Requirement Recommend", "Recommend MCP capabilities for an issue prompt.",
       Type.Object({ description: optionalString, project_id: optionalString, title: optionalString }, objectOptions), actions.recommendMcpRequirements),
-    mcpTool("mcp_resource_list", "MCP Resource List", "List read-only MCP resources visible to PI.",
+    mcpTool("mcp_resource_list", "MCP Resource List", "List read-only MCP resources visible to Supervisor.",
       Type.Object({ server_id: optionalString }, objectOptions), actions.listMcpResources),
     mcpTool("mcp_resource_read", "MCP Resource Read", "Read a read-only MCP resource through the action gate.",
       Type.Object({ capability_id: requiredText }, objectOptions), actions.readMcpResource),

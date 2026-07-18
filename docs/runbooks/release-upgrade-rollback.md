@@ -4,7 +4,7 @@
 
 - 发布代码的 source of truth 是发布 tag 指向的 Git commit；GitHub Release 只是该 revision 的交付投影。
 - `release.json`、压缩包内后端 `--version`、前端 build version 和 tag 必须完全一致。`checksums.txt` 绑定所有平台压缩包与 `release.json`，GitHub Actions 再为这些 digest 生成 signed build provenance。
-- 运行数据的唯一 source of truth 仍是 `${CODEX_RUNNER_STATE_DIR}/runner.db`。升级快照只保存 runner-owned binary、web、PI package 和运维脚本，不复制数据库、token、`.env` 或用户 artifact。
+- 运行数据的唯一 source of truth 仍是 `${CODEX_RUNNER_STATE_DIR}/runner.db`。升级快照只保存 Runner-owned binary、web、Supervisor package 和运维脚本，不复制数据库、token、`.env` 或用户 artifact。
 - 当前 release 文件没有双写/双读窗口。数据库 migration 仍由既有 forward-only `schema_migrations` 执行，兼容合同是 `xuanwu.storage-compat.v1`；不能以 release snapshot 替代数据库备份。
 
 ## 2. 发布人操作
@@ -71,7 +71,7 @@ codex-issue-runner-update upgrade \
 
 - 后端启动仍通过现有 `schema_migrations` 做 forward-only migration；没有通用 down migration。
 - 正式升级前必须按 [`0070-db-migration-rehearsal-gate.md`](../architecture/xuanwu/0070-db-migration-rehearsal-gate.md) 对 fresh SQLite backup copy 执行 `migration-preflight`、`migration-forward` 和 `migration-rollback` rehearsal，并按 [`backup-restore.md`](../backup-restore.md) 完成隔离 import/restore。
-- `runner.db` 仍为 authority；Work/Run/Evidence/Handoff、Issue/Session/Guardian/PI 沿用既有模型，不增加 release 专用状态表或第二 truth source。
+- `runner.db` 仍为 authority；Work/Run/Evidence/Handoff、Issue/Session/Guardian/Supervisor 沿用既有模型，不增加 release 专用状态表或第二 truth source。
 - 兼容、双写和双读期限均为 **0**：本 issue 不做 storage cutover。任何未来 schema/table 删除必须单独经过 P11/G7 destructive gate，不能由 updater 或 changelog 授权。
 
 每个后续版本必须在此追加：新增 migration ID、最低可回滚 binary、需要的 operator action、配置默认值变化以及 restore-tested backup ref 要求。没有 migration 时明确写 “none”。

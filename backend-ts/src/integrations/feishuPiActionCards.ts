@@ -34,7 +34,7 @@ export function buildFeishuPiActionCard(input: {
     ],
     header: {
       template: "orange",
-      title: { tag: "plain_text", content: input.issueID ? `Issue #${input.issueID} 等待 PI action 确认` : "PI action 等待确认" }
+      title: { tag: "plain_text", content: input.issueID ? `Issue #${input.issueID} 等待 Supervisor 动作确认` : "Supervisor 动作等待确认" }
     }
   };
 }

@@ -87,7 +87,7 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   const settings = readProjectPiSettings(context.database, project.id);
   const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
   const agent = requireRunnableAgent(context.database, settings.pi_agent_id, "run manager cycle");
-  if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "PI manager cycle is already running");
+  if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "Supervisor manager cycle is already running");
   activeProjectPiRuns.set(project.id, "pending");
   let state: Awaited<ReturnType<typeof createManagerCycleState>>;
   try {
@@ -125,7 +125,7 @@ async function createManagerCycleState(context: PiProjectControlContext, project
     project_id: project.id,
     session_file: runtime.session.sessionFile ?? "",
     status: "active",
-    title: "PI manager cycle"
+    title: "Supervisor manager cycle"
   });
   persistPiSessionIndex(context.database, conversation, project);
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
@@ -217,20 +217,20 @@ function managerCyclePrompt(
   issueState: ReturnType<typeof diagnoseIssueState>
 ): string {
   return [
-    "Run exactly one PI manager cycle for this codex-issue-runner project.",
+    "Run exactly one Xuanwu Supervisor manager cycle for this codex-issue-runner project.",
     `Project id: ${project.id}`,
     `Project name: ${project.name}`,
     "Project status snapshot:",
     JSON.stringify(snapshot, null, 2),
     "Issue state diagnostics:",
     JSON.stringify(issueState, null, 2),
-    "Agent roles: PI manager plans/authorizes/schedules; executor executes issues; verifier checks completion evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
+    "Agent roles: Supervisor plans/authorizes/schedules; executor executes issues; verifier checks completion evidence; reviewer reviews code/results; reporter summarizes daily/nightly/failures.",
     "Project default skill policy:",
     JSON.stringify(parseSkillPolicy(project.default_skill_policy), null, 2),
     "Project default MCP policy:",
     JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
     "Use role workflow tools for executor, verifier, reviewer, reporter proposals when needed; all role actions must go through action gate and audit.",
-    "Create PI action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
+    "Create Supervisor action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
     "When you find durable project/user/process observations, write disabled review candidates via memory_write_candidate; manager-cycle observations must never auto-enable memory.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."

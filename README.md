@@ -1,8 +1,8 @@
 # 玄武 (Xuanwu)
 
-**玄武**是本地优先、验证优先的 AI Engineering Control Plane：把工程目标变成可追踪的工作，交给 Coding Agents 长时间执行，并以可审计的监督、恢复、验证和交付闭环收口。Codex Issue Runner 是当前仓库、CLI 与兼容 API 的名称。
+**玄武**是本地优先、验证优先的 AI Engineering Control Plane：把工程目标变成可追踪的工作，交给 Coding Agents 长时间执行，并以可审计的监督、恢复、验证和交付闭环收口。`codex-issue-runner` 仅作为当前仓库、CLI 与兼容 API 的稳定标识保留。
 
-产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准；产品、Supervisor、Runner 与兼容标识的命名以 [玄武品牌术语合同](docs/architecture/xuanwu/0002-brand-terminology.md) 为准；六条核心工作如何端到端验收以 [Golden Journey 合同](docs/architecture/xuanwu/0003-golden-journey-contracts.md) 为准。
+产品定位、用户承诺、非目标和迁移原则以 [ADR-XW-0001](docs/architecture/xuanwu/0001-product-positioning.md) 为准；产品、Supervisor、Runner 与兼容标识的命名以 [玄武品牌术语合同](docs/architecture/xuanwu/0002-brand-terminology.md) 和 [用户可见命名迁移清单](docs/architecture/xuanwu/0082-user-facing-naming-migration.md) 为准；六条核心工作如何端到端验收以 [Golden Journey 合同](docs/architecture/xuanwu/0003-golden-journey-contracts.md) 为准。
 
 当前后端已经切到 Bun/TypeScript，live 默认监听 `0.0.0.0:3008`，CLI 默认连接 `127.0.0.1:3008`。
 
@@ -250,7 +250,7 @@ release pipeline 会发布 `release.json`、`checksums.txt` 和四个平台压�
 CLI 默认连接 `CODEX_RUNNER_ADDR`，未设置时使用 `127.0.0.1:3008`；也可以对任意命令传 `--addr http://127.0.0.1:3008`。
 当前 CLI 子命令不实现 `--help`，`--json` 输出是完整 JSON 文档且可能跨多行。
 
-Dashboard、PI Activity 和 Issue Activity/Work timeline 默认读取可重建的 `event_summary_projection`；完整 Logs、Session/Guardian 与 legacy event API 仍读取 `issue_events` authority。首次切读或需要校验 cursor 时，在数据库副本先执行可中断重建：
+Dashboard、Supervisor Activity 和 Issue Activity/Work timeline 默认读取可重建的 `event_summary_projection`；完整 Logs、Session/Guardian 与 legacy event API 仍读取 `issue_events` authority。首次切读或需要校验 cursor 时，在数据库副本先执行可中断重建：
 
 ```bash
 cd backend-ts
@@ -280,7 +280,7 @@ bun run src/main.ts maintenance events rebuild-projection \
 
 ## 事件归档与数据库维护 runbook
 
-维护命令直接操作指定 SQLite 文件，不经过 HTTP。`issue_events` 仍是唯一 source of truth；归档目录只是 append-only shadow archive，不参与 Issue / Session / Guardian / PI 的 live read。首次演练必须使用 SQLite online backup 副本，不能直接拿正式库试验。
+维护命令直接操作指定 SQLite 文件，不经过 HTTP。`issue_events` 仍是唯一 source of truth；归档目录只是 append-only shadow archive，不参与 Issue / Session / Guardian / Supervisor 的 live read。首次演练必须使用 SQLite online backup 副本，不能直接拿正式库试验。
 
 ```bash
 LIVE_DB="$HOME/Library/Application Support/codex-issue-runner-bun-live/state/runner.db"

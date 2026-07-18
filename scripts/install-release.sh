@@ -26,7 +26,7 @@ RESOLVED_VERSION=""
 
 usage() {
   cat <<'HELP'
-Install and run Codex Issue Runner from GitHub Releases.
+Install and run Xuanwu from the codex-issue-runner compatibility release.
 
 Usage:
   curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/scripts/install-release.sh | bash
@@ -337,7 +337,7 @@ install_linux_systemd() {
   mkdir -p "$unit_dir"
   cat > "$unit_file" <<UNIT
 [Unit]
-Description=Codex Issue Runner
+Description=Xuanwu (codex-issue-runner)
 After=network.target
 
 [Service]

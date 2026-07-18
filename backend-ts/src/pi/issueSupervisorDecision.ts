@@ -87,12 +87,12 @@ export async function runPiSupervisorDecision(
 
 function decisionPrompt(context: IssueSupervisorRecoveryContext, now: Date): string {
   return [
-    "You are PI Issue Supervisor. Decide how to recover, wait, escalate, or do nothing for one runner issue.",
+    "You are the Xuanwu Supervisor. Decide how to recover, wait, escalate, or do nothing for one Runner issue.",
     "Return exactly one JSON object. No markdown, no code fences, no prose outside JSON.",
     "Schema fields: decision, confidence, rationale, recovery_message, wait_until, risk_level, evidence_refs, expected_outcome, fallback_if_no_progress.",
     "Allowed decisions: wait, resume_session, steer_running_turn, retry_issue, needs_user, blocked, noop.",
     "Boundary constraints:",
-    "- PI owns issue lifecycle; Codex/Claude are executor workers in a generic worker/provider model.",
+    "- Supervisor owns issue lifecycle; Codex/Claude are executor workers in a generic worker/provider model.",
     "- Check current issue/session/project state before recommending recovery.",
     "- Avoid duplicate operations and repeated recovery loops.",
     "- Respect provider retry-after windows; do not resume before a future wait_until.",
@@ -146,11 +146,11 @@ function fallbackDecision(context: IssueSupervisorRecoveryContext, reason: strin
     decision: internal || issueID(context) <= 0 ? "noop" : "needs_user",
     evidence_refs: ["supervisor_decision_invalid", ...candidateEvidence(context)],
     expected_outcome: internal
-      ? "PI records the invalid supervisor decision as internal audit without user approval"
-      : "human reviews the invalid PI supervisor decision before any recovery action is dispatched",
+      ? "Supervisor records the invalid decision as internal audit without user approval"
+      : "human reviews the invalid Supervisor decision before any recovery action is dispatched",
     fallback_if_no_progress: "blocked",
     rationale: reason,
-    recovery_message: internal ? "" : "PI supervisor returned invalid decision JSON; human review is required before attempting recovery.",
+    recovery_message: internal ? "" : "Supervisor returned invalid decision JSON; human review is required before attempting recovery.",
     risk_level: internal ? "low" : "medium"
   };
 }
@@ -265,7 +265,7 @@ function providerCategory(context: IssueSupervisorRecoveryContext): string {
 function deterministicNeedsUserReason(context: IssueSupervisorRecoveryContext): string {
   const hardOutage = hardOutageDiagnosis(context);
   if (hardOutage) {
-    return `supervisor decision attempted automatic recovery for provider runtime unavailable or exhausted recovery diagnosis (${hardOutage}); PI must choose needs_user or blocked`;
+    return `supervisor decision attempted automatic recovery for provider runtime unavailable or exhausted recovery diagnosis (${hardOutage}); Supervisor must choose needs_user or blocked`;
   }
   if (isAutomaticRecoveryBlockedDiagnosis(primaryDiagnosis(context)) ||
     ["auth", "permission", "quota", "business_failure"].includes(providerCategory(context))) {

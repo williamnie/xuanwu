@@ -56,7 +56,7 @@ const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply"
 const ACK_LINK_TYPE = "feishu_ack_reaction", ACK_RELATIONSHIP = "ack_reaction";
 const ACK_REACTION_EMOJI_TYPE = "OK";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
-const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
+const NEW_CONVERSATION_ACK_TEXT = "已开启新的 Supervisor 上下文。你可以继续发下一条消息。";
 const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请在消息里带上项目名或 issue id 后再发。";
 const ISSUE_PROJECT_CLARIFICATION_TEXT = "这是哪个项目？你可以直接回复项目名，或把项目名带在任务里。";
 

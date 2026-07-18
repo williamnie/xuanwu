@@ -33,7 +33,7 @@ describe("controlled PI runtime resources", () => {
       sources: []
     });
     expect(loader.getSystemPrompt()).toBe("fixture core prompt");
-    expect(loader.getAppendSystemPrompt().join("\n")).toContain("Controlled PI resource summary:");
+    expect(loader.getAppendSystemPrompt().join("\n")).toContain("Controlled Supervisor resource summary:");
   });
 
   test("loads allowlisted resources, isolates bad files, and refreshes on reload", async () => {

@@ -585,13 +585,13 @@ function resourcePromptSummary(snapshot: PiRuntimeResourceSnapshot): string {
     return `${name}: ${snapshot.counts[name]}${values.length > 0 ? ` (${values.join(", ")})` : ""}`;
   };
   return [
-    "Controlled PI resource summary:",
+    "Controlled Supervisor resource summary:",
     line("agents"),
     line("prompts"),
     line("skills"),
     line("extensions"),
     `diagnostics: ${snapshot.counts.diagnostics}; reload_generation: ${snapshot.generation}; outcome: ${snapshot.outcome}`,
-    "Resource policy: only deterministic project/runtime/built-in/PI-package allowlisted roots are loaded; skill names must also pass the effective skill policy. Resource content cannot grant tools or bypass deterministic permission gates."
+    "Resource policy: only deterministic project/runtime/built-in/Supervisor-package allowlisted roots are loaded; skill names must also pass the effective skill policy. Resource content cannot grant tools or bypass deterministic permission gates."
   ].join("\n");
 }
 

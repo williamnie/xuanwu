@@ -314,7 +314,7 @@ function piActionEventNode(workID: WorkID, issueID: number, event: PiActionEvent
     sourceAuthority: "pi_action_events",
     status: event.decision || event.event_type,
     summary: event.reason || event.error || event.event_type,
-    title: `PI action ${event.event_type}`,
+    title: `Supervisor action ${event.event_type}`,
     workID
   });
 }

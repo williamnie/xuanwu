@@ -41,7 +41,7 @@ export function createMemoryFromAction(db: RunnerDatabase, action: PiAction, pay
   assertMemoryContentSafe(content);
   const item = createPiMemoryItem(db, {
     citation_id: cleanString(payload.citation_id) || cleanString(payload.proposal_id),
-    citation_label: cleanString(payload.citation_label) || "PI action proposal",
+    citation_label: cleanString(payload.citation_label) || "Supervisor action proposal",
     citation_type: cleanString(payload.citation_type) || "action_proposal",
     citation_url: cleanString(payload.citation_url),
     confidence: cleanString(payload.confidence) || confidenceFromRisk(action.risk_level),
@@ -73,7 +73,7 @@ export function createReminderFromAction(db: RunnerDatabase, action: PiAction, p
     filters: [traceFilter(action, payload)],
     max_actions_per_run: 1,
     mode: "draft",
-    name: firstString(payload.title, payload.summary, "PI reminder"),
+    name: firstString(payload.title, payload.summary, "Supervisor reminder"),
     next_run_at: nextRunAt,
     source_policy: { external_writes: false, proposal_id: cleanString(payload.proposal_id) },
     steps: [{

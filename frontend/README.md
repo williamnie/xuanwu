@@ -1,4 +1,6 @@
-# Codex Issue Runner Frontend
+# 玄武 Xuanwu Frontend
+
+`codex-issue-runner` 仍是仓库、CLI 和兼容 API 的稳定标识，不作为用户可见产品名。
 
 ## API target
 

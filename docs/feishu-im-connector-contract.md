@@ -1,6 +1,6 @@
-# PI 飞书 IM connector v0 契约
+# 玄武 Supervisor 飞书 IM connector v0 契约
 
-本契约只定义 PI 首个真实 IM 通道的配置、事件归一化与安全边界；默认使用飞书长连接接收事件，本机 runner 主动连接飞书开放平台，不要求公网域名。
+本契约只定义 Supervisor 首个真实 IM 通道的配置、事件归一化与安全边界；默认使用飞书长连接接收事件，本机 runner 主动连接飞书开放平台，不要求公网域名。
 
 ## 配置来源
 
@@ -39,7 +39,7 @@ Dedupe/source 约定：`feishu:message:<message_id>`。写入 `external_events` 
 - 接收文本消息和 mention。
 - 图片附件只记录 metadata，不下载、不解析内容。
 - 不自动回复；任何 IM 外部写回默认为 draft/proposal，自动发送必须经过 policy/action gate。
-- PI 可以只读 repo/issue/session/project/memory 上下文并生成 context pack / issue proposal；真正代码修改仍由 runner/executor 完成。
+- Supervisor 可以只读 repo/issue/session/project/memory 上下文并生成 context pack / issue proposal；真正代码修改仍由 runner/executor 完成。
 
 ## 飞书 Open Platform 事件接收门禁
 

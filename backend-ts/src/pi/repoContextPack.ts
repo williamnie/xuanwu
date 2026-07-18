@@ -50,7 +50,7 @@ export type RepoContextPackInput = Omit<Partial<RepoContextPack>,
 
 export const REPO_CONTEXT_PACK_VERSION = 1;
 export const REPO_CONTEXT_PACK_NOTICE =
-  "PI repo_context_pack 是只读代码/上下文后的初步上下文，不是 executor 的强制指令；executor 需要复核运行态和代码后再实现、测试、提交。";
+  "Supervisor repo_context_pack 是只读代码/上下文后的初步上下文，不是 executor 的强制指令；executor 需要复核运行态和代码后再实现、测试、提交。";
 
 export function createRepoContextPack(input: RepoContextPackInput, options: { now?: Date | string } = {}): RepoContextPack {
   return {
@@ -72,7 +72,7 @@ export function createRepoContextPack(input: RepoContextPackInput, options: { no
 
 export function renderRepoContextPack(pack: RepoContextPack): string {
   return [
-    "## PI repo_context_pack",
+    "## Supervisor repo_context_pack",
     `> ${REPO_CONTEXT_PACK_NOTICE}`,
     "",
     `- Intent: ${pack.intent || "(not specified)"}`,

@@ -251,7 +251,7 @@ describe("PI supervisor decision runtime", () => {
         expect(result.decision.decision).toBe(decision);
       }
       const supervisorPrompt = JSON.parse(promptText).messages[0].content[0].text as string;
-      expect(supervisorPrompt).toContain("PI owns issue lifecycle");
+      expect(supervisorPrompt).toContain("Supervisor owns issue lifecycle");
       expect(supervisorPrompt).toContain("generic worker/provider model");
       expect(supervisorPrompt).toContain("executor workers");
       expect(supervisorPrompt).toContain("Codex/Claude");

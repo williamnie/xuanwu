@@ -133,7 +133,7 @@ describe("PI Guardian missed intent sweep", () => {
       expect(first.pendingAlertIds).toHaveLength(1);
       expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
       expect(sender.calls[0]?.text).toContain("通知摘要待处理");
-      expect(sender.calls[0]?.text).toContain("请查看 PI Guardian");
+      expect(sender.calls[0]?.text).toContain("请查看 Guardian");
       expect(sender.calls[0]?.text).not.toContain("missed_digest_pending");
       expect(sender.calls[0]?.text).not.toContain("digest_pipeline_unavailable");
       expect(alert).toMatchObject({

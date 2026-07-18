@@ -42,7 +42,7 @@ const SUPERVISOR_CONTROL_TOOLS = new Set<string>(SUPERVISOR_CONTROL_TOOL_NAMES);
 export function listBuiltinToolProviders(): ToolProvider[] {
   return [{
     audit: { redact: [] },
-    description: "Builtin PI and runner tools exposed by the local runtime.",
+    description: "Builtin Supervisor and Runner tools exposed by the local runtime.",
     id: RUNNER_BUILTIN_PROVIDER_ID,
     kind: "builtin",
     metadata: { builtin: true },
@@ -103,10 +103,10 @@ function toolRiskLevel(permission: ToolPermission): "high" | "low" | "medium" {
 }
 
 function primitiveDescription(name: string): string {
-  if (name === "read") return "Read a bounded file excerpt through PI runtime.";
-  if (name === "grep") return "Search text through PI runtime.";
-  if (name === "find") return "Find files through PI runtime.";
-  return "List directory entries through PI runtime.";
+  if (name === "read") return "Read a bounded file excerpt through Supervisor runtime.";
+  if (name === "grep") return "Search text through Supervisor runtime.";
+  if (name === "find") return "Find files through Supervisor runtime.";
+  return "List directory entries through Supervisor runtime.";
 }
 
 function primitiveSchema(name: string): ToolJsonSchema {

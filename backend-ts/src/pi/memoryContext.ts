@@ -82,7 +82,7 @@ export function buildPiMemoryPromptContext(db: RunnerDatabase, input: PiMemoryPr
   const items = result.memory_items;
   const lines = items.map(formatMemoryLine);
   return [
-    "Confirmed PI memory:",
+    "Confirmed Supervisor memory:",
     lines.length > 0 ? lines.join("\n") : "- No confirmed memories for this scope.",
     `Memory retrieval: scopes=${result.retrieval_scopes.join(",") || "global"} item_limit=${result.limits.item_limit} token_budget=${result.limits.token_budget} token_estimate=${result.limits.token_estimate} truncated=${result.limits.truncated}.`,
     `Memory truncation: ${result.truncation_summary.summary}`,
