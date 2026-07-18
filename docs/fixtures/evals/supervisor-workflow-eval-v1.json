@@ -1,0 +1,730 @@
+{
+  "cases": [
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "answer",
+          "intents": [
+            "answer"
+          ],
+          "primary_intent": "answer"
+        }
+      },
+      "id": "intent-answer",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "解释 Work 和 Run 的区别",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.0018,
+            "input_tokens": 125,
+            "output_tokens": 55,
+            "total_tokens": 180
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.00153,
+            "input_tokens": 107,
+            "output_tokens": 46,
+            "total_tokens": 153
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "answer"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "read_only",
+          "intents": [
+            "investigate",
+            "query"
+          ],
+          "primary_intent": "investigate"
+        },
+        "plan": {
+          "mode": "read_only",
+          "status": "ready",
+          "work_count": 0,
+          "workflow_purposes": [
+            "investigate"
+          ]
+        },
+        "selected_tools": [
+          "work_read",
+          "run_read",
+          "evidence_list"
+        ]
+      },
+      "id": "workflow-investigate",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "调查 Work #42 为什么失败，只读分析，不要修改状态",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [
+            "work_read",
+            "run_read",
+            "evidence_list"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.0036,
+            "input_tokens": 251,
+            "output_tokens": 109,
+            "total_tokens": 360
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [
+            "work_read",
+            "run_read",
+            "evidence_list"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.00306,
+            "input_tokens": 214,
+            "output_tokens": 92,
+            "total_tokens": 306
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "work_plan",
+        "tool_selection",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "workflow",
+        "investigate"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "controlled_action",
+          "intents": [
+            "execute"
+          ],
+          "primary_intent": "execute"
+        },
+        "plan": {
+          "mode": "work_plan",
+          "status": "ready",
+          "work_count": 1,
+          "workflow_purposes": [
+            "implement"
+          ]
+        },
+        "selected_tools": [
+          "work_read",
+          "work_update",
+          "evidence_list"
+        ]
+      },
+      "id": "workflow-implement",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "实现登录页错误提示并补 focused test",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [
+            "work_read",
+            "work_update",
+            "evidence_list"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.0042,
+            "input_tokens": 294,
+            "output_tokens": 126,
+            "total_tokens": 420
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [
+            "work_read",
+            "work_update",
+            "evidence_list"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.00357,
+            "input_tokens": 249,
+            "output_tokens": 108,
+            "total_tokens": 357
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "work_plan",
+        "tool_selection",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "workflow",
+        "execute"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "controlled_action",
+          "intents": [
+            "execute",
+            "release"
+          ],
+          "primary_intent": "execute"
+        },
+        "plan": {
+          "mode": "work_plan",
+          "status": "ready",
+          "work_count": 3,
+          "workflow_purposes": [
+            "implement",
+            "release"
+          ]
+        },
+        "selected_tools": [
+          "work_read",
+          "evidence_list",
+          "handoff_read"
+        ]
+      },
+      "id": "workflow-release",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "先修复构建脚本，然后发布当前版本",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [
+            "work_read",
+            "evidence_list",
+            "handoff_read"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.005,
+            "input_tokens": 350,
+            "output_tokens": 150,
+            "total_tokens": 500
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [
+            "work_read",
+            "evidence_list",
+            "handoff_read"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.00425,
+            "input_tokens": 297,
+            "output_tokens": 128,
+            "total_tokens": 425
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "work_plan",
+        "tool_selection",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "workflow",
+        "release"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "controlled_action",
+          "intents": [
+            "work_control"
+          ],
+          "primary_intent": "work_control"
+        },
+        "selected_tools": [
+          "work_read",
+          "run_read",
+          "run_control"
+        ]
+      },
+      "id": "intent-work-control",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "重试 Work #42 的 Run",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [
+            "work_read",
+            "run_read",
+            "run_control"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.0026,
+            "input_tokens": 182,
+            "output_tokens": 78,
+            "total_tokens": 260
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [
+            "work_read",
+            "run_read",
+            "run_control"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.00221,
+            "input_tokens": 154,
+            "output_tokens": 67,
+            "total_tokens": 221
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "tool_selection",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "work-control"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "controlled_action",
+          "intents": [
+            "automation"
+          ],
+          "primary_intent": "automation"
+        },
+        "plan": {
+          "mode": "work_plan",
+          "status": "ready",
+          "work_count": 1,
+          "workflow_purposes": [
+            "implement"
+          ]
+        },
+        "selected_tools": [
+          "run_list",
+          "work_create"
+        ]
+      },
+      "id": "workflow-automation",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "每天巡检失败的 Run，需要时通知我",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [
+            "run_list",
+            "work_create"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.0038,
+            "input_tokens": 266,
+            "output_tokens": 114,
+            "total_tokens": 380
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [
+            "run_list",
+            "work_create"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.00323,
+            "input_tokens": 226,
+            "output_tokens": 97,
+            "total_tokens": 323
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "work_plan",
+        "tool_selection",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "workflow",
+        "automation"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "controlled_action",
+          "intents": [
+            "approval"
+          ],
+          "primary_intent": "approval"
+        }
+      },
+      "id": "intent-approval",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "批准这个执行方案",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.0019,
+            "input_tokens": 133,
+            "output_tokens": 57,
+            "total_tokens": 190
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.00161,
+            "input_tokens": 112,
+            "output_tokens": 49,
+            "total_tokens": 161
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "approval"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "route": {
+          "decision": "read_only",
+          "intents": [
+            "query"
+          ],
+          "primary_intent": "query"
+        },
+        "selected_tools": [
+          "work_list"
+        ]
+      },
+      "id": "intent-query",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "这个项目还有多少 Work 没完成？",
+        "source": "runner_chat"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [
+            "work_list"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.0021,
+            "input_tokens": 147,
+            "output_tokens": 63,
+            "total_tokens": 210
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [
+            "work_list"
+          ],
+          "token_usage": {
+            "estimated_cost_usd": 0.00178,
+            "input_tokens": 124,
+            "output_tokens": 54,
+            "total_tokens": 178
+          }
+        }
+      },
+      "required_scorers": [
+        "intent_route",
+        "tool_selection",
+        "token_cost"
+      ],
+      "tags": [
+        "intent",
+        "query"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "completion": {
+          "decision": "passed",
+          "target_status": "done"
+        }
+      },
+      "id": "completion-passed",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "",
+        "source": "runner_chat",
+        "completion_evidence": "passed"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.0012,
+            "input_tokens": 84,
+            "output_tokens": 36,
+            "total_tokens": 120
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.00102,
+            "input_tokens": 71,
+            "output_tokens": 31,
+            "total_tokens": 102
+          }
+        }
+      },
+      "required_scorers": [
+        "completion_gate",
+        "token_cost"
+      ],
+      "tags": [
+        "completion",
+        "gate"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "completion": {
+          "decision": "failed",
+          "target_status": "failed"
+        }
+      },
+      "id": "completion-failed",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "",
+        "source": "runner_chat",
+        "completion_evidence": "failed"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.0012,
+            "input_tokens": 84,
+            "output_tokens": 36,
+            "total_tokens": 120
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.00102,
+            "input_tokens": 71,
+            "output_tokens": 31,
+            "total_tokens": 102
+          }
+        }
+      },
+      "required_scorers": [
+        "completion_gate",
+        "token_cost"
+      ],
+      "tags": [
+        "completion",
+        "gate"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "completion": {
+          "decision": "pending",
+          "target_status": "pending_verification"
+        }
+      },
+      "id": "completion-missing",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "",
+        "source": "runner_chat",
+        "completion_evidence": "missing"
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.001,
+            "input_tokens": 70,
+            "output_tokens": 30,
+            "total_tokens": 100
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.00085,
+            "input_tokens": 59,
+            "output_tokens": 26,
+            "total_tokens": 85
+          }
+        }
+      },
+      "required_scorers": [
+        "completion_gate",
+        "token_cost"
+      ],
+      "tags": [
+        "completion",
+        "gate"
+      ]
+    },
+    {
+      "golden": {
+        "max_estimated_cost_usd": 0.01,
+        "max_total_tokens": 600,
+        "report": {
+          "exhausted_recoveries": 1,
+          "needs_user_escalations": 1,
+          "rate_limit_waits": 1,
+          "recovered_issues": 1,
+          "recovery_actions": 1
+        }
+      },
+      "id": "supervisor-report",
+      "input": {
+        "project_id": "fixture-project",
+        "prompt": "",
+        "source": "runner_chat",
+        "report_events": [
+          {
+            "action_type": "session.resume_followup",
+            "event_type": "action",
+            "issue_id": 101
+          },
+          {
+            "action_type": "issue.retry_after",
+            "event_type": "action",
+            "issue_id": 102,
+            "provider_error_category": "rate_limit",
+            "retry_after_at": "2026-07-18T00:05:00.000Z"
+          },
+          {
+            "action_type": "needs_user.escalate",
+            "decision": "needs_user",
+            "event_type": "decision",
+            "issue_id": 103
+          },
+          {
+            "diagnosis_code": "session_recovery_exhausted",
+            "event_type": "decision",
+            "issue_id": 104
+          }
+        ]
+      },
+      "observations": {
+        "fixture-baseline": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.0024,
+            "input_tokens": 168,
+            "output_tokens": 72,
+            "total_tokens": 240
+          }
+        },
+        "fixture-candidate": {
+          "selected_tools": [],
+          "token_usage": {
+            "estimated_cost_usd": 0.00204,
+            "input_tokens": 142,
+            "output_tokens": 62,
+            "total_tokens": 204
+          }
+        }
+      },
+      "required_scorers": [
+        "report",
+        "token_cost"
+      ],
+      "tags": [
+        "report",
+        "supervisor"
+      ]
+    }
+  ],
+  "evaluation_time": "2026-07-18T00:10:00.000Z",
+  "model_variants": [
+    {
+      "baseline": true,
+      "id": "fixture-baseline",
+      "label": "Recorded baseline",
+      "model": "supervisor-fixture-v1",
+      "provider": "offline-fixture"
+    },
+    {
+      "baseline": false,
+      "id": "fixture-candidate",
+      "label": "Recorded candidate",
+      "model": "supervisor-fixture-v2",
+      "provider": "offline-fixture"
+    }
+  ],
+  "regression_threshold": {
+    "max_score_regression": 0,
+    "max_token_regression_ratio": 0.1,
+    "min_overall_score": 1,
+    "min_required_scorer_score": 1
+  },
+  "schema_version": "xw.supervisor-workflow-eval-suite.v1",
+  "suite_id": "supervisor-workflow-core-v1"
+}
