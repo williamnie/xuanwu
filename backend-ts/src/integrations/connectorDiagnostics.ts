@@ -8,10 +8,10 @@ import { gitEventConnectorManifest } from "./gitEvents.ts";
 import { trackerIssueConnectorManifest } from "./tracker/issueSync.ts";
 import { WEBHOOK_CHANNEL_MANIFEST } from "../http/webhookEventsApi.ts";
 import {
-  CHANNEL_CONNECTOR_CONTRACT_VERSION,
   type ConnectorCapability,
   type ConnectorManifest
 } from "./channelConnectorContracts.ts";
+import { feishuChannelConnectorManifest } from "./feishuChannelConnector.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
@@ -157,7 +157,7 @@ function staticDefinitions(context: ConnectorDiagnosticsContext, secrets: Secret
   return [
     {
       configured: feishuStatus.status === "configured",
-      manifest: feishuManifest(feishuRefs),
+      manifest: feishuChannelConnectorManifest(feishuRefs.flatMap((item) => typeof item.ref === "string" ? [item.ref] : [])),
       missing_required: stringList(feishuStatus.missing_required),
       secret_refs: feishuRefs,
       source: "feishu",
@@ -236,20 +236,6 @@ function publicDiagnostic(database: RunnerDatabase, definition: StaticConnectorD
       ...definition.missing_required,
       ...definition.secret_refs.filter((item) => item.required === true && item.configured !== true).map((item) => String(item.name ?? ""))
     ].filter(Boolean))]
-  };
-}
-
-function feishuManifest(refs: Array<Record<string, unknown>>): ConnectorManifest {
-  return {
-    auth_refs: refs.flatMap((item) => typeof item.ref === "string" && item.ref !== "" ? [{ kind: "secret_ref" as const, ref: item.ref }] : []),
-    capabilities: [
-      { id: "message.receive", kind: "inbound", requires_authorization: true },
-      { id: "message.reply", kind: "outbound", requires_authorization: true }
-    ],
-    contract_version: CHANNEL_CONNECTOR_CONTRACT_VERSION,
-    display_name: "Feishu IM",
-    id: "feishu",
-    kind: "channel"
   };
 }
 

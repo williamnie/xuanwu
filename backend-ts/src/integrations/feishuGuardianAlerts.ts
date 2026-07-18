@@ -16,6 +16,7 @@ import {
   FeishuClientError,
   type FeishuMessageClient
 } from "./feishuClient.ts";
+import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
 import { feishuTargetForConversation, feishuTargetForIssue } from "./feishuNotificationTargets.ts";
 
 export type PiGuardianDirectFeishuOptions = {
@@ -42,10 +43,23 @@ export async function sendDirectFeishuGuardianAlert(
   }
   try {
     const sender = options.sender ?? createFeishuMessageClient({ config: options.config });
-    const sent = await sender.sendTextMessage({ ...target, text: alertText(alert, options) });
+    const alertRef = `pi_guardian_alerts:${alert.id}`;
+    const receipt = await createFeishuChannelConnector({ config: options.config, sender }).deliver!(createFeishuOutboundEnvelope({
+      actionGateRef: `${alertRef}:retry-policy`,
+      actionID: `${alertRef}:direct-feishu`,
+      authority: "deterministic_policy",
+      correlationID: alert.run_group_id || alertRef,
+      eventRef: alertRef,
+      idempotencyKey: `${alertRef}:direct-feishu`,
+      occurredAt: options.now?.toISOString(),
+      operation: "message.reply",
+      payload: { text: alertText(alert, options) },
+      receiveID: target.receiveId,
+      receiveIDType: target.receiveIdType
+    }));
     updatePiGuardianAlert(db, alert.id, sentGuardianAlertRetryPatch({
       alert,
-      messageId: sent.messageId,
+      messageId: receipt.provider_request_ref,
       now: options.now
     }));
   } catch (error) {

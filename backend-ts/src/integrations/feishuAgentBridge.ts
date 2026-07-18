@@ -4,6 +4,7 @@ import { createExternalLink, listExternalLinksByExternal } from "../db/repositor
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feishu.ts";
 import { createFeishuMessageClient, type FeishuMessageClient, type FeishuTextMessageResult } from "./feishuClient.ts";
+import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
 import {
   parseFeishuNewConversationCommand,
   routeFeishuConversation,
@@ -52,6 +53,7 @@ export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ing
 export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 
 const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply";
+const ACK_LINK_TYPE = "feishu_ack_reaction", ACK_RELATIONSHIP = "ack_reaction";
 const ACK_REACTION_EMOJI_TYPE = "OK";
 const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 PI 上下文。你可以继续发下一条消息。";
@@ -184,11 +186,26 @@ async function sendReply(
   runner: FeishuRunnerResult,
   reason: string
 ): Promise<FeishuBridgeHandleResult> {
-  const sent = await messageSender(options).sendTextMessage({
-    receiveId: input.event.chat_id,
-    receiveIdType: "chat_id",
-    text
-  });
+  const eventRef = input.ingest.event_id > 0 ? `external_events:${input.ingest.event_id}` : input.event.dedupe_key;
+  const receipt = await createFeishuChannelConnector({
+    config: options.config,
+    sender: messageSender(options)
+  }).deliver!(createFeishuOutboundEnvelope({
+    actionGateRef: `${eventRef}:reply-policy`,
+    actionID: `feishu-reply:${input.event.message_id}`,
+    authority: "deterministic_policy",
+    correlationID: cleanString(runner.conversationId) || fallbackConversationID(input.event),
+    eventRef,
+    idempotencyKey: `feishu-reply:${input.event.dedupe_key}`,
+    occurredAt: input.event.timestamp,
+    operation: "message.reply",
+    payload: { text },
+    receiveID: input.event.chat_id,
+    receiveIDType: "chat_id"
+  }));
+  const sent: FeishuTextMessageResult = {
+    messageId: receipt.provider_request_ref
+  };
   recordReplyLink(options.database, input, runner, sent);
   return { reason, replied: true };
 }
@@ -246,10 +263,30 @@ async function sendAckReaction(
 ): Promise<void> {
   const sender = messageSender(options);
   if (!sender.addMessageReaction) return;
+  if (alreadyAcknowledged(options.database, input.event)) return;
   try {
-    await sender.addMessageReaction({
-      emojiType: ACK_REACTION_EMOJI_TYPE,
-      messageId: input.event.message_id
+    const eventRef = input.ingest.event_id > 0 ? `external_events:${input.ingest.event_id}` : input.event.dedupe_key;
+    const receipt = await createFeishuChannelConnector({ config: options.config, sender }).deliver!(createFeishuOutboundEnvelope({
+      actionGateRef: `${eventRef}:ack-policy`,
+      actionID: `feishu-ack:${input.event.message_id}`,
+      authority: "deterministic_policy",
+      correlationID: input.event.dedupe_key,
+      eventRef,
+      idempotencyKey: `feishu-ack:${input.event.dedupe_key}`,
+      occurredAt: input.event.timestamp,
+      operation: "reaction.add",
+      payload: { emoji_type: ACK_REACTION_EMOJI_TYPE, message_id: input.event.message_id },
+      receiveID: input.event.chat_id,
+      receiveIDType: "chat_id"
+    }));
+    createExternalLink(options.database, {
+      conversation_id: fallbackConversationID(input.event),
+      external_event_id: input.ingest.event_id,
+      external_id: input.event.message_id,
+      external_type: ACK_LINK_TYPE,
+      loop_run_id: `feishu_reaction:${receipt.provider_request_ref}`,
+      relationship: ACK_RELATIONSHIP,
+      source: "feishu"
     });
   } catch (error) {
     console.warn(JSON.stringify({
@@ -349,6 +386,15 @@ function alreadyReplied(db: RunnerDatabase, event: FeishuNormalizedMessageEvent)
     limit: 1,
     source: "feishu"
   }).some((item) => item.relationship === REPLY_RELATIONSHIP);
+}
+
+function alreadyAcknowledged(db: RunnerDatabase, event: FeishuNormalizedMessageEvent): boolean {
+  return listExternalLinksByExternal(db, {
+    externalID: event.message_id,
+    externalType: ACK_LINK_TYPE,
+    limit: 1,
+    source: "feishu"
+  }).some((item) => item.relationship === ACK_RELATIONSHIP);
 }
 
 function replyDedupeKey(event: FeishuNormalizedMessageEvent): string {

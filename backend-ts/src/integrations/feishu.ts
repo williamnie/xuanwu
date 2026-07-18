@@ -14,6 +14,17 @@ export {
 export { buildFeishuConnectorConfig, feishuConnectorStatus, redactFeishuConnectorConfig } from "./feishuConfig.ts";
 export { feishuExternalEventInput, normalizeFeishuMessageEvent, projectIDForFeishuMessage } from "./feishuEvents.ts";
 export {
+  FEISHU_CONNECTOR_ID,
+  createFeishuChannelConnector,
+  createFeishuOutboundEnvelope,
+  feishuChannelConnectorManifest,
+  feishuConnectorTarget,
+  feishuInboundEnvelopeForEvent,
+  migrateLegacyFeishuOutboxEnvelope,
+  normalizeFeishuInboundEnvelope,
+  type FeishuConnectorInbound
+} from "./feishuChannelConnector.ts";
+export {
   FeishuCallbackPayloadError,
   calculateFeishuCallbackSignature,
   decryptFeishuCallbackPayload,

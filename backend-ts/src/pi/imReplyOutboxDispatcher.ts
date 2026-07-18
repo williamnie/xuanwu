@@ -15,6 +15,10 @@ import {
 } from "../integrations/feishuPiActionCards.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { FeishuClientError, type FeishuMessageClient } from "../integrations/feishuClient.ts";
+import {
+  createFeishuChannelConnector,
+  migrateLegacyFeishuOutboxEnvelope
+} from "../integrations/feishuChannelConnector.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 
 export type FeishuMessageSender = FeishuMessageClient;
@@ -76,28 +80,39 @@ async function sendFeishuMessage(
   const target = sendTarget(outbox);
   const approvalID = approvalRequestID(outbox);
   const piActionID = piActionIDFromApprovalActionID(approvalID);
+  let card: Record<string, unknown> | undefined;
   if (piActionID !== "" && options.sender.sendInteractiveCard) {
-    return await options.sender.sendInteractiveCard({
-      ...target,
-      card: buildFeishuPiActionCard({
-        actionID: piActionID,
-        issueID: outbox.issue_id,
-        text: outbox.content
-      })
+    card = buildFeishuPiActionCard({
+      actionID: piActionID,
+      issueID: outbox.issue_id,
+      text: outbox.content
     });
   }
   const approval = approvalID ? getPiApprovalRequest(options.database, approvalID) : null;
-  if (approval && options.sender.sendInteractiveCard) {
-    return await options.sender.sendInteractiveCard({
-      ...target,
-      card: buildFeishuApprovalCard({
-        approvalID: approval.approval_id,
-        issueID: approval.issue_id || outbox.issue_id,
-        text: outbox.content
-      })
+  if (!card && approval && options.sender.sendInteractiveCard) {
+    card = buildFeishuApprovalCard({
+      approvalID: approval.approval_id,
+      issueID: approval.issue_id || outbox.issue_id,
+      text: outbox.content
     });
   }
-  return await options.sender.sendTextMessage({ ...target, text: outbox.content });
+  const envelope = migrateLegacyFeishuOutboxEnvelope({
+    approvalActionID: outbox.approval_action_id,
+    card,
+    content: outbox.content,
+    externalEventID: outbox.external_event_id,
+    id: outbox.id,
+    issueID: outbox.issue_id,
+    occurredAt: outbox.created_at,
+    receiveID: target.receiveId,
+    receiveIDType: target.receiveIdType,
+    replyDraftID: outbox.reply_draft_id
+  });
+  const receipt = await createFeishuChannelConnector({
+    config: options.config,
+    sender: options.sender
+  }).deliver!(envelope);
+  return { messageId: receipt.provider_request_ref };
 }
 
 function handleSendError(

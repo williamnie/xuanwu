@@ -149,7 +149,7 @@ describe("Feishu completion watch notifications", () => {
 
       expect(result).toMatchObject({ failed: 0, processed: 1, retry: 1, sent: 0 });
       expect(stored).toMatchObject({ status: "retry" });
-      expect(stored?.last_error).toContain("token expired");
+      expect(stored?.last_error).toBe("token [redacted]");
       expect(stored?.cooldown_until).not.toBe("");
     } finally {
       db.close();

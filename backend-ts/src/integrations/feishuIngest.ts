@@ -10,6 +10,7 @@ import {
   type FeishuConnectorConfig,
   type FeishuNormalizedMessageEvent
 } from "./feishu.ts";
+import { createFeishuChannelConnector, feishuInboundEnvelopeForEvent } from "./feishuChannelConnector.ts";
 
 export type FeishuIngestContext = {
   bus?: EventBus;
@@ -49,8 +50,15 @@ export function ingestFeishuMessageEvent(
   const rawRef = meta.rawPayloadRef || rawPayloadRef(raw);
   const event = normalizeFeishuMessageEvent(raw, { rawEventRef: rawRef });
   const attention = attentionDecision(context, event);
+  const envelope = feishuInboundEnvelopeForEvent(event, attention.project_id);
   const summary = normalizedSummary(event, attention.project_id, attention);
-  const inboxEvent = saveInboxEvent(context, event, attention, raw);
+  let inboxEvent: ReturnType<typeof saveInboxEvent> = null;
+  // ChannelConnector is the runtime boundary; its callback delegates to the
+  // existing external_events writer instead of introducing a second inbox.
+  void createFeishuChannelConnector({
+    config: context.config,
+    onInbound: () => { inboxEvent = saveInboxEvent(context, event, attention, raw); }
+  }).ingest!(envelope);
   publishAudit(context, {
     connector: "feishu",
     dedupe_key: event.dedupe_key,

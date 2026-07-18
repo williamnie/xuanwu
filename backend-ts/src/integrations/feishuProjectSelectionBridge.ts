@@ -11,6 +11,7 @@ import {
   createFeishuMessageClient,
   type FeishuMessageClient
 } from "./feishuClient.ts";
+import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
 import type { FeishuConversationClock, FeishuConversationRoute } from "./feishuConversationRouting.ts";
 import type { FeishuProjectContextResult } from "./feishuProjectContext.ts";
 import type {
@@ -67,7 +68,7 @@ export async function handleFeishuProjectSelectionAction(
   if (consumed.status !== "consumed" || !consumed.selection) {
     return { reason: `project_selection_${consumed.status}`, replied: false };
   }
-  await sendActionText(options, action.chat_id, `已选择 ${action.project_id}，我会用它处理刚才这句。`);
+  await sendActionText(options, action.chat_id, `已选择 ${action.project_id}，我会用它处理刚才这句。`, action.selection_id);
   return continuePendingPrompt(options, consumed.selection, action.project_id);
 }
 
@@ -125,20 +126,34 @@ async function sendSelectionPrompt(
   candidates: Array<{ id: string; name: string }>
 ): Promise<string> {
   const sender = messageSender(options);
+  const auditRef = `feishu-project-selection:${selection.selection_id}`;
+  let operation: "card.send" | "message.reply" = "message.reply";
+  let payload: Record<string, unknown>;
   if (sender.sendInteractiveCard) {
     const card = buildFeishuProjectSelectionCard({
       candidates,
       originalPrompt: selection.original_prompt,
       selectionId: selection.selection_id
     });
-    return (await sender.sendInteractiveCard({ card, receiveId: chatId, receiveIdType: "chat_id" })).messageId;
+    operation = "card.send";
+    payload = { card };
+  } else {
+    payload = { text: fallbackSelectionText(candidates) };
   }
-  const sent = await sender.sendTextMessage({
-    receiveId: chatId,
-    receiveIdType: "chat_id",
-    text: fallbackSelectionText(candidates)
-  });
-  return sent.messageId;
+  const receipt = await createFeishuChannelConnector({ config: options.config, sender }).deliver!(createFeishuOutboundEnvelope({
+    actionGateRef: `${auditRef}:pending`,
+    actionID: `${auditRef}:prompt`,
+    authority: "deterministic_policy",
+    correlationID: selection.conversation_id,
+    eventRef: auditRef,
+    idempotencyKey: `${auditRef}:prompt`,
+    occurredAt: selection.created_at,
+    operation,
+    payload,
+    receiveID: chatId,
+    receiveIDType: "chat_id"
+  }));
+  return receipt.provider_request_ref;
 }
 
 async function continuePendingPrompt(
@@ -156,7 +171,7 @@ async function continuePendingPrompt(
       targetProjectSource: "card_select",
       prompt: selection.original_prompt
     });
-    if (cleanString(runner.text) !== "") await sendActionText(options, selection.chat_id, runner.text);
+    if (cleanString(runner.text) !== "") await sendActionText(options, selection.chat_id, runner.text, selection.selection_id);
     return { reason: "project_selection_continued", replied: true };
   } catch (error) {
     return continueFailure(options, selection.chat_id, projectId, error);
@@ -168,7 +183,7 @@ async function savedOnly(
   chatId: string,
   projectId: string
 ): Promise<FeishuBridgeHandleResult> {
-  await sendActionText(options, chatId, `已选择 ${projectId}。请把项目名或 issue id 写在具体请求里。`);
+  await sendActionText(options, chatId, `已选择 ${projectId}。请把项目名或 issue id 写在具体请求里。`, `saved:${projectId}`);
   return { reason: "project_selection_saved", replied: true };
 }
 
@@ -178,16 +193,29 @@ async function continueFailure(
   projectId: string,
   error: unknown
 ): Promise<FeishuBridgeHandleResult> {
-  await sendActionText(options, chatId, `已选择 ${projectId}，但继续处理刚才请求时出错：${safeError(error)}。你可以稍后重试。`);
+  await sendActionText(options, chatId, `已选择 ${projectId}，但继续处理刚才请求时出错：${safeError(error)}。你可以稍后重试。`, `failed:${projectId}`);
   return { reason: "project_selection_continue_failed", replied: true };
 }
 
 async function sendActionText(
   options: FeishuProjectSelectionBridgeOptions,
   chatId: string,
-  text: string
+  text: string,
+  correlation: string
 ): Promise<void> {
-  await messageSender(options).sendTextMessage({ receiveId: chatId, receiveIdType: "chat_id", text });
+  const ref = `feishu-project-selection:${correlation}`;
+  await createFeishuChannelConnector({ config: options.config, sender: messageSender(options) }).deliver!(createFeishuOutboundEnvelope({
+    actionGateRef: `${ref}:consumed`,
+    actionID: `${ref}:reply`,
+    authority: "deterministic_policy",
+    correlationID: ref,
+    eventRef: ref,
+    idempotencyKey: `${ref}:reply:${stableTextKey(text)}`,
+    operation: "message.reply",
+    payload: { text },
+    receiveID: chatId,
+    receiveIDType: "chat_id"
+  }));
 }
 
 function pendingEvent(selection: FeishuPendingProjectSelection): FeishuNormalizedMessageEvent {
@@ -225,6 +253,12 @@ function safeError(error: unknown): string {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function stableTextKey(value: string): string {
+  let hash = 2166136261;
+  for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+  return (hash >>> 0).toString(16);
 }
 
 export type { FeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
