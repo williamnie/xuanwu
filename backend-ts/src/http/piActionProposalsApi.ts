@@ -2,13 +2,15 @@ import type { RunnerDatabase } from "../db/database.ts";
 import {
   createActionProposal,
   getActionProposal,
-  listActionProposals,
-  rejectActionProposal
+  listActionProposals
 } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
-import { approveAndExecuteActionProposal } from "./piActionProposalExecution.ts";
+import {
+  LEGACY_ATTENTION_MUTATION_HEADERS,
+  resolveProposalDecision
+} from "./attentionDecisionService.ts";
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";
 import type { Router } from "./router.ts";
 
@@ -53,23 +55,14 @@ async function approveProposalResponse(context: PiActionProposalContext, request
   const body = await objectBody(request);
   const id = proposalID(request);
   requireProposal(context, id);
-  return writeAsyncResponse(() => approveAndExecuteActionProposal(context, {
-    actionEdits: actionEdits(body.action_edits ?? body.actionEdits),
-    actor: cleanString(body.actor),
-    proposalID: id
-  }));
+  return writeAsyncResponse(() => resolveProposalDecision(context, id, "approve", body), 200, true);
 }
 
 async function rejectProposalResponse(context: PiActionProposalContext, request: Request): Promise<Response> {
   const body = await objectBody(request);
   const id = proposalID(request);
   requireProposal(context, id);
-  return writeResponse(() => rejectActionProposal(
-    context.database,
-    id,
-    cleanString(body.actor),
-    cleanString(body.reason)
-  ));
+  return writeAsyncResponse(() => resolveProposalDecision(context, id, "reject", body), 200, true);
 }
 
 function writeResponse(create: () => unknown, status = 200): Response {
@@ -81,9 +74,9 @@ function writeResponse(create: () => unknown, status = 200): Response {
   }
 }
 
-async function writeAsyncResponse(create: () => Promise<unknown>, status = 200): Promise<Response> {
+async function writeAsyncResponse(create: () => Promise<unknown>, status = 200, deprecated = false): Promise<Response> {
   try {
-    return json(await create(), { status });
+    return json(await create(), { status, ...(deprecated ? { headers: LEGACY_ATTENTION_MUTATION_HEADERS } : {}) });
   } catch (error) {
     if (error instanceof HttpError) throw error;
     if (error instanceof Error) throw new HttpError(400, error.message);
@@ -130,10 +123,4 @@ function cleanParam(value: string | null): string {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function actionEdits(value: unknown): Record<string, { payload?: JsonObject }> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, { payload?: JsonObject }>
-    : {};
 }

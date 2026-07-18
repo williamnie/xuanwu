@@ -106,7 +106,7 @@ Work 634 at revision abc123 handoff   -> xw:handoff:derived:634%40abc123
 | Run | `issue_runs` | `agent_sessions` 仅作 session ref，不生成第二个 Run ID |
 | Evidence | `issue_events`、`pi_action_events`、`issue_supervisor_events`、`git` | 事实按原始 authority 保持可追溯；bundle 不吞并原始 ID |
 | Handoff | `derived` | 由 Work、Git、Evidence 和 delivery audit 组装；当前无独立表 |
-| Attention | `attention_inbox_items`、`pi_guardian_alerts`、`pi_approval_requests`、`issues` | 各 carrier 在统一迁移前保持自己的 authority |
+| Attention | `attention_inbox_items`、`pi_guardian_alerts`、`pi_approval_requests`、`pi_actions`、`issues` | P11.03 将 active internal Action 映射为 Attention；各 carrier 保持自己的 authority |
 | Automation | `pi_automations`、`cron_tasks`、`pi_delegations` | definition 与 heartbeat/run 分离；见 8.6 |
 
 ID 冲突以 authority 隔离。迁移时不得重新编号历史对象；新表若成为 authority，必须保留 old ID mapping 和 parity audit。
@@ -322,6 +322,7 @@ Issue 是兼容名称和当前 authoritative carrier，不创建 `works` 表。
 | `attention_inbox_items` | `new -> open`；`triaged -> acknowledged`；`proposal_created -> waiting`；`actioned -> resolved`；`ignored -> dismissed`；`failed -> open` | intake Attention 的主 carrier |
 | `pi_guardian_alerts` | `open -> open`；`acked -> acknowledged`；`resolved -> resolved`；`suppressed -> dismissed` | operational failure/needs-user |
 | `pi_approval_requests` | `pending -> waiting`；非 pending 的最终 decision -> `resolved` | Permission/Approval Attention，不改变 proposal authority |
+| `pi_actions` | `candidate/pending/approved/changes_requested/snoozed -> waiting/open`；终态退出 active Attention | internal Action Gate Approval；Action/event 仍是 execution/audit authority |
 | `issues.error/comment` | 兼容 `issues` authority 的 Attention projection | 仅用于尚未进入统一 Inbox 的 blocker，不新建 issue status |
 | `pi_action_proposals` | 仅作 Attention `related_ref`/next action | Proposal 本身不是 Attention |
 

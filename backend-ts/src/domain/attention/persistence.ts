@@ -3,6 +3,8 @@ import {
   listAttentionInboxItems,
 } from "../../db/repositories/intakeRuns.ts";
 import {
+  listActionProposals,
+  listPiActions,
   listPiApprovalRequests,
   listPiGuardianAlerts
 } from "../../db/repositories/pi.ts";
@@ -17,7 +19,8 @@ import {
 import {
   attentionFromApprovalRequest,
   attentionFromGuardianAlert,
-  attentionFromInboxItem
+  attentionFromInboxItem,
+  attentionFromPiAction
 } from "./legacyAdapters.ts";
 
 type AttentionCommandEvent = {
@@ -63,10 +66,61 @@ export function persistAttentionCommand(
 }
 
 function attentionCandidates(db: RunnerDatabase) {
-  const inbox = listAttentionInboxItems(db).map(attentionFromInboxItem);
+  const proposalRefs = proposalRefsByInboxID(db);
+  const inbox = listAttentionInboxItems(db).map((item) => {
+    const candidate = attentionFromInboxItem(item);
+    return {
+      ...candidate,
+      related_refs: [...(candidate.related_refs ?? []), ...(proposalRefs.get(item.id) ?? [])]
+    };
+  });
   const guardian = listPiGuardianAlerts(db).map(attentionFromGuardianAlert);
   const approvals = listPiApprovalRequests(db).map(attentionFromApprovalRequest);
-  return [...inbox, ...guardian, ...approvals];
+  const actions = listPiActions(db)
+    .filter((action) => ["candidate", "pending", "approved", "changes_requested", "snoozed"].includes(action.status))
+    .map((action) => attentionFromPiAction(action, proposalRefsFromAction(action)));
+  return [...inbox, ...guardian, ...approvals, ...actions];
+}
+
+function proposalRefsByInboxID(db: RunnerDatabase): Map<number, string[]> {
+  const refs = new Map<number, string[]>();
+  for (const proposal of listActionProposals(db)) {
+    for (const source of proposal.source_item_ids) {
+      const id = inboxItemID(source);
+      if (id <= 0) continue;
+      refs.set(id, [...new Set([...(refs.get(id) ?? []), `proposal:${proposal.id}`])]);
+    }
+  }
+  return refs;
+}
+
+function proposalRefsFromAction(action: { idempotency_key: string; payload_json: string }): string[] {
+  const refs = new Set<string>();
+  const payload = parseObject(action.payload_json);
+  const proposalID = cleanString(payload.proposal_id);
+  if (proposalID) refs.add(`proposal:${proposalID}`);
+  const match = /^action-proposal:(.+):[^:]+$/.exec(action.idempotency_key);
+  if (match?.[1]) refs.add(`proposal:${match[1]}`);
+  return [...refs];
+}
+
+function inboxItemID(value: string): number {
+  const match = /^(?:attention_inbox_item:)?(\d+)$/.exec(value.trim());
+  const id = Number(match?.[1] ?? 0);
+  return Number.isSafeInteger(id) && id > 0 ? id : 0;
+}
+
+function parseObject(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function replayCommands(db: RunnerDatabase, initial: AttentionRecord): AttentionRecord {
@@ -82,14 +136,21 @@ function replayCommands(db: RunnerDatabase, initial: AttentionRecord): Attention
   })).attention, initial);
 }
 
-function commandEvent(event: AttentionCommandEvent): AttentionCommand {
+function commandEvent(event: Omit<AttentionCommandEvent, "action"> & { action: string }): AttentionCommand {
   const audit = event.audit;
   return {
-    action: event.action,
+    action: attentionCommandAction(event.action),
     audit,
     expected_revision: event.revision - 1,
     ...(event.snoozed_until ? { snoozed_until: event.snoozed_until } : {})
   };
+}
+
+function attentionCommandAction(value: string): AttentionCommand["action"] {
+  if (["acknowledge", "snooze", "resolve", "dismiss", "escalate"].includes(value)) {
+    return value as AttentionCommand["action"];
+  }
+  throw new Error(`unsupported persisted Attention action ${value}`);
 }
 
 function parseAudit(value: string): AttentionTransitionAudit {

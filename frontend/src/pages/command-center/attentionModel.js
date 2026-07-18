@@ -36,10 +36,6 @@ export function attentionView(item, now = new Date()) {
   };
 }
 
-export function approvalIDFromAttention(item) {
-  return item?.source_refs?.find(ref => ref?.authority === 'pi_approval_requests')?.local_id || '';
-}
-
 function statusLabel(status) {
   return ({ acknowledged: '已确认', open: '待处理', waiting: '等待中' })[status] || '待处理';
 }

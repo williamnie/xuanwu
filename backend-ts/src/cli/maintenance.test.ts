@@ -167,6 +167,26 @@ describe("maintenance CLI", () => {
     ]);
     expect(rollback).toMatchObject({ blockers: [], dry_run: true, checkpoint: { total: 1 } });
   });
+
+  test("audits PI Action, Proposal, Approval, and Attention consolidation without authorizing deletion", async () => {
+    const root = mkdtempSync(join(tmpdir(), "maintenance-attention-cli-"));
+    roots.push(root);
+    const dbPath = join(root, "runner-copy.db");
+    const reportPath = join(root, "attention-audit.json");
+    const database = await openDatabase({ dbPath, stateDir: root });
+    database.close();
+
+    const report = await maintenanceCli([
+      "attention", "audit", "--db", dbPath, "--report", reportPath, "--json"
+    ]);
+    expect(report).toMatchObject({
+      contract: "xw.pi-decision-consolidation.v1",
+      data_gate_passed: true,
+      delete_gate: { destructive_delete_authorized: false },
+      operation: "attention.consolidation-audit"
+    });
+    expect(existsSync(reportPath)).toBe(true);
+  });
 });
 
 async function cli(extra: string[], dbPath: string): Promise<Record<string, unknown>> {

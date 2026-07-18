@@ -49,6 +49,7 @@ import { trackerIssueSyncMigration } from "./048_tracker_issue_sync.ts";
 import { automationExecutionLinksMigration } from "./049_automation_execution_links.ts";
 import { automationWatchesMigration } from "./050_automation_watches.ts";
 import { removeProductionFixturesMigration } from "./051_remove_production_fixtures.ts";
+import { consolidatePiDecisionLayersMigration } from "./052_consolidate_pi_decision_layers.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -101,5 +102,6 @@ export const migrations = [
   trackerIssueSyncMigration,
   automationExecutionLinksMigration,
   automationWatchesMigration,
-  removeProductionFixturesMigration
+  removeProductionFixturesMigration,
+  consolidatePiDecisionLayersMigration
 ];

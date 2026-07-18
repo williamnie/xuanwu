@@ -21,7 +21,7 @@ export const DOMAIN_ID_AUTHORITIES = {
   run: ["issue_runs"],
   evidence: ["issue_events", "pi_action_events", "issue_supervisor_events", "git"],
   handoff: ["derived"],
-  attention: ["attention_inbox_items", "pi_guardian_alerts", "pi_approval_requests", "issues"],
+  attention: ["attention_inbox_items", "pi_guardian_alerts", "pi_approval_requests", "pi_actions", "issues"],
   automation: ["pi_automations", "cron_tasks", "pi_delegations"]
 } as const satisfies Record<CoreObjectKind, readonly string[]>;
 

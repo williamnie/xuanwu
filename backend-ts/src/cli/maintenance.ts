@@ -16,6 +16,7 @@ import {
   backfillIssueWorks,
   rollbackIssueWorkBackfill
 } from "../domain/work/migrationService.ts";
+import { auditPiDecisionConsolidation } from "../domain/attention/consolidationAudit.ts";
 import {
   forwardDatabaseMigration,
   preflightDatabaseMigration,
@@ -35,7 +36,7 @@ const BOOLEAN_FLAGS = new Set([
 export function runMaintenance(args: string[]): string {
   const family = args[0]?.trim();
   const command = args[1]?.trim();
-  if (!family || !command) throw new Error("usage: maintenance <events|db|work> <command> [flags]");
+  if (!family || !command) throw new Error("usage: maintenance <events|db|work|attention> <command> [flags]");
   const flags = parseFlags(args.slice(2));
   let report: Record<string, unknown>;
   if (family === "events" && command === "report") {
@@ -205,6 +206,12 @@ export function runMaintenance(args: string[]): string {
       confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
       dbPath: required(flags, "db"),
       reason: flags.reason,
+      reportPath: required(flags, "report")
+    });
+  } else if (family === "attention" && command === "audit") {
+    allowOnly(flags, ["db", "json", "report"]);
+    report = auditPiDecisionConsolidation({
+      dbPath: required(flags, "db"),
       reportPath: required(flags, "report")
     });
   } else if (family === "work" && command === "audit") {

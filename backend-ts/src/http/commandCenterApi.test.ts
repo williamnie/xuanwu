@@ -6,7 +6,12 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createContextBundle } from "../db/repositories/contextBundles.ts";
 import { recordHandoff } from "../db/repositories/handoffs.ts";
 import { createAttentionInboxItem, createIntakeRun } from "../db/repositories/intakeRuns.ts";
-import { createPiApprovalRequest, upsertPiGuardianAlert } from "../db/repositories/pi.ts";
+import {
+  createActionProposal,
+  createPiAction,
+  createPiApprovalRequest,
+  upsertPiGuardianAlert
+} from "../db/repositories/pi.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
@@ -220,6 +225,68 @@ describe("Command Center aggregate API", () => {
     }
   });
 
+  test("uses one Command Center decision seam for internal Actions and source-linked Proposals", async () => {
+    const db = await fixtureDatabase();
+    try {
+      createPiAction(db, {
+        action_type: "issue.enqueue",
+        gate_decision: "ask",
+        gate_reason: "risk requires user confirmation",
+        id: "internal-action-pending",
+        idempotency_key: "internal-action-pending",
+        payload_json: JSON.stringify({ issue_id: 738 }),
+        project_id: "demo",
+        rationale: "Enqueue issue 738",
+        requires_confirmation: 1,
+        risk_level: "medium",
+        status: "pending"
+      });
+      const itemID = insertAttention(db);
+      createActionProposal(db, {
+        actions: [{ payload: { reason: "duplicate" }, requires_approval: false, risk: "low", type: "no_action" }],
+        id: "proposal-command-center",
+        skill_run_id: "missing-legacy-skill-run",
+        source_item_ids: [`attention_inbox_item:${itemID}`],
+        status: "proposed",
+        summary: "Ignore duplicate request"
+      });
+      const router = createDefaultRouter({ database: db });
+
+      const summary = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
+      const items = ((await summary.json()) as Record<string, any>).sections.attention.items;
+      const internal = items.find((item: Record<string, any>) => item.source_refs.some((ref: Record<string, any>) => ref.authority === "pi_actions"));
+      const proposalAttention = items.find((item: Record<string, any>) => item.source_refs.some((ref: Record<string, any>) => ref.authority === "attention_inbox_items"));
+      expect(internal).toMatchObject({ type: "approval_required", status: "waiting" });
+
+      const detail = await router.handle(new Request(`${BASE_URL}/api/command-center/attention/${encodeURIComponent(internal.id)}`));
+      expect(await detail.json()).toMatchObject({
+        decisions: [{ kind: "pi_action", ref: "pi_action:internal-action-pending", status: "pending" }]
+      });
+      const rejectedAction = await router.handle(jsonRequest(
+        `/api/command-center/attention/${encodeURIComponent(internal.id)}/actions/reject`,
+        { actor: "user:command-center", decision_ref: "pi_action:internal-action-pending", reason: "not authorized" }
+      ));
+      expect(rejectedAction.status).toBe(200);
+      expect(await rejectedAction.json()).toMatchObject({ attention: null, decision: { decision_ref: "pi_action:internal-action-pending" } });
+
+      const proposalDetail = await router.handle(new Request(
+        `${BASE_URL}/api/command-center/attention/${encodeURIComponent(proposalAttention.id)}`
+      ));
+      expect(await proposalDetail.json()).toMatchObject({
+        decisions: [{ kind: "proposal", ref: "proposal:proposal-command-center", status: "proposed" }]
+      });
+      const rejectedProposal = await router.handle(jsonRequest(
+        `/api/command-center/attention/${encodeURIComponent(proposalAttention.id)}/actions/reject`,
+        { actor: "user:command-center", decision_ref: "proposal:proposal-command-center", reason: "duplicate" }
+      ));
+      expect(rejectedProposal.status).toBe(200);
+      expect(db.sqlite.query("select status from attention_inbox_items where id=?").get(itemID)).toEqual({ status: "ignored" });
+      expect(db.sqlite.query("select status from pi_action_proposals where id='proposal-command-center'").get()).toEqual({ status: "rejected" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps the active Work partition bounded on a large library", async () => {
     const db = await fixtureDatabase();
     try {
@@ -288,7 +355,7 @@ function insertRun(db: RunnerDatabase, issueID: number): string {
   return makeDomainID("run", "issue_runs", `command-center-run-${issueID}`);
 }
 
-function insertAttention(db: RunnerDatabase): void {
+function insertAttention(db: RunnerDatabase): number {
   const bundle = createContextBundle(db, {
     created_by: "system",
     event_refs: [1],
@@ -302,7 +369,7 @@ function insertAttention(db: RunnerDatabase): void {
     skill_id: "fixture-intake",
     status: "succeeded"
   }, new Date(SOURCE_TIME));
-  createAttentionInboxItem(db, {
+  return createAttentionInboxItem(db, {
     bundle_id: bundle.id,
     confidence: 0.9,
     evidence_refs: ["external_event:1"],
@@ -314,7 +381,7 @@ function insertAttention(db: RunnerDatabase): void {
     summary: "Review the pending action",
     title: "Approval needed",
     urgency: "high"
-  }, new Date(SOURCE_TIME));
+  }, new Date(SOURCE_TIME)).id;
 }
 
 function attentionCommand(revision: number, action: "acknowledge" | "snooze"): Record<string, unknown> {

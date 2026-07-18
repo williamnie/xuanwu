@@ -1,5 +1,6 @@
 import type { AttentionInboxItemRecord } from "../../db/repositories/intakeRuns.ts";
 import type { PiApprovalRequest } from "../../db/repositories/pi/approvalRequests.ts";
+import type { PiAction } from "../../db/repositories/pi/actions.ts";
 import type { PiGuardianAlert } from "../../db/repositories/pi/guardianAlerts.ts";
 import type {
   AttentionCandidate,
@@ -79,10 +80,38 @@ export function attentionFromApprovalRequest(request: PiApprovalRequest): Attent
       approvalResolution(request.status),
       approvalCorrelations(request)
     ),
-    status: request.status === "pending" ? "waiting" : "resolved",
+    status: request.status === "resolve_failed" ? "open" : activeApprovalStatus(request.status) ? "waiting" : "resolved",
     summary: request.summary || request.request_summary || "Approval required",
     type: "approval_required",
     updated_at: request.updated_at
+  };
+}
+
+export function attentionFromPiAction(action: PiAction, relatedRefs: string[] = []): AttentionCandidate {
+  return {
+    created_at: action.created_at,
+    evidence_refs: [`pi_actions:${action.id}`],
+    next_action: actionNextAction(action),
+    owner: projectOwner(action.project_id),
+    reason_code: clean(action.gate_reason) || clean(action.status) || "action_approval_required",
+    related_refs: compact([
+      ...relatedRefs,
+      action.issue_id > 0 ? `issue:${action.issue_id}` : "",
+      action.conversation_id ? `conversation:${action.conversation_id}` : ""
+    ]),
+    required_actor: "approver",
+    severity: severity(action.risk_level),
+    source_ref: sourceRef(
+      "pi_actions",
+      action.id,
+      action.status,
+      actionResolution(action.status),
+      actionCorrelations(action)
+    ),
+    status: actionStatus(action.status),
+    summary: clean(action.rationale) || `Approval required for ${action.action_type}`,
+    type: "approval_required",
+    updated_at: action.updated_at
   };
 }
 
@@ -134,7 +163,40 @@ function guardianResolution(status: string): AttentionSourceRef["resolution"] {
 }
 
 function approvalResolution(status: string): AttentionSourceRef["resolution"] {
-  return status === "pending" ? "active" : "resolved";
+  return activeApprovalStatus(status) ? "active" : "resolved";
+}
+
+function activeApprovalStatus(status: string): boolean {
+  return ["pending", "delivered", "resolve_failed"].includes(status);
+}
+
+function actionResolution(status: string): AttentionSourceRef["resolution"] {
+  return activeActionStatus(status) ? "active" : "resolved";
+}
+
+function actionStatus(status: string): AttentionStatus {
+  if (status === "changes_requested") return "open";
+  if (activeActionStatus(status)) return "waiting";
+  return "resolved";
+}
+
+function activeActionStatus(status: string): boolean {
+  return ["candidate", "pending", "approved", "changes_requested", "snoozed"].includes(status);
+}
+
+function actionNextAction(action: PiAction): string {
+  if (action.status === "changes_requested") return "review requested changes and submit a revised action";
+  if (action.status === "snoozed") return "review the snoozed action when its approval window resumes";
+  return "review the gated action and approve or reject it";
+}
+
+function actionCorrelations(action: PiAction): string[] {
+  return compact([
+    `approval:${action.id}`,
+    action.issue_id > 0 ? `issue:${action.issue_id}` : "",
+    action.issue_id > 0 ? `work:xw:work:issues:${action.issue_id}` : "",
+    action.conversation_id ? `conversation:${action.conversation_id}` : ""
+  ]);
 }
 
 function inboxCorrelations(item: AttentionInboxItemRecord): string[] {

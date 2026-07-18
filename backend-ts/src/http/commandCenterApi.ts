@@ -9,6 +9,7 @@ import {
   listPersistedAttention,
   persistAttentionCommand
 } from "../domain/attention/persistence.ts";
+import { getActionProposal, getPiAction, getPiApprovalRequest } from "../db/repositories/pi.ts";
 import type { AttentionCommand, AttentionRecord, AttentionTransitionAudit } from "../domain/attention/contracts.ts";
 import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
 import {
@@ -26,15 +27,16 @@ import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
+import { resolveAttentionDecision } from "./attentionDecisionService.ts";
 
 export const COMMAND_CENTER_SUMMARY_CONTRACT = "xw.command-center.summary.v1" as const;
 
 export const COMMAND_CENTER_COMPATIBILITY_POLICY = {
   attention_command_audit_authority: "attention_command_events-append-only-overlay",
-  attention_read_authority: "legacy-attention-adapters-with-command-overlay",
+  attention_read_authority: "authoritative-attention-approval-and-pi-action-adapters-with-command-overlay",
   dual_read: "none-request-time-projection-over-current-authorities",
   dual_write: "none-legacy-facts-remain-single-writer",
-  final_removal_gate: "P07.03/P07.04/P07.05-migrated-and-legacy-Dashboard-zero-consumer-for-one-release",
+  final_removal_gate: "P11.03/P11.09-and-G7-and-one-release-zero-legacy-mutation-consumers-with-backup-restore",
   handoff_read_authority: "issue_events:handoff.*.v1",
   rollback: "unregister-command-center-route-and-restore-bounded-legacy-Dashboard-reads-without-data-migration",
   run_read_authority: "issue_runs+run_attempts+issue_events-read-through-progress",
@@ -107,8 +109,9 @@ export function registerCommandCenterRoutes(
   router.get("/api/command-center/summary", (request) => commandCenterResponse(() => (
     buildCommandCenterSummary(context, request, options)
   )));
+  router.get("/api/command-center/attention/:id", (request) => attentionDetailResponse(context.database, request));
   router.post("/api/command-center/attention/:id/actions/:action", async (request) => (
-    attentionCommandResponse(context.database, request)
+    attentionCommandResponse(context, request)
   ));
 }
 
@@ -240,7 +243,7 @@ function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCe
   };
 }
 
-function attentionSummary(item: AttentionRecord): Record<string, unknown> {
+export function attentionSummary(item: AttentionRecord): Record<string, unknown> {
   const primary = item.source_refs[0];
   return {
     created_at: item.created_at,
@@ -327,25 +330,100 @@ function attentionSourceLink(authority: string, localID: string): string {
   return "/api/issues";
 }
 
-async function attentionCommandResponse(db: RunnerDatabase, request: Request): Promise<Response> {
+function attentionDetailResponse(db: RunnerDatabase, request: Request): Response {
+  const id = routeValue(request, "attention");
+  const attention = getPersistedAttention(db, id);
+  if (!attention) throw new HttpError(404, "Attention not found");
+  return json({
+    attention: attentionSummary(attention),
+    decisions: attentionDecisionDetails(db, attention)
+  });
+}
+
+async function attentionCommandResponse(context: ReadApiContext, request: Request): Promise<Response> {
   const id = routeValue(request, "attention");
   const action = routeValue(request, "actions");
-  if (action !== "acknowledge" && action !== "snooze") throw new HttpError(400, "unsupported Attention action");
-  if (!getPersistedAttention(db, id)) throw new HttpError(404, "Attention not found");
+  const current = getPersistedAttention(context.database, id);
+  if (!current) throw new HttpError(404, "Attention not found");
   const body = await parseJsonBody(request);
+  if (action !== "acknowledge" && action !== "snooze") {
+    const object = objectValue(body, "Attention decision body");
+    const decision = await resolveAttentionDecision(context, {
+      action,
+      body: object,
+      relatedRefs: current.related_refs,
+      sourceRefs: current.source_refs
+    });
+    const refreshed = getPersistedAttention(context.database, id);
+    return json({ attention: refreshed ? attentionSummary(refreshed) : null, decision });
+  }
   const command = attentionCommandInput(action, body);
   try {
-    const result = persistAttentionCommand(db, id, command);
+    const result = persistAttentionCommand(context.database, id, command);
     return json({ attention: attentionSummary(result.attention), mutation: { audit_event: result.audit_event, replayed: false } });
   } catch (error) {
     throw new HttpError(409, error instanceof Error ? error.message : "Attention command failed");
   }
 }
 
+function attentionDecisionDetails(db: RunnerDatabase, attention: AttentionRecord): Array<Record<string, unknown>> {
+  const details: Array<Record<string, unknown>> = [];
+  for (const source of attention.source_refs) {
+    if (source.authority === "pi_approval_requests") {
+      const approval = getPiApprovalRequest(db, source.local_id);
+      if (approval) details.push({
+        kind: "provider_approval",
+        ref: `approval:${approval.approval_id}`,
+        request_type: approval.request_type,
+        risk: approval.risk,
+        status: approval.status,
+        summary: approval.summary || approval.request_summary,
+        provider: approval.provider,
+        project_id: approval.project_id,
+        run_id: approval.run_id || approval.session_id
+      });
+    }
+    if (source.authority === "pi_actions") {
+      const action = getPiAction(db, source.local_id);
+      if (action) details.push({
+        action_type: action.action_type,
+        gate_decision: action.gate_decision,
+        gate_reason: action.gate_reason,
+        kind: "pi_action",
+        ref: `pi_action:${action.id}`,
+        risk: action.risk_level,
+        status: action.status,
+        summary: action.rationale || action.action_type
+      });
+    }
+  }
+  for (const ref of attention.related_refs.filter((value) => value.startsWith("proposal:"))) {
+    const proposal = getActionProposal(db, ref.slice("proposal:".length));
+    if (!proposal) continue;
+    details.push({
+      actions: proposal.actions.map((action) => ({
+        id: action.id,
+        requires_approval: action.requires_approval,
+        risk: action.risk,
+        status: action.execution_status || "pending",
+        summary: action.summary,
+        type: action.type
+      })),
+      kind: "proposal",
+      ref,
+      risk: proposal.actions.some((action) => action.risk === "high") ? "high" :
+        proposal.actions.some((action) => action.risk === "medium") ? "medium" : "low",
+      status: proposal.status,
+      summary: proposal.summary
+    });
+  }
+  return details;
+}
+
 function attentionCommandInput(action: "acknowledge" | "snooze", value: unknown): AttentionCommand {
   const body = objectValue(value, "Attention command body");
   const expectedRevision = body.expected_revision;
-  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+  if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
     throw new HttpError(400, "expected_revision must be a non-negative integer");
   }
   const audit = objectValue(body.audit, "audit") as AttentionTransitionAudit;

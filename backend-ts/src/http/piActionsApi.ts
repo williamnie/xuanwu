@@ -9,7 +9,10 @@ import type { EventBus } from "../events/bus.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import type { ProjectLoopStarter } from "./piActionDispatch.ts";
-import { executeApprovedPiAction, resolvePiActionDecision } from "./piActionDecision.ts";
+import {
+  LEGACY_ATTENTION_MUTATION_HEADERS,
+  resolveInternalActionDecision
+} from "./attentionDecisionService.ts";
 import type { Router } from "./router.ts";
 
 type PiActionsContext = {
@@ -24,11 +27,11 @@ export function registerPiActionRoutes(router: Router, context: PiActionsContext
   router.get("/api/pi/actions/:id", (request) => actionResponse(context, request));
   router.get("/api/pi/actions/:id/events", (request) => json(listPiActionEvents(context.database, { actionId: actionID(request) })));
   router.get("/api/pi/audit-events", (request) => json(listPiActionEvents(context.database, piActionEventFilter(request))));
-  router.post("/api/pi/actions/:id/approve", async (request) => json(await approveAction(context, actionID(request))));
-  router.post("/api/pi/actions/:id/reject", async (request) => json(await rejectAction(context, actionID(request))));
-  router.post("/api/pi/actions/:id/request-changes", async (request) => json(await requestChangesAction(context, actionID(request), request)));
-  router.post("/api/pi/actions/:id/snooze", async (request) => json(await snoozeAction(context, actionID(request), request)));
-  router.post("/api/pi/actions/:id/execute", async (request) => json(await executeAction(context, actionID(request))));
+  router.post("/api/pi/actions/:id/approve", (request) => legacyActionDecision(context, request, "approve"));
+  router.post("/api/pi/actions/:id/reject", (request) => legacyActionDecision(context, request, "reject"));
+  router.post("/api/pi/actions/:id/request-changes", (request) => legacyActionDecision(context, request, "request_changes"));
+  router.post("/api/pi/actions/:id/snooze", (request) => legacyActionDecision(context, request, "snooze"));
+  router.post("/api/pi/actions/:id/execute", (request) => legacyActionDecision(context, request, "execute"));
 }
 
 function actionResponse(context: PiActionsContext, request: Request): Response {
@@ -37,37 +40,10 @@ function actionResponse(context: PiActionsContext, request: Request): Response {
   return json(action);
 }
 
-async function approveAction(context: PiActionsContext, id: string) {
-  return await resolvePiActionDecision(context, { actionID: id, decision: "approve" });
-}
-
-async function rejectAction(context: PiActionsContext, id: string) {
-  return await resolvePiActionDecision(context, { actionID: id, decision: "reject" });
-}
-
-async function requestChangesAction(context: PiActionsContext, id: string, request: Request) {
+async function legacyActionDecision(context: PiActionsContext, request: Request, action: string): Promise<Response> {
   const body = await parseObjectBody(request);
-  return resolvePiActionDecision(context, {
-    actionID: id,
-    actor: cleanString(body.actor),
-    comment: cleanString(body.comment || body.reason || body.requested_changes),
-    decision: "request_changes"
-  });
-}
-
-async function snoozeAction(context: PiActionsContext, id: string, request: Request) {
-  const body = await parseObjectBody(request);
-  return resolvePiActionDecision(context, {
-    actionID: id,
-    actor: cleanString(body.actor),
-    decision: "snooze",
-    reason: cleanString(body.reason),
-    snoozedUntil: cleanString(body.until || body.snoozed_until)
-  });
-}
-
-async function executeAction(context: PiActionsContext, id: string) {
-  return await executeApprovedPiAction(context, id);
+  const result = await resolveInternalActionDecision(context, actionID(request), action, body);
+  return json(result, { headers: LEGACY_ATTENTION_MUTATION_HEADERS });
 }
 
 function actionID(request: Request): string {
@@ -118,8 +94,4 @@ function positiveID(value: string | null): number | undefined {
 
 function cleanParam(value: string | null): string {
   return value?.trim() ?? "";
-}
-
-function cleanString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }

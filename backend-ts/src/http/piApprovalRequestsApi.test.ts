@@ -52,6 +52,8 @@ describe("PI approval requests API", () => {
       ]));
       expect(await detail.json()).toMatchObject({ approval_id: "approval-panel-1", status: "delivered" });
       expect(resolved.status).toBe(200);
+      expect(resolved.headers.get("deprecation")).toBe("true");
+      expect(resolved.headers.get("link")).toContain("/api/command-center/summary?sections=attention");
       expect(await resolved.json()).toMatchObject({ ok: true, status: "approved" });
       expect(duplicate.status).toBe(200);
       expect(await duplicate.json()).toMatchObject({ ok: true, status: "approved" });

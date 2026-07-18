@@ -81,6 +81,8 @@ describe("Bun PI actions API", () => {
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
+      expect(first.headers.get("deprecation")).toBe("true");
+      expect(first.headers.get("link")).toContain("/api/command-center/summary?sections=attention");
       expect(await first.json()).toMatchObject({ id: action.action_id, status: "completed" });
       expect(await second.json()).toMatchObject({ id: action.action_id, status: "completed" });
       expect(getIssue(database, issueID)).toMatchObject({ status: "todo" });

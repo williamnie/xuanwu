@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowUpRight, BellRing, Check, RefreshCw, ShieldCheck, S
 import { commandCenterApi } from '../../api/commandCenter.js';
 import { eventsApi } from '../../api/events.js';
 import { message as toast } from '../../store/toastStore.js';
-import { ATTENTION_PRIORITIES, approvalIDFromAttention, attentionActionPayload, attentionView, groupAttentionByPriority } from './attentionModel.js';
+import { ATTENTION_PRIORITIES, attentionActionPayload, attentionView, groupAttentionByPriority } from './attentionModel.js';
 import './AttentionSection.css';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -58,21 +58,24 @@ export default function AttentionSection({ navigateTo }) {
   };
 
   const reviewApproval = async item => {
-    const id = approvalIDFromAttention(item);
-    if (!id) return;
     setApproval({ detail: null, error: '', loading: true });
     try {
-      setApproval({ detail: await commandCenterApi.getApproval(id), error: '', loading: false });
+      setApproval({ detail: await commandCenterApi.getAttention(item.id), error: '', loading: false });
     } catch (reviewError) {
       setApproval({ detail: null, error: reviewError.message || '读取 Approval 失败', loading: false });
     }
   };
-  const resolveApproval = async decision => {
+  const resolveApproval = async (decision, target) => {
     if (!approval.detail || submitting) return;
-    setSubmitting(`approval:${decision}`);
+    setSubmitting(`${target.ref}:${decision}`);
     try {
-      await commandCenterApi.resolveApproval(approval.detail.approval_id, { decision, scope: 'turn' });
-      toast.success(decision === 'approve' ? 'Approval 已批准；provider 将恢复当前 turn' : 'Approval 已拒绝并记录审计');
+      await commandCenterApi.controlAttention(approval.detail.attention.id, decision, {
+        actor: 'frontend:user',
+        decision_ref: target.ref,
+        reason: `Command Center user ${decision}d ${target.kind}`,
+        scope: 'turn',
+      });
+      toast.success(decision === 'approve' ? 'Decision 已批准并进入唯一 Action Gate 执行链' : 'Decision 已拒绝并记录审计');
       setApproval({ detail: null, error: '', loading: false });
       await load({ silent: true });
     } catch (resolveError) {
@@ -124,8 +127,8 @@ function AttentionCard({ item, navigateTo, onReviewApproval, onSubmit, submittin
     <div className="attention-card-actions">
       {view.canAcknowledge ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'acknowledge')} type="button"><Check size={13} /> {pending('acknowledge') ? '提交中…' : '确认'}</button> : null}
       {view.canSnooze ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'snooze')} type="button"><TimerReset size={13} /> {pending('snooze') ? '提交中…' : '暂停 1 小时'}</button> : null}
-      {item.type === 'approval_required' && approvalIDFromAttention(item) ? (
-        <button className="open" onClick={() => onReviewApproval(item)} type="button">审阅 Approval <ShieldCheck size={13} /></button>
+      {item.type === 'approval_required' ? (
+        <button className="open" onClick={() => onReviewApproval(item)} type="button">审阅 Decision <ShieldCheck size={13} /></button>
       ) : item.links?.view === '#/attention-inbox' ? (
         <button className="open" onClick={() => navigateTo?.('attention-inbox')} type="button">打开来源 <ArrowUpRight size={13} /></button>
       ) : (
@@ -136,16 +139,24 @@ function AttentionCard({ item, navigateTo, onReviewApproval, onSubmit, submittin
 }
 
 function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
+  const attention = approval.detail?.attention;
+  const decisions = approval.detail?.decisions || [];
   return <section className="approval-detail" aria-live="polite">
-    <header><div><span><ShieldCheck size={14} /> Approval detail</span><h3>{approval.detail?.request_summary || approval.detail?.summary || '审批请求'}</h3></div><button aria-label="关闭 Approval 详情" onClick={onClose} type="button"><X size={16} /></button></header>
+    <header><div><span><ShieldCheck size={14} /> Decision detail</span><h3>{attention?.summary || '审批请求'}</h3></div><button aria-label="关闭 Approval 详情" onClick={onClose} type="button"><X size={16} /></button></header>
     {approval.loading ? <div className="approval-detail-state"><RefreshCw className="is-spinning" size={19} />正在读取审批事实…</div> : approval.error ? <div className="approval-detail-state error"><AlertTriangle size={19} />{approval.error}</div> : <>
-      <div className="approval-detail-grid">
-        <ApprovalFact label="Request" value={approval.detail.approval_id} /><ApprovalFact label="Risk" value={approval.detail.risk} />
-        <ApprovalFact label="Provider" value={approval.detail.provider || 'codex'} /><ApprovalFact label="Type" value={approval.detail.request_type || 'approval'} />
-        <ApprovalFact label="Project" value={approval.detail.project_id || '—'} /><ApprovalFact label="Run" value={approval.detail.run_id || approval.detail.session_id || '—'} />
-      </div>
-      {approval.detail.resolver_error ? <div className="approval-resolver-error"><AlertTriangle size={14} />{approval.detail.resolver_error}</div> : null}
-      <footer><span>确定性 gate 仅授权当前 turn；操作会写入 `pi_approval_requests` resolver audit。</span><button disabled={Boolean(submitting)} onClick={() => onResolve('deny')} type="button"><ShieldX size={14} />拒绝</button><button className="approve" disabled={Boolean(submitting)} onClick={() => onResolve('approve')} type="button"><ShieldCheck size={14} />批准一次</button></footer>
+      {decisions.map(target => <div className="approval-decision-target" key={target.ref}>
+        <div className="approval-detail-grid">
+          <ApprovalFact label="Decision" value={target.ref} /><ApprovalFact label="Risk" value={target.risk} />
+          <ApprovalFact label="Kind" value={target.kind} /><ApprovalFact label="Status" value={target.status} />
+        </div>
+        <p>{target.summary}</p>
+        {target.actions?.length ? <div className="proposal-actions-list">{target.actions.map(action => <div className="proposal-action-row" key={action.id}><strong>{action.type}</strong><small>{action.risk} · {action.status}</small><span>{action.summary}</span></div>)}</div> : null}
+        {target.status === 'pending' || target.status === 'proposed' || target.status === 'delivered' || target.status === 'resolve_failed' ? <footer>
+          <span>旧 API 只翻译到此确定性 command；每个外部写仍经同一 Action Gate。</span>
+          <button disabled={Boolean(submitting)} onClick={() => onResolve('reject', target)} type="button"><ShieldX size={14} />拒绝</button>
+          <button className="approve" disabled={Boolean(submitting)} onClick={() => onResolve('approve', target)} type="button"><ShieldCheck size={14} />批准一次</button>
+        </footer> : null}
+      </div>)}
     </>}
   </section>;
 }

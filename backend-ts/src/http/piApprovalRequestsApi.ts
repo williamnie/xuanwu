@@ -2,8 +2,11 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getPiApprovalRequest, listPiApprovalRequests } from "../db/repositories/pi/approvalRequests.ts";
 import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
-import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
+import {
+  LEGACY_ATTENTION_MUTATION_HEADERS,
+  resolveProviderApprovalDecision
+} from "./attentionDecisionService.ts";
 import type { Router } from "./router.ts";
 
 type PiApprovalRequestsContext = {
@@ -17,15 +20,9 @@ export function registerPiApprovalRequestRoutes(router: Router, context: PiAppro
   router.get("/api/pi/approval-requests/:id", (request) => approvalDetail(context.database, request));
   router.post("/api/pi/approval-requests/:id/resolve", async (request) => {
     const requestID = approvalRequestID(request);
-    const result = await resolveApprovalRequest(context, requestID, await objectBody(request));
-    const approval = getPiApprovalRequest(context.database, requestID);
-    context.bus?.publish({
-      projectId: approval?.project_id,
-      status: result.status,
-      type: "approval.resolved",
-      payload: JSON.stringify({ approval_id: requestID, decision: approval?.resolved_decision, scope: approval?.resolved_scope })
-    });
-    return json(result);
+    const body = await objectBody(request);
+    const result = await resolveProviderApprovalDecision(context, requestID, "resolve", body);
+    return json(result, { headers: LEGACY_ATTENTION_MUTATION_HEADERS });
   });
 }
 
@@ -49,23 +46,6 @@ function listApprovalRequests(db: RunnerDatabase, request: Request) {
   if (status === "open") return rows.filter((row) => ["pending", "delivered", "resolve_failed"].includes(row.status));
   if (status !== "") return rows.filter((row) => row.status === status);
   return rows;
-}
-
-async function resolveApprovalRequest(
-  context: PiApprovalRequestsContext,
-  requestID: string,
-  body: Record<string, unknown>
-) {
-  try {
-    return await resolvePiApprovalRequestFromFeishu(context.database, {
-      decision: clean(body.decision),
-      providers: context.providers,
-      requestID,
-      scope: clean(body.scope)
-    });
-  } catch (error) {
-    throw new HttpError(409, safeError(error));
-  }
 }
 
 async function objectBody(request: Request): Promise<Record<string, unknown>> {
@@ -93,8 +73,4 @@ function positiveID(value: string | null): number | undefined {
 
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message : "PI approval request failed";
 }

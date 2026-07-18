@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AttentionInboxItemRecord } from "../../db/repositories/intakeRuns.ts";
 import type { PiApprovalRequest } from "../../db/repositories/pi/approvalRequests.ts";
+import type { PiAction } from "../../db/repositories/pi/actions.ts";
 import type { PiGuardianAlert } from "../../db/repositories/pi/guardianAlerts.ts";
 import {
   ATTENTION_PRIORITY_TABLE,
@@ -21,7 +22,8 @@ import {
 import {
   attentionFromApprovalRequest,
   attentionFromGuardianAlert,
-  attentionFromInboxItem
+  attentionFromInboxItem,
+  attentionFromPiAction
 } from "./legacyAdapters.ts";
 
 const CREATED = "2026-07-17T00:00:00.000Z";
@@ -66,10 +68,11 @@ describe("unified Attention contracts", () => {
     expect(attentionDedupeKey(projectOnlyInbox)).not.toBe(attentionDedupeKey(projectOnlyGuardian));
   });
 
-  test("projects legacy inbox, Guardian, and approval carriers without changing their authorities", () => {
+  test("projects legacy inbox, Guardian, provider Approval, and internal Action carriers without changing their authorities", () => {
     const inbox = attentionFromInboxItem(inboxItem());
     const guardian = attentionFromGuardianAlert(guardianAlert());
     const approval = attentionFromApprovalRequest(approvalRequest());
+    const action = attentionFromPiAction(piAction(), ["proposal:proposal-713"]);
 
     expect(inbox).toMatchObject({
       owner: { kind: "project", project_id: "codex-issue-runner" },
@@ -84,6 +87,17 @@ describe("unified Attention contracts", () => {
     expect(approval).toMatchObject({
       required_actor: "approver",
       source_ref: { authority: "pi_approval_requests", resolution: "active" },
+      status: "waiting",
+      type: "approval_required"
+    });
+    expect(attentionFromApprovalRequest({ ...approvalRequest(), status: "resolve_failed" })).toMatchObject({
+      source_ref: { resolution: "active" },
+      status: "open"
+    });
+    expect(action).toMatchObject({
+      related_refs: expect.arrayContaining(["proposal:proposal-713", "issue:713"]),
+      required_actor: "approver",
+      source_ref: { authority: "pi_actions", resolution: "active" },
       status: "waiting",
       type: "approval_required"
     });
@@ -254,5 +268,17 @@ function approvalRequest(): PiApprovalRequest {
     resolver_status: "", resolved_at: "", resolved_decision: "", resolved_scope: "", risk: "medium",
     run_id: "run-713", session_id: "session-713", status: "pending", summary: "Approve command",
     thread_id: "session-713", turn_id: "turn-713", updated_at: CREATED
+  };
+}
+
+function piAction(): PiAction {
+  return {
+    action_type: "issue.enqueue", approved_by: "", before_snapshot_json: "{}", conversation_id: "conversation-713",
+    created_at: CREATED, decided_by: "", delegation_id: "", expected_state_json: "{}", gate_decision: "ask",
+    gate_reason: "risk requires user confirmation", guardian_decision_id: "", heartbeat_id: "", id: "action-713",
+    idempotency_key: "action-proposal:proposal-713:action-1", issue_id: 713, lease_expires_at: "", lease_key: "",
+    legacy_bypass_reason: "", payload_json: '{"proposal_id":"proposal-713"}', project_id: "codex-issue-runner",
+    rationale: "Enqueue issue 713", requested_changes: "", requires_confirmation: 1, result_json: "{}",
+    risk_level: "medium", snoozed_until: "", source: "action_proposal", status: "pending", updated_at: CREATED
   };
 }

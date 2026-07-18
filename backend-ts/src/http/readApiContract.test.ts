@@ -79,6 +79,7 @@ describe("read API route contracts", () => {
 
   test("locks Command Center read and audited Attention command contracts", () => {
     expect(captureRoutes(registerCommandCenterRoutes)).toEqual([
+      "GET /api/command-center/attention/:id",
       "GET /api/command-center/summary",
       "POST /api/command-center/attention/:id/actions/:action"
     ]);
