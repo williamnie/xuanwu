@@ -3,10 +3,22 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
+
+class RetryExecutionProvider implements ExecutorProvider {
+  readonly id = "fake-execution-only" as const;
+  readonly capabilities = ["issue_execution"] as const;
+  readonly issueIDs: number[] = [];
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.issueIDs.push(input.issueId);
+    return { runId: `retry-run-${input.issueId}` };
+  }
+}
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-bun-issue-actions-api-"));
@@ -81,6 +93,24 @@ describe("Bun issue action API", () => {
     }
   });
 
+  test("retry force-starts the selected issue while another failed issue keeps auto-run stopped", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new RetryExecutionProvider();
+    try {
+      insertProject(database, "retry-blocked", { autoRun: 1, provider: provider.id });
+      insertIssue(database, { projectId: "retry-blocked", status: "failed", title: "existing blocker" });
+      const retryID = insertIssue(database, { projectId: "retry-blocked", status: "failed", title: "selected retry" });
+
+      const response = await issueAction(database, retryID, "retry", provider);
+      expect(response.status).toBe(200);
+      await waitFor(() => provider.issueIDs.includes(retryID));
+
+      expect(provider.issueIDs).toEqual([retryID]);
+    } finally {
+      database.close();
+    }
+  });
+
   test("cancel marks issues cancelled, closes open runs, and records issue_cancel", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -143,8 +173,14 @@ describe("Bun issue action API", () => {
   });
 });
 
-function issueAction(db: RunnerDatabase, id: number, action: "cancel" | "enqueue" | "retry"): Promise<Response> {
-  return createDefaultRouter({ database: db }).handle(new Request(`${BASE_URL}/api/issues/${id}/${action}`, {
+function issueAction(
+  db: RunnerDatabase,
+  id: number,
+  action: "cancel" | "enqueue" | "retry",
+  provider?: ExecutorProvider
+): Promise<Response> {
+  const providers = provider ? { [provider.id]: provider } : undefined;
+  return createDefaultRouter({ database: db, providers }).handle(new Request(`${BASE_URL}/api/issues/${id}/${action}`, {
     method: "POST",
     body: "{}",
     headers: { "content-type": "application/json" }
@@ -186,12 +222,25 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   return row.id;
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
+function insertProject(
+  db: RunnerDatabase,
+  id: string,
+  options: { autoRun?: number; provider?: string } = {}
+): void {
   db.sqlite.run(
-    `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, id, `/tmp/${id}`, options.provider ?? "codex", options.autoRun ?? 0,
+      1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let index = 0; index < 100; index += 1) {
+    if (predicate()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition was not met");
 }
 
 function insertOpenRun(db: RunnerDatabase, issueId: number): void {

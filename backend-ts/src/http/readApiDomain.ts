@@ -22,7 +22,7 @@ import {
 } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/interrupt.ts";
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
-import { startProjectLoop } from "../runner/projectLoopManager.ts";
+import { startProjectLoop, type ProjectLoopStartOptions } from "../runner/projectLoopManager.ts";
 import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
@@ -157,14 +157,18 @@ async function retryIssueAndKickLoop(
     providers: context.providers
   });
   publishIssueStatusChange(context, issue, { status: issue.status });
-  if (isQueuedIssue(issue)) kickAutoProject(context, issue.project_id);
+  if (isQueuedIssue(issue)) kickAutoProject(context, issue.project_id, { forceOnce: true });
   return issue;
 }
 
-function kickAutoProject(context: ReadApiContext, projectID: string): void {
+function kickAutoProject(
+  context: ReadApiContext,
+  projectID: string,
+  options: ProjectLoopStartOptions = {}
+): void {
   const project = getProject(context.database, projectID);
   if ((project?.auto_run ?? 0) !== 1) return;
-  startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, projectID);
+  startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, projectID, options);
 }
 
 function isQueuedIssue(value: unknown): value is Issue {
