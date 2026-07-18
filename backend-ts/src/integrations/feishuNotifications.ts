@@ -21,6 +21,7 @@ import {
   resolvePiApprovalRequestFromFeishu
 } from "./feishuApprovalRequests.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import { routeNotification } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {
   formatApprovalNotification,
@@ -91,6 +92,10 @@ export function attachFeishuNotificationObservers(input: {
       }
       if (event.type === "pi.needs_user") {
         const result = queueFeishuPiNeedsUserNotification(input.database, event, { config: input.config });
+        dispatchIfQueued(input, result);
+      }
+      if (event.type === "handoff.notification") {
+        const result = queueFeishuHandoffNotification(input.database, event);
         dispatchIfQueued(input, result);
       }
       if (event.type === "codex.event" && event.method === "approval/requested") {
@@ -219,14 +224,77 @@ export function queueFeishuApprovalNotification(
   const target = feishuTargetForIssue(db, issue.id);
   if (!target) return { queued: false, reason: "missing_feishu_link" };
   if (alreadyQueuedFeishuNotification(db, APPROVAL_NOTIFY_TYPE, approvalID)) return { queued: false, reason: "duplicate" };
-  createFeishuNotificationDraft(db, issue, target, {
+  const result = routeNotification(db, {
     approvalActionID: approvalID,
     content: formatApprovalNotification(issue, parsed.command, parsed.path),
-    notifyID: approvalID,
-    type: APPROVAL_NOTIFY_TYPE
-  });
+    conversationID: target.threadID || target.chatID,
+    deepLink: `/api/issues/${issue.id}`,
+    idempotencyKey: `approval_requested:${approvalID}`,
+    issueID: issue.id,
+    kind: "approval_requested",
+    notificationID: approvalID,
+    notificationType: APPROVAL_NOTIFY_TYPE,
+    payload: { approval_id: approvalID, issue_id: issue.id, provider: safeText(event.provider) || "codex" },
+    projectID: issue.project_id,
+    requiresUser: true,
+    routes: [{
+      channel: "feishu",
+      chatID: target.chatID,
+      eventID: target.eventID,
+      messageID: target.messageID,
+      threadID: target.threadID
+    }],
+    severity: "actionable",
+    sourceEventID: approvalID,
+    sourceEventType: "approval/requested",
+    summary: `issue #${issue.id} approval requested`
+  })[0];
+  if (!result?.queued) return { queued: false, reason: result?.reason || "duplicate" };
   markPiApprovalDelivered(db, approvalID, { channel: "feishu" });
   return { queued: true, reason: "queued" };
+}
+
+export function queueFeishuHandoffNotification(db: RunnerDatabase, event: AppEvent): QueueResult {
+  const payload = parseObject(event.payload);
+  const handoffID = safeText(payload.handoff_id);
+  const issueID = event.issueId ?? positiveID(payload.issue_id);
+  if (handoffID === "" || issueID <= 0) return { queued: false, reason: "missing_handoff_target" };
+  const issue = getIssue(db, issueID);
+  if (!issue) return { queued: false, reason: "missing_issue" };
+  const target = feishuTargetForIssue(db, issueID);
+  if (!target) return { queued: false, reason: "missing_feishu_link" };
+  const status = safeText(payload.status) || safeText(event.status) || "ready";
+  const revision = positiveID(payload.revision);
+  const deepLink = safeText(payload.href).startsWith("#/")
+    ? safeText(payload.href)
+    : `#/handoffs/${encodeURIComponent(handoffID)}`;
+  const notificationID = `${handoffID}:${revision}:${status}`;
+  const result = routeNotification(db, {
+    content: `Handoff ${status}：${safeText(payload.summary) || handoffID}`,
+    conversationID: target.threadID || target.chatID,
+    deepLink,
+    idempotencyKey: `handoff:${notificationID}`,
+    issueID,
+    kind: `handoff_${status}`,
+    notificationID,
+    notificationType: "feishu_handoff_notification",
+    payload,
+    projectID: issue.project_id,
+    routes: [{
+      channel: "feishu",
+      chatID: target.chatID,
+      eventID: target.eventID,
+      messageID: target.messageID,
+      threadID: target.threadID
+    }],
+    severity: "info",
+    sourceEventID: handoffID,
+    sourceEventType: "handoff.notification",
+    summary: safeText(payload.summary) || `Handoff ${status}`
+  })[0];
+  return result?.queued
+    ? { queued: true, reason: "queued" }
+    : { queued: false, reason: result?.reason || "duplicate" };
 }
 
 function feishuConfigured(config: FeishuConnectorConfig | undefined): boolean {

@@ -8,7 +8,11 @@ import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { createPiNotificationPreference, listPiNotificationIntents } from "../db/repositories/pi.ts";
+import {
+  createPiNotificationPreference,
+  listPiNotificationIntents,
+  upsertProjectPiPolicy
+} from "../db/repositories/pi.ts";
 import { queueFeishuIssueStatusNotification } from "./feishuLifecycleNotifications.ts";
 
 const tempRoots: string[] = [];
@@ -114,6 +118,36 @@ describe("Feishu lifecycle notification preference routing", () => {
           run_group_id: "",
           state: "sent"
         }
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("project quiet hours defer ordinary lifecycle notification for Daily Digest", async () => {
+    const db = await fixtureDatabase();
+    try {
+      upsertProjectPiPolicy(db, {
+        project_id: "demo",
+        quiet_hours_json: { daily: [{ end: "08:00", start: "22:00" }] },
+        timezone: "UTC"
+      });
+      const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { status: "done", error: "" });
+
+      const result = queueFeishuIssueStatusNotification(db, issueID, {
+        now: new Date("2026-07-18T23:00:00.000Z")
+      });
+
+      expect(result).toMatchObject({ queued: false, reason: "run_group_lifecycle_aggregated" });
+      expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(0);
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+        expect.objectContaining({
+          decision: "aggregate",
+          flush_after_at: "2026-07-19T08:00:00.000Z",
+          kind: "issue_done",
+          state: "aggregated"
+        })
       ]);
     } finally {
       db.close();

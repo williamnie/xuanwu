@@ -7,6 +7,7 @@ import {
 } from "../db/repositories/handoffs.ts";
 import type { HandoffRecord } from "../domain/handoff/contracts.ts";
 import type { EventBus } from "../events/bus.ts";
+import { createPiNotificationIntent } from "../db/repositories/pi.ts";
 
 export type HandoffNotificationSummary = {
   branch_ref: string;
@@ -56,6 +57,21 @@ export function recordHandoffDelivery(input: RecordHandoffDeliveryInput): {
       projectID: stored.record.project_id,
       title: stored.record.handoff.status === "delivered" ? "Handoff delivered" : "Handoff ready"
     }, new Date(input.recorded_at), 0);
+    createPiNotificationIntent(input.database, {
+      decision: "send_now",
+      idempotency_key: `handoff:${stored.record.handoff.id}:${stored.record.handoff.revision}:${stored.record.handoff.status}:runner_ui`,
+      issue_id: stored.record.issue_id,
+      kind: `handoff_${stored.record.handoff.status}`,
+      payload_json: payload,
+      project_id: stored.record.project_id,
+      ready_at: input.recorded_at,
+      severity: "info",
+      source_event_id: stored.record.handoff.id,
+      source_event_type: "handoff.notification",
+      state: "sent",
+      summary: payload.summary,
+      target_channel: "runner_ui"
+    });
     return { ...stored, notification };
   }).immediate();
 

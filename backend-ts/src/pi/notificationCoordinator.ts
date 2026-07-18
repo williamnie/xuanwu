@@ -3,6 +3,7 @@ import type { Issue } from "../db/repositories/issues.ts";
 import {
   createPiNotificationIntent,
   listPiRunGroupItems,
+  readProjectPiPolicy,
   updatePiNotificationIntent,
   type PiGuardianEvent,
   type PiNotificationIntent,
@@ -13,6 +14,7 @@ import {
   resolvePiNotificationPreference,
   type ResolvedPiNotificationPreference
 } from "./notificationPreferenceResolver.ts";
+import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 
 export type LifecycleIntentDecision = "aggregate" | "send_now" | "suppress";
 export type LifecycleIntentResult = {
@@ -23,15 +25,17 @@ export type LifecycleIntentResult = {
 
 export function coordinateIssueLifecycleNotification(
   db: RunnerDatabase,
-  input: { event: PiGuardianEvent; issue: Issue; target?: LifecycleTarget }
+  input: { event: PiGuardianEvent; issue: Issue; now?: Date; target?: LifecycleTarget }
 ): LifecycleIntentResult {
   const item = latestRunGroupItemForIssue(db, input.issue.id);
   const runGroupID = item?.run_group_id ?? "";
   const preference = resolveLifecyclePreference(db, input.event, input.issue, runGroupID);
-  const decision = lifecycleDecision(input.issue.status, runGroupID, input.event.severity, preference);
+  const quietUntil = lifecycleQuietUntil(db, input.issue.project_id, input.now ?? new Date(), input.event.severity, preference);
+  const decision = lifecycleDecision(input.issue.status, runGroupID, input.event.severity, preference, quietUntil);
   const intent = createPiNotificationIntent(db, {
     conversation_id: input.event.conversation_id,
     decision,
+    flush_after_at: decision === "aggregate" ? quietUntil : "",
     idempotency_key: lifecycleIntentKey(input.issue, input.event, runGroupID),
     issue_id: input.issue.id,
     kind: lifecycleKind(input.issue.status),
@@ -126,13 +130,33 @@ function lifecycleDecision(
   status: string,
   runGroupID: string,
   severity: string,
-  preference: ResolvedPiNotificationPreference
+  preference: ResolvedPiNotificationPreference,
+  quietUntil: string
 ): LifecycleIntentDecision {
   const preferenceDecision = preferenceLifecycleDecision(preference, severity);
   if (preferenceDecision) return preferenceDecision;
+  if (quietUntil !== "") return "aggregate";
   if (runGroupID === "") return "send_now";
   if (isStartStatus(status)) return "suppress";
   return "aggregate";
+}
+
+function lifecycleQuietUntil(
+  db: RunnerDatabase,
+  projectID: string,
+  now: Date,
+  severity: string,
+  preference: ResolvedPiNotificationPreference
+): string {
+  if (mustNotify(preference, severity)) return "";
+  const policy = readProjectPiPolicy(db, projectID);
+  return quietHoursResumeAt({
+    mode: "daily",
+    next_run_at: now.toISOString(),
+    quiet_hours_json: policy.quiet_hours_json,
+    time_of_day: "00:00",
+    timezone: policy.timezone
+  }, now);
 }
 
 function preferenceLifecycleDecision(

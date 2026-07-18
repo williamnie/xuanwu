@@ -7,6 +7,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
+import { listPiNotificationIntents } from "../db/repositories/pi.ts";
 import {
   createLocalBranchCommitHandoffService,
   resolveLocalGitHandoffProjectPolicy,
@@ -153,6 +154,13 @@ describe("Handoff HTTP API and delivery notification", () => {
         }
       });
       expect(notifications).toHaveLength(1);
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "handoff_ready",
+          state: "sent",
+          target_channel: "runner_ui"
+        })
+      ]));
       expect(JSON.parse(notifications[0]!.payload)).toMatchObject({
         branch_ref: local.branch_ref,
         commit_ref: local.commit_revision,

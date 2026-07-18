@@ -1,7 +1,9 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { createExternalLink } from "../db/repositories/externalLinks.ts";
-import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import type { Issue } from "../db/repositories/issues.ts";
+import {
+  alreadyQueuedNotification,
+  queueNotificationOutbox
+} from "../notifications/notificationOutbox.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuTarget } from "./feishuNotificationTargets.ts";
 
@@ -16,38 +18,23 @@ export function createFeishuNotificationDraft(
   target: FeishuTarget,
   input: DraftInput
 ): { outboxID: number } {
-  const draft = createImReplyDraft(db, {
+  const queued = queueNotificationOutbox(db, {
+    approvalActionID: safeText(input.approvalActionID),
+    channel: FEISHU_SOURCE,
     content: input.content,
-    created_by: "pi",
-    external_event_id: target.eventID,
-    issue_id: issue.id,
-    risk: "low",
-    source: FEISHU_SOURCE,
-    status: "pending",
-    approval_action_id: safeText(input.approvalActionID),
-    target_chat_id: target.chatID,
-    target_message_id: target.messageID,
-    target_thread_id: target.threadID
+    createdBy: "pi",
+    issueID: issue.id,
+    notificationID: input.notifyID,
+    notificationType: input.type,
+    projectID: issue.project_id,
+    target
   });
-  const approved = approveImReplyDraft(db, draft.id);
-  createExternalLink(db, {
-    conversation_id: target.threadID || target.chatID,
-    external_event_id: target.eventID,
-    external_id: input.notifyID,
-    external_type: input.type,
-    issue_id: issue.id,
-    project_id: issue.project_id,
-    relationship: "notification",
-    source: FEISHU_SOURCE
-  });
-  return { outboxID: approved.outbox.id };
+  if (!queued.queued) throw new Error("Feishu notification already queued");
+  return { outboxID: queued.outboxID };
 }
 
 export function alreadyQueuedFeishuNotification(db: RunnerDatabase, type: string, externalID: string): boolean {
-  const row = db.sqlite.query<{ count: number }, [string, string]>(
-    "select count(*) as count from external_links where source='feishu' and external_type=? and external_id=?"
-  ).get(type, externalID);
-  return (row?.count ?? 0) > 0;
+  return alreadyQueuedNotification(db, FEISHU_SOURCE, type, externalID);
 }
 
 function safeText(value: unknown): string {

@@ -6,14 +6,11 @@ import {
 } from "../db/repositories/pi.ts";
 import { ISSUE_COMPLETION_WATCH_INTENT_KIND } from "../pi/issueCompletionWatchEvaluator.ts";
 import {
-  markNotificationIntentRetry,
-  markNotificationIntentSent
+  markNotificationIntentRetry
 } from "../pi/notificationCoordinator.ts";
+import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { formatIssueCompletionWatchNotification } from "./feishuNotificationFormatters.ts";
-import {
-  alreadyQueuedFeishuNotification,
-  createFeishuNotificationDraft
-} from "./feishuNotificationDrafts.ts";
+import { alreadyQueuedFeishuNotification } from "./feishuNotificationDrafts.ts";
 
 export type CompletionWatchQueueResult = {
   failed: number;
@@ -69,13 +66,25 @@ function queueWatchIntent(
     result.skipped += 1;
     return;
   }
-  const draft = createFeishuNotificationDraft(db, { id: intent.issue_id, project_id: intent.project_id }, target, {
+  const queued = queueExistingNotificationIntent(db, {
     content: formatIssueCompletionWatchNotification(payload),
-    notifyID,
-    type: COMPLETION_WATCH_NOTIFY_TYPE
+    deepLink: intent.issue_id > 0 ? `/api/issues/${intent.issue_id}` : "#/automations",
+    intent,
+    notificationID: notifyID,
+    notificationType: COMPLETION_WATCH_NOTIFY_TYPE,
+    route: {
+      channel: "feishu",
+      chatID: target.chatID,
+      eventID: target.eventID,
+      messageID: target.messageID,
+      threadID: target.threadID
+    }
   });
+  if (!queued.queued) {
+    result.skipped += 1;
+    return;
+  }
   clearWatchError(db, payload);
-  markNotificationIntentSent(db, intent, draft.outboxID);
   result.queued += 1;
 }
 

@@ -8,6 +8,7 @@ import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardi
 import type { FeishuMessageClient } from "../integrations/feishuClient.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
+import { queueDailyNotificationDigests, type DailyDigestResult } from "../notifications/dailyDigest.ts";
 import { sendMissedDigestPendingFeishuFallback } from "../pi/guardianMissedDigestFallback.ts";
 import {
   runGuardianMissedIntentSweepOnce,
@@ -60,6 +61,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
   digestNotifications: { failed: number; queued: number; scanned: number; skipped: number };
+  dailyDigestNotifications: DailyDigestResult;
   completionWatchNotifications: { failed: number; queued: number; scanned: number; skipped: number };
   guardianActionDispatch: PiGuardianActionDispatchResult;
   missedIntentSweep: GuardianMissedIntentSweepResult;
@@ -204,6 +206,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
   resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
   runWatchAutomationsOnce(input.database, { now: input.watchdogNow });
+  const dailyDigestNotifications = queueDailyNotificationDigests(input.database, { now: optionalDate(input.watchdogNow) });
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const completionWatchNotifications = queueReadyFeishuCompletionWatchNotifications(input.database);
   const issueWatchdog = await runAutoRunIssueWatchdogOnce({
@@ -220,6 +223,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     automations,
     cron,
     delegations: { scanned: delegations.scanned, skipped: delegations.skipped, started: delegations.started },
+    dailyDigestNotifications,
     digestFlush,
     digestNotifications,
     completionWatchNotifications,

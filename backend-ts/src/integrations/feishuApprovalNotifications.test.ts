@@ -7,7 +7,7 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
-import { upsertPiApprovalRequest } from "../db/repositories/pi.ts";
+import { listPiNotificationIntents, upsertPiApprovalRequest } from "../db/repositories/pi.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
@@ -41,6 +41,14 @@ describe("Feishu approval notification queue", () => {
       expect(first).toMatchObject({ queued: true, reason: "queued" });
       expect(second).toMatchObject({ queued: false, reason: "duplicate" });
       expect(outbox).toHaveLength(1);
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toMatchObject([
+        expect.objectContaining({
+          kind: "approval_requested",
+          requires_user: 1,
+          sent_outbox_id: outbox[0]?.id,
+          state: "sent"
+        })
+      ]);
       expect(content).toContain("git status");
       expect(outbox[0]).toMatchObject({
         approval_action_id: "approval-1",

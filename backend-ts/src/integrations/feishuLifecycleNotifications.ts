@@ -13,16 +13,14 @@ import { formatRunGroupDigest } from "../pi/digestFormatter.ts";
 import { ingestIssueLifecycleEvent } from "../pi/guardianEventIngest.ts";
 import {
   coordinateIssueLifecycleNotification,
-  markLifecycleIntentSent,
   markNotificationIntentRetry,
-  markNotificationIntentSent,
   suppressLifecycleIntent,
   type LifecycleIntentResult
 } from "../pi/notificationCoordinator.ts";
+import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { formatIssueStatusNotification } from "./feishuNotificationFormatters.ts";
 import {
-  alreadyQueuedFeishuNotification,
-  createFeishuNotificationDraft
+  alreadyQueuedFeishuNotification
 } from "./feishuNotificationDrafts.ts";
 import {
   feishuFallbackTargetForProject,
@@ -45,6 +43,7 @@ export function queueFeishuIssueStatusNotification(
     config?: FeishuConnectorConfig;
     conversationId?: string;
     eventType?: string;
+    now?: Date;
     suppressDirectStart?: boolean;
   } = {}
 ): QueueResult {
@@ -64,7 +63,7 @@ export function queueFeishuIssueStatusNotification(
     return { queued: false, reason: "issue_completion_watch_owns_target" };
   }
   const target = linkedTarget ?? fallbackLifecycleTarget(issue, options.config);
-  const intentResult = createLifecycleIntent(db, issue, event, target);
+  const intentResult = createLifecycleIntent(db, issue, event, target, options.now);
   if (intentResult.decision === "suppress") {
     return { queued: false, reason: "run_group_lifecycle_suppressed" };
   }
@@ -104,11 +103,13 @@ function createLifecycleIntent(
   db: RunnerDatabase,
   issue: Issue,
   event: ReturnType<typeof ingestIssueLifecycleEvent>,
-  target: ReturnType<typeof feishuTargetForIssue>
+  target: ReturnType<typeof feishuTargetForIssue>,
+  now?: Date
 ): LifecycleIntentResult {
   return coordinateIssueLifecycleNotification(db, {
     event,
     issue,
+    now,
     target: target ? {
       chatID: target.chatID,
       messageID: target.messageID,
@@ -188,13 +189,21 @@ function queueLegacyFeishuDraft(
     }
     return { queued: false, reason: "duplicate" };
   }
-  const draft = createFeishuNotificationDraft(db, issue, target, {
+  const queued = queueExistingNotificationIntent(db, {
     content: formatIssueStatusNotification(issue),
-    notifyID,
-    type: ISSUE_STATUS_NOTIFY_TYPE
+    deepLink: `/api/issues/${issue.id}`,
+    intent: intentResult.intent,
+    notificationID: notifyID,
+    notificationType: ISSUE_STATUS_NOTIFY_TYPE,
+    route: {
+      channel: "feishu",
+      chatID: target.chatID,
+      eventID: target.eventID,
+      messageID: target.messageID,
+      threadID: target.threadID
+    }
   });
-  markLifecycleIntentSent(db, intentResult.intent, draft.outboxID);
-  return { queued: true, reason: "queued" };
+  return { queued: queued.queued, reason: queued.reason };
 }
 
 function safelyQueueDigestIntent(
@@ -229,13 +238,22 @@ function queueDigestIntent(
     result.skipped += 1;
     return;
   }
-  const draft = createFeishuNotificationDraft(db, { id: 0, project_id: intent.project_id }, target, {
+  const queued = queueExistingNotificationIntent(db, {
     content: formatRunGroupDigest(intent),
-    notifyID: digestNotificationID(intent),
-    type: DIGEST_NOTIFY_TYPE
+    deepLink: `/api/pi/guardian/run-groups/${encodeURIComponent(intent.run_group_id)}`,
+    intent,
+    notificationID: digestNotificationID(intent),
+    notificationType: DIGEST_NOTIFY_TYPE,
+    route: {
+      channel: "feishu",
+      chatID: target.chatID,
+      eventID: target.eventID,
+      messageID: target.messageID,
+      threadID: target.threadID
+    }
   });
-  markNotificationIntentSent(db, intent, draft.outboxID);
-  result.queued += 1;
+  if (queued.queued) result.queued += 1;
+  else result.skipped += 1;
 }
 
 function readyDigestIntents(db: RunnerDatabase, limit: number): PiNotificationIntent[] {
