@@ -6,6 +6,8 @@ import PiMemoryPanel from './PiMemoryPanel';
 import PiMcpManagementPanel from './PiMcpManagementPanel';
 import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
+import PermissionsSettingsPanel from './PermissionsSettingsPanel';
+import NotificationSettingsPanel from './NotificationSettingsPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
@@ -21,7 +23,7 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
       {activeTab === 'general' && <GeneralSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'models-agents' && <ModelsAgentsSettingsTab />}
       {activeTab === 'connections' && <ConnectionsSettingsTab />}
-      {activeTab === 'permissions' && <PermissionsSettingsTab />}
+      {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'notifications' && <NotificationsSettingsTab />}
     </>
   );
@@ -78,24 +80,31 @@ function ConnectionsSettingsTab() {
   );
 }
 
-function PermissionsSettingsTab() {
+function PermissionsSettingsTab({ navigateTo }) {
   return (
-    <SettingsPlaceholderPanel
-      eyebrow="Permissions"
-      title="权限与审批"
-      description="日常权限入口保留确定性审批边界；待处理 Approval 已统一放在 Command Center。"
-      items={['LLM 输出不会直接授予工具或外部写权限。', '权限矩阵继续复用现有 approval 与 policy 能力，不在 Settings 复制审批队列。']}
-    />
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Permissions"
+        title="权限与审批"
+        description="集中展示 connector capability 与确定性 Action Gate 风险边界；待处理 Approval 已统一放在 Command Center。"
+        items={['Settings 不创建 approval grant，也不复制审批队列。', '权限决定和变更继续写入既有 provider approval、Action Gate 与项目 policy 审计。']}
+      />
+      <PermissionsSettingsPanel navigateTo={navigateTo} />
+    </>
   );
 }
 
 function NotificationsSettingsTab() {
   return (
-    <SettingsPlaceholderPanel
-      eyebrow="Notifications"
-      title="通知偏好"
-      description="通知设置保留为普通用户入口；P07.13 将在这里接入现有通知偏好与连接状态，不新增并行通知存储。"
-    />
+    <>
+      <SettingsPlaceholderPanel
+        eyebrow="Notifications"
+        title="通知偏好"
+        description="配置全局投递模式、通知渠道和立即通知类型；项目、会话或 run group 的更窄偏好仍按现有优先级覆盖。"
+        items={['唯一 source of truth 是 pi_notification_preferences。', '保存会生成新版本并保留 superseded/disabled 历史，不做双写。']}
+      />
+      <NotificationSettingsPanel />
+    </>
   );
 }
 

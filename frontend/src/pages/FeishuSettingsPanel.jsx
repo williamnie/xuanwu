@@ -26,7 +26,7 @@ const fieldGridStyle = {
 export default function FeishuSettingsPanel() {
   const state = useFeishuSettings();
   return (
-    <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <section className="glass-card" id="feishu-connection-settings" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <PanelHeader status={state.remote?.status} enabled={state.remote?.enabled} />
       {state.error && <div style={{ color: 'var(--error)', fontSize: '0.82rem' }}>{state.error}</div>}
       <SettingsForm {...state} />

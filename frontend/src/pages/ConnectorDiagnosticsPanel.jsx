@@ -1,13 +1,14 @@
 import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
-import { Cable, RefreshCw, ShieldX, TestTube2 } from 'lucide-react';
+import { Cable, RefreshCw, Settings2, ShieldX, TestTube2 } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { PanelLoader } from '../components/TurtleLoader';
+import { configureGuide } from './settingsProductModels.js';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
 
 export default function ConnectorDiagnosticsPanel() {
-  const [state, setState] = useState({ busy: '', data: null, error: '', loading: true, notice: '', revoke: '' });
+  const [state, setState] = useState({ busy: '', configure: '', data: null, error: '', loading: true, notice: '', revoke: '' });
 
   useEffect(() => { loadConnectors(setState); }, []);
 
@@ -17,6 +18,7 @@ export default function ConnectorDiagnosticsPanel() {
       <PanelHeader loading={state.loading} onRefresh={() => loadConnectors(setState)} />
       {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
       {!state.error && <ConnectorBody connectors={connectors} loading={state.loading} notice={state.notice}
+        onConfigure={(connector) => setState(previous => ({ ...previous, configure: previous.configure === connector.id ? '' : connector.id }))}
         onRevoke={(connector, ref) => revokeConnectorSecret(connector, ref, state, setState)}
         onTest={(connector) => testConnector(connector, state, setState)} state={state} />}
     </section>
@@ -41,10 +43,10 @@ function PanelHeader({ loading, onRefresh }) {
     <div style={{ alignItems: 'center', display: 'flex', gap: '16px', justifyContent: 'space-between' }}>
       <div>
         <h2 style={{ alignItems: 'center', display: 'flex', fontSize: '1.1rem', fontWeight: 700, gap: '8px' }}>
-          <Cable size={18} color="var(--primary)" /> Connector Diagnostics
+          <Cable size={18} color="var(--primary)" /> Connections
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          只读检查 Browser / CLI connector 的配置、health 诊断与缺失项；不返回 secret 明文。
+          查看 Feishu、Git、Tracker、Webhook 与本地 connector 的配置健康；测试和撤销均使用现有受审计 API。
         </p>
       </div>
       <button className="btn btn-secondary" disabled={loading} onClick={onRefresh} type="button">
@@ -55,7 +57,7 @@ function PanelHeader({ loading, onRefresh }) {
   );
 }
 
-function ConnectorBody({ connectors, loading, notice, onRevoke, onTest, state }) {
+function ConnectorBody({ connectors, loading, notice, onConfigure, onRevoke, onTest, state }) {
   if (loading && connectors.length === 0) {
     return <PanelLoader label="正在检查 Connector…" />;
   }
@@ -70,7 +72,7 @@ function ConnectorBody({ connectors, loading, notice, onRevoke, onTest, state })
       <ConnectorSummary connectors={connectors} />
       <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
         {connectors.map(connector => <ConnectorCard connector={connector} key={`${connector.kind || 'connector'}:${connector.id}`}
-          onRevoke={onRevoke} onTest={onTest} state={state} />)}
+          onConfigure={onConfigure} onRevoke={onRevoke} onTest={onTest} state={state} />)}
       </div>
     </div>
   );
@@ -89,7 +91,7 @@ function ConnectorSummary({ connectors }) {
   );
 }
 
-function ConnectorCard({ connector, onRevoke, onTest, state }) {
+function ConnectorCard({ connector, onConfigure, onRevoke, onTest, state }) {
   const status = connectorStatus(connector);
   const revocable = (connector.secret_refs || []).find(item => item.revocable);
   const revokeKey = revocable ? `${connector.id}::${revocable.ref}` : '';
@@ -115,6 +117,7 @@ function ConnectorCard({ connector, onRevoke, onTest, state }) {
       <ConnectorEnv env={connector.env || []} />
       <SecretRefs refs={connector.secret_refs || []} />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <button className="btn btn-secondary" onClick={() => onConfigure(connector)} type="button"><Settings2 size={14} />配置</button>
         {connector.test_connection?.supported && <button className="btn btn-secondary" disabled={testing || connector.health?.backoff?.blocked}
           onClick={() => onTest(connector)} type="button"><TestTube2 size={14} />{testing ? '测试中…' : '测试连接'}</button>}
         {revocable && state.revoke !== revokeKey && <button className="btn btn-secondary" disabled={revoking}
@@ -125,6 +128,19 @@ function ConnectorCard({ connector, onRevoke, onTest, state }) {
           <button className="btn btn-secondary" disabled={revoking} onClick={() => onRevoke(null, null)} type="button">取消</button>
         </>}
       </div>
+      {state.configure === connector.id && <ConnectorConfigureGuide connector={connector} />}
+    </div>
+  );
+}
+
+function ConnectorConfigureGuide({ connector }) {
+  const guide = configureGuide(connector);
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: '12px', display: 'grid', fontSize: '0.78rem', gap: '7px', lineHeight: 1.5, padding: '10px' }}>
+      <strong>{guide.title}</strong>
+      <span style={{ color: 'var(--text-muted)' }}>{guide.body}</span>
+      {guide.refs && <code style={{ overflowWrap: 'anywhere' }}>{guide.refs}</code>}
+      {connector.id === 'feishu' && <button className="btn btn-secondary" onClick={() => document.getElementById('feishu-connection-settings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">前往飞书配置</button>}
     </div>
   );
 }

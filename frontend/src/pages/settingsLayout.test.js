@@ -7,6 +7,9 @@ const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.ur
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url), 'utf8');
 const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsPanel.jsx', import.meta.url), 'utf8');
+const permissionsSettingsSource = readFileSync(new URL('./PermissionsSettingsPanel.jsx', import.meta.url), 'utf8');
+const notificationSettingsSource = readFileSync(new URL('./NotificationSettingsPanel.jsx', import.meta.url), 'utf8');
+const settingsProductModelsSource = readFileSync(new URL('./settingsProductModels.js', import.meta.url), 'utf8');
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const sourcePoliciesSource = readFileSync(new URL('./SourcePoliciesPanel.jsx', import.meta.url), 'utf8');
@@ -131,11 +134,40 @@ test('Connections shows connector health, test and inline revoke controls from A
   assert.match(connectorsApiSource, /testPiConnector/);
   assert.match(connectorsApiSource, /revokePiConnectorSecret/);
   assert.match(connectorDiagnosticsSource, /connectorsApi\.getPiConnectors\(\)/);
-  assert.match(connectorDiagnosticsSource, /Connector Diagnostics/);
+  assert.match(connectorDiagnosticsSource, /> Connections/);
+  assert.match(connectorDiagnosticsSource, /配置/);
+  assert.match(connectorDiagnosticsSource, /configureGuide/);
   assert.match(connectorDiagnosticsSource, /测试连接/);
   assert.match(connectorDiagnosticsSource, /确认撤销/);
   assert.match(connectorDiagnosticsSource, /Connector API coming soon/);
   assert.doesNotMatch(connectorDiagnosticsSource, /window\.confirm|window\.alert/);
+});
+
+test('Permissions projects live connector capabilities and preserves deterministic Approval authority', () => {
+  assert.match(sectionsSource, /PermissionsSettingsPanel/);
+  assert.match(permissionsSettingsSource, /connectorsApi\.getPiConnectors\(\)/);
+  assert.match(permissionsSettingsSource, /Connector permission matrix/);
+  assert.match(permissionsSettingsSource, /Action Gate 风险边界/);
+  for (const authority of ['pi_approval_requests', 'pi_actions', 'pi_action_events']) {
+    assert.match(permissionsSettingsSource, new RegExp(authority));
+  }
+  for (const risk of ['read_only', 'internal_write', 'external_write', 'dangerous']) {
+    assert.match(permissionsSettingsSource, new RegExp(risk));
+  }
+  assert.match(permissionsSettingsSource, /不能降低风险、扩大 scope 或绕过确定性 deny/);
+  assert.doesNotMatch(permissionsSettingsSource, /window\.confirm|window\.alert/);
+});
+
+test('Notifications edits the existing versioned preference authority and shows channel health', () => {
+  assert.match(sectionsSource, /NotificationSettingsPanel/);
+  assert.match(notificationSettingsSource, /assistantApi\.getPiGuardianPreferences/);
+  assert.match(notificationSettingsSource, /assistantApi\.createPiGuardianPreference/);
+  assert.match(notificationSettingsSource, /assistantApi\.disablePiGuardianPreference/);
+  assert.match(notificationSettingsSource, /connectorsApi\.getPiConnectors/);
+  assert.match(notificationSettingsSource, /版本与审计记录/);
+  assert.match(settingsProductModelsSource, /source_message_id: 'settings:notifications'/);
+  assert.match(settingsProductModelsSource, /digest_policy: form\.digestPolicy/);
+  assert.doesNotMatch(notificationSettingsSource, /window\.confirm|window\.alert/);
 });
 
 test('Skills tab shows intake and domain runtime history from API', () => {
