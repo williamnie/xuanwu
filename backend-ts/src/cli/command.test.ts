@@ -90,6 +90,27 @@ describe("Bun CLI dispatcher", () => {
     expect(code).toBe(0);
   });
 
+  test("doctor prints deterministic first-use fixes without changing the JSON contract", async () => {
+    const body = {
+      auth: { enabled: true },
+      db: { ok: true },
+      health: { reasons: [{ code: "provider_unavailable", message: "Codex is unavailable", source: "provider:codex" }], state: "degraded" },
+      providers: [{ available: false, id: "codex", label: "Codex", status: "missing" }],
+      security: { warnings: [] },
+      service: { alive: true }
+    };
+    const fetcher = fetchStub(() => jsonResponse(body));
+
+    const human = await run(["doctor"], { fetcher });
+    expect(human.code).toBe(0);
+    expect(human.stdout).toContain("Doctor health=degraded api=true db=true providers=codex:missing");
+    expect(human.stdout).toContain("fix: install and sign in to an executor CLI");
+    expect(human.stdout).toContain("codex --version");
+
+    const json = await run(["doctor", "--json"], { fetcher });
+    expect(JSON.parse(json.stdout)).toEqual(body);
+  });
+
   test("creates project against live default addr", async () => {
     const fetcher = fetchStub(async (request) => {
       expect(request.method).toBe("POST");

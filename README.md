@@ -163,6 +163,8 @@ CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
 
 ## 首次使用启动器与 Codex Server 选择
 
+完整的首次使用路径见 [10 分钟首次交付](docs/first-delivery.md)。Command Center 会直接展示 setup wizard、成功清单和可复制的失败恢复步骤。
+
 Dashboard 的 Settings → Runtime 里有 “首次使用启动器” 和 “Codex server 接入方式”：
 
 - `cli`：默认模式，Runner 独立拉起 `codex app-server --listen stdio://`，适合稳定后台自动执行。

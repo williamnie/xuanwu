@@ -54,3 +54,12 @@ export type SystemStatusDTO = {
   runner?: { in_progress_issues?: number; running_loops?: number };
   service?: { alive?: boolean };
 };
+
+export type SystemDoctorDTO = SystemStatusDTO & {
+  health?: {
+    reasons?: Array<{ code?: string; message?: string; source?: string }>;
+    state?: string;
+  };
+  providers?: Array<{ available?: boolean; id?: string; label?: string; status?: string }>;
+  security?: { warnings?: Array<{ code?: string; message?: string }> };
+};

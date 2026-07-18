@@ -2,6 +2,7 @@ import { assistantApi } from '../api/assistant.js';
 import { useEffect, useMemo, useState } from 'react';
 import { PRODUCT_TERMS } from '../brand';
 import { message } from '../store/toastStore';
+import { clearFirstDeliveryConnectionTest, recordFirstDeliveryConnectionTest } from '../utils/firstDeliveryConnection.js';
 
 export const DEFAULT_PI_AGENT_ID = 'runner-default';
 
@@ -27,6 +28,7 @@ const LEGACY_PI_ASSISTANT_INSTRUCTIONS = new Set([
 ]);
 
 const LEGACY_PI_AGENT_NAMES = new Set(['PI Assistant', 'Runner Agent', 'Runner Brain']);
+const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelId', 'modelProvider', 'userAgent']);
 
 export function usePiAgentSettingsState() {
   const [connectionTest, setConnectionTest] = useState({ busy: false, providerId: '', result: null });
@@ -60,10 +62,12 @@ export function usePiAgentSettingsState() {
   const loadPromptSummary = () => loadPiPromptSummary(DEFAULT_PI_AGENT_ID, setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
     if (key === 'instructions') setPromptSummary(null);
+    if (CONNECTION_FIELDS.has(key)) clearFirstDeliveryConnectionTest();
     if (key === 'modelProvider') setConnectionTest({ busy: false, providerId: '', result: null });
     setForm((current) => ({ ...current, [key]: value }));
   };
   const selectProviderPreset = (preset) => {
+    clearFirstDeliveryConnectionTest();
     const configured = providers.find((provider) => provider.id === preset.id);
     setConnectionTest({ busy: false, providerId: '', result: null });
     setForm((current) => ({
@@ -113,10 +117,12 @@ async function testPiConnection(form, setConnectionTest) {
   setConnectionTest({ busy: true, providerId, result: null });
   try {
     const result = await assistantApi.testPiProviderConnection(providerId, providerPayload(form));
+    recordFirstDeliveryConnectionTest(result);
     setConnectionTest({ busy: false, providerId, result });
     if (result.ok) message.success(result.message || 'Provider 连接成功');
     else message.error(result.message || 'Provider 连接失败');
   } catch (err) {
+    clearFirstDeliveryConnectionTest();
     setConnectionTest({ busy: false, providerId, result: { error: 'request_failed', message: err.message || 'Provider 连接失败', ok: false, status: 'failed' } });
     message.error(err.message || 'Provider 连接失败');
   }

@@ -1,7 +1,7 @@
 import { parseCommandArgs } from "./common.ts";
 import { getJSON } from "./http.ts";
-import { formatSystemLogs, formatSystemStatus } from "./output.ts";
-import type { EnvReader, Fetcher, SystemLogsDTO, SystemStatusDTO } from "./types.ts";
+import { formatSystemDoctor, formatSystemLogs, formatSystemStatus } from "./output.ts";
+import type { EnvReader, Fetcher, SystemDoctorDTO, SystemLogsDTO, SystemStatusDTO } from "./types.ts";
 
 export async function runSystem(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
   const command = args[0]?.trim();
@@ -17,7 +17,9 @@ export async function getSystemStatus(args: string[], env: EnvReader, fetcher: F
 }
 
 export async function getSystemDoctor(args: string[], env: EnvReader, fetcher: Fetcher): Promise<string> {
-  return await getSystemPayload(args, env, fetcher, "/api/system/doctor");
+  const { common } = parseCommandArgs(args, [], env);
+  const doctor = await getJSON<SystemDoctorDTO>(fetcher, common, "/api/system/doctor");
+  return formatSystemDoctor(doctor, common.json);
 }
 
 async function getSystemPayload(args: string[], env: EnvReader, fetcher: Fetcher, path: string): Promise<string> {
