@@ -56,6 +56,16 @@ LLM 只能生成 goal 解释、计划、proposal、rationale 或 Handoff 摘要�
 
 产品或 UI 只有在完整 journey conformance 通过后，才能宣称对应 Golden Journey 已交付。
 
+P10.08 的 canonical conformance runner 为：
+
+```bash
+bun scripts/run-golden-journeys.ts
+```
+
+runner 串行重放 `GJ-01`–`GJ-06`，每条 journey 都创建独立临时 SQLite state 和 1–2 个带 clean Git baseline 的 fixture project，执行该 journey 的 backend runtime/API smoke、frontend assertions，并通过临时 Bun HTTP server 对真实 API 与 frontend shell 做断言。默认 artifacts 写入被 Git 忽略的 `.runner/artifacts/golden-journeys/<run-id>/`；每个 stage 保存日志和结构化结果，失败时在 `failure-report.json` 指出最早不确定 stage 并停止后续执行。fixture 默认在关闭 DB/server 后删除并断言路径不存在；仅显式传入 `--keep-fixtures` 才保留。单条重放使用 `--scenario GJ-0N`，自定义证据目录使用 `--artifacts <path>`。local 与 CI 使用同一命令和退出码；CI 可把 `--artifacts` 指向 job artifact 目录，无需真实 provider、IM tenant、remote 或发布环境。
+
+这个 runner 只编排当前 SQLite/API/Runner/Guardian/PI/Git authority，不新增状态写入路径、公开 schema、provider adapter 或双写/双读。测试回滚是删除 runner/scenario registry 和其 artifacts，不涉及数据迁移；六条 journey、相关 authority consumer 和 P11/G7 删除门禁通过前，不得用本 runner 的汇总结果替代原始 Evidence/Handoff/audit fact。
+
 ## 2. 通用 Evidence 与 fixture 规则
 
 ### 2.1 最小 Evidence envelope

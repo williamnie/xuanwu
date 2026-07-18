@@ -50,6 +50,15 @@ describe("Xuanwu Golden Journey canonical contract", () => {
     expect(contract).toContain("回滚步骤");
     expect(contract).toContain("删除门禁");
   });
+
+  test("links the six-journey conformance runner, artifacts, cleanup, and earliest-stage failure report", () => {
+    expect(contract).toContain("bun scripts/run-golden-journeys.ts");
+    expect(contract).toContain(".runner/artifacts/golden-journeys/<run-id>/");
+    expect(contract).toContain("failure-report.json");
+    expect(contract).toContain("最早不确定 stage");
+    expect(contract).toContain("--scenario GJ-0N");
+    expect(existsSync(resolve(REPO_ROOT, "scripts/run-golden-journeys.ts"))).toBe(true);
+  });
 });
 
 function journeySection(id: string): string {
