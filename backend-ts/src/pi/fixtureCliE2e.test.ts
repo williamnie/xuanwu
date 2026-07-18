@@ -149,7 +149,7 @@ function statusQuestionItem(request: LlmIntakeRequest) {
 }
 function eventSummary(request: LlmIntakeRequest, externalID: string) {
   const events = request.input.context_bundle.raw_event_summaries;
-  const event = events.find((item) => item.source_ref === `${SOURCE}:${externalID}`);
+  const event = events.find((item) => decodeURIComponent(item.source_ref).includes(`${SOURCE}:${externalID}`));
   if (!event) throw new Error(`fixture event missing from intake input: ${externalID}`);
   return event;
 }

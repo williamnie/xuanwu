@@ -5,7 +5,7 @@
 - 依赖：[ADR-XW-0005](0005-capability-disposition-inventory.md)、[ADR-XW-0006](../xuanwu-migration/README.md)
 - 可执行清单：`backend-ts/src/xuanwu/automationSemantics.ts`
 - 覆盖校验：`backend-ts/src/xuanwu/automationSemantics.test.ts`
-- 范围：`cron_tasks`、`pi_automations`、PI delegation/heartbeat、completion watch、live-only nightly batch，以及 P00.05 归入 automation family 的全部 27 条 API
+- 范围：`cron_tasks`、`pi_automations`、PI delegation/heartbeat、completion watch、live-only nightly batch，以及当前归入 automation family 的全部 34 条 API
 
 ## 1. 决策
 
@@ -64,7 +64,7 @@ LLM 只能提议 Automation 或生成说明；状态变更、外部写、cutover
 
 ## 6. 迁移顺序
 
-1. 冻结 11 张 carrier 表、27 条 API、writer/consumer、ID/status/cursor/idempotency mapping 和 live baseline。
+1. 冻结 11 张 legacy carrier 表、7 张统一 Automation 表、34 条 API、writer/consumer、ID/status/cursor/idempotency mapping 和 live baseline。
 2. 新 command 先收敛到一个确定性 Automation command seam；legacy storage 仍各自 sole authority。
 3. 只添加可逆 mapping；W1 按 batch backfill，并 shadow-compare definition、cursor、status、claim 与 watch idempotency。
 4. W2 先切读；parity、restart/retry 与非 LLM 审批通过后再 G4 切到一个 target writer，旧 route 变 translation-only。
@@ -87,7 +87,7 @@ LLM 只能提议 Automation 或生成说明；状态变更、外部写、cutover
 
 ## 8. API 覆盖
 
-可执行清单逐项覆盖 P00.05 automation family 的 **27** 条 route：Cron 4、PI Automation 5、delegation 7、heartbeat timeline 1、completion watch 3、project heartbeat/control 7。测试与 `API_ROUTE_DISPOSITIONS` 做 exact set comparison，新增或删除 route 未同步语义清单会失败。
+可执行清单逐项覆盖 automation family 的 **34** 条 route：统一 Automation 7、Cron 4、PI Automation 5、delegation 7、heartbeat timeline 1、completion watch 3、project heartbeat/control 7。测试与 `API_ROUTE_DISPOSITIONS` 做 exact set comparison，新增或删除 route 未同步语义清单会失败。
 
 17 条 mutation route 全部标成 write：创建/修改 definition、pause/resume/expire/cancel、manual run。后续统一时，它们必须调用同一确定性 command 和 audit；10 条 GET 只读 projection 不得产生 claim、notification 或外部写。
 

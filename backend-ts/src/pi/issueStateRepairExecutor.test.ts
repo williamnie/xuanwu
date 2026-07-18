@@ -129,6 +129,7 @@ describe("Issue state repair executor", () => {
         "issue.verification_report",
         "issue.verification_gate_intent.v1",
         "issue.verification_gate_outcome.v1",
+        "issue.verification_report",
         "issue.state_manager_repair"
       ]);
       expect(JSON.parse(events[2].payload)).toMatchObject({

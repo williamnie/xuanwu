@@ -21,11 +21,11 @@
 
 统计：
 
-- 59 张表：keep=28、merge=22、migrate=7、delete=2
-- 198 条用户 API route：keep=116、merge=55、migrate=27、delete=0
-- 30 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
+- 79 张表：keep=48、merge=22、migrate=7、delete=2（77 张 current source + 2 张 live-only legacy）
+- 239 条用户 API route：keep=139、merge=66、migrate=34、delete=0
+- 36 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 14 个后台调度/启动单元：keep=4、merge=8、migrate=2、delete=0
-- 143 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
+- 148 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
 ## 2. live reference 证据
 
@@ -38,7 +38,7 @@ sqlite3 -readonly "$LIVE_DB" "select count(*) from sqlite_master where type='tab
 sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name;"
 ```
 
-决定性结果：launchd `state = running`、`API OK`、`db ok: True`；进程参数明确 `--db .../state/runner.db`；live DB 有 **59** 张非 SQLite 内部表，39 条 `schema_migrations`。当前 source migration 重建 **57** 张表；差集只有 `nightly_batches` 与 `nightly_batch_items`。
+决定性结果：capture 时 launchd `state = running`、`API OK`、`db ok: True`；进程参数明确 `--db .../state/runner.db`；capture 的 live DB 有 **59** 张非 SQLite 内部表，39 条 `schema_migrations`。当前 source migration 已扩展到 **77** 张表；另保留 `nightly_batches` 与 `nightly_batch_items` 两张 live-only legacy 清单。source/live 差异必须通过正式 migration/release gate 收敛，不能把未部署 source 表误报为 live authority。
 
 逐表 `count(*)` 已固化在可执行清单的 `live_rows` 快照字段；覆盖测试可通过 `XUANWU_LIVE_DB=<path>` 对 live table name set 做只读比对，不依赖易漂移的 row count。
 
@@ -126,20 +126,20 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 
 ## 5. API 清单
 
-API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `backend-ts/src/http/*.ts` 的生产 route 注册：排除非用户 probe `/health`，并将重复注册折叠成 198 条唯一用户 route。当前 `POST /api/system/restart` 有两个注册点；运行时按注册顺序命中 `systemRestartApi.ts`，后续只能合并实现，不得增加第三个 endpoint。
+API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `backend-ts/src/http/*.ts` 的生产 route 注册：排除非用户 probe `/health`，并将重复注册折叠成 239 条唯一用户 route。当前 `POST /api/system/restart` 有两个注册点；运行时按注册顺序命中 `systemRestartApi.ts`，后续只能合并实现，不得增加第三个 endpoint。
 
 | API family | route 数 | 结论 | 目标 | 当前 source of truth |
 | --- | ---: | --- | --- | --- |
 | `assistant-runtime` | 21 | **keep** | Operator conversation and supporting memory/config | pi_conversations, pi_agents, pi_memory_items |
-| `attention` | 21 | **merge** | Attention projections with deterministic resolution gates | attention_inbox_items and current Guardian/Approval carriers |
-| `automation` | 27 | **migrate** | Automation API with legacy cron/delegation compatibility | pi_automations plus legacy cron_tasks/pi_delegations |
-| `capability-policy` | 39 | **keep** | Capability registry and deterministic permission policy | tool/MCP registries and project_pi_policies |
-| `evidence-handoff` | 26 | **merge** | Evidence/Handoff read models and audited action requests | issue/pi audit authorities plus derived Handoff |
-| `integration-intake-delivery` | 15 | **keep** | Audited intake and external delivery adapters | external_events/external_links/outbox authorities |
+| `attention` | 25 | **merge** | Attention projections with deterministic resolution gates | attention_inbox_items and current Guardian/Approval carriers |
+| `automation` | 34 | **migrate** | Automation API with legacy cron/delegation compatibility | pi_automations plus legacy cron_tasks/pi_delegations |
+| `capability-policy` | 44 | **keep** | Capability registry and deterministic permission policy | tool/MCP registries and project_pi_policies |
+| `evidence-handoff` | 30 | **merge** | Evidence/Handoff read models and audited action requests | issue/pi audit authorities plus derived Handoff |
+| `integration-intake-delivery` | 23 | **keep** | Audited intake and external delivery adapters | external_events/external_links/outbox authorities |
 | `project-scope` | 17 | **keep** | Project/local control-plane scope | projects and scoped settings |
-| `run-session-drilldown` | 8 | **merge** | Run with provider Session drill-down | issue_runs; agent_sessions remains a reference |
-| `system-observability` | 8 | **keep** | Local runtime observability/control | live process, config, logs and event bus |
-| `work-ledger` | 16 | **keep** | Work ledger compatibility API | issues remains authoritative |
+| `run-session-drilldown` | 11 | **merge** | Run with provider Session drill-down | issue_runs; agent_sessions remains a reference |
+| `system-observability` | 10 | **keep** | Local runtime observability/control | live process, config, logs and event bus |
+| `work-ledger` | 24 | **keep** | Work ledger compatibility API | issues remains authoritative |
 
 <details><summary><code>assistant-runtime</code> 的逐项 routes</summary>
 
@@ -417,13 +417,13 @@ GET /api/issues/:id/runs
 | --- | --- | --- | --- | --- |
 | `assistant-runtime` | `pi-chat`, `pi-overview`, `pi-memory` | **keep** | Operator conversation and supporting memory/config | `PiAgentSettingsPanel.jsx`, `PiChat.jsx`, `PiChatComposerMeta.jsx`, `PiMemoryPanel.jsx` |
 | `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | `AttentionInbox.jsx` |
-| `automation` | `cron`, `pi-automations` | **migrate** | Automation API with legacy cron/delegation compatibility | `AutomationsRuntimePanel.jsx`, `Cron.jsx` |
-| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsPlaceholders.jsx`, `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
+| `automation` | `cron`, `pi-automations` | **migrate** | Automation API with legacy cron/delegation compatibility | `Automations.jsx`, `AutomationsRuntimePanel.jsx`, `Cron.jsx` |
+| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsPlaceholders.jsx`, `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
 | `evidence-handoff` | `handoffs`, `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx`, `Handoffs.jsx` |
 | `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `Projects.jsx` |
-| `run-session-drilldown` | `sessions` | **merge** | Run with provider Session drill-down | `Sessions.jsx` |
+| `run-session-drilldown` | `runs`, `sessions` | **merge** | Run with provider Session drill-down | `Runs.jsx`, `Sessions.jsx` |
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
-| `work-ledger` | `issues`, `issue-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `IssueTemplatesPanel.jsx` |
+| `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `IssueTemplatesPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
 
 页面迁移规则：`Issues`/`IssueDetail` 先保留现有 API 与状态机，逐步改为 Work 术语；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`Cron` 与 Automation 设置最终合并，但在 cron cursor parity 前保留现页；`pi-inbox`/`attention-inbox` 是同一 Attention surface 的兼容 page id。
 
@@ -450,7 +450,7 @@ GET /api/issues/:id/runs
 
 ## 8. PI 模块清单
 
-`backend-ts/src/pi` 的 143 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
+`backend-ts/src/pi` 的 148 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
 
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
@@ -458,13 +458,13 @@ GET /api/issues/:id/runs
 | `automation` | 11 | **migrate** | Automation execution pipeline | pi_automations; legacy heartbeats/watches are compatibility carriers |
 | `capability-connectors` | 27 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
 | `guardian-attention` | 25 | **merge** | Attention detection, routing and delivery | Guardian authorities projected into Attention |
-| `intake-context` | 9 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |
+| `intake-context` | 8 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |
 | `memory` | 4 | **keep** | Supporting knowledge store | pi_memory_items |
 | `policy-role` | 2 | **keep** | Deterministic policy and role selection | project policy plus static role contracts |
 | `reporting` | 8 | **merge** | Evidence/Handoff reporting projections | underlying immutable facts remain authoritative |
 | `test-support` | 2 | **keep** | Focused deterministic fixtures | test-only import graph |
 | `verification-evidence` | 7 | **keep** | Evidence production and verification policy | verification facts and Git/runtime inputs |
-| `work-run-orchestration` | 31 | **merge** | Work/Run orchestration and recovery | issues and issue_runs authorities |
+| `work-run-orchestration` | 37 | **merge** | Work/Run orchestration and recovery | issues and issue_runs authorities |
 
 <details><summary><code>action-permission-gate</code> 的逐项 modules</summary>
 
@@ -585,8 +585,6 @@ backend-ts/src/pi/intakeSkillInput.ts
 backend-ts/src/pi/intakeSourcePolicy.ts
 backend-ts/src/pi/llmIntake.ts
 backend-ts/src/pi/manualSourcePull.ts
-backend-ts/src/skills/builtinDomainProposal.ts
-backend-ts/src/skills/runtime.ts
 ```
 
 </details>
@@ -683,6 +681,12 @@ backend-ts/src/pi/runnerIssueScheduleActions.ts
 backend-ts/src/pi/runnerIssueStateActions.ts
 backend-ts/src/pi/runnerNextTriageActions.ts
 backend-ts/src/pi/sessionObserver.ts
+backend-ts/src/pi/supervisorCommitments.ts
+backend-ts/src/pi/supervisorContextResolver.ts
+backend-ts/src/pi/supervisorControlContracts.ts
+backend-ts/src/pi/supervisorControlTools.ts
+backend-ts/src/pi/supervisorIntentRouter.ts
+backend-ts/src/pi/supervisorWorkPlanner.ts
 ```
 
 </details>
@@ -742,4 +746,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：57 张 current source table + 2 张 live-only table = 59；198 条唯一用户 API route 全覆盖；30 个 JSX 页面组件与 143 个 PI 模块恰好归属一次；14 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：77 张 current source table + 2 张 live-only table = 79；239 条唯一用户 API route 全覆盖；36 个 JSX 页面组件与 148 个 PI 模块恰好归属一次；14 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

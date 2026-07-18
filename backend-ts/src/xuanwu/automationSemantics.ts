@@ -163,6 +163,13 @@ export const AUTOMATION_STATUS_MAPPINGS = [
 ] as const satisfies readonly AutomationStatusMapping[];
 
 export const AUTOMATION_API_ROUTES = [
+  { method: "GET", path: "/api/automations", role: "observation", write: false },
+  { method: "POST", path: "/api/automations", role: "definition", write: true },
+  { method: "GET", path: "/api/automations/:id", role: "observation", write: false },
+  { method: "PATCH", path: "/api/automations/:id", role: "control", write: true },
+  { method: "PATCH", path: "/api/automations/:id/trigger", role: "control", write: true },
+  { method: "POST", path: "/api/automations/:id/run-now", role: "trigger", write: true },
+  { method: "POST", path: "/api/automations/:id/status", role: "control", write: true },
   { method: "GET", path: "/api/cron-tasks", role: "observation", write: false },
   { method: "POST", path: "/api/cron-tasks", role: "definition", write: true },
   { method: "DELETE", path: "/api/cron-tasks/:id", role: "definition", write: true },

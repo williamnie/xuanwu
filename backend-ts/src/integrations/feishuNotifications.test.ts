@@ -49,7 +49,7 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("router queues Feishu completion notification when linked issue is patched done", async () => {
+  test("router rejects direct done patches without Evidence and does not notify", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     try {
@@ -63,13 +63,8 @@ describe("Feishu notification queue", () => {
       }));
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
-      expect(response.status).toBe(200);
-      expect(outbox).toHaveLength(1);
-      expect(outbox[0]).toMatchObject({
-        content: expect.stringContaining("issue #1 已完成"),
-        issue_id: issueID,
-        target_chat_id: "oc_group"
-      });
+      expect(response.status).toBe(400);
+      expect(outbox).toEqual([]);
     } finally {
       db.close();
     }
@@ -109,21 +104,25 @@ describe("Feishu notification queue", () => {
     const config = buildConfig({ feishuAppId: "cli_app_id", feishuAppSecret: "app-secret-value" });
     try {
       const issueID = linkedFeishuIssue(db);
+      updateIssue(db, issueID, { error: "bun test passed", status: "pending_verification" });
       const router = createDefaultRouter({ bus, config, database: db, feishuSender: sender });
 
-      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}`, {
-        body: JSON.stringify({ error: "", status: "done" }),
+      const response = await router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/verification`, {
+        body: JSON.stringify({ action: "accept", comment: "验收通过" }),
         headers: { "content-type": "application/json" },
-        method: "PATCH"
+        method: "POST"
       }));
       await until(() => sender.calls.length > 0);
+      await until(() => listSyncOutbox(db, { source: "feishu" })[0]?.status === "sent");
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(response.status).toBe(200);
       expect(sender.calls).toEqual([{
         receiveId: "oc_group",
         receiveIdType: "chat_id",
-        text: "Pi：issue #1 已完成：Feishu task\n验证状态：已标记完成，未附加验证摘要。"
+        text: "Pi：issue #1 已完成：Feishu task\n" +
+          "验证状态：已标记完成，未附加验证摘要。\n" +
+          "查看：/api/issues/1"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
     } finally {
@@ -158,7 +157,8 @@ describe("Feishu notification queue", () => {
         receiveIdType: "chat_id",
         text: "Pi：issue #1 执行失败/阻塞：Needs human\n" +
           "错误摘要：backend contract missing\n" +
-          "下一步：请查看 Runner issue #1 的日志，补充授权/信息后 retry 或重新排队。"
+          "下一步：请查看 Runner issue #1 的日志，补充授权/信息后 retry 或重新排队。\n" +
+          "查看：/api/issues/1"
       }]);
       expect(outbox[0]).toMatchObject({ feishu_message_id: "om_auto_sent_1", status: "sent" });
     } finally {

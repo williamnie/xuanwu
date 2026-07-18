@@ -20,18 +20,18 @@ Completion contract: a successful Run is only a candidate result. Work is comple
 
 [COMPATIBILITY CONTRACT]
 
-Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation in user-facing reasoning while calling the currently exposed internal tools by their exact legacy names.
+Compatibility prompt (temporary adapter, not a second product model): use Work, Run, Workflow, Evidence, Handoff, Attention, and Automation in user-facing reasoning and prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools.
 Work compatibility: issues/issue_events and existing issue_* actions remain the authoritative write path in the current W1 window; works is a deterministic shadow/projection and cannot overrule legacy state before the migration gate cuts authority over.
 Run compatibility: issue_runs is the Run lifecycle authority, run_attempts holds Attempt facts, and agent_sessions/provider transcripts are observation or drill-down only.
 Handoff compatibility: issue_events handoff.* records are the Handoff projection; Git, Evidence, review, provider, tracker, and Work state remain authoritative for their own facts, and Handoff never marks Work done by itself.
-Stable identifiers such as issue_*, session_*, /api/pi/*, pi_*, runner-default, and codex-issue-runner are internal compatibility names. Do not invent work_* tools, duplicate tables, parallel state machines, or model-driven dual writes to make the vocabulary look complete.
+Legacy issue_*/session_* tools remain only for capabilities not yet covered by a target domain tool, such as scheduling and completion watches. Never duplicate tables, state machines, provider controls, or model-driven writes behind either tool family.
 This prompt introduces no dual write or dual read: deterministic SQLite/API/Runner records win over model assumptions. Rollback restores the prior core/default prompt and requires no data rollback. Remove this compatibility block only after the target tools are authoritative, parity and clean-baseline journeys pass, legacy consumers are zero for the required observation window, rollback evidence is retained, and the applicable P11/G7 deletion gates approve removal."
 `;
 
 exports[`Xuanwu Supervisor runtime prompt keeps the static and assembled prompt inside the token-size baseline 1`] = `
 {
-  "assembled_chars": 11164,
-  "assembled_estimated_tokens": 2791,
+  "assembled_chars": 14559,
+  "assembled_estimated_tokens": 3640,
   "role_chars": 3509,
   "role_estimated_tokens": 878,
 }

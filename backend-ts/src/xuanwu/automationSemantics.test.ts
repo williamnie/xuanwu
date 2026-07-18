@@ -37,17 +37,17 @@ describe("Xuanwu Automation semantics", () => {
     }
   });
 
-  test("covers all 27 automation API routes and marks every mutation", () => {
+  test("covers all 34 automation API routes and marks every mutation", () => {
     const expected = API_ROUTE_DISPOSITIONS
       .filter((route) => route.family === "automation")
       .map((route) => `${route.method} ${route.path}`)
       .sort();
     const actual = AUTOMATION_API_ROUTES.map((route) => `${route.method} ${route.path}`).sort();
     expect(actual).toEqual(expected);
-    expect(actual).toHaveLength(27);
+    expect(actual).toHaveLength(34);
     expect(new Set(actual).size).toBe(actual.length);
-    expect(AUTOMATION_API_ROUTES.filter((route) => route.write)).toHaveLength(17);
-    expect(AUTOMATION_API_ROUTES.filter((route) => !route.write)).toHaveLength(10);
+    expect(AUTOMATION_API_ROUTES.filter((route) => route.write)).toHaveLength(22);
+    expect(AUTOMATION_API_ROUTES.filter((route) => !route.write)).toHaveLength(12);
     for (const route of AUTOMATION_API_ROUTES) {
       expect(route.write).toBe(route.method !== "GET");
       expect(["definition", "trigger", "control", "observation"]).toContain(route.role);
@@ -87,7 +87,7 @@ describe("Xuanwu Automation semantics", () => {
     for (const heading of ["触发 / 执行 / 观察分类", "状态映射", "重复能力", "迁移顺序", "删除门禁", "live records 抽样", "API 覆盖"]) {
       expect(adr).toContain(heading);
     }
-    expect(adr).toContain("27");
+    expect(adr).toContain("34");
     expect(adr).toContain("11 张表");
     expect(adr).toContain("W1 + W2 最多两个连续正式 release");
   });

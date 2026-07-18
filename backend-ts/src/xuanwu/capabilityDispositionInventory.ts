@@ -45,8 +45,48 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 0, delete_preconditions: []
   },
   {
+    name: "attention_command_events", disposition: "keep", target: "Attention command audit",
+    source_of_truth: "attention_command_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "attention_inbox_items", disposition: "keep", target: "Attention primary carrier",
     source_of_truth: "attention_inbox_items", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_definitions", disposition: "keep", target: "Automation definition authority",
+    source_of_truth: "automation_definitions", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_events", disposition: "keep", target: "Automation audit ledger",
+    source_of_truth: "automation_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_execution_links", disposition: "keep", target: "Automation Work and Run relations",
+    source_of_truth: "automation_execution_links", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_run_events", disposition: "keep", target: "Automation Run audit",
+    source_of_truth: "automation_run_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_runs", disposition: "keep", target: "Automation execution authority",
+    source_of_truth: "automation_runs", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_trigger_configs", disposition: "keep", target: "Automation trigger configuration",
+    source_of_truth: "automation_trigger_configs", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "automation_watches", disposition: "keep", target: "Automation observation authority",
+    source_of_truth: "automation_watches", retention: "R2_DURABLE", runtime_origin: "source_schema",
     live_rows: 0, delete_preconditions: []
   },
   {
@@ -63,6 +103,16 @@ export const TABLE_DISPOSITIONS = [
     name: "cron_tasks", disposition: "migrate", target: "Automation definition",
     source_of_truth: "cron_tasks until Automation parity", retention: "R3_AUDIT", runtime_origin: "source_schema",
     live_rows: 3, delete_preconditions: []
+  },
+  {
+    name: "event_projection_watermarks", disposition: "keep", target: "Event projection cursor",
+    source_of_truth: "event_projection_watermarks", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection", disposition: "keep", target: "Bounded event summary projection",
+    source_of_truth: "event_summary_projection; issue_events remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
   },
   {
     name: "external_events", disposition: "keep", target: "Intake Evidence",
@@ -83,6 +133,16 @@ export const TABLE_DISPOSITIONS = [
     name: "feishu_project_selections", disposition: "merge", target: "Project-scope connector preference",
     source_of_truth: "feishu_project_selections", retention: "R2_DURABLE", runtime_origin: "source_schema",
     live_rows: 2, delete_preconditions: []
+  },
+  {
+    name: "git_repo_mapping_events", disposition: "keep", target: "Git mapping audit",
+    source_of_truth: "git_repo_mapping_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "git_repo_mappings", disposition: "keep", target: "Git repository mapping authority",
+    source_of_truth: "git_repo_mappings", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
   },
   {
     name: "im_reply_drafts", disposition: "merge", target: "Handoff delivery proposal",
@@ -290,6 +350,11 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 11, delete_preconditions: []
   },
   {
+    name: "run_attempts", disposition: "keep", target: "Run Attempt authority",
+    source_of_truth: "run_attempts", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "schema_migrations", disposition: "keep", target: "Storage migration ledger",
     source_of_truth: "schema_migrations", retention: "R3_AUDIT", runtime_origin: "source_schema",
     live_rows: 39, delete_preconditions: []
@@ -310,9 +375,44 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 52, delete_preconditions: []
   },
   {
+    name: "tracker_issue_links", disposition: "keep", target: "Tracker issue relation authority",
+    source_of_truth: "tracker_issue_links", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "tracker_project_mappings", disposition: "keep", target: "Tracker project mapping authority",
+    source_of_truth: "tracker_project_mappings", retention: "R2_DURABLE", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "tracker_sync_cursors", disposition: "keep", target: "Tracker synchronization cursor",
+    source_of_truth: "tracker_sync_cursors", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "tracker_sync_events", disposition: "keep", target: "Tracker synchronization audit",
+    source_of_truth: "tracker_sync_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "uploads", disposition: "keep", target: "Evidence artifact store",
     source_of_truth: "uploads", retention: "R4_SENSITIVE", runtime_origin: "source_schema",
     live_rows: 54, delete_preconditions: []
+  },
+  {
+    name: "work_events", disposition: "keep", target: "Work ledger audit",
+    source_of_truth: "work_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "work_relations", disposition: "keep", target: "Work dependency and hierarchy relations",
+    source_of_truth: "work_relations", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "works", disposition: "keep", target: "Work shadow ledger during migration",
+    source_of_truth: "issues until Work authority cutover", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
   },
 ] as const;
 
@@ -330,6 +430,45 @@ export const API_ROUTE_FAMILIES = [
 ] as const;
 
 export const API_ROUTE_DISPOSITIONS = [
+  { method: "GET", path: "/api/automations", family: "automation" },
+  { method: "GET", path: "/api/automations/:id", family: "automation" },
+  { method: "PATCH", path: "/api/automations/:id", family: "automation" },
+  { method: "PATCH", path: "/api/automations/:id/trigger", family: "automation" },
+  { method: "POST", path: "/api/automations", family: "automation" },
+  { method: "POST", path: "/api/automations/:id/run-now", family: "automation" },
+  { method: "POST", path: "/api/automations/:id/status", family: "automation" },
+  { method: "GET", path: "/api/command-center/attention/:id", family: "attention" },
+  { method: "GET", path: "/api/command-center/summary", family: "attention" },
+  { method: "POST", path: "/api/command-center/attention/:id/actions/:action", family: "attention" },
+  { method: "GET", path: "/api/event-summaries", family: "system-observability" },
+  { method: "GET", path: "/api/evidence", family: "evidence-handoff" },
+  { method: "GET", path: "/api/evidence/:id", family: "evidence-handoff" },
+  { method: "GET", path: "/api/evidence/:id/artifacts/:index", family: "evidence-handoff" },
+  { method: "GET", path: "/api/issues/:id/event-summaries", family: "system-observability" },
+  { method: "GET", path: "/api/pi/approval-requests/:id", family: "attention" },
+  { method: "GET", path: "/api/pi/connectors/diagnostics", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/connectors/:id/revoke", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/connectors/:id/test-connection", family: "capability-policy" },
+  { method: "POST", path: "/api/handoffs/:id/reviews", family: "evidence-handoff" },
+  { method: "POST", path: "/api/integrations/git/:provider/events", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/git/:provider/resync", family: "integration-intake-delivery" },
+  { method: "PUT", path: "/api/integrations/git/mappings", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/trackers/:provider/events", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/trackers/:provider/poll", family: "integration-intake-delivery" },
+  { method: "PUT", path: "/api/integrations/trackers/:provider/links", family: "integration-intake-delivery" },
+  { method: "PUT", path: "/api/integrations/trackers/mappings", family: "integration-intake-delivery" },
+  { method: "POST", path: "/api/integrations/webhook/events", family: "integration-intake-delivery" },
+  { method: "GET", path: "/api/runs", family: "run-session-drilldown" },
+  { method: "GET", path: "/api/runs/:id", family: "run-session-drilldown" },
+  { method: "POST", path: "/api/runs/:id/actions/:action", family: "run-session-drilldown" },
+  { method: "GET", path: "/api/work-relations", family: "work-ledger" },
+  { method: "GET", path: "/api/works", family: "work-ledger" },
+  { method: "GET", path: "/api/works/:id", family: "work-ledger" },
+  { method: "GET", path: "/api/works/:id/relations", family: "work-ledger" },
+  { method: "GET", path: "/api/works/:id/timeline", family: "work-ledger" },
+  { method: "PATCH", path: "/api/works/:id", family: "work-ledger" },
+  { method: "POST", path: "/api/works", family: "work-ledger" },
+  { method: "POST", path: "/api/works/:id/actions/:action", family: "work-ledger" },
   { method: "GET", path: "/api/agent-profiles", family: "project-scope" },
   { method: "POST", path: "/api/agent-profiles", family: "project-scope" },
   { method: "DELETE", path: "/api/agent-profiles/:id", family: "project-scope" },
@@ -546,12 +685,12 @@ export const PAGE_SURFACES = [
   {
     id: "automation", disposition: "migrate", target: "Automation API with legacy cron/delegation compatibility",
     page_ids: ["cron", "pi-automations"],
-    source_files: ["frontend/src/pages/AutomationsRuntimePanel.jsx", "frontend/src/pages/Cron.jsx"]
+    source_files: ["frontend/src/pages/Automations.jsx", "frontend/src/pages/AutomationsRuntimePanel.jsx", "frontend/src/pages/Cron.jsx"]
   },
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsPlaceholders.jsx", "frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsPlaceholders.jsx", "frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",
@@ -565,8 +704,8 @@ export const PAGE_SURFACES = [
   },
   {
     id: "run-session-drilldown", disposition: "merge", target: "Run with provider Session drill-down",
-    page_ids: ["sessions"],
-    source_files: ["frontend/src/pages/Sessions.jsx"]
+    page_ids: ["runs", "sessions"],
+    source_files: ["frontend/src/pages/Runs.jsx", "frontend/src/pages/Sessions.jsx"]
   },
   {
     id: "system-observability", disposition: "keep", target: "Local runtime observability/control",
@@ -575,8 +714,8 @@ export const PAGE_SURFACES = [
   },
   {
     id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API",
-    page_ids: ["issues", "issue-detail"],
-    source_files: ["frontend/src/pages/IssueCard.jsx", "frontend/src/pages/IssueCardMoreActions.jsx", "frontend/src/pages/IssueDetail.jsx", "frontend/src/pages/Issues.jsx", "frontend/src/pages/IssueSupervisorPanel.jsx", "frontend/src/pages/IssueTemplatesPanel.jsx"]
+    page_ids: ["issues", "issue-detail", "work-board", "work-detail"],
+    source_files: ["frontend/src/pages/IssueCard.jsx", "frontend/src/pages/IssueCardMoreActions.jsx", "frontend/src/pages/IssueDetail.jsx", "frontend/src/pages/Issues.jsx", "frontend/src/pages/IssueSupervisorPanel.jsx", "frontend/src/pages/IssueTemplatesPanel.jsx", "frontend/src/pages/WorkBoard.jsx", "frontend/src/pages/WorkDetail.jsx"]
   },
 ] as const;
 
@@ -616,7 +755,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "intake-context", disposition: "merge", target: "Attention intake and Evidence context", source_of_truth: "external events, context bundles and intake audit",
-    source_files: ["backend-ts/src/pi/contextBundleBuilder.ts", "backend-ts/src/pi/contextPackTrace.ts", "backend-ts/src/pi/domainSkillRun.ts", "backend-ts/src/pi/eventRouter.ts", "backend-ts/src/pi/intakeSkillInput.ts", "backend-ts/src/pi/intakeSourcePolicy.ts", "backend-ts/src/pi/llmIntake.ts", "backend-ts/src/pi/manualSourcePull.ts", "backend-ts/src/skills/builtinDomainProposal.ts", "backend-ts/src/skills/runtime.ts"]
+    source_files: ["backend-ts/src/pi/contextBundleBuilder.ts", "backend-ts/src/pi/contextPackTrace.ts", "backend-ts/src/pi/domainSkillRun.ts", "backend-ts/src/pi/eventRouter.ts", "backend-ts/src/pi/intakeSkillInput.ts", "backend-ts/src/pi/intakeSourcePolicy.ts", "backend-ts/src/pi/llmIntake.ts", "backend-ts/src/pi/manualSourcePull.ts"]
   },
   {
     id: "memory", disposition: "keep", target: "Supporting knowledge store", source_of_truth: "pi_memory_items",
@@ -640,7 +779,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "work-run-orchestration", disposition: "merge", target: "Work/Run orchestration and recovery", source_of_truth: "issues and issue_runs authorities",
-    source_files: ["backend-ts/src/pi/agentOrchestration.ts", "backend-ts/src/pi/agentOrchestrationActions.ts", "backend-ts/src/pi/agentOrchestrationPayloads.ts", "backend-ts/src/pi/failedRetryPolicy.ts", "backend-ts/src/pi/issueProposalContext.ts", "backend-ts/src/pi/issueStateManager.ts", "backend-ts/src/pi/issueStateRepairExecutor.ts", "backend-ts/src/pi/issueStateSnapshot.ts", "backend-ts/src/pi/issueStateVerification.ts", "backend-ts/src/pi/issueSupervisorActions.ts", "backend-ts/src/pi/issueSupervisorContext.ts", "backend-ts/src/pi/issueSupervisorContextSupport.ts", "backend-ts/src/pi/issueSupervisorDecision.ts", "backend-ts/src/pi/issueSupervisorDecisionFailure.ts", "backend-ts/src/pi/issueSupervisorRecovery.ts", "backend-ts/src/pi/issueSupervisorRecoveryAttemptRecorder.ts", "backend-ts/src/pi/issueSupervisorSignalCollector.ts", "backend-ts/src/pi/issueToolViews.ts", "backend-ts/src/pi/providerErrorParser.ts", "backend-ts/src/pi/providerErrorParserSupport.ts", "backend-ts/src/pi/providerOutageDiagnosis.ts", "backend-ts/src/pi/recoveryActionPlanner.ts", "backend-ts/src/pi/recoveryBudget.ts", "backend-ts/src/pi/recoveryDiagnosis.ts", "backend-ts/src/pi/runnerActionTools.ts", "backend-ts/src/pi/runnerActions.ts", "backend-ts/src/pi/runnerBatchTriageScope.ts", "backend-ts/src/pi/runnerIssueScheduleActions.ts", "backend-ts/src/pi/runnerIssueStateActions.ts", "backend-ts/src/pi/runnerNextTriageActions.ts", "backend-ts/src/pi/sessionObserver.ts"]
+    source_files: ["backend-ts/src/pi/agentOrchestration.ts", "backend-ts/src/pi/agentOrchestrationActions.ts", "backend-ts/src/pi/agentOrchestrationPayloads.ts", "backend-ts/src/pi/failedRetryPolicy.ts", "backend-ts/src/pi/issueProposalContext.ts", "backend-ts/src/pi/issueStateManager.ts", "backend-ts/src/pi/issueStateRepairExecutor.ts", "backend-ts/src/pi/issueStateSnapshot.ts", "backend-ts/src/pi/issueStateVerification.ts", "backend-ts/src/pi/issueSupervisorActions.ts", "backend-ts/src/pi/issueSupervisorContext.ts", "backend-ts/src/pi/issueSupervisorContextSupport.ts", "backend-ts/src/pi/issueSupervisorDecision.ts", "backend-ts/src/pi/issueSupervisorDecisionFailure.ts", "backend-ts/src/pi/issueSupervisorRecovery.ts", "backend-ts/src/pi/issueSupervisorRecoveryAttemptRecorder.ts", "backend-ts/src/pi/issueSupervisorSignalCollector.ts", "backend-ts/src/pi/issueToolViews.ts", "backend-ts/src/pi/providerErrorParser.ts", "backend-ts/src/pi/providerErrorParserSupport.ts", "backend-ts/src/pi/providerOutageDiagnosis.ts", "backend-ts/src/pi/recoveryActionPlanner.ts", "backend-ts/src/pi/recoveryBudget.ts", "backend-ts/src/pi/recoveryDiagnosis.ts", "backend-ts/src/pi/runnerActionTools.ts", "backend-ts/src/pi/runnerActions.ts", "backend-ts/src/pi/runnerBatchTriageScope.ts", "backend-ts/src/pi/runnerIssueScheduleActions.ts", "backend-ts/src/pi/runnerIssueStateActions.ts", "backend-ts/src/pi/runnerNextTriageActions.ts", "backend-ts/src/pi/sessionObserver.ts", "backend-ts/src/pi/supervisorCommitments.ts", "backend-ts/src/pi/supervisorContextResolver.ts", "backend-ts/src/pi/supervisorControlContracts.ts", "backend-ts/src/pi/supervisorControlTools.ts", "backend-ts/src/pi/supervisorIntentRouter.ts", "backend-ts/src/pi/supervisorWorkPlanner.ts"]
   },
 ] as const;
 

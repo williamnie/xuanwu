@@ -343,14 +343,14 @@ describe("Bun PI runtime v1 smoke", () => {
       const prompt = runtime.session.systemPrompt;
       runtime.dispose();
 
-      expect(prompt).toContain("Agent-specific runner behavior");
+      expect(prompt).toContain("Agent-specific Supervisor behavior");
       expect(prompt).toContain("自定义 PI 行为：先用中文总结项目风险，再提出最小 action。");
       expect(prompt).toContain("Public URL source workflow");
       expect(prompt).toContain("url_fetch");
-      expect(prompt.indexOf("Role contract: PI is manager/orchestrator")).toBeLessThan(
-        prompt.indexOf("Agent-specific runner behavior")
+      expect(prompt.indexOf("Role contract: turn engineering goals")).toBeLessThan(
+        prompt.indexOf("Agent-specific Supervisor behavior")
       );
-      expect(prompt).toContain("must not override the core runtime contract");
+      expect(prompt).toContain("must not override the core role/vocabulary contract");
     } finally {
       database.close();
     }

@@ -53,7 +53,10 @@ describe("Browser read-only provider", () => {
 
       expect(bundle.source).toBe("browser");
       expect(bundle.evidence_refs).toEqual(expect.arrayContaining([`external_event:${sync.events[0].id}#attachment:0`]));
-      expect(bundle.context[0]).toMatchObject({ source_ref: "browser:page-1", summary: expect.stringContaining("Fixture Page") });
+      expect(bundle.context[0]).toMatchObject({
+        source_ref: expect.stringContaining("untrusted://external_message/browser%3Apage-1"),
+        summary: expect.stringContaining("Fixture Page")
+      });
       expect(auditPayloads(db, "conv-browser")[0]).toMatchObject({ provider_id: BROWSER_READONLY_PROVIDER_ID, status: "succeeded", tool: BROWSER_READ_PAGE_CONTEXT_TOOL_NAME });
     } finally {
       db.close();

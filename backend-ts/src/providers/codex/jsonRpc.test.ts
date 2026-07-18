@@ -461,11 +461,17 @@ describe("Codex stdio JSON-RPC transport", () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(events).toEqual([{
+    expect(events).toMatchObject([{
       provider: "codex",
       type: "error",
       status: "failed",
       error: "boom CODEX_API_KEY=[redacted]",
+      runEvent: {
+        contract: "xw.run-event.v1",
+        kind: "error",
+        outcome: "failed",
+        terminal: true
+      },
       session: { provider: "codex", sessionId: "thread-1", turnId: "turn-1" },
       raw: {
         method: "error",

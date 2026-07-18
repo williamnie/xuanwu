@@ -76,7 +76,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("issue_runs is the Run lifecycle authority");
       expect(prompt).toContain("issue_events handoff.* records are the Handoff projection");
       expect(prompt).toContain("This prompt introduces no dual write or dual read");
-      expect(prompt).toContain("Do not invent work_* tools");
+      expect(prompt).toContain("prefer the registered work_*, run_*, evidence_*, and handoff_* domain tools");
       expect(prompt).toContain("issue_create_proposal");
       expect(prompt).toContain("issue_enqueue_proposal");
       expect(prompt).toContain("issue_schedule_enqueue");

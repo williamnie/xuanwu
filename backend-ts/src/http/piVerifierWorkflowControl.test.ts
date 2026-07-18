@@ -66,8 +66,10 @@ function insertProject(db: RunnerDatabase, id: string): void {
 function insertFauxAgent(db: RunnerDatabase): void {
   db.sqlite.run(
     `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", "pi-control-verifier", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+     values (?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(id) do update set model_provider=excluded.model_provider,
+       model_id=excluded.model_id, thinking_level=excluded.thinking_level, enabled=excluded.enabled`,
+    ["runner-default", "PI Faux", "pi-control-verifier", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

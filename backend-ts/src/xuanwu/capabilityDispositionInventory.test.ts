@@ -20,8 +20,8 @@ const ADR_PATH = "docs/architecture/xuanwu/0005-capability-disposition-inventory
 
 describe("Xuanwu capability disposition inventory", () => {
   test("covers every current source table and the two live-only legacy tables", () => {
-    expect(TABLE_DISPOSITIONS).toHaveLength(59);
-    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(59);
+    expect(TABLE_DISPOSITIONS).toHaveLength(79);
+    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(79);
     expect(Object.keys(RETENTION_LEVELS).sort()).toEqual([
       "R0_DERIVED",
       "R1_OPERATIONAL",
@@ -74,7 +74,7 @@ describe("Xuanwu capability disposition inventory", () => {
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);
-    expect(inventoried).toHaveLength(198);
+    expect(inventoried).toHaveLength(239);
     expect(unique(inventoried)).toHaveLength(inventoried.length);
 
     const familyIDs = new Set(API_ROUTE_FAMILIES.map((family) => family.id));
@@ -101,7 +101,7 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(143);
+    expect(inventoriedPi).toHaveLength(148);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 
@@ -135,8 +135,8 @@ describe("Xuanwu capability disposition inventory", () => {
     for (const heading of ["live reference", "表清单", "API 清单", "页面清单", "后台调度器", "PI 模块", "删除前置条件"]) {
       expect(adr).toContain(heading);
     }
-    expect(adr).toContain("59 张表");
-    expect(adr).toContain("198 条用户 API route");
+    expect(adr).toContain("79 张表");
+    expect(adr).toContain("239 条用户 API route");
   });
 });
 
