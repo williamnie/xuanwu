@@ -1,20 +1,38 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { listPiApprovalRequests } from "../db/repositories/pi/approvalRequests.ts";
+import { getPiApprovalRequest, listPiApprovalRequests } from "../db/repositories/pi/approvalRequests.ts";
+import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { resolvePiApprovalRequestFromFeishu } from "../integrations/feishuApprovalRequests.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
 type PiApprovalRequestsContext = {
+  bus?: EventBus;
   database: RunnerDatabase;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
 export function registerPiApprovalRequestRoutes(router: Router, context: PiApprovalRequestsContext): void {
   router.get("/api/pi/approval-requests", (request) => json(listApprovalRequests(context.database, request)));
-  router.post("/api/pi/approval-requests/:id/resolve", async (request) => json(
-    await resolveApprovalRequest(context, approvalRequestID(request), await objectBody(request))
-  ));
+  router.get("/api/pi/approval-requests/:id", (request) => approvalDetail(context.database, request));
+  router.post("/api/pi/approval-requests/:id/resolve", async (request) => {
+    const requestID = approvalRequestID(request);
+    const result = await resolveApprovalRequest(context, requestID, await objectBody(request));
+    const approval = getPiApprovalRequest(context.database, requestID);
+    context.bus?.publish({
+      projectId: approval?.project_id,
+      status: result.status,
+      type: "approval.resolved",
+      payload: JSON.stringify({ approval_id: requestID, decision: approval?.resolved_decision, scope: approval?.resolved_scope })
+    });
+    return json(result);
+  });
+}
+
+function approvalDetail(db: RunnerDatabase, request: Request): Response {
+  const approval = getPiApprovalRequest(db, approvalRequestID(request));
+  if (!approval) throw new HttpError(404, "PI approval request 不存在");
+  return json(approval);
 }
 
 function listApprovalRequests(db: RunnerDatabase, request: Request) {

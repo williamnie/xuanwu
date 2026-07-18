@@ -23,10 +23,39 @@ export type CreateAutomationInput = Omit<AutomationDefinition, "active_trigger_v
   trigger_created_by: string;
 };
 
+export type AutomationDefinitionPatch = Partial<Pick<AutomationDefinition,
+  "mode" | "name" | "next_run_at" | "permission_policy_ref" | "workflow_ref"
+>>;
+
+export type AutomationEvent = {
+  actor_id: string;
+  actor_kind: AutomationAudit["actor_kind"];
+  after_revision: number;
+  automation_id: AutomationID;
+  before_revision: number;
+  correlation_id: string;
+  event_id: string;
+  event_type: string;
+  expected_revision: number;
+  gate_authority: AutomationAudit["gate"]["authority"];
+  gate_decision: AutomationAudit["gate"]["decision"];
+  gate_policy_ref: string;
+  occurred_at: string;
+  payload: Record<string, unknown>;
+  reason: string;
+};
+
+export type AutomationListFilter = {
+  project_id?: string;
+  status?: AutomationDefinition["status"];
+  trigger_type?: AutomationTriggerConfig["type"];
+};
+
 export function createAutomation(
   db: RunnerDatabase,
   input: CreateAutomationInput,
-  now = new Date().toISOString()
+  now = new Date().toISOString(),
+  audit?: AutomationAudit
 ): AutomationDefinition {
   const timestamp = normalizeTimestamp(now);
   const definition: AutomationDefinition = {
@@ -38,6 +67,7 @@ export function createAutomation(
     updated_at: timestamp
   };
   assertAutomationDefinition(definition);
+  if (audit) assertAllowedAudit(audit);
   const trigger: VersionedAutomationTrigger = {
     ...input.trigger, automation_id: definition.id, created_at: timestamp,
     created_by: input.trigger_created_by, version: 1
@@ -49,8 +79,47 @@ export function createAutomation(
       idempotency_namespace, active_trigger_version, next_run_at, revision, created_at, updated_at
     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, definitionValues(definition));
     insertTrigger(db, trigger);
+    if (audit) insertEvent(db, definition.id, "automation.created.v1", 0, 0, 0, audit, {
+      status: definition.status,
+      trigger_type: trigger.type,
+      trigger_version: trigger.version
+    });
   })();
   return requireAutomation(db, definition.id);
+}
+
+export function updateAutomationDefinition(
+  db: RunnerDatabase,
+  id: AutomationID,
+  patch: AutomationDefinitionPatch,
+  expectedRevision: number,
+  audit: AutomationAudit
+): AutomationDefinition {
+  const current = requireAutomation(db, id);
+  assertAllowedAudit(audit);
+  if (expectedRevision !== current.revision) throw new Error("automation revision conflict");
+  const next: AutomationDefinition = {
+    ...current,
+    ...patch,
+    next_run_at: patch.next_run_at === undefined ? current.next_run_at : normalizeOptionalTimestamp(patch.next_run_at),
+    revision: current.revision + 1,
+    updated_at: normalizeTimestamp(audit.occurred_at)
+  };
+  assertAutomationDefinition(next);
+  db.transaction(() => {
+    db.sqlite.run(`update automation_definitions set name=?, workflow_ref=?, permission_policy_ref=?, mode=?,
+      next_run_at=?, revision=?, updated_at=? where id=? and revision=?`, [
+      next.name, next.workflow_ref, next.permission_policy_ref, next.mode, next.next_run_at,
+      next.revision, next.updated_at, id, current.revision
+    ]);
+    if ((db.sqlite.query("select changes() as count").get() as { count: number }).count !== 1) {
+      throw new Error("automation revision conflict");
+    }
+    insertEvent(db, id, "automation.definition_updated.v1", expectedRevision, current.revision, next.revision, audit, {
+      changed_fields: Object.keys(patch).sort()
+    });
+  })();
+  return requireAutomation(db, id);
 }
 
 export function reviseAutomationTrigger(
@@ -58,10 +127,12 @@ export function reviseAutomationTrigger(
   id: AutomationID,
   trigger: AutomationTriggerConfig,
   audit: AutomationAudit,
-  nextRunAt?: string | null
+  nextRunAt?: string | null,
+  expectedRevision?: number
 ): AutomationDefinition {
   const current = requireAutomation(db, id);
   assertAllowedAudit(audit);
+  if (expectedRevision !== undefined && expectedRevision !== current.revision) throw new Error("automation revision conflict");
   const version = current.active_trigger_version + 1;
   const timestamp = normalizeTimestamp(audit.occurred_at);
   const versioned: VersionedAutomationTrigger = {
@@ -109,6 +180,27 @@ export function getAutomation(db: RunnerDatabase, id: AutomationID): AutomationD
   return row ? mapDefinition(row) : null;
 }
 
+export function listAutomations(db: RunnerDatabase, filter: AutomationListFilter = {}): AutomationDefinition[] {
+  const clauses: string[] = [];
+  const values: string[] = [];
+  if (filter.project_id) {
+    clauses.push("d.scope_kind='project' and d.scope_id=?");
+    values.push(filter.project_id);
+  }
+  if (filter.status) {
+    clauses.push("d.status=?");
+    values.push(filter.status);
+  }
+  if (filter.trigger_type) {
+    clauses.push("c.trigger_type=?");
+    values.push(filter.trigger_type);
+  }
+  const where = clauses.length > 0 ? ` where ${clauses.join(" and ")}` : "";
+  return db.sqlite.query<Row, string[]>(`select d.* from automation_definitions d
+    join automation_trigger_configs c on c.automation_id=d.id and c.version=d.active_trigger_version
+    ${where} order by d.updated_at desc, d.id asc limit 500`).all(...values).map(mapDefinition);
+}
+
 export function getAutomationTrigger(
   db: RunnerDatabase,
   id: AutomationID,
@@ -124,6 +216,24 @@ export function getAutomationTrigger(
 export function listAutomationRuns(db: RunnerDatabase, id: AutomationID): AutomationRun[] {
   return db.sqlite.query<Row, [string]>(`select * from automation_runs where automation_id=? order by created_at desc, run_id desc`)
     .all(id).map(mapRun);
+}
+
+export function listAutomationEvents(db: RunnerDatabase, id: AutomationID): AutomationEvent[] {
+  return db.sqlite.query<Row, [string]>(`select * from automation_events where automation_id=?
+    order by occurred_at desc, event_id desc`).all(id).map(mapEvent);
+}
+
+export function recordAutomationEvent(
+  db: RunnerDatabase,
+  id: AutomationID,
+  eventType: string,
+  audit: AutomationAudit,
+  payload: Record<string, unknown> = {}
+): AutomationEvent {
+  const current = requireAutomation(db, id);
+  assertAllowedAudit(audit);
+  insertEvent(db, id, eventType, current.revision, current.revision, current.revision, audit, payload);
+  return listAutomationEvents(db, id).find((event) => event.event_id === audit.event_id)!;
 }
 
 export function recordAutomationRun(
@@ -232,6 +342,18 @@ function mapRun(row: Row): AutomationRun {
     automation_id: text(row.automation_id) as AutomationID, completed_at: nullableText(row.completed_at),
     created_at: text(row.created_at), idempotency_key: text(row.idempotency_key), requested_at: text(row.requested_at),
     run_id: text(row.run_id), status: text(row.status) as AutomationRunStatus, summary: JSON.parse(text(row.summary_json)), trigger_version: number(row.trigger_version)
+  };
+}
+
+function mapEvent(row: Row): AutomationEvent {
+  return {
+    actor_id: text(row.actor_id), actor_kind: text(row.actor_kind) as AutomationEvent["actor_kind"],
+    after_revision: number(row.after_revision), automation_id: text(row.automation_id) as AutomationID,
+    before_revision: number(row.before_revision), correlation_id: text(row.correlation_id), event_id: text(row.event_id),
+    event_type: text(row.event_type), expected_revision: number(row.expected_revision),
+    gate_authority: text(row.gate_authority) as AutomationEvent["gate_authority"],
+    gate_decision: text(row.gate_decision) as AutomationEvent["gate_decision"], gate_policy_ref: text(row.gate_policy_ref),
+    occurred_at: text(row.occurred_at), payload: JSON.parse(text(row.payload_json)), reason: text(row.reason)
   };
 }
 

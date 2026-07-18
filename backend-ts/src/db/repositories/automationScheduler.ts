@@ -1,7 +1,7 @@
 import type { RunnerDatabase } from "../database.ts";
-import { getAutomation, getAutomationTrigger } from "./automations.ts";
+import { getAutomation, getAutomationTrigger, recordAutomationEvent } from "./automations.ts";
 import { upsertPiGuardianAlert } from "./pi.ts";
-import type { AutomationDefinition, AutomationID, AutomationRun, VersionedAutomationTrigger } from "../../domain/automation/contracts.ts";
+import type { AutomationAudit, AutomationDefinition, AutomationID, AutomationRun, VersionedAutomationTrigger } from "../../domain/automation/contracts.ts";
 
 type Row = Record<string, unknown>;
 
@@ -41,6 +41,37 @@ export function claimDueAutomationRuns(
     return { claimed, dead_lettered: recovered, skipped_misfires: skipped };
   });
   return scan.immediate(now.toISOString());
+}
+
+export function enqueueAutomationRunNow(
+  db: RunnerDatabase,
+  id: AutomationID,
+  expectedRevision: number,
+  audit: AutomationAudit,
+  now = new Date()
+): AutomationRun {
+  const definition = getAutomation(db, id);
+  if (!definition) throw new Error(`automation ${id} not found`);
+  if (definition.revision !== expectedRevision) throw new Error("automation revision conflict");
+  if (definition.status !== "active") throw new Error("only active automation can run now");
+  const trigger = getAutomationTrigger(db, id);
+  if (!trigger) throw new Error("automation trigger is unavailable");
+  const slot = now.toISOString();
+  const suffix = audit.event_id.replace(/[^a-zA-Z0-9._:-]/g, "-").slice(-96);
+  const run: ClaimedAutomationRun = {
+    ...queuedRun(definition, slot, now),
+    idempotency_key: `${definition.idempotency_namespace}:manual:${suffix}`,
+    run_id: `automation-run:${definition.id.slice("automation:".length)}:manual:${suffix}`,
+    trigger_version: trigger.version
+  };
+  db.transaction(() => {
+    if (!insertRun(db, run, { detail: "operator requested run now", source: "automation_ui" })) {
+      throw new Error("automation run-now request already exists");
+    }
+    appendRunEvent(db, run, "automation.run_queued.v1", now, "operator requested run now");
+    recordAutomationEvent(db, id, "automation.triggered.v1", audit, { run_id: run.run_id, trigger: "manual" });
+  })();
+  return { ...run, summary: { detail: "operator requested run now", source: "automation_ui" } };
 }
 
 export function completeAutomationRun(

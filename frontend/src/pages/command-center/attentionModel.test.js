@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { attentionActionPayload, attentionView, groupAttentionByPriority } from './attentionModel.js';
+import { approvalIDFromAttention, attentionActionPayload, attentionView, groupAttentionByPriority } from './attentionModel.js';
 
 const ITEM = { id: 'xw:attention:pi_guardian_alerts:alert-1', priority: 'p0', revision: 3, status: 'open', type: 'connection_issue' };
 
@@ -33,6 +33,14 @@ test('Attention commands carry a human allow gate, revision, audit identifiers, 
   assert.equal(attentionActionPayload(ITEM, 'snooze', input).snoozed_until, '2026-07-17T09:00:00.000Z');
 });
 
+test('finds Approval authority refs for inline Command Center review', () => {
+  assert.equal(approvalIDFromAttention({ source_refs: [
+    { authority: 'pi_guardian_alerts', local_id: 'alert-1' },
+    { authority: 'pi_approval_requests', local_id: 'approval-1' }
+  ] }), 'approval-1');
+  assert.equal(approvalIDFromAttention(ITEM), '');
+});
+
 test('Command Center Attention has grouped cards, source deep links, empty state, and post-action refresh', () => {
   const page = readFileSync(new URL('./AttentionSection.jsx', import.meta.url), 'utf8');
   const dashboard = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
@@ -44,6 +52,10 @@ test('Command Center Attention has grouped cards, source deep links, empty state
   assert.match(page, /当前没有需要关注的事项/);
   assert.match(page, /navigateTo\?\.\('attention-inbox'\)/);
   assert.match(page, /href=\{item\.links\?\.self\}/);
+  assert.match(page, /ApprovalDetail/);
+  assert.match(page, /resolveApproval/);
+  assert.match(page, /subscribeToEvents/);
+  assert.match(page, /Attention 类型筛选/);
   assert.match(api, /\/api\/command-center\/attention\/\$\{encodeURIComponent\(id\)\}\/actions/);
   assert.match(dashboard, /<AttentionSection navigateTo=\{navigateTo\} \/>/);
 });

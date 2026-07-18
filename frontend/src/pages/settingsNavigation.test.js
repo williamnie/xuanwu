@@ -20,20 +20,19 @@ test('Settings exposes five primary tabs and keeps runtime details in Advanced',
     'model-runtime',
     'mcp',
     'skills',
-    'automations',
     'memory',
     'activity',
     'policies',
   ]);
 });
 
-test('Settings deterministically migrates all nine legacy tabs', () => {
+test('Settings migrates configuration tabs but excludes product work queues', () => {
   assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'models-agents' });
   assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'advanced', tab: 'runtime' });
   assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'primary', tab: 'connections' });
   assert.deepEqual(resolveSettingsRoute('skills'), { tier: 'advanced', tab: 'skills' });
-  assert.deepEqual(resolveSettingsRoute('automations'), { tier: 'advanced', tab: 'automations' });
-  assert.deepEqual(resolveSettingsRoute('approvals'), { tier: 'primary', tab: 'permissions' });
+  assert.deepEqual(resolveSettingsRoute('automations'), { tier: 'primary', tab: 'general' });
+  assert.deepEqual(resolveSettingsRoute('approvals'), { tier: 'primary', tab: 'general' });
   assert.deepEqual(resolveSettingsRoute('memory'), { tier: 'advanced', tab: 'memory' });
   assert.deepEqual(resolveSettingsRoute('activity'), { tier: 'advanced', tab: 'activity' });
   assert.deepEqual(resolveSettingsRoute('policies'), { tier: 'advanced', tab: 'policies' });

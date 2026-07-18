@@ -72,6 +72,8 @@ export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   'pi-chat': 'ask-xuanwu',
   sessions: 'runs',
   cron: 'automations',
+  'pi-automations': 'automations',
+  'pi-approvals': 'command-center',
   'pi-connectors': 'connections',
 });
 
@@ -119,20 +121,6 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     label: 'Skills',
     title: 'Skills',
     description: '查看 intake/domain skill、依赖工具、schema 与运行历史。'
-  },
-  {
-    page: 'pi-automations',
-    tab: 'automations',
-    label: 'Automations',
-    title: 'Automations',
-    description: '预留 continuous intake、manual run、schedule 与 webhook 规则入口。'
-  },
-  {
-    page: 'pi-approvals',
-    tab: 'approvals',
-    label: 'Approvals',
-    title: 'Approvals',
-    description: '集中处理 action proposal、外部写操作与高风险工具调用确认。'
   },
   {
     page: 'pi-memory',

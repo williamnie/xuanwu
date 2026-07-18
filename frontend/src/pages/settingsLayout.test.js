@@ -10,7 +10,6 @@ const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsP
 const skillsRuntimeSource = readFileSync(new URL('./SkillsRuntimePanel.jsx', import.meta.url), 'utf8');
 const activityTimelineSource = readFileSync(new URL('./ActivityTimelinePanel.jsx', import.meta.url), 'utf8');
 const sourcePoliciesSource = readFileSync(new URL('./SourcePoliciesPanel.jsx', import.meta.url), 'utf8');
-const automationsRuntimeSource = readFileSync(new URL('./AutomationsRuntimePanel.jsx', import.meta.url), 'utf8');
 const assistantApiSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 const automationApiSource = readFileSync(new URL('../api/automation.js', import.meta.url), 'utf8');
 const connectorsApiSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
@@ -25,7 +24,7 @@ test('Settings renders five primary sections and gates internal panels behind Ad
   for (const tab of ['general', 'models-agents', 'connections', 'permissions', 'notifications']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
-  for (const tab of ['runtime', 'model-runtime', 'mcp', 'skills', 'automations', 'memory', 'activity', 'policies']) {
+  for (const tab of ['runtime', 'model-runtime', 'mcp', 'skills', 'memory', 'activity', 'policies']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
   assert.match(sectionsSource, /tier === 'advanced'/);
@@ -54,7 +53,7 @@ test('Settings primary IA includes project settings without duplicating its sour
   assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
   assert.doesNotMatch(placeholderSource, /Runner Brain/);
   assert.match(sectionsSource, /Skills/);
-  assert.match(sectionsSource, /Automations/);
+  assert.match(sectionsSource, /Command Center/);
   assert.match(sectionsSource, /Memory/);
   assert.match(sectionsSource, /Activity/);
   assert.match(sectionsSource, /Policies/);
@@ -78,9 +77,11 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
 
-  for (const route of ['pi-overview', 'pi-connectors', 'pi-skills', 'pi-automations', 'pi-approvals', 'pi-memory', 'pi-activity', 'pi-policies']) {
+  for (const route of ['pi-overview', 'pi-connectors', 'pi-skills', 'pi-memory', 'pi-activity', 'pi-policies']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
+  assert.match(modulesSource, /'pi-automations': 'automations'/);
+  assert.match(modulesSource, /'pi-approvals': 'command-center'/);
   for (const route of ['command-center', 'ask-xuanwu', 'work', 'runs', 'handoffs', 'automations', 'projects', 'connections', 'settings']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
@@ -170,13 +171,8 @@ test('Policies tab manages source policies from API', () => {
   assert.doesNotMatch(sourcePoliciesSource, /window\.confirm|window\.alert/);
 });
 
-test('Automations tab shows scheduler status and pause controls from API', () => {
-  assert.match(sectionsSource, /AutomationsRuntimePanel/);
-  assert.match(automationApiSource, /getPiAutomations/);
-  assert.match(automationApiSource, /updatePiAutomation/);
-  assert.match(automationsRuntimeSource, /last_status/);
-  assert.match(automationsRuntimeSource, /next_run_at/);
-  assert.match(automationsRuntimeSource, /error/);
-  assert.doesNotMatch(sectionsSource, /AutomationsPlaceholder/);
-  assert.doesNotMatch(automationsRuntimeSource, /window\.confirm|window\.alert/);
+test('Automations and Approval queues live outside Settings', () => {
+  assert.doesNotMatch(sectionsSource, /AutomationsRuntimePanel/);
+  assert.doesNotMatch(sectionsSource, /activeTab === 'automations'/);
+  assert.match(sectionsSource, /待处理 Approval 已统一放在 Command Center/);
 });

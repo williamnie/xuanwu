@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RunnerDatabase } from "../db/database.ts";
+import { AUTOMATION_API_AUTHORITY, registerAutomationRoutes } from "./automationApi.ts";
 import {
   COMMAND_CENTER_COMPATIBILITY_POLICY,
   COMMAND_CENTER_SUMMARY_CONTRACT,
@@ -20,6 +21,10 @@ describe("read API route contracts", () => {
     expect(READ_API_ROUTE_REGISTRY.map(({ id, responsibility }) => ({ id, responsibility })))
       .toMatchInlineSnapshot(`
         [
+          {
+            "id": "automations",
+            "responsibility": "domain",
+          },
           {
             "id": "command-center",
             "responsibility": "projection",
@@ -72,9 +77,10 @@ describe("read API route contracts", () => {
       `);
   });
 
-  test("locks Command Center method, path, and read-only authority contracts", () => {
+  test("locks Command Center read and audited Attention command contracts", () => {
     expect(captureRoutes(registerCommandCenterRoutes)).toEqual([
-      "GET /api/command-center/summary"
+      "GET /api/command-center/summary",
+      "POST /api/command-center/attention/:id/actions/:action"
     ]);
     expect(COMMAND_CENTER_SUMMARY_CONTRACT).toBe("xw.command-center.summary.v1");
     expect(COMMAND_CENTER_COMPATIBILITY_POLICY).toMatchObject({
@@ -82,6 +88,25 @@ describe("read API route contracts", () => {
       dual_write: expect.stringContaining("none"),
       handoff_read_authority: "issue_events:handoff.*.v1",
       work_read_authority: "issues-via-Work-adapter"
+    });
+  });
+
+  test("locks native Automation methods and single-authority contract", () => {
+    expect(captureRoutes(registerAutomationRoutes)).toEqual([
+      "GET /api/automations",
+      "GET /api/automations/:id",
+      "PATCH /api/automations/:id",
+      "PATCH /api/automations/:id/trigger",
+      "POST /api/automations",
+      "POST /api/automations/:id/run-now",
+      "POST /api/automations/:id/status"
+    ]);
+    expect(AUTOMATION_API_AUTHORITY).toMatchObject({
+      definition: "automation_definitions",
+      dual_read: "none",
+      dual_write: "none",
+      runs: "automation_runs",
+      final_delete_gate: expect.stringContaining("P11/G7")
     });
   });
 

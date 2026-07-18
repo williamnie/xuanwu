@@ -10,4 +10,9 @@ export const commandCenterApi = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  getApproval: (id) => request(`/api/pi/approval-requests/${encodeURIComponent(id)}`),
+  resolveApproval: (id, payload) => request(`/api/pi/approval-requests/${encodeURIComponent(id)}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
 };

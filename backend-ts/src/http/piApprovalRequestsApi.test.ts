@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getPiApprovalRequest, upsertPiApprovalRequest } from "../db/repositories/pi.ts";
+import { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -15,14 +16,19 @@ afterEach(async () => {
 });
 
 describe("PI approval requests API", () => {
-  test("lists open provider approvals and resolves Codex approval once from the panel", async () => {
+  test("lists approval detail and handles approve/deny exactly once from Command Center", async () => {
     const db = await fixtureDatabase();
     const resolutions: Array<{ decision: string; id: string; scope: string }> = [];
+    const bus = new EventBus();
+    const events: string[] = [];
+    const stop = bus.observe(event => events.push(event.type));
     try {
       createApprovalRequest(db, "approval-panel-1");
-      const router = createDefaultRouter({ database: db, providers: { codex: approvalProvider(resolutions) } });
+      createApprovalRequest(db, "approval-panel-deny");
+      const router = createDefaultRouter({ bus, database: db, providers: { codex: approvalProvider(resolutions) } });
 
       const listed = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests?status=open`));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-1`));
       const resolved = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-1/resolve`, {
         body: JSON.stringify({ decision: "approve", scope: "turn" }),
         headers: { "content-type": "application/json" },
@@ -33,16 +39,32 @@ describe("PI approval requests API", () => {
         headers: { "content-type": "application/json" },
         method: "POST"
       }));
+      const denied = await router.handle(new Request(`${BASE_URL}/api/pi/approval-requests/approval-panel-deny/resolve`, {
+        body: JSON.stringify({ decision: "deny", scope: "turn" }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      }));
 
       expect(listed.status).toBe(200);
-      expect(await listed.json()).toEqual([expect.objectContaining({ approval_id: "approval-panel-1" })]);
+      expect(await listed.json()).toEqual(expect.arrayContaining([
+        expect.objectContaining({ approval_id: "approval-panel-1" }),
+        expect.objectContaining({ approval_id: "approval-panel-deny" })
+      ]));
+      expect(await detail.json()).toMatchObject({ approval_id: "approval-panel-1", status: "delivered" });
       expect(resolved.status).toBe(200);
       expect(await resolved.json()).toMatchObject({ ok: true, status: "approved" });
       expect(duplicate.status).toBe(200);
       expect(await duplicate.json()).toMatchObject({ ok: true, status: "approved" });
-      expect(resolutions).toEqual([{ decision: "approve", id: "approval-panel-1", scope: "turn" }]);
+      expect(await denied.json()).toMatchObject({ ok: true, status: "rejected" });
+      expect(resolutions).toEqual([
+        { decision: "approve", id: "approval-panel-1", scope: "turn" },
+        { decision: "deny", id: "approval-panel-deny", scope: "turn" }
+      ]);
       expect(getPiApprovalRequest(db, "approval-panel-1")).toMatchObject({ status: "approved" });
+      expect(getPiApprovalRequest(db, "approval-panel-deny")).toMatchObject({ status: "rejected" });
+      expect(events).toContain("approval.resolved");
     } finally {
+      stop();
       db.close();
     }
   });

@@ -1,3 +1,4 @@
+import { registerAutomationRoutes } from "./automationApi.ts";
 import { registerCommandCenterRoutes } from "./commandCenterApi.ts";
 import { registerEventSummaryRoutes } from "./eventSummariesApi.ts";
 import { registerEvidenceRoutes } from "./evidenceApi.ts";
@@ -21,6 +22,7 @@ type ReadApiRouteRegistration = {
 };
 
 export const READ_API_ROUTE_REGISTRY = [
+  { id: "automations", register: registerAutomationRoutes, responsibility: "domain" },
   { id: "command-center", register: registerCommandCenterRoutes, responsibility: "projection" },
   { id: "evidence", register: registerEvidenceRoutes, responsibility: "domain" },
   { id: "event-summaries", register: registerEventSummaryRoutes, responsibility: "projection" },

@@ -39,7 +39,7 @@ const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
 const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
 const AttentionInbox = lazy(() => import('./pages/AttentionInbox'));
-const Cron = lazy(() => import('./pages/Cron'));
+const Automations = lazy(() => import('./pages/Automations'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
@@ -58,7 +58,7 @@ const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
 ]);
 
 const PAGE_DATA_SLICES = {
-  automations: ['cronTasks'],
+  automations: ['projects'],
   'command-center': ['projects', 'issues'],
   issues: ['issues'],
   projects: ['projects', 'issues'],
@@ -396,7 +396,7 @@ export default function App() {
             ) : currentPage === 'projects' ? (
               <Projects />
             ) : currentPage === 'automations' ? (
-              <Cron />
+              <Automations />
             ) : currentPage === 'connections' ? (
               <Settings initialTab="connectors" pageTitle={PRODUCT_NAV_LABELS.connections} navigateTo={navigateTo} />
             ) : currentPage === 'settings' ? (

@@ -9,7 +9,6 @@ import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import RunnerSettingsPanel from './RunnerSettingsPanel';
 import SkillsRuntimePanel from './SkillsRuntimePanel';
 import SourcePoliciesPanel from './SourcePoliciesPanel';
-import AutomationsRuntimePanel from './AutomationsRuntimePanel';
 import { SettingsPlaceholderPanel } from './AssistantSettingsPlaceholders';
 import { RestartAction } from './SettingsChrome';
 
@@ -83,8 +82,8 @@ function PermissionsSettingsTab() {
     <SettingsPlaceholderPanel
       eyebrow="Permissions"
       title="权限与审批"
-      description="日常权限入口保留确定性审批边界；底层 source policy 与自动化控制位于 Advanced。"
-      items={['LLM 输出不会直接授予工具或外部写权限。', '后续权限矩阵继续复用现有 approval 与 policy 能力。']}
+      description="日常权限入口保留确定性审批边界；待处理 Approval 已统一放在 Command Center。"
+      items={['LLM 输出不会直接授予工具或外部写权限。', '权限矩阵继续复用现有 approval 与 policy 能力，不在 Settings 复制审批队列。']}
     />
   );
 }
@@ -106,7 +105,6 @@ function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
       {activeTab === 'model-runtime' && <PiAgentSettingsPanel advanced />}
       {activeTab === 'mcp' && <AdvancedConnectionsSettingsTab />}
       {activeTab === 'skills' && <AdvancedSkillsSettingsTab />}
-      {activeTab === 'automations' && <AutomationsRuntimePanel />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
       {activeTab === 'policies' && <SourcePoliciesPanel />}

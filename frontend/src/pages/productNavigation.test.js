@@ -48,6 +48,8 @@ test('legacy page ids redirect into canonical product routes without replacing h
     'pi-chat': 'ask-xuanwu',
     sessions: 'runs',
     cron: 'automations',
+    'pi-automations': 'automations',
+    'pi-approvals': 'command-center',
     'pi-connectors': 'connections',
   });
   for (const [legacyPage, canonicalPage] of Object.entries(PRODUCT_COMPAT_ROUTE_REDIRECTS)) {
@@ -65,6 +67,6 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
   assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat navigateTo=\{navigateTo\} initialConversationId=\{selectedPiConversationId\} \/>/);
-  assert.match(appSource, /currentPage === 'automations'[\s\S]*<Cron \/>/);
+  assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
   assert.match(appSource, /currentPage === 'connections'[\s\S]*initialTab="connectors"/);
 });
