@@ -3,6 +3,7 @@ import { basename, delimiter, isAbsolute, join, relative } from "node:path";
 import { bunBuildInfo } from "../buildInfo.ts";
 import type { RunnerConfig, ProviderRuntimeConfig } from "../config/env.ts";
 import { codexAppIntegrationStatus } from "../config/codexServer.ts";
+import { buildStaticConnectorDiagnostics } from "../integrations/connectorDiagnostics.ts";
 import { feishuConnectorStatus } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -20,6 +21,7 @@ type SystemStatusContext = {
   database: RunnerDatabase;
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   startedAt: Date;
+  webhookSigningSecret?: string;
 };
 
 type CheckStatus = { ok: boolean; error?: string };
@@ -36,6 +38,11 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     codex: codexStatus(context.config),
     providers,
     connectors: connectorStatus(context.config, context.feishuReceiverStatus?.()),
+    connector_health: buildStaticConnectorDiagnostics({
+      config: context.config,
+      database: context.database,
+      webhookSigningSecret: context.webhookSigningSecret
+    }),
     event_projection: eventProjectionStatus(context.database),
     run_progress_projection: runProgressProjectionStatus(context.database),
     runner: runnerStatus(context.database)

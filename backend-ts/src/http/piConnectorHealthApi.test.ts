@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
+import { createDatabaseSecretService } from "../security/secrets/service.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const FIXTURE_TOKEN = "FIXTURE_CONNECTOR_TOKEN";
@@ -106,6 +107,63 @@ describe("PI connector health API", () => {
           unavailable_diagnostic: "browser_unavailable"
         })
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("tests a local webhook connection and audits the result", async () => {
+    const { db } = await openFixtureRuntime();
+    try {
+      const config = buildConfig({ stateDir: dirname(db.path) });
+      const router = createDefaultRouter({ config, database: db, webhookSigningSecret: "webhook-fixture-secret" });
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/connectors/webhook/test-connection`, {
+        body: JSON.stringify({ reason: "fixture test" }), method: "POST"
+      }));
+      const body = await response.json() as { result: { ok: boolean; state: string } };
+      const audit = db.sqlite.query<{ payload_json: string; result_json: string }, []>(
+        "select payload_json, result_json from pi_action_events where event_type='connector.tested' order by id desc limit 1"
+      ).get();
+
+      expect(response.status).toBe(200);
+      expect(body.result).toMatchObject({ ok: true, state: "healthy" });
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toEqual({ connector_id: "webhook" });
+      expect(audit?.result_json).not.toContain("webhook-fixture-secret");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("revokes only a declared secret ref, clears runtime material and returns no value", async () => {
+    const { db } = await openFixtureRuntime();
+    try {
+      const secrets = createDatabaseSecretService(db);
+      const metadata = secrets.put("integrations/github/token", "github-fixture-secret", "fixture", "setup");
+      const config = buildConfig({
+        githubToken: "github-fixture-secret",
+        githubTokenRef: metadata.ref,
+        stateDir: dirname(db.path)
+      });
+      const router = createDefaultRouter({ config, database: db });
+      const diagnosticResponse = await router.handle(new Request(`${BASE_URL}/api/pi/connectors/diagnostics`));
+      const diagnosticText = await diagnosticResponse.text();
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/connectors/github-events/revoke`, {
+        body: JSON.stringify({ reason: "fixture revoke", secret_ref: metadata.ref }), method: "POST"
+      }));
+      const text = await response.text();
+      const body = JSON.parse(text) as { secret: { status: string } };
+
+      expect(diagnosticResponse.status).toBe(200);
+      expect(JSON.parse(diagnosticText)).toMatchObject({ schema_version: "xuanwu.connector-diagnostics.v1" });
+      expect(diagnosticText).not.toContain("github-fixture-secret");
+      expect(response.status).toBe(200);
+      expect(body.secret.status).toBe("revoked");
+      expect(config.integrations.github.token).toBe("");
+      expect(() => secrets.resolve(metadata.ref)).toThrow("secret is revoked");
+      expect(text).not.toContain("github-fixture-secret");
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from pi_action_events where event_type='secret.revoked'"
+      ).get()?.count).toBe(1);
     } finally {
       db.close();
     }

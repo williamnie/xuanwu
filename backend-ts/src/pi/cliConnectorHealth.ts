@@ -6,8 +6,10 @@ import type { ToolResult, ToolResultError } from "./toolProviderEnvelope.ts";
 export type CliConnectorHealthState = "configured" | "disabled" | "misconfigured" | "error";
 
 export type CliConnectorHealthOptions = {
+  connectorID?: string;
   env?: Record<string, string | undefined>;
   manifestDirs?: string[];
+  probe?: boolean;
 };
 
 export type CliConnectorHealthReport = {
@@ -27,7 +29,12 @@ export async function checkCliConnectorHealth(
     env: options.env ?? process.env,
     manifestDirs: options.manifestDirs ?? []
   });
-  const connectors = await Promise.all(registry.connectors.map((ref) => connectorHealth(ref, options.env)));
+  const refs = options.connectorID
+    ? registry.connectors.filter((ref) => ref.provider.id === options.connectorID)
+    : registry.connectors;
+  const connectors = await Promise.all(
+    refs.map((ref) => connectorHealth(ref, options.env, options.probe))
+  );
   return {
     connectors: [...connectors, ...diagnosticConnectors(registry.diagnostics)],
     diagnostics: registry.diagnostics.map(publicDiagnostic)
@@ -36,9 +43,15 @@ export async function checkCliConnectorHealth(
 
 async function connectorHealth(
   ref: CliConnectorRef,
-  env: Record<string, string | undefined> | undefined
+  env: Record<string, string | undefined> | undefined,
+  probe = true
 ): Promise<Record<string, unknown>> {
   if (ref.missingRequiredEnv.length > 0) return staticConnectorHealth(ref, env);
+  if (!probe) return healthEntry(ref, env, "configured", {
+    checked: false,
+    ok: true,
+    status: "not_tested"
+  });
   const result = await runCliTool({
     command: ref.manifest.health,
     cwd: ref.manifestDir,
@@ -81,8 +94,24 @@ function healthEntry(
     manifest_file: basename(ref.manifestPath),
     command_count: ref.manifest.commands.length,
     env: envStatus(ref, env),
+    permissions: ref.manifest.commands.map((command) => ({
+      authorization: command.permission === "read" ? "registry_required" : "action_gate_required",
+      capability_id: command.name,
+      direction: command.permission
+    })),
+    secret_refs: (ref.manifest.env ?? []).filter((item) => item.secret === true).map((item) => ({
+      configured: cleanString((env ?? process.env)[item.name]) !== "",
+      name: item.name,
+      ref: `env://${item.name}`,
+      required: item.required === true,
+      revocable: false,
+      status: cleanString((env ?? process.env)[item.name]) === "" ? "missing" : "active"
+    })),
     missing_required: ref.missingRequiredEnv,
     health,
+    revoke: { supported: false },
+    source_of_truth: "CLI connector manifest, environment metadata and tool_call_audit",
+    test_connection: { supported: true },
     summary: { configured: status === "configured", ...summary }
   };
 }

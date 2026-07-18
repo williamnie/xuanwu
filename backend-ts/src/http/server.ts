@@ -116,7 +116,8 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       database: runtime.database,
       interruptTimeoutMs: runtime.interruptTimeoutMs,
       piOpenAICodexOAuthLogin: runtime.piOpenAICodexOAuthLogin,
-      providers: runtime.providers
+      providers: runtime.providers,
+      webhookSigningSecret: runtime.webhookSigningSecret
     });
   }
   return router;
@@ -156,7 +157,8 @@ export function registerSystemStatusRoute(
     config: context.config,
     database: context.database,
     feishuReceiverStatus: context.feishuReceiverStatus,
-    startedAt
+    startedAt,
+    webhookSigningSecret: context.webhookSigningSecret
   };
   router.get("/api/system/status", () => json({
     ...buildSystemStatus(statusContext),

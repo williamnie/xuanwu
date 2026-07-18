@@ -151,6 +151,15 @@ describe("Bun system status endpoints", () => {
           state: "disabled"
         }
       }]);
+      expect(body.connector_health.map((connector) => connector.id)).toEqual([
+        "feishu", "webhook", "github-events", "gitlab-events", "github-issues", "gitlab-issues", "linear-issues"
+      ]);
+      expect(body.connector_health[0]).toMatchObject({
+        health: { state: "unconfigured" },
+        permissions: expect.any(Array),
+        secret_refs: expect.any(Array),
+        test_connection: { supported: true }
+      });
       expect(body.runner.running_loops).toBe(0);
       expect(body.runner.auto_run_projects).toBe(0);
       expect(body.runner.in_progress_issues).toBe(0);
@@ -435,6 +444,7 @@ type SystemStatusBody = {
   db: { ok: boolean };
   codex: Record<string, unknown>;
   connectors: Array<{ id: string } & Record<string, unknown>>;
+  connector_health: Array<{ id: string } & Record<string, unknown>>;
   event_projection: Record<string, unknown>;
   run_progress_projection: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;

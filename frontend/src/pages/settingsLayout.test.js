@@ -118,17 +118,22 @@ test('Advanced Runtime exports one redacted diagnostics bundle from existing sys
   assert.match(settingsSource, /downloadDiagnostics/);
   assert.match(settingsSource, /systemApi\.getRuntimeDoctor\(\)/);
   assert.match(settingsSource, /systemApi\.getRuntimeLogs\(120\)/);
+  assert.match(settingsSource, /connectorsApi\.getPiConnectorDiagnostics\(\)/);
   assert.match(settingsSource, /下载诊断包/);
   assert.match(runtimeDiagnosticsSource, /xuanwu\.runtime-diagnostics\.v1/);
   assert.match(runtimeDiagnosticsSource, /redactDiagnosticValue/);
   assert.doesNotMatch(settingsSource, /window\.confirm|window\.alert/);
 });
 
-test('Connectors tab shows read-only connector diagnostics from API', () => {
+test('Connections shows connector health, test and inline revoke controls from API', () => {
   assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
   assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
+  assert.match(connectorsApiSource, /testPiConnector/);
+  assert.match(connectorsApiSource, /revokePiConnectorSecret/);
   assert.match(connectorDiagnosticsSource, /connectorsApi\.getPiConnectors\(\)/);
   assert.match(connectorDiagnosticsSource, /Connector Diagnostics/);
+  assert.match(connectorDiagnosticsSource, /测试连接/);
+  assert.match(connectorDiagnosticsSource, /确认撤销/);
   assert.match(connectorDiagnosticsSource, /Connector API coming soon/);
   assert.doesNotMatch(connectorDiagnosticsSource, /window\.confirm|window\.alert/);
 });

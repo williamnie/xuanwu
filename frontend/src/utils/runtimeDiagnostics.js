@@ -2,7 +2,7 @@ import { redactRuntimeText } from './runtimeLogs.js';
 
 const SENSITIVE_KEY = /(?:authorization|token|secret|password|api[_-]?key|access[_-]?key)/i;
 
-export function buildRuntimeDiagnosticsBundle({ doctor = {}, logs = {} } = {}, generatedAt = new Date().toISOString()) {
+export function buildRuntimeDiagnosticsBundle({ connectors = {}, doctor = {}, logs = {} } = {}, generatedAt = new Date().toISOString()) {
   return redactDiagnosticValue({
     schema_version: 'xuanwu.runtime-diagnostics.v1',
     generated_at: generatedAt,
@@ -12,6 +12,7 @@ export function buildRuntimeDiagnosticsBundle({ doctor = {}, logs = {} } = {}, g
       source: 'system APIs plus client defense-in-depth',
     },
     runtime: doctor,
+    connectors,
     logs,
   });
 }

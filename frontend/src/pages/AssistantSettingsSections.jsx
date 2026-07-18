@@ -69,9 +69,10 @@ function ConnectionsSettingsTab() {
       <SettingsPlaceholderPanel
         eyebrow="Connections"
         title="已连接服务"
-        description="连接日常协作服务；MCP discovery、capability 和 connector diagnostics 已移入 Advanced。"
-        items={['飞书继续使用现有集成配置。', '连接详情与凭据读取保持后端脱敏合同。']}
+        description="统一查看连接健康、权限、最近同步、退避与凭据引用；MCP discovery 细节仍保留在 Advanced。"
+        items={['测试连接只执行只读 probe 并写入审计。', '撤销只接受当前 connector 声明的 secret ref，不提供明文读取。']}
       />
+      <ConnectorDiagnosticsPanel />
       <FeishuSettingsPanel />
     </>
   );

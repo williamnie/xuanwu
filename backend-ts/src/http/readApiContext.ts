@@ -12,4 +12,5 @@ export type ReadApiContext = {
   interruptTimeoutMs?: number;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  webhookSigningSecret?: string;
 };

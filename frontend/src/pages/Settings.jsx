@@ -1,4 +1,5 @@
 import { systemApi } from '../api/system.js';
+import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Copy, Download, RefreshCw, ServerCog } from 'lucide-react';
 import { message } from '../store/toastStore';
@@ -110,11 +111,12 @@ async function copyDoctor(setDoctorLoading) {
 async function downloadDiagnostics(setDoctorLoading) {
   setDoctorLoading(true);
   try {
-    const [doctor, logs] = await Promise.all([
+    const [doctor, logs, connectors] = await Promise.all([
       systemApi.getRuntimeDoctor(),
       systemApi.getRuntimeLogs(120),
+      connectorsApi.getPiConnectorDiagnostics(),
     ]);
-    const bundle = buildRuntimeDiagnosticsBundle({ doctor, logs });
+    const bundle = buildRuntimeDiagnosticsBundle({ connectors, doctor, logs });
     downloadText(`xuanwu-runtime-diagnostics-${safeTimestamp(bundle.generated_at)}.json`, formatRuntimeDiagnosticsBundle(bundle));
     message.success('脱敏诊断包已下载');
   } catch (err) {

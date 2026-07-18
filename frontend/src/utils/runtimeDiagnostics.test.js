@@ -5,6 +5,7 @@ import { buildRuntimeDiagnosticsBundle, formatRuntimeDiagnosticsBundle } from '.
 
 test('builds a versioned runtime diagnostics bundle with defense-in-depth redaction', () => {
   const bundle = buildRuntimeDiagnosticsBundle({
+    connectors: { connectors: [{ id: 'github-events', secret_refs: [{ ref: 'secret://integrations/github/token' }] }] },
     doctor: {
       db: { path: '<stateDir>/runner.db' },
       providers: [{ id: 'codex', api_key: 'doctor-secret' }],
@@ -21,5 +22,6 @@ test('builds a versioned runtime diagnostics bundle with defense-in-depth redact
   assert.match(text, /<stateDir>\/runner\.db/);
   assert.match(text, /\[redacted-path\]/);
   assert.match(text, /\[redacted\]/);
+  assert.match(text, /github-events/);
   assert.doesNotMatch(text, /doctor-secret|runtime-token|\/Users\/alice/);
 });

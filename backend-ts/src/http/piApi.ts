@@ -51,6 +51,7 @@ type PiApiContext = {
   database: RunnerDatabase;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  webhookSigningSecret?: string;
 };
 
 type SettingsPatch = Partial<Pick<ProjectPiSettings,

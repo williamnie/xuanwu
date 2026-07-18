@@ -3,6 +3,18 @@ import { request } from './base.js';
 export const connectorsApi = {
   getPiConnectors: () => request('/api/pi/connectors'),
 
+  getPiConnectorDiagnostics: () => request('/api/pi/connectors/diagnostics'),
+
+  testPiConnector: (id) => request(`/api/pi/connectors/${encodeURIComponent(id)}/test-connection`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: 'Settings Connections test' }),
+  }),
+
+  revokePiConnectorSecret: (id, secretRef) => request(`/api/pi/connectors/${encodeURIComponent(id)}/revoke`, {
+    method: 'POST',
+    body: JSON.stringify({ reason: 'Settings Connections revoke', secret_ref: secretRef }),
+  }),
+
   getFeishuSettings: () => request('/api/integrations/feishu/settings'),
 
   updateFeishuSettings: (settings) => request('/api/integrations/feishu/settings', {

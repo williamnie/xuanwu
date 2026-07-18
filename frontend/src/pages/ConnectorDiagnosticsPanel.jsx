@@ -1,12 +1,13 @@
 import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useState } from 'react';
-import { Cable, RefreshCw } from 'lucide-react';
+import { Cable, RefreshCw, ShieldX, TestTube2 } from 'lucide-react';
+import { message } from '../store/toastStore';
 import { PanelLoader } from '../components/TurtleLoader';
 
 const CONNECTOR_STATUSES = ['configured', 'disabled', 'misconfigured', 'error'];
 
 export default function ConnectorDiagnosticsPanel() {
-  const [state, setState] = useState({ data: null, error: '', loading: true, notice: '' });
+  const [state, setState] = useState({ busy: '', data: null, error: '', loading: true, notice: '', revoke: '' });
 
   useEffect(() => { loadConnectors(setState); }, []);
 
@@ -15,7 +16,9 @@ export default function ConnectorDiagnosticsPanel() {
     <section className="glass-card" style={{ display: 'grid', gap: '16px' }}>
       <PanelHeader loading={state.loading} onRefresh={() => loadConnectors(setState)} />
       {state.error && <div style={{ color: 'var(--error)', fontSize: '0.86rem' }}>{state.error}</div>}
-      {!state.error && <ConnectorBody connectors={connectors} loading={state.loading} notice={state.notice} />}
+      {!state.error && <ConnectorBody connectors={connectors} loading={state.loading} notice={state.notice}
+        onRevoke={(connector, ref) => revokeConnectorSecret(connector, ref, state, setState)}
+        onTest={(connector) => testConnector(connector, state, setState)} state={state} />}
     </section>
   );
 }
@@ -23,7 +26,7 @@ export default function ConnectorDiagnosticsPanel() {
 function loadConnectors(setState) {
   setState(previous => ({ ...previous, loading: true }));
   connectorsApi.getPiConnectors()
-    .then(data => setState({ data, error: '', loading: false, notice: '' }))
+    .then(data => setState(previous => ({ ...previous, data, error: '', loading: false, notice: '' })))
     .catch(error => setState(previous => ({
       ...previous,
       data: error.status === 404 ? { connectors: [] } : previous.data,
@@ -52,7 +55,7 @@ function PanelHeader({ loading, onRefresh }) {
   );
 }
 
-function ConnectorBody({ connectors, loading, notice }) {
+function ConnectorBody({ connectors, loading, notice, onRevoke, onTest, state }) {
   if (loading && connectors.length === 0) {
     return <PanelLoader label="正在检查 Connector…" />;
   }
@@ -66,7 +69,8 @@ function ConnectorBody({ connectors, loading, notice }) {
     <div style={{ display: 'grid', gap: '12px' }}>
       <ConnectorSummary connectors={connectors} />
       <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-        {connectors.map(connector => <ConnectorCard connector={connector} key={`${connector.kind || 'connector'}:${connector.id}`} />)}
+        {connectors.map(connector => <ConnectorCard connector={connector} key={`${connector.kind || 'connector'}:${connector.id}`}
+          onRevoke={onRevoke} onTest={onTest} state={state} />)}
       </div>
     </div>
   );
@@ -85,8 +89,12 @@ function ConnectorSummary({ connectors }) {
   );
 }
 
-function ConnectorCard({ connector }) {
+function ConnectorCard({ connector, onRevoke, onTest, state }) {
   const status = connectorStatus(connector);
+  const revocable = (connector.secret_refs || []).find(item => item.revocable);
+  const revokeKey = revocable ? `${connector.id}::${revocable.ref}` : '';
+  const testing = state.busy === `test:${connector.id}`;
+  const revoking = state.busy === `revoke:${connector.id}`;
   return (
     <div style={connectorCardStyle()}>
       <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
@@ -100,10 +108,31 @@ function ConnectorCard({ connector }) {
       </div>
       <ConnectorMeta label="Health" ok={status === 'configured'} value={healthText(connector)} />
       <ConnectorMeta label="Missing" ok={(connector.missing_required || []).length === 0} value={missingText(connector)} />
-      <ConnectorMeta label="Manifest" ok value={connector.manifest_file || connector.summary?.callback_path || 'n/a'} />
+      <ConnectorMeta label="Manifest" ok value={connector.manifest_file || connector.summary?.callback_path || (connector.manifest?.contract_version ? `contract v${connector.manifest.contract_version}` : 'n/a')} />
+      <ConnectorMeta label="最近同步" ok={Boolean(connector.health?.last_sync_at)} value={connector.health?.last_sync_at || '尚无同步记录'} />
+      <ConnectorMeta label="权限" ok value={permissionText(connector)} />
+      <ConnectorMeta label="退避" ok={!connector.health?.backoff?.blocked} value={backoffText(connector)} />
       <ConnectorEnv env={connector.env || []} />
+      <SecretRefs refs={connector.secret_refs || []} />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        {connector.test_connection?.supported && <button className="btn btn-secondary" disabled={testing || connector.health?.backoff?.blocked}
+          onClick={() => onTest(connector)} type="button"><TestTube2 size={14} />{testing ? '测试中…' : '测试连接'}</button>}
+        {revocable && state.revoke !== revokeKey && <button className="btn btn-secondary" disabled={revoking}
+          onClick={() => onRevoke(connector, revocable)} type="button"><ShieldX size={14} />撤销凭据</button>}
+        {revocable && state.revoke === revokeKey && <>
+          <button className="btn btn-danger" disabled={revoking} onClick={() => onRevoke(connector, revocable)} type="button">
+            {revoking ? '撤销中…' : '确认撤销'}</button>
+          <button className="btn btn-secondary" disabled={revoking} onClick={() => onRevoke(null, null)} type="button">取消</button>
+        </>}
+      </div>
     </div>
   );
+}
+
+function SecretRefs({ refs }) {
+  if (!refs.length) return null;
+  const value = refs.map(item => `${item.name}: ${item.status}${item.version ? ` v${item.version}` : ''}`).join(' · ');
+  return <ConnectorMeta label="Secret refs" ok={refs.every(item => !item.required || item.status === 'active' || item.status === 'legacy')} value={value} />;
 }
 
 function ConnectorMeta({ label, ok, value }) {
@@ -138,9 +167,57 @@ function connectorStatus(connector) {
 
 function healthText(connector) {
   const health = connector.health || {};
+  if (health.state) return health.last_error?.message || health.state;
   if (health.checked === false) return health.error?.message || 'skipped';
   if (health.status) return health.error?.message || health.status;
   return connector.summary?.error || 'static check';
+}
+
+function permissionText(connector) {
+  const permissions = connector.permissions || [];
+  if (!permissions.length) return '未声明';
+  return permissions.map(item => `${item.capability_id} (${item.authorization})`).join(' · ');
+}
+
+function backoffText(connector) {
+  const backoff = connector.health?.backoff;
+  if (!backoff?.blocked) return '未退避';
+  return `第 ${backoff.attempt} 次失败，${backoff.retry_at} 后重试`;
+}
+
+async function testConnector(connector, state, setState) {
+  setState({ ...state, busy: `test:${connector.id}` });
+  try {
+    const response = await connectorsApi.testPiConnector(connector.id);
+    message[response.result?.ok ? 'success' : 'error'](response.result?.ok ? '连接测试通过' : response.result?.error?.message || '连接测试失败');
+    await loadConnectors(setState);
+    setState(previous => ({ ...previous, busy: '' }));
+  } catch (error) {
+    message.error(error.message || '连接测试失败');
+    setState(previous => ({ ...previous, busy: '' }));
+  }
+}
+
+async function revokeConnectorSecret(connector, ref, state, setState) {
+  if (!connector || !ref) {
+    setState(previous => ({ ...previous, revoke: '' }));
+    return;
+  }
+  const key = `${connector.id}::${ref.ref}`;
+  if (state.revoke !== key) {
+    setState(previous => ({ ...previous, revoke: key }));
+    return;
+  }
+  setState(previous => ({ ...previous, busy: `revoke:${connector.id}` }));
+  try {
+    await connectorsApi.revokePiConnectorSecret(connector.id, ref.ref);
+    message.success('凭据已撤销并从当前运行态失效');
+    await loadConnectors(setState);
+    setState(previous => ({ ...previous, busy: '', revoke: '' }));
+  } catch (error) {
+    message.error(error.message || '撤销凭据失败');
+    setState(previous => ({ ...previous, busy: '' }));
+  }
 }
 
 function missingText(connector) {
