@@ -296,7 +296,7 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(prompt).toContain("最多追问一个关键问题");
       expect(prompt).toContain('"id": "codex-issue-runner"');
       expect(prompt).not.toContain('"id": "verification-before-completion"');
-      expect(prompt).toContain("Controlled PI resource summary:");
+      expect(prompt).toContain("Controlled Supervisor resource summary:");
       expect(prompt).toContain("<name>codex-issue-runner</name>");
       expect(prompt).not.toContain("<name>pi-domain-proposal</name>");
       expect(prompt).toContain("Issue-specific PI context");

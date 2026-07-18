@@ -61,8 +61,8 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
       "backend-ts/src/http/piActionsAuditApi.test.ts"
     ],
     fixture_projects: 1,
-    frontend_route: "#/attention-inbox",
-    frontend_tests: ["frontend/src/pages/AttentionInbox.proposals.test.js"],
+    frontend_route: "#/command-center",
+    frontend_tests: ["frontend/src/pages/command-center/attentionModel.test.js"],
     id: "GJ-04",
     name: "远程控制"
   },
@@ -76,7 +76,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
     fixture_projects: 1,
     frontend_route: "#/automations",
     frontend_tests: [
-      "frontend/src/pages/AttentionInbox.proposals.test.js",
+      "frontend/src/pages/command-center/attentionModel.test.js",
       "frontend/src/pages/projectHold.test.js"
     ],
     id: "GJ-05",

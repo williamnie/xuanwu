@@ -134,7 +134,7 @@ describe("Xuanwu Supervisor runtime prompt", () => {
         project: projectRecord("/tmp/xuanwu-prompt-project")
       }, db);
 
-      expect(prompt).toContain("Confirmed PI memory:");
+      expect(prompt).toContain("Confirmed Supervisor memory:");
       expect(prompt).toContain("Project-level Supervisor preference");
       expect(prompt).toContain("Global Supervisor behavior");
       expect(prompt).not.toContain("Old chat conversation memory");

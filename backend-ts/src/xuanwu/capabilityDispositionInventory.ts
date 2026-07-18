@@ -477,6 +477,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/codex/approvals/:id/resolve", family: "run-session-drilldown" },
   { method: "GET", path: "/api/codex/models", family: "system-observability" },
   { method: "POST", path: "/api/commands", family: "run-session-drilldown" },
+  { method: "GET", path: "/api/compatibility/legacy", family: "system-observability" },
+  { method: "POST", path: "/api/compatibility/legacy/usage", family: "system-observability" },
   { method: "GET", path: "/api/cron-tasks", family: "automation" },
   { method: "POST", path: "/api/cron-tasks", family: "automation" },
   { method: "DELETE", path: "/api/cron-tasks/:id", family: "automation" },
@@ -680,7 +682,7 @@ export const PAGE_SURFACES = [
   {
     id: "attention", disposition: "merge", target: "Attention projections with deterministic resolution gates",
     page_ids: ["pi-inbox", "attention-inbox"],
-    source_files: ["frontend/src/pages/AttentionInbox.jsx"]
+    source_files: []
   },
   {
     id: "automation", disposition: "migrate", target: "Automation API with legacy cron/delegation compatibility",
@@ -690,7 +692,7 @@ export const PAGE_SURFACES = [
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",
     page_ids: ["settings", "pi-connectors", "pi-skills", "pi-policies"],
-    source_files: ["frontend/src/pages/AssistantSettingsPlaceholders.jsx", "frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
+    source_files: ["frontend/src/pages/AssistantSettingsSections.jsx", "frontend/src/pages/ConnectorDiagnosticsPanel.jsx", "frontend/src/pages/FeishuSettingsPanel.jsx", "frontend/src/pages/NotificationSettingsPanel.jsx", "frontend/src/pages/PermissionsSettingsPanel.jsx", "frontend/src/pages/PiMcpManagementPanel.jsx", "frontend/src/pages/ProviderAvailabilityPanel.jsx", "frontend/src/pages/RunnerSettingsPanel.jsx", "frontend/src/pages/Settings.jsx", "frontend/src/pages/SettingsChrome.jsx", "frontend/src/pages/SkillsRuntimePanel.jsx", "frontend/src/pages/SourcePoliciesPanel.jsx"]
   },
   {
     id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests",

@@ -302,7 +302,7 @@ node --test frontend/src/pages/sessions/projectOrder.test.js frontend/src/pages/
 
 ```bash
 bun test backend-ts/src/integrations/feishuAgentBridgeIssueCommand.test.ts backend-ts/src/integrations/feishuApprovalRequests.test.ts backend-ts/src/http/piActionsAuditApi.test.ts
-node --test frontend/src/pages/AttentionInbox.proposals.test.js
+node --test frontend/src/pages/command-center/attentionModel.test.js
 ```
 
 ## GJ-05：常驻巡检
@@ -356,7 +356,7 @@ node --test frontend/src/pages/AttentionInbox.proposals.test.js
 
 ```bash
 bun test backend-ts/src/pi/heartbeatOrchestrator.test.ts backend-ts/src/runner/piAutoManageSchedulerWatchdog.test.ts backend-ts/src/pi/heartbeatConcurrency.test.ts
-node --test frontend/src/pages/AttentionInbox.proposals.test.js frontend/src/pages/projectHold.test.js
+node --test frontend/src/pages/command-center/attentionModel.test.js frontend/src/pages/projectHold.test.js
 ```
 
 ## GJ-06：发布交付
