@@ -369,7 +369,16 @@ export async function projectIssueRuntimeEvidence(
 
 export function classifyVerificationCommand(command: string): CommandEvidenceKind | undefined {
   const value = command.trim();
-  if (value === "" || compoundVerificationCommand(value)) return undefined;
+  if (value === "" || unsafeCompoundVerificationCommand(value)) return undefined;
+  const segments = value.split(/\s*&&\s*/).map((segment) => segment.trim()).filter(Boolean);
+  const kinds = segments.map(classifySingleVerificationCommand).filter(Boolean) as CommandEvidenceKind[];
+  if (kinds.includes("test")) return "test";
+  if (kinds.includes("lint")) return "lint";
+  if (kinds.includes("build")) return "build";
+  return undefined;
+}
+
+function classifySingleVerificationCommand(value: string): CommandEvidenceKind | undefined {
   const test = /(?:^|\s)(?:bun\s+test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|deno\s+test|cargo\s+test|go\s+test|flutter\s+test|pytest|python\d*\s+-m\s+pytest)(?:\s|$)/i;
   const lint = /(?:^|\s)(?:bun\s+(?:run\s+)?lint|npm\s+(?:run\s+)?lint|pnpm\s+(?:run\s+)?lint|yarn\s+(?:run\s+)?lint|eslint|ruff\s+check|cargo\s+clippy|flutter\s+analyze|dart\s+analyze|tsc\b[^\n;&|]*--noEmit)(?:\s|$)/i;
   const build = /(?:^|\s)(?:bun\s+(?:run\s+)?build|npm\s+(?:run\s+)?build|pnpm\s+(?:run\s+)?build|yarn\s+(?:run\s+)?build|cargo\s+build|go\s+build|flutter\s+build|xcodebuild|tsc)(?:\s|$)/i;
@@ -577,12 +586,12 @@ function commandText(item: StoredCommandItem): string {
   return cleanString(item.command);
 }
 
-function compoundVerificationCommand(command: string): boolean {
+function unsafeCompoundVerificationCommand(command: string): boolean {
   const lines = command.split("\n").map((line) => line.trim()).filter(Boolean)
     .filter((line) => !/^set\s+-/.test(line) && !/^cd\s+/.test(line));
   if (lines.length > 1) return true;
   const value = lines[0] ?? command;
-  return /(?:&&|;|\|)/.test(value);
+  return /(?:;|\|)/.test(value);
 }
 
 function commandTiming(item: StoredCommandItem, eventCreatedAt: string): {

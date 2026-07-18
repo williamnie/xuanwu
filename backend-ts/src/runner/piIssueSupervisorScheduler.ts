@@ -10,6 +10,7 @@ import {
   type IssueSupervisorRecoveryContext
 } from "../pi/issueSupervisorContext.ts";
 import { supervisorCandidateReady } from "../pi/issueSupervisorSignalCollector.ts";
+import { isTransientRecoveryDiagnosis } from "../pi/recoveryDiagnosis.ts";
 import type { PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
 import {
   guardianSignalsFromSupervisorCandidates,
@@ -129,9 +130,21 @@ function supervisorCandidateDispatchable(
   now: Date,
   options: Pick<PiIssueSupervisorSchedulerInput, "staleAfterSeconds">
 ): boolean {
+  if (isTransientRecoveryDiagnosis(candidate.diagnosis_code) && cooldownBlocksCandidate(context, candidate, now)) return false;
   if (supervisorCandidateReady(context, candidate, now, { staleAfterSeconds: options.staleAfterSeconds })) return true;
   return candidate.diagnosis_code === "provider_retry_after_waiting" &&
     clean(candidate.source_event_type) !== "issue.retry_after_scheduled";
+}
+
+function cooldownBlocksCandidate(
+  context: IssueSupervisorRecoveryContext,
+  candidate: IssueSupervisorRecoveryContext["candidates"][number],
+  now: Date
+): boolean {
+  if (candidate.diagnosis_code === "provider_retry_after_ready" &&
+    clean(context.recovery_history.last_action_type) === "issue.retry_after") return false;
+  const until = Date.parse(cooldownUntil(context, now));
+  return Number.isFinite(until) && until > now.getTime();
 }
 
 function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
@@ -194,7 +207,7 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): 
       stale_gap_seconds: numberValue(target.context.session.stale_gap_seconds),
       supervisor_mode: clean(target.context.policy.mode),
       wait_until: clean(item.wait_until),
-      ...retryAfterPayload(item)
+      ...retryAfterPayload(item, now)
     })),
     { heartbeatID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`, now, projectID: target.projectID }
   ));
@@ -280,6 +293,13 @@ function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): stri
   return until.getTime() > now.getTime() ? iso(until) : "";
 }
 
-function retryAfterPayload(candidate: IssueSupervisorRecoveryContext["candidates"][number]): Record<string, string> {
-  return clean(candidate.source_event_type) === "issue.retry_after_scheduled" ? { retry_after_ready: "true" } : {};
+function retryAfterPayload(
+  candidate: IssueSupervisorRecoveryContext["candidates"][number],
+  now: Date
+): Record<string, string> {
+  const waitUntil = Date.parse(clean(candidate.wait_until));
+  return clean(candidate.source_event_type) === "issue.retry_after_scheduled" ||
+    (Number.isFinite(waitUntil) && waitUntil <= now.getTime())
+    ? { retry_after_ready: "true" }
+    : {};
 }

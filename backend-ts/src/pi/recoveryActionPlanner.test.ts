@@ -51,6 +51,28 @@ describe("supervisor recovery action planner", () => {
     }));
   });
 
+  test("retries a stale active turn instead of sending a follow-up into a disconnected session", () => {
+    expect(supervisorRecoveryActionCandidates({
+      eventID: "event-stale-active",
+      issueID: 741,
+      payload: {
+        allowed_actions: ["session.resume_followup", "issue.retry"],
+        diagnosis_code: "session_no_recent_progress",
+        issue_status: "in_progress",
+        issue_updated_at: "2026-07-18T16:27:16Z",
+        provider: "codex",
+        provider_session_id: "thread-741",
+        provider_turn_id: "turn-741",
+        ready: true,
+        run_id: "issue-741-attempt-4",
+        session_status: "disconnected",
+        signal_type: "supervisor.candidate",
+        supervisor_mode: "autonomous"
+      },
+      projectID: "codex-issue-runner"
+    })).toContainEqual(expect.objectContaining({ action_type: "issue.retry" }));
+  });
+
   test("plans issue retry when scheduled retry-after is ready", () => {
     expect(supervisorRecoveryActionCandidates({
       eventID: "event-retry-after-ready",
@@ -72,6 +94,26 @@ describe("supervisor recovery action planner", () => {
       action_type: "issue.retry",
       payload: expect.objectContaining({ issue_id: 504 })
     }));
+  });
+
+  test("retries immediately when a provider reconnect window is already due", () => {
+    expect(supervisorRecoveryActionCandidates({
+      eventID: "event-reconnect-ready",
+      issueID: 743,
+      payload: {
+        allowed_actions: ["issue.retry_after", "issue.retry"],
+        diagnosis_code: "executor_stream_disconnected",
+        issue_status: "in_progress",
+        issue_updated_at: "2026-07-18T16:18:52Z",
+        ready: true,
+        retry_after_ready: "true",
+        run_id: "issue-743-attempt-1",
+        signal_type: "supervisor.candidate",
+        supervisor_mode: "autonomous",
+        wait_until: "2026-07-18T16:18:57Z"
+      },
+      projectID: "codex-issue-runner"
+    })).toContainEqual(expect.objectContaining({ action_type: "issue.retry" }));
   });
 
   test("plans a fresh issue retry for the first transient startup timeout without a session", () => {

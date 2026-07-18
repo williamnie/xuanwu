@@ -129,6 +129,25 @@ describe("Bun issue patch API", () => {
     }
   });
 
+  test("preserves pending verification against a generic failed status patch", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo", "pending_verification");
+
+      const response = await patchIssue(database, issueId, { status: "failed", error: "agent fallback" });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        message: "pending_verification 请使用 verification reject，避免普通失败回写覆盖验证门禁"
+      });
+      expect(database.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(issueId))
+        .toEqual({ status: "pending_verification" });
+    } finally {
+      database.close();
+    }
+  });
+
   test("moves a triage issue to an existing project", async () => {
     const database = await openFixtureDatabase();
     try {

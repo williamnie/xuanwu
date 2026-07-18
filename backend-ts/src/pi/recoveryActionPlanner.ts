@@ -126,6 +126,8 @@ function recoveryActionType(failureClass: RecoveryFailureClass, payload: Record<
   if (failureClass !== "transient") return "";
   if (shouldScheduleRetryAfter(payload)) return "issue.retry_after";
   if (clean(payload.retry_after_ready) === "true") return "issue.retry";
+  if (clean(payload.diagnosis_code) === "session_no_recent_progress" &&
+    clean(payload.session_status).toLowerCase() === "disconnected") return "issue.retry";
   return clean(payload.provider_session_id) !== "" ? "session.resume_followup" : "issue.retry";
 }
 
@@ -172,6 +174,7 @@ function riskLevel(actionType: string): string {
 }
 
 function shouldScheduleRetryAfter(payload: Record<string, unknown>): boolean {
+  if (clean(payload.retry_after_ready) === "true") return false;
   const diagnosis = clean(payload.diagnosis_code);
   if (diagnosis === "provider_retry_after_waiting") return true;
   return diagnosis !== "provider_retry_after_ready" &&

@@ -90,6 +90,11 @@ async function updateIssueAndKickLoop(
   body: Record<string, unknown>
 ): Promise<Issue> {
   if (isStartIssuePatch(body)) return startIssueFromPatch(context, id, body);
+  const current = getIssue(context.database, id);
+  if (!current) throw new ProjectNotFoundError();
+  if (current.status === "pending_verification" && stringBody(body.status) === "failed") {
+    throw new Error("pending_verification 请使用 verification reject，避免普通失败回写覆盖验证门禁");
+  }
   const issue = stringBody(body.status) === "done"
     ? (await completeIssueFromRuntimeEvidence(context.database, id, body, {
       actor: { id: "runner-completion-api", kind: "runner" },

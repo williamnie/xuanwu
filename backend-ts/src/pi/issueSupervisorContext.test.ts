@@ -52,6 +52,7 @@ describe("PI issue supervisor context builder", () => {
         diagnosis_code: "executor_stream_disconnected"
       });
       expect(context.candidates.map((item) => item.diagnosis_code)).toContain("executor_stream_disconnected");
+      expect(context.candidates.map((item) => item.diagnosis_code)).not.toContain("session_no_recent_progress");
       expect(context.workspace_snapshot).toMatchObject({
         last_agent_message: "I inspected the current state and found the narrow failing path.",
         last_commands: ["bun test backend-ts/src/pi/issueSupervisorContext.test.ts"]

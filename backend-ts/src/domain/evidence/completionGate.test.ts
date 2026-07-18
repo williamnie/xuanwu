@@ -30,6 +30,8 @@ describe("Evidence Policy completion gate", () => {
     expect(classifyVerificationCommand("bun test src/domain/evidence/completionGate.test.ts")).toBe("test");
     expect(classifyVerificationCommand("flutter analyze")).toBe("lint");
     expect(classifyVerificationCommand("cargo build --release")).toBe("build");
+    expect(classifyVerificationCommand("bun test a.test.ts && git diff --check")).toBe("test");
+    expect(classifyVerificationCommand("rg -n 'legacy' src && bun test a.test.ts")).toBe("test");
     expect(classifyVerificationCommand("sed -n '1,20p' policy.test.ts")).toBeUndefined();
     expect(classifyVerificationCommand("bun test a.test.ts\nbunx tsc --noEmit")).toBeUndefined();
     expect(classifyVerificationCommand("bun test a.test.ts | cat")).toBeUndefined();
@@ -72,6 +74,28 @@ describe("Evidence Policy completion gate", () => {
         verdict: "fail",
         recommended_next_action: { action: "fix_and_reverify" },
         gate_consistency: { expected_status: "failed", policy_decision: "failed" }
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("lets a later passing chained test supersede an earlier failed lint result", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertRunningIssue(db);
+      insertCommandEvent(db, issueID, "bunx tsc -p tsconfig.json --noEmit", 1);
+      insertCommandEvent(db, issueID, "bun test src/xuanwu/userFacingTerminology.test.ts && git diff --check", 0);
+
+      const result = await completeIssueFromRuntimeEvidence(db, issueID, { status: "done", error: "" });
+
+      expect(result).toMatchObject({
+        evaluation: {
+          decision: "passed",
+          groups: [{ requirements: [{ status: "passed" }], status: "passed" }]
+        },
+        issue: { status: "done", error: "" },
+        target_status: "done"
       });
     } finally {
       db.close();

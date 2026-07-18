@@ -4,8 +4,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listIssueSupervisorEvents, listPiActions, listPiGuardianEvents, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import {
+  createIssueSupervisorEvent,
+  listIssueSupervisorEvents,
+  listPiActions,
+  listPiGuardianEvents,
+  upsertProjectPiPolicy
+} from "../db/repositories/pi.ts";
 import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
+import { recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import { runGuardianDecisionOrchestratorOnce } from "../pi/guardianDecisionOrchestrator.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
@@ -233,6 +240,92 @@ describe("PI issue supervisor scheduler", () => {
 
       expect(result).toMatchObject({ decisions: 0, scanned: 1, signaled: 0 });
       expect(listIssueSupervisorEvents(db, { issueId: 503 })).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("waits for recovery cooldown before emitting another transient action", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-cooldown-project-"));
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["issue.retry"],
+        project_id: "demo",
+        supervisor_cooldown_seconds: 300,
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, { issueID: 506, projectID: "demo", sessionUpdatedAt: "2026-06-10T07:45:00Z", threadID: "thread-506", turnID: "turn-506" });
+      db.sqlite.run("update agent_sessions set status='idle' where session_key='codex:thread-506'");
+      createIssueSupervisorEvent(db, {
+        action_type: "issue.retry",
+        event_type: "action",
+        issue_id: 506,
+        project_id: "demo"
+      });
+      recordPiRecoveryAttempt(db, {
+        action_type: "issue.retry",
+        budget_window_started_at: "2026-06-09T08:00:00Z",
+        created_at: "2026-06-10T07:59:00Z",
+        diagnosis_code: "session_no_recent_progress",
+        id: "cooldown-506",
+        idempotency_key: "cooldown-506",
+        issue_id: 506,
+        project_id: "demo",
+        status: "progress",
+        updated_at: "2026-06-10T07:59:00Z"
+      });
+
+      const waiting = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+      const due = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: new Date("2026-06-10T08:05:01Z"),
+        staleAfterSeconds: 300
+      });
+
+      expect(waiting).toMatchObject({ signaled: 0 });
+      expect(due).toMatchObject({ signaled: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not let retry-after scheduling delay a due provider retry window", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-retry-after-cooldown-project-"));
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["issue.retry_after", "issue.retry"],
+        project_id: "demo",
+        supervisor_cooldown_seconds: 300,
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, { issueID: 507, projectID: "demo", sessionUpdatedAt: "2026-06-10T07:45:00Z", threadID: "thread-507", turnID: "turn-507" });
+      db.sqlite.run("update issues set auto_retry_next_at=?, auto_retry_reason=? where id=?", [
+        "2026-06-10T07:59:30Z", "provider_rate_limited", 507
+      ]);
+      insertIssueEvent(db, 507, {
+        reason: "provider_rate_limited",
+        retry_after_at: "2026-06-10T07:59:30Z"
+      }, "2026-06-10T07:59:00Z", "issue.retry_after_scheduled");
+      recordPiRecoveryAttempt(db, {
+        action_type: "issue.retry_after",
+        budget_window_started_at: "2026-06-09T08:00:00Z",
+        created_at: "2026-06-10T07:59:00Z",
+        diagnosis_code: "provider_retry_after_waiting",
+        id: "retry-after-507",
+        idempotency_key: "retry-after-507",
+        issue_id: 507,
+        project_id: "demo",
+        status: "planned",
+        updated_at: "2026-06-10T07:59:00Z"
+      });
+
+      const due = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
+
+      expect(due).toMatchObject({ signaled: 1 });
+      expect(JSON.parse(listPiGuardianEvents(db, { projectId: "demo" })[0]?.normalized_payload_json ?? "{}"))
+        .toMatchObject({ diagnosis_code: "provider_retry_after_ready", retry_after_ready: "true" });
     } finally {
       db.close();
     }

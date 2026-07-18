@@ -77,10 +77,13 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   if (outageCandidate) return [outageCandidate];
   const diagnosis = providerError?.diagnosis_code;
   const stopped = stoppedSession(session);
+  if (diagnosis) {
+    out.push(providerErrorCandidate(input, providerError, diagnosis));
+    return out;
+  }
   if (stopped && !blocksStoppedRecovery(providerError)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session is idle while issue run remains open" });
   }
-  if (diagnosis) out.push(providerErrorCandidate(input, providerError, diagnosis));
   if (!diagnosis && !stopped && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session has no recent updates" });
   }
