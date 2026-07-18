@@ -94,7 +94,7 @@ function processEvent(
   now: Date,
   summary: GuardianDecisionOrchestratorSummary
 ): void {
-  const candidate = guardianDecisionCandidate(event);
+  const candidate = guardianDecisionCandidate(event, db);
   const current = activeDecisionForCandidate(db, candidate);
   const forceImmediate = Boolean(current && shouldBreakGuardianDecisionWindow(current, candidate));
   if (!forceImmediate && !current && suppressForCooldown(db, candidate, now)) {

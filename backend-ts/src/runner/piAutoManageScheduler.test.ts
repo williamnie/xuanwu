@@ -400,7 +400,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("escalates a deferred provider initialize outage without claiming later todos", async () => {
+  test("recovers a deferred provider initialize outage without claiming later todos", async () => {
     const db = await openFixtureDatabase();
     const provider = new InitializeTimeoutProvider();
     const runner = new FakePiCycleRunner();
@@ -417,13 +417,13 @@ describe("PI auto-manage scheduler", () => {
 
       const result = await runOutageScheduleClosure(db, runner);
 
-      expect(result.first.supervisor).toMatchObject({ signaled: 1 });
+      expect(result.first.supervisor).toMatchObject({ scanned: 1, signaled: 0 });
       expect(result.first.guardianDecisions).toMatchObject({ created: 1 });
       expect(result.second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
       expect(runner.calls).toEqual([]);
       expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
 
-      expectProviderOutageNeedsUserClosure(db, 701);
+      expectProviderOutageRecovery(db, 701);
     } finally {
       db.close();
     }
@@ -547,30 +547,19 @@ function expectDeferredOutageClaim(db: DB, provider: InitializeTimeoutProvider):
   expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.provider_deferred");
 }
 
-function expectProviderOutageNeedsUserClosure(db: DB, issueID: number): void {
+function expectProviderOutageRecovery(db: DB, issueID: number): void {
   const action = firstProviderOutageAction(db, issueID);
-  const notification = firstUnreadNeedsUserNotification(db, issueID);
-  const payload = JSON.parse(notification.payload) as Record<string, unknown>;
-  const serializedNotification = JSON.stringify({ message: notification.message, payload });
-  expect(action).toMatchObject({ action_type: "needs_user.escalate", gate_decision: "execute", status: "completed" });
-  expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({ diagnosis_code: "provider_runtime_unavailable" });
-  expect(payload.provider).toBe("claude");
-  expect(String(payload.next_step)).toContain("重启");
-  expect(notification.message).toContain("claude");
-  expect(notification.message).toContain("重启");
-  expect(serializedNotification).not.toContain("sk-live-secret");
-  expect(serializedNotification).not.toContain("/Users/xiaobei/private");
+  expect(action).toMatchObject({ action_type: "issue.retry", gate_decision: "execute", status: "completed" });
+  expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+    diagnosis_code: "provider_transient_network_error"
+  });
+  expect(getIssue(db, issueID)).toMatchObject({ status: "todo" });
+  expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
 }
 
 function firstProviderOutageAction(db: DB, issueID: number) {
   const [action] = listPiActions(db, { issueId: issueID });
   return action;
-}
-
-function firstUnreadNeedsUserNotification(db: DB, issueID: number) {
-  const [notification] = listNotifications(db, { projectID: "demo", unreadOnly: true });
-  expect(notification).toMatchObject({ event: "pi.needs_user", issue_id: issueID });
-  return notification;
 }
 
 function insertIssueRunSession(db: DB, issueID: number): void {

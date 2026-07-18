@@ -38,6 +38,9 @@ describe("PI supervisor issue retry recovery attempts", () => {
     try {
       insertProject(db, "demo");
       insertIssueRunSession(db, 309);
+      db.sqlite.run("update issue_runs set provider_session_id='', provider_turn_id='' where issue_id=309");
+      db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at)
+        values (309, 'issue.provider_deferred', '{}', '2026-06-10T07:00:00Z')`);
       db.sqlite.run("update issues set attempt_count=99 where id=?", [309]);
 
       await dispatchPiAction({ database: db }, retryAction(db, 309, "retry-action-309"));

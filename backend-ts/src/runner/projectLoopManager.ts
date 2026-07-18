@@ -3,6 +3,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import {
   countActiveExecutorWork,
   hasActiveExecutorWorkForProject,
+  hasProjectExecutionBlocker,
   hasTodoIssue,
   projectExecutionLockKey
 } from "../db/repositories/issueQueue.ts";
@@ -105,7 +106,9 @@ async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): P
 }
 
 function shouldContinue(db: RunnerDatabase, projectID: string, forceOnce: boolean): boolean {
-  return (forceOnce || isAutoRunEnabled(db, projectID)) && !hasActiveExecutorWorkForProject(db, projectID);
+  if (hasActiveExecutorWorkForProject(db, projectID)) return false;
+  if (forceOnce) return true;
+  return isAutoRunEnabled(db, projectID) && !hasProjectExecutionBlocker(db, projectID);
 }
 
 function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopInput {
@@ -122,7 +125,8 @@ function requeueProjectsWithTodo(db: RunnerDatabase): void {
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
   for (const project of projects) {
-    if (activeLoops.has(project.id) || hasActiveExecutorWorkForProject(db, project.id) || !hasTodoIssue(db, project.id)) continue;
+    if (activeLoops.has(project.id) || hasActiveExecutorWorkForProject(db, project.id) ||
+      hasProjectExecutionBlocker(db, project.id) || !hasTodoIssue(db, project.id)) continue;
     activeLoops.add(project.id);
     enqueueProject(project.id);
   }

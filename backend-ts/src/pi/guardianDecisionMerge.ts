@@ -1,3 +1,4 @@
+import type { RunnerDatabase } from "../db/database.ts";
 import type { PiGuardianDecision, PiGuardianEvent } from "../db/repositories/pi.ts";
 import { guardianDecisionActionsJson } from "./guardianDecisionActionCandidates.ts";
 import { classifyRecoveryDiagnosis } from "./recoveryDiagnosis.ts";
@@ -52,14 +53,14 @@ const INFO_MERGE_WINDOW_MS = 120_000;
 const IMMEDIATE_WINDOW_MS = 0;
 const WATCH_MERGE_WINDOW_MS = 30_000;
 
-export function guardianDecisionCandidate(event: PiGuardianEvent): GuardianDecisionCandidate {
+export function guardianDecisionCandidate(event: PiGuardianEvent, db?: RunnerDatabase): GuardianDecisionCandidate {
   const payload = jsonRecord(event.normalized_payload_json);
   const diagnosis = diagnosisCode(event, payload);
   const severity = deterministicSeverity(event, payload, diagnosis, severityValue(event.severity));
   const decisionKind = decisionKindForEvent(event, payload);
   return {
     action_type: clean(payload.action_type),
-    actions_json: guardianDecisionActionsJson(event, payload),
+    actions_json: guardianDecisionActionsJson(event, payload, db),
     conversation_id: event.conversation_id,
     created_at: event.created_at,
     decision: decisionValue(decisionKind, severity),

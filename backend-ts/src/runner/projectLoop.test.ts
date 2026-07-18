@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
+import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
-import { isProjectLoopActive, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
+import { isProjectLoopActive, kickAutoRunProjects, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
 const tempRoots: string[] = [];
@@ -57,6 +58,24 @@ class TransientInfraExecutionProvider implements ExecutorProvider {
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
     this.inputs.push(input);
     throw new Error("codex app-server request timed out after 10000ms: initialize");
+  }
+}
+
+class TerminalExecutionProvider extends FakeExecutionProvider {
+  constructor(
+    private readonly db: RunnerDatabase,
+    private readonly status: "failed" | "pending_verification"
+  ) {
+    super();
+  }
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    const result = await super.run(input);
+    updateIssue(this.db, input.issueId, {
+      error: this.status === "failed" ? "executor reported a scoped failure" : "verification evidence required",
+      status: this.status
+    });
+    return result;
   }
 }
 
@@ -323,6 +342,31 @@ describe("Bun project loop claim execution", () => {
       db.close();
     }
   });
+
+  for (const status of ["failed"] as const) {
+    test(`auto-run stays stopped after executor marks the current issue ${status}`, async () => {
+      const db = await openFixtureDatabase();
+      const provider = new TerminalExecutionProvider(db, status);
+      try {
+        insertProject(db, { id: `terminal-${status}`, provider: provider.id, autoRun: 1 });
+        const first = insertIssue(db, { projectId: `terminal-${status}`, title: "first" });
+        const second = insertIssue(db, { projectId: `terminal-${status}`, title: "second" });
+
+        startProjectLoop({ database: db, providers: { [provider.id]: provider } }, `terminal-${status}`);
+        await waitFor(() => getIssue(db, first)?.status === status);
+        await waitFor(() => !isProjectLoopActive(`terminal-${status}`));
+
+        kickAutoRunProjects({ database: db, providers: { [provider.id]: provider } });
+        await Bun.sleep(20);
+
+        expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+        expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
+        expect(listIssueRuns(db, second)).toEqual([]);
+      } finally {
+        db.close();
+      }
+    });
+  }
 
   test("auto-run defers provider infra transient failures and keeps later todos queued for PI", async () => {
     const db = await openFixtureDatabase();

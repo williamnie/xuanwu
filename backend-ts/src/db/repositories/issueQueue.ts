@@ -5,6 +5,7 @@ import { getIssue, type Issue } from "./issues.ts";
 
 const STATUS_TODO = "todo";
 const STATUS_IN_PROGRESS = "in_progress";
+const PROJECT_EXECUTION_BLOCKING_STATUSES = ["failed"] as const;
 
 type ClaimedIssueRow = { id: number };
 type CountRow = { count: number };
@@ -59,6 +60,16 @@ export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
   if (cleanProjectID === "") return false;
   const sql = "select count(*) as count from issues where project_id=? and status=?";
   return countRows(db, sql, [cleanProjectID, STATUS_TODO]) > 0;
+}
+
+export function hasProjectExecutionBlocker(db: RunnerDatabase, projectID: string): boolean {
+  const cleanProjectID = projectID.trim();
+  if (cleanProjectID === "") return false;
+  const placeholders = PROJECT_EXECUTION_BLOCKING_STATUSES.map(() => "?").join(",");
+  return countRows(db, `
+    select count(*) as count from issues
+    where project_id=? and status in (${placeholders})
+  `, [cleanProjectID, ...PROJECT_EXECUTION_BLOCKING_STATUSES]) > 0;
 }
 
 function claimNextIssueID(db: RunnerDatabase, projectID: string): number {

@@ -1,6 +1,7 @@
 import {
   cancelIssue,
   forceRetryIssue,
+  requeueUnstartedIssueClaim,
   retryIssue,
   type IssueActionOptions
 } from "../db/repositories/issueActions.ts";
@@ -56,11 +57,22 @@ export async function retryIssueWithInterrupt(
   const issue = issueWithLatestRun(db, mustGetIssue(db, issueID));
   if (!isOpenRunningIssue(issue)) return retryIssue(db, issueID, options);
   if (!shouldInterruptIssue(issue)) {
+    if (hasDeferredStartupFailure(db, issue)) return requeueUnstartedIssueClaim(db, issueID);
     throw new Error("Issue 正在启动 provider session，请稍后再重试");
   }
   const interrupted = await interruptLinkedIssue(db, issue, ISSUE_RETRY_REASON, runtime);
   if (!interrupted) throw new Error("旧 Session 中断失败，Issue 未重新排队");
   return forceRetryIssue(db, issueID, options);
+}
+
+function hasDeferredStartupFailure(db: RunnerDatabase, issue: Issue): boolean {
+  const run = issue.latest_run;
+  if (!run || run.provider_session_id !== "" || run.provider_turn_id !== "") return false;
+  const row = db.sqlite.query<{ count: number }, [number, string]>(`
+    select count(*) as count from issue_events
+    where issue_id=? and type='issue.provider_deferred' and created_at>=?
+  `).get(issue.id, run.started_at);
+  return (row?.count ?? 0) > 0;
 }
 
 export async function interruptSession(
