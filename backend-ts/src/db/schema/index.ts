@@ -47,6 +47,7 @@ import { automationSchedulerMigration } from "./046_automation_scheduler.ts";
 import { gitProviderEventsMigration } from "./047_git_provider_events.ts";
 import { trackerIssueSyncMigration } from "./048_tracker_issue_sync.ts";
 import { automationExecutionLinksMigration } from "./049_automation_execution_links.ts";
+import { automationWatchesMigration } from "./050_automation_watches.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -97,5 +98,6 @@ export const migrations = [
   automationSchedulerMigration,
   gitProviderEventsMigration,
   trackerIssueSyncMigration,
-  automationExecutionLinksMigration
+  automationExecutionLinksMigration,
+  automationWatchesMigration
 ];

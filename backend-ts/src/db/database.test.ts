@@ -55,9 +55,11 @@ describe("Bun SQLite database connection", () => {
         "attention_inbox_items",
         "automation_definitions",
         "automation_events",
+        "automation_execution_links",
         "automation_run_events",
         "automation_runs",
         "automation_trigger_configs",
+        "automation_watches",
         "context_bundles",
         "cron_task_schedules",
         "cron_tasks",
@@ -217,7 +219,9 @@ describe("Bun SQLite database connection", () => {
         { id: "045_automation_model" },
         { id: "046_automation_scheduler" },
         { id: "047_git_provider_events" },
-        { id: "048_tracker_issue_sync" }
+        { id: "048_tracker_issue_sync" },
+        { id: "049_automation_execution_links" },
+        { id: "050_automation_watches" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -285,6 +289,11 @@ describe("Bun SQLite database connection", () => {
       expect(indexNames(connection, "pi_run_group_items")).toContain("idx_pi_run_group_items_status");
       expect(indexNames(connection, "pi_issue_completion_watches")).toContain("ux_pi_issue_completion_watches_active_key");
       expect(indexNames(connection, "pi_issue_completion_watch_items")).toContain("idx_pi_issue_completion_watch_items_issue");
+      expect(indexNames(connection, "automation_watches")).toEqual(expect.arrayContaining([
+        "idx_automation_watches_due",
+        "ux_automation_watches_dedupe",
+        "ux_automation_watches_legacy"
+      ]));
       expect(indexNames(connection, "external_links")).toContain("idx_external_links_issue");
       expect(indexNames(connection, "sync_outbox")).toEqual(expect.arrayContaining([
         "idx_sync_outbox_operation_dispatch",
@@ -422,6 +431,15 @@ describe("Bun SQLite database connection", () => {
         initial_status: "''",
         last_status: "''",
         terminal_at: "''"
+      });
+      expect(columnDefaults(connection, "automation_watches")).toMatchObject({
+        error: "''",
+        expires_at: "''",
+        last_external_event_id: "0",
+        legacy_watch_id: "''",
+        notified_at: "''",
+        outcome: "''",
+        satisfied_at: "''"
       });
       expect(columnDefaults(connection, "assistant_tool_providers")).toMatchObject({
         audit_json: '\'{"redact":[]}\'',
@@ -760,7 +778,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 48 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 50 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

@@ -40,6 +40,7 @@ import {
   type AutomationSchedulerResult
 } from "./automationScheduler.ts";
 import { createNativeAutomationExecutor } from "./automationRuntime.ts";
+import { runWatchAutomationsOnce } from "./watchAutomationRuntime.ts";
 import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
@@ -202,6 +203,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
   resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
+  runWatchAutomationsOnce(input.database, { now: input.watchdogNow });
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
   const completionWatchNotifications = queueReadyFeishuCompletionWatchNotifications(input.database);
   const issueWatchdog = await runAutoRunIssueWatchdogOnce({
