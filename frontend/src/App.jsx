@@ -38,7 +38,6 @@ const Runs = lazy(() => import('./pages/Runs'));
 const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
 const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
-const AttentionInbox = lazy(() => import('./pages/AttentionInbox'));
 const Automations = lazy(() => import('./pages/Automations'));
 const Settings = lazy(() => import('./pages/Settings'));
 
@@ -389,8 +388,6 @@ export default function App() {
               />
             ) : currentPage === 'ask-xuanwu' ? (
               <PiChat navigateTo={navigateTo} initialConversationId={selectedPiConversationId} />
-            ) : currentPage === 'attention-inbox' || currentPage === 'pi-inbox' ? (
-              <AttentionInbox />
             ) : isAssistantModulePage(currentPage) ? (
               <Settings initialTab={assistantModule?.tab} navigateTo={navigateTo} />
             ) : currentPage === 'projects' ? (

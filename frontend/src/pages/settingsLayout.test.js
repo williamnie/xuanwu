@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
 const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.url), 'utf8');
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
-const placeholderSource = readFileSync(new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url), 'utf8');
+const settingsNavigationSource = readFileSync(new URL('./settingsNavigation.js', import.meta.url), 'utf8');
+const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
+const placeholderPath = new URL('./AssistantSettingsPlaceholders.jsx', import.meta.url);
 const connectorDiagnosticsSource = readFileSync(new URL('./ConnectorDiagnosticsPanel.jsx', import.meta.url), 'utf8');
 const permissionsSettingsSource = readFileSync(new URL('./PermissionsSettingsPanel.jsx', import.meta.url), 'utf8');
 const notificationSettingsSource = readFileSync(new URL('./NotificationSettingsPanel.jsx', import.meta.url), 'utf8');
@@ -44,22 +46,22 @@ test('Settings primary IA includes project settings without duplicating its sour
   assert.match(sectionsSource, /Per-project settings/);
   assert.match(sectionsSource, /navigateTo\?\.\('projects'\)/);
   assert.match(sectionsSource, /不会产生双写/);
-  assert.match(sectionsSource, /Models & Agents/);
-  assert.match(sectionsSource, /Connections/);
-  assert.match(sectionsSource, /Permissions/);
-  assert.match(sectionsSource, /Notifications/);
+  assert.match(settingsNavigationSource, /Models & Agents/);
+  assert.match(settingsNavigationSource, /Connections/);
+  assert.match(settingsNavigationSource, /Permissions/);
+  assert.match(settingsNavigationSource, /Notifications/);
   assert.match(sectionsSource, /<PiAgentSettingsPanel \/>/);
   assert.match(sectionsSource, /<PiAgentSettingsPanel advanced \/>/);
   assert.match(piAgentSource, /if \(!advanced\) return <RecommendedProviderSettings state=\{state\} \/>/);
   assert.match(piAgentSource, /<ProviderCredentialFields state=\{state\} \/>/);
   assert.match(piAgentSource, /advanced && <ApiTypeField form=\{form\} updateField=\{updateField\} \/>/);
   assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
-  assert.doesNotMatch(placeholderSource, /Runner Brain/);
-  assert.match(sectionsSource, /Skills/);
-  assert.match(sectionsSource, /Command Center/);
-  assert.match(sectionsSource, /Memory/);
-  assert.match(sectionsSource, /Activity/);
-  assert.match(sectionsSource, /Policies/);
+  assert.equal(existsSync(placeholderPath), false);
+  assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|placeholder/i);
+  assert.match(sectionsSource, /SkillsRuntimePanel/);
+  assert.match(sectionsSource, /PiMemoryPanel/);
+  assert.match(sectionsSource, /ActivityTimelinePanel/);
+  assert.match(sectionsSource, /SourcePoliciesPanel/);
 });
 
 test('ordinary Settings route does not render raw runtime controls', () => {
@@ -78,8 +80,6 @@ test('ordinary Settings route does not render raw runtime controls', () => {
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
-  const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
-
   for (const route of ['pi-overview', 'pi-connectors', 'pi-skills', 'pi-memory', 'pi-activity', 'pi-policies']) {
     assert.match(modulesSource, new RegExp(`page: '${route}'`));
   }
@@ -96,7 +96,9 @@ test('Xuanwu product sidebar removes the PI section and keeps internal config be
   assert.doesNotMatch(sidebarSource, /PI_ASSISTANT_NAV_ITEMS|pi-assistant-nav|pi-assistant-item/);
   assert.match(sidebarSource, /sidebar-footer-actions/);
   assert.match(appStylesSource, /\.sidebar-footer-actions \.nav-item/);
-  assert.match(appSource, /currentPage === 'attention-inbox' \|\| currentPage === 'pi-inbox'/);
+  assert.doesNotMatch(appSource, /AttentionInbox|currentPage === 'attention-inbox'|currentPage === 'pi-inbox'/);
+  assert.match(modulesSource, /'attention-inbox': 'command-center'/);
+  assert.match(modulesSource, /'pi-inbox': 'command-center'/);
   assert.match(appSource, /currentPage === 'command-center'/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'/);
   assert.match(appSource, /currentPage === 'automations'/);
@@ -211,5 +213,6 @@ test('Policies tab manages source policies from API', () => {
 test('Automations and Approval queues live outside Settings', () => {
   assert.doesNotMatch(sectionsSource, /AutomationsRuntimePanel/);
   assert.doesNotMatch(sectionsSource, /activeTab === 'automations'/);
-  assert.match(sectionsSource, /待处理 Approval 已统一放在 Command Center/);
+  assert.match(modulesSource, /'pi-approvals': 'command-center'/);
+  assert.doesNotMatch(sectionsSource, /Approval queue|ApprovalQueue/);
 });

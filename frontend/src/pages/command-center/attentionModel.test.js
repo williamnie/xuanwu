@@ -33,7 +33,7 @@ test('Attention commands carry a human allow gate, revision, audit identifiers, 
   assert.equal(attentionActionPayload(ITEM, 'snooze', input).snoozed_until, '2026-07-17T09:00:00.000Z');
 });
 
-test('Command Center Attention has grouped cards, source deep links, empty state, and post-action refresh', () => {
+test('Command Center Attention has grouped cards, canonical source links, empty state, and post-action refresh', () => {
   const page = readFileSync(new URL('./AttentionSection.jsx', import.meta.url), 'utf8');
   const dashboard = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
   const api = readFileSync(new URL('../../api/commandCenter.js', import.meta.url), 'utf8');
@@ -42,7 +42,8 @@ test('Command Center Attention has grouped cards, source deep links, empty state
   assert.match(page, /controlAttention/);
   assert.match(page, /await load\(\{ silent: true \}\)/);
   assert.match(page, /当前没有需要关注的事项/);
-  assert.match(page, /navigateTo\?\.\('attention-inbox'\)/);
+  assert.doesNotMatch(page, /navigateTo\?\.\('attention-inbox'\)/);
+  assert.match(page, /查看来源事实/);
   assert.match(page, /href=\{item\.links\?\.self\}/);
   assert.match(page, /ApprovalDetail/);
   assert.match(page, /resolveApproval/);
@@ -52,5 +53,5 @@ test('Command Center Attention has grouped cards, source deep links, empty state
   assert.match(page, /Attention 类型筛选/);
   assert.match(api, /\/api\/command-center\/attention\/\$\{encodeURIComponent\(id\)\}\/actions/);
   assert.doesNotMatch(api, /\/api\/pi\/approval-requests/);
-  assert.match(dashboard, /<AttentionSection navigateTo=\{navigateTo\} \/>/);
+  assert.match(dashboard, /<AttentionSection \/>/);
 });

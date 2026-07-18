@@ -153,7 +153,7 @@ export default function Dashboard({
       <div className="grid-cols-2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
         {/* 左栏：Active Work */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', minWidth: 0 }}>
-          <AttentionSection navigateTo={navigateTo} />
+          <AttentionSection />
           <ActiveWorkSection navigateTo={navigateTo} projects={projects} />
         </div>
 

@@ -215,7 +215,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .sidebar-footer-actions .nav-item { border-color: transparent; }
 
 .page-intro { border-bottom-color: var(--border-color); gap: 22px; min-height: 98px; padding: 26px 0 18px; }
-.page-intro h1, .settings-title-row h1, .attention-inbox-hero h1 {
+.page-intro h1, .settings-title-row h1 {
   font-family: var(--font-display);
   font-weight: 600;
   letter-spacing: -0.018em;

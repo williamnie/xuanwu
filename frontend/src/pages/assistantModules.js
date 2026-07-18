@@ -75,12 +75,12 @@ export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   'pi-automations': 'automations',
   'pi-approvals': 'command-center',
   'pi-connectors': 'connections',
+  'attention-inbox': 'command-center',
+  'pi-inbox': 'command-center',
 });
 
 const HIDDEN_COMPAT_ROUTE_PARENTS = Object.freeze({
   issues: 'work',
-  'attention-inbox': 'command-center',
-  'pi-inbox': 'command-center',
 });
 
 export function productNavigationItems({ workBoardEnabled = true } = {}) {
@@ -134,7 +134,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'activity',
     label: 'Activity',
     title: 'Activity',
-    description: '预留 raw event、intake run、skill run、proposal 与 tool call 审计时间线。'
+    description: '查看 raw event、intake run、skill run、proposal 与 tool call 的审计时间线。'
   },
   {
     page: 'pi-policies',

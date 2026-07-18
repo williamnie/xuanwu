@@ -8,7 +8,7 @@ import './AttentionSection.css';
 
 const REFRESH_INTERVAL_MS = 30_000;
 
-export default function AttentionSection({ navigateTo }) {
+export default function AttentionSection() {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -107,7 +107,7 @@ export default function AttentionSection({ navigateTo }) {
           {ATTENTION_PRIORITIES.map(priority => groups[priority].length > 0 ? (
             <div className="attention-priority-group" data-priority={priority} key={priority}>
               <div className="attention-priority-heading"><strong>{priority.toUpperCase()}</strong><span>{groups[priority].length} 项</span></div>
-              {groups[priority].map(item => <AttentionCard item={item} key={item.id} navigateTo={navigateTo} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} />)}
+              {groups[priority].map(item => <AttentionCard item={item} key={item.id} onReviewApproval={reviewApproval} onSubmit={submit} submitting={submitting} />)}
             </div>
           ) : null)}
         </div>
@@ -117,7 +117,7 @@ export default function AttentionSection({ navigateTo }) {
   );
 }
 
-function AttentionCard({ item, navigateTo, onReviewApproval, onSubmit, submitting }) {
+function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
   const view = attentionView(item);
   const pending = (action) => submitting === `${item.id}:${action}`;
   return <article className={`attention-card ${view.tone}`}>
@@ -130,7 +130,7 @@ function AttentionCard({ item, navigateTo, onReviewApproval, onSubmit, submittin
       {item.type === 'approval_required' ? (
         <button className="open" onClick={() => onReviewApproval(item)} type="button">审阅 Decision <ShieldCheck size={13} /></button>
       ) : item.links?.view === '#/attention-inbox' ? (
-        <button className="open" onClick={() => navigateTo?.('attention-inbox')} type="button">打开来源 <ArrowUpRight size={13} /></button>
+        <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">查看来源事实 <ArrowUpRight size={13} /></a>
       ) : (
         <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">打开来源 <ArrowUpRight size={13} /></a>
       )}

@@ -41,13 +41,12 @@ test('buttons use the flat E2B-inspired control language', () => {
   assert.match(foundationCss, /\.btn-secondary\s*\{[^}]*border:\s*1px solid var\(--button-border\)/);
   assert.doesNotMatch(foundationCss, /\.btn-primary:hover[^}]*translateY/);
   assert.match(pagesCss, /button:not\(\.kanban-card-speed-toggle\),[\s\S]*border-radius:\s*var\(--button-radius\)\s*!important/);
-  assert.match(pagesCss, /\.attention-inbox-filter button\.active\s*\{[^}]*background:\s*var\(--button-primary-bg\)/);
+  assert.doesNotMatch(pagesCss, /attention-inbox/);
 });
 
 test('page refinements keep chat layouts bounded on narrow screens', () => {
   assert.match(pagesCss, /\.pi-chat-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(272px, 298px\)\s+minmax\(0, 1fr\)/);
   assert.match(pagesCss, /@media \(max-width:\s*960px\)[\s\S]*\.pi-chat-shell\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
-  assert.match(pagesCss, /\.attention-inbox-grid\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
@@ -62,9 +61,7 @@ test('low-frequency global panels use the same visual system without owning Sess
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(pagesCss, new RegExp(escaped));
   }
-  assert.match(pagesCss, /\.status-pill, \.attention-chip\s*\{\s*border-radius:\s*var\(--radius-xs\)/);
-  assert.match(pagesCss, /\.attention-empty\s*\{\s*border-radius:\s*var\(--radius-md\)/);
-  assert.match(pagesCss, /\.attention-inbox-filter button, \.attention-actions button\s*\{[^}]*font-family:\s*var\(--font-sans\)/);
+  assert.match(pagesCss, /\.proposal-action-row\s*\{\s*border-radius:\s*var\(--radius-md\)/);
   assert.match(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-sans\)/);
   assert.doesNotMatch(pagesCss, /\.settings-eyebrow,[^{]*\.eyebrow\s*\{[^}]*font-family:\s*var\(--font-mono\)/);
   assert.doesNotMatch(pagesCss, /\.pi-chat-runtime-pill[^}]*border-radius:\s*999px/);

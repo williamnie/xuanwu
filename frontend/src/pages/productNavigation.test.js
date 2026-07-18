@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { PRODUCT_NAV_LABELS } from '../brand.js';
@@ -51,12 +51,15 @@ test('legacy page ids redirect into canonical product routes without replacing h
     'pi-automations': 'automations',
     'pi-approvals': 'command-center',
     'pi-connectors': 'connections',
+    'attention-inbox': 'command-center',
+    'pi-inbox': 'command-center',
   });
   for (const [legacyPage, canonicalPage] of Object.entries(PRODUCT_COMPAT_ROUTE_REDIRECTS)) {
     assert.equal(resolveProductPage(legacyPage), canonicalPage);
   }
   assert.equal(resolveProductPage('issues'), 'issues');
-  assert.equal(resolveProductPage('pi-inbox'), 'pi-inbox');
+  assert.equal(resolveProductPage('attention-inbox'), 'command-center');
+  assert.equal(resolveProductPage('pi-inbox'), 'command-center');
   assert.equal(productNavPageForRoute('issues'), 'work');
   assert.equal(productNavPageForRoute('pi-inbox'), 'command-center');
   assert.equal(productNavPageForRoute('pi-memory'), 'settings');
@@ -69,4 +72,32 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat navigateTo=\{navigateTo\} initialConversationId=\{selectedPiConversationId\} \/>/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
   assert.match(appSource, /currentPage === 'connections'[\s\S]*initialTab="connectors"/);
+  assert.doesNotMatch(appSource, /AttentionInbox|currentPage === 'attention-inbox'|currentPage === 'pi-inbox'/);
+});
+
+test('retired Inbox and Settings placeholders have no remaining frontend consumer', () => {
+  for (const path of [
+    './AttentionInbox.jsx',
+    './AttentionInbox.css',
+    './AssistantSettingsPlaceholders.jsx',
+  ]) {
+    assert.equal(existsSync(new URL(path, import.meta.url)), false);
+  }
+
+  const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+  const workDetailSource = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
+  const assistantApiSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|AssistantSettingsPlaceholders/);
+  assert.match(workDetailSource, /navigateTo\('command-center'\)/);
+  assert.doesNotMatch(workDetailSource, /navigateTo\('attention-inbox'\)/);
+  for (const retiredMutation of [
+    'updatePiAttentionItem',
+    'ignorePiAttentionItem',
+    'reintakePiAttentionItem',
+    'startPiAttentionDomainSkill',
+    'approvePiActionProposal',
+    'rejectPiActionProposal',
+  ]) {
+    assert.doesNotMatch(assistantApiSource, new RegExp(retiredMutation));
+  }
 });

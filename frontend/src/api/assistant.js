@@ -60,26 +60,6 @@ export const assistantApi = {
 
   getPiAttentionItem: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}`),
 
-  updatePiAttentionItem: (id, updates) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  }),
-
-  ignorePiAttentionItem: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}/ignore`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-
-  reintakePiAttentionItem: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}/reintake`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-
-  startPiAttentionDomainSkill: (id) => request(`/api/pi/attention-inbox/items/${encodeURIComponent(id)}/domain-skill`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-
   getPiAttentionContextBundle: (id) => request(`/api/pi/attention-inbox/context-bundles/${encodeURIComponent(id)}`),
 
   getPiAttentionContextBundles: ({ source = '', limit = 100 } = {}) => {
@@ -89,28 +69,6 @@ export const assistantApi = {
     const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/pi/attention-inbox/context-bundles${query}`);
   },
-
-  getPiAttentionIntakeRun: (id) => request(`/api/pi/attention-inbox/intake-runs/${encodeURIComponent(id)}`),
-
-  getPiAttentionRawEvent: (id) => request(`/api/pi/attention-inbox/raw-events/${encodeURIComponent(id)}`),
-
-  getPiActionProposals: ({ sourceItemId = '', status = '' } = {}) => {
-    const params = new URLSearchParams();
-    if (sourceItemId) params.append('source_item_id', sourceItemId);
-    if (status) params.append('status', status);
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return request(`/api/pi/action-proposals${query}`);
-  },
-
-  approvePiActionProposal: (id, payload = {}) => request(`/api/pi/action-proposals/${encodeURIComponent(id)}/approve`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
-
-  rejectPiActionProposal: (id, payload = {}) => request(`/api/pi/action-proposals/${encodeURIComponent(id)}/reject`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }),
 
   getPiAgents: () => request('/api/pi/agents'),
 

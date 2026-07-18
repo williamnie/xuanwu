@@ -337,7 +337,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
               ))}
             </div>
           ) : <EmptySection success text="No open Work, approval or Guardian attention signal." />}
-          <button className="work-section-link" onClick={() => navigateTo('attention-inbox')} type="button">Open Attention <ArrowUpRight size={13} /></button>
+          <button className="work-section-link" onClick={() => navigateTo('command-center')} type="button">Open Attention <ArrowUpRight size={13} /></button>
         </section>
       </div>
 

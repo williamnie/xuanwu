@@ -164,42 +164,22 @@
 }
 .pi-chat-runtime-pill, [data-theme="dark"] .pi-chat-runtime-pill { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-xs); color: var(--text-secondary); }
 
-/* Inbox, Settings, Activity */
-.attention-inbox-hero, .assistant-module-hero {
-  background: linear-gradient(110deg, color-mix(in srgb, var(--primary) 10%, var(--bg-card)), color-mix(in srgb, var(--info) 5%, var(--bg-card)));
-  border-color: var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-.attention-inbox-list, .attention-inbox-detail, .attention-card {
+/* Settings and Command Center Attention */
+.attention-card {
   background: var(--panel-gradient);
   border-color: var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 }
-.attention-inbox-filter button, .attention-actions button, .settings-tabs {
+.settings-tabs {
   background: var(--button-secondary-bg);
   border-color: var(--button-border);
   border-radius: var(--button-radius);
   box-shadow: none;
 }
-.attention-inbox-filter button, .attention-actions button {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-}
-.attention-inbox-filter button.active {
-  background: var(--button-primary-bg);
-  border-color: var(--button-primary-bg);
-  color: var(--button-primary-fg);
-}
-.attention-item-row, .proposal-item, .proposal-action-row, .evidence-stack details { border-radius: var(--radius-md); }
-.attention-item-row.active, .attention-item-row:hover { background: var(--surface-tint); border-color: color-mix(in srgb, var(--primary) 24%, var(--border-color)); }
-.attention-empty { border-radius: var(--radius-md); }
-.status-pill, .attention-chip { border-radius: var(--radius-xs); }
+.proposal-action-row { border-radius: var(--radius-md); }
 .settings-title-row h1 { font-size: clamp(1.8rem, 3vw, 2.45rem); }
-.settings-eyebrow, .assistant-module-eyebrow, .activity-eyebrow, .eyebrow {
+.settings-eyebrow, .activity-eyebrow, .eyebrow {
   font-family: var(--font-sans);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -212,7 +192,6 @@
   box-shadow: none;
   color: var(--button-primary-fg);
 }
-.assistant-module-hero { border-radius: var(--radius-xl); }
 .activity-panel { background: var(--panel-gradient); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 20px; }
 .activity-filter input, .activity-node-body, .activity-summary, .activity-refs pre { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-md); }
 .activity-rail-dot { box-shadow: 0 0 0 4px var(--bg-card); }
@@ -405,7 +384,6 @@ button:hover:not(.kanban-card-speed-toggle) { transform: none !important; }
   .pi-chat-page { padding-top: 14px; }
   .pi-chat-shell { grid-template-columns: minmax(0, 1fr); }
   .pi-chat-sidebar.glass-card, .pi-chat-main.glass-card { border-radius: var(--radius-md); }
-  .attention-inbox-grid { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); }
 }
 
 @media (max-width: 760px) {
@@ -414,8 +392,6 @@ button:hover:not(.kanban-card-speed-toggle) { transform: none !important; }
   .pi-chat-main.glass-card { min-height: 52vh; }
   .pi-chat-thread { padding: 22px 16px; }
   .pi-chat-composer { padding: 12px 14px 15px; }
-  .attention-inbox-grid { grid-template-columns: 1fr; }
-  .attention-inbox-list { max-height: 300px; }
   .settings-tabs { width: 100%; }
   .settings-tab { flex: 1 0 auto; }
 }
