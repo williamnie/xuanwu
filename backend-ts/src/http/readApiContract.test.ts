@@ -70,6 +70,10 @@ describe("read API route contracts", () => {
             "responsibility": "domain",
           },
           {
+            "id": "legacy-compatibility",
+            "responsibility": "projection",
+          },
+          {
             "id": "usage",
             "responsibility": "projection",
           },

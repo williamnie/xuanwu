@@ -309,7 +309,7 @@ function CompatibilitySessionNotice() {
   return (
     <div className="run-surface-notice compat">
       <strong>Sessions 兼容 deep link</strong>
-      <span>此入口在迁移窗口内保留旧 provider session 操作；返回 Runs 后以 Work/Run 为执行主线。</span>
+      <span>此入口按 compat v1 保留至 v0.3.x；请迁移到 Runs provider drill-down，以 Work/Run 为执行主线。</span>
     </div>
   );
 }

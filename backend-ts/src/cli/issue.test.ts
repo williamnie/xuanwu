@@ -22,6 +22,7 @@ describe("Bun issue CLI", () => {
     const bodyFile = await tempIssueFile("修复 Bun CLI\n\n保持最小改动。");
     const requests: string[] = [];
     const fetcher = fetchStub(async (request) => {
+      expect(request.headers.get("x-codex-client")).toBe("codex-issue-runner-cli");
       requests.push(`${request.method} ${new URL(request.url).pathname}`);
       if (new URL(request.url).pathname === "/api/issues") {
         expect(request.method).toBe("POST");

@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useEffect } from 'react';
 import { useImmer } from 'use-immer';
 import { systemApi } from './api/system.js';
 import { getAuthToken } from './api/authToken';
+import { compatibilityApi } from './api/compatibility.js';
 import {
   assistantModuleForPage,
   isAssistantModulePage,
@@ -20,9 +21,10 @@ import {
 import { RECONCILE_INTERVAL_MS } from './utils/stateGuards';
 import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
+import { message as toast } from './store/toastStore';
 import AuthGate from './components/AuthGate';
 import { PRODUCT_NAV_LABELS } from './brand.js';
-import { issueIdFromWorkId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
+import { issueIdFromWorkId, workIdFromIssueId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
 import { handoffRouteFromHash } from './pages/handoffPageModel.js';
 import './App.css';
 import './GeekWorkbench.css';
@@ -195,12 +197,21 @@ export default function App() {
 
   const navigateTo = useCallback((page, issueId = null, sessionId = '', handoffId = '') => {
     const resolvedPage = resolveProductPage(page, { workBoardEnabled: WORK_BOARD_ENABLED });
+    if ((page === 'issues' || page === 'sessions') && resolvedPage !== page) {
+      compatibilityApi.recordLegacyRoute({ family: page, target: resolvedPage }).catch(() => {});
+      toast.warning(
+        `${page === 'issues' ? 'Issues' : 'Sessions'} 旧入口已迁移到 ${resolvedPage === 'work' ? 'Work' : 'Runs'}；compat v1 保留至 v0.3.x。`,
+        6000,
+      );
+    }
     const hashRoute = handoffRouteFromHash(globalThis.location?.hash);
     const targetHandoffId = resolvedPage === 'handoffs' ? handoffId || hashRoute?.handoffId || '' : '';
     const targetIssueId = resolvedPage === 'issues'
       ? page === 'work' ? issueIdFromWorkId(issueId) : issueId
       : null;
-    const targetWorkId = resolvedPage === 'work' ? String(issueId || '') : '';
+    const targetWorkId = resolvedPage === 'work'
+      ? page === 'issues' ? workIdFromIssueId(issueId) : String(issueId || '')
+      : '';
     if (resolvedPage !== 'handoffs' && hashRoute && globalThis.history && globalThis.location) {
       globalThis.history.replaceState(null, '', `${globalThis.location.pathname}${globalThis.location.search}`);
     }

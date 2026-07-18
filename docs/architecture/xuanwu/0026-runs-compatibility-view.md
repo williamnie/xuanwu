@@ -1,5 +1,8 @@
 # ADR-XW-0026：Runs 主视图与 Sessions 兼容入口
 
+> P11.05 更新：`sessions` 旧 page id 的期限、warning、telemetry 和 compat v1 removal gate 由
+> [ADR-XW-0081](0081-issues-sessions-route-retirement.md) 接管；provider observation drill-down 继续保留。
+
 - 状态：Accepted
 - 日期：2026-07-16
 - 路线 issue：XW P03.07 / Runner #662

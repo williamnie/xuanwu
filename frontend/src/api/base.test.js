@@ -11,6 +11,7 @@ test('base request preserves bearer auth, JSON headers, and response parsing', a
     const headers = new Headers(options.headers);
     assert.equal(headers.get('Authorization'), 'Bearer test-token');
     assert.equal(headers.get('Content-Type'), 'application/json');
+    assert.equal(headers.get('X-Codex-Client'), 'xuanwu-web');
     assert.equal(headers.get('X-Request-ID'), 'request-1');
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   });

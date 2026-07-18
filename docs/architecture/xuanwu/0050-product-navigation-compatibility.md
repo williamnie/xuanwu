@@ -1,5 +1,8 @@
 # 玄武产品导航与兼容路由合同
 
+> P11.05 更新：`issues` 已从隐藏挂载入口升级为到 Work 的确定性 redirect；期限和 telemetry 见
+> [ADR-XW-0081](0081-issues-sessions-route-retirement.md)。
+
 - 状态：Accepted
 - 日期：2026-07-17
 - 依赖：[ADR-XW-0002](0002-brand-terminology.md)、[Work Board 兼容合同](0019-work-board-compatibility.md)、[Runs 兼容视图合同](0026-runs-compatibility-view.md)

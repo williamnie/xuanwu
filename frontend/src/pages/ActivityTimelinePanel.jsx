@@ -131,7 +131,7 @@ function NodeLinks({ navigateTo, node }) {
   const sessionId = node.refs?.session_id || '';
   return (
     <div className="activity-links">
-      {issueId > 0 && navigateTo && <button onClick={() => navigateTo('issues', issueId)} type="button"><Link2 size={13} /> Issue #{issueId}</button>}
+      {issueId > 0 && navigateTo && <button onClick={() => navigateTo('work', `xw:work:issues:${issueId}`)} type="button"><Link2 size={13} /> Work #{issueId}</button>}
       {sessionId && navigateTo && <button onClick={() => navigateTo('sessions', null, sessionId)} type="button"><Link2 size={13} /> Session</button>}
       {issueId > 0 && <a href={`/api/issues/${issueId}`} rel="noreferrer" target="_blank"><Link2 size={13} /> issue API</a>}
       {links.map(([label, href]) => <a href={href} key={`${label}:${href}`} rel="noreferrer" target="_blank"><Link2 size={13} /> {label}</a>)}

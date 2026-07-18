@@ -14,6 +14,7 @@
 
 - 产品统一使用玄武品牌；`codex-issue-runner` 保留为仓库、二进制和兼容 API 名称。
 - 生产后端统一为 Bun/TypeScript，持久化 authority 仍为 `runner.db`。
+- Issues/Sessions 用户入口迁移到 Work/Runs；旧 API 进入可观测的 compat v1 deprecation 窗口，保留到 `v0.3.x`。
 
 ## [0.1.0] - 2026-05-22
 

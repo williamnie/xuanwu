@@ -248,7 +248,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
           <span>WORK ID</span>
           <code>{work.id}</code>
           {issueId ? (
-            <button onClick={() => navigateTo('issues', issueId)} type="button">Issue #{issueId} compatibility <ArrowUpRight size={13} /></button>
+            <span>Issue #{issueId} authority</span>
           ) : null}
         </div>
       </header>

@@ -70,6 +70,7 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
 export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   dashboard: 'command-center',
   'pi-chat': 'ask-xuanwu',
+  issues: 'work',
   sessions: 'runs',
   cron: 'automations',
   'pi-automations': 'automations',
@@ -77,10 +78,6 @@ export const PRODUCT_COMPAT_ROUTE_REDIRECTS = Object.freeze({
   'pi-connectors': 'connections',
   'attention-inbox': 'command-center',
   'pi-inbox': 'command-center',
-});
-
-const HIDDEN_COMPAT_ROUTE_PARENTS = Object.freeze({
-  issues: 'work',
 });
 
 export function productNavigationItems({ workBoardEnabled = true } = {}) {
@@ -95,7 +92,6 @@ export function resolveProductPage(page, { workBoardEnabled = true } = {}) {
 
 export function productNavPageForRoute(page) {
   const resolvedPage = PRODUCT_COMPAT_ROUTE_REDIRECTS[page] || page;
-  if (HIDDEN_COMPAT_ROUTE_PARENTS[resolvedPage]) return HIDDEN_COMPAT_ROUTE_PARENTS[resolvedPage];
   if (isAssistantModulePage(resolvedPage)) return 'settings';
   return resolvedPage;
 }

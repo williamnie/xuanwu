@@ -1,5 +1,8 @@
 # Work Board 与 Issues 兼容入口
 
+> P11.05 更新：用户级 `issues` page id 已按 [ADR-XW-0081](0081-issues-sessions-route-retirement.md)
+> redirect 到 Work；旧 Issues 页面只作为关闭 Work feature flag 时的 rollback artifact。API/storage authority 不变。
+
 ## 决策
 
 `Work Board` 是统一 Work Ledger 的新用户入口；`Issues` 页面、Issue detail 和现有 `/api/issues*` 操作继续保留。Work 卡片通过 canonical `xw:work:issues:<issue_id>` 映射打开原 Issue detail，不复制详情或执行逻辑。

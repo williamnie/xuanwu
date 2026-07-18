@@ -46,6 +46,7 @@ test('legacy page ids redirect into canonical product routes without replacing h
   assert.deepEqual(PRODUCT_COMPAT_ROUTE_REDIRECTS, {
     dashboard: 'command-center',
     'pi-chat': 'ask-xuanwu',
+    issues: 'work',
     sessions: 'runs',
     cron: 'automations',
     'pi-automations': 'automations',
@@ -57,7 +58,7 @@ test('legacy page ids redirect into canonical product routes without replacing h
   for (const [legacyPage, canonicalPage] of Object.entries(PRODUCT_COMPAT_ROUTE_REDIRECTS)) {
     assert.equal(resolveProductPage(legacyPage), canonicalPage);
   }
-  assert.equal(resolveProductPage('issues'), 'issues');
+  assert.equal(resolveProductPage('issues'), 'work');
   assert.equal(resolveProductPage('attention-inbox'), 'command-center');
   assert.equal(resolveProductPage('pi-inbox'), 'command-center');
   assert.equal(productNavPageForRoute('issues'), 'work');
@@ -68,6 +69,8 @@ test('legacy page ids redirect into canonical product routes without replacing h
 test('App routes canonical pages to the currently verified compatibility surfaces', () => {
   assert.match(appSource, /currentPage: initialHandoffRoute\?\.page \|\| 'command-center'/);
   assert.match(appSource, /resolveProductPage\(page, \{ workBoardEnabled: WORK_BOARD_ENABLED \}\)/);
+  assert.match(appSource, /recordLegacyRoute\(\{ family: page, target: resolvedPage \}\)/);
+  assert.match(appSource, /workIdFromIssueId\(issueId\)/);
   assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat navigateTo=\{navigateTo\} initialConversationId=\{selectedPiConversationId\} \/>/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);

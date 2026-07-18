@@ -9,6 +9,7 @@ export async function request(path, options = {}) {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'X-Codex-Client': 'xuanwu-web',
       ...authHeader(),
       ...options.headers,
     },

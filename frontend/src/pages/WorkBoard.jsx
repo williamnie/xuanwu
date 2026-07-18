@@ -152,7 +152,7 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
         view={view}
       />
 
-      <CompatibilityNotice compatibility={compatibility} navigateTo={navigateTo} />
+      <CompatibilityNotice compatibility={compatibility} />
 
       <WorkFilters
         filters={filters}
@@ -263,7 +263,7 @@ function LedgerStat({ label, tone = '', value }) {
   );
 }
 
-function CompatibilityNotice({ compatibility, navigateTo }) {
+function CompatibilityNotice({ compatibility }) {
   return (
     <div className="work-compatibility-notice">
       <div>
@@ -273,9 +273,7 @@ function CompatibilityNotice({ compatibility, navigateTo }) {
           Work 写入经兼容适配器落到 Issues；当前 shadow {compatibility?.target_shadow || 'disabled'}，无双写。
         </span>
       </div>
-      <button onClick={() => navigateTo('issues')} type="button">
-        打开 Issues 兼容入口 <ArrowUpRight size={14} />
-      </button>
+      <span className="work-compatibility-window">Issues API compat v1 保留至 v0.3.x；新入口统一使用 Work。</span>
     </div>
   );
 }
@@ -384,9 +382,7 @@ function WorkCard({ navigateTo, onEdit, onEvidence, projectName, relations, work
           <ShieldCheck size={13} /> Evidence
         </button>
         {issueId ? (
-          <button className="work-issue-link" onClick={() => navigateTo('issues', issueId)} type="button">
-            Issue #{issueId} <ArrowUpRight size={13} />
-          </button>
+          <span className="work-source-label">Issue #{issueId} authority</span>
         ) : <span className="work-source-label">{work.id}</span>}
       </div>
     </article>

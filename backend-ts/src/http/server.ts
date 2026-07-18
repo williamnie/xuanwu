@@ -22,6 +22,7 @@ import type { PiOpenAICodexOAuthLogin } from "./piOAuthApi.ts";
 import type { EventRouterSourcePolicy } from "../pi/eventRouter.ts";
 import type { LlmIntakeModel } from "../pi/llmIntake.ts";
 import { registerReadApiRoutes } from "./readApi.ts";
+import { instrumentLegacyCompatibilityResponse } from "./legacyCompatibilityApi.ts";
 import { registerRunnerSettingsRoutes } from "./runnerSettingsApi.ts";
 import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
@@ -137,7 +138,7 @@ export async function startServer(
     hostname: address.hostname,
     idleTimeout: 120,
     port: address.port,
-    fetch: createRequestHandler(activeRouter, authToken, { webDir: config.webDir })
+    fetch: createRequestHandler(activeRouter, authToken, { database: runtime.database, webDir: config.webDir })
   });
 }
 
@@ -167,7 +168,7 @@ export function registerSystemStatusRoute(
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }
 
-type RequestHandlerOptions = { webDir?: string };
+type RequestHandlerOptions = { database?: RunnerDatabase; webDir?: string };
 
 export function createRequestHandler(
   router: Router,
@@ -178,7 +179,7 @@ export function createRequestHandler(
     const corsResponse = applyLocalCors(request);
     if (corsResponse) return corsResponse;
     const response = requireBearerAuth(request, authToken) ?? await routeOrStatic(router, request, options);
-    return withCors(request, response);
+    return withCors(request, instrumentLegacyCompatibilityResponse(request, response, options.database));
   };
 }
 

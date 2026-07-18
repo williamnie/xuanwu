@@ -29,6 +29,11 @@ export function issueIdFromWorkId(workId) {
   return match ? Number(match[1]) : null;
 }
 
+export function workIdFromIssueId(issueId) {
+  const value = Number(issueId);
+  return Number.isSafeInteger(value) && value > 0 ? `xw:work:issues:${value}` : '';
+}
+
 export function indexRelationsByWork(relations = []) {
   const index = new Map();
   relations.forEach((relation) => {

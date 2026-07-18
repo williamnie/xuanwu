@@ -10,6 +10,7 @@ import {
   workBoardEnabled,
   workDeliveryStage,
   workNeedsAttention,
+  workIdFromIssueId,
 } from './workBoardModel.js';
 
 const works = [
@@ -32,6 +33,8 @@ test('Issue-backed Work IDs produce stable Issues deep links', () => {
   assert.equal(issueIdFromWorkId('xw:work:issues:655'), 655);
   assert.equal(issueIdFromWorkId('xw:work:external:655'), null);
   assert.equal(issueIdFromWorkId('xw:work:issues:0'), null);
+  assert.equal(workIdFromIssueId(655), 'xw:work:issues:655');
+  assert.equal(workIdFromIssueId(0), '');
 });
 
 test('Attention and delivery projections stay deterministic', () => {
@@ -74,7 +77,7 @@ test('large Work lists preserve deterministic combined filtering', () => {
   assert.equal(result.every(item => item.owner.project_id === 'alpha' && item.status === 'done'), true);
 });
 
-test('Work stays primary while hidden Issues compatibility routes keep the domain client', () => {
+test('Work stays primary while Issues route redirects and compatibility APIs keep the domain client', () => {
   const app = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebar = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');
   const navigation = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
@@ -85,7 +88,7 @@ test('Work stays primary while hidden Issues compatibility routes keep the domai
   assert.match(app, /selectedWorkId=\{selectedWorkId\}/);
   assert.match(app, /resolveProductPage/);
   assert.match(sidebar, /productNavigationItems/);
-  assert.match(navigation, /issues: 'work'/);
+  assert.match(navigation, /issues:\s*'work'/);
   assert.doesNotMatch(sidebar, /aria-label="Issues"/);
   assert.match(client, /request\('\/api\/works'/);
   assert.match(client, /request\(`\/api\/works\/\$\{encodeURIComponent\(id\)\}`/);
