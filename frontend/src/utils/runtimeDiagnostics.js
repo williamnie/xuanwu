@@ -1,6 +1,13 @@
 import { redactRuntimeText } from './runtimeLogs.js';
 
 const SENSITIVE_KEY = /(?:authorization|token|secret|password|api[_-]?key|access[_-]?key)/i;
+const SAFE_USAGE_KEYS = new Set([
+  'cached_input_tokens',
+  'input_tokens',
+  'output_tokens',
+  'reasoning_output_tokens',
+  'total_tokens',
+]);
 
 export function buildRuntimeDiagnosticsBundle({ connectors = {}, doctor = {}, logs = {} } = {}, generatedAt = new Date().toISOString()) {
   return redactDiagnosticValue({
@@ -12,6 +19,8 @@ export function buildRuntimeDiagnosticsBundle({ connectors = {}, doctor = {}, lo
       source: 'system APIs plus client defense-in-depth',
     },
     runtime: doctor,
+    health: doctor?.health || {},
+    observability: doctor?.observability || {},
     connectors,
     logs,
   });
@@ -22,7 +31,7 @@ export function formatRuntimeDiagnosticsBundle(bundle) {
 }
 
 export function redactDiagnosticValue(value, key = '') {
-  if (SENSITIVE_KEY.test(key)) return '[redacted]';
+  if (SENSITIVE_KEY.test(key) && !SAFE_USAGE_KEYS.has(key)) return '[redacted]';
   if (Array.isArray(value)) return value.map(item => redactDiagnosticValue(item));
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, redactDiagnosticValue(item, name)]));

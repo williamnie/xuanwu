@@ -14,6 +14,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
 import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
 import { isSensitiveFieldName } from "../security/redactionRegistry.ts";
+import { buildRuntimeObservability } from "../observability/runtimeObservability.ts";
 
 type SystemStatusContext = {
   authEnabled: boolean;
@@ -29,7 +30,15 @@ type ProviderStatus = ReturnType<typeof providerStatus>[number];
 
 export function buildSystemStatus(context: SystemStatusContext): Record<string, unknown> {
   const providers = providerStatus(context.config);
-  return {
+  const connectorHealth = buildStaticConnectorDiagnostics({
+    config: context.config,
+    database: context.database,
+    webhookSigningSecret: context.webhookSigningSecret
+  });
+  const eventProjection = eventProjectionStatus(context.database);
+  const runProgressProjection = runProgressProjectionStatus(context.database);
+  const observability = buildRuntimeObservability(context.database);
+  const status = {
     service: serviceStatus(context.startedAt),
     db: databaseStatus(context.database),
     auth: { enabled: context.authEnabled },
@@ -38,15 +47,13 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     codex: codexStatus(context.config),
     providers,
     connectors: connectorStatus(context.config, context.feishuReceiverStatus?.()),
-    connector_health: buildStaticConnectorDiagnostics({
-      config: context.config,
-      database: context.database,
-      webhookSigningSecret: context.webhookSigningSecret
-    }),
-    event_projection: eventProjectionStatus(context.database),
-    run_progress_projection: runProgressProjectionStatus(context.database),
-    runner: runnerStatus(context.database)
+    connector_health: connectorHealth,
+    event_projection: eventProjection,
+    run_progress_projection: runProgressProjection,
+    runner: runnerStatus(context.database),
+    observability
   };
+  return { ...status, health: systemHealth({ ...status, required_provider_ids: requiredProviderIDs(context.database) }) };
 }
 
 export function buildRuntimeDoctor(context: SystemStatusContext): Record<string, unknown> {
@@ -57,11 +64,13 @@ export function buildRuntimeDoctor(context: SystemStatusContext): Record<string,
     listen: { addr: status.config.addr },
     auth: { enabled: status.auth.enabled, current_request_authorized: true },
     security: status.security,
+    health: status.health,
     db: { ...status.db, path: status.config.db_path, path_visible: status.db.ok },
     runner: status.runner,
     projects: [],
     providers: status.providers.map(doctorProvider),
     connectors: status.connectors,
+    observability: status.observability,
     recent_errors: { count: 0, sources: [] }
   };
 }
@@ -332,8 +341,72 @@ type RuntimeStatus = {
   config: { addr: string; db_path: string };
   db: CheckStatus;
   connectors: Array<Record<string, unknown>>;
+  connector_health: Array<Record<string, unknown>>;
+  event_projection: Record<string, unknown>;
+  health: Record<string, unknown>;
+  observability: Record<string, unknown>;
   providers: ProviderStatus[];
+  run_progress_projection: Record<string, unknown>;
   runner: Record<string, number>;
   security: Record<string, unknown>;
   service: Record<string, unknown>;
 };
+
+function systemHealth(status: {
+  connector_health: Array<Record<string, unknown>>;
+  db: CheckStatus;
+  event_projection: Record<string, unknown>;
+  observability: Record<string, unknown>;
+  providers: ProviderStatus[];
+  required_provider_ids: Set<string>;
+  run_progress_projection: Record<string, unknown>;
+  security: { warnings: Array<Record<string, string>> };
+}): Record<string, unknown> {
+  const reasons: Array<Record<string, unknown>> = [];
+  if (!status.db.ok) reasons.push(healthReason("database_unavailable", "critical", "db", "database query failed"));
+  for (const warning of arrayObjects(status.security.warnings)) {
+    reasons.push(healthReason(String(warning.code || "security_warning"), "warning", "security", String(warning.message || "security warning")));
+  }
+  for (const provider of status.providers.filter((item) => status.required_provider_ids.has(item.id) && !item.available)) {
+    reasons.push(healthReason("provider_unavailable", "warning", `provider:${provider.id}`, `${provider.label} is unavailable`));
+  }
+  for (const connector of status.connector_health) {
+    const health = object(connector.health);
+    const state = String(health.state ?? connector.state ?? "");
+    if (state === "failed" || state === "degraded") {
+      reasons.push(healthReason("connector_unhealthy", state === "failed" ? "critical" : "warning", `connector:${String(connector.id ?? "unknown")}`, state));
+    }
+  }
+  if (status.event_projection.status === "lagging") {
+    reasons.push(healthReason("event_projection_lagging", "warning", "event_summary_projection", `${Number(status.event_projection.lag_rows ?? 0)} rows pending`));
+  }
+  if (Number(status.run_progress_projection.stalled_runs ?? 0) > 0) {
+    reasons.push(healthReason("run_progress_stalled", "warning", "run_progress_projection", `${Number(status.run_progress_projection.stalled_runs)} runs stalled`));
+  }
+  const healthSignals = object(status.observability.health_signals);
+  for (const signal of arrayObjects(healthSignals.reasons)) {
+    reasons.push(healthReason(String(signal.code ?? "observability_degraded"), "warning", String(signal.source_ref ?? "observability"), `${Number(signal.count ?? 0)} affected`));
+  }
+  const state = reasons.some((item) => item.severity === "critical") ? "failed" : reasons.length > 0 ? "degraded" : "healthy";
+  return { state, reasons };
+}
+
+function healthReason(code: string, severity: "critical" | "warning", sourceRef: string, message: string): Record<string, unknown> {
+  return { code, severity, source_ref: sourceRef, message: redactSensitiveText(message) };
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function arrayObjects(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.map(object) : [];
+}
+
+function requiredProviderIDs(database: RunnerDatabase): Set<string> {
+  return new Set(database.sqlite.query<{ provider: string }, []>(`
+    select provider from projects where trim(provider)<>''
+    union
+    select provider from issue_runs where ended_at='' and trim(provider)<>''
+  `).all().map((row) => String(row.provider)));
+}

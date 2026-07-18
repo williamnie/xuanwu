@@ -8,6 +8,8 @@ test('builds a versioned runtime diagnostics bundle with defense-in-depth redact
     connectors: { connectors: [{ id: 'github-events', secret_refs: [{ ref: 'secret://integrations/github/token' }] }] },
     doctor: {
       db: { path: '<stateDir>/runner.db' },
+      health: { state: 'degraded', reasons: [{ code: 'provider_unavailable' }] },
+      observability: { cost: { usage: { total_tokens: 120 } }, trace_correlation: { items: [{ trace_id: 'xw:work:issues:1' }] } },
       providers: [{ id: 'codex', api_key: 'doctor-secret' }],
     },
     logs: {
@@ -19,6 +21,9 @@ test('builds a versioned runtime diagnostics bundle with defense-in-depth redact
 
   assert.equal(bundle.schema_version, 'xuanwu.runtime-diagnostics.v1');
   assert.equal(bundle.generated_at, '2026-07-17T01:00:00.000Z');
+  assert.equal(bundle.health.state, 'degraded');
+  assert.equal(bundle.observability.cost.usage.total_tokens, 120);
+  assert.equal(bundle.observability.trace_correlation.items[0].trace_id, 'xw:work:issues:1');
   assert.match(text, /<stateDir>\/runner\.db/);
   assert.match(text, /\[redacted-path\]/);
   assert.match(text, /\[redacted\]/);

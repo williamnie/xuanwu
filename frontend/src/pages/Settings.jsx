@@ -192,6 +192,8 @@ function RuntimeStatusBody({ status, loading }) {
   const rows = [
     ['API', status.service?.alive ? 'alive' : 'down', status.service?.alive],
     ['DB', status.db?.ok ? 'ok' : status.db?.error || 'error', status.db?.ok],
+    ['Health reasons', `${status.health?.state || 'unknown'} · ${(status.health?.reasons || []).length} reasons`, status.health?.state === 'healthy'],
+    ['Observability', `${status.observability?.dimensions?.work?.total || 0} Work / ${status.observability?.dimensions?.run?.total || 0} Run / ${status.observability?.cost?.usage?.total_tokens || 0} tokens`, true],
     ['Codex server', `${status.codex?.server_mode || 'cli'} · ${status.codex?.command || 'missing'}`, status.codex?.command_ok],
     ['Auth enabled', status.config?.auth_enabled ? 'enabled' : 'disabled', !status.config?.auth_enabled],
     ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress / max ${status.runner?.max_parallel_projects || 1}`, true],

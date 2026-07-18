@@ -79,6 +79,17 @@ describe("Bun system status endpoints", () => {
         status: "ready",
         waiting_approval_runs: 0
       });
+      expect(body.observability).toMatchObject({
+        schema_version: "xuanwu.runtime-observability.v1",
+        query_contract: { raw_log_scan: false, provider_session_scan: false },
+        dimensions: {
+          work: { source: "issues", total: 0 },
+          run: { source: "issue_runs", total: 0, attempts: 0 },
+          automation: { source: "automation_runs", total: 0 }
+        },
+        trace_correlation: { trace_id_contract: "canonical Work id", items: [] }
+      });
+      expect(body.health).toMatchObject({ state: expect.any(String), reasons: expect.any(Array) });
       expect(body.codex).toMatchObject({
         command: "codex app-server --listen stdio://",
         command_ok: true,
@@ -284,6 +295,11 @@ describe("Bun system status endpoints", () => {
       expect(response.status).toBe(200);
       expect(body.listen.addr).toBe("127.0.0.1:3008");
       expect(body.db.path).toBe("<stateDir>/runner.db");
+      expect(body.observability).toMatchObject({
+        schema_version: "xuanwu.runtime-observability.v1",
+        query_contract: { raw_log_scan: false }
+      });
+      expect(body.health).toMatchObject({ state: expect.any(String), reasons: expect.any(Array) });
       expect(claude).toMatchObject({
         id: "claude",
         label: "Claude Code",
@@ -446,6 +462,8 @@ type SystemStatusBody = {
   connectors: Array<{ id: string } & Record<string, unknown>>;
   connector_health: Array<{ id: string } & Record<string, unknown>>;
   event_projection: Record<string, unknown>;
+  health: Record<string, unknown>;
+  observability: Record<string, unknown>;
   run_progress_projection: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
   runner: Record<string, number>;
@@ -459,6 +477,8 @@ type SystemStatusBody = {
 
 type RuntimeDoctorBody = {
   db: { path: string };
+  health: Record<string, unknown>;
   listen: { addr: string };
+  observability: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
 };
