@@ -97,6 +97,18 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 
 安装可重复执行：新二进制会先写入临时文件再原子替换，随后由 launchd/systemd 重启；`runner.db`、token 和日志不会被升级脚本替换。Linux 额外执行 `loginctl enable-linger "$USER"`，使 user systemd 在退出登录和重启后仍会启动。macOS 的 LaunchAgent 使用 `ProcessType=Background`，作为非 GUI daemon 运行，不依赖前台 App 的 App Nap 调度。
 
+installer 会先验证 `checksums.txt` 和 binary/release metadata 版本一致性；生产环境可设置 `CODEX_RUNNER_VERIFY_ATTESTATION=require`，通过 GitHub CLI 验证由 release workflow 签发的 provenance。安装后可只读检查更新，升级和回滚则必须提供显式 apply、非 LLM actor、已验证 backup ref 和 audit ref：
+
+```bash
+codex-issue-runner-update check --json
+codex-issue-runner-update upgrade --apply \
+  --actor release-automation --actor-kind system \
+  --audit-ref 'change:<id>' --reason 'approved upgrade' \
+  --backup-ref 'backup-manifest:sha256:<digest>' --confirm-backup-tested
+```
+
+完整发布、migration note、灾备和 binary/data rollback 边界见 [发布、升级与回滚运行手册](docs/runbooks/release-upgrade-rollback.md)；用户备份恢复命令见 [备份、导出、导入与恢复演练](docs/backup-restore.md)。
+
 安装后使用随 release 一起安装的 daemon CLI 统一查看和管理边界：
 
 ```bash
@@ -191,8 +203,10 @@ git push origin v0.1.0
 本地也可以手动打包：
 
 ```bash
-./scripts/package-release.sh
+CODEX_RUNNER_VERSION=v0.2.0 CODEX_RUNNER_ENFORCE_RELEASE=1 ./scripts/package-release.sh
 ```
+
+release pipeline 会发布 `release.json`、`checksums.txt` 和四个平台压缩包，并用 GitHub OIDC/Sigstore 生成 signed build provenance。发布前必须先在 [CHANGELOG](CHANGELOG.md) 添加与 tag 完全一致的版本 heading；具体发布和验证命令见 [运维手册](docs/runbooks/release-upgrade-rollback.md)。
 
 ## CLI 调用
 

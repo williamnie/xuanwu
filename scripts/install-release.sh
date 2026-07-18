@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
 VERSION="${CODEX_RUNNER_VERSION:-latest}"
+VERIFY_ATTESTATION="${CODEX_RUNNER_VERIFY_ATTESTATION:-auto}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
@@ -14,10 +15,14 @@ AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 AUTH_TOKEN="${CODEX_RUNNER_AUTH_TOKEN:-}"
 BIN_PATH="$INSTALL_DIR/codex-issue-runner"
 DAEMON_PATH="$INSTALL_DIR/codex-issue-runner-daemon"
+INSTALLER_PATH="$INSTALL_DIR/codex-issue-runner-install"
+UPDATER_PATH="$INSTALL_DIR/codex-issue-runner-update"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-}"
 CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
 CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
+AUDIT_LOG="$LOG_DIR/release-upgrade.log"
+RESOLVED_VERSION=""
 
 usage() {
   cat <<'HELP'
@@ -36,14 +41,27 @@ Useful environment variables:
   CODEX_RUNNER_CODEX_APP_CMD=/path/to/app/codex Codex App bundled server command
   CODEX_RUNNER_AUTH_TOKEN=...          Custom bearer token for remote access
   CODEX_RUNNER_AUTH_TOKEN_FILE=...     Generated token file path
+  CODEX_RUNNER_VERIFY_ATTESTATION=auto|require|skip
 
-After installation, use `codex-issue-runner-daemon status|doctor|restart|uninstall`.
+After installation, use `codex-issue-runner-daemon status|doctor|restart|uninstall`
+and `codex-issue-runner-update check|upgrade|rollback`.
 `uninstall` keeps the state directory and database.
 HELP
 }
 
 log() { printf '[install] %s\n' "$*"; }
 fail() { printf '[install] ERROR: %s\n' "$*" >&2; exit 1; }
+
+audit() {
+  local outcome="$1"
+  mkdir -p "$LOG_DIR"
+  chmod 700 "$LOG_DIR" 2>/dev/null || true
+  printf '%s action=install outcome=%s version=%s actor=%q actor_kind=%q audit_ref=%q reason=%q\n' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$outcome" "${RESOLVED_VERSION:-$VERSION}" \
+    "${CODEX_RUNNER_AUDIT_ACTOR:-${USER:-unknown}}" "${CODEX_RUNNER_AUDIT_ACTOR_KIND:-user}" \
+    "${CODEX_RUNNER_AUDIT_REF:-shell:install-release}" "${CODEX_RUNNER_AUDIT_REASON:-manual install}" >> "$AUDIT_LOG"
+  chmod 600 "$AUDIT_LOG" 2>/dev/null || true
+}
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -87,14 +105,56 @@ detect_platform() {
   printf '%s %s\n' "$os" "$arch"
 }
 
-asset_url() {
-  local os="$1" arch="$2" asset
-  asset="codex-issue-runner_${os}_${arch}.tar.gz"
+release_asset_url() {
+  local asset="$1"
   if [ "$VERSION" = "latest" ]; then
     printf 'https://github.com/%s/releases/latest/download/%s' "$REPO" "$asset"
     return
   fi
   printf 'https://github.com/%s/releases/download/%s/%s' "$REPO" "$VERSION" "$asset"
+}
+
+checksum_for() {
+  local checksums="$1" name="$2"
+  awk -v name="$name" '{ file=$2; sub(/^\*/, "", file); if (file == name) { print $1; exit } }' "$checksums"
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+verify_download() {
+  local path="$1" name="$2" checksums="$3" expected actual
+  expected="$(checksum_for "$checksums" "$name")"
+  [ -n "$expected" ] || fail "checksums.txt has no entry for $name"
+  actual="$(sha256_file "$path")"
+  [ "$actual" = "$expected" ] || fail "SHA-256 mismatch for $name"
+}
+
+verify_attestation() {
+  local archive="$1"
+  case "$VERIFY_ATTESTATION" in
+    skip) return 0 ;;
+    auto|require) ;;
+    *) fail "CODEX_RUNNER_VERIFY_ATTESTATION must be auto, require, or skip" ;;
+  esac
+  if ! command -v gh >/dev/null 2>&1; then
+    [ "$VERIFY_ATTESTATION" = "require" ] && fail "gh is required for release attestation verification"
+    log "warning: gh not found; SHA-256 verified but signed provenance was not checked"
+    return 0
+  fi
+  gh attestation verify "$archive" --repo "$REPO" \
+    --signer-workflow "$REPO/.github/workflows/release.yml" >/dev/null \
+    || fail "GitHub artifact attestation verification failed"
+  log "verified signed GitHub provenance"
+}
+
+release_version() {
+  sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n 1
 }
 
 resolve_codex_cmd() {
@@ -109,20 +169,42 @@ resolve_codex_cmd() {
 }
 
 download_binary() {
-  local os="$1" arch="$2" url tmp archive staged
-  url="$(asset_url "$os" "$arch")"
+  local os="$1" arch="$2" asset url tmp archive checksums metadata staged binary_version
+  asset="codex-issue-runner_${os}_${arch}.tar.gz"
+  url="$(release_asset_url "$asset")"
   tmp="$(mktemp -d)"
   archive="$tmp/codex-issue-runner.tar.gz"
+  checksums="$tmp/checksums.txt"
+  metadata="$tmp/release.json"
   log "downloading $url"
   curl -fL --retry 3 -o "$archive" "$url"
+  curl -fsSL --retry 3 -o "$checksums" "$(release_asset_url checksums.txt)"
+  curl -fsSL --retry 3 -o "$metadata" "$(release_asset_url release.json)"
+  verify_download "$archive" "$asset" "$checksums"
+  verify_download "$metadata" release.json "$checksums"
+  RESOLVED_VERSION="$(release_version "$metadata")"
+  [ -n "$RESOLVED_VERSION" ] || fail "release.json does not contain a version"
+  if [ "$VERSION" != "latest" ] && [ "$RESOLVED_VERSION" != "$VERSION" ]; then
+    fail "release metadata version $RESOLVED_VERSION does not match requested $VERSION"
+  fi
+  verify_attestation "$archive"
   LC_ALL=C tar -xzf "$archive" -C "$tmp"
   [ -x "$tmp/codex-issue-runner" ] || fail "release asset does not contain executable binary"
+  binary_version="$("$tmp/codex-issue-runner" --version | awk 'NR == 1 { print $2 }')"
+  [ "$binary_version" = "$RESOLVED_VERSION" ] \
+    || fail "binary version $binary_version does not match release metadata $RESOLVED_VERSION"
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$LOG_DIR" "$(dirname "$AUTH_TOKEN_FILE")"
   staged="$INSTALL_DIR/.codex-issue-runner.stage.$$"
   install -m 0755 "$tmp/codex-issue-runner" "$staged"
   mv -f "$staged" "$BIN_PATH"
   if [ -f "$tmp/daemon.sh" ]; then
     install -m 0755 "$tmp/daemon.sh" "$DAEMON_PATH"
+  fi
+  if [ -f "$tmp/install-release.sh" ]; then
+    install -m 0755 "$tmp/install-release.sh" "$INSTALLER_PATH"
+  fi
+  if [ -f "$tmp/update-release.sh" ]; then
+    install -m 0755 "$tmp/update-release.sh" "$UPDATER_PATH"
   fi
   if [ -d "$tmp/web" ]; then
     rm -rf "$STATE_DIR/web"
@@ -291,6 +373,10 @@ main() {
   require_cmd curl
   require_cmd tar
   require_cmd uname
+  require_cmd awk
+  if ! command -v sha256sum >/dev/null 2>&1; then require_cmd shasum; fi
+  audit requested
+  trap 'audit failed' ERR
   local os arch
   read -r os arch < <(detect_platform)
   download_binary "$os" "$arch"
@@ -299,6 +385,8 @@ main() {
     darwin) install_macos_launchd ;;
     linux) install_linux_systemd ;;
   esac
+  audit applied
+  trap - ERR
   log "ready: $(service_url)/"
   log "data: $STATE_DIR"
 }

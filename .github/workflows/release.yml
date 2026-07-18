@@ -13,6 +13,9 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 jobs:
   release:
@@ -65,7 +68,13 @@ jobs:
       - name: Package release assets
         env:
           CODEX_RUNNER_VERSION: ${{ steps.vars.outputs.tag }}
+          CODEX_RUNNER_ENFORCE_RELEASE: '1'
         run: ./scripts/package-release.sh
+
+      - name: Sign release provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: dist/release/checksums.txt
 
       - name: Publish GitHub Release
         env:
@@ -73,9 +82,9 @@ jobs:
           TAG_NAME: ${{ steps.vars.outputs.tag }}
         run: |
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" dist/release/*.tar.gz dist/release/checksums.txt --clobber
+            gh release upload "$TAG_NAME" dist/release/*.tar.gz dist/release/checksums.txt dist/release/release.json --clobber
           else
-            gh release create "$TAG_NAME" dist/release/*.tar.gz dist/release/checksums.txt \
+            gh release create "$TAG_NAME" dist/release/*.tar.gz dist/release/checksums.txt dist/release/release.json \
               --title "$TAG_NAME" \
               --generate-notes
           fi

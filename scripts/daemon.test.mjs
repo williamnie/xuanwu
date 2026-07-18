@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -82,19 +83,28 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     const state = join(temp, 'state');
     const install = join(temp, 'install');
     const fixture = join(temp, 'fixture');
-    const archive = join(temp, 'release.tar.gz');
+    const release = join(temp, 'release');
+    const archive = join(release, 'codex-issue-runner_darwin_arm64.tar.gz');
     const calls = join(temp, 'calls.log');
     await mkdir(join(home, 'Library', 'LaunchAgents'), { recursive: true });
     await mkdir(fakeBin, { recursive: true });
     await mkdir(state, { recursive: true });
     await mkdir(fixture, { recursive: true });
+    await mkdir(release, { recursive: true });
     await writeFile(join(state, 'runner.db'), 'state-survives-upgrade');
-    await writeExecutable(join(fixture, 'codex-issue-runner'), '#!/bin/sh\nexit 0\n');
+    await writeExecutable(join(fixture, 'codex-issue-runner'), '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex-issue-runner v1.2.3 build=test bun=test"; fi\nexit 0\n');
     await writeFile(join(fixture, 'daemon.sh'), await readFile(daemon));
     await chmod(join(fixture, 'daemon.sh'), 0o755);
     assert.equal(spawnSync('tar', ['-czf', archive, '-C', fixture, '.']).status, 0);
+    const metadata = join(release, 'release.json');
+    await writeFile(metadata, '{\n  "version": "v1.2.3"\n}\n');
+    await writeFile(join(release, 'checksums.txt'), [
+      `${await sha256(archive)}  codex-issue-runner_darwin_arm64.tar.gz`,
+      `${await sha256(metadata)}  release.json`,
+      ''
+    ].join('\n'));
     await writeExecutable(join(fakeBin, 'uname'), '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; esac\n');
-    await writeExecutable(join(fakeBin, 'curl'), '#!/bin/sh\nfor arg in "$@"; do if [ "$previous" = "-o" ]; then cp "$FIXTURE_ARCHIVE" "$arg"; exit 0; fi; previous="$arg"; done\nexit 0\n');
+    await writeExecutable(join(fakeBin, 'curl'), '#!/bin/sh\nout=""; url=""; previous=""\nfor arg in "$@"; do if [ "$previous" = "-o" ]; then out="$arg"; fi; case "$arg" in http*) url="$arg" ;; esac; previous="$arg"; done\nif [ -n "$out" ]; then cp "$FIXTURE_RELEASE_DIR/${url##*/}" "$out"; fi\nexit 0\n');
     await writeExecutable(join(fakeBin, 'codex'), '#!/bin/sh\nexit 0\n');
     await writeExecutable(join(fakeBin, 'plutil'), '#!/bin/sh\nexit 0\n');
     await writeExecutable(join(fakeBin, 'launchctl'), '#!/bin/sh\necho "launchctl $*" >> "$CALL_LOG"\nexit 0\n');
@@ -103,10 +113,12 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
       HOME: home,
       PATH: `${fakeBin}:${process.env.PATH}`,
       CALL_LOG: calls,
-      FIXTURE_ARCHIVE: archive,
+      FIXTURE_RELEASE_DIR: release,
       CODEX_RUNNER_INSTALL_DIR: install,
       CODEX_RUNNER_STATE_DIR: state,
-      CODEX_RUNNER_ADDR: '127.0.0.1:3999'
+      CODEX_RUNNER_ADDR: '127.0.0.1:3999',
+      CODEX_RUNNER_VERSION: 'v1.2.3',
+      CODEX_RUNNER_VERIFY_ATTESTATION: 'skip'
     };
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = spawnSync('bash', [join(root, 'scripts', 'install-release.sh')], { env, encoding: 'utf8' });
@@ -119,3 +131,7 @@ test('release installer can repeat an atomic macOS upgrade without replacing sta
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+async function sha256(path) {
+  return createHash('sha256').update(await readFile(path)).digest('hex');
+}
