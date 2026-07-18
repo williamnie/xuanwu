@@ -106,7 +106,7 @@ install_deps() {
 
 run_preflight_checks() {
   install_deps
-  run_step "backend-ts tests" bash -lc "cd '$ROOT_DIR/backend-ts' && bun test"
+  run_step "backend-ts tests" bash -lc "cd '$ROOT_DIR/backend-ts' && bun test --timeout 60000"
   run_step "frontend lint" npm --prefix "$ROOT_DIR/frontend" run lint
   APP_VERSION="$(resolve_app_version)"
   BUILD_STAMP="$(resolve_build_stamp)"

@@ -117,7 +117,14 @@ test('release manifest enforces tag format, changelog, and target metadata', asy
 });
 
 test('release package keeps PI Bun assets beside the executable and smokes the host binary', async () => {
-  const script = await readFile(join(root, 'scripts', 'package-release.sh'), 'utf8');
+  const [script, workflow, runbook] = await Promise.all([
+    readFile(join(root, 'scripts', 'package-release.sh'), 'utf8'),
+    readFile(join(root, '.github', 'workflows', 'release.yml'), 'utf8'),
+    readFile(join(root, 'docs', 'runbooks', 'release-upgrade-rollback.md'), 'utf8'),
+  ]);
+  assert.match(script, /bun test --timeout 60000/);
+  assert.match(workflow, /run: bun test --timeout 60000/);
+  assert.match(runbook, /\(cd dist\/release && shasum -a 256 -c checksums\.txt\)/);
   assert.match(script, /cp "\$source\/package\.json" "\$pkg_dir\/package\.json"/);
   assert.match(script, /"\$pkg_dir\/theme"/);
   assert.match(script, /"\$pkg_dir\/assets"/);

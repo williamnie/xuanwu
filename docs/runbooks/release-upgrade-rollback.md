@@ -16,7 +16,7 @@
    ```bash
    CODEX_RUNNER_VERSION=v0.2.0 CODEX_RUNNER_ENFORCE_RELEASE=1 \
      ./scripts/package-release.sh bun-darwin-arm64
-   shasum -a 256 -c dist/release/checksums.txt
+   (cd dist/release && shasum -a 256 -c checksums.txt)
    tar -xOf dist/release/codex-issue-runner_darwin_arm64.tar.gz ./codex-issue-runner.build.stamp
    ```
 

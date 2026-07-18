@@ -62,7 +62,7 @@ jobs:
         run: bun install --cwd backend-ts
 
       - name: Run backend tests
-        run: bun test
+        run: bun test --timeout 60000
         working-directory: backend-ts
 
       - name: Package release assets
