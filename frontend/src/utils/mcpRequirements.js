@@ -30,7 +30,9 @@ function stringList(value) {
   try {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed)) return uniqueClean(parsed.map(String));
-  } catch {}
+  } catch {
+    // Non-JSON strings fall back to the existing newline/comma parser below.
+  }
   return uniqueClean(text.split(/[\n,]/));
 }
 

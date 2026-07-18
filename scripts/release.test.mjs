@@ -116,6 +116,16 @@ test('release manifest enforces tag format, changelog, and target metadata', asy
   }
 });
 
+test('release package keeps PI Bun assets beside the executable and smokes the host binary', async () => {
+  const script = await readFile(join(root, 'scripts', 'package-release.sh'), 'utf8');
+  assert.match(script, /cp "\$source\/package\.json" "\$pkg_dir\/package\.json"/);
+  assert.match(script, /"\$pkg_dir\/theme"/);
+  assert.match(script, /"\$pkg_dir\/assets"/);
+  assert.match(script, /"\$pkg_dir\/export-html"/);
+  assert.match(script, /run_step "packaged host binary smoke" "\$binary" --version/);
+  assert.doesNotMatch(script, /"\$pkg_dir\/pi-coding-agent\/package\.json"/);
+});
+
 async function createRelease(temp, name, version) {
   const release = join(temp, `release-${name}`);
   const fixture = join(temp, `fixture-${name}`);

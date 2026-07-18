@@ -55,16 +55,40 @@ copy_if_exists() {
 stage_pi_package_assets() {
   local pkg_dir="$1" source="$ROOT_DIR/backend-ts/node_modules/@earendil-works/pi-coding-agent"
   [ -f "$source/package.json" ] || fail "missing PI package assets: $source/package.json"
-  mkdir -p "$pkg_dir/pi-coding-agent"
-  cp "$source/package.json" "$pkg_dir/pi-coding-agent/package.json"
-  copy_if_exists "$source/README.md" "$pkg_dir/pi-coding-agent/README.md"
-  copy_if_exists "$source/CHANGELOG.md" "$pkg_dir/pi-coding-agent/CHANGELOG.md"
-  copy_if_exists "$source/docs" "$pkg_dir/pi-coding-agent/docs"
-  copy_if_exists "$source/examples" "$pkg_dir/pi-coding-agent/examples"
-  copy_if_exists "$source/dist/modes/interactive/theme" "$pkg_dir/pi-coding-agent/theme"
-  copy_if_exists "$source/dist/modes/interactive/assets" "$pkg_dir/pi-coding-agent/assets"
-  copy_if_exists "$source/dist/core/export-html" "$pkg_dir/pi-coding-agent/export-html"
+  # pi-coding-agent resolves Bun binary assets relative to process.execPath.
+  # Keep its package metadata and runtime assets next to our compiled binary;
+  # a nested pi-coding-agent/ directory is invisible to that resolver.
+  cp "$source/package.json" "$pkg_dir/package.json"
+  copy_if_exists "$source/dist/modes/interactive/theme" "$pkg_dir/theme"
+  copy_if_exists "$source/dist/modes/interactive/assets" "$pkg_dir/assets"
+  copy_if_exists "$source/dist/core/export-html" "$pkg_dir/export-html"
+  copy_if_exists "$source/examples" "$pkg_dir/examples"
+  copy_if_exists "$source/docs" "$pkg_dir/docs/pi-coding-agent"
   copy_if_exists "$ROOT_DIR/backend-ts/node_modules/@silvia-odwyer/photon-node/photon_rs_bg.wasm" "$pkg_dir/photon_rs_bg.wasm"
+}
+
+host_bun_target() {
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) printf 'bun-darwin-arm64' ;;
+    Darwin-x86_64) printf 'bun-darwin-x64' ;;
+    Linux-aarch64|Linux-arm64) printf 'bun-linux-arm64' ;;
+    Linux-x86_64) printf 'bun-linux-x64' ;;
+    *) printf '' ;;
+  esac
+}
+
+smoke_host_binary() {
+  local target="$1" host_target asset binary
+  host_target="$(host_bun_target)"
+  [ -n "$host_target" ] && [ "$target" = "$host_target" ] || return 0
+  case "$target" in
+    bun-darwin-arm64) asset="codex-issue-runner_darwin_arm64" ;;
+    bun-darwin-x64) asset="codex-issue-runner_darwin_amd64" ;;
+    bun-linux-arm64) asset="codex-issue-runner_linux_arm64" ;;
+    bun-linux-x64) asset="codex-issue-runner_linux_amd64" ;;
+  esac
+  binary="$WORK_DIR/$asset/codex-issue-runner"
+  run_step "packaged host binary smoke" "$binary" --version
 }
 
 install_deps() {
@@ -153,6 +177,7 @@ main() {
   fi
   for target in "${targets[@]}"; do
     package_target "$target"
+    smoke_host_binary "$target"
   done
   local manifest_args=(
     "$ROOT_DIR/scripts/write-release-manifest.mjs"
