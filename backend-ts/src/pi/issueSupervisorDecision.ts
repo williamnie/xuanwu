@@ -2,7 +2,6 @@ import { Value } from "@sinclair/typebox/value";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createIssueSupervisorEvent, type PiAgent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
-import { createPiRuntimeSession } from "../http/piRuntime.ts";
 import type { PiGatePolicy } from "./actionGate.ts";
 import {
   PI_SUPERVISOR_DECISION_JSON_SCHEMA,
@@ -50,6 +49,7 @@ const HARD_OUTAGE_DIAGNOSES = new Set(["provider_runtime_unavailable", "session_
 export async function runPiSupervisorDecision(
   input: PiSupervisorDecisionRuntimeInput
 ): Promise<PiSupervisorDecisionRuntimeResult> {
+  const { createPiRuntimeSession } = await import("../http/piRuntime.ts");
   const runtime = await createPiRuntimeSession(input.database, {
     agent: input.agent,
     authorization: supervisorAuthorization(input.project.id),

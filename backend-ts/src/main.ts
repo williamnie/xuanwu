@@ -1,5 +1,5 @@
-import { runCli } from "./cli/command.ts";
 import { formatBunVersion } from "./buildInfo.ts";
+import { coldStartTrace } from "./benchmarks/coldStart.ts";
 import { commandMode } from "./mainMode.ts";
 import { loadConfig } from "./config/env.ts";
 import { openDatabase } from "./db/database.ts";
@@ -9,7 +9,6 @@ import { startServer } from "./http/server.ts";
 import type { FeishuConnectorConfig } from "./integrations/feishu.ts";
 import { createFeishuAgentBridge } from "./integrations/feishuAgentBridge.ts";
 import { createFeishuReceiverManager } from "./integrations/feishuReceiver.ts";
-import { runPiConversationPrompt } from "./http/piConversationApi.ts";
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
@@ -18,6 +17,7 @@ import { recoverInProgressIssues } from "./runner/recovery.ts";
 import { redactSensitiveText } from "./util/redact.ts";
 
 const { serve, args, version } = commandMode(Bun.argv.slice(2));
+coldStartTrace("entry_loaded");
 
 if (version) {
   process.stdout.write(formatBunVersion());
@@ -25,18 +25,23 @@ if (version) {
 }
 
 if (!serve) {
+  const { runCli } = await import("./cli/command.ts");
   process.exit(await runCli(args));
 }
 
 const config = loadConfig(args);
+coldStartTrace("config_loaded");
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
+coldStartTrace("database_opened");
 const bus = new EventBus();
 const providers = executorProviders(config, bus);
+coldStartTrace("providers_initialized");
 setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
 const feishuBridge = createFeishuAgentBridge({
   config: () => config.integrations.feishu,
   database,
   runConversation: async ({ conversationId, event, intent, projectId, prompt, targetProjectId, targetProjectSource }) => {
+    const { runPiConversationPrompt } = await import("./http/piConversationApi.ts");
     const oneShotTargetProjectId = targetProjectId || projectId;
     const result = await runPiConversationPrompt({ bus, database, providers }, {
       clearProjectId: true,
@@ -52,6 +57,7 @@ const feishuBridge = createFeishuAgentBridge({
   }
 });
 const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, bus, database, providers });
+coldStartTrace("connectors_initialized");
 const server = await startServer(config, {
   bus,
   database,
@@ -60,8 +66,10 @@ const server = await startServer(config, {
   onFeishuConfigChanged: restartFeishuReceiver,
   providers
 });
+coldStartTrace("http_routes_registered");
 void restartFeishuReceiver(config.integrations.feishu);
 void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config);
+coldStartTrace("scheduler_watchdog_initialized");
 
 console.log(JSON.stringify({
   ok: true,

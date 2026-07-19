@@ -59,6 +59,13 @@ describe("Bun system status endpoints", () => {
         stamp: "",
         version: body.service.version
       });
+      expect(body.service.memory).toMatchObject({
+        array_buffers_bytes: expect.any(Number),
+        external_bytes: expect.any(Number),
+        heap_total_bytes: expect.any(Number),
+        heap_used_bytes: expect.any(Number),
+        rss_bytes: expect.any(Number)
+      });
       expect(body.db.ok).toBe(true);
       expect(body.auth.enabled).toBe(true);
       expect(body.config.addr).toBe("127.0.0.1:3008");
@@ -471,6 +478,7 @@ type SystemStatusBody = {
     alive: boolean;
     build: Record<string, unknown>;
     runtime: string;
+    memory: Record<string, number>;
     version: string;
   };
 };

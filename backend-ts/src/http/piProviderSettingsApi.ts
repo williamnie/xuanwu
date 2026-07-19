@@ -164,7 +164,7 @@ async function testProviderConnection(
   const startedAt = Date.now();
   let result: ProviderConnectionResult;
   if (auth === "oauth") {
-    result = oauthConnectionResult(context.database, id);
+    result = await oauthConnectionResult(context.database, id);
   } else {
     result = await probeApiKeyProvider(id, body, current, preset, context.secrets!);
   }
@@ -172,8 +172,8 @@ async function testProviderConnection(
   return result;
 }
 
-function oauthConnectionResult(database: RunnerDatabase, id: string): ProviderConnectionResult {
-  const configured = id === "openai-codex" && isPiOpenAICodexOAuthConfigured(database);
+async function oauthConnectionResult(database: RunnerDatabase, id: string): Promise<ProviderConnectionResult> {
+  const configured = id === "openai-codex" && await isPiOpenAICodexOAuthConfigured(database);
   return {
     auth: "oauth",
     checked_at: new Date().toISOString(),

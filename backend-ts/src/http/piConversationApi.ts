@@ -22,13 +22,7 @@ import { redactSensitiveText } from "../util/redact.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { piConversationPromptImages } from "./piConversationImages.ts";
 import { piConversationDetail } from "./piConversationTranscript.ts";
-import {
-  createOrRestorePiRuntime,
-  PI_RUNNER_CHAT_ACTIONS,
-  createPiRuntimeSession,
-  type PiRuntimeResult,
-  type PiRuntimeSession
-} from "./piRuntime.ts";
+import type { PiRuntimeResult, PiRuntimeSession } from "./piRuntime.ts";
 import { publishPiSessionEvent } from "./piSessionEvents.ts";
 import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actionGate.ts";
 import {
@@ -113,6 +107,7 @@ async function createConversationWithRuntime(
   context: PiConversationContext,
   body: Record<string, unknown>
 ): Promise<PiConversation> {
+  const { createOrRestorePiRuntime } = await import("./piRuntime.ts");
   const project = optionalConversationProject(context.database, cleanString(body.project_id));
   const agent = conversationAgent(context.database, cleanString(body.pi_agent_id));
   const id = cleanString(body.id) || crypto.randomUUID();
@@ -261,6 +256,7 @@ async function resetConversationProjectRuntime(
   context: PiConversationContext,
   conversation: PiConversation
 ): Promise<PiConversation> {
+  const { createOrRestorePiRuntime } = await import("./piRuntime.ts");
   const runtime = await createOrRestorePiRuntime(context.database, {
     agent: requireConversationAgent(context.database, conversation),
     bus: context.bus,
@@ -369,6 +365,7 @@ async function openConversationRuntime(
   turnID = "",
   source?: string
 ) {
+  const { createPiRuntimeSession, PI_RUNNER_CHAT_ACTIONS } = await import("./piRuntime.ts");
   const project = conversation.project_id === "" || (
     !supervisorContext.provenance.context_inheritance_allowed &&
     supervisorContext.target.project_id !== conversation.project_id
@@ -383,7 +380,7 @@ async function openConversationRuntime(
   const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: conversationAuthorization(review, toolProject, intentRoute, supervisorContext),
+    authorization: conversationAuthorization(review, toolProject, intentRoute, supervisorContext, PI_RUNNER_CHAT_ACTIONS),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     conversationID: conversation.id,
@@ -407,18 +404,23 @@ function conversationAuthorization(
   review: boolean,
   project: Project | undefined,
   intentRoute: SupervisorIntentRoute,
-  supervisorContext: SupervisorContextResolution
+  supervisorContext: SupervisorContextResolution,
+  runnerChatActions: readonly string[]
 ) {
   if (review) return reviewConversationAuthorization();
-  if (project) return runnerChatAuthorization(project, intentRoute);
+  if (project) return runnerChatAuthorization(project, intentRoute, runnerChatActions);
   if (supervisorContext.status === "ambiguous") return readOnlyConversationAuthorization();
   if (!supervisorIntentRouteAllowsMutation(intentRoute)) return readOnlyConversationAuthorization();
   return undefined;
 }
 
-function runnerChatAuthorization(project: Project, intentRoute: SupervisorIntentRoute) {
+function runnerChatAuthorization(
+  project: Project,
+  intentRoute: SupervisorIntentRoute,
+  runnerChatActions: readonly string[]
+) {
   const actions = supervisorIntentRouteAllowsMutation(intentRoute)
-    ? [...PI_RUNNER_CHAT_ACTIONS]
+    ? [...runnerChatActions]
     : [...PI_READ_ONLY_ACTION_TYPES];
   return {
     allowedActions: actions,

@@ -85,6 +85,7 @@ export function summarizeRuntimePath(path: string, stateDir: string): string {
 
 function serviceStatus(startedAt: Date): Record<string, unknown> {
   const build = bunBuildInfo();
+  const memory = process.memoryUsage();
   return {
     alive: true,
     name: "codex-issue-runner backend-ts",
@@ -92,6 +93,13 @@ function serviceStatus(startedAt: Date): Record<string, unknown> {
     bun_version: build.bun_version,
     version: build.version,
     build,
+    memory: {
+      array_buffers_bytes: memory.arrayBuffers,
+      external_bytes: memory.external,
+      heap_total_bytes: memory.heapTotal,
+      heap_used_bytes: memory.heapUsed,
+      rss_bytes: memory.rss
+    },
     started_at: startedAt.toISOString()
   };
 }
