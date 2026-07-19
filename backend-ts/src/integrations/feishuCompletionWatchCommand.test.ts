@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { listIssueCompletionAutomations } from "../pi/issueCompletionAutomation.ts";
 import { runWatchAutomationsOnce } from "../runner/watchAutomationRuntime.ts";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
@@ -68,6 +69,7 @@ describe("Feishu completion watch command", () => {
     satisfyIssue(database, first.id, "done", "movo-web");
     satisfyIssue(database, second.id, "failed", "movo-web");
     const queued = runWatchAutomationsOnce(database);
+    await flushAgentCommunicationTestMessages(database);
     expect(queued).toMatchObject({ failed: 0, queued: 1, satisfied: 1 });
     expect(listSyncOutbox(database, { source: "feishu" })[0]).toMatchObject({
       target_chat_id: "oc_group",

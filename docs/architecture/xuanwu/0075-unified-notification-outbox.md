@@ -20,7 +20,9 @@
 | provider/channel 投递关系审计与 dedupe | `external_links(relationship='notification')` |
 | Handoff 交付事实 | 既有 Handoff record；notification 只引用 deep link，不反写 Handoff |
 
-`routeNotification` 为每个 channel 生成稳定 child idempotency key，确定性读取既有 run-group/conversation/project/global preference；`digest_policy_json.channels` 可收窄 channel。`needs_user`、approval 与 urgent 仍立即入 outbox，普通消息在项目 quiet hours 或 digest/quiet preference 下保持为 `aggregated` intent。`queueDailyNotificationDigests` 在项目 timezone 的 `daily_at`（默认 09:00）后聚合无 run-group 的 deferred intent；run-group digest 继续由既有 scheduler 负责，二者不竞争。
+`routeNotification` 为每个 channel 生成稳定 child idempotency key，确定性读取既有 run-group/conversation/project/global preference；`digest_policy_json.channels` 可收窄 channel。普通消息在项目 quiet hours 或 digest/quiet preference 下保持为 `aggregated` intent；所有准备外发的通知（包括 `needs_user`、approval 与 urgent）先进入 `agent_pending`，由 `agentCommunicationGateway.ts` 调用项目配置的 Agent 判断是否打扰用户、合并关联事件并生成最终措辞，之后才写入 outbox。`queueDailyNotificationDigests` 在项目 timezone 的 `daily_at`（默认 09:00）后聚合无 run-group 的 deferred intent；run-group digest 继续由既有 scheduler 负责，二者不竞争。
+
+Agent 调用失败、返回无效结果，或错误压制 `requires_user` 事项时，gateway 会停止原始自动状态消息，并按项目与会话 30 分钟限流发送一条 `agent_communication_fallback`，明确告知用户 Agent 当前不可用及应检查 provider。该 fallback 是 Agent-first 边界的唯一确定性通知例外；Guardian 自身不可用/漏报告警继续保留既有直达兜底。此变更不新增 authority、表或迁移，`pi_notification_intents`、`im_reply_drafts`、`sync_outbox` 与 `external_links` 的职责不变。
 
 `notificationOutbox.ts` 只承载既有 draft/outbox 写入与 retry policy。P11.06 已删除 Feishu notification draft wrapper，所有 notification producer 经 `unifiedNotificationPipeline.ts` 进入该 core；生产 Feishu 的 card-aware dispatch 仍由 `imReplyOutboxDispatcher` 承担。多 channel sender 合同不解析 provider payload，也不绕过 approval/action gate。
 
@@ -35,6 +37,7 @@
 ```bash
 cd backend-ts
 bun test src/notifications/unifiedNotificationPipeline.test.ts \
+  src/notifications/agentCommunicationGateway.test.ts \
   src/integrations/feishuApprovalNotifications.test.ts \
   src/integrations/feishuLifecycleNotifications.test.ts \
   src/integrations/feishuDigestNotifications.test.ts \

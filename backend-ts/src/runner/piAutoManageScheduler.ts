@@ -9,6 +9,11 @@ import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
 import { queueDailyNotificationDigests, type DailyDigestResult } from "../notifications/dailyDigest.ts";
+import {
+  runAgentCommunicationGatewayOnce,
+  type AgentCommunicationDecider,
+  type AgentCommunicationGatewayResult
+} from "../notifications/agentCommunicationGateway.ts";
 import { sendMissedDigestPendingFeishuFallback } from "../pi/guardianMissedDigestFallback.ts";
 import {
   runGuardianMissedIntentSweepOnce,
@@ -49,6 +54,7 @@ export type PiAutoManageProjectCycleInput = { maxActions: number; projectId: str
 export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) => Promise<unknown>;
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
+  agentCommunications: AgentCommunicationGatewayResult;
   automationCore: AutomationSchedulerResult;
   automations: { executed: number; failed: number; scanned: number; skipped: number };
   cron: { executed: number; failed: number; scanned: number; skipped: number };
@@ -67,6 +73,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
 };
 
 export type PiAutoManageCycleInput = {
+  agentCommunicationDecider?: AgentCommunicationDecider;
   bus?: EventBus;
   codexSessionsDir?: string;
   config?: RunnerConfig;
@@ -210,8 +217,21 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     staleAfterMs: input.watchdogStaleAfterMs
   });
   const projects = await runPiAutoManageCycle(input);
+  const agentCommunications = await runAgentCommunicationGatewayOnce(input.database, {
+    decide: input.agentCommunicationDecider,
+    now: optionalDate(input.watchdogNow)
+  });
+  if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && input.config) {
+    await dispatchFeishuOutbox({
+      config: input.config.integrations.feishu,
+      database: input.database,
+      now: optionalDate(input.watchdogNow),
+      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: input.config.integrations.feishu })
+    });
+  }
   return {
     ...projects,
+    agentCommunications,
     automationCore,
     automations,
     cron,

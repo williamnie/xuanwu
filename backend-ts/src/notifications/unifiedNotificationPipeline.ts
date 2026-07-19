@@ -9,7 +9,7 @@ import { resolvePiNotificationPreference } from "../pi/notificationPreferenceRes
 import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import {
-  queueNotificationOutbox,
+  alreadyQueuedNotification,
   type NotificationOutboxTarget
 } from "./notificationOutbox.ts";
 
@@ -45,7 +45,7 @@ export type UnifiedNotificationRouteResult = {
   intent: PiNotificationIntent;
   outboxID: number;
   queued: boolean;
-  reason: "aggregated" | "channel_filtered" | "duplicate" | "queued" | "suppressed";
+  reason: "agent_pending" | "aggregated" | "channel_filtered" | "duplicate" | "queued" | "suppressed";
   route: NotificationRoute;
 };
 
@@ -76,17 +76,19 @@ export function queueExistingNotificationIntent(
   const route = input.route ?? routeFromIntent(input.intent);
   const updated = withDeepLink(db, input.intent, input.deepLink);
   if (updated.sent_outbox_id > 0) return duplicateResult(updated, route);
-  const queued = queueNotificationOutbox(db, {
-    approvalActionID: input.approvalActionID,
-    channel: route.channel,
-    content: contentWithDeepLink(input.content, input.deepLink),
-    issueID: updated.issue_id,
-    notificationID: cleanString(input.notificationID) || updated.idempotency_key,
-    notificationType: input.notificationType,
-    projectID: updated.project_id,
-    target: route
-  });
-  if (!queued.queued) {
+  if (updated.state === "agent_pending") return duplicateResult(updated, route);
+  if (updated.state === "suppressed") {
+    return noQueueResult(updated, route, "suppressed");
+  }
+  if (updated.state === "aggregated") {
+    return noQueueResult(updated, route, "aggregated");
+  }
+  if (alreadyQueuedNotification(
+    db,
+    route.channel,
+    input.notificationType,
+    cleanString(input.notificationID) || updated.idempotency_key
+  )) {
     const duplicate = updatePiNotificationIntent(db, updated.id, {
       decision: "suppress",
       error: "duplicate_notification_link",
@@ -94,18 +96,19 @@ export function queueExistingNotificationIntent(
     });
     return duplicateResult(duplicate, route);
   }
-  const sent = updatePiNotificationIntent(db, updated.id, {
-    error: "",
-    sent_at: new Date().toISOString(),
-    sent_outbox_id: queued.outboxID,
-    state: "sent"
+  const pending = stageAgentCommunication(db, updated, {
+    approvalActionID: input.approvalActionID,
+    content: contentWithDeepLink(input.content, input.deepLink),
+    notificationID: cleanString(input.notificationID) || updated.idempotency_key,
+    notificationType: input.notificationType,
+    route
   });
   return {
-    decision: decisionValue(sent.decision),
-    intent: sent,
-    outboxID: queued.outboxID,
+    decision: decisionValue(pending.decision),
+    intent: pending,
+    outboxID: 0,
     queued: true,
-    reason: "queued",
+    reason: "agent_pending",
     route
   };
 }
@@ -169,6 +172,34 @@ function routeOne(
     notificationID: input.notificationID,
     notificationType: input.notificationType,
     route
+  });
+}
+
+function stageAgentCommunication(
+  db: RunnerDatabase,
+  intent: PiNotificationIntent,
+  input: {
+    approvalActionID?: string;
+    content: string;
+    notificationID: string;
+    notificationType: string;
+    route: NotificationRoute;
+  }
+): PiNotificationIntent {
+  const payload = parseRecord(intent.payload_json);
+  return updatePiNotificationIntent(db, intent.id, {
+    error: "",
+    payload_json: {
+      ...payload,
+      agent_communication: {
+        approval_action_id: cleanString(input.approvalActionID),
+        content_seed: input.content,
+        notification_id: input.notificationID,
+        notification_type: input.notificationType,
+        route: input.route
+      }
+    },
+    state: "agent_pending"
   });
 }
 

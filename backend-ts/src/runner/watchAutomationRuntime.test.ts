@@ -15,6 +15,7 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { markSyncOutboxSent } from "../db/repositories/imReplyOutboxDispatch.ts";
 import { createPiIssueCompletionWatch, markPiIssueCompletionWatchSatisfied } from "../db/repositories/pi.ts";
 import type { AutomationAudit, AutomationID } from "../domain/automation/contracts.ts";
+import { runAgentCommunicationGatewayOnce } from "../notifications/agentCommunicationGateway.ts";
 import { runWatchAutomationsOnce } from "./watchAutomationRuntime.ts";
 
 const roots: string[] = [];
@@ -41,8 +42,9 @@ describe("Watch Automation runtime", () => {
       });
       expect(getAutomationWatch(db, completed.automation_id)).toMatchObject({ outcome: "completion", status: "satisfied" });
       expect(getAutomationWatch(db, failed.automation_id)).toMatchObject({ outcome: "failure", status: "satisfied" });
+      await flushAgentMessages(db);
       expect(runWatchAutomationsOnce(db, { now: EVALUATED_AT })).toMatchObject({ delivered: 0, queued: 0, scanned: 0 });
-      expect(count(db, "sync_outbox")).toBe(2);
+      expect(count(db, "sync_outbox")).toBe(1);
       markQueuedOutboxesSent(db);
       expect(runWatchAutomationsOnce(db, { now: EVALUATED_AT })).toMatchObject({
         delivered: 2, failed: 0, queued: 0, satisfied: 0, scanned: 0
@@ -50,8 +52,8 @@ describe("Watch Automation runtime", () => {
       expect(getAutomationWatch(db, completed.automation_id)).toMatchObject({ outcome: "completion", status: "notified" });
       expect(getAutomationWatch(db, failed.automation_id)).toMatchObject({ outcome: "failure", status: "notified" });
       expect(count(db, "pi_notification_intents")).toBe(2);
-      expect(count(db, "sync_outbox")).toBe(2);
-      expect(count(db, "external_links", "external_type='feishu_automation_watch_notification'")).toBe(2);
+      expect(count(db, "sync_outbox")).toBe(1);
+      expect(count(db, "external_links", "external_type='agent_communication'")).toBe(1);
     } finally { db.close(); }
   });
 
@@ -68,6 +70,7 @@ describe("Watch Automation runtime", () => {
         expired: 1, failed: 0, queued: 1, scanned: 1
       });
       expect(getAutomationWatch(db, timeout.automation_id)).toMatchObject({ outcome: "timeout", status: "expired" });
+      await flushAgentMessages(db);
       markQueuedOutboxesSent(db);
       expect(runWatchAutomationsOnce(db, { now: EVALUATED_AT })).toMatchObject({ delivered: 1, queued: 0 });
       expect(getAutomationWatch(db, timeout.automation_id)).toMatchObject({ outcome: "timeout", status: "notified" });
@@ -101,6 +104,7 @@ describe("Watch Automation runtime", () => {
       expect(getAutomationWatch(db, watch.automation_id)).toMatchObject({
         matched_ref: `external_event:${matched.id}`, outcome: "thread_event", status: "satisfied"
       });
+      await flushAgentMessages(db);
       markQueuedOutboxesSent(db);
       expect(runWatchAutomationsOnce(db, { now: EVALUATED_AT }).delivered).toBe(1);
       expect(getAutomationWatch(db, watch.automation_id)).toMatchObject({
@@ -211,6 +215,16 @@ function markQueuedOutboxesSent(db: RunnerDatabase): void {
     feishuMessageId: `feishu-message-${id}`,
     timestamp: new Date(`2026-07-18T00:06:0${index}.000Z`)
   }));
+}
+
+async function flushAgentMessages(db: RunnerDatabase): Promise<void> {
+  await runAgentCommunicationGatewayOnce(db, {
+    decide: async ({ intents }) => ({
+      decision: "send",
+      message: `你订阅的 ${intents.length} 项观察已结束，请查看结果。`,
+      rationale: "explicit completion watch"
+    })
+  });
 }
 
 function eventTypes(db: RunnerDatabase, id: AutomationID): string[] {

@@ -275,6 +275,7 @@ export function queueFeishuApprovalNotification(
     summary: `issue #${issue.id} approval requested`
   })[0];
   if (!result?.queued) return { queued: false, reason: result?.reason || "duplicate" };
+  if (result.reason === "agent_pending") return { queued: true, reason: "queued" };
   markPiApprovalDelivered(db, approvalID, { channel: "feishu" });
   return { queued: true, reason: "queued" };
 }

@@ -11,6 +11,7 @@ import { listPiNotificationIntents, upsertPiApprovalRequest } from "../db/reposi
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { buildFeishuConnectorConfig } from "./feishu.ts";
 import {
   attachFeishuNotificationObservers,
@@ -35,6 +36,7 @@ describe("Feishu approval notification queue", () => {
 
       const first = queueFeishuApprovalNotification(db, approvalEvent("approval-1", "thread-approval", "git status"));
       const second = queueFeishuApprovalNotification(db, approvalEvent("approval-1", "thread-approval", "git status"));
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const content = outbox[0]?.content ?? "";
 
@@ -96,6 +98,7 @@ describe("Feishu approval notification queue", () => {
         approvalEvent("approval-record-1", "thread-record", "cat CODEX_API_KEY=fixture-secret /Users/example/private.txt", "turn-record")
       );
       const second = queueFeishuApprovalNotification(db, approvalEvent("approval-record-1", "thread-record", "git status"));
+      await flushAgentCommunicationTestMessages(db);
       const resolved = await resolvePiApprovalRequestFromFeishu(db, {
         decision: "approve_session",
         provider: { resolveApproval: async (id, decision) => { resolutions.push({ id, decision: decision.decision, scope: decision.scope ?? "" }); } },
@@ -201,10 +204,18 @@ describe("Feishu approval notification queue", () => {
         type: "codex.event"
       });
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
-      expect(outbox).toHaveLength(2);
+      expect(outbox).toHaveLength(1);
       expect(outbox.map((item) => item.content).join("\n")).toContain("issue #1 已完成");
-      expect(outbox.map((item) => item.content).join("\n")).toContain("bun test");
+      expect(outbox.map((item) => item.content).join("\n")).not.toContain("bun test");
+      expect(listPiNotificationIntents(db, { issueId: issueID })).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          error: "action_no_longer_pending",
+          kind: "approval_requested",
+          state: "suppressed"
+        })
+      ]));
       expect(getPiApprovalRequest(db, "approval-observed")).toMatchObject({ resolved_decision: "deny", status: "rejected" });
     } finally {
       detach();

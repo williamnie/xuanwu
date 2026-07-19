@@ -8,6 +8,7 @@ import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import {
   createPiNotificationPreference,
   listPiNotificationIntents,
@@ -107,6 +108,7 @@ describe("Feishu lifecycle notification preference routing", () => {
 
       updateIssue(db, issueID, { status: "done", error: "" });
       const result = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
 
       expect(result).toMatchObject({ queued: true, reason: "queued" });
       expect(listSyncOutbox(db, { source: "feishu" })).toHaveLength(1);

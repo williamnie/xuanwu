@@ -149,7 +149,17 @@ function queueDigestGroup(db: RunnerDatabase, group: DigestCandidate[], now: Dat
     sourceEventType: "notification.daily_digest",
     summary: `Daily Digest ${bucket}: ${group.length} notification intents`
   })[0];
-  if (!routed || routed.outboxID <= 0) return false;
+  if (!routed) return false;
+  if (routed.reason === "agent_pending") {
+    for (const item of group) {
+      updatePiNotificationIntent(db, item.intent.id, {
+        error: "covered_by_agent_daily_digest",
+        state: "agent_covered"
+      });
+    }
+    return true;
+  }
+  if (routed.outboxID <= 0) return false;
   for (const item of group) {
     updatePiNotificationIntent(db, item.intent.id, {
       error: "",

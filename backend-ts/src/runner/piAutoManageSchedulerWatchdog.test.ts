@@ -63,6 +63,11 @@ describe("PI auto-manage scheduler watchdog integration", () => {
       ]);
 
       const result = await runScheduleLayerCycle({
+        agentCommunicationDecider: async () => ({
+          decision: "send",
+          message: "Stone 已整理恢复摘要，请查看。",
+          rationale: "recovery digest"
+        }),
         database: db,
         runProjectCycle: async () => ({}),
         watchdogNow: new Date("2026-06-19T00:10:00Z"),

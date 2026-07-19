@@ -10,6 +10,7 @@ import { getIssue } from "../db/repositories/issues.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { createPiAction, listPiGuardianEvents, listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { createBatchRunGroup, updateRunGroupEnqueueResult } from "../pi/runGroupService.ts";
 import { buildFeishuConnectorConfig } from "./feishu.ts";
 import { queueFeishuIssueStatusNotification } from "./feishuLifecycleNotifications.ts";
@@ -24,7 +25,7 @@ afterEach(async () => {
 });
 
 describe("Feishu lifecycle notification intents", () => {
-  test("legacy no-run-group lifecycle still sends start done and failed notifications", async () => {
+  test("lets Agent consolidate legacy lifecycle events per conversation target", async () => {
     const db = await fixtureDatabase();
     try {
       const issueID = linkedFeishuIssue(db);
@@ -37,6 +38,7 @@ describe("Feishu lifecycle notification intents", () => {
       updateIssue(db, failedIssueID, { status: "failed", error: "tests failed" });
       const failed = queueFeishuIssueStatusNotification(db, failedIssueID);
 
+      await flushAgentCommunicationTestMessages(db);
       const intents = listPiNotificationIntents(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const content = outbox.map((item) => item.content).join("\n");
@@ -44,7 +46,7 @@ describe("Feishu lifecycle notification intents", () => {
       expect(start).toMatchObject({ queued: true, reason: "queued" });
       expect(done).toMatchObject({ queued: true, reason: "queued" });
       expect(failed).toMatchObject({ queued: true, reason: "queued" });
-      expect(outbox).toHaveLength(3);
+      expect(outbox).toHaveLength(1);
       expect(content).toContain("准备启动");
       expect(content).toContain("已完成");
       expect(content).toContain("执行失败/阻塞");
@@ -63,6 +65,7 @@ describe("Feishu lifecycle notification intents", () => {
       updateIssue(db, issueID, { status: "done", error: "" });
 
       const result = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
       const intents = listPiNotificationIntents(db, { issueId: issueID });
       const inbox = listPiGuardianEvents(db, { issueId: issueID });
       const outbox = listSyncOutbox(db, { source: "feishu" });
@@ -136,6 +139,7 @@ describe("Feishu lifecycle notification intents", () => {
 
       const failed = queueFeishuIssueStatusNotification(db, failedIssue.id, { config });
       const done = queueFeishuIssueStatusNotification(db, doneIssue.id, { config });
+      await flushAgentCommunicationTestMessages(db);
       const intents = listPiNotificationIntents(db, { issueId: failedIssue.id });
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
@@ -170,13 +174,14 @@ describe("Feishu lifecycle notification intents", () => {
 
       const done = queueFeishuIssueStatusNotification(db, doneIssueID);
       const failed = queueFeishuIssueStatusNotification(db, failedIssueID);
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const content = outbox.map((item) => item.content).join("\n");
 
       expect(done).toMatchObject({ queued: true, reason: "queued" });
       expect(failed).toMatchObject({ queued: true, reason: "queued" });
-      expect(outbox).toHaveLength(2);
-      expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group", "oc_group"]);
+      expect(outbox).toHaveLength(1);
+      expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group"]);
       expect(content).toContain("已完成");
       expect(content).toContain("执行失败/阻塞");
       expectSendNowIntent(listPiNotificationIntents(db, { issueId: doneIssueID }), {
@@ -246,6 +251,7 @@ describe("Feishu lifecycle notification intents", () => {
       const legacy = queueFeishuIssueStatusNotification(db, legacyIssueID);
       updateIssue(db, groupedIssueID, { status: "done", error: "" });
       const grouped = queueFeishuIssueStatusNotification(db, groupedIssueID);
+      await flushAgentCommunicationTestMessages(db);
 
       const legacyIntents = listPiNotificationIntents(db, { issueId: legacyIssueID });
       const groupedIntents = listPiNotificationIntents(db, { runGroupId: group.id });

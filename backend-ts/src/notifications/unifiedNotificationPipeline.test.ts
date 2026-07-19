@@ -13,6 +13,8 @@ import {
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { queueDailyNotificationDigests } from "./dailyDigest.ts";
+import { flushAgentCommunicationTestMessages } from "./agentCommunicationGateway.testSupport.ts";
+import { runAgentCommunicationGatewayOnce } from "./agentCommunicationGateway.ts";
 import {
   dispatchNotificationOutbox,
   NotificationChannelError,
@@ -95,6 +97,7 @@ describe("unified notification intent/outbox", () => {
 
       const first = routeNotification(db, input);
       const replay = routeNotification(db, input);
+      await flushAgentCommunicationTestMessages(db);
       const intents = listPiNotificationIntents(db, { issueId: issue.id });
       const outbox = listSyncOutbox(db);
 
@@ -198,14 +201,17 @@ describe("unified notification intent/outbox", () => {
 
       const digest = queueDailyNotificationDigests(db, { now: new Date("2026-07-19T09:00:00.000Z") });
       const replay = queueDailyNotificationDigests(db, { now: new Date("2026-07-19T09:01:00.000Z") });
+      await runAgentCommunicationGatewayOnce(db, {
+        decide: async () => ({ decision: "send", message: "今天有 1 条任务更新。", rationale: "requested digest" }),
+        now: new Date("2026-07-19T09:02:00.000Z")
+      });
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const intents = listPiNotificationIntents(db);
 
       expect(digest).toMatchObject({ aggregated: 1, failed: 0, queued: 1 });
       expect(replay).toMatchObject({ queued: 0 });
       expect(outbox).toHaveLength(1);
-      expect(outbox[0]?.content).toContain("Daily Digest · 2026-07-19 · 1 条");
-      expect(outbox[0]?.content).toContain(`/api/issues/${issue.id}`);
+      expect(outbox[0]?.content).toBe("今天有 1 条任务更新。");
       expect(intents.filter((intent) => intent.kind === "daily_digest")).toHaveLength(1);
       expect(intents.find((intent) => intent.id === source.id)).toMatchObject({
         sent_outbox_id: outbox[0]?.id,
@@ -250,13 +256,16 @@ describe("unified notification intent/outbox", () => {
         type: "handoff.notification"
       };
 
-      expect(queueFeishuHandoffNotification(db, event)).toMatchObject({ queued: true });
+      expect(queueFeishuHandoffNotification(db, event)).toMatchObject({ queued: true, reason: "queued" });
+      await runAgentCommunicationGatewayOnce(db, {
+        decide: async () => ({ decision: "send", message: "交付已经准备好，可以开始审核。", rationale: "handoff ready" })
+      });
       expect(queueFeishuHandoffNotification(db, event)).toMatchObject({ queued: false, reason: "duplicate" });
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const intents = listPiNotificationIntents(db, { issueId: issue.id });
 
       expect(outbox).toHaveLength(1);
-      expect(outbox[0]?.content).toContain("#/handoffs/xw%3Ahandoff%3Aderived%3Afixture");
+      expect(outbox[0]?.content).toBe("交付已经准备好，可以开始审核。");
       expect(intents).toMatchObject([
         expect.objectContaining({ kind: "handoff_ready", sent_outbox_id: outbox[0]?.id, state: "sent" })
       ]);

@@ -9,6 +9,7 @@ import {
   createPiRunGroup,
   getPiNotificationIntent
 } from "../db/repositories/pi.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { queueReadyFeishuDigestNotifications } from "./feishuLifecycleNotifications.ts";
 
 const tempRoots: string[] = [];
@@ -43,6 +44,7 @@ describe("Feishu run group digest notifications", () => {
       });
 
       const result = queueReadyFeishuDigestNotifications(db);
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const sent = getPiNotificationIntent(db, intent.id);
       const content = outbox[0]?.content ?? "";

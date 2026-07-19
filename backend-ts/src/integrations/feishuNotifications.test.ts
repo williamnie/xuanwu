@@ -12,7 +12,8 @@ import { listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "../http/server.ts";
-import type { FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
+import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { queueFeishuIssueStatusNotification, queueFeishuPiNeedsUserNotification } from "./feishuNotifications.ts";
 
 const tempRoots: string[] = [];
@@ -34,6 +35,7 @@ describe("Feishu notification queue", () => {
 
       const first = queueFeishuIssueStatusNotification(db, issueID);
       const second = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(first).toMatchObject({ queued: true, reason: "queued" });
@@ -84,6 +86,7 @@ describe("Feishu notification queue", () => {
         headers: { "content-type": "application/json" },
         method: "POST"
       }));
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(response.status).toBe(200);
@@ -98,7 +101,7 @@ describe("Feishu notification queue", () => {
     }
   });
 
-  test("router dispatches Feishu completion notification automatically", async () => {
+  test("dispatches a router completion notification only after Agent wording", async () => {
     const db = await fixtureDatabase();
     const bus = new EventBus();
     const sender = new FakeFeishuSender();
@@ -113,8 +116,9 @@ describe("Feishu notification queue", () => {
         headers: { "content-type": "application/json" },
         method: "POST"
       }));
-      await until(() => sender.calls.length > 0);
-      await until(() => listSyncOutbox(db, { source: "feishu" })[0]?.status === "sent");
+      expect(sender.calls).toEqual([]);
+      await flushAgentCommunicationTestMessages(db);
+      await dispatchFeishuOutbox({ config: config.integrations.feishu, database: db, sender });
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(response.status).toBe(200);
@@ -149,7 +153,9 @@ describe("Feishu notification queue", () => {
         headers: { "content-type": "application/json" },
         method: "PATCH"
       }));
-      await until(() => sender.calls.length > 0);
+      expect(sender.calls).toEqual([]);
+      await flushAgentCommunicationTestMessages(db);
+      await dispatchFeishuOutbox({ config: config.integrations.feishu, database: db, sender });
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(response.status).toBe(200);
@@ -191,6 +197,7 @@ describe("Feishu notification queue", () => {
 
       const first = queueFeishuPiNeedsUserNotification(db, event);
       const second = queueFeishuPiNeedsUserNotification(db, event);
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       const intents = listPiNotificationIntents(db, { issueId: issueID });
       const text = JSON.stringify({ intents, outbox });
@@ -254,6 +261,7 @@ describe("Feishu notification queue", () => {
         type: "pi.needs_user"
       }, { config: config.integrations.feishu });
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(result).toMatchObject({ queued: true, reason: "queued" });
       expect(outbox).toHaveLength(1);
@@ -309,12 +317,4 @@ class FakeFeishuSender implements FeishuMessageSender {
     this.calls.push(input);
     return { messageId: `om_auto_sent_${this.calls.length}` };
   }
-}
-
-async function until(check: () => boolean): Promise<void> {
-  for (let index = 0; index < 50; index += 1) {
-    if (check()) return;
-    await Bun.sleep(10);
-  }
-  throw new Error("condition timed out");
 }

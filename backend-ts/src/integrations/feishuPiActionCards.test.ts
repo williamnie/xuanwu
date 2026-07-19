@@ -11,6 +11,7 @@ import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getSyncOutbox, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { createPiAction, getPiAction, listPiActionEvents } from "../db/repositories/pi.ts";
 import { createDefaultRouter, createRequestHandler } from "../http/server.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { dispatchFeishuOutbox, type FeishuMessageSender } from "../pi/imReplyOutboxDispatcher.ts";
 import { queueFeishuPiActionPendingNotification } from "./feishuNotifications.ts";
 
@@ -35,6 +36,7 @@ describe("Feishu PI action cards", () => {
         projectId: "demo",
         type: "pi.action_pending"
       });
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" })[0];
       const dispatched = await dispatchFeishuOutbox({
         config: buildConfig({ feishuAllowedChatIds: "oc_group" }).integrations.feishu,

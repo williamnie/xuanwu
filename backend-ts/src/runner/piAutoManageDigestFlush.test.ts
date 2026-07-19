@@ -50,7 +50,15 @@ describe("PI auto-manage digest flush integration", () => {
         target_channel: "feishu"
       });
 
-      const result = await runScheduleLayerCycle({ database: db, runProjectCycle: async () => ({}) });
+      const result = await runScheduleLayerCycle({
+        agentCommunicationDecider: async () => ({
+          decision: "send",
+          message: "运行组 group-scheduled 摘要：本批次已完成。",
+          rationale: "requested run-group digest"
+        }),
+        database: db,
+        runProjectCycle: async () => ({})
+      });
       const intents = listPiNotificationIntents(db, { runGroupId: "group-scheduled" });
 
       expect(result.digestFlush).toEqual({ flushed: 1, scanned: 1, skipped: 0 });

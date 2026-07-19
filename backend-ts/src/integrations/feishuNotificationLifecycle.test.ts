@@ -11,6 +11,7 @@ import { createPiAction, createPiMemoryItem } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
+import { flushAgentCommunicationTestMessages } from "../notifications/agentCommunicationGateway.testSupport.ts";
 import { createPiRunnerActions } from "../pi/runnerActions.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { runProjectLoopOnce } from "../runner/projectLoop.ts";
@@ -40,6 +41,7 @@ describe("Feishu lifecycle notifications", () => {
       updateIssue(db, issueID, { status: "in_progress", error: "" });
       const inProgress = queueFeishuIssueStatusNotification(db, issueID);
       const replay = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
 
       expect(todo).toMatchObject({ queued: true, reason: "queued" });
@@ -63,6 +65,7 @@ describe("Feishu lifecycle notifications", () => {
       });
 
       const result = queueFeishuIssueStatusNotification(db, issueID);
+      await flushAgentCommunicationTestMessages(db);
       const content = listSyncOutbox(db, { source: "feishu" })[0]?.content ?? "";
 
       expect(result).toMatchObject({ queued: true, reason: "queued" });
@@ -86,6 +89,7 @@ describe("Feishu lifecycle notifications", () => {
       const event = memoryCandidateEvent("12345678-2222-4222-8222-123456789abc");
       const first = queueFeishuMemoryCandidateNotification(db, event);
       const second = queueFeishuMemoryCandidateNotification(db, event);
+      await flushAgentCommunicationTestMessages(db);
       const content = listSyncOutbox(db, { source: "feishu" })[0]?.content ?? "";
 
       expect(first).toMatchObject({ queued: true, reason: "queued" });
@@ -116,9 +120,10 @@ describe("Feishu lifecycle notifications", () => {
       updateIssue(db, issue.id, { error: "", status: "done" });
       bus.publish({ issueId: issue.id, payload: JSON.stringify({ status: "done" }), projectId: "demo", type: "issue.status_changed" });
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
-      expect(outbox).toHaveLength(2);
-      expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group", "oc_group"]);
+      expect(outbox).toHaveLength(1);
+      expect(outbox.map((item) => item.target_chat_id)).toEqual(["oc_group"]);
       expect(outbox.map((item) => item.content).join("\n")).toContain("准备启动");
       expect(outbox.map((item) => item.content).join("\n")).toContain("已完成");
     } finally {
@@ -187,6 +192,7 @@ describe("Feishu lifecycle notifications", () => {
         type: "pi.action_completed"
       });
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]?.content).toContain("准备启动");
@@ -205,6 +211,7 @@ describe("Feishu lifecycle notifications", () => {
 
       bus.publish(memoryCandidateEvent("22345678-2222-4222-8222-123456789abc"));
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({ target_chat_id: "oc_group" });
@@ -230,9 +237,10 @@ describe("Feishu lifecycle notifications", () => {
         providers: { "fake-execution-only": failingProvider() }
       });
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(result).toMatchObject({ claimed: true });
-      expect(outbox).toHaveLength(2);
+      expect(outbox).toHaveLength(1);
       expect(outbox.map((item) => item.content).join("\n")).toContain("已启动 executor session");
       expect(outbox.map((item) => item.content).join("\n")).toContain("执行失败/阻塞");
     } finally {
@@ -247,6 +255,16 @@ describe("Feishu lifecycle notifications", () => {
     const detach = attachFeishuNotificationObservers({ bus, database: db });
     try {
       const issueID = linkedFeishuIssue(db, { conversationID: "feishu-chat-oc_group-20260614" });
+      createPiAction(db, {
+        action_type: "session.steer",
+        conversation_id: "feishu-chat-oc_group-20260614",
+        gate_decision: "ask",
+        id: "pi-action-1",
+        issue_id: issueID,
+        project_id: "demo",
+        source: "pi_tool",
+        status: "pending"
+      });
       const event = {
         conversationId: "feishu-chat-oc_group-20260614",
         issueId: issueID,
@@ -258,6 +276,7 @@ describe("Feishu lifecycle notifications", () => {
       bus.publish(event);
       bus.publish(event);
 
+      await flushAgentCommunicationTestMessages(db);
       const outbox = listSyncOutbox(db, { source: "feishu" });
       expect(outbox).toHaveLength(1);
       expect(outbox[0]).toMatchObject({ target_chat_id: "oc_group" });

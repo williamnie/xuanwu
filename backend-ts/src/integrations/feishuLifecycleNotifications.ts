@@ -123,7 +123,8 @@ function linkedLifecycleTarget(
   return feishuTargetForIssue(db, issueID) ??
     feishuTargetForConversation(db, conversationID ?? "") ??
     feishuTargetForConversation(db, getPiRunGroup(db, runGroupID)?.origin_conversation_id ?? "") ??
-    feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID));
+    feishuTargetForConversation(db, legacyEnqueueConversationID(db, issueID)) ??
+    latestLifecycleIntentTarget(db, issueID);
 }
 
 function fallbackLifecycleTarget(issue: Issue, config: FeishuConnectorConfig | undefined) {
@@ -148,7 +149,29 @@ function lifecycleConversationID(
   const explicit = cleanString(explicitConversationID);
   if (explicit !== "" || runGroupID !== "") return explicit;
   return issueLinkConversationID(db, issue.id) ||
-    legacyEnqueueConversationID(db, issue.id) || sourceSessionConversationID(issue.source_session_id);
+    legacyEnqueueConversationID(db, issue.id) ||
+    latestLifecycleIntentConversationID(db, issue.id) ||
+    sourceSessionConversationID(issue.source_session_id);
+}
+
+function latestLifecycleIntentTarget(db: RunnerDatabase, issueID: number) {
+  const intent = listPiNotificationIntents(db, { issueId: issueID })
+    .filter((candidate) => candidate.target_chat_id !== "" || candidate.target_message_id !== "")
+    .at(-1);
+  if (!intent) return null;
+  return {
+    chatID: intent.target_chat_id,
+    eventID: 0,
+    messageID: intent.target_message_id,
+    threadID: intent.target_thread_id
+  };
+}
+
+function latestLifecycleIntentConversationID(db: RunnerDatabase, issueID: number): string {
+  return listPiNotificationIntents(db, { issueId: issueID })
+    .map((intent) => cleanString(intent.conversation_id))
+    .filter(Boolean)
+    .at(-1) ?? "";
 }
 
 function latestRunGroupIDForIssue(db: RunnerDatabase, issueID: number): string {
@@ -192,7 +215,7 @@ function queueLifecycleIntent(
       threadID: target.threadID
     }
   });
-  return { queued: queued.queued, reason: queued.reason };
+  return { queued: queued.queued, reason: queued.queued ? "queued" : queued.reason };
 }
 
 function safelyQueueDigestIntent(
