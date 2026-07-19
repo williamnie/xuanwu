@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { runProjectLoopOnce } from "./projectLoop.ts";
+import { projectLoopDecision, runProjectLoopOnce } from "./projectLoop.ts";
 import { isProjectLoopActive, kickAutoRunProjects, setProjectLoopMaxParallelProjects, startProjectLoop } from "./projectLoopManager.ts";
 import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
 
@@ -289,6 +289,96 @@ describe("Bun project loop claim execution", () => {
       expect(provider.inputs.map((input) => input.issueId).sort((a, b) => a - b)).toEqual([first, second]);
       expect(getIssue(db, first)).toMatchObject({ status: "in_progress", attempt_count: 1 });
       expect(getIssue(db, second)).toMatchObject({ status: "in_progress", attempt_count: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("explicit project hold blocks auto-run and forced execution without creating a Run", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "held", provider: provider.id, autoRun: 1 });
+      const issueID = insertIssue(db, { projectId: "held", title: "held issue" });
+      db.sqlite.run(`insert into project_holds
+        (project_id, reason, message, hold_since, updated_at) values (?, ?, ?, ?, ?)`, [
+        "held", "user_pause", "explicit fixture hold", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
+      ]);
+
+      startProjectLoop({ database: db, providers: { [provider.id]: provider } }, "held", { forceOnce: true });
+      await waitFor(() => !isProjectLoopActive("held"));
+
+      expect(provider.inputs).toEqual([]);
+      expect(getIssue(db, issueID)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, issueID)).toEqual([]);
+      expect(latestEventPayload(db, issueID, "issue.runner_scope_decision")).toMatchObject({
+        authority: "project_holds",
+        decision: "stop",
+        reason: "project_hold",
+        scope: "project:held"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("provider runtime blocker stays provider-scoped while another provider keeps running", async () => {
+    const db = await openFixtureDatabase();
+    const healthy = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "missing-codex", provider: "codex", autoRun: 1 });
+      insertProject(db, { id: "healthy", provider: healthy.id, autoRun: 1 });
+      const blocked = insertIssue(db, { projectId: "missing-codex", title: "provider blocked" });
+      const runnable = insertIssue(db, { projectId: "healthy", title: "provider ready" });
+      const runtime = { database: db, providers: { [healthy.id]: healthy } };
+
+      startProjectLoop(runtime, "missing-codex");
+      startProjectLoop(runtime, "healthy");
+      await waitFor(() => healthy.inputs.length === 1);
+      await waitFor(() => !isProjectLoopActive("missing-codex") && !isProjectLoopActive("healthy"));
+
+      expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
+      expect(getIssue(db, blocked)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, blocked)).toEqual([]);
+      expect(latestEventPayload(db, blocked, "issue.runner_scope_decision")).toMatchObject({
+        authority: "runner.providers",
+        decision: "stop",
+        provider: "codex",
+        reason: "provider_runtime",
+        scope: "provider:codex"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("persisted provider deferral blocks the same provider but releases global capacity", async () => {
+    const db = await openFixtureDatabase();
+    const outage = new TransientInfraExecutionProvider();
+    const healthy = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "outage", provider: outage.id, autoRun: 1 });
+      insertProject(db, { id: "same-provider", provider: outage.id, autoRun: 1 });
+      insertProject(db, { id: "other-provider", provider: healthy.id, autoRun: 1 });
+      const deferred = insertIssue(db, { projectId: "outage", title: "deferred" });
+      const providerBlocked = insertIssue(db, { projectId: "same-provider", title: "same provider" });
+      const runnable = insertIssue(db, { projectId: "other-provider", title: "other provider" });
+      const runtime = { database: db, providers: { [outage.id]: outage, [healthy.id]: healthy } };
+
+      startProjectLoop(runtime, "outage");
+      await waitFor(() => listEventTypes(db, deferred).includes("issue.provider_deferred"));
+      await waitFor(() => healthy.inputs.length === 1);
+
+      expect(healthy.inputs.map((input) => input.issueId)).toEqual([runnable]);
+      expect(getIssue(db, providerBlocked)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(listIssueRuns(db, providerBlocked)).toEqual([]);
+      expect(projectLoopDecision({ ...runtime, projectId: "same-provider" }, false)).toMatchObject({
+        allowed: false,
+        authority: "issue.provider_deferred",
+        provider: "claude",
+        reason: "provider_runtime",
+        scope: "provider:claude"
+      });
     } finally {
       db.close();
     }
@@ -738,6 +828,17 @@ function listEventTypes(db: RunnerDatabase, issueID: number): string[] {
   return db.sqlite.query<{ type: string }, [number]>(
     "select type from issue_events where issue_id=? order by id asc"
   ).all(issueID).map((event) => event.type);
+}
+
+function latestEventPayload(
+  db: RunnerDatabase,
+  issueID: number,
+  type: string
+): Record<string, unknown> {
+  const payload = db.sqlite.query<{ payload: string }, [number, string]>(`
+    select payload from issue_events where issue_id=? and type=? order by id desc limit 1
+  `).get(issueID, type)?.payload ?? "{}";
+  return JSON.parse(payload) as Record<string, unknown>;
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {

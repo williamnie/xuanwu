@@ -9,11 +9,16 @@ const STATUS_IN_PROGRESS = "in_progress";
 type ClaimedIssueRow = { id: number };
 type CountRow = { count: number };
 type ProjectCwdRow = { cwd: string };
+export type IssueClaimFilter = (issue: Issue) => boolean;
 
-export function claimNextIssue(db: RunnerDatabase, projectID: string): Issue | null {
+export function claimNextIssue(
+  db: RunnerDatabase,
+  projectID: string,
+  filter: IssueClaimFilter = () => true
+): Issue | null {
   const cleanProjectID = projectID.trim();
   if (cleanProjectID === "") throw new Error("project id is required");
-  const claim = db.transaction((id: string) => claimNextIssueID(db, id));
+  const claim = db.transaction((id: string) => claimNextIssueID(db, id, filter));
   const issueID = claim.immediate(cleanProjectID);
   return issueID > 0 ? getIssue(db, issueID) : null;
 }
@@ -27,8 +32,33 @@ export function countActiveExecutorWork(db: RunnerDatabase): number {
     select count(distinct i.id) as count
     from issues i
     left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-    where i.status=? or ir.id is not null
+    where (i.status=? or ir.id is not null)
+      and not (
+        ir.id is not null and exists (
+          select 1 from issue_events event
+          where event.issue_id=i.id and event.type='issue.provider_deferred'
+            and event.created_at>=ir.started_at
+        )
+      )
   `, [STATUS_IN_PROGRESS]);
+}
+
+export function hasDeferredProviderRuntime(
+  db: RunnerDatabase,
+  providerID: string
+): boolean {
+  const cleanProviderID = providerID.trim();
+  if (cleanProviderID === "") return false;
+  return countRows(db, `
+    select count(distinct i.id) as count
+    from issues i
+    join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+    where i.status=? and ir.provider=? and exists (
+      select 1 from issue_events event
+      where event.issue_id=i.id and event.type='issue.provider_deferred'
+        and event.created_at>=ir.started_at
+    )
+  `, [STATUS_IN_PROGRESS, cleanProviderID]) > 0;
 }
 
 export function hasActiveExecutorWorkForProject(db: RunnerDatabase, projectID: string): boolean {
@@ -61,15 +91,40 @@ export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
   return countRows(db, sql, [cleanProjectID, STATUS_TODO]) > 0;
 }
 
-export function hasReadyIssue(db: RunnerDatabase, projectID: string): boolean {
+export function hasReadyIssue(
+  db: RunnerDatabase,
+  projectID: string,
+  filter: IssueClaimFilter = () => true
+): boolean {
   const cleanProjectID = projectID.trim();
   if (cleanProjectID === "") return false;
-  return nextIssueRow(db, cleanProjectID) !== null;
+  return nextIssueRow(db, cleanProjectID, filter) !== null;
 }
 
-function claimNextIssueID(db: RunnerDatabase, projectID: string): number {
+export function peekNextReadyIssue(
+  db: RunnerDatabase,
+  projectID: string,
+  filter: IssueClaimFilter = () => true
+): Issue | null {
+  const cleanProjectID = projectID.trim();
+  if (cleanProjectID === "") return null;
+  const row = nextIssueRow(db, cleanProjectID, filter);
+  return row ? getIssue(db, row.id) : null;
+}
+
+export function peekNextTodoIssue(db: RunnerDatabase, projectID: string): Issue | null {
+  const cleanProjectID = projectID.trim();
+  if (cleanProjectID === "") return null;
+  const row = db.sqlite.query<ClaimedIssueRow, [string, string]>(`
+    select id from issues where project_id=? and status=?
+    order by priority desc, created_at asc, id asc limit 1
+  `).get(cleanProjectID, STATUS_TODO);
+  return row ? getIssue(db, row.id) : null;
+}
+
+function claimNextIssueID(db: RunnerDatabase, projectID: string, filter: IssueClaimFilter): number {
   if (hasActiveExecutorWorkForProject(db, projectID)) return 0;
-  const row = nextIssueRow(db, projectID);
+  const row = nextIssueRow(db, projectID, filter);
   if (!row) return 0;
   const timestamp = issueTimestamp();
   db.sqlite.run(`update issues set status=?, attempt_count=attempt_count+1,
@@ -97,13 +152,17 @@ function parsedProjectExecutionLockKey(db: RunnerDatabase, projectID: string): {
   };
 }
 
-function nextIssueRow(db: RunnerDatabase, projectID: string): ClaimedIssueRow | null {
+function nextIssueRow(db: RunnerDatabase, projectID: string, filter: IssueClaimFilter): ClaimedIssueRow | null {
   const dependencyByIssueID = readProjectIssueDependencies(db, projectID);
   const rows = db.sqlite.query<ClaimedIssueRow, [string, string]>(`
     select id from issues where project_id=? and status=?
     order by priority desc, created_at asc, id asc
   `).all(projectID, STATUS_TODO);
-  return rows.find((row) => dependencyByIssueID.get(row.id)?.ready === true) ?? null;
+  return rows.find((row) => {
+    if (dependencyByIssueID.get(row.id)?.ready !== true) return false;
+    const issue = getIssue(db, row.id);
+    return issue !== null && filter(issue);
+  }) ?? null;
 }
 
 function recordClaimEvent(db: RunnerDatabase, issueID: number, timestamp: string): void {

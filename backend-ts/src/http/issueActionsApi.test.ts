@@ -93,7 +93,7 @@ describe("Bun issue action API", () => {
     }
   });
 
-  test("retry force-starts the selected issue while another failed issue keeps auto-run stopped", async () => {
+  test("retry force-starts the selected issue without reviving the project-wide failed fuse", async () => {
     const database = await openFixtureDatabase();
     const provider = new RetryExecutionProvider();
     try {
@@ -106,6 +106,34 @@ describe("Bun issue action API", () => {
       await waitFor(() => provider.issueIDs.includes(retryID));
 
       expect(provider.issueIDs).toEqual([retryID]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("cancel releases the project lock and recomputes the runnable sibling", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new RetryExecutionProvider();
+    try {
+      insertProject(database, "cancel-recompute", { autoRun: 1, provider: provider.id });
+      const running = insertIssue(database, {
+        projectId: "cancel-recompute",
+        status: "in_progress",
+        title: "running"
+      });
+      const sibling = insertIssue(database, {
+        projectId: "cancel-recompute",
+        status: "todo",
+        title: "ready sibling"
+      });
+      insertOpenRun(database, running);
+
+      const response = await issueAction(database, running, "cancel", provider);
+      expect(response.status).toBe(200);
+      await waitFor(() => provider.issueIDs.includes(sibling));
+
+      expect(provider.issueIDs).toEqual([sibling]);
+      expect(getIssueStatus(database, sibling)).toBe("in_progress");
     } finally {
       database.close();
     }
@@ -255,6 +283,12 @@ function latestRun(db: RunnerDatabase, issueId: number): Record<string, unknown>
   return db.sqlite.query<Record<string, unknown>, [number]>(
     "select status, ended_at, exit_reason from issue_runs where issue_id = ? order by attempt desc limit 1"
   ).get(issueId) ?? null;
+}
+
+function getIssueStatus(db: RunnerDatabase, issueId: number): string {
+  return db.sqlite.query<{ status: string }, [number]>(
+    "select status from issues where id=?"
+  ).get(issueId)?.status ?? "";
 }
 
 function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }> {

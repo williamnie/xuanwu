@@ -21,7 +21,7 @@ import {
 } from "../db/repositories/projects.ts";
 import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/interrupt.ts";
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
-import { startProjectLoop, type ProjectLoopStartOptions } from "../runner/projectLoopManager.ts";
+import { kickAutoRunProjects, startProjectLoop, type ProjectLoopStartOptions } from "../runner/projectLoopManager.ts";
 import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 import {
   readProjectIssueDependencies,
@@ -176,7 +176,9 @@ function kickAutoProject(
 ): void {
   const project = getProject(context.database, projectID);
   if ((project?.auto_run ?? 0) !== 1) return;
-  startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, projectID, options);
+  const runtime = { bus: context.bus, database: context.database, providers: context.providers };
+  if (options.forceOnce === true) startProjectLoop(runtime, projectID, options);
+  kickAutoRunProjects(runtime);
 }
 
 function isQueuedIssue(value: unknown): value is Issue {

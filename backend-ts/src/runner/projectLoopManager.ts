@@ -1,9 +1,12 @@
-import { runProjectLoopOnce, type ProjectLoopInput } from "./projectLoop.ts";
-import { getProject } from "../db/repositories/projects.ts";
+import {
+  projectLoopDecision,
+  recordProjectLoopDecision,
+  runProjectLoopOnce,
+  type ProjectLoopInput
+} from "./projectLoop.ts";
 import {
   countActiveExecutorWork,
   hasActiveExecutorWorkForProject,
-  hasReadyIssue,
   projectExecutionLockKey
 } from "../db/repositories/issueQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -61,7 +64,7 @@ export function projectLoopMaxParallelProjects(): number {
 }
 
 export function kickAutoRunProjects(runtime: ProjectLoopRuntime): void {
-  requeueProjectsWithTodo(runtime.database);
+  requeueProjectsWithTodo(runtime);
   startQueuedWorkers(runtime);
 }
 
@@ -87,26 +90,21 @@ async function runProject(runtime: ProjectLoopRuntime, projectID: string): Promi
   } finally {
     forcedProjects.delete(projectID);
     activeLoops.delete(projectID);
-    if (shouldRequeue) requeueProjectsWithTodo(runtime.database);
+    if (shouldRequeue) requeueProjectsWithTodo(runtime);
   }
 }
 
-function isAutoRunEnabled(db: RunnerDatabase, projectID: string): boolean {
-  return (getProject(db, projectID)?.auto_run ?? 0) === 1;
-}
-
 async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): Promise<boolean> {
-  while (shouldContinue(runtime.database, projectID, forcedProjects.has(projectID))) {
+  while (shouldContinue(runtime, projectID, forcedProjects.has(projectID))) {
     const result = await runProjectLoopOnce(loopInput(runtime, projectID));
     if (!result.claimed) break;
   }
   return true;
 }
 
-function shouldContinue(db: RunnerDatabase, projectID: string, forceOnce: boolean): boolean {
-  if (hasActiveExecutorWorkForProject(db, projectID)) return false;
-  if (forceOnce) return true;
-  return isAutoRunEnabled(db, projectID) && hasReadyIssue(db, projectID);
+function shouldContinue(runtime: ProjectLoopRuntime, projectID: string, forceOnce: boolean): boolean {
+  if (hasActiveExecutorWorkForProject(runtime.database, projectID)) return false;
+  return projectLoopDecision(loopInput(runtime, projectID), forceOnce).allowed;
 }
 
 function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopInput {
@@ -118,13 +116,13 @@ function enqueueProject(projectID: string): void {
   waitingProjects.push(projectID);
 }
 
-function requeueProjectsWithTodo(db: RunnerDatabase): void {
-  const projects = db.sqlite.query<{ id: string }, []>(
+function requeueProjectsWithTodo(runtime: ProjectLoopRuntime): void {
+  const projects = runtime.database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();
   for (const project of projects) {
-    if (activeLoops.has(project.id) || hasActiveExecutorWorkForProject(db, project.id) ||
-      !hasReadyIssue(db, project.id)) continue;
+    if (activeLoops.has(project.id) || hasActiveExecutorWorkForProject(runtime.database, project.id) ||
+      !projectLoopDecision(loopInput(runtime, project.id), false).allowed) continue;
     activeLoops.add(project.id);
     enqueueProject(project.id);
   }
@@ -162,7 +160,9 @@ function nextRunnableProject(runtime: ProjectLoopRuntime): RunnableProject | nul
       waitingProjects.push(id);
       continue;
     }
-    if (!shouldContinue(runtime.database, id, forcedProjects.has(id))) {
+    const gate = projectLoopDecision(loopInput(runtime, id), forcedProjects.has(id));
+    if (hasActiveExecutorWorkForProject(runtime.database, id) || !gate.allowed) {
+      if (!gate.allowed) recordProjectLoopDecision(runtime.database, gate);
       forcedProjects.delete(id);
       activeLoops.delete(id);
       continue;

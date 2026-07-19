@@ -1,4 +1,10 @@
-import { claimNextIssue } from "../db/repositories/issueQueue.ts";
+import {
+  claimNextIssue,
+  hasDeferredProviderRuntime,
+  peekNextReadyIssue,
+  peekNextTodoIssue
+} from "../db/repositories/issueQueue.ts";
+import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { getIssue, listIssueRuns, type Issue } from "../db/repositories/issues.ts";
 import type { Project } from "../db/repositories/projects.ts";
@@ -28,13 +34,59 @@ export type ProjectLoopResult =
   | { claimed: false }
   | { claimed: true; issue: Issue; run: ProviderRunResult };
 
+export type ProjectLoopDecision = {
+  allowed: boolean;
+  authority: string;
+  issue: Issue | null;
+  provider: string;
+  reason: "dependency_blocker" | "no_work" | "project_hold" | "provider_runtime" | "ready" | "user_pause";
+  scope: string;
+};
+
 export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<ProjectLoopResult> {
   const project = mustGetProject(input.database, input.projectId);
-  const issue = claimNextIssue(input.database, project.id);
+  const decision = projectLoopDecision(input, true);
+  if (!decision.allowed) {
+    recordProjectLoopDecision(input.database, decision);
+    return { claimed: false };
+  }
+  const issue = claimNextIssue(input.database, project.id, (candidate) => (
+    issueProviderAvailable(input.database, project, candidate, input.providers)
+  ));
   if (!issue) return { claimed: false };
+  recordProjectLoopDecision(input.database, { ...decision, issue });
   publishIssueStatus(input, issue);
   const run = await runClaimedIssue(input, project, issue);
   return { claimed: true, issue, run };
+}
+
+export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean): ProjectLoopDecision {
+  const project = mustGetProject(input.database, input.projectId);
+  const firstQueued = peekNextTodoIssue(input.database, project.id);
+  const firstReady = peekNextReadyIssue(input.database, project.id);
+  if (project.hold) {
+    return decision(false, "project_holds", firstQueued, project.provider, "project_hold", `project:${project.id}`);
+  }
+  if (!forceOnce && project.auto_run !== 1) {
+    return decision(false, "projects.auto_run", firstQueued, project.provider, "user_pause", `project:${project.id}`);
+  }
+  if (!firstReady) {
+    return firstQueued
+      ? decision(false, "work_relations(kind=depends_on)+issues.status", firstQueued, "", "dependency_blocker", "dependency_subgraph")
+      : decision(false, "issues.status", null, "", "no_work", `project:${project.id}`);
+  }
+  const runnable = peekNextReadyIssue(input.database, project.id, (issue) => (
+    issueProviderAvailable(input.database, project, issue, input.providers)
+  ));
+  if (!runnable) {
+    const provider = issueProviderID(input.database, project, firstReady);
+    const authority = isExecutorProviderId(provider) && input.providers[provider] !== undefined
+      ? "issue.provider_deferred"
+      : "runner.providers";
+    return decision(false, authority, firstReady, provider, "provider_runtime", `provider:${provider || "unknown"}`);
+  }
+  const provider = issueProviderID(input.database, project, runnable);
+  return decision(true, "work_relations(kind=depends_on)+issues.status", runnable, provider, "ready", `issue:${runnable.id}`);
 }
 
 async function runClaimedIssue(
@@ -108,9 +160,59 @@ function selectedProvider(
   selection: AgentRecommendation,
   providers: ProjectLoopInput["providers"]
 ): ExecutorProvider {
-  const preferred = isExecutorProviderId(selection.provider) ? providers[selection.provider] : undefined;
-  if (preferred) return preferred;
+  if (isExecutorProviderId(selection.provider)) {
+    const preferred = providers[selection.provider];
+    if (preferred) return preferred;
+    throw new Error(`project ${project.id} provider "${selection.provider}" is not registered`);
+  }
   return projectProvider(project, providers);
+}
+
+function issueProviderAvailable(
+  db: RunnerDatabase,
+  project: Project,
+  issue: Issue,
+  providers: ProjectLoopInput["providers"]
+): boolean {
+  const providerID = issueProviderID(db, project, issue);
+  return isExecutorProviderId(providerID) && providers[providerID] !== undefined &&
+    !hasDeferredProviderRuntime(db, providerID);
+}
+
+function issueProviderID(db: RunnerDatabase, project: Project, issue: Issue): string {
+  const selection = resolveExecutorSelection(db, project, issue);
+  return isExecutorProviderId(selection.provider) ? selection.provider : project.provider.trim();
+}
+
+function decision(
+  allowed: boolean,
+  authority: string,
+  issue: Issue | null,
+  provider: string,
+  reason: ProjectLoopDecision["reason"],
+  scope: string
+): ProjectLoopDecision {
+  return { allowed, authority, issue, provider, reason, scope };
+}
+
+export function recordProjectLoopDecision(db: RunnerDatabase, input: ProjectLoopDecision): void {
+  if (!input.issue) return;
+  const payload = JSON.stringify({
+    authority: input.authority,
+    decision: input.allowed ? "continue" : "stop",
+    provider: input.provider,
+    reason: input.reason,
+    scope: input.scope
+  });
+  const previous = db.sqlite.query<{ payload: string }, [number]>(`
+    select payload from issue_events where issue_id=? and type='issue.runner_scope_decision'
+    order by id desc limit 1
+  `).get(input.issue.id)?.payload;
+  if (!input.allowed && previous === payload) return;
+  db.sqlite.run(
+    `insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.runner_scope_decision', ?, ?)`,
+    [input.issue.id, payload, issueTimestamp()]
+  );
 }
 
 function issueExecutionNoLongerCurrent(db: RunnerDatabase, issueID: number, runID: string): boolean {
