@@ -272,7 +272,8 @@ const STATE_EVENT_TYPES = new Set([
   "issue.supervisor_resume_followup",
   "issue.supervisor_retry",
   "issue.watchdog_kicked",
-  "issue.watchdog_needs_user"
+  "issue.watchdog_needs_user",
+  "issue.watchdog_waiting"
 ]);
 const AUDIT_EVENT_TYPES = new Set([
   "issue.comment",

@@ -26,6 +26,7 @@ import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "..
 export type ProjectLoopInput = {
   bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
+  now?: Date | string;
   projectId: string;
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
@@ -51,8 +52,8 @@ export async function runProjectLoopOnce(input: ProjectLoopInput): Promise<Proje
     return { claimed: false };
   }
   const issue = claimNextIssue(input.database, project.id, (candidate) => (
-    issueProviderAvailable(input.database, project, candidate, input.providers)
-  ));
+    issueProviderAvailable(input.database, project, candidate, input.providers, input.now)
+  ), input.now);
   if (!issue) return { claimed: false };
   recordProjectLoopDecision(input.database, { ...decision, issue });
   publishIssueStatus(input, issue);
@@ -76,7 +77,7 @@ export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean)
       : decision(false, "issues.status", null, "", "no_work", `project:${project.id}`);
   }
   const runnable = peekNextReadyIssue(input.database, project.id, (issue) => (
-    issueProviderAvailable(input.database, project, issue, input.providers)
+    issueProviderAvailable(input.database, project, issue, input.providers, input.now)
   ));
   if (!runnable) {
     const provider = issueProviderID(input.database, project, firstReady);
@@ -172,11 +173,12 @@ function issueProviderAvailable(
   db: RunnerDatabase,
   project: Project,
   issue: Issue,
-  providers: ProjectLoopInput["providers"]
+  providers: ProjectLoopInput["providers"],
+  now: Date | string | undefined
 ): boolean {
   const providerID = issueProviderID(db, project, issue);
   return isExecutorProviderId(providerID) && providers[providerID] !== undefined &&
-    !hasDeferredProviderRuntime(db, providerID);
+    !hasDeferredProviderRuntime(db, providerID, now ?? new Date());
 }
 
 function issueProviderID(db: RunnerDatabase, project: Project, issue: Issue): string {
