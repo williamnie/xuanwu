@@ -18,3 +18,10 @@ test('launchd deployment stages controlled PI runtime resources with package ass
   assert.match(source, /copy_if_exists "\$RUNNER_PLUGINS_SOURCE" "\$PI_PACKAGE_ASSET_DIR\/plugins"/);
   assert.match(source, /<key>PI_PACKAGE_DIR<\/key>/);
 });
+
+test('launchd deployment persists the explicit W1 automation shadow selector', () => {
+  assert.match(source, /AUTOMATION_SHADOW_W1="\$\{CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0\}"/);
+  assert.match(source, /CODEX_RUNNER_AUTOMATION_SHADOW_W1 must be 0 or 1/);
+  assert.match(source, /<key>CODEX_RUNNER_AUTOMATION_SHADOW_W1<\/key>/);
+  assert.match(source, /<string>\$\(xml_escape "\$AUTOMATION_SHADOW_W1"\)<\/string>/);
+});

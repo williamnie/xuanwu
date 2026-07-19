@@ -22,6 +22,7 @@ LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$APP_SUPPORT_DIR/logs}"
 CODEX_CMD="${CODEX_RUNNER_CODEX_CMD:-$(command -v codex || true)}"
 CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
 CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
+AUTOMATION_SHADOW_W1="${CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 DOMAIN="gui/$(id -u)"
@@ -120,6 +121,11 @@ if [ -z "$CODEX_CMD" ]; then
   exit 1
 fi
 
+if [[ "$AUTOMATION_SHADOW_W1" != "0" && "$AUTOMATION_SHADOW_W1" != "1" ]]; then
+  echo "[launchd] CODEX_RUNNER_AUTOMATION_SHADOW_W1 must be 0 or 1" >&2
+  exit 1
+fi
+
 APP_VERSION="$("$ROOT_DIR/scripts/resolve-version.sh")"
 echo "[launchd] version: $APP_VERSION"
 env VITE_APP_VERSION="$APP_VERSION" npm --prefix "$ROOT_DIR/frontend" run build
@@ -170,6 +176,8 @@ cat > "$PLIST" <<PLIST
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
     <key>CODEX_RUNNER_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
+    <key>CODEX_RUNNER_AUTOMATION_SHADOW_W1</key>
+    <string>$(xml_escape "$AUTOMATION_SHADOW_W1")</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
