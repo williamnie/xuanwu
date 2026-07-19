@@ -3,6 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runMigrations } from "../db/migrations.ts";
+import {
+  dropLegacyAutomationTables,
+  LEGACY_AUTOMATION_DROP_MIGRATION_ID,
+  LEGACY_AUTOMATION_DROP_TABLES
+} from "../db/schema/053_drop_legacy_automation_tables.ts";
 import { API_ROUTE_DISPOSITIONS, TABLE_DISPOSITIONS } from "./capabilityDispositionInventory.ts";
 import {
   AUTOMATION_API_ROUTES,
@@ -186,7 +191,7 @@ describe("Xuanwu Automation semantics", () => {
     }
   });
 
-  test("current source schema contains every non-legacy carrier table", () => {
+  test("keeps startup deferred and preserves the P11.09 exact drop set after an audited marker", () => {
     const sqlite = new Database(":memory:");
     try {
       runMigrations(sqlite);
@@ -196,8 +201,17 @@ describe("Xuanwu Automation semantics", () => {
       for (const table of AUTOMATION_TABLES.filter((name) => !name.startsWith("nightly_"))) {
         expect(sourceTables.has(table)).toBe(true);
       }
-      expect(sourceTables.has("nightly_batches")).toBe(false);
-      expect(sourceTables.has("nightly_batch_items")).toBe(false);
+
+      dropLegacyAutomationTables(sqlite);
+      sqlite.run("insert into schema_migrations (id) values (?)", [LEGACY_AUTOMATION_DROP_MIGRATION_ID]);
+      runMigrations(sqlite);
+      const finalTables = new Set(sqlite.query<{ name: string }, []>(
+        "select name from sqlite_master where type='table' and name not like 'sqlite_%'"
+      ).all().map((row) => row.name));
+      for (const table of LEGACY_AUTOMATION_DROP_TABLES) expect(finalTables.has(table)).toBe(false);
+      for (const table of ["pi_delegations", "pi_heartbeat_controls", "pi_heartbeat_runs", "pi_heartbeat_events"]) {
+        expect(finalTables.has(table)).toBe(true);
+      }
     } finally {
       sqlite.close();
     }

@@ -19,7 +19,9 @@ import type {
 import type { PiIssueCompletionWatchNotification } from "../db/repositories/pi/issueCompletionWatchAdmin.ts";
 import type { AutomationAudit, AutomationID } from "../domain/automation/contracts.ts";
 
-const TERMINAL = new Set(["done", "failed", "cancelled", "pending_verification"]);
+export const ISSUE_COMPLETION_TERMINAL_STATUSES = new Set([
+  "done", "failed", "cancelled", "pending_verification"
+]);
 
 export function createIssueCompletionAutomation(
   db: RunnerDatabase,
@@ -36,8 +38,8 @@ export function createIssueCompletionAutomation(
   if (!projectID || issues.some((issue) => issue.project_id !== projectID)) throw new Error("issue project_id does not match watch");
   const original = object(input.condition);
   const statuses = Array.isArray(original.terminal_statuses)
-    ? original.terminal_statuses.map(clean).filter((status) => TERMINAL.has(status))
-    : [...TERMINAL];
+    ? original.terminal_statuses.map(clean).filter((status) => ISSUE_COMPLETION_TERMINAL_STATUSES.has(status))
+    : [...ISSUE_COMPLETION_TERMINAL_STATUSES];
   const target = {
     channel: "feishu" as const,
     chat_id: clean(input.target_chat_id),
@@ -137,6 +139,34 @@ export function listIssueCompletionAutomationNotifications(
   }).filter((item): item is PiIssueCompletionWatchNotification => Boolean(item));
 }
 
+export function issueCompletionAutomationOwnsTargetForIssue(db: RunnerDatabase, issueID: number): boolean {
+  return listAutomationIssueWatches(db).some((watch) =>
+    watch.subject.kind === "issues" &&
+    watch.subject.issue_ids.includes(issueID) &&
+    (watch.status === "watching" || watch.status === "satisfied") &&
+    watch.notification_target.chat_id !== ""
+  );
+}
+
+export function issueCompletionAutomationCounts(db: RunnerDatabase): {
+  active_watches: number;
+  failed_notification: number;
+  satisfied_pending_notification: number;
+} {
+  return {
+    active_watches: db.sqlite.query<{ count: number }, []>(
+      "select count(*) as count from automation_watches where migration_mode='native' and status='watching'"
+    ).get()?.count ?? 0,
+    failed_notification: db.sqlite.query<{ count: number }, [string]>(`select count(*) as count
+      from pi_notification_intents intent left join sync_outbox outbox on outbox.id=intent.sent_outbox_id
+      where intent.kind=? and ((intent.state='ready' and intent.error<>'') or outbox.status='failed')`
+    ).get("automation_watch_terminal")?.count ?? 0,
+    satisfied_pending_notification: db.sqlite.query<{ count: number }, [string]>(`select count(*) as count
+      from pi_notification_intents where kind=? and state='ready' and sent_outbox_id=0 and error=''`
+    ).get("automation_watch_terminal")?.count ?? 0
+  };
+}
+
 export function projectIssueCompletionAutomation(db: RunnerDatabase, watch: AutomationWatch): PiIssueCompletionWatch {
   if (watch.subject.kind !== "issues") throw new Error(`automation watch ${watch.automation_id} is not issue-based`);
   const definition = db.sqlite.query<{ scope_id: string }, [string]>(
@@ -184,7 +214,7 @@ function projectItem(db: RunnerDatabase, watch: AutomationWatch, issueID: number
     issue_id: issueID,
     last_status: status,
     project_id: projectID,
-    terminal_at: TERMINAL.has(status) ? watch.satisfied_at : "",
+    terminal_at: ISSUE_COMPLETION_TERMINAL_STATUSES.has(status) ? watch.satisfied_at : "",
     updated_at: watch.updated_at,
     watch_id: watch.automation_id
   };

@@ -7,7 +7,6 @@ import {
 } from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
 import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
-import { listCronTasks } from "../db/repositories/cronTasks.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
@@ -50,7 +49,6 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
   return {
     auxiliary: {
       listAgentProfiles: () => listAgentProfiles(context.database),
-      listCronTasks: () => listCronTasks(context.database),
       listIssueTemplates: () => listIssueTemplates(context.database)
     },
     issues: {

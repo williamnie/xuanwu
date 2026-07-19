@@ -50,6 +50,7 @@ import { automationExecutionLinksMigration } from "./049_automation_execution_li
 import { automationWatchesMigration } from "./050_automation_watches.ts";
 import { removeProductionFixturesMigration } from "./051_remove_production_fixtures.ts";
 import { consolidatePiDecisionLayersMigration } from "./052_consolidate_pi_decision_layers.ts";
+import { dropLegacyAutomationTablesMigration } from "./053_drop_legacy_automation_tables.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -103,5 +104,6 @@ export const migrations = [
   automationExecutionLinksMigration,
   automationWatchesMigration,
   removeProductionFixturesMigration,
-  consolidatePiDecisionLayersMigration
+  consolidatePiDecisionLayersMigration,
+  dropLegacyAutomationTablesMigration
 ];

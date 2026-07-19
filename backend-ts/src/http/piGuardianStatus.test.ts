@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { buildConfig } from "../config/env.ts";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { createPiIssueCompletionWatch, createPiNotificationIntent, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
+import { createPiNotificationIntent, upsertPiGuardianWatchdogStatus } from "../db/repositories/pi.ts";
+import { createIssueCompletionAutomation } from "../pi/issueCompletionAutomation.ts";
 import { createDefaultRouter, registerSystemStatusRoute } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -53,7 +54,7 @@ describe("PI guardian system status", () => {
     try {
       insertProject(database, config.stateDir);
       const issue = createIssue(database, { project_id: "demo", status: "todo", title: "Active watch" });
-      createPiIssueCompletionWatch(database, {
+      createIssueCompletionAutomation(database, {
         issue_ids: [issue.id],
         project_id: "demo",
         source_event_id: "watch-active",
@@ -110,7 +111,7 @@ function watchIntent(watchID: string, error: string): Record<string, unknown> {
     id: `intent-${watchID}`,
     idempotency_key: `issue_completion_watch_satisfied:${watchID}`,
     issue_id: 1,
-    kind: "issue_completion_watch_satisfied",
+    kind: "automation_watch_terminal",
     project_id: "demo",
     state: "ready",
     target_channel: "feishu",

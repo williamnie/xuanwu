@@ -3,11 +3,11 @@ import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { listExternalLinksByIssue } from "../db/repositories/externalLinks.ts";
 import {
   getPiRunGroup,
-  issueCompletionWatchOwnsTargetForIssue,
   listPiActions,
   listPiNotificationIntents,
   type PiNotificationIntent
 } from "../db/repositories/pi.ts";
+import { issueCompletionAutomationOwnsTargetForIssue } from "../pi/issueCompletionAutomation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import { formatRunGroupDigest } from "../pi/digestFormatter.ts";
 import { ingestIssueLifecycleEvent } from "../pi/guardianEventIngest.ts";
@@ -55,7 +55,7 @@ export function queueFeishuIssueStatusNotification(
     runGroupID
   });
   const linkedTarget = linkedLifecycleTarget(db, issue.id, conversationID, event.run_group_id);
-  if (!linkedTarget && issueCompletionWatchOwnsTargetForIssue(db, issue.id)) {
+  if (!linkedTarget && issueCompletionAutomationOwnsTargetForIssue(db, issue.id)) {
     return { queued: false, reason: "issue_completion_watch_owns_target" };
   }
   const target = linkedTarget ?? fallbackLifecycleTarget(issue, options.config);

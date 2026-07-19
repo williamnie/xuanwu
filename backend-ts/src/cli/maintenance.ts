@@ -22,6 +22,10 @@ import {
   preflightDatabaseMigration,
   rollbackDatabaseMigration
 } from "../db/migrationRehearsal.ts";
+import {
+  cleanupLegacyAutomationSchema,
+  verifyLegacyAutomationArchive
+} from "../db/legacyAutomationCleanup.ts";
 import { formatJSON } from "./output.ts";
 
 const BOOLEAN_FLAGS = new Set([
@@ -208,6 +212,31 @@ export function runMaintenance(args: string[]): string {
       reason: flags.reason,
       reportPath: required(flags, "report")
     });
+  } else if (family === "db" && command === "legacy-automation-drop") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "archive", "audit-ref", "backup",
+      "confirm-backup-tested", "confirm-no-active-writers", "confirm-tables",
+      "db", "json", "reason", "release-ref", "report", "source-root"
+    ]);
+    report = cleanupLegacyAutomationSchema({
+      actor: flags.actor,
+      actorKind: workActorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      archivePath: flags.archive,
+      auditRef: flags["audit-ref"],
+      backupPath: flags.backup,
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      confirmTables: flags["confirm-tables"],
+      dbPath: required(flags, "db"),
+      reason: flags.reason,
+      releaseRef: flags["release-ref"],
+      reportPath: required(flags, "report"),
+      sourceRoot: flags["source-root"]
+    });
+  } else if (family === "db" && command === "legacy-automation-archive-verify") {
+    allowOnly(flags, ["archive", "json"]);
+    report = verifyLegacyAutomationArchive(required(flags, "archive"));
   } else if (family === "attention" && command === "audit") {
     allowOnly(flags, ["db", "json", "report"]);
     report = auditPiDecisionConsolidation({

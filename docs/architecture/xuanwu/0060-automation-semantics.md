@@ -1,6 +1,7 @@
 # ADR-XW-0060：Cron、PI Automation、Heartbeat 与 Watch 统一语义
 
-- 状态：Accepted（W2 / G4 / W3 target-primary；legacy storage 仅作 rollback/archive，尚未删除）
+- 状态：Accepted（W2 / G4 / W3 target-primary；P11.09 exact-set schema cleanup 见
+  `docs/migrations/legacy-automation-schema-drop-v1.md`）
 - 日期：2026-07-17
 - 依赖：[ADR-XW-0005](0005-capability-disposition-inventory.md)、[ADR-XW-0006](../xuanwu-migration/README.md)
 - 可执行清单：`backend-ts/src/xuanwu/automationSemantics.ts`
@@ -90,6 +91,10 @@ LLM 只能提议 Automation 或生成说明；状态变更、外部写、cutover
 | nightly tables | parent/items 全量带 checksum 导出；一个 release source/runtime/API 零消费者；fresh SQLite backup 与隔离 restore；P11.09 |
 
 `pi_automations` 也是 legacy migration candidate；只有 W2/G4 target single-writer、W3 restart/retry parity、一个正式 release consumer-zero、archive/restore 和精确非 LLM G7 approval 全部完成后才可删除。任何 candidate 缺少 active-row=0、consumer-zero、backup/archive hash、restore rehearsal 或精确非 LLM approval 时必须 fail closed。
+
+P11.09 只删除已通过 exact-set consumer-zero 的 cron、`pi_automations`、legacy completion-watch 与
+Nightly 表。`pi_delegations` 因 report/authorization live consumer 继续保留；heartbeat control/run/event
+仍是运行与 R3 audit authority，也继续保留。空行数不能覆盖这两个 retain decision。
 
 可执行审计只读打开 SQLite，并把数据/影子 parity 与 destructive delete authorization 分开：
 

@@ -1,8 +1,12 @@
 import type { Database as SQLiteDatabase } from "bun:sqlite";
 import { migrations } from "./schema/index.ts";
+import {
+  dropLegacyAutomationTables,
+  LEGACY_AUTOMATION_DROP_MIGRATION_ID
+} from "./schema/053_drop_legacy_automation_tables.ts";
 
 export type SqlMigration = {
-  apply?: (sqlite: SQLiteDatabase) => void;
+  apply?: (sqlite: SQLiteDatabase) => false | void;
   id: string;
   sql: string;
 };
@@ -50,11 +54,16 @@ export function runMigrations(sqlite: SQLiteDatabase, sqlMigrations: SqlMigratio
   const applyPending = sqlite.transaction(() => {
     for (const migration of sqlMigrations) {
       if (applied.has(migration.id)) continue;
-      applyMigration(sqlite, migration);
+      if (!applyMigration(sqlite, migration)) continue;
       sqlite.run("insert into schema_migrations (id) values (?)", [migration.id]);
       applied.add(migration.id);
     }
     repairKnownSchemaDrift(sqlite, sqlMigrations);
+    if (applied.has(LEGACY_AUTOMATION_DROP_MIGRATION_ID)) {
+      // Repairable historical migrations recreate empty compatibility tables. Re-drop
+      // them only after the audited maintenance command has persisted the marker.
+      dropLegacyAutomationTables(sqlite);
+    }
   });
   applyPending.immediate();
 }
@@ -70,10 +79,10 @@ function repairKnownSchemaDrift(sqlite: SQLiteDatabase, sqlMigrations: SqlMigrat
   }
 }
 
-function applyMigration(sqlite: SQLiteDatabase, migration: SqlMigration): void {
+function applyMigration(sqlite: SQLiteDatabase, migration: SqlMigration): boolean {
   if (migration.apply) {
-    migration.apply(sqlite);
-    return;
+    return migration.apply(sqlite) !== false;
   }
   sqlite.run(migration.sql);
+  return true;
 }
