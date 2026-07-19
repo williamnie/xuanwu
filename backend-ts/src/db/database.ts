@@ -36,6 +36,10 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     readwrite: !target.readonly,
     strict: true
   });
+  // Runtime observability commands open short-lived read-only connections to the
+  // same database. Wait for those readers instead of letting a transient lock
+  // terminate the launchd process while it persists provider events.
+  sqlite.run("pragma busy_timeout = 5000");
   sqlite.run("pragma foreign_keys = on");
   if (!target.readonly) {
     runMigrations(sqlite);

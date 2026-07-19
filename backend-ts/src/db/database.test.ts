@@ -34,6 +34,7 @@ describe("Bun SQLite database connection", () => {
       expect(connection.path).toBe(join(stateDir, "runner.db"));
       expect(existsSync(stateDir)).toBe(true);
       expect(existsSync(connection.path)).toBe(true);
+      expect(connection.sqlite.query("pragma busy_timeout").get()).toEqual({ timeout: 5000 });
       expect(connection.sqlite.query("select name from items").get()).toEqual({ name: "alpha" });
     } finally {
       connection.close();
