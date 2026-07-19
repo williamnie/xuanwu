@@ -52,12 +52,12 @@ export const AUTOMATION_CARRIERS = [
     id: "pi_automation",
     role: "execution",
     tables: ["pi_automations"],
-    current_authority: "pi_automations owns native Automation definition, claim cursor, retry, and last execution result",
-    target_semantics: "Primary Automation definition/claim authority and governed execution pipeline",
-    disposition: "keep",
+    current_authority: "pi_automations is a legacy definition, cursor, retry, claim, and result authority until G4",
+    target_semantics: "automation_definitions plus automation_runs/events is the only target Automation authority",
+    disposition: "migrate",
     duplicate_with: ["cron", "delegation"],
     rollback: "Keep pi_automations dormant while legacy carriers are authoritative; a failed parity or recovery gate restores legacy reads and clears only rebuildable shadow rows by migration batch.",
-    final_delete_gate: "Primary authority is not a deletion candidate; only obsolete compatibility fields may be removed by a later P11 ADR after consumer-zero and restore evidence.",
+    final_delete_gate: "P11.04/P11.09, W2/G4 target single-writer plus W3 restart/retry parity, one release with zero direct storage consumers, archive/restore evidence, and non-LLM G7 approval.",
     source_files: [
       "backend-ts/src/runner/piAutomationScheduler.ts",
       "backend-ts/src/pi/automationRunner.ts",
@@ -129,20 +129,20 @@ export const AUTOMATION_CARRIERS = [
 ] as const satisfies readonly AutomationCarrier[];
 
 export const AUTOMATION_STATUS_MAPPINGS = [
-  { carrier: "cron", field: "status", source_status: "active", canonical_status: "enabled", semantic_axis: "definition" },
+  { carrier: "cron", field: "status", source_status: "active", canonical_status: "active", semantic_axis: "definition" },
   { carrier: "cron", field: "status", source_status: "paused", canonical_status: "paused", semantic_axis: "definition" },
-  { carrier: "cron", field: "status", source_status: "done", canonical_status: "completed", semantic_axis: "definition" },
+  { carrier: "cron", field: "status", source_status: "done", canonical_status: "archived", semantic_axis: "definition" },
   { carrier: "cron", field: "last_status", source_status: "success", canonical_status: "succeeded", semantic_axis: "execution" },
   { carrier: "cron", field: "last_status", source_status: "error", canonical_status: "failed", semantic_axis: "execution" },
   { carrier: "cron", field: "last_status", source_status: "skipped", canonical_status: "skipped", semantic_axis: "execution" },
-  { carrier: "pi_automation", field: "enabled", source_status: "1", canonical_status: "enabled", semantic_axis: "definition" },
+  { carrier: "pi_automation", field: "enabled", source_status: "1", canonical_status: "active", semantic_axis: "definition" },
   { carrier: "pi_automation", field: "enabled", source_status: "0", canonical_status: "paused", semantic_axis: "definition" },
   { carrier: "pi_automation", field: "last_status", source_status: "running", canonical_status: "running", semantic_axis: "execution" },
   { carrier: "pi_automation", field: "last_status", source_status: "success", canonical_status: "succeeded", semantic_axis: "execution" },
   { carrier: "pi_automation", field: "last_status", source_status: "error", canonical_status: "failed", semantic_axis: "execution" },
-  { carrier: "delegation", field: "status", source_status: "active", canonical_status: "enabled", semantic_axis: "definition" },
+  { carrier: "delegation", field: "status", source_status: "active", canonical_status: "active", semantic_axis: "definition" },
   { carrier: "delegation", field: "status", source_status: "paused", canonical_status: "paused", semantic_axis: "definition" },
-  { carrier: "delegation", field: "status", source_status: "expired", canonical_status: "completed", semantic_axis: "definition" },
+  { carrier: "delegation", field: "status", source_status: "expired", canonical_status: "archived", semantic_axis: "definition" },
   { carrier: "heartbeat", field: "status", source_status: "running", canonical_status: "running", semantic_axis: "execution" },
   { carrier: "heartbeat", field: "status", source_status: "completed", canonical_status: "succeeded", semantic_axis: "execution" },
   { carrier: "heartbeat", field: "status", source_status: "failed", canonical_status: "failed", semantic_axis: "execution" },
@@ -201,8 +201,8 @@ export const AUTOMATION_API_ROUTES = [
 
 export const AUTOMATION_MIGRATION_CONTRACT = {
   current_gate: "G0",
-  current_window: "W0",
-  target_authority: "pi_automations plus one governed Automation command/claim pipeline; Work, Run, Approval, Attention, and delivery retain their own authorities",
+  current_window: "W1",
+  target_authority: "automation_definitions plus automation_runs/events and one governed Automation command/claim pipeline; pi_automations remains legacy-primary only until G4",
   dual_read: "W1 legacy-primary shadow comparison, then W2 target-primary deterministic comparison/fallback; W1+W2 is at most two consecutive formal releases.",
   dual_write: "Default forbidden. W1 permits only idempotent target shadow writes owned by a migration batch; at G4/W2 target becomes the sole writer and legacy APIs translate to the same command.",
   rollback: "Parity failure keeps/restores the legacy carrier, disables shadow/target read, and blocks the next gate. After G4, stop the target writer and replay only the audited cutover delta before restoring legacy authority.",
@@ -219,3 +219,22 @@ export const AUTOMATION_MIGRATION_CONTRACT = {
 } as const;
 
 export const AUTOMATION_TABLES = AUTOMATION_CARRIERS.flatMap((carrier) => [...carrier.tables]);
+
+export const AUTOMATION_TARGET_TABLES = [
+  "automation_definitions",
+  "automation_trigger_configs",
+  "automation_runs",
+  "automation_events",
+  "automation_run_events",
+  "automation_execution_links",
+  "automation_watches"
+] as const;
+
+export const AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS = [
+  { carrier: "cron", entrypoint: "runDueCronTasks", role: "legacy_writer" },
+  { carrier: "pi_automation", entrypoint: "runDuePiAutomations", role: "legacy_writer" },
+  { carrier: "target_automation", entrypoint: "runDueAutomations", role: "target_writer" },
+  { carrier: "delegation_heartbeat", entrypoint: "runDelegationHeartbeatsOnce", role: "legacy_writer" },
+  { carrier: "automation_watch", entrypoint: "runWatchAutomationsOnce", role: "target_observer" },
+  { carrier: "completion_watch", entrypoint: "queueReadyFeishuCompletionWatchNotifications", role: "legacy_delivery_consumer" }
+] as const;

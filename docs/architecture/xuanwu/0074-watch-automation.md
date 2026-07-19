@@ -3,7 +3,7 @@
 - 状态：Accepted（P08.06 / native Watch + W1 legacy shadow）
 - 依赖：P08.02 / Runner #708、P08.04 / Runner #710（均为 `done`）
 - 实现：`automationWatches.ts`、`watchAutomationRuntime.ts`
-- 迁移工具：`bun scripts/migrate-watch-automations.mjs --db <runner.db>`（默认只读预览）
+- 迁移工具：`bun scripts/migrate-watch-automations.mjs --db <runner.db>`（只读预览）；copy-only apply 统一走 `migrate-automation-shadow.mjs`
 
 ## 决策
 
@@ -34,10 +34,12 @@ W2 只能在 condition/item/status、startup sweep、expiry、cancel、external 
 # 只读计划，不应用 schema 或 shadow row
 bun scripts/migrate-watch-automations.mjs --db /path/to/runner.db
 
-# 应用 additive migration 与审计 shadow write
-bun scripts/migrate-watch-automations.mjs \
-  --db /path/to/runner.db --apply \
-  --actor runner-operator --correlation watch-migration-20260718
+# 仅对与 source legacy checksum 一致的隔离备份副本应用 shadow write
+bun scripts/migrate-automation-shadow.mjs \
+  --source-db /path/to/authoritative-runner.db \
+  --db /path/to/isolated-backup-copy.db --apply-to-copy \
+  --actor runner-operator --correlation watch-migration-20260718 \
+  --reason "isolated W1 watch parity rehearsal"
 ```
 
-`--apply` 必须显式提供 actor 与 correlation；重复执行只报告 `unchanged`。工具不发送通知、不切换 read authority，也不删除旧表。
+旧 `migrate-watch-automations.mjs --apply` 已 fail closed，避免误写 live DB。copy-only apply 必须显式提供 source、非 LLM actor、correlation 和 reason；重复执行只报告 `unchanged`。工具不发送通知、不切换 read authority，也不删除旧表。

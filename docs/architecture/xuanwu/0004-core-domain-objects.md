@@ -107,7 +107,7 @@ Work 634 at revision abc123 handoff   -> xw:handoff:derived:634%40abc123
 | Evidence | `issue_events`、`pi_action_events`、`issue_supervisor_events`、`git` | 事实按原始 authority 保持可追溯；bundle 不吞并原始 ID |
 | Handoff | `derived` | 由 Work、Git、Evidence 和 delivery audit 组装；当前无独立表 |
 | Attention | `attention_inbox_items`、`pi_guardian_alerts`、`pi_approval_requests`、`pi_actions`、`issues` | P11.03 将 active internal Action 映射为 Attention；各 carrier 保持自己的 authority |
-| Automation | `pi_automations`、`cron_tasks`、`pi_delegations` | definition 与 heartbeat/run 分离；见 8.6 |
+| Automation | target `automation_definitions/runs/events`；legacy `pi_automations`、`cron_tasks`、`pi_delegations` | definition 与 heartbeat/run 分离；见 8.6 |
 
 ID 冲突以 authority 隔离。迁移时不得重新编号历史对象；新表若成为 authority，必须保留 old ID mapping 和 parity audit。
 
@@ -332,7 +332,8 @@ Issue 是兼容名称和当前 authoritative carrier，不创建 `works` 表。
 
 | 当前 carrier | 领域映射 | 边界 |
 | --- | --- | --- |
-| `pi_automations` | primary Automation definition；`enabled=1 -> active`、`enabled=0 -> paused` | `last_status` 是最近 tick outcome，不是 definition lifecycle |
+| `automation_definitions` + `automation_runs/events` | 当前 served API/repository 的 target Automation definition/claim authority | W1 shadow 固定 `draft` 且不 claim；W2/G4 后才可 target-primary/single-writer |
+| `pi_automations` | legacy Automation definition/cursor/retry authority；`enabled=1 -> active`、`enabled=0 -> paused` | G4 前 sole writer；`last_status` 是最近 tick outcome，不是 definition lifecycle |
 | `cron_tasks` + `cron_task_schedules` | legacy scheduled Automation authority | 在迁移前保留自己的 ID/cursor，不复制到 `pi_automations` |
 | `pi_delegations` | standing-order compatibility authority | delegation heartbeat 是触发/监督，不是 Work owner |
 | `pi_heartbeat_runs/events` | Automation/standing-order 的触发与调度审计；关联 Work 后才可投影为 core Evidence | 不是 Automation definition，也不是 engineering Run |

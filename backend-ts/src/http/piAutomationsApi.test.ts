@@ -100,6 +100,42 @@ describe("PI automations API", () => {
       fixture.db.close();
     }
   });
+
+  test("routes legacy mutation through W1 seam without changing the legacy response on shadow failure", async () => {
+    const fixture = await openFixture();
+    const previous = Bun.env.CODEX_RUNNER_AUTOMATION_SHADOW_W1;
+    const originalWarn = console.warn;
+    const audits: string[] = [];
+    try {
+      Bun.env.CODEX_RUNNER_AUTOMATION_SHADOW_W1 = "1";
+      console.warn = (message?: unknown) => audits.push(String(message));
+      const router = createDefaultRouter({ database: fixture.db });
+      const body = await jsonRequest(router, "/api/pi/automations", {
+        body: JSON.stringify({
+          name: "Legacy result survives shadow failure",
+          steps: [{ type: "domain_skill", skill_id: "fixture-domain", idempotency_key: "domain-failure" }],
+          trigger: { type: "schedule" }
+        }),
+        method: "POST"
+      });
+
+      expect(body.automation).toMatchObject({ id: 1, name: "Legacy result survives shadow failure" });
+      expect(fixture.db.sqlite.query("select count(*) as count from pi_automations").get()).toEqual({ count: 1 });
+      expect(fixture.db.sqlite.query("select count(*) as count from automation_definitions").get()).toEqual({ count: 0 });
+      expect(audits.map((line) => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          legacy_id: 1,
+          outcome: "failed",
+          schema_version: "xuanwu.automation-shadow-audit.v1"
+        })
+      ]);
+    } finally {
+      console.warn = originalWarn;
+      if (previous === undefined) delete Bun.env.CODEX_RUNNER_AUTOMATION_SHADOW_W1;
+      else Bun.env.CODEX_RUNNER_AUTOMATION_SHADOW_W1 = previous;
+      fixture.db.close();
+    }
+  });
 });
 
 async function openFixture(): Promise<{ db: RunnerDatabase; root: string }> {

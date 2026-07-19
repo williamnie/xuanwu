@@ -84,7 +84,7 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 | `pi_actions` | **merge** | Handoff or Automation action candidate | pi_actions | `R3_AUDIT` | 731 |
 | `pi_agents` | **merge** | Local control-plane assistant configuration | pi_agents | `R2_DURABLE` | 1 |
 | `pi_approval_requests` | **merge** | Attention permission request | pi_approval_requests | `R3_AUDIT` | 0 |
-| `pi_automations` | **keep** | Automation primary authority | pi_automations | `R3_AUDIT` | 0 |
+| `pi_automations` | **migrate** | `automation_definitions` target authority | pi_automations until W2/G4 target single-writer cutover | `R3_AUDIT` | 0 |
 | `pi_conversations` | **keep** | Operator conversation | pi_conversations | `R4_SENSITIVE` | 25 |
 | `pi_delegations` | **migrate** | Automation standing order | pi_delegations until Automation parity | `R3_AUDIT` | 0 |
 | `pi_guardian_alerts` | **migrate** | Attention runtime alert | pi_guardian_alerts until Attention parity | `R3_AUDIT` | 6 |
@@ -122,7 +122,7 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 - Evidence 继续分布在 `issue_events`、`issue_supervisor_events`、`pi_action_events`、外部 intake/audit 与 Git；不得为了统一命名复制 Evidence table。
 - Handoff 继续由 Work、Git revision、Evidence refs 和 delivery audit 确定性组装；本期无独立 Handoff table。
 - Attention 当前由 `attention_inbox_items`、Guardian alert、Approval request、Project hold/通知 carrier 共同投影；合并前不互相双写。
-- Automation 以 `pi_automations` 为目标 primary authority；`cron_tasks`、`pi_delegations`、completion watch 在迁移前保留 ID、cursor 和各自写路径。
+- Automation target authority 是 `automation_definitions` / `automation_runs/events`；`pi_automations`、`cron_tasks`、`pi_delegations`、completion watch 在 G4 前保留 ID、cursor 和各自写路径。W1 shadow 不 claim、不执行，也不是第二 writer。
 
 ## 5. API 清单
 

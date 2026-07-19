@@ -8,8 +8,10 @@ import {
   AUTOMATION_API_ROUTES,
   AUTOMATION_CARRIERS,
   AUTOMATION_MIGRATION_CONTRACT,
+  AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS,
   AUTOMATION_STATUS_MAPPINGS,
-  AUTOMATION_TABLES
+  AUTOMATION_TABLES,
+  AUTOMATION_TARGET_TABLES
 } from "./automationSemantics.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
@@ -31,10 +33,44 @@ describe("Xuanwu Automation semantics", () => {
       expect(carrier.current_authority).not.toBe("");
       expect(carrier.target_semantics).not.toBe("");
       expect(carrier.rollback).not.toBe("");
-      expect(carrier.final_delete_gate).toContain(carrier.id === "pi_automation" ? "not a deletion candidate" : "P11");
+      expect(carrier.final_delete_gate).toContain("P11");
       for (const table of carrier.tables) expect(inventoried.has(table)).toBe(true);
       for (const source of carrier.source_files) expect(existsSync(resolve(REPO_ROOT, source))).toBe(true);
     }
+  });
+
+  test("freezes the exact target tables and all schedule-cycle writers/consumers", () => {
+    expect(AUTOMATION_TARGET_TABLES).toEqual([
+      "automation_definitions", "automation_trigger_configs", "automation_runs", "automation_events",
+      "automation_run_events", "automation_execution_links", "automation_watches"
+    ]);
+    const sqlite = new Database(":memory:");
+    try {
+      runMigrations(sqlite);
+      const sourceTables = new Set(sqlite.query<{ name: string }, []>(
+        "select name from sqlite_master where type='table'"
+      ).all().map((row) => row.name));
+      expect(AUTOMATION_TARGET_TABLES.filter((table) => !sourceTables.has(table))).toEqual([]);
+    } finally {
+      sqlite.close();
+    }
+
+    expect(AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS.map((item) => item.entrypoint)).toEqual([
+      "runDueCronTasks", "runDuePiAutomations", "runDueAutomations", "runDelegationHeartbeatsOnce",
+      "runWatchAutomationsOnce", "queueReadyFeishuCompletionWatchNotifications"
+    ]);
+    const scheduler = readFileSync(resolve(REPO_ROOT, "backend-ts/src/runner/piAutoManageScheduler.ts"), "utf8");
+    const actualCalls = AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS
+      .filter((item) => new RegExp(`\\b${item.entrypoint}\\s*\\(`).test(scheduler))
+      .map((item) => item.entrypoint);
+    expect(actualCalls).toEqual(AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS.map((item) => item.entrypoint));
+    expect(new Set(AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS.map((item) => item.carrier)).size)
+      .toBe(AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS.length);
+
+    expect(TABLE_DISPOSITIONS.find((item) => item.name === "pi_automations")).toMatchObject({
+      disposition: "migrate",
+      target: "automation_definitions target authority"
+    });
   });
 
   test("covers all 34 automation API routes and marks every mutation", () => {
@@ -71,8 +107,9 @@ describe("Xuanwu Automation semantics", () => {
 
   test("locks authority, bounded dual mode, rollback, deterministic permission, order, and deletion gates", () => {
     expect(AUTOMATION_MIGRATION_CONTRACT.current_gate).toBe("G0");
-    expect(AUTOMATION_MIGRATION_CONTRACT.current_window).toBe("W0");
-    expect(AUTOMATION_MIGRATION_CONTRACT.target_authority).toContain("pi_automations");
+    expect(AUTOMATION_MIGRATION_CONTRACT.current_window).toBe("W1");
+    expect(AUTOMATION_MIGRATION_CONTRACT.target_authority).toContain("automation_definitions");
+    expect(AUTOMATION_MIGRATION_CONTRACT.target_authority).toContain("pi_automations remains legacy-primary");
     expect(AUTOMATION_MIGRATION_CONTRACT.dual_read).toContain("at most two");
     expect(AUTOMATION_MIGRATION_CONTRACT.dual_write).toContain("Default forbidden");
     expect(AUTOMATION_MIGRATION_CONTRACT.rollback).toContain("restor");

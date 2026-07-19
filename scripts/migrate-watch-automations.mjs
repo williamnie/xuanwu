@@ -3,13 +3,13 @@ import { openDatabase } from "../backend-ts/src/db/database.ts";
 import { migrateLegacyCompletionWatches } from "../backend-ts/src/db/repositories/automationWatches.ts";
 
 const args = parseArgs(process.argv.slice(2));
-if (!args.db) fail("usage: migrate-watch-automations.mjs --db <runner.db> [--apply --actor <id> --correlation <id>]");
-if (args.apply && (!args.actor || !args.correlation)) {
-  fail("--apply requires --actor and --correlation");
+if (!args.db) fail("usage: migrate-watch-automations.mjs --db <runner.db> (readonly dry-run; use migrate-automation-shadow.mjs for copy-only apply)");
+if (args.apply) {
+  fail("direct --apply is disabled in W1; use migrate-automation-shadow.mjs --apply-to-copy --source-db <source.db> --db <isolated-copy.db> ...");
 }
 
 const now = new Date().toISOString();
-const database = await openDatabase(args.apply ? { dbPath: args.db } : { readonlyImportPath: args.db });
+const database = await openDatabase({ readonlyImportPath: args.db });
 try {
   const result = migrateLegacyCompletionWatches(database, {
     audit: {
@@ -25,7 +25,7 @@ try {
       occurred_at: now,
       reason: args.apply ? "approved legacy completion watch shadow migration" : "read-only migration preview"
     },
-    dryRun: !args.apply
+    dryRun: true
   });
   console.log(JSON.stringify({ applied: args.apply, database: args.db, ...result }, null, 2));
 } finally {

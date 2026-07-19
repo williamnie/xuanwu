@@ -1,14 +1,13 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
-  createPiAutomation,
   getPiAutomation,
   listPiAutomations,
   listRunnablePiAutomations,
-  updatePiAutomation,
   type AutomationTriggerType,
   type PiAutomationFilter,
   type PiAutomationInput
 } from "../db/repositories/piAutomations.ts";
+import { executePiAutomationLegacyCommand } from "../db/repositories/piAutomationCommands.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -30,7 +29,12 @@ function runnableResponse(context: PiAutomationContext, request: Request): Respo
 
 async function createResponse(context: PiAutomationContext, request: Request): Promise<Response> {
   const body = await objectBody(request);
-  return writeResponse(() => ({ automation: createPiAutomation(context.database, body as PiAutomationInput) }), 201);
+  return writeResponse(() => ({
+    automation: executePiAutomationLegacyCommand(context.database, {
+      input: body as PiAutomationInput,
+      operation: "create"
+    }).automation
+  }), 201);
 }
 
 function detailResponse(context: PiAutomationContext, request: Request): Response {
@@ -41,7 +45,13 @@ function detailResponse(context: PiAutomationContext, request: Request): Respons
 
 async function patchResponse(context: PiAutomationContext, request: Request): Promise<Response> {
   const body = await objectBody(request);
-  return writeResponse(() => ({ automation: updatePiAutomation(context.database, pathID(request), body) }));
+  return writeResponse(() => ({
+    automation: executePiAutomationLegacyCommand(context.database, {
+      id: pathID(request),
+      operation: "update",
+      patch: body
+    }).automation
+  }));
 }
 
 async function writeResponse(write: () => unknown, status = 200): Promise<Response> {

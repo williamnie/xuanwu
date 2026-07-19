@@ -220,9 +220,12 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 0, delete_preconditions: []
   },
   {
-    name: "pi_automations", disposition: "keep", target: "Automation primary authority",
-    source_of_truth: "pi_automations", retention: "R3_AUDIT", runtime_origin: "source_schema",
-    live_rows: 0, delete_preconditions: []
+    name: "pi_automations", disposition: "migrate", target: "automation_definitions target authority",
+    source_of_truth: "pi_automations until W2/G4 target single-writer cutover", retention: "R3_AUDIT", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: [
+      "Complete W1 shadow mapping and W2/G4 single-writer cutover with definition, cursor, retry, claim and provenance parity.",
+      "Prove one release with zero direct pi_automations writer/consumer before P11/G7 archive and restore approval."
+    ]
   },
   {
     name: "pi_conversations", disposition: "keep", target: "Operator conversation",
