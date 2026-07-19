@@ -7,7 +7,7 @@ const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 
 test('Work Detail composes canonical sections without replacing existing domain clients', () => {
-  for (const section of ['acceptance', 'relationships', 'attention', 'runs', 'evidence', 'handoffs', 'timeline']) {
+  for (const section of ['readiness', 'acceptance', 'relationships', 'attention', 'runs', 'evidence', 'handoffs', 'timeline']) {
     assert.match(detail, new RegExp(`id="work-${section}"`));
   }
   assert.match(detail, /workApi\.getWork\(workId\)/);
@@ -16,6 +16,8 @@ test('Work Detail composes canonical sections without replacing existing domain 
   assert.match(detail, /<EvidencePanel title="Work Evidence" workId=\{work\.id\} \/>/);
   assert.match(detail, /handoffsApi\.getHandoffs/);
   assert.match(detail, /assistantApi\.getPiGuardianAlerts/);
+  assert.match(detail, /readiness\?\.current_stage/);
+  assert.match(detail, /missing_evidence/);
 });
 
 test('Work Board offers board/list views and opens canonical Work Detail', () => {

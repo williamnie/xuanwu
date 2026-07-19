@@ -101,6 +101,8 @@ test('Command Center reads aggregate facts and writes only through Work and Run 
   assert.match(pageSource, /runsApi\.getRun/);
   assert.match(pageSource, /runsApi\.controlRun/);
   assert.match(pageSource, /freshness\?\.is_stale/);
+  assert.match(pageSource, /item\.readiness\?\.current_stage/);
+  assert.match(pageSource, /item\.readiness\?\.missing_evidence/);
   assert.match(clientSource, /\/api\/works\/\$\{encodeURIComponent\(id\)\}\/actions\/\$\{action\}/);
   assert.doesNotMatch(pageSource, /updateIssue|cancelIssue|interruptSession/);
 });

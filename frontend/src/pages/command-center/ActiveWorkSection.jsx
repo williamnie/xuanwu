@@ -168,6 +168,13 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
                   <span className="active-work-progress-label">LATEST</span>
                   <span>{view.progressText}</span>
                 </div>
+                {item.readiness && item.readiness.status !== 'not_required' ? (
+                  <div className="active-work-readiness" data-status={item.readiness?.status}>
+                    <span>READINESS</span>
+                    <strong>{item.readiness?.current_stage || 'waiting_source'}</strong>
+                    <em>{item.readiness?.missing_evidence?.[0] || item.readiness?.next_step}</em>
+                  </div>
+                ) : null}
                 <div className="active-work-meta">
                   <span><Clock3 size={13} /> {view.duration}</span>
                   {view.progressAt ? <span>更新于 {formatRelativeTime(view.progressAt)}</span> : null}

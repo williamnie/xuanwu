@@ -85,6 +85,7 @@ describe("Command Center aggregate API", () => {
                 status: "running"
               },
               links: { self: expect.stringContaining("/api/works/") },
+              readiness: { status: "not_required" },
               status: "in_progress"
             }],
             status: "ok"

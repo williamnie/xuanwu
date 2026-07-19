@@ -134,6 +134,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
   }, [load]);
 
   const work = detail?.work || null;
+  const readiness = detail?.readiness || null;
   const relations = useMemo(() => detail?.relations?.items || [], [detail]);
   const issueId = issueIdFromWorkId(work?.id);
   const projectName = projects.find(project => project.id === work?.owner?.project_id)?.name || work?.owner?.project_id || 'Unscoped';
@@ -266,7 +267,7 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       </details>
 
       <nav className="work-detail-section-nav" aria-label="Work detail sections">
-        {['goal', 'acceptance', 'relationships', 'attention', 'runs', 'evidence', 'handoffs', 'timeline'].map(section => (
+        {['goal', 'readiness', 'acceptance', 'relationships', 'attention', 'runs', 'evidence', 'handoffs', 'timeline'].map(section => (
           <a href={`#work-${section}`} key={section}>{section}</a>
         ))}
       </nav>
@@ -284,6 +285,34 @@ export default function WorkDetail({ navigateTo, onPageContextChange, onWorkChan
       <section className="work-detail-goal work-detail-panel" id="work-goal">
         <SectionHeading eyebrow="Intent" title="Goal" />
         <MarkdownPreview text={work.goal || 'No goal recorded.'} />
+      </section>
+
+      <section className="work-detail-panel work-readiness" id="work-readiness">
+        <SectionHeading eyebrow={readiness?.contract || 'xw.delivery-readiness.projection.v1'} title="Delivery readiness" />
+        {readiness?.status === 'not_required' ? (
+          <div className="work-section-empty success"><CheckCircle2 size={16} /> No live delivery readiness requirements declared.</div>
+        ) : (
+          <>
+            <div className="work-readiness-summary">
+              <strong data-status={readiness?.status}>{readiness?.current_stage || 'waiting_source'}</strong>
+              <span>{readiness?.next_step || 'Inspect readiness Evidence.'}</span>
+            </div>
+            <div className="work-readiness-list">
+              {(readiness?.requirements || []).map((requirement, index) => (
+                <article key={`${requirement.source_work_id}:${requirement.environment}:${index}`}>
+                  <div>
+                    <strong>{requirement.environment} · {requirement.current_stage || 'waiting_source'}</strong>
+                    <code>{requirement.source_revision} → {requirement.runtime_revision} · {requirement.release_window}</code>
+                  </div>
+                  <span>Required {requirement.required_stage}{requirement.migration_gate ? ` · ${requirement.migration_gate}` : ''}</span>
+                  {requirement.missing_evidence?.length ? (
+                    <ul>{requirement.missing_evidence.map(item => <li key={item}>{item}</li>)}</ul>
+                  ) : <em>Evidence complete</em>}
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <div className="work-detail-overview-grid">

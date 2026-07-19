@@ -24,6 +24,13 @@ import {
   type WorkTransitionAudit
 } from "../domain/work/contracts.ts";
 import { queryWorkTimeline } from "../domain/work/timeline.ts";
+import {
+  READINESS_STAGES,
+  declareIssueReadinessRequirements,
+  readIssueReadiness,
+  type ReadinessRequirement,
+  type ReadinessRequirementDeclaration
+} from "../domain/readiness/contracts.ts";
 import { startProjectLoop } from "../runner/projectLoopManager.ts";
 import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
@@ -37,6 +44,7 @@ export const WORK_HTTP_COMPATIBILITY_POLICY = {
   dual_read: "none",
   final_removal_gate: "P11.05/P11.09-and-G7-and-zero-consumer-and-backup-restore-observation-window",
   read_authority: "issues",
+  readiness_authority: "issues.status+work_relations+append-only-structured-Evidence-request-time-projection",
   relation_authority: "pi-carrier-read-projection",
   rollback: "unregister-work-http-routes-without-data-migration",
   structural_relation_write: "unavailable-before-G4",
@@ -58,6 +66,20 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   router.get("/api/works/:id/relations", (request) => (
     workResponse(() => workRelationsResponse(context.database, request))
   ));
+  router.put("/api/works/:id/readiness-requirements", async (request) => workResponse(async () => {
+    const work = requireWork(context.database, workID(request));
+    const body = await objectBody(request);
+    assertKeys(body, ["audit", "requirements", "schema_version", "work_id"]);
+    const declaration = readinessDeclaration(body, work);
+    const result = declareIssueReadinessRequirements(context.database, workIDToIssueID(work.id), declaration);
+    kickProject(context, work);
+    return {
+      compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
+      mutation: { event_id: result.event_id, replayed: result.replayed },
+      readiness: readIssueReadiness(context.database, workIDToIssueID(work.id)),
+      work
+    };
+  }));
   router.get("/api/work-relations", (request) => (
     workResponse(() => relationListResponse(context.database, request))
   ));
@@ -165,8 +187,59 @@ function detailResponse(db: RunnerDatabase, request: Request): Record<string, un
   const work = requireWork(db, workID(request));
   return {
     compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
+    readiness: readIssueReadiness(db, workIDToIssueID(work.id)),
     relations: relationsForWork(db, work.id),
     work
+  };
+}
+
+function readinessDeclaration(
+  body: Record<string, unknown>,
+  work: WorkLedgerEntry
+): ReadinessRequirementDeclaration {
+  if (body.schema_version !== 1) throw workError(400, "invalid_request", "schema_version must be 1");
+  const declaredWorkID = requiredString(body.work_id, "work_id");
+  if (declaredWorkID !== work.id) throw workError(400, "invalid_request", "work_id must match the route Work");
+  if (!Array.isArray(body.requirements) || body.requirements.length === 0) {
+    throw workError(400, "invalid_request", "requirements are required");
+  }
+  return {
+    audit: readinessAudit(body.audit),
+    requirements: body.requirements.map((value, index) => readinessRequirement(value, index)),
+    schema_version: 1,
+    work_id: work.id
+  };
+}
+
+function readinessAudit(value: unknown): ReadinessRequirementDeclaration["audit"] {
+  const audit = auditInput(value);
+  return {
+    actor: audit.actor,
+    correlation_id: audit.correlation_id,
+    event_id: audit.event_id,
+    occurred_at: audit.occurred_at,
+    reason: audit.reason
+  };
+}
+
+function readinessRequirement(value: unknown, index: number): ReadinessRequirement {
+  const item = objectValue(value, `requirements[${index}]`);
+  assertKeys(item, [
+    "environment", "migration_gate", "release_window", "required_stage",
+    "runtime_revision", "source_revision", "source_work_id"
+  ]);
+  const stage = requiredString(item.required_stage, `requirements[${index}].required_stage`);
+  if (!READINESS_STAGES.includes(stage as typeof READINESS_STAGES[number])) {
+    throw workError(400, "invalid_request", `requirements[${index}].required_stage is invalid`);
+  }
+  return {
+    environment: requiredString(item.environment, `requirements[${index}].environment`),
+    ...(optionalString(item.migration_gate) ? { migration_gate: optionalString(item.migration_gate) } : {}),
+    release_window: requiredString(item.release_window, `requirements[${index}].release_window`),
+    required_stage: stage as ReadinessRequirement["required_stage"],
+    runtime_revision: requiredString(item.runtime_revision, `requirements[${index}].runtime_revision`),
+    source_revision: requiredString(item.source_revision, `requirements[${index}].source_revision`),
+    source_work_id: canonicalWorkID(requiredString(item.source_work_id, `requirements[${index}].source_work_id`))
   };
 }
 

@@ -73,7 +73,7 @@ export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean)
   }
   if (!firstReady) {
     return firstQueued
-      ? decision(false, "work_relations(kind=depends_on)+issues.status", firstQueued, "", "dependency_blocker", "dependency_subgraph")
+      ? decision(false, "work_relations(kind=depends_on)+issues.status+readiness-evidence-projection", firstQueued, "", "dependency_blocker", "dependency_subgraph")
       : decision(false, "issues.status", null, "", "no_work", `project:${project.id}`);
   }
   const runnable = peekNextReadyIssue(input.database, project.id, (issue) => (
@@ -87,7 +87,7 @@ export function projectLoopDecision(input: ProjectLoopInput, forceOnce: boolean)
     return decision(false, authority, firstReady, provider, "provider_runtime", `provider:${provider || "unknown"}`);
   }
   const provider = issueProviderID(input.database, project, runnable);
-  return decision(true, "work_relations(kind=depends_on)+issues.status", runnable, provider, "ready", `issue:${runnable.id}`);
+  return decision(true, "work_relations(kind=depends_on)+issues.status+readiness-evidence-projection", runnable, provider, "ready", `issue:${runnable.id}`);
 }
 
 async function runClaimedIssue(

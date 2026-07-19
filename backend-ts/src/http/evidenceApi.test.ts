@@ -7,7 +7,13 @@ import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { EVIDENCE_RECORDED_EVENT_TYPE, listStoredEvidence, recordEvidenceRecords } from "../db/repositories/evidence.ts";
 import { getIssue } from "../db/repositories/issues.ts";
+import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
 import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
+import { declareIssueReadinessRequirements } from "../domain/readiness/contracts.ts";
+import type { DependencyRelation } from "../domain/work/contracts.ts";
+import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
+import type { ExecutorProvider, ProviderRunInput, ProviderRunResult } from "../providers/types.ts";
+import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -254,6 +260,74 @@ describe("Evidence HTTP API", () => {
       db.close();
     }
   });
+
+  test("records strict runtime readiness Evidence append-only and rejects missing rollback provenance", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertIssue(db, "Runtime release", "done");
+      const router = createDefaultRouter({ database: db });
+      const record = readinessEvidence(issueID, "release-760");
+      const posted = await postReadinessEvidence(router, issueID, record);
+      const replay = await postReadinessEvidence(router, issueID, record);
+      const invalid = readinessEvidence(issueID, "release-760-invalid");
+      invalid.decisive_output.facts.rollback_ref = "";
+      const rejected = await postReadinessEvidence(router, issueID, invalid);
+
+      expect(posted.status).toBe(200);
+      expect(await posted.json()).toMatchObject({ evidence: { id: record.id }, replayed: false });
+      expect(replay.status).toBe(200);
+      expect(await replay.json()).toMatchObject({ replayed: true });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toMatchObject({
+        code: "invalid_readiness_evidence",
+        message: expect.stringContaining("rollback_ref")
+      });
+      expect(listStoredEvidence(db, { issue_ids: [issueID], limit: 10 }).items).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("wakes an auto-run project when new readiness Evidence makes a downstream Issue eligible", async () => {
+    const db = await fixture();
+    const provider = new ReadinessExecutionProvider();
+    try {
+      db.sqlite.run("update projects set auto_run=1 where id='demo'");
+      const sourceID = insertIssue(db, "Runtime release", "done");
+      const downstreamID = insertIssue(db, "Live-dependent cleanup", "todo");
+      addReadinessDependency(db, downstreamID, sourceID);
+      declareIssueReadinessRequirements(db, downstreamID, {
+        audit: {
+          actor: { id: "release-controller", kind: "system" },
+          correlation_id: "release-760:wake",
+          event_id: "release-760:wake:requirements",
+          occurred_at: timestamp(10),
+          reason: "Require the production runtime stamp before claim"
+        },
+        requirements: [{
+          environment: "production",
+          release_window: "W2",
+          required_stage: "deployed",
+          runtime_revision: "v0.1.0-760-g9f1e2d3",
+          source_revision: "9f1e2d3",
+          source_work_id: issueIDToWorkID(sourceID)
+        }],
+        schema_version: 1,
+        work_id: issueIDToWorkID(downstreamID)
+      });
+      const router = createDefaultRouter({ database: db, providers: { codex: provider } });
+
+      const response = await postReadinessEvidence(router, sourceID, readinessEvidence(sourceID, "release-760-wake"));
+      await waitFor(() => provider.inputs.length === 1);
+
+      expect(response.status).toBe(200);
+      expect(provider.inputs[0]).toMatchObject({ issueId: downstreamID, projectId: "demo" });
+      expect(getIssue(db, downstreamID)).toMatchObject({ attempt_count: 1, status: "in_progress" });
+    } finally {
+      await waitFor(() => !isProjectLoopActive("demo"));
+      db.close();
+    }
+  });
 });
 
 async function fixture(): Promise<RunnerDatabase> {
@@ -372,6 +446,56 @@ function postCommandEvidence(
   }));
 }
 
+function postReadinessEvidence(
+  router: ReturnType<typeof createDefaultRouter>,
+  issueID: number,
+  item: EvidenceRecord
+): Promise<Response> {
+  return router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/evidence/readiness`, {
+    body: JSON.stringify({ evidence: item }),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  }));
+}
+
+function readinessEvidence(issueID: number, id: string): EvidenceRecord {
+  const at = timestamp(20);
+  return {
+    artifact_refs: [{ kind: "report", ref: `release-report:${id}` }],
+    completed_at: at,
+    created_at: at,
+    decisive_output: {
+      facts: {
+        environment: "production",
+        migration_gate: "",
+        readiness_event: "deployment",
+        release_window: "W2",
+        rollback_ref: "release:760:rollback",
+        runtime_revision: "v0.1.0-760-g9f1e2d3",
+        runtime_stamp: "20260720T000500Z-9f1e2d3-clean",
+        source_revision: "9f1e2d3"
+      },
+      summary: "Production runtime stamp matches the source release"
+    },
+    id: `xw:evidence:issue_events:${id}`,
+    kind: "http",
+    observed_at: at,
+    provenance: {
+      assertion_origin: "system_observation",
+      audit_event_ref: `release-audit:${id}`,
+      producer: { id: "release-controller", kind: "system" },
+      source_kind: "http_exchange",
+      source_ref: `runtime:${id}`
+    },
+    redaction: { policy_ref: "evidence-redaction:v1", redacted_paths: [], status: "not_required" },
+    revision: 0,
+    schema_version: 1,
+    status: "passed",
+    updated_at: at,
+    work_id: `xw:work:issues:${issueID}`
+  };
+}
+
 function commandEvidenceBody(
   runID: string,
   channel: "delegated_executor" | "post_deploy_verifier",
@@ -404,4 +528,43 @@ function commandEvidenceBody(
 
 function timestamp(seconds: number): string {
   return new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString();
+}
+
+class ReadinessExecutionProvider implements ExecutorProvider {
+  readonly capabilities = ["issue_execution"] as const;
+  readonly id = "codex" as const;
+  readonly inputs: ProviderRunInput[] = [];
+
+  async run(input: ProviderRunInput): Promise<ProviderRunResult> {
+    this.inputs.push(input);
+    return { runId: `readiness-run-${input.issueId}` };
+  }
+}
+
+function addReadinessDependency(db: RunnerDatabase, issueID: number, dependencyID: number): void {
+  const source = getIssueAsWork(db, issueID);
+  const target = getIssueAsWork(db, dependencyID);
+  if (!source || !target) throw new Error("missing Work fixture");
+  insertWorkRecord(db, source);
+  insertWorkRecord(db, target);
+  const relation: DependencyRelation = {
+    actor: { id: "readiness-api-test", kind: "runner" },
+    audit_event_ref: `readiness-api:${issueID}:${dependencyID}`,
+    correlation_id: `readiness-api:${issueID}:${dependencyID}`,
+    depends_on_work_id: target.id,
+    kind: "depends_on",
+    occurred_at: timestamp(5),
+    reason: "readiness auto-wake dependency",
+    relation_id: `depends-on:${issueID}:${dependencyID}`,
+    work_id: source.id
+  };
+  insertWorkRelationRecord(db, "demo", relation);
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("timed out waiting for readiness auto-run");
+    await Bun.sleep(10);
+  }
 }

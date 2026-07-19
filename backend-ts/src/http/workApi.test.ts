@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
+import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
 import { createPiAction } from "../db/repositories/pi/actions.ts";
-import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
+import type { DependencyRelation } from "../domain/work/contracts.ts";
+import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -242,6 +244,60 @@ describe("Work HTTP API", () => {
       db.close();
     }
   });
+
+  test("declares audited readiness requirements and exposes the live Evidence gap on Work Detail", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const source = createIssue(db, { project_id: "demo", status: "done", title: "Source release" });
+      const downstream = createIssue(db, { project_id: "demo", status: "todo", title: "Live cleanup" });
+      addDependency(db, downstream.id, source.id);
+      const router = createDefaultRouter({ database: db });
+      const workID = issueIDToWorkID(downstream.id);
+      const payload = {
+        audit: audit("readiness-v1", "supervisor"),
+        requirements: [{
+          environment: "production",
+          migration_gate: "G4",
+          release_window: "W2",
+          required_stage: "gate_passed",
+          runtime_revision: "v0.1.0-760-g9f1e2d3",
+          source_revision: "9f1e2d3",
+          source_work_id: issueIDToWorkID(source.id)
+        }],
+        schema_version: 1,
+        work_id: workID
+      };
+
+      const declared = await router.handle(jsonRequest(
+        `/api/works/${encodeURIComponent(workID)}/readiness-requirements`, "PUT", payload
+      ));
+      const replay = await router.handle(jsonRequest(
+        `/api/works/${encodeURIComponent(workID)}/readiness-requirements`, "PUT", payload
+      ));
+      const detail = await router.handle(new Request(`${BASE_URL}/api/works/${encodeURIComponent(workID)}`));
+
+      expect(declared.status).toBe(200);
+      expect(await body(declared)).toMatchObject({
+        mutation: { replayed: false },
+        readiness: {
+          current_stage: "source_ready",
+          missing_evidence: [
+            "deployed:production:v0.1.0-760-g9f1e2d3",
+            "observed:production:W2",
+            "gate_passed:G4"
+          ],
+          ready: false,
+          status: "waiting"
+        }
+      });
+      expect(replay.status).toBe(200);
+      expect(await body(replay)).toMatchObject({ mutation: { replayed: true } });
+      expect(await body(detail)).toMatchObject({ readiness: { contract: "xw.delivery-readiness.projection.v1" } });
+    } finally {
+      db.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {
@@ -300,4 +356,24 @@ function adapterAudits(db: RunnerDatabase): Array<Record<string, unknown>> {
   return db.sqlite.query<{ payload: string }, []>(`
     select payload from issue_events where type='issue.work_adapter_write' order by id asc
   `).all().map((row) => JSON.parse(row.payload) as Record<string, unknown>);
+}
+
+function addDependency(db: RunnerDatabase, issueID: number, dependencyID: number): void {
+  const source = getIssueAsWork(db, issueID);
+  const target = getIssueAsWork(db, dependencyID);
+  if (!source || !target) throw new Error("missing Work fixture");
+  insertWorkRecord(db, source);
+  insertWorkRecord(db, target);
+  const relation: DependencyRelation = {
+    actor: { id: "work-api-test", kind: "runner" },
+    audit_event_ref: `work-api:${issueID}:${dependencyID}`,
+    correlation_id: `work-api:${issueID}:${dependencyID}`,
+    depends_on_work_id: target.id,
+    kind: "depends_on",
+    occurred_at: "2026-07-16T01:00:00.000Z",
+    reason: "readiness API dependency",
+    relation_id: `depends-on:${issueID}:${dependencyID}`,
+    work_id: source.id
+  };
+  insertWorkRelationRecord(db, "demo", relation);
 }

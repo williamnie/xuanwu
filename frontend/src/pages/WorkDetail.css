@@ -126,6 +126,19 @@
 .work-section-heading h2 { font-family: var(--font-display); font-size: 1.05rem; letter-spacing: -0.01em; margin: 0; }
 .work-detail-goal .markdown-preview { color: var(--text-secondary); font-size: 0.79rem; line-height: 1.6; max-height: 520px; overflow: auto; }
 
+.work-readiness-summary { align-items: center; display: flex; flex-wrap: wrap; gap: 9px 14px; }
+.work-readiness-summary strong { border: 1px solid currentColor; border-radius: 999px; color: var(--warning); font-family: var(--font-mono); font-size: 0.62rem; padding: 4px 8px; text-transform: uppercase; }
+.work-readiness-summary strong[data-status='ready'] { color: var(--success); }
+.work-readiness-summary strong[data-status='invalid'] { color: var(--error); }
+.work-readiness-summary span { color: var(--text-secondary); font-size: 0.7rem; }
+.work-readiness-list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 12px; }
+.work-readiness-list article { background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 7px; padding: 11px; }
+.work-readiness-list article > div { display: flex; flex-direction: column; gap: 4px; }
+.work-readiness-list strong { font-size: 0.72rem; }
+.work-readiness-list code, .work-readiness-list article > span, .work-readiness-list li, .work-readiness-list em { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.59rem; font-style: normal; overflow-wrap: anywhere; }
+.work-readiness-list ul { margin: 0; padding-left: 17px; }
+.work-readiness-list em { color: var(--success); }
+
 .work-detail-overview-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.8fr) minmax(260px, 0.8fr); }
 .work-acceptance-summary { display: flex; flex-wrap: wrap; gap: 8px; }
 .work-acceptance-summary span { align-items: center; background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 999px; color: var(--text-secondary); display: flex; font-size: 0.66rem; gap: 6px; padding: 5px 8px; }

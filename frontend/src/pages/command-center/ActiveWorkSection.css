@@ -114,6 +114,13 @@
 .active-work-progress { align-items: baseline; color: var(--text-secondary); display: flex; font-size: 0.76rem; gap: 9px; line-height: 1.45; min-width: 0; }
 .active-work-progress > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .active-work-progress-label { color: var(--text-muted); flex-shrink: 0; font-family: var(--font-mono); font-size: 0.61rem; font-weight: 700; letter-spacing: 0.09em; }
+.active-work-readiness { align-items: baseline; background: color-mix(in srgb, var(--warning) 7%, var(--bg-secondary)); border-left: 2px solid var(--warning); display: grid; gap: 7px; grid-template-columns: auto auto minmax(0, 1fr); padding: 7px 9px; }
+.active-work-readiness[data-status='ready'] { background: color-mix(in srgb, var(--success) 7%, var(--bg-secondary)); border-left-color: var(--success); }
+.active-work-readiness[data-status='invalid'] { background: var(--error-bg); border-left-color: var(--error); }
+.active-work-readiness span, .active-work-readiness strong, .active-work-readiness em { font-family: var(--font-mono); font-size: 0.6rem; }
+.active-work-readiness span { color: var(--text-muted); letter-spacing: 0.07em; }
+.active-work-readiness strong { color: var(--text-primary); text-transform: uppercase; }
+.active-work-readiness em { color: var(--text-muted); font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .active-work-meta { align-items: center; color: var(--text-muted); display: flex; flex-wrap: wrap; font-family: var(--font-mono); font-size: 0.66rem; gap: 7px 13px; }
 .active-work-meta > span { align-items: center; display: inline-flex; gap: 5px; }
 .active-work-stalled { color: var(--warning); font-weight: 700; }

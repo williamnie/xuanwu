@@ -5,11 +5,13 @@ import { getIssue } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
+  EVIDENCE_RECORDED_EVENT_TYPE,
   getStoredEvidence,
   issueIDForEvidenceSourceEvent,
   issueIDsForRun,
   issueIDsForSession,
   listStoredEvidence,
+  recordEvidenceRecords,
   runIDsForSession,
   type StoredEvidenceRecord
 } from "../db/repositories/evidence.ts";
@@ -30,6 +32,8 @@ import { json } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 import { parseStructuredVerifierReviewEventPayload } from "../domain/evidence/verifierReview.ts";
+import { validateReadinessEvidence } from "../domain/readiness/contracts.ts";
+import { startProjectLoop } from "../runner/projectLoopManager.ts";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -76,6 +80,38 @@ export function registerEvidenceRoutes(router: Router, context: ReadApiContext):
   router.post("/api/issues/:id/evidence/command", (request) => (
     evidenceResponse(() => captureResponse(context.database, request))
   ));
+  router.post("/api/issues/:id/evidence/readiness", (request) => (
+    evidenceResponse(() => readinessEvidenceResponse(context, request))
+  ));
+}
+
+async function readinessEvidenceResponse(context: ReadApiContext, request: Request): Promise<Record<string, unknown>> {
+  const issueID = issueIDFromCaptureRequest(request);
+  const issue = getIssue(context.database, issueID);
+  if (!issue) throw evidenceError(404, "issue_not_found", "Issue not found");
+  const body = await objectBody(request);
+  assertKeys(body, ["evidence"]);
+  const evidence = body.evidence as EvidenceRecord;
+  const errors = validateReadinessEvidence(evidence);
+  if (errors.length > 0) throw evidenceError(400, "invalid_readiness_evidence", errors.join("; "));
+  const replayed = (context.database.sqlite.query<{ count: number }, [string, string]>(`
+    select count(*) as count from issue_events where type=? and json_valid(payload)
+      and json_extract(payload, '$.evidence.id')=?
+  `).get(EVIDENCE_RECORDED_EVENT_TYPE, evidence.id)?.count ?? 0) > 0;
+  try {
+    recordEvidenceRecords(context.database, issueID, [evidence], {
+      recorded_at: evidence.observed_at,
+      source: "readiness-http-api"
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw evidenceError(/conflicts with the append-only/i.test(message) ? 409 : 400, "invalid_readiness_evidence", message);
+  }
+  const project = getProject(context.database, issue.project_id);
+  if (project?.auto_run === 1) {
+    startProjectLoop({ bus: context.bus, database: context.database, providers: context.providers }, project.id);
+  }
+  return { evidence, replayed };
 }
 
 async function listResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {

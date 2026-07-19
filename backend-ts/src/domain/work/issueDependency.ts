@@ -1,7 +1,9 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { issueIDToWorkID, workIDToIssueID } from "./issueAdapter.ts";
+import { readIssueReadiness, readinessNotRequired, type ReadinessProjection } from "../readiness/contracts.ts";
 
 export const ISSUE_DEPENDENCY_COMPATIBILITY = {
+  readiness_authority: "append-only-structured-Evidence-request-time-projection",
   relation_authority: "work_relations(kind=depends_on)",
   status_authority: "issues",
   work_id_adapter: "xw:work:issues:<issue_id>"
@@ -12,7 +14,8 @@ export type IssueDependencyReason =
   | "waiting_dependency"
   | "failed_dependency"
   | "missing_dependency"
-  | "dependency_cycle";
+  | "dependency_cycle"
+  | "waiting_readiness";
 
 export type IssueDependencyRef = {
   issue_id: number | null;
@@ -26,6 +29,7 @@ export type IssueDependencyDiagnostic = {
   cycle_work_ids: string[];
   direct_dependencies: IssueDependencyRef[];
   ready: boolean;
+  readiness: ReadinessProjection;
   reason: IssueDependencyReason;
   root_blockers: IssueDependencyRef[];
   waiting_reason: string;
@@ -34,6 +38,7 @@ export type IssueDependencyDiagnostic = {
 type IssueRow = { id: number; project_id: string; status: string; title: string };
 type RelationRow = { source_work_id: string; target_work_id: string };
 type DependencyGraph = {
+  db: RunnerDatabase;
   issuesByWorkID: Map<string, IssueRow>;
   targetsBySource: Map<string, string[]>;
 };
@@ -79,7 +84,7 @@ function dependencyGraph(db: RunnerDatabase, projectID: string, issues: IssueRow
     if (!targets.includes(row.target_work_id)) targets.push(row.target_work_id);
     targetsBySource.set(row.source_work_id, targets);
   }
-  return { issuesByWorkID, targetsBySource };
+  return { db, issuesByWorkID, targetsBySource };
 }
 
 function evaluateIssueDependency(graph: DependencyGraph, issue: IssueRow): IssueDependencyDiagnostic {
@@ -90,15 +95,23 @@ function evaluateIssueDependency(graph: DependencyGraph, issue: IssueRow): Issue
   const rootBlockers = cycleWorkIDs.length > 0
     ? uniqueRefs(cycleWorkIDs.map((id) => dependencyRef(graph, id)))
     : uniqueRefs(directWorkIDs.flatMap((id) => collectRootBlockers(graph, id, new Set([workID]))));
-  const reason = dependencyReason(directDependencies, rootBlockers, cycleWorkIDs);
+  const dependencyStatus = dependencyReason(directDependencies, rootBlockers, cycleWorkIDs);
+  const readiness = directWorkIDs.length === 0
+    ? readinessNotRequired(workID)
+    : readIssueReadiness(graph.db, issue.id);
+  if (!readiness) throw new Error(`missing readiness projection for Issue ${issue.id}`);
+  const reason = dependencyStatus === "ready" && !readiness.ready ? "waiting_readiness" : dependencyStatus;
   return {
     compatibility: ISSUE_DEPENDENCY_COMPATIBILITY,
     cycle_work_ids: cycleWorkIDs,
     direct_dependencies: directDependencies,
     ready: reason === "ready",
+    readiness,
     reason,
     root_blockers: rootBlockers,
-    waiting_reason: waitingReason(reason, directDependencies, rootBlockers, cycleWorkIDs)
+    waiting_reason: reason === "waiting_readiness"
+      ? readiness.next_step
+      : waitingReason(reason, directDependencies, rootBlockers, cycleWorkIDs)
   };
 }
 
@@ -174,6 +187,7 @@ function waitingReason(
   cycle: string[]
 ): string {
   if (reason === "ready") return direct.length === 0 ? "No hard dependencies." : "All hard dependencies are done.";
+  if (reason === "waiting_readiness") return "Waiting for declared delivery readiness Evidence.";
   if (reason === "dependency_cycle") return `Dependency cycle detected: ${cycle.map(refLabelFromWorkID).join(" -> ")}.`;
   const labels = (roots.length > 0 ? roots : direct).map(refLabel).join(", ");
   if (reason === "missing_dependency") return `Missing dependency reference: ${labels}.`;

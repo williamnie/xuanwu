@@ -23,6 +23,7 @@ import {
   workIDToIssueID
 } from "../domain/work/issueAdapter.ts";
 import type { WorkLedgerEntry, WorkStatus } from "../domain/work/contracts.ts";
+import { readIssueReadiness } from "../domain/readiness/contracts.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
@@ -40,6 +41,7 @@ export const COMMAND_CENTER_COMPATIBILITY_POLICY = {
   handoff_read_authority: "issue_events:handoff.*.v1",
   rollback: "unregister-command-center-route-and-restore-bounded-legacy-Dashboard-reads-without-data-migration",
   run_read_authority: "issue_runs+run_attempts+issue_events-read-through-progress",
+  readiness_read_authority: "issues.status+work_relations+issue_events:evidence.recorded.v1-request-time-projection",
   work_read_authority: "issues-via-Work-adapter"
 } as const;
 
@@ -186,7 +188,7 @@ function activeWorkSection(db: RunnerDatabase, input: SectionInput): CommandCent
       total: countIssueBackedWorks(db, { statuses: ACTIVE_WORK_STATUSES })
     },
     freshness: freshness(input.now, sourceTimestamps, 15 * 60),
-    items: works.map((work) => activeWorkSummary(work, runByWorkID.get(work.id))),
+    items: works.map((work) => activeWorkSummary(db, work, runByWorkID.get(work.id))),
     links: { collection: "/api/works", runs: "/api/runs" }
   };
 }
@@ -267,7 +269,7 @@ export function attentionSummary(item: AttentionRecord): Record<string, unknown>
   };
 }
 
-function activeWorkSummary(work: WorkLedgerEntry, run: RunView | undefined): Record<string, unknown> {
+function activeWorkSummary(db: RunnerDatabase, work: WorkLedgerEntry, run: RunView | undefined): Record<string, unknown> {
   const issueID = workIDToIssueID(work.id);
   return {
     id: work.id,
@@ -279,6 +281,7 @@ function activeWorkSummary(work: WorkLedgerEntry, run: RunView | undefined): Rec
       self: `/api/works/${encodeURIComponent(work.id)}`
     },
     project_id: work.owner.project_id,
+    readiness: readIssueReadiness(db, issueID),
     revision: work.revision,
     status: work.status,
     title: work.title,
