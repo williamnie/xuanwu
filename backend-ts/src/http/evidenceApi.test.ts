@@ -5,7 +5,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { EVIDENCE_RECORDED_EVENT_TYPE, recordEvidenceRecords } from "../db/repositories/evidence.ts";
+import { EVIDENCE_RECORDED_EVENT_TYPE, listStoredEvidence, recordEvidenceRecords } from "../db/repositories/evidence.ts";
+import { getIssue } from "../db/repositories/issues.ts";
 import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
@@ -118,6 +119,7 @@ describe("Evidence HTTP API", () => {
       expect(passedBody.items).toEqual([
         expect.objectContaining({ kind: "test", run_id: passedRunID, status: "passed" })
       ]);
+      expect(passedBody.verification_gap).toMatchObject({ reason: "none" });
       expect(failedBody.items).toEqual([
         expect.objectContaining({
           decisive_summary: expect.stringContaining("failed with exit 1"),
@@ -126,6 +128,7 @@ describe("Evidence HTTP API", () => {
           status: "failed"
         })
       ]);
+      expect(failedBody.verification_gap).toMatchObject({ reason: "failed" });
       expect(await passedDetail.json()).toMatchObject({
         verifier_review_refs: [{
           finding_ids: expect.arrayContaining(["requirement:current-run-check"]),
@@ -154,7 +157,12 @@ describe("Evidence HTTP API", () => {
       ));
 
       expect(empty.status).toBe(200);
-      expect(await empty.json()).toMatchObject({ has_more: false, items: [], projection_errors: [] });
+      expect(await empty.json()).toMatchObject({
+        has_more: false,
+        items: [],
+        projection_errors: [],
+        verification_gap: { reason: "not_executed" }
+      });
       expect(badCursor.status).toBe(400);
       expect(await badCursor.json()).toEqual({ code: "invalid_cursor", message: "Evidence cursor is invalid" });
       expect(missing.status).toBe(404);
@@ -191,6 +199,57 @@ describe("Evidence HTTP API", () => {
       expect(db.sqlite.query<{ count: number }, [string]>(
         "select count(*) as count from issue_events where type=?"
       ).get(EVIDENCE_RECORDED_EVENT_TYPE)?.count).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("accepts delegated and post-deploy command results, replays idempotently, and closes late pending Evidence", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertIssue(db, "Explicit verification", "in_progress");
+      const runID = insertRun(db, issueID, "in_progress", "session-explicit");
+      const router = createDefaultRouter({ database: db });
+      const observed = Date.now();
+      const failed = commandEvidenceBody(runID, "delegated_executor", "delegated-failed", 1, new Date(observed - 2_000).toISOString());
+      const passed = commandEvidenceBody(runID, "post_deploy_verifier", "post-deploy-passed", 0, new Date(observed - 1_000).toISOString(), {
+        command: "deploy --revision fixture; bun test smoke.test.ts"
+      });
+
+      const failedResponse = await postCommandEvidence(router, issueID, failed);
+      const passedResponse = await postCommandEvidence(router, issueID, passed);
+      const replay = await postCommandEvidence(router, issueID, passed);
+      const conflict = await postCommandEvidence(router, issueID, { ...passed, observation: { ...passed.observation, exit_code: 1 } });
+      const crossRun = await postCommandEvidence(router, issueID, { ...passed, correlation_id: "cross-run", run_id: "xw:run:issue_runs:issue-999-attempt-1" });
+      const completed = await patchDone(router, issueID);
+      const records = listStoredEvidence(db, { issue_ids: [issueID], limit: 10 }).items;
+
+      expect(failedResponse.status).toBe(200);
+      expect(await failedResponse.json()).toMatchObject({
+        evidence: { decisive_output: { facts: { correlation_channel: "delegated_executor" } }, status: "failed" },
+        replayed: false
+      });
+      expect(passedResponse.status).toBe(200);
+      expect(await passedResponse.json()).toMatchObject({
+        evidence: { decisive_output: { facts: { correlation_channel: "post_deploy_verifier" } }, status: "passed" }
+      });
+      expect(await replay.json()).toMatchObject({ replayed: true });
+      expect(conflict.status).toBe(409);
+      expect(crossRun.status).toBe(409);
+      expect(completed.status).toBe("done");
+      expect(records.map((item) => item.evidence.status).sort()).toEqual(["failed", "passed"]);
+
+      const lateIssueID = insertIssue(db, "Late verification", "pending_verification");
+      const lateRunID = insertRun(db, lateIssueID, "done", "session-late");
+      const late = await postCommandEvidence(
+        router,
+        lateIssueID,
+        commandEvidenceBody(lateRunID, "delegated_executor", "late-after-disconnect", 0, new Date(observed).toISOString())
+      );
+      expect(await late.json()).toMatchObject({
+        gate: { decision: "passed", issue_status: "done", target_status: "done" }
+      });
+      expect(getIssue(db, lateIssueID)?.status).toBe("done");
     } finally {
       db.close();
     }
@@ -299,6 +358,48 @@ async function patchDone(router: ReturnType<typeof createDefaultRouter>, issueID
   }));
   expect(response.status).toBe(200);
   return response.json() as Promise<Record<string, any>>;
+}
+
+function postCommandEvidence(
+  router: ReturnType<typeof createDefaultRouter>,
+  issueID: number,
+  body: Record<string, any>
+): Promise<Response> {
+  return router.handle(new Request(`${BASE_URL}/api/issues/${issueID}/evidence/command`, {
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  }));
+}
+
+function commandEvidenceBody(
+  runID: string,
+  channel: "delegated_executor" | "post_deploy_verifier",
+  correlationID: string,
+  exitCode: number,
+  endedAt: string,
+  overrides: { command?: string } = {}
+): Record<string, any> {
+  const ended = Date.parse(endedAt);
+  return {
+    channel,
+    correlation_id: correlationID,
+    kind: "test",
+    observation: {
+      command: overrides.command ?? "bun test smoke.test.ts",
+      cwd: "/tmp/demo",
+      duration_ms: 100,
+      ended_at: new Date(ended).toISOString(),
+      exit_code: exitCode,
+      started_at: new Date(ended - 100).toISOString(),
+      stderr: exitCode === 0 ? "" : "failed",
+      stdout: exitCode === 0 ? "passed" : "",
+      timed_out: false
+    },
+    producer_id: `${channel}:fixture`,
+    run_id: runID,
+    source_ref: `${channel}:${correlationID}`
+  };
 }
 
 function timestamp(seconds: number): string {

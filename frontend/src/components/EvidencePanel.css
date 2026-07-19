@@ -150,6 +150,7 @@
 .evidence-state.error,
 .evidence-detail-state.error,
 .evidence-download-error { color: var(--error); }
+.evidence-state.warning { color: var(--warning, #b7791f); }
 
 .evidence-detail {
   background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);

@@ -5,13 +5,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
+import { listStoredEvidence } from "../../db/repositories/evidence.ts";
 import { validateWorkflowVerificationPolicy } from "./policy.ts";
 import { parseStructuredVerifierReviewEventPayload } from "./verifierReview.ts";
 import {
   classifyVerificationCommand,
   completeIssueFromRuntimeEvidence,
   ISSUE_VERIFICATION_GATE_EVENT_TYPES,
-  ISSUE_WORK_VERIFICATION_POLICY
+  ISSUE_WORK_VERIFICATION_POLICY,
+  runtimeVerificationGap
 } from "./completionGate.ts";
 
 const tempRoots: string[] = [];
@@ -35,6 +37,72 @@ describe("Evidence Policy completion gate", () => {
     expect(classifyVerificationCommand("sed -n '1,20p' policy.test.ts")).toBeUndefined();
     expect(classifyVerificationCommand("bun test a.test.ts\nbunx tsc --noEmit")).toBeUndefined();
     expect(classifyVerificationCommand("bun test a.test.ts | cat")).toBeUndefined();
+    expect(classifyVerificationCommand("echo $(date) && bun test a.test.ts")).toBeUndefined();
+    expect(classifyVerificationCommand("zsh -lc 'bun test a.test.ts'")).toBeUndefined();
+  });
+
+  test("correlates PTY terminal interactions with the completed command without treating stdin as proof", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertRunningIssue(db);
+      insertTerminalInteraction(db, issueID, "command-pty", "process-pty");
+      insertCommandEvent(db, issueID, "bun test src/domain/evidence/completionGate.test.ts", 0, {
+        correlation: runtimeCorrelation(issueID, 1),
+        itemID: "command-pty",
+        processID: "process-pty"
+      });
+
+      const result = await completeIssueFromRuntimeEvidence(db, issueID, { status: "done" });
+      const records = listStoredEvidence(db, { issue_ids: [issueID], limit: 10 }).items;
+
+      expect(result.issue.status).toBe("done");
+      expect(records).toHaveLength(1);
+      expect(records[0]?.evidence.decisive_output.facts).toMatchObject({
+        correlation_channel: "terminal_interaction",
+        terminal_interaction_count: 1
+      });
+      expect(JSON.stringify(records[0]?.evidence)).not.toContain("typed-but-not-proof");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("rejects a late command correlated to an older Run instead of polluting the current Run", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertRunningIssue(db);
+      const now = new Date();
+      db.sqlite.run("update issue_runs set status='failed', ended_at=? where issue_id=?", [new Date(now.getTime() - 2_000).toISOString(), issueID]);
+      db.sqlite.run(
+        `insert into issue_runs (id, issue_id, attempt, status, provider, started_at)
+         values (?, ?, 2, 'in_progress', 'codex', ?)`,
+        [`issue-${issueID}-attempt-2`, issueID, new Date(now.getTime() - 1_000).toISOString()]
+      );
+      insertCommandEvent(db, issueID, "bun test src/domain/evidence/completionGate.test.ts", 0, {
+        correlation: runtimeCorrelation(issueID, 1)
+      });
+
+      const result = await completeIssueFromRuntimeEvidence(db, issueID, { status: "done" }, { now: now.toISOString() });
+
+      expect(result.issue.status).toBe("pending_verification");
+      expect(result.evaluation.groups[0]?.requirements[0]).toMatchObject({ status: "missing" });
+      expect(listStoredEvidence(db, { issue_ids: [issueID], limit: 10 }).items).toHaveLength(0);
+      expect(await runtimeVerificationGap(db, issueID, now.toISOString())).toMatchObject({ reason: "run_mismatch" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reports an unsafe compound verification as not captured instead of auto-accepting it", async () => {
+    const db = await fixture();
+    try {
+      const issueID = insertRunningIssue(db);
+      insertCommandEvent(db, issueID, "bun test a.test.ts | cat", 0);
+
+      expect(await runtimeVerificationGap(db, issueID)).toMatchObject({ reason: "not_captured" });
+    } finally {
+      db.close();
+    }
   });
 
   test("documents authority, compatibility window, rollback and deletion gates", () => {
@@ -166,12 +234,19 @@ function insertRunningIssue(db: RunnerDatabase): number {
   return issueID;
 }
 
-function insertCommandEvent(db: RunnerDatabase, issueID: number, command: string, exitCode: number): void {
+function insertCommandEvent(
+  db: RunnerDatabase,
+  issueID: number,
+  command: string,
+  exitCode: number,
+  options: { correlation?: Record<string, unknown>; itemID?: string; processID?: string } = {}
+): void {
   const completedAtMs = Date.now();
   const rawPayload = JSON.stringify({
     item: {
       type: "commandExecution",
-      id: `command-${issueID}`,
+      id: options.itemID ?? `command-${issueID}`,
+      processId: options.processID,
       command,
       cwd: "/tmp/demo",
       status: exitCode === 0 ? "completed" : "failed",
@@ -184,8 +259,45 @@ function insertCommandEvent(db: RunnerDatabase, issueID: number, command: string
   });
   db.sqlite.run(
     "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
-    [issueID, JSON.stringify({ type: "tool", raw_method: "item/completed", raw_payload: rawPayload }), new Date(completedAtMs).toISOString()]
+    [issueID, JSON.stringify({
+      type: "tool",
+      raw_method: "item/completed",
+      raw_payload: rawPayload,
+      runtime_evidence_correlation: options.correlation
+    }), new Date(completedAtMs).toISOString()]
   );
+}
+
+function insertTerminalInteraction(db: RunnerDatabase, issueID: number, itemID: string, processID: string): void {
+  const payload = JSON.stringify({
+    itemId: itemID,
+    processId: processID,
+    stdin: "typed-but-not-proof",
+    threadId: "thread-gate",
+    turnId: "turn-gate"
+  });
+  db.sqlite.run(
+    "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+    [issueID, JSON.stringify({
+      type: "tool",
+      raw_method: "item/commandExecution/terminalInteraction",
+      raw_payload: payload,
+      runtime_evidence_correlation: runtimeCorrelation(issueID, 1)
+    }), new Date(Date.now() - 1).toISOString()]
+  );
+}
+
+function runtimeCorrelation(issueID: number, attempt: number): Record<string, unknown> {
+  const runID = `xw:run:issue_runs:issue-${issueID}-attempt-${attempt}`;
+  return {
+    attempt_id: `${runID}~attempt:${attempt}`,
+    contract: "xw.runtime-evidence-correlation.v1",
+    issue_run_id: `issue-${issueID}-attempt-${attempt}`,
+    provider: "codex",
+    provider_session_id: "thread-gate",
+    provider_turn_id: "turn-gate",
+    run_id: runID
+  };
 }
 
 function gateEvents(db: RunnerDatabase, issueID: number): Array<{ payload: string; type: string }> {

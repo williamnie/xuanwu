@@ -123,7 +123,8 @@ describe("read API route contracts", () => {
     expect(captureRoutes(registerEvidenceRoutes)).toEqual([
       "GET /api/evidence",
       "GET /api/evidence/:id",
-      "GET /api/evidence/:id/artifacts/:index"
+      "GET /api/evidence/:id/artifacts/:index",
+      "POST /api/issues/:id/evidence/command"
     ]);
     expect(EVIDENCE_HTTP_COMPATIBILITY_POLICY).toMatchObject({
       dual_write: expect.stringContaining("none"),

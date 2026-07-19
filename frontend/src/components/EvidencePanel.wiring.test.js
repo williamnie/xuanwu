@@ -19,4 +19,8 @@ test('Evidence panel has bounded list, empty/error states, artifact access and r
   assert.match(panel, /downloadArtifact/);
   assert.match(panel, /Raw \/ advanced/);
   assert.match(panel, /JSON\.stringify\(\{ evidence, storage_source: detail\.storage_source \}/);
+  for (const reason of ['验证尚未执行', '验证结果未捕获', 'Evidence 与当前 Run 不匹配', 'Evidence 已过期', '验证失败']) {
+    assert.match(panel, new RegExp(reason));
+  }
+  assert.match(panel, /response\?\.verification_gap/);
 });

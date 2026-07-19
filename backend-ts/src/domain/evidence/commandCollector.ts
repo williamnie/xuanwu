@@ -52,8 +52,24 @@ export type CommandEvidenceContext = {
   work_id: WorkID;
 };
 
+export const COMMAND_EVIDENCE_CHANNELS = [
+  "direct_command",
+  "terminal_interaction",
+  "delegated_executor",
+  "post_deploy_verifier",
+  "explicit_api"
+] as const;
+export type CommandEvidenceChannel = typeof COMMAND_EVIDENCE_CHANNELS[number];
+
+export type CommandEvidenceCorrelation = {
+  channel: CommandEvidenceChannel;
+  correlation_id: string;
+  terminal_interaction_count?: number;
+};
+
 export type CollectCommandEvidenceInput = {
   artifact_refs?: readonly EvidenceArtifactRef[];
+  correlation?: CommandEvidenceCorrelation;
   context: CommandEvidenceContext;
   environment?: CommandEnvironment;
   kind: CommandEvidenceKind;
@@ -158,6 +174,11 @@ export function createCommandEvidenceCollector(
           ...(observation.exit_code === null ? {} : { exit_code: observation.exit_code }),
           facts: {
             command: boundedHead(observation.command, MAX_FACT_TEXT_BYTES),
+            ...(input.correlation ? {
+              correlation_channel: input.correlation.channel,
+              correlation_id: boundedHead(input.correlation.correlation_id.trim(), MAX_FACT_TEXT_BYTES),
+              terminal_interaction_count: input.correlation.terminal_interaction_count ?? 0
+            } : {}),
             duration_ms: observation.duration_ms,
             environment_architecture: boundedHead(environment.architecture.trim(), MAX_FACT_TEXT_BYTES),
             environment_fingerprint: fingerprintCommandEnvironment(environment, observation.cwd),
@@ -296,6 +317,18 @@ function validateInput(input: CollectCommandEvidenceInput): void {
   }
   if (input.observation.exit_code !== null && !Number.isSafeInteger(input.observation.exit_code)) {
     throw new Error("command exit_code must be an integer or null");
+  }
+  if (input.correlation) {
+    if (!COMMAND_EVIDENCE_CHANNELS.includes(input.correlation.channel)) {
+      throw new Error("unsupported command Evidence correlation channel");
+    }
+    if (input.correlation.correlation_id.trim() === "") {
+      throw new Error("command Evidence correlation_id is required");
+    }
+    const count = input.correlation.terminal_interaction_count ?? 0;
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error("terminal_interaction_count must be a non-negative integer");
+    }
   }
   const started = Date.parse(input.observation.started_at);
   const ended = Date.parse(input.observation.ended_at);

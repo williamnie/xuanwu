@@ -13,8 +13,14 @@ import {
   runIDsForSession,
   type StoredEvidenceRecord
 } from "../db/repositories/evidence.ts";
-import { projectIssueRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 import {
+  captureRuntimeVerification,
+  projectIssueRuntimeEvidence,
+  runtimeVerificationGap
+} from "../domain/evidence/completionGate.ts";
+import { COMMAND_EVIDENCE_CHANNELS, COMMAND_EVIDENCE_KINDS } from "../domain/evidence/commandCollector.ts";
+import {
+  EVIDENCE_ARTIFACT_KINDS,
   EVIDENCE_STATUSES,
   type EvidenceArtifactRef,
   type EvidenceRecord
@@ -67,6 +73,9 @@ export function registerEvidenceRoutes(router: Router, context: ReadApiContext):
   router.get("/api/evidence/:id/artifacts/:index", (request) => (
     evidenceResponse(() => artifactResponse(context.database, request))
   ));
+  router.post("/api/issues/:id/evidence/command", (request) => (
+    evidenceResponse(() => captureResponse(context.database, request))
+  ));
 }
 
 async function listResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
@@ -79,6 +88,7 @@ async function listResponse(db: RunnerDatabase, request: Request): Promise<Recor
     .sort((left, right) => evidenceTime(right.evidence).localeCompare(evidenceTime(left.evidence)))
     .slice(0, filter.limit);
   const fallbackSources = new Set(items.map((item) => item.storage_source).filter((source) => source !== "structured"));
+  const scopedIssueID = filter.issue_ids?.length === 1 ? filter.issue_ids[0] : undefined;
   return {
     compatibility: {
       ...EVIDENCE_HTTP_COMPATIBILITY_POLICY,
@@ -98,8 +108,52 @@ async function listResponse(db: RunnerDatabase, request: Request): Promise<Recor
     limit: filter.limit,
     next_cursor: page.next_before_event_id ? encodeCursor(page.next_before_event_id) : "",
     projection_errors: projected.errors,
-    skipped_invalid: page.skipped_invalid
+    skipped_invalid: page.skipped_invalid,
+    verification_gap: scopedIssueID
+      ? await runtimeVerificationGap(db, scopedIssueID)
+      : { reason: "none", detail: "请按单个 Work、Run 或 Issue 过滤以查看验证缺口。" }
   };
+}
+
+async function captureResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
+  const issueID = issueIDFromCaptureRequest(request);
+  if (!getIssue(db, issueID)) throw evidenceError(404, "issue_not_found", "Issue not found");
+  const body = await objectBody(request);
+  assertKeys(body, ["artifact_refs", "channel", "correlation_id", "kind", "observation", "producer_id", "run_id", "source_ref"]);
+  const channel = requiredText(body.channel, "channel");
+  if (!COMMAND_EVIDENCE_CHANNELS.includes(channel as typeof COMMAND_EVIDENCE_CHANNELS[number])) {
+    throw evidenceError(400, "invalid_channel", "Evidence channel is invalid");
+  }
+  const kind = requiredText(body.kind, "kind");
+  if (!COMMAND_EVIDENCE_KINDS.includes(kind as typeof COMMAND_EVIDENCE_KINDS[number])) {
+    throw evidenceError(400, "invalid_kind", "Evidence kind is invalid");
+  }
+  const observation = commandObservation(body.observation);
+  try {
+    const result = await captureRuntimeVerification(db, issueID, {
+      artifact_refs: artifactRefs(body.artifact_refs),
+      channel: channel as typeof COMMAND_EVIDENCE_CHANNELS[number],
+      correlation_id: requiredText(body.correlation_id, "correlation_id"),
+      kind: kind as typeof COMMAND_EVIDENCE_KINDS[number],
+      observation,
+      producer_id: requiredText(body.producer_id, "producer_id"),
+      run_id: requiredText(body.run_id, "run_id"),
+      source_ref: requiredText(body.source_ref, "source_ref")
+    });
+    return {
+      evidence: result.evidence,
+      gate: result.gate ? {
+        decision: result.gate.evaluation.decision,
+        issue_status: result.gate.issue.status,
+        target_status: result.gate.target_status
+      } : null,
+      replayed: result.replayed
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const conflict = /mismatch|conflicts with its append-only replay/i.test(message);
+    throw evidenceError(conflict ? 409 : 400, conflict ? "evidence_correlation_conflict" : "invalid_evidence", message);
+  }
 }
 
 async function detailResponse(db: RunnerDatabase, request: Request): Promise<Record<string, unknown>> {
@@ -404,6 +458,108 @@ function sourceEventID(evidenceID: string): number | null {
 function issueIDFromWorkID(workID: string): number | null {
   const match = /^xw:work:issues:([1-9][0-9]*)$/.exec(workID);
   return match ? Number(match[1]) : null;
+}
+
+function issueIDFromCaptureRequest(request: Request): number {
+  const parts = pathParts(request);
+  const value = parts[parts.indexOf("issues") + 1] ?? "";
+  return positiveInteger(value, "issue_id");
+}
+
+async function objectBody(request: Request): Promise<Record<string, unknown>> {
+  let value: unknown;
+  try {
+    value = await request.json();
+  } catch {
+    throw evidenceError(400, "invalid_json", "Request body is not valid JSON");
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw evidenceError(400, "invalid_body", "Request body must be an object");
+  }
+  return value as Record<string, unknown>;
+}
+
+function commandObservation(value: unknown) {
+  const observation = objectValue(value, "observation");
+  assertKeys(observation, [
+    "command", "cwd", "duration_ms", "ended_at", "exit_code", "signal", "started_at", "stderr", "stdout", "timed_out"
+  ]);
+  const exitCode = observation.exit_code;
+  if (exitCode !== null && (!Number.isSafeInteger(exitCode) || typeof exitCode !== "number")) {
+    throw evidenceError(400, "invalid_exit_code", "observation.exit_code must be an integer or null");
+  }
+  const duration = observation.duration_ms;
+  if (typeof duration !== "number" || !Number.isSafeInteger(duration) || duration < 0) {
+    throw evidenceError(400, "invalid_duration", "observation.duration_ms must be a non-negative integer");
+  }
+  return {
+    command: requiredText(observation.command, "observation.command"),
+    cwd: requiredText(observation.cwd, "observation.cwd"),
+    duration_ms: duration,
+    ended_at: canonicalTimestamp(observation.ended_at, "observation.ended_at"),
+    exit_code: exitCode as number | null,
+    signal: optionalValueText(observation.signal),
+    started_at: canonicalTimestamp(observation.started_at, "observation.started_at"),
+    stderr: optionalValueText(observation.stderr),
+    stdout: optionalValueText(observation.stdout),
+    timed_out: observation.timed_out === true
+  };
+}
+
+function artifactRefs(value: unknown): EvidenceArtifactRef[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw evidenceError(400, "invalid_artifact_refs", "artifact_refs must be an array");
+  return value.map((item, index) => {
+    const artifact = objectValue(item, `artifact_refs[${index}]`);
+    assertKeys(artifact, ["kind", "label", "media_type", "ref", "sha256"]);
+    const kind = requiredText(artifact.kind, `artifact_refs[${index}].kind`);
+    if (!EVIDENCE_ARTIFACT_KINDS.includes(kind as typeof EVIDENCE_ARTIFACT_KINDS[number])) {
+      throw evidenceError(400, "invalid_artifact_kind", `artifact_refs[${index}].kind is invalid`);
+    }
+    const label = optionalValueText(artifact.label);
+    const mediaType = optionalValueText(artifact.media_type);
+    const sha256 = optionalValueText(artifact.sha256);
+    return {
+      kind: kind as typeof EVIDENCE_ARTIFACT_KINDS[number],
+      ...(label ? { label } : {}),
+      ...(mediaType ? { media_type: mediaType } : {}),
+      ref: requiredText(artifact.ref, `artifact_refs[${index}].ref`),
+      ...(sha256 ? { sha256 } : {})
+    };
+  });
+}
+
+function objectValue(value: unknown, name: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw evidenceError(400, "invalid_object", `${name} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertKeys(value: Record<string, unknown>, allowed: readonly string[]): void {
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw evidenceError(400, "unknown_fields", `Unknown fields: ${unknown.join(", ")}`);
+  }
+}
+
+function requiredText(value: unknown, name: string): string {
+  const text = optionalValueText(value);
+  if (!text) throw evidenceError(400, "missing_field", `${name} is required`);
+  return text;
+}
+
+function optionalValueText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function canonicalTimestamp(value: unknown, name: string): string {
+  const text = requiredText(value, name);
+  const time = Date.parse(text);
+  if (!Number.isFinite(time) || new Date(time).toISOString() !== text) {
+    throw evidenceError(400, "invalid_timestamp", `${name} must use canonical ISO format`);
+  }
+  return text;
 }
 
 function intersect(sets: number[][]): number[] {

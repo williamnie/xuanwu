@@ -1,5 +1,9 @@
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
-import { recordIssueLogEvent } from "../db/repositories/issueEvents.ts";
+import {
+  recordIssueLogEvent,
+  RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
+  type RuntimeEvidenceCorrelation
+} from "../db/repositories/issueEvents.ts";
 import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { projectNormalizedRunEvent } from "../db/repositories/runAttemptEvents.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -14,6 +18,9 @@ import type {
   SessionRef
 } from "../providers/types.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { captureRuntimeEvidenceFromIssueLog } from "../domain/evidence/completionGate.ts";
+import { makeRunAttemptID } from "../domain/run/contracts.ts";
+import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
 import { createIssueLogPersistence } from "./issueLogPersistence.ts";
@@ -48,15 +55,15 @@ export async function runIssueWithProvider(
     throw new Error('executor provider missing capability "issue_execution"');
   }
   const providerID = provider.id;
-  input.database && ensureOpenIssueRun(input.database, input.issueId);
+  const activeRun = input.database ? ensureOpenIssueRun(input.database, input.issueId) : undefined;
   input.onRunStart?.({
     provider: providerID,
     issueId: input.issueId,
     projectId: input.projectId,
     metadata: { cwd: input.cwd }
   });
-  const activeRunID = openIssueRunID(input.database, input.issueId);
-  const eventSink = providerEventSink(input, activeRunID);
+  const activeRunID = activeRun?.id ?? openIssueRunID(input.database, input.issueId);
+  const eventSink = providerEventSink(input, activeRunID, activeRun?.attempt ?? 0);
   let result: ProviderRunResult;
   try {
     result = await provider.run(providerInput(input, eventSink.push));
@@ -64,7 +71,7 @@ export async function runIssueWithProvider(
     if (!eventSink.hasFailure()) eventSink.push(providerRunErrorEvent(providerID, error));
     throw error;
   } finally {
-    eventSink.flush();
+    await eventSink.flush();
   }
   persistRuntimeResult(input, providerID, result, activeRunID);
   input.onRunComplete?.({
@@ -77,11 +84,20 @@ export async function runIssueWithProvider(
   return result;
 }
 
-function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string) {
-  const persistence = createIssueLogPersistence((event) => persistRuntimeEvent(input, event, activeRunID));
+function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string, activeAttempt: number) {
+  const pendingEvidence = new Set<Promise<void>>();
+  const persistence = createIssueLogPersistence((event) => {
+    const pending = persistRuntimeEvent(input, event, activeRunID, activeAttempt);
+    if (!pending) return;
+    pendingEvidence.add(pending);
+    void pending.finally(() => pendingEvidence.delete(pending));
+  });
   let failure = false;
   return {
-    flush: persistence.flush,
+    async flush() {
+      persistence.flush();
+      await Promise.all([...pendingEvidence]);
+    },
     hasFailure: () => failure,
     push(event: ProviderEvent) {
       if (event.runEvent?.kind === "error") failure = true;
@@ -124,9 +140,19 @@ function persistRuntimeResult(
   });
 }
 
-function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEvent, activeRunID: string): void {
+function persistRuntimeEvent(
+  input: RunnerIssueExecutionInput,
+  event: ProviderEvent,
+  activeRunID: string,
+  activeAttempt: number
+): Promise<void> | undefined {
   if (!input.database) return;
-  const persisted = recordIssueLogEvent(input.database, input.issueId, event);
+  const persisted = recordIssueLogEvent(
+    input.database,
+    input.issueId,
+    event,
+    runtimeEvidenceCorrelation(event, activeRunID, activeAttempt)
+  );
   syncProviderApprovalRequest(input, event, activeRunID);
   publishIssueLog(input, event, persisted);
   if (event.session) {
@@ -146,6 +172,39 @@ function persistRuntimeEvent(input: RunnerIssueExecutionInput, event: ProviderEv
     issueID: input.issueId,
     projectID: input.projectId
   });
+  if (event.raw?.method !== "item/completed") return;
+  return captureRuntimeEvidenceFromIssueLog(
+    input.database,
+    input.issueId,
+    persisted,
+    activeRunID
+  ).then(() => undefined).catch((error) => {
+    input.onLog?.({
+      error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+      provider: event.provider,
+      raw: { method: "runtime/evidence_capture_error" },
+      status: "failed",
+      type: "error"
+    });
+  });
+}
+
+function runtimeEvidenceCorrelation(
+  event: ProviderEvent,
+  issueRunID: string,
+  attempt: number
+): RuntimeEvidenceCorrelation | undefined {
+  if (!issueRunID || attempt <= 0) return undefined;
+  const runID = makeDomainID("run", "issue_runs", issueRunID);
+  return {
+    attempt_id: makeRunAttemptID(runID, attempt),
+    contract: RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
+    issue_run_id: issueRunID,
+    provider: event.provider,
+    provider_session_id: event.session?.sessionId ?? "",
+    provider_turn_id: event.session?.turnId ?? "",
+    run_id: runID
+  };
 }
 
 function resultSessionStatus(db: RunnerDatabase, provider: string, session: SessionRef): string {

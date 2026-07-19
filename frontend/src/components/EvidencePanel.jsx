@@ -31,6 +31,7 @@ export default function EvidencePanel({
   const filters = useMemo(() => ({ issueId, limit: PAGE_SIZE, runId, sessionRef, workId }), [issueId, runId, sessionRef, workId]);
   const [items, setItems] = useState([]);
   const [compatibility, setCompatibility] = useState(null);
+  const [verificationGap, setVerificationGap] = useState(null);
   const [nextCursor, setNextCursor] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -48,6 +49,7 @@ export default function EvidencePanel({
       const response = await evidenceApi.listEvidence({ ...filters, cursor });
       setItems(current => append ? mergeEvidencePages(current, response?.items || []) : response?.items || []);
       setCompatibility(response?.compatibility || null);
+      setVerificationGap(response?.verification_gap || null);
       setNextCursor(response?.next_cursor || '');
       setError('');
     } catch (loadError) {
@@ -127,7 +129,10 @@ export default function EvidencePanel({
       ) : !loading && items.length === 0 ? (
         <div className="evidence-state empty">
           <FileCheck2 size={18} />
-          <div><strong>暂无结构化证据</strong><span>Agent 自述、普通评论或 Run success 不会自动算作系统证明。</span></div>
+          <div>
+            <strong>{verificationGapTitle(verificationGap?.reason)}</strong>
+            <span>{verificationGap?.detail || 'Agent 自述、普通评论或 Run success 不会自动算作系统证明。'}</span>
+          </div>
         </div>
       ) : (
         <div className="evidence-list" aria-busy={loading}>
@@ -147,6 +152,13 @@ export default function EvidencePanel({
         </div>
       )}
 
+      {!loading && items.length > 0 && verificationGap?.reason && verificationGap.reason !== 'none' ? (
+        <div className="evidence-state warning" role="status">
+          <AlertTriangle size={16} />
+          <div><strong>{verificationGapTitle(verificationGap.reason)}</strong><span>{verificationGap.detail}</span></div>
+        </div>
+      ) : null}
+
       {selectedId ? (
         <EvidenceDetail
           detail={detail}
@@ -162,6 +174,16 @@ export default function EvidencePanel({
       ) : null}
     </section>
   );
+}
+
+function verificationGapTitle(reason) {
+  return {
+    failed: '验证失败',
+    not_captured: '验证结果未捕获',
+    not_executed: '验证尚未执行',
+    run_mismatch: 'Evidence 与当前 Run 不匹配',
+    stale: 'Evidence 已过期',
+  }[reason] || '暂无结构化证据';
 }
 
 function EvidenceRow({ active, item, onOpen }) {

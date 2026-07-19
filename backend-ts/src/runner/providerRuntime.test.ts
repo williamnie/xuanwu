@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
+import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
@@ -136,6 +137,48 @@ class NormalizedCodexFixtureProvider implements ExecutorProvider {
       runId: "codex:thread-normalized:turn-normalized",
       session: { provider: this.id, sessionId: "thread-normalized", turnId: "turn-normalized" }
     };
+  }
+}
+
+class VerificationCodexFixtureProvider implements ExecutorProvider {
+  readonly id = "codex" as const;
+  readonly capabilities = ["issue_execution"] as const;
+
+  async run(input: ProviderRunInput) {
+    const threadId = "thread-verification";
+    const turnId = "turn-verification";
+    const itemId = "command-verification";
+    const processId = "process-verification";
+    const completedAtMs = Date.now();
+    [
+      { method: "turn/started", params: { threadId, turn: { id: turnId } } },
+      {
+        method: "item/commandExecution/terminalInteraction",
+        params: { itemId, processId, stdin: "", threadId, turnId }
+      },
+      {
+        method: "item/completed",
+        params: {
+          completedAtMs,
+          item: {
+            aggregatedOutput: "1 pass",
+            command: "bun test src/runner/providerRuntime.test.ts",
+            commandActions: [{ type: "unknown", command: "bun test src/runner/providerRuntime.test.ts" }],
+            cwd: "/tmp/project",
+            durationMs: 10,
+            exitCode: 0,
+            id: itemId,
+            processId,
+            status: "completed",
+            type: "commandExecution"
+          },
+          threadId,
+          turnId
+        }
+      },
+      { method: "turn/completed", params: { threadId, turn: { id: turnId, status: "completed" } } }
+    ].forEach((notification) => input.onEvent?.(normalizeCodexEvent(notification)));
+    return { runId: `codex:${threadId}:${turnId}`, session: { provider: this.id, sessionId: threadId, turnId } };
   }
 }
 
@@ -283,11 +326,48 @@ describe("executor provider runtime seam", () => {
         issue_id: issueId,
         raw_ref: "{\"provider_turn_id\":\"fake-turn\",\"run_id\":\"fake-run\",\"service_tier\":\"priority\",\"service_tier_source\":\"issue\"}"
       });
-      expect(listIssueEvents(db, issueId)).toMatchObject([{
+      const issueEvents = listIssueEvents(db, issueId);
+      expect(issueEvents).toMatchObject([{
         issue_id: issueId,
-        type: "issue.log",
-        payload: "{\"type\":\"provider.message\",\"provider\":\"fake-execution-only\",\"text\":\"fake provider log\"}"
+        type: "issue.log"
       }]);
+      expect(JSON.parse(issueEvents[0]!.payload)).toMatchObject({
+        provider: "fake-execution-only",
+        runtime_evidence_correlation: {
+          attempt_id: "xw:run:issue_runs:issue-1-attempt-1~attempt:1",
+          contract: "xw.runtime-evidence-correlation.v1",
+          issue_run_id: "issue-1-attempt-1",
+          run_id: "xw:run:issue_runs:issue-1-attempt-1"
+        },
+        text: "fake provider log",
+        type: "provider.message"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("captures completed PTY verification Evidence during provider runtime", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo");
+
+      await runIssueWithProvider(new VerificationCodexFixtureProvider(), {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "run verification"
+      });
+
+      const records = listStoredEvidence(db, { issue_ids: [issueId], limit: 10 }).items;
+      expect(records).toHaveLength(1);
+      expect(records[0]?.evidence).toMatchObject({
+        decisive_output: { facts: { correlation_channel: "terminal_interaction", terminal_interaction_count: 1 } },
+        kind: "test",
+        status: "passed"
+      });
     } finally {
       db.close();
     }

@@ -65,6 +65,18 @@ export type IssueLogPayloadExternalizationPlan = {
   stored_payload: string;
 };
 
+export const RUNTIME_EVIDENCE_CORRELATION_CONTRACT = "xw.runtime-evidence-correlation.v1" as const;
+
+export type RuntimeEvidenceCorrelation = {
+  attempt_id: string;
+  contract: typeof RUNTIME_EVIDENCE_CORRELATION_CONTRACT;
+  issue_run_id: string;
+  provider: string;
+  provider_session_id: string;
+  provider_turn_id: string;
+  run_id: string;
+};
+
 export function listIssueEvents(
   db: RunnerDatabase,
   issueID: number,
@@ -103,10 +115,15 @@ export function recordIssueEvent(db: RunnerDatabase, issueID: number, type: stri
   return mustGetIssueEvent(db, lastInsertID(db));
 }
 
-export function recordIssueLogEvent(db: RunnerDatabase, issueID: number, event: ProviderEvent): IssueEvent {
+export function recordIssueLogEvent(
+  db: RunnerDatabase,
+  issueID: number,
+  event: ProviderEvent,
+  correlation?: RuntimeEvidenceCorrelation
+): IssueEvent {
   ensureIssueExists(db, issueID);
   const timestamp = issueTimestamp();
-  const payload = storedIssueLogPayload(db, event);
+  const payload = storedIssueLogPayload(db, event, correlation);
   db.sqlite.run(
     `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
     [issueID, "issue.log", payload, timestamp]
@@ -116,8 +133,12 @@ export function recordIssueLogEvent(db: RunnerDatabase, issueID: number, event: 
   return mustGetIssueEvent(db, lastInsertID(db), false);
 }
 
-function storedIssueLogPayload(db: RunnerDatabase, event: ProviderEvent): string {
-  const body = issueLogPayload(event);
+function storedIssueLogPayload(
+  db: RunnerDatabase,
+  event: ProviderEvent,
+  correlation?: RuntimeEvidenceCorrelation
+): string {
+  const body = issueLogPayload(event, correlation);
   const serialized = JSON.stringify(body);
   if (Buffer.byteLength(serialized) <= ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES) return serialized;
   const artifact = writeIssueLogArtifact(db, serialized);
@@ -221,13 +242,17 @@ function issueLogArtifactSummary(
     path: boundedString(payload.path, SUMMARY_PATH_BYTES),
     status: boundedString(payload.status, 256),
     error: boundedString(payload.error, SUMMARY_ERROR_BYTES),
+    runtime_evidence_correlation: payload.runtime_evidence_correlation,
     raw_payload: diagnostic ? boundedString(payload.raw_payload, SUMMARY_ERROR_BYTES) : undefined,
     run_event: payload.run_event,
     issue_log_artifact: artifact
   });
 }
 
-function issueLogPayload(event: ProviderEvent): Record<string, unknown> {
+function issueLogPayload(
+  event: ProviderEvent,
+  correlation?: RuntimeEvidenceCorrelation
+): Record<string, unknown> {
   return compactObject({
     type: event.type,
     provider: event.provider,
@@ -239,7 +264,8 @@ function issueLogPayload(event: ProviderEvent): Record<string, unknown> {
     path: event.path,
     status: event.status,
     error: event.error,
-    run_event: event.runEvent
+    run_event: event.runEvent,
+    runtime_evidence_correlation: correlation
   });
 }
 

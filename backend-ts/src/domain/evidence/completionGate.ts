@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
+import { dirname } from "node:path";
 import type { RunnerDatabase } from "../../db/database.ts";
-import { hydrateStoredIssueLogPayload, recordIssueEvent } from "../../db/repositories/issueEvents.ts";
-import { recordEvidenceRecords } from "../../db/repositories/evidence.ts";
+import {
+  hydrateStoredIssueLogPayload,
+  recordIssueEvent,
+  RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
+  type IssueEvent,
+  type RuntimeEvidenceCorrelation
+} from "../../db/repositories/issueEvents.ts";
+import { listStoredEvidence, recordEvidenceRecords } from "../../db/repositories/evidence.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../../db/repositories/issues.ts";
 import { updateIssue, type UpdateIssueInput } from "../../db/repositories/issueUpdate.ts";
 import { makeDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
@@ -13,8 +20,15 @@ import {
   type WorkTransitionAudit
 } from "../work/contracts.ts";
 import { issueAsWork } from "../work/issueAdapter.ts";
-import { createCommandEvidenceCollector, type CommandEvidenceKind } from "./commandCollector.ts";
-import { validateEvidence, type EvidenceRecord } from "./contracts.ts";
+import {
+  COMMAND_EVIDENCE_CHANNELS,
+  FileSystemCommandEvidenceArtifactStore,
+  createCommandEvidenceCollector,
+  type CommandEvidenceChannel,
+  type CommandEvidenceKind,
+  type CommandExecutionObservation
+} from "./commandCollector.ts";
+import { validateEvidence, type EvidenceArtifactRef, type EvidenceRecord } from "./contracts.ts";
 import {
   evaluateWorkflowVerificationPolicy,
   type VerificationManualOverride,
@@ -107,6 +121,10 @@ type StoredCommandItem = {
   cwd?: unknown;
   durationMs?: unknown;
   exitCode?: unknown;
+  id?: unknown;
+  processId?: unknown;
+  stderr?: unknown;
+  stdout?: unknown;
   status?: unknown;
   type?: unknown;
 };
@@ -115,6 +133,44 @@ type IssueLogRow = {
   created_at: string;
   id: number;
   payload: string;
+};
+
+type ParsedIssueLog = {
+  correlation?: RuntimeEvidenceCorrelation;
+  item?: StoredCommandItem;
+  method: string;
+  raw: Record<string, unknown>;
+  row: IssueLogRow;
+};
+
+export type RuntimeVerificationCaptureInput = {
+  artifact_refs?: readonly EvidenceArtifactRef[];
+  channel: CommandEvidenceChannel;
+  correlation_id: string;
+  kind?: CommandEvidenceKind;
+  observation: CommandExecutionObservation;
+  producer_id: string;
+  run_id: string;
+  source_ref: string;
+};
+
+export type RuntimeVerificationCaptureResult = {
+  evidence: EvidenceRecord;
+  gate?: IssueCompletionGateResult;
+  replayed: boolean;
+};
+
+export type VerificationGapReason =
+  | "not_executed"
+  | "not_captured"
+  | "run_mismatch"
+  | "stale"
+  | "failed"
+  | "none";
+
+export type VerificationGap = {
+  reason: VerificationGapReason;
+  detail: string;
 };
 
 export function applyIssueCompletionGate(
@@ -241,17 +297,127 @@ export async function completeIssueFromRuntimeEvidence(
   options: { actor?: DomainActor; correlation_id?: string; now?: string; source?: string } = {}
 ): Promise<IssueCompletionGateResult> {
   const now = canonicalNow(options.now);
-  const projection = await projectIssueRuntimeEvidence(db, issueID, now);
+  const projection = await projectIssueRuntimeEvidence(db, issueID, now, { persist_artifacts: true });
+  const evidence = currentRunEvidence(db, issueID, projection.run, projection.evidence);
   return applyIssueCompletionGate(db, issueID, {
     actor: options.actor ?? { id: "runner-completion-api", kind: "runner" },
     correlation_id: options.correlation_id ?? `issue-${issueID}-completion`,
-    evidence: projection.evidence,
+    evidence,
     now,
     patch,
     projection_errors: projection.errors,
     run: projection.run,
     source: options.source ?? "issue-patch-api"
   });
+}
+
+export async function captureRuntimeVerification(
+  db: RunnerDatabase,
+  issueID: number,
+  input: RuntimeVerificationCaptureInput,
+  now = new Date().toISOString()
+): Promise<RuntimeVerificationCaptureResult> {
+  const issue = mustGetIssue(db, issueID);
+  const run = latestIssueRun(db, issueID);
+  const binding = correlationBinding(run);
+  if (input.run_id !== binding.run_id) {
+    throw new Error(`verification Evidence Run mismatch: expected ${binding.run_id}`);
+  }
+  if (!COMMAND_EVIDENCE_CHANNELS.includes(input.channel)) {
+    throw new Error("unsupported verification Evidence channel");
+  }
+  const kind = input.kind ?? classifyVerificationCommand(input.observation.command);
+  if (!kind) {
+    throw new Error("verification command is not safely classifiable; use kind only through the explicit verification API");
+  }
+  const identity = createHash("sha256").update(stableJson({
+    channel: input.channel,
+    correlation_id: input.correlation_id,
+    issue_id: issueID,
+    run_id: binding.run_id,
+    source_ref: input.source_ref
+  })).digest("hex").slice(0, 32);
+  const evidenceID = makeDomainID("evidence", "issue_events", `runtime-${identity}`);
+  const existing = listStoredEvidence(db, {
+    issue_ids: [issueID],
+    limit: 1000,
+    run_ids: [binding.run_id]
+  }).items.find((item) => item.evidence.id === evidenceID)?.evidence;
+  const collector = createCommandEvidenceCollector({
+    artifact_store: new FileSystemCommandEvidenceArtifactStore(dirname(db.path))
+  });
+  const evidence = await collector.collect({
+    artifact_refs: input.artifact_refs,
+    context: {
+      attempt_id: binding.attempt_id,
+      audit_event_ref: `runtime-evidence:${input.correlation_id}`,
+      collected_at: input.observation.ended_at,
+      evidence_id: evidenceID,
+      producer: { id: input.producer_id.trim() || "runtime-verification-api", kind: "runner" },
+      run_id: binding.run_id,
+      source_ref: input.source_ref,
+      work_id: issueAsWork(issue).id
+    },
+    correlation: {
+      channel: input.channel,
+      correlation_id: input.correlation_id,
+      terminal_interaction_count: input.channel === "terminal_interaction" ? 1 : 0
+    },
+    kind,
+    observation: input.observation
+  });
+  if (existing) {
+    if (stableJson(existing) !== stableJson(evidence)) {
+      throw new Error(`verification Evidence ${evidenceID} conflicts with its append-only replay`);
+    }
+    const gate = issue.status === "pending_verification"
+      ? reevaluatePendingIssue(db, issueID, run, canonicalNow(now), `replayed-evidence:${input.channel}`)
+      : undefined;
+    return { evidence: existing, ...(gate ? { gate } : {}), replayed: true };
+  }
+  recordEvidenceRecords(db, issueID, [evidence], {
+    recorded_at: canonicalNow(now),
+    source: `runtime-evidence:${input.channel}`
+  });
+  const gate = issue.status === "pending_verification"
+    ? reevaluatePendingIssue(db, issueID, run, canonicalNow(now), `late-evidence:${input.channel}`)
+    : undefined;
+  return { evidence, ...(gate ? { gate } : {}), replayed: false };
+}
+
+export async function captureRuntimeEvidenceFromIssueLog(
+  db: RunnerDatabase,
+  issueID: number,
+  event: IssueEvent,
+  expectedIssueRunID: string,
+  now = new Date().toISOString()
+): Promise<RuntimeVerificationCaptureResult | null> {
+  const run = latestIssueRun(db, issueID);
+  if (run.id !== expectedIssueRunID) {
+    recordCaptureRejected(db, issueID, event.id, "run_mismatch", `expected current Run ${run.id}, received ${expectedIssueRunID}`);
+    return null;
+  }
+  const projection = await projectIssueRuntimeEvidence(db, issueID, now, { persist_artifacts: true });
+  const evidence = projection.evidence.find((item) => item.provenance.source_ref === `issue_events:${event.id}`);
+  if (!evidence) {
+    const relatedError = projection.errors.find((error) => error.startsWith(`issue event ${event.id}:`));
+    if (relatedError) recordCaptureRejected(db, issueID, event.id, "not_captured", relatedError);
+    return null;
+  }
+  const existing = listStoredEvidence(db, {
+    issue_ids: [issueID],
+    limit: 1000,
+    run_ids: [evidence.run_id!]
+  }).items.some((item) => item.evidence.id === evidence.id);
+  recordEvidenceRecords(db, issueID, [evidence], {
+    recorded_at: canonicalNow(now),
+    source: "provider-runtime-command"
+  });
+  const issue = mustGetIssue(db, issueID);
+  const gate = issue.status === "pending_verification"
+    ? reevaluatePendingIssue(db, issueID, run, canonicalNow(now), "late-provider-evidence")
+    : undefined;
+  return { evidence, ...(gate ? { gate } : {}), replayed: existing };
 }
 
 export function createManualOverrideEvidence(
@@ -320,23 +486,30 @@ export function createManualOverrideEvidence(
 export async function projectIssueRuntimeEvidence(
   db: RunnerDatabase,
   issueID: number,
-  now = new Date().toISOString()
+  now = new Date().toISOString(),
+  options: { persist_artifacts?: boolean } = {}
 ): Promise<RuntimeEvidenceProjection> {
   const issue = mustGetIssue(db, issueID);
   const run = listIssueRuns(db, issueID).at(-1);
   const rows = recentCommandEvents(db, issueID, run);
-  const collector = createCommandEvidenceCollector();
+  const logs = rows.map(parseIssueLog).filter((item): item is ParsedIssueLog => item !== undefined);
+  const collector = createCommandEvidenceCollector(options.persist_artifacts
+    ? { artifact_store: new FileSystemCommandEvidenceArtifactStore(dirname(db.path)) }
+    : {});
   const evidence: EvidenceRecord[] = [];
   const errors: string[] = [];
-  for (const row of rows) {
-    const item = commandItem(row.payload);
+  for (const log of logs) {
+    const row = log.row;
+    const item = log.item;
     if (!item) continue;
     const command = commandText(item);
     const kind = classifyVerificationCommand(command);
     if (!kind) continue;
     try {
+      if (run) validateRuntimeCorrelation(log, run);
       const timing = commandTiming(item, row.created_at);
       const runID = run ? makeDomainID("run", "issue_runs", run.id) : undefined;
+      const terminalInteractions = matchingTerminalInteractions(log, logs);
       evidence.push(await collector.collect({
         context: {
           audit_event_ref: `issue-event:${row.id}`,
@@ -347,6 +520,11 @@ export async function projectIssueRuntimeEvidence(
           source_ref: `issue_events:${row.id}`,
           work_id: issueAsWork(issue).id
         },
+        correlation: {
+          channel: terminalInteractions.length > 0 ? "terminal_interaction" : "direct_command",
+          correlation_id: commandCorrelationID(log),
+          terminal_interaction_count: terminalInteractions.length
+        },
         kind,
         observation: {
           command,
@@ -355,8 +533,8 @@ export async function projectIssueRuntimeEvidence(
           ended_at: timing.ended,
           exit_code: integerOrNull(item.exitCode),
           started_at: timing.started,
-          stderr: "",
-          stdout: "",
+          stderr: cleanString(item.stderr),
+          stdout: cleanString(item.stdout) || cleanString(item.aggregatedOutput),
           timed_out: false
         }
       }));
@@ -562,16 +740,22 @@ function recentCommandEvents(db: RunnerDatabase, issueID: number, run: IssueRun 
   }));
 }
 
-function commandItem(payload: string): StoredCommandItem | undefined {
+function parseIssueLog(row: IssueLogRow): ParsedIssueLog | undefined {
+  const payload = row.payload;
   const event = parsedObject(payload);
-  if (event?.type !== "tool" || event.raw_method !== "item/completed") return undefined;
-  const raw = typeof event.raw_payload === "string" ? parsedObject(event.raw_payload) : undefined;
-  const item = raw?.item;
-  if (!item || typeof item !== "object" || Array.isArray(item)) return undefined;
-  const command = item as StoredCommandItem;
-  if (command.type !== "commandExecution") return undefined;
-  if (command.status !== "completed" && command.status !== "failed") return undefined;
-  return command;
+  if (!event) return undefined;
+  const method = cleanString(event.raw_method);
+  const raw = typeof event.raw_payload === "string"
+    ? parsedObject(event.raw_payload) ?? {}
+    : recordObject(event.raw_payload) ?? {};
+  const itemValue = raw.item;
+  const candidate = recordObject(itemValue);
+  const item = method === "item/completed" && candidate && candidate.type === "commandExecution" &&
+    (candidate.status === "completed" || candidate.status === "failed")
+    ? candidate as StoredCommandItem
+    : undefined;
+  const correlation = runtimeCorrelation(event.runtime_evidence_correlation);
+  return { ...(correlation ? { correlation } : {}), ...(item ? { item } : {}), method, raw, row };
 }
 
 function commandText(item: StoredCommandItem): string {
@@ -591,7 +775,65 @@ function unsafeCompoundVerificationCommand(command: string): boolean {
     .filter((line) => !/^set\s+-/.test(line) && !/^cd\s+/.test(line));
   if (lines.length > 1) return true;
   const value = lines[0] ?? command;
-  return /(?:;|\|)/.test(value);
+  return /(?:;|\||`|\$\(|\$\{|<\(|>\(|\beval\b|(?:^|\s)(?:ba|z|da|fi)?sh\s+-[a-z]*c\b)/i.test(value);
+}
+
+function validateRuntimeCorrelation(log: ParsedIssueLog, run: IssueRun): void {
+  const expected = correlationBinding(run);
+  if (log.correlation) {
+    if (log.correlation.contract !== RUNTIME_EVIDENCE_CORRELATION_CONTRACT ||
+      log.correlation.issue_run_id !== run.id ||
+      log.correlation.run_id !== expected.run_id ||
+      log.correlation.attempt_id !== expected.attempt_id) {
+      throw new Error("runtime Evidence correlation does not match the current Run/Attempt");
+    }
+    return;
+  }
+  const sessionID = cleanString(log.raw.threadId) || cleanString(log.raw.sessionId);
+  const turnID = cleanString(log.raw.turnId);
+  if (run.provider_session_id && sessionID && sessionID !== run.provider_session_id) {
+    throw new Error("provider session does not match the current Run");
+  }
+  if (run.provider_turn_id && turnID && turnID !== run.provider_turn_id) {
+    throw new Error("provider turn does not match the current Attempt");
+  }
+}
+
+function matchingTerminalInteractions(command: ParsedIssueLog, logs: readonly ParsedIssueLog[]): ParsedIssueLog[] {
+  const itemID = cleanString(command.item?.id);
+  const processID = cleanString(command.item?.processId);
+  if (!itemID && !processID) return [];
+  return logs.filter((candidate) => {
+    if (candidate.method !== "item/commandExecution/terminalInteraction") return false;
+    if (command.correlation && candidate.correlation && stableJson(command.correlation) !== stableJson(candidate.correlation)) {
+      return false;
+    }
+    const candidateItemID = cleanString(candidate.raw.itemId);
+    const candidateProcessID = cleanString(candidate.raw.processId);
+    return (itemID !== "" && candidateItemID === itemID) || (processID !== "" && candidateProcessID === processID);
+  });
+}
+
+function commandCorrelationID(log: ParsedIssueLog): string {
+  const itemID = cleanString(log.item?.id);
+  if (itemID) return `${log.correlation?.issue_run_id ?? "legacy"}:${itemID}`;
+  return `issue-event:${log.row.id}`;
+}
+
+function runtimeCorrelation(value: unknown): RuntimeEvidenceCorrelation | undefined {
+  const record = recordObject(value);
+  if (!record || record.contract !== RUNTIME_EVIDENCE_CORRELATION_CONTRACT) return undefined;
+  const correlation: RuntimeEvidenceCorrelation = {
+    attempt_id: cleanString(record.attempt_id),
+    contract: RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
+    issue_run_id: cleanString(record.issue_run_id),
+    provider: cleanString(record.provider),
+    provider_session_id: cleanString(record.provider_session_id),
+    provider_turn_id: cleanString(record.provider_turn_id),
+    run_id: cleanString(record.run_id)
+  };
+  // 出现 contract 标记后保留残缺字段，让校验 fail closed，不能退回 legacy 匹配。
+  return correlation;
 }
 
 function commandTiming(item: StoredCommandItem, eventCreatedAt: string): {
@@ -615,6 +857,123 @@ function commandTiming(item: StoredCommandItem, eventCreatedAt: string): {
 
 function integerOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) ? value : null;
+}
+
+export async function runtimeVerificationGap(
+  db: RunnerDatabase,
+  issueID: number,
+  now = new Date().toISOString()
+): Promise<VerificationGap> {
+  const run = listIssueRuns(db, issueID).at(-1);
+  if (!run) return { reason: "not_executed", detail: "当前 Work 尚未创建 Run，验证命令未执行。" };
+  const binding = correlationBinding(run);
+  const projection = await projectIssueRuntimeEvidence(db, issueID, now);
+  const stored = listStoredEvidence(db, { issue_ids: [issueID], limit: 1000 }).items.map((item) => item.evidence);
+  const all = uniqueEvidence([...stored, ...projection.evidence]);
+  const current = all.filter((item) => item.run_id === binding.run_id && ["test", "lint", "build"].includes(item.kind))
+    .sort((left, right) => right.observed_at.localeCompare(left.observed_at));
+  const latest = current[0];
+  if (latest) {
+    if (latest.status !== "passed") {
+      return { reason: "failed", detail: `当前 Run 最新 Evidence 状态为 ${latest.status}。` };
+    }
+    if (Date.parse(canonicalNow(now)) - Date.parse(latest.observed_at) > 24 * 60 * 60 * 1000) {
+      return { reason: "stale", detail: "当前 Run 的 passing Evidence 已超过 24 小时有效期。" };
+    }
+    return { reason: "none", detail: "当前 Run 已有可用于 completion gate 的 passing Evidence。" };
+  }
+  if (projection.errors.some((error) => /does not match the current|provider (?:session|turn) does not match/i.test(error))) {
+    return { reason: "run_mismatch", detail: "捕获到验证结果，但其 Run/Attempt correlation 与当前 Run 不匹配。" };
+  }
+  if (all.some((item) => item.work_id === issueAsWork(mustGetIssue(db, issueID)).id && item.run_id !== binding.run_id &&
+    ["test", "lint", "build"].includes(item.kind))) {
+    return { reason: "run_mismatch", detail: "只有旧 Run 的验证 Evidence；旧结果不能完成当前 Run。" };
+  }
+  const logs = recentCommandEvents(db, issueID, run).map(parseIssueLog).filter((item): item is ParsedIssueLog => item !== undefined);
+  const verificationObserved = logs.some((log) => log.item && Boolean(classifySingleVerificationCommand(commandText(log.item))));
+  if (verificationObserved || projection.errors.length > 0) {
+    return { reason: "not_captured", detail: "已观察到验证命令，但没有捕获到可绑定当前 Run 的终态结果。" };
+  }
+  return { reason: "not_executed", detail: "当前 Run 尚未执行可识别的 test、lint 或 build 验证命令。" };
+}
+
+function currentRunEvidence(
+  db: RunnerDatabase,
+  issueID: number,
+  run: IssueRun | undefined,
+  projected: readonly EvidenceRecord[]
+): EvidenceRecord[] {
+  if (!run) return uniqueEvidence(projected);
+  const runID = correlationBinding(run).run_id;
+  const stored = listStoredEvidence(db, {
+    issue_ids: [issueID],
+    limit: 1000,
+    run_ids: [runID]
+  }).items.map((item) => item.evidence);
+  return uniqueEvidence([...stored, ...projected.filter((item) => item.run_id === runID)]);
+}
+
+function uniqueEvidence(records: readonly EvidenceRecord[]): EvidenceRecord[] {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    if (seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+}
+
+function latestIssueRun(db: RunnerDatabase, issueID: number): IssueRun {
+  const run = listIssueRuns(db, issueID).at(-1);
+  if (!run) throw new Error("verification Evidence requires a current Run");
+  return run;
+}
+
+function correlationBinding(run: IssueRun): {
+  attempt_id: NonNullable<EvidenceRecord["attempt_id"]>;
+  run_id: NonNullable<EvidenceRecord["run_id"]>;
+} {
+  const runID = makeDomainID("run", "issue_runs", run.id);
+  return { attempt_id: makeRunAttemptID(runID, run.attempt), run_id: runID };
+}
+
+function reevaluatePendingIssue(
+  db: RunnerDatabase,
+  issueID: number,
+  run: IssueRun,
+  now: string,
+  source: string
+): IssueCompletionGateResult {
+  const evidence = currentRunEvidence(db, issueID, run, []);
+  return applyIssueCompletionGate(db, issueID, {
+    actor: { id: "runtime-evidence-reevaluator", kind: "runner" },
+    correlation_id: `${source}:${issueID}:${run.id}`,
+    evidence,
+    now,
+    patch: { status: "done" },
+    run,
+    source
+  });
+}
+
+function recordCaptureRejected(
+  db: RunnerDatabase,
+  issueID: number,
+  issueEventID: number,
+  reason: "not_captured" | "run_mismatch",
+  detail: string
+): void {
+  const fingerprint = createHash("sha256").update(`${issueEventID}:${reason}:${detail}`).digest("hex");
+  const replay = db.sqlite.query<{ id: number }, [number, string]>(`
+    select id from issue_events where issue_id=? and type='issue.verification_capture_rejected.v1'
+      and json_valid(payload) and json_extract(payload, '$.fingerprint')=? limit 1
+  `).get(issueID, fingerprint);
+  if (replay) return;
+  recordIssueEvent(db, issueID, "issue.verification_capture_rejected.v1", {
+    detail,
+    fingerprint,
+    issue_event_id: issueEventID,
+    reason
+  });
 }
 
 function canonicalNow(value: string | undefined): string {
@@ -650,6 +1009,12 @@ function parsedObject(value: unknown): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+function recordObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
 }
 
 function cleanString(value: unknown): string {
