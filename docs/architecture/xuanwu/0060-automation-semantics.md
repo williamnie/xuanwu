@@ -5,13 +5,13 @@
 - 依赖：[ADR-XW-0005](0005-capability-disposition-inventory.md)、[ADR-XW-0006](../xuanwu-migration/README.md)
 - 可执行清单：`backend-ts/src/xuanwu/automationSemantics.ts`
 - 覆盖校验：`backend-ts/src/xuanwu/automationSemantics.test.ts`
-- 范围：11 张 legacy carrier 表、7 张 `automation_*` target 表，以及当前归入 automation family 的全部 34 条 API
+- 范围：11 张 legacy carrier 表、7 张 `automation_*` target 表、automation family 的全部 34 条 API，以及同样读写 `pi_automations` 的 3 条 source-policy compatibility API
 
 ## 1. 决策
 
 当前 actively served `/api/automations`、repository 与 scheduler 已确定：`automation_definitions`、`automation_trigger_configs`、`automation_runs/events` 是唯一 Automation target；`pi_automations` 是 legacy authority，不是 target primary。G4 前，每个 legacy carrier 继续拥有自己的 ID、cursor、状态和写路径；W1 只允许可关闭、可重建的 target shadow，不能让 shadow claim 或执行。
 
-W1 将 `/api/pi/automations` 的 create/update 收敛到 `piAutomationCommands.ts`。命令先提交 legacy 行，再在 `CODEX_RUNNER_AUTOMATION_SHADOW_W1=1` 时尝试 deterministic shadow；默认关闭即恢复纯 legacy。shadow failure 只写结构化 audit log，不改变 HTTP/legacy result。target definition 固定为 `draft`、`next_run_at=null`，因此不会被 target scheduler claim，也不会触发 provider、notification 或其他外部写。
+W1 将 `/api/pi/automations`、`/api/pi/source-policies` 和 action-dispatch reminder/thread monitor 的 create/update 全部收敛到 `piAutomationCommands.ts`。命令先提交 legacy 行，再在 `CODEX_RUNNER_AUTOMATION_SHADOW_W1=1` 时尝试 deterministic shadow；默认关闭即恢复纯 legacy。shadow failure 只写带 actor/event/correlation/gate 的结构化 audit log，不改变 HTTP/legacy result。PI target definition 固定为 `draft`、`next_run_at=null`，因此不会被 target scheduler claim，也不会触发 provider、notification 或其他外部写；completion-watch shadow 继续以 `migration_mode=legacy_shadow` 排除 target observer/delivery。
 
 Automation 是有边界、触发器、权限、停止/升级条件的 standing order。Schedule/Cron 只决定何时触发；Heartbeat 是 trigger executor 与审计，不是 standing order；completion watch 只观察 authoritative Work；Attention 记录需要处理的事项；Approval 只授予权限；Notification/outbox 只负责送达。任何一层都不能单独证明 Work 完成，也不能绕开现有 Issue/Run/Evidence、Action Proposal/Approval 与外部写审计。
 
@@ -90,9 +90,9 @@ LLM 只能提议 Automation 或生成说明；状态变更、外部写、cutover
 
 ## 8. API 覆盖
 
-可执行清单逐项覆盖 automation family 的 **34** 条 route：统一 Automation 7、Cron 4、PI Automation 5、delegation 7、heartbeat timeline 1、completion watch 3、project heartbeat/control 7。测试与 `API_ROUTE_DISPOSITIONS` 做 exact-set comparison，新增或删除 route 未同步语义清单会失败。
+可执行清单逐项覆盖 automation family 的 **34** 条 route：统一 Automation 7、Cron 4、PI Automation 5、delegation 7、heartbeat timeline 1、completion watch 3、project heartbeat/control 7；另对同样读写 `pi_automations` 的 3 条 source-policy compatibility route 做 exact-set comparison。测试还扫描全部非测试 TypeScript source，保证只有 `piAutomationCommands.ts` 能调用 legacy repository 的 create/update，新增直写会失败。
 
-22 条 mutation route 全部标成 write；12 条 GET 是只读 projection。W1 只收敛 legacy PI Automation 的 2 条 mutation route，其他 route 仍由各自 legacy authority 处理；不得把 W1 冒充 G4 single-writer cutover。
+34 条 automation-family route 中 22 条 mutation 全部标成 write、12 条 GET 是只读 projection。W1 收敛直接写 `pi_automations` 的 2 条 PI Automation mutation route、2 条 source-policy compatibility mutation route 和 action-dispatch 内部 writer；其他 carrier route 仍由各自 legacy authority 处理，不得把 W1 冒充 G4 single-writer cutover。
 
 ## 9. live records 抽样
 

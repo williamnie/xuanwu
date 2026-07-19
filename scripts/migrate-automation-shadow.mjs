@@ -5,6 +5,10 @@ import { realpathSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { backfillPiAutomationShadows } from "../backend-ts/src/db/repositories/piAutomationShadow.ts";
 import { migrateLegacyCompletionWatches } from "../backend-ts/src/db/repositories/automationWatches.ts";
+import {
+  AUTOMATION_TABLES,
+  AUTOMATION_TARGET_TABLES
+} from "../backend-ts/src/xuanwu/automationSemantics.ts";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.db) usage("--db <runner.db> is required");
@@ -46,7 +50,8 @@ try {
     generated_at: timestamp,
     safety: {
       live_write: false,
-      target_definitions_forced_draft: true,
+      pi_target_definitions_forced_draft: true,
+      legacy_watch_shadows_non_native: true,
       external_writes: false,
       source_legacy_checksum: args.sourceDb ? readonlyLegacyChecksum(args.sourceDb) : null
     },
@@ -93,27 +98,43 @@ function assertBackupCopy(sourcePath, targetPath) {
 function snapshot(database) {
   const sqlite = database.sqlite;
   assertHealthy(sqlite, "database");
-  const tables = [
-    "cron_tasks", "cron_task_schedules", "pi_automations", "pi_delegations",
-    "pi_heartbeat_controls", "pi_heartbeat_runs", "pi_heartbeat_events",
-    "pi_issue_completion_watches", "pi_issue_completion_watch_items",
-    "automation_definitions", "automation_trigger_configs", "automation_runs",
-    "automation_run_events", "automation_events", "automation_watches"
-  ];
+  const tables = [...AUTOMATION_TABLES, ...AUTOMATION_TARGET_TABLES];
   return {
     quick_check: scalar(sqlite, "pragma quick_check"),
     foreign_key_violations: rows(sqlite, "pragma foreign_key_check").length,
     counts: Object.fromEntries(tables.map((table) => [table, tableExists(sqlite, table) ? count(sqlite, table) : null])),
-    legacy_checksum: legacyChecksum(sqlite)
+    statuses: statusSnapshot(sqlite),
+    legacy_checksum: tableChecksum(sqlite, AUTOMATION_TABLES),
+    target_checksum: tableChecksum(sqlite, AUTOMATION_TARGET_TABLES)
   };
 }
 
 function legacyChecksum(sqlite) {
-  const tables = ["pi_automations", "pi_issue_completion_watches", "pi_issue_completion_watch_items"];
+  return tableChecksum(sqlite, AUTOMATION_TABLES);
+}
+
+function tableChecksum(sqlite, tables) {
   const value = Object.fromEntries(tables.map((table) => [table,
     tableExists(sqlite, table) ? rows(sqlite, `select * from ${table} order by rowid`) : null
   ]));
   return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+function statusSnapshot(sqlite) {
+  const axes = [
+    ["cron_tasks", "status"], ["cron_tasks", "last_status"],
+    ["pi_automations", "enabled"], ["pi_automations", "last_status"],
+    ["pi_delegations", "status"], ["pi_heartbeat_runs", "status"],
+    ["pi_issue_completion_watches", "status"], ["nightly_batches", "status"],
+    ["nightly_batch_items", "status"], ["automation_definitions", "status"],
+    ["automation_runs", "status"], ["automation_watches", "status"]
+  ];
+  return Object.fromEntries(axes.map(([table, column]) => {
+    const key = `${table}.${column}`;
+    if (!tableExists(sqlite, table) || !columnExists(sqlite, table, column)) return [key, null];
+    return [key, rows(sqlite, `select distinct cast(${column} as text) as value from ${table} order by value`)
+      .map((row) => row.value)];
+  }));
 }
 
 function wrapDatabase(sqlite, path, readonly) {
@@ -142,6 +163,10 @@ function assertHealthy(sqlite, label) {
 
 function tableExists(sqlite, table) {
   return Boolean(sqlite.query("select name from sqlite_master where type='table' and name=?").get(table));
+}
+
+function columnExists(sqlite, table, column) {
+  return rows(sqlite, `pragma table_info(${table})`).some((row) => row.name === column);
 }
 
 function count(sqlite, table) {

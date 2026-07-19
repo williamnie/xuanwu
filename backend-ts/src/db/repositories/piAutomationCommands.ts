@@ -29,8 +29,12 @@ export type PiAutomationLegacyCommandResult = {
 };
 
 type ShadowAuditEvent = {
+  actor_id: string;
   automation_id: string;
+  correlation_id: string;
   error: string;
+  event_id: string;
+  gate: AutomationAudit["gate"];
   legacy_id: number;
   operation: PiAutomationLegacyCommand["operation"];
   outcome: "failed";
@@ -55,18 +59,23 @@ export function executePiAutomationLegacyCommand(
     : updatePiAutomation(db, command.id, command.patch, now);
   const enabled = options.shadowEnabled ?? Bun.env[PI_AUTOMATION_SHADOW_ENV] === "1";
   if (!enabled) return { automation, shadow: { enabled: false } };
+  const audit = commandAudit(command.operation, automation, now);
   try {
     const outcome = (options.shadowWrite ?? upsertPiAutomationShadow)(
       db,
       automation,
-      commandAudit(command.operation, automation, now)
+      audit
     );
     return { automation, shadow: { enabled: true, outcome } };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const event: ShadowAuditEvent = {
+      actor_id: audit.actor_id,
       automation_id: `automation:legacy-pi-${automation.id}`,
+      correlation_id: audit.correlation_id,
       error: message.slice(0, 1000),
+      event_id: audit.event_id,
+      gate: audit.gate,
       legacy_id: automation.id,
       operation: command.operation,
       outcome: "failed",

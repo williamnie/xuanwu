@@ -62,7 +62,12 @@ export const AUTOMATION_CARRIERS = [
       "backend-ts/src/runner/piAutomationScheduler.ts",
       "backend-ts/src/pi/automationRunner.ts",
       "backend-ts/src/db/repositories/piAutomations.ts",
-      "backend-ts/src/db/repositories/piAutomationScheduler.ts"
+      "backend-ts/src/db/repositories/piAutomationScheduler.ts",
+      "backend-ts/src/db/repositories/piAutomationCommands.ts",
+      "backend-ts/src/db/repositories/piAutomationShadow.ts",
+      "backend-ts/src/http/piAutomationsApi.ts",
+      "backend-ts/src/http/piSourcePoliciesApi.ts",
+      "backend-ts/src/pi/nonIssueProposalActions.ts"
     ]
   },
   {
@@ -198,6 +203,20 @@ export const AUTOMATION_API_ROUTES = [
   { method: "POST", path: "/api/projects/:id/pi/resume", role: "control", write: true },
   { method: "POST", path: "/api/projects/:id/pi/run-once", role: "trigger", write: true }
 ] as const satisfies readonly AutomationRoute[];
+
+// These routes are classified as capability-policy in the product inventory, but they
+// read or mutate the same legacy pi_automations rows and therefore belong to the W1 seam inventory.
+export const PI_AUTOMATION_LEGACY_STORAGE_ROUTES = [
+  { method: "GET", path: "/api/pi/source-policies", role: "observation", write: false },
+  { method: "POST", path: "/api/pi/source-policies", role: "definition", write: true },
+  { method: "PATCH", path: "/api/pi/source-policies/automations/:id", role: "control", write: true }
+] as const satisfies readonly AutomationRoute[];
+
+export const PI_AUTOMATION_LEGACY_WRITER_SOURCES = [
+  "backend-ts/src/http/piAutomationsApi.ts",
+  "backend-ts/src/http/piSourcePoliciesApi.ts",
+  "backend-ts/src/pi/nonIssueProposalActions.ts"
+] as const;
 
 export const AUTOMATION_MIGRATION_CONTRACT = {
   current_gate: "G0",

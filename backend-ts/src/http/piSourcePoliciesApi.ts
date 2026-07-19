@@ -1,11 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getProjectPiSettings, readProjectPiPolicy } from "../db/repositories/pi.ts";
 import {
-  createPiAutomation,
   listPiAutomations,
-  updatePiAutomation,
   type PiAutomationRecord
 } from "../db/repositories/piAutomations.ts";
+import { executePiAutomationLegacyCommand } from "../db/repositories/piAutomationCommands.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
   resolveSourcePolicy,
@@ -53,15 +52,17 @@ async function createResponse(context: PiSourcePolicyContext, request: Request):
 async function patchAutomationResponse(context: PiSourcePolicyContext, request: Request): Promise<Response> {
   const body = await objectBody(request);
   return writeResponse(() => ({
-    automation: automationPolicy(updatePiAutomation(context.database, pathID(request), {
-      source_policy: sourcePolicyInput(body.source_policy ?? body)
-    }))
+    automation: automationPolicy(executePiAutomationLegacyCommand(context.database, {
+      id: pathID(request),
+      operation: "update",
+      patch: { source_policy: sourcePolicyInput(body.source_policy ?? body) }
+    }).automation)
   }));
 }
 
 function createPolicyAutomation(db: RunnerDatabase, body: JsonObject): PiAutomationRecord {
   const policy = sourcePolicyInput(body.source_policy ?? body);
-  return createPiAutomation(db, {
+  return executePiAutomationLegacyCommand(db, { operation: "create", input: {
     enabled: false,
     filters: sourceFilter(body.source),
     mode: "propose",
@@ -69,7 +70,7 @@ function createPolicyAutomation(db: RunnerDatabase, body: JsonObject): PiAutomat
     source_policy: policy,
     steps: [{ cursor: "", idempotency_key: "policy-only-source-sync", type: "source_sync", watermark: "" }],
     trigger: { type: "manual" }
-  });
+  } }).automation;
 }
 
 function profilePolicy(profile: SourceProfile): JsonObject {

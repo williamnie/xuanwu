@@ -2,12 +2,13 @@ export type CapabilityDisposition = "keep" | "merge" | "migrate" | "delete";
 export type DataRetention = "R0_DERIVED" | "R1_OPERATIONAL" | "R2_DURABLE" | "R3_AUDIT" | "R4_SENSITIVE";
 
 export const LIVE_REFERENCE = {
-  captured_at: "2026-07-15T23:42:00+08:00",
+  captured_at: "2026-07-19T12:23:34+08:00",
   database_path_kind: "launchd --db runner.db",
-  runtime_commit: "16fee2e2a0e0",
-  runtime_version: "v0.1.0-543-g16fee2e",
-  source_head_at_capture: "356271efc165",
-  table_count: 59
+  row_count_snapshot_at: "2026-07-15T23:42:00+08:00",
+  runtime_commit: "a9c06490ecf2",
+  runtime_version: "v0.1.0-666-ga9c0649",
+  source_head_at_capture: "da18fa14e65f",
+  table_count: 79
 } as const;
 
 export const RETENTION_LEVELS = {
@@ -422,7 +423,7 @@ export const TABLE_DISPOSITIONS = [
 export const API_ROUTE_FAMILIES = [
   { id: "assistant-runtime", disposition: "keep", target: "Operator conversation and supporting memory/config", source_of_truth: "pi_conversations, pi_agents, pi_memory_items" },
   { id: "attention", disposition: "merge", target: "Attention projections with deterministic resolution gates", source_of_truth: "attention_inbox_items and current Guardian/Approval carriers" },
-  { id: "automation", disposition: "migrate", target: "Automation API with legacy cron/delegation compatibility", source_of_truth: "pi_automations plus legacy cron_tasks/pi_delegations" },
+  { id: "automation", disposition: "migrate", target: "automation_definitions/runs/events API with legacy carrier compatibility", source_of_truth: "legacy pi_automations, cron_tasks/schedules, pi_delegations, heartbeat controls, and completion watches until W2/G4" },
   { id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy", source_of_truth: "tool/MCP registries and project_pi_policies" },
   { id: "evidence-handoff", disposition: "merge", target: "Evidence/Handoff read models and audited action requests", source_of_truth: "issue/pi audit authorities plus derived Handoff" },
   { id: "integration-intake-delivery", disposition: "keep", target: "Audited intake and external delivery adapters", source_of_truth: "external_events/external_links/outbox authorities" },
@@ -688,7 +689,7 @@ export const PAGE_SURFACES = [
     source_files: []
   },
   {
-    id: "automation", disposition: "migrate", target: "Automation API with legacy cron/delegation compatibility",
+    id: "automation", disposition: "migrate", target: "automation_definitions/runs/events API with legacy carrier compatibility",
     page_ids: ["cron", "pi-automations"],
     source_files: ["frontend/src/pages/Automations.jsx"]
   },
@@ -731,7 +732,8 @@ export const SCHEDULER_DISPOSITIONS = [
   { id: "auto-manage-timer", disposition: "keep", target: "Single local scheduler infrastructure", entrypoint: "createPiAutoManageScheduler", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "issue-supervisor-scan", disposition: "merge", target: "Run recovery Evidence and Attention", entrypoint: "runPiIssueSupervisorSchedulerOnce", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "legacy-cron-dispatch", disposition: "migrate", target: "Automation trigger/definition", entrypoint: "runDueCronTasks", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
-  { id: "automation-dispatch", disposition: "keep", target: "Automation execution", entrypoint: "runDuePiAutomations", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
+  { id: "legacy-pi-automation-dispatch", disposition: "migrate", target: "Automation target definition/claim execution", entrypoint: "runDuePiAutomations", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
+  { id: "target-automation-dispatch", disposition: "keep", target: "automation_definitions/runs execution", entrypoint: "runDueAutomations", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "delegation-heartbeat", disposition: "migrate", target: "Automation standing-order execution", entrypoint: "runDelegationHeartbeatsOnce", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "provider-terminal-reconcile", disposition: "merge", target: "Run terminal Evidence", entrypoint: "signalOpenRunTerminalProviderErrors", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "guardian-decision-and-action", disposition: "merge", target: "Attention/Evidence with deterministic gate", entrypoint: "drainGuardianDecisionOrchestrator + dispatchApprovedGuardianActions", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
@@ -747,7 +749,7 @@ export const PI_MODULE_FAMILIES = [
     source_files: ["backend-ts/src/pi/actionAudit.ts", "backend-ts/src/pi/actionEngine.ts", "backend-ts/src/pi/actionEnvelope.ts", "backend-ts/src/pi/actionGate.ts", "backend-ts/src/pi/actionGateRecovery.ts", "backend-ts/src/pi/actionRecordMetadata.ts", "backend-ts/src/pi/approvalFastAudit.ts", "backend-ts/src/pi/approvalFastPolicy.ts", "backend-ts/src/pi/approvalGrantScope.ts", "backend-ts/src/pi/approvalPolicyCache.ts", "backend-ts/src/pi/approvalRequestParser.ts", "backend-ts/src/pi/approvalSafetyPolicy.ts", "backend-ts/src/pi/authorizationScope.ts", "backend-ts/src/pi/nonIssueProposalActions.ts", "backend-ts/src/pi/runnerChatAuthorization.ts", "backend-ts/src/pi/sourcePermissionPolicy.ts", "backend-ts/src/pi/stalePendingActions.ts"]
   },
   {
-    id: "automation", disposition: "migrate", target: "Automation execution pipeline", source_of_truth: "pi_automations; legacy heartbeats/watches are compatibility carriers",
+    id: "automation", disposition: "migrate", target: "automation_definitions/runs/events execution pipeline", source_of_truth: "legacy pi_automations, heartbeats, and watches until W2/G4",
     source_files: ["backend-ts/src/pi/automationRunner.ts", "backend-ts/src/pi/heartbeatActionExecution.ts", "backend-ts/src/pi/heartbeatOrchestrator.ts", "backend-ts/src/pi/heartbeatOrchestratorSupport.ts", "backend-ts/src/pi/heartbeatPlanner.ts", "backend-ts/src/pi/heartbeatSignals.ts", "backend-ts/src/pi/heartbeatTypes.ts", "backend-ts/src/pi/heartbeatVerificationPlanner.ts", "backend-ts/src/pi/issueCompletionWatchActions.ts", "backend-ts/src/pi/issueCompletionWatchEvaluator.ts", "backend-ts/src/pi/manualTrigger.ts"]
   },
   {

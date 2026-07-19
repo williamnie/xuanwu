@@ -11,7 +11,9 @@ import {
   AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS,
   AUTOMATION_STATUS_MAPPINGS,
   AUTOMATION_TABLES,
-  AUTOMATION_TARGET_TABLES
+  AUTOMATION_TARGET_TABLES,
+  PI_AUTOMATION_LEGACY_STORAGE_ROUTES,
+  PI_AUTOMATION_LEGACY_WRITER_SOURCES
 } from "./automationSemantics.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
@@ -88,6 +90,42 @@ describe("Xuanwu Automation semantics", () => {
       expect(route.write).toBe(route.method !== "GET");
       expect(["definition", "trigger", "control", "observation"]).toContain(route.role);
     }
+  });
+
+  test("covers every compatibility route and direct writer of legacy pi_automations", () => {
+    const expectedRoutes = API_ROUTE_DISPOSITIONS
+      .filter((route) => route.path.startsWith("/api/pi/source-policies"))
+      .map((route) => `${route.method} ${route.path}`)
+      .sort();
+    const actualRoutes = PI_AUTOMATION_LEGACY_STORAGE_ROUTES
+      .map((route) => `${route.method} ${route.path}`)
+      .sort();
+    expect(actualRoutes).toEqual(expectedRoutes);
+    expect(actualRoutes).toHaveLength(3);
+
+    expect(PI_AUTOMATION_LEGACY_WRITER_SOURCES).toEqual([
+      "backend-ts/src/http/piAutomationsApi.ts",
+      "backend-ts/src/http/piSourcePoliciesApi.ts",
+      "backend-ts/src/pi/nonIssueProposalActions.ts"
+    ]);
+    for (const source of PI_AUTOMATION_LEGACY_WRITER_SOURCES) {
+      expect(readFileSync(resolve(REPO_ROOT, source), "utf8"))
+        .toContain("executePiAutomationLegacyCommand");
+    }
+
+    const directCallers = [...new Bun.Glob("**/*.ts").scanSync({
+      cwd: resolve(REPO_ROOT, "backend-ts/src")
+    })]
+      .filter((path) => !path.endsWith(".test.ts"))
+      .filter((path) => /\b(?:createPiAutomation|updatePiAutomation)\s*\(/.test(
+        readFileSync(resolve(REPO_ROOT, "backend-ts/src", path), "utf8")
+      ))
+      .map((path) => `backend-ts/src/${path}`)
+      .sort();
+    expect(directCallers).toEqual([
+      "backend-ts/src/db/repositories/piAutomationCommands.ts",
+      "backend-ts/src/db/repositories/piAutomations.ts"
+    ]);
   });
 
   test("maps lifecycle, execution, observation, and archived statuses without collapsing their axes", () => {

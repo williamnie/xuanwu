@@ -106,12 +106,18 @@ describe("Xuanwu capability disposition inventory", () => {
   });
 
   test("keeps schedulers mapped and gives every delete item reproducible evidence and gates", () => {
-    expect(SCHEDULER_DISPOSITIONS).toHaveLength(14);
+    expect(SCHEDULER_DISPOSITIONS).toHaveLength(15);
     for (const scheduler of SCHEDULER_DISPOSITIONS) {
       expect(readFileSync(resolve(REPO_ROOT, scheduler.source_file), "utf8")).toContain(
         scheduler.entrypoint.split(" + ")[0].split(" / ")[0]
       );
     }
+    expect(SCHEDULER_DISPOSITIONS.filter((item) =>
+      item.entrypoint === "runDuePiAutomations" || item.entrypoint === "runDueAutomations"
+    )).toEqual([
+      expect.objectContaining({ id: "legacy-pi-automation-dispatch", disposition: "migrate" }),
+      expect.objectContaining({ id: "target-automation-dispatch", disposition: "keep" })
+    ]);
 
     const deleteItems = TABLE_DISPOSITIONS.filter((item) => item.disposition === "delete");
     expect(deleteItems.map((item) => item.name)).toEqual(["nightly_batch_items", "nightly_batches"]);
@@ -136,7 +142,7 @@ describe("Xuanwu capability disposition inventory", () => {
       expect(adr).toContain(heading);
     }
     expect(adr).toContain("79 张表");
-    expect(adr).toContain("239 条用户 API route");
+    expect(adr).toContain("241 条用户 API route");
   });
 });
 

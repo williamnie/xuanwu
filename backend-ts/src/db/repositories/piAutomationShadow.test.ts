@@ -104,6 +104,10 @@ describe("PI Automation W1 target shadow", () => {
       expect(db.sqlite.query("select count(*) as count from pi_automations").get()).toEqual({ count: 1 });
       expect(db.sqlite.query("select count(*) as count from automation_definitions").get()).toEqual({ count: 0 });
       expect(events).toEqual([expect.objectContaining({
+        actor_id: "pi-automation-command-seam",
+        correlation_id: "legacy-pi-automation:create:1:2026-07-19T04:00:00.000Z",
+        event_id: "automation-shadow:create:1:2026-07-19T04:00:00.000Z",
+        gate: expect.objectContaining({ authority: "deterministic_policy", decision: "allow" }),
         legacy_id: 1,
         operation: "create",
         outcome: "failed",

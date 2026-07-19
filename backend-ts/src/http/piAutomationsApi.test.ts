@@ -124,6 +124,7 @@ describe("PI automations API", () => {
       expect(fixture.db.sqlite.query("select count(*) as count from automation_definitions").get()).toEqual({ count: 0 });
       expect(audits.map((line) => JSON.parse(line))).toEqual([
         expect.objectContaining({
+          correlation_id: expect.stringContaining("legacy-pi-automation:create:1:"),
           legacy_id: 1,
           outcome: "failed",
           schema_version: "xuanwu.automation-shadow-audit.v1"

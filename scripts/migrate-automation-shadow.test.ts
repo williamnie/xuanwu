@@ -20,6 +20,7 @@ describe("migrate-automation-shadow", () => {
     roots.push(root);
     const source = join(root, "source.db");
     const copy = join(root, "copy.db");
+    const staleCopy = join(root, "stale-copy.db");
     const db = await openDatabase({ dbPath: source });
     createPiAutomation(db, {
       name: "CLI fixture",
@@ -28,13 +29,29 @@ describe("migrate-automation-shadow", () => {
     }, new Date("2026-07-19T05:00:00Z"));
     db.close();
     await copyFile(source, copy);
+    await copyFile(source, staleCopy);
+    const stale = new Database(staleCopy);
+    stale.run(`insert into cron_tasks
+      (name, action, mode, status, created_at, updated_at)
+      values ('stale copy row', 'triage_to_todo', 'once', 'done', '2026-07-19T05:00:00Z', '2026-07-19T05:00:00Z')`);
+    stale.close();
 
     const preview = await run(["--db", source]);
     expect(preview.exitCode).toBe(0);
     expect(JSON.parse(preview.stdout)).toMatchObject({
       mode: "dry_run",
       backfill: { pi_automations: { created: 1, scanned: 1 } },
-      safety: { live_write: false }
+      before: {
+        counts: { automation_execution_links: 0, nightly_batches: null, pi_automations: 1 },
+        statuses: { "pi_automations.enabled": ["1"], "pi_automations.last_status": [""] },
+        legacy_checksum: expect.any(String),
+        target_checksum: expect.any(String)
+      },
+      safety: {
+        legacy_watch_shadows_non_native: true,
+        live_write: false,
+        pi_target_definitions_forced_draft: true
+      }
     });
 
     const args = [
@@ -54,9 +71,22 @@ describe("migrate-automation-shadow", () => {
     });
     const second = await run(args);
     expect(second.exitCode).toBe(0);
-    expect(JSON.parse(second.stdout)).toMatchObject({
+    const secondReport = JSON.parse(second.stdout);
+    expect(secondReport).toMatchObject({
       backfill: { pi_automations: { created: 0, drift: [], refreshed: 0, unchanged: 1 } }
     });
+    expect(secondReport.after.target_checksum).toBe(JSON.parse(first.stdout).after.target_checksum);
+
+    const staleDenied = await run([
+      "--db", staleCopy,
+      "--apply-to-copy",
+      "--source-db", source,
+      "--actor", "migration-operator",
+      "--correlation", "stale-copy",
+      "--reason", "must reject any legacy carrier drift"
+    ]);
+    expect(staleDenied.exitCode).toBe(2);
+    expect(staleDenied.stderr).toContain("target legacy Automation carriers differ from source DB");
 
     expect(count(source, "automation_definitions")).toBe(0);
     expect(count(source, "pi_automations")).toBe(1);

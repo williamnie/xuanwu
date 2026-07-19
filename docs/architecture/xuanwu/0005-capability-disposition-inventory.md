@@ -1,7 +1,7 @@
 # ADR-XW-0005：现有能力 keep / merge / migrate / delete 清单
 
 - 状态：Accepted
-- 日期：2026-07-15
+- 日期：2026-07-15（live table-set reference 于 2026-07-19 刷新）
 - 依赖：[ADR-XW-0004](0004-core-domain-objects.md)
 - 可执行清单：`backend-ts/src/xuanwu/capabilityDispositionInventory.ts`
 - 覆盖校验：`backend-ts/src/xuanwu/capabilityDispositionInventory.test.ts`
@@ -21,15 +21,15 @@
 
 统计：
 
-- 79 张表：keep=48、merge=22、migrate=7、delete=2（77 张 current source + 2 张 live-only legacy）
-- 239 条用户 API route：keep=139、merge=66、migrate=34、delete=0
+- 79 张表：keep=47、merge=22、migrate=8、delete=2（77 张 current source + 2 张 live-only legacy）
+- 241 条用户 API route：keep=141、merge=66、migrate=34、delete=0
 - 36 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
-- 14 个后台调度/启动单元：keep=4、merge=8、migrate=2、delete=0
+- 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
 - 148 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
 ## 2. live reference 证据
 
-快照时间：`2026-07-15T23:42:00+08:00`。仓库 source HEAD 为 `356271efc165`；launchd 正在服务的已部署 runtime 为 `v0.1.0-543-g16fee2e` / `16fee2e2a0e0`，因此清单优先记录 live runtime/DB，并用当前 source 解释消费者。
+table-set 刷新时间：`2026-07-19T12:23:34+08:00`。仓库 source HEAD 为 `da18fa14e65f`；launchd 正在服务的已部署 runtime 仍为 `v0.1.0-666-ga9c0649` / `a9c06490ecf2`，因此 W1 source 尚未部署，清单继续以 live runtime/DB 证明当前 authority，并用 current source 解释 target contract。
 
 ```bash
 ./scripts/status-launchd.sh
@@ -38,9 +38,9 @@ sqlite3 -readonly "$LIVE_DB" "select count(*) from sqlite_master where type='tab
 sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' and name not like 'sqlite_%' order by name;"
 ```
 
-决定性结果：capture 时 launchd `state = running`、`API OK`、`db ok: True`；进程参数明确 `--db .../state/runner.db`；capture 的 live DB 有 **59** 张非 SQLite 内部表，39 条 `schema_migrations`。当前 source migration 已扩展到 **77** 张表；另保留 `nightly_batches` 与 `nightly_batch_items` 两张 live-only legacy 清单。source/live 差异必须通过正式 migration/release gate 收敛，不能把未部署 source 表误报为 live authority。
+决定性结果：capture 时 launchd `state = running`、`API OK`、`db ok: True`；进程参数明确 `--db .../state/runner.db`；live DB 有 **79** 张非 SQLite 内部表、52 条 `schema_migrations`，与 77 张 current-source 表加 `nightly_batches` / `nightly_batch_items` 两张 live-only legacy 表的 exact set 一致。runtime 仍是 `a9c0649`，不能把未部署的 W1 source behavior 误报为 live authority。
 
-逐表 `count(*)` 已固化在可执行清单的 `live_rows` 快照字段；覆盖测试可通过 `XUANWU_LIVE_DB=<path>` 对 live table name set 做只读比对，不依赖易漂移的 row count。
+逐表 `live_rows` 仍保留 `2026-07-15T23:42:00+08:00` 的审计快照；覆盖测试可通过 `XUANWU_LIVE_DB=<path>` 对当前 live table name exact set 做只读比对，不依赖易漂移的 row count。P11.04-W1 的 fresh Automation counts/status/checksum 另由 `migrate-automation-shadow.mjs` readonly report 生成。
 
 ## 3. 数据保留等级
 
@@ -132,7 +132,7 @@ API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `ba
 | --- | ---: | --- | --- | --- |
 | `assistant-runtime` | 21 | **keep** | Operator conversation and supporting memory/config | pi_conversations, pi_agents, pi_memory_items |
 | `attention` | 25 | **merge** | Attention projections with deterministic resolution gates | attention_inbox_items and current Guardian/Approval carriers |
-| `automation` | 34 | **migrate** | Automation API with legacy cron/delegation compatibility | pi_automations plus legacy cron_tasks/pi_delegations |
+| `automation` | 34 | **migrate** | `automation_definitions/runs/events` API with legacy carrier compatibility | legacy pi_automations, cron_tasks/schedules, pi_delegations, heartbeat controls, and completion watches until W2/G4 |
 | `capability-policy` | 44 | **keep** | Capability registry and deterministic permission policy | tool/MCP registries and project_pi_policies |
 | `evidence-handoff` | 30 | **merge** | Evidence/Handoff read models and audited action requests | issue/pi audit authorities plus derived Handoff |
 | `integration-intake-delivery` | 23 | **keep** | Audited intake and external delivery adapters | external_events/external_links/outbox authorities |
@@ -417,7 +417,7 @@ GET /api/issues/:id/runs
 | --- | --- | --- | --- | --- |
 | `assistant-runtime` | `pi-chat`, `pi-overview`, `pi-memory` | **keep** | Operator conversation and supporting memory/config | `PiAgentSettingsPanel.jsx`, `PiChat.jsx`, `PiChatComposerMeta.jsx`, `PiMemoryPanel.jsx` |
 | `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | —（已合并到 Command Center） |
-| `automation` | `cron`, `pi-automations` | **migrate** | Automation API with legacy cron/delegation compatibility | `Automations.jsx` |
+| `automation` | `cron`, `pi-automations` | **migrate** | `automation_definitions/runs/events` API with legacy carrier compatibility | `Automations.jsx` |
 | `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
 | `evidence-handoff` | `handoffs`, `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx`, `Handoffs.jsx` |
 | `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `Projects.jsx` |
@@ -437,7 +437,8 @@ GET /api/issues/:id/runs
 | `auto-manage-timer` | **keep** | Single local scheduler infrastructure | `createPiAutoManageScheduler` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
 | `issue-supervisor-scan` | **merge** | Run recovery Evidence and Attention | `runPiIssueSupervisorSchedulerOnce` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
 | `legacy-cron-dispatch` | **migrate** | Automation trigger/definition | `runDueCronTasks` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
-| `automation-dispatch` | **keep** | Automation execution | `runDuePiAutomations` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
+| `legacy-pi-automation-dispatch` | **migrate** | Automation target definition/claim execution | `runDuePiAutomations` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
+| `target-automation-dispatch` | **keep** | `automation_definitions/runs` execution | `runDueAutomations` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
 | `delegation-heartbeat` | **migrate** | Automation standing-order execution | `runDelegationHeartbeatsOnce` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
 | `provider-terminal-reconcile` | **merge** | Run terminal Evidence | `signalOpenRunTerminalProviderErrors` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
 | `guardian-decision-and-action` | **merge** | Attention/Evidence with deterministic gate | `drainGuardianDecisionOrchestrator + dispatchApprovedGuardianActions` | `backend-ts/src/runner/piAutoManageScheduler.ts` |
@@ -455,7 +456,7 @@ GET /api/issues/:id/runs
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
 | `action-permission-gate` | 17 | **keep** | Deterministic permission and external-effect gate | Action Proposal/Approval plus pi_action_events |
-| `automation` | 11 | **migrate** | Automation execution pipeline | pi_automations; legacy heartbeats/watches are compatibility carriers |
+| `automation` | 11 | **migrate** | `automation_definitions/runs/events` execution pipeline | legacy pi_automations, heartbeats, and watches until W2/G4 |
 | `capability-connectors` | 27 | **keep** | Capability and connector runtime | registered provider/tool manifests and audited calls |
 | `guardian-attention` | 25 | **merge** | Attention detection, routing and delivery | Guardian authorities projected into Attention |
 | `intake-context` | 8 | **merge** | Attention intake and Evidence context | external events, context bundles and intake audit |

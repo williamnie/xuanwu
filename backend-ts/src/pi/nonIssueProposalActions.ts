@@ -3,7 +3,7 @@ import {
   createPiMemoryItem,
   type PiAction
 } from "../db/repositories/pi.ts";
-import { createPiAutomation } from "../db/repositories/piAutomations.ts";
+import { executePiAutomationLegacyCommand } from "../db/repositories/piAutomationCommands.ts";
 import { createIssueCompletionWatchAction } from "./issueCompletionWatchActions.ts";
 import { assertMemoryContentSafe } from "./memoryPolicy.ts";
 
@@ -68,7 +68,7 @@ export function createMemoryFromAction(db: RunnerDatabase, action: PiAction, pay
 export function createReminderFromAction(db: RunnerDatabase, action: PiAction, payload: JsonObject): JsonObject {
   const nextRunAt = firstString(payload.due_at, payload.next_run_at, payload.remind_at);
   if (nextRunAt === "") throw new Error("reminder.create due_at is required");
-  const automation = createPiAutomation(db, {
+  const automation = executePiAutomationLegacyCommand(db, { operation: "create", input: {
     enabled: payload.enabled !== false,
     filters: [traceFilter(action, payload)],
     max_actions_per_run: 1,
@@ -90,7 +90,7 @@ export function createReminderFromAction(db: RunnerDatabase, action: PiAction, p
       type: "schedule"
     },
     trigger_type: "schedule"
-  });
+  } }).automation;
   return {
     automation_id: automation.id,
     next_run_at: automation.next_run_at,
@@ -125,7 +125,7 @@ function createIssueWatch(db: RunnerDatabase, action: PiAction, payload: JsonObj
 function createThreadMonitor(db: RunnerDatabase, action: PiAction, payload: JsonObject): JsonObject {
   const threadID = firstString(payload.thread_id, payload.target_thread_id, payload.message_id);
   if (threadID === "") throw new Error("watch_thread thread_id or issue_ids is required");
-  const automation = createPiAutomation(db, {
+  const automation = executePiAutomationLegacyCommand(db, { operation: "create", input: {
     enabled: payload.enabled !== false,
     filters: [traceFilter(action, payload)],
     max_actions_per_run: 1,
@@ -146,7 +146,7 @@ function createThreadMonitor(db: RunnerDatabase, action: PiAction, payload: Json
       type: "continuous"
     },
     trigger_type: "continuous"
-  });
+  } }).automation;
   return {
     automation_id: automation.id,
     monitor_id: `automation:${automation.id}`,
