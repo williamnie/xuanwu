@@ -6,6 +6,7 @@
 
 ### Added
 
+- 完成玄武 AI Engineering Control Plane 的 115 项建设路线与最终迁移收口。
 - 六条 Golden Journey、容量基准、Supervisor 评测与统一可观测性。
 - SQLite 迁移门禁、加密备份/隔离恢复演练和 daemon 生命周期管理。
 - 可审计的 release update check、升级快照、release-owned file 回滚与 GitHub signed provenance。
