@@ -5,6 +5,7 @@
 - 依赖：[ADR-XW-0005](0005-capability-disposition-inventory.md)、[ADR-XW-0006](../xuanwu-migration/README.md)
 - 可执行清单：`backend-ts/src/xuanwu/automationSemantics.ts`
 - 覆盖校验：`backend-ts/src/xuanwu/automationSemantics.test.ts`
+- 只读退役审计：`scripts/audit-automation-consolidation.mjs`
 - 范围：11 张 legacy carrier 表、7 张 `automation_*` target 表、automation family 的全部 34 条 API，以及同样读写 `pi_automations` 的 3 条 source-policy compatibility API
 
 ## 1. 决策
@@ -88,6 +89,19 @@ LLM 只能提议 Automation 或生成说明；状态变更、外部写、cutover
 
 `pi_automations` 也是 legacy migration candidate；只有 W2/G4 target single-writer、W3 restart/retry parity、一个正式 release consumer-zero、archive/restore 和精确非 LLM G7 approval 全部完成后才可删除。任何 candidate 缺少 active-row=0、consumer-zero、backup/archive hash、restore rehearsal 或精确非 LLM approval 时必须 fail closed。
 
+可执行审计只读打开 SQLite，并把数据/影子 parity 与 destructive delete authorization 分开：
+
+```bash
+scripts/audit-automation-consolidation.mjs \
+  --db <runner.db> \
+  --report /tmp/xw-p11-04/automation-consolidation-audit.json
+```
+
+报告检查未终结 Cron/Nightly、Cron/PI claim、active Delegation、running Heartbeat、未送达 completion watch、
+PI Automation 与 completion-watch W1 shadow drift/orphan，并生成包含 parent/item mapping 与 SHA-256 的 Nightly
+只读 archive candidate。该 candidate 不是 fresh backup，也不代表 restore rehearsal 已完成；报告固定
+`destructive_delete_authorized=false`，不会接受 LLM 文本作为 formal-release consumer-zero、P11.09 或 G7 证据。
+
 ## 8. API 覆盖
 
 可执行清单逐项覆盖 automation family 的 **34** 条 route：统一 Automation 7、Cron 4、PI Automation 5、delegation 7、heartbeat timeline 1、completion watch 3、project heartbeat/control 7；另对同样读写 `pi_automations` 的 3 条 source-policy compatibility route 做 exact-set comparison。测试还扫描全部非测试 TypeScript source，保证只有 `piAutomationCommands.ts` 能调用 legacy repository 的 create/update，新增直写会失败。
@@ -96,7 +110,7 @@ LLM 只能提议 Automation 或生成说明；状态变更、外部写、cutover
 
 ## 9. live records 抽样
 
-只读快照刷新于 `2026-07-19`：launchd runtime `v0.1.0-666-ga9c0649`，审计时 source HEAD `8af2789`；live DB 只以 SQLite readonly 打开，未修改 live state。
+只读快照刷新于 `2026-07-19`：launchd runtime `v0.1.0-672-g0a5f00e`，审计时 source HEAD `0a5f00e`；live DB 只以 SQLite readonly 打开，未修改 live state。
 
 | table | rows | status sample |
 | --- | ---: | --- |
