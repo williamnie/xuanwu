@@ -8,9 +8,9 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createAttentionInboxItem, createIntakeRun, getAttentionInboxItem } from "../db/repositories/intakeRuns.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
+import { getAutomation, getAutomationTrigger } from "../db/repositories/automations.ts";
 import { listImReplyDrafts, listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { getPiAction, getPiIssueCompletionWatch, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
-import { listPiAutomations } from "../db/repositories/piAutomations.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -315,7 +315,7 @@ describe("PI action proposals API", () => {
       const byType = new Map(actions.map((item) => [item.type, item]));
       const watchID = String(byType.get("watch_thread")?.result?.watch_id || "");
       const memoryID = String(byType.get("memory.create")?.result?.memory_id || "");
-      const reminderID = Number(byType.get("reminder.create")?.result?.automation_id || 0);
+      const reminderID = String(byType.get("reminder.create")?.result?.automation_id || "");
 
       expect(actions.map((item) => [item.type, item.execution_status, Boolean(item.pi_action_id)])).toEqual([
         ["ask_user", "completed", true],
@@ -329,12 +329,13 @@ describe("PI action proposals API", () => {
         target_chat_id: "oc_watch",
         items: [expect.objectContaining({ issue_id: watched.id })]
       });
-      expect(listPiAutomations(db).find((item) => item.id === reminderID)).toMatchObject({
-        mode: "draft",
+      expect(getAutomation(db, reminderID as `automation:${string}`)).toMatchObject({
+        mode: "propose",
         name: "跟进提醒",
         next_run_at: "2999-01-01T00:00:00.000Z",
-        trigger_type: "schedule"
+        status: "active"
       });
+      expect(getAutomationTrigger(db, reminderID as `automation:${string}`)).toMatchObject({ type: "manual" });
       expect(listPiMemoryItems(db).find((item) => item.id === memoryID)).toMatchObject({
         content: "用户偏好：提醒前先确认是否需要发群。",
         disabled: 1,

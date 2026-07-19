@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import PromptEditor from '../components/editor/PromptEditor';
 import IssueEditModal from '../components/IssueEditModal';
-import CronTasksPanel from '../components/CronTasksPanel';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
 import {
@@ -395,7 +394,6 @@ export default function Issues({
         </h1>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <CronTasksPanel compact defaultProjectId={filterProject} />
           <button
             className="btn btn-primary"
             style={{ padding: '6px 12px', fontSize: '0.78rem' }}

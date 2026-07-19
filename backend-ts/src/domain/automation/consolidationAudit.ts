@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { migrateLegacyCompletionWatches } from "../../db/repositories/automationWatches.ts";
@@ -14,6 +14,7 @@ export const AUTOMATION_CONSOLIDATION_AUDIT_CONTRACT = "xw.automation-consolidat
 export function auditAutomationConsolidation(input: {
   dbPath: string;
   reportPath: string;
+  sourceRoot?: string;
 }): Record<string, unknown> {
   const dbPath = resolve(required(input.dbPath, "dbPath"));
   const reportPath = resolve(required(input.reportPath, "reportPath"));
@@ -92,11 +93,15 @@ export function auditAutomationConsolidation(input: {
         blockers: [...healthBlockers, ...rowBlockers],
         passed: healthBlockers.length === 0 && rowBlockers.length === 0
       },
+      cutover_gate: cutoverGate(sqlite),
+      consumer_zero: sourceConsumerAudit(resolve(input.sourceRoot ?? process.cwd()), sqlite),
       db_path: dbPath,
       delete_gate: {
         blockers: [
-          "current authority is G0/W1 legacy-primary; W2 target-primary and G4 single-writer cutover are not established",
-          "W3 target-only restart, retry, missed-trigger, pause, watch-dedupe, and delivery recovery evidence is required",
+          cutoverMarkerExists(sqlite)
+            ? "G4 target-primary is established, but destructive delete is outside P11.04 and remains forbidden"
+            : "current authority is G0/W1 legacy-primary; W2 target-primary and G4 single-writer cutover are not established",
+          "W3 target-only runtime evidence must remain independently reviewable",
           "one formal release of zero legacy storage/API/scheduler consumers is required",
           "fresh backup, checksum archive, isolated restore, and retained rollback evidence are required",
           "P11.09 and exact non-LLM G7 destructive approval are required"
@@ -114,7 +119,9 @@ export function auditAutomationConsolidation(input: {
       },
       row_checks: rowChecks,
       shadow_parity: parity,
-      source_of_truth: "G0/W1 legacy carriers remain primary; automation_* rows are non-executing shadows or native target records",
+      source_of_truth: cutoverMarkerExists(sqlite)
+        ? "G4/W3 automation_definitions is the sole definition and scheduler authority; legacy tables are retained rollback/archive data"
+        : "G0/W1 legacy carriers remain primary; automation_* rows are non-executing shadows or native target records",
       target_checksum: tableChecksum(sqlite, AUTOMATION_TARGET_TABLES)
     };
     mkdirSync(dirname(reportPath), { recursive: true });
@@ -124,6 +131,69 @@ export function auditAutomationConsolidation(input: {
     sqlite.close();
   }
 }
+
+function cutoverGate(sqlite: Database) {
+  const marker = cutoverMarkerExists(sqlite);
+  const blockers = [
+    marker ? "" : "automation:cutover-739 marker is missing",
+    ...Object.entries({
+      active_or_paused_delegations: conditionalCount(sqlite, "pi_delegations", "status in ('active','paused')"),
+      claimed_cron_tasks: conditionalCount(sqlite, "cron_tasks", "claim_token<>''", "claim_token"),
+      claimed_pi_automations: conditionalCount(sqlite, "pi_automations", "lock_token<>''", "lock_token"),
+      nonterminal_cron_tasks: conditionalCount(sqlite, "cron_tasks", "status<>'done'"),
+      pi_automations: tableExists(sqlite, "pi_automations") ? count(sqlite, "select count(*) as count from pi_automations") : null,
+      running_heartbeat_runs: conditionalCount(sqlite, "pi_heartbeat_runs", "status='running'")
+    }).flatMap(([name, value]) => value === null ? [`${name} could not be checked`] : value > 0 ? [`${name}=${value}`] : [])
+  ].filter(Boolean);
+  return { phase: marker ? "G4/W3-target-only" : "G0/W1-legacy-primary", passed: blockers.length === 0, blockers };
+}
+
+function sourceConsumerAudit(sourceRoot: string, sqlite: Database) {
+  const checks = [
+    ["backend-ts/src/main.ts", ["sweepActivePiIssueCompletionWatches"]],
+    ["backend-ts/src/http/server.ts", ["attachPiIssueCompletionWatchObserver"]],
+    ["backend-ts/src/runner/piAutoManageScheduler.ts", [
+      "runDueCronTasks(", "runDuePiAutomations(", "runDelegationHeartbeatsOnce(", "queueReadyFeishuCompletionWatchNotifications("
+    ]],
+    ["backend-ts/src/http/readApiRoutes.ts", ["router.get(\"/api/cron-tasks\""]],
+    ["backend-ts/src/http/frontendCompatApi.ts", ["router.post(\"/api/cron-tasks\"", "router.patch(\"/api/cron-tasks/", "router.delete(\"/api/cron-tasks/"]],
+    ["backend-ts/src/http/piApi.ts", ["registerPiAutomationRoutes(", "registerPiDelegationRoutes(", "registerPiIssueCompletionWatchRoutes("]],
+    ["backend-ts/src/pi/heartbeatSignals.ts", ["from cron_tasks", "from pi_delegations"]],
+    ["backend-ts/src/pi/runnerIssueScheduleActions.ts", ["createCronTask("]],
+    ["frontend/src/api/automation.js", ["/api/cron-tasks", "/api/pi/automations"]],
+    ["frontend/src/api/assistant.js", ["/api/pi/delegations"]]
+  ] as const;
+  const matches: Array<{ file: string; pattern: string }> = [];
+  for (const [file, patterns] of checks) {
+    let source = "";
+    try { source = readFileSync(resolve(sourceRoot, file), "utf8"); } catch { matches.push({ file, pattern: "file_missing" }); continue; }
+    for (const pattern of patterns) if (source.includes(pattern)) matches.push({ file, pattern });
+  }
+  const markerAt = cutoverMarkerTimestamp(sqlite);
+  const usage = markerAt === "" ? null : count(sqlite, `select count(*) as count from pi_action_events
+    where event_type='compatibility.automation_legacy_used.v1' and created_at>=${sqlLiteral(markerAt)}`);
+  return {
+    compatibility_usage_since_cutover: usage,
+    cutover_observation_started_at: markerAt || null,
+    passed: matches.length === 0 && usage === 0,
+    source_matches: matches
+  };
+}
+
+function cutoverMarkerExists(sqlite: Database): boolean {
+  return tableExists(sqlite, "automation_definitions") && Boolean(sqlite.query(
+    "select id from automation_definitions where id='automation:cutover-739'"
+  ).get());
+}
+
+function cutoverMarkerTimestamp(sqlite: Database): string {
+  if (!tableExists(sqlite, "automation_events")) return "";
+  return String(sqlite.query<{ occurred_at: string }, []>(`select occurred_at from automation_events
+    where automation_id='automation:cutover-739' and event_type='automation.target_primary_cutover.v1'
+    order by occurred_at desc limit 1`).get()?.occurred_at ?? "");
+}
+
+function sqlLiteral(value: string): string { return `'${value.replaceAll("'", "''")}'`; }
 
 function shadowParity(sqlite: Database, dbPath: string, missingTables: string[]) {
   if (missingTables.length > 0) {

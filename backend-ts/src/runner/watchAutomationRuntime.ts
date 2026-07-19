@@ -17,6 +17,7 @@ import type { AutomationAudit } from "../domain/automation/contracts.ts";
 import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
+import { recordSupervisorCommitmentTerminalOutcome } from "../pi/supervisorCommitments.ts";
 
 export type WatchAutomationCycleResult = {
   cursor_advanced: number;
@@ -100,8 +101,11 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
       status: match.outcome === "timeout" ? "expired" : "satisfied"
     }, audit(watch, now, `terminal:${match.outcome}`));
     if (!["satisfied", "expired"].includes(terminal.status)) return false;
+    if (terminal.subject.kind === "issues" && terminal.condition.metadata?.original_condition) {
+      recordSupervisorCommitmentTerminalOutcome(db, terminal.automation_id);
+    }
     const intent = createPiNotificationIntent(db, {
-      conversation_id: terminal.notification_target.thread_id || terminal.notification_target.chat_id,
+      conversation_id: terminal.notification_target.thread_id || terminal.notification_target.chat_id || watchOriginConversation(terminal),
       decision: "send_now",
       id: intentID(watch),
       idempotency_key: `automation_watch_terminal:${watch.automation_id}`,
@@ -124,6 +128,10 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
       target_message_id: terminal.notification_target.message_id,
       target_thread_id: terminal.notification_target.thread_id
     });
+    if (!hasExternalNotificationTarget(terminal)) {
+      recordAutomationWatchNotificationQueued(db, terminal, audit(watch, now, "notification-intent-ready"));
+      return true;
+    }
     const queued = queueExistingNotificationIntent(db, {
       content: notificationText(watch, match),
       intent,
@@ -142,6 +150,19 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
     return true;
   });
   return write.immediate();
+}
+
+function hasExternalNotificationTarget(watch: AutomationWatch): boolean {
+  return Boolean(
+    watch.notification_target.chat_id ||
+    watch.notification_target.message_id ||
+    watch.notification_target.thread_id
+  );
+}
+
+function watchOriginConversation(watch: AutomationWatch): string {
+  const value = watch.condition.metadata?.origin_conversation_id;
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function reconcileDeliveredWatches(

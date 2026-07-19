@@ -18,7 +18,7 @@ import { useRunnerBrandState } from './useRunnerBrandState.js';
 import { APP_VERSION } from '../version';
 import {
   selectBackendOnline,
-  selectCronTasks,
+  selectAutomations,
   selectIssues,
   selectProjects,
   useDataStore,
@@ -154,7 +154,7 @@ function ApiStatus() {
 }
 
 function ProductNavBadge({ active, page }) {
-  if (page === 'automations') return <CronCountBadge active={active} />;
+  if (page === 'automations') return <AutomationCountBadge active={active} />;
   if (page === 'projects') return <ProjectCountBadge active={active} />;
   return null;
 }
@@ -169,10 +169,10 @@ function ProjectCountBadge({ active }) {
   );
 }
 
-function CronCountBadge({ active }) {
-  const cronTasks = useDataStore(selectCronTasks);
-  const activeCount = cronTasks.filter(task => task.status === 'active').length;
-  const label = activeCount > 0 ? activeCount : cronTasks.length;
+function AutomationCountBadge({ active }) {
+  const automations = useDataStore(selectAutomations);
+  const activeCount = automations.filter(item => item.status === 'active').length;
+  const label = activeCount > 0 ? activeCount : automations.length;
 
   return (
     <span className="nav-badge" style={{ background: active ? 'var(--primary-glow)' : undefined, color: active ? 'var(--primary)' : undefined }}>

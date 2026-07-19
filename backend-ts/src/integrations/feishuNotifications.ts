@@ -39,7 +39,6 @@ import {
   queueFeishuIssueStatusNotification,
   type QueueResult
 } from "./feishuLifecycleNotifications.ts";
-import { queueReadyFeishuCompletionWatchNotifications } from "./feishuCompletionWatchNotifications.ts";
 
 const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
 const MEMORY_NOTIFY_TYPE = "feishu_memory_candidate_notification";
@@ -68,8 +67,6 @@ export function attachFeishuNotificationObservers(input: {
           suppressDirectStart: shouldSuppressLifecycleStartNotification(input.database, event.issueId)
         });
         dispatchIfQueued(input, result);
-        const watches = queueReadyFeishuCompletionWatchNotifications(input.database);
-        dispatchIfNotificationsQueued(input, watches);
       }
       if (isPiIssueStartEvent(input.database, event)) {
         const result = queueFeishuIssueStatusNotification(input.database, event.issueId ?? 0, {
@@ -116,16 +113,6 @@ function dispatchIfQueued(input: {
   sender?: FeishuMessageSender;
 }, result: QueueResult): void {
   if (!result.queued || !input.config) return;
-  const sender = input.sender ?? createFeishuMessageClient({ config: input.config });
-  void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
-}
-
-function dispatchIfNotificationsQueued(input: {
-  config?: FeishuConnectorConfig;
-  database: RunnerDatabase;
-  sender?: FeishuMessageSender;
-}, result: { queued: number }): void {
-  if (result.queued <= 0 || !input.config) return;
   const sender = input.sender ?? createFeishuMessageClient({ config: input.config });
   void dispatchFeishuOutbox({ config: input.config, database: input.database, sender }).catch(() => {});
 }

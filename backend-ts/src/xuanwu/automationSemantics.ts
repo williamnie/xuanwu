@@ -34,56 +34,53 @@ export const AUTOMATION_CARRIERS = [
     id: "cron",
     role: "trigger",
     tables: ["cron_tasks", "cron_task_schedules"],
-    current_authority: "cron_tasks owns definition/lifecycle/claim/result; cron_task_schedules owns schedule policy until cutover",
-    target_semantics: "Automation schedule trigger and compatibility command adapter",
+    current_authority: "automation_definitions owns trigger/lifecycle and automation_runs owns claim/result; cron tables are frozen rollback/archive carriers",
+    target_semantics: "Automation schedule trigger and redirect-only compatibility surface",
     disposition: "migrate",
     duplicate_with: ["pi_automation_schedule", "delegation_heartbeat_schedule"],
     rollback: "Before G4 disable target shadow/read and continue cron_tasks; after G4 stop target writer and replay the audited cutover delta before restoring cron writes.",
     final_delete_gate: "P11.04/P11.09, no active task or claim, schedule/quiet-hours/missed-run/restart parity, one release with zero storage consumers, archive plus restore rehearsal, and non-LLM G7 approval.",
     source_files: [
-      "backend-ts/src/runner/cronExecutor.ts",
-      "backend-ts/src/runner/scheduleActionDispatcher.ts",
-      "backend-ts/src/schedule/cronSchedule.ts",
-      "backend-ts/src/db/repositories/cronTaskClaims.ts",
-      "backend-ts/src/db/repositories/cronTaskResults.ts"
+      "backend-ts/src/runner/automationScheduler.ts",
+      "backend-ts/src/pi/runnerIssueScheduleActions.ts",
+      "backend-ts/src/http/automationLegacyRedirectsApi.ts",
+      "scripts/migrate-automation-target-primary.mjs"
     ]
   },
   {
     id: "pi_automation",
     role: "execution",
     tables: ["pi_automations"],
-    current_authority: "pi_automations is a legacy definition, cursor, retry, claim, and result authority until G4",
+    current_authority: "automation_definitions and automation_runs/events are target-primary; pi_automations is frozen rollback/archive data",
     target_semantics: "automation_definitions plus automation_runs/events is the only target Automation authority",
     disposition: "migrate",
     duplicate_with: ["cron", "delegation"],
     rollback: "Keep pi_automations dormant while legacy carriers are authoritative; a failed parity or recovery gate restores legacy reads and clears only rebuildable shadow rows by migration batch.",
     final_delete_gate: "P11.04/P11.09, W2/G4 target single-writer plus W3 restart/retry parity, one release with zero direct storage consumers, archive/restore evidence, and non-LLM G7 approval.",
     source_files: [
-      "backend-ts/src/runner/piAutomationScheduler.ts",
-      "backend-ts/src/pi/automationRunner.ts",
-      "backend-ts/src/db/repositories/piAutomations.ts",
-      "backend-ts/src/db/repositories/piAutomationScheduler.ts",
-      "backend-ts/src/db/repositories/piAutomationCommands.ts",
-      "backend-ts/src/db/repositories/piAutomationShadow.ts",
-      "backend-ts/src/http/piAutomationsApi.ts",
-      "backend-ts/src/http/piSourcePoliciesApi.ts",
-      "backend-ts/src/pi/nonIssueProposalActions.ts"
+      "backend-ts/src/runner/automationScheduler.ts",
+      "backend-ts/src/db/repositories/automations.ts",
+      "backend-ts/src/http/automationApi.ts",
+      "backend-ts/src/http/automationLegacyRedirectsApi.ts",
+      "backend-ts/src/pi/nonIssueProposalActions.ts",
+      "scripts/migrate-automation-target-primary.mjs"
     ]
   },
   {
     id: "delegation",
     role: "trigger",
     tables: ["pi_delegations"],
-    current_authority: "pi_delegations owns standing-order intent, authorization scope, lifecycle, and next heartbeat cursor",
+    current_authority: "continuous automation_definitions owns standing-order trigger/lifecycle; pi_delegations is frozen rollback/archive data",
     target_semantics: "Automation standing order with continuous/scheduled trigger and the same deterministic permission gate",
     disposition: "migrate",
     duplicate_with: ["cron", "pi_automation"],
     rollback: "Before G4 keep delegation lifecycle/cursor authoritative; after G4 legacy delegation routes translate to the sole Automation command and never resume legacy writes concurrently.",
     final_delete_gate: "P11.04/P11.09, no active/paused delegation, authorization mapping parity, heartbeat cursor/restart parity, zero direct consumers for one release, and G7 backup/approval evidence.",
     source_files: [
-      "backend-ts/src/pi/heartbeatOrchestrator.ts",
-      "backend-ts/src/db/repositories/pi/delegations.ts",
-      "backend-ts/src/http/piDelegationsApi.ts"
+      "backend-ts/src/runner/standingOrderRuntime.ts",
+      "backend-ts/src/runner/automationScheduler.ts",
+      "backend-ts/src/http/automationLegacyRedirectsApi.ts",
+      "scripts/migrate-automation-target-primary.mjs"
     ]
   },
   {
@@ -106,17 +103,17 @@ export const AUTOMATION_CARRIERS = [
     id: "completion_watch",
     role: "observation",
     tables: ["pi_issue_completion_watches", "pi_issue_completion_watch_items"],
-    current_authority: "completion-watch header/items own condition, target snapshot, idempotency key, and notification progress",
+    current_authority: "automation_watches owns condition, targets, idempotency and delivery progress; legacy watch tables are rollback/archive data",
     target_semantics: "Automation completion condition/observation attached to authoritative Work; never execution or completion authority",
     disposition: "migrate",
     duplicate_with: ["supervisor_commitment", "notification_delivery"],
     rollback: "Keep legacy watch observer and startup sweep authoritative through W1; target observation may shadow-compare but must not send a second notification.",
     final_delete_gate: "P11.04/P11.09, zero active/satisfied-undelivered watches, item/status/idempotency/restart parity, notification dedupe proof, one release zero direct consumers, archive/restore, and G7 approval.",
     source_files: [
-      "backend-ts/src/pi/issueCompletionWatchEvaluator.ts",
-      "backend-ts/src/pi/issueCompletionWatchActions.ts",
-      "backend-ts/src/db/repositories/pi/issueCompletionWatches.ts",
-      "backend-ts/src/db/repositories/pi/issueCompletionWatchAdmin.ts"
+      "backend-ts/src/runner/watchAutomationRuntime.ts",
+      "backend-ts/src/pi/issueCompletionAutomation.ts",
+      "backend-ts/src/db/repositories/automationWatches.ts",
+      "backend-ts/src/http/automationLegacyRedirectsApi.ts"
     ]
   },
   {
@@ -168,6 +165,7 @@ export const AUTOMATION_STATUS_MAPPINGS = [
 ] as const satisfies readonly AutomationStatusMapping[];
 
 export const AUTOMATION_API_ROUTES = [
+  { method: "GET", path: "/api/compatibility/automations", role: "observation", write: false },
   { method: "GET", path: "/api/automations", role: "observation", write: false },
   { method: "POST", path: "/api/automations", role: "definition", write: true },
   { method: "GET", path: "/api/automations/:id", role: "observation", write: false },
@@ -204,8 +202,8 @@ export const AUTOMATION_API_ROUTES = [
   { method: "POST", path: "/api/projects/:id/pi/run-once", role: "trigger", write: true }
 ] as const satisfies readonly AutomationRoute[];
 
-// These routes are classified as capability-policy in the product inventory, but they
-// read or mutate the same legacy pi_automations rows and therefore belong to the W1 seam inventory.
+// These method/path contracts remain visible for one release, but all mutation
+// routes are permanent redirects and never read or write pi_automations.
 export const PI_AUTOMATION_LEGACY_STORAGE_ROUTES = [
   { method: "GET", path: "/api/pi/source-policies", role: "observation", write: false },
   { method: "POST", path: "/api/pi/source-policies", role: "definition", write: true },
@@ -213,25 +211,22 @@ export const PI_AUTOMATION_LEGACY_STORAGE_ROUTES = [
 ] as const satisfies readonly AutomationRoute[];
 
 export const PI_AUTOMATION_LEGACY_WRITER_SOURCES = [
-  "backend-ts/src/http/piAutomationsApi.ts",
-  "backend-ts/src/http/piSourcePoliciesApi.ts",
-  "backend-ts/src/pi/nonIssueProposalActions.ts"
 ] as const;
 
 export const AUTOMATION_MIGRATION_CONTRACT = {
-  current_gate: "G0",
-  current_window: "W1",
-  target_authority: "automation_definitions plus automation_runs/events and one governed Automation command/claim pipeline; pi_automations remains legacy-primary only until G4",
-  dual_read: "W1 legacy-primary shadow comparison, then W2 target-primary deterministic comparison/fallback; W1+W2 is at most two consecutive formal releases.",
-  dual_write: "Default forbidden. W1 permits only idempotent target shadow writes owned by a migration batch; at G4/W2 target becomes the sole writer and legacy APIs translate to the same command.",
-  rollback: "Parity failure keeps/restores the legacy carrier, disables shadow/target read, and blocks the next gate. After G4, stop the target writer and replay only the audited cutover delta before restoring legacy authority.",
+  current_gate: "G4",
+  current_window: "W3",
+  target_authority: "automation_definitions plus automation_runs/events, automation_watches, and one governed Automation command/claim pipeline are the sole target-primary authority",
+  dual_read: "none; legacy routes redirect without reading legacy storage",
+  dual_write: "forbidden; target is the sole writer and retained legacy storage is rollback/archive only",
+  rollback: "Stop the target release, restore the retained pre-cutover SQLite backup, verify the isolated restore checksum, and deploy the previous release; never enable both writers.",
   permission: "LLM output may propose an Automation but cannot approve a state change, external write, cutover, rollback, or destructive action; deterministic policy/Approval and audit are mandatory.",
   notification_boundary: "A watch observes authoritative Work; Attention records a need; Approval authorizes; Notification/outbox delivers. None of them proves Work completion or becomes Automation execution authority.",
   migration_order: [
     "Freeze carrier IDs, status/cursor mapping, writer/consumer inventory, and live baseline.",
     "Route new commands through one deterministic Automation command seam while every legacy carrier remains the sole storage authority.",
     "Add only reversible target mappings, then backfill and shadow-compare definitions, cursors, status, claims, and watch idempotency during W1.",
-    "In W2 switch reads first; after parity and non-LLM approval, switch to one target writer and make legacy APIs translation-only.",
+    "In W2/G4 switch to one target writer and make legacy APIs permanent redirect-only without a dual-write window.",
     "Run W3 target-only through restart, missed-trigger, retry, pause, watch-dedupe, and external-delivery recovery; prove zero legacy storage consumers.",
     "Only P11/G7 may remove compatibility code or tables after archive, fresh backup, isolated restore, and item-specific delete gates."
   ]
@@ -250,10 +245,6 @@ export const AUTOMATION_TARGET_TABLES = [
 ] as const;
 
 export const AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS = [
-  { carrier: "cron", entrypoint: "runDueCronTasks", role: "legacy_writer" },
-  { carrier: "pi_automation", entrypoint: "runDuePiAutomations", role: "legacy_writer" },
   { carrier: "target_automation", entrypoint: "runDueAutomations", role: "target_writer" },
-  { carrier: "delegation_heartbeat", entrypoint: "runDelegationHeartbeatsOnce", role: "legacy_writer" },
-  { carrier: "automation_watch", entrypoint: "runWatchAutomationsOnce", role: "target_observer" },
-  { carrier: "completion_watch", entrypoint: "queueReadyFeishuCompletionWatchNotifications", role: "legacy_delivery_consumer" }
+  { carrier: "automation_watch", entrypoint: "runWatchAutomationsOnce", role: "target_observer" }
 ] as const;

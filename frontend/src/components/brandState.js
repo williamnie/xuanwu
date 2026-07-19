@@ -12,7 +12,7 @@ const NIGHT_START_HOUR = 22;
 const NIGHT_END_HOUR = 8;
 const ACTIVE_ISSUE_STATUS = 'in_progress';
 const ACTIVE_LOOP_STATUS = 'running';
-const ACTIVE_CRON_STATUS = 'active';
+const ACTIVE_AUTOMATION_STATUS = 'active';
 const GUARDING_PATTERN = /verifier|verify|guardian|guard|supervisor|quality|gate|验证|守护|门禁/i;
 
 export function normalizeBrandState(state) {
@@ -23,7 +23,7 @@ export function resolveRunnerBrandState({
   backendOnline = true,
   issues = [],
   projects = [],
-  cronTasks = [],
+  automations = [],
   now = new Date(),
 } = {}) {
   if (!backendOnline) return BRAND_STATES.offline;
@@ -35,7 +35,7 @@ export function resolveRunnerBrandState({
 
   if (isNightTime(now)) return BRAND_STATES.sleeping;
   if (safeItems(projects).some(isMonitoringProject)) return BRAND_STATES.monitor;
-  if (safeItems(cronTasks).some(isActiveCronTask)) return BRAND_STATES.monitor;
+  if (safeItems(automations).some(isActiveAutomation)) return BRAND_STATES.monitor;
   return BRAND_STATES.idle;
 }
 
@@ -61,6 +61,6 @@ function isMonitoringProject(project) {
   return project?.loop_status === ACTIVE_LOOP_STATUS || Number(project?.auto_run) === 1;
 }
 
-function isActiveCronTask(task) {
-  return task?.status === ACTIVE_CRON_STATUS;
+function isActiveAutomation(automation) {
+  return automation?.status === ACTIVE_AUTOMATION_STATUS;
 }

@@ -4,7 +4,6 @@ import { basename, extname, isAbsolute, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunnerDatabase } from "../db/database.ts";
 import { createAgentProfile, deleteAgentProfile, updateAgentProfile } from "../db/repositories/agentProfiles.ts";
-import { createCronTask, deleteCronTask, updateCronTask } from "../db/repositories/cronTaskWrites.ts";
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
@@ -63,11 +62,6 @@ export function createFrontendCompatHandlers(context: FrontendCompatContext) {
     capabilities: () => ({ skills: listSkillRegistry(), plugins: [] }),
     commands: {
       execute: (body: Record<string, unknown>) => executeCommand(context, body)
-    },
-    cronTasks: {
-      create: (body: Record<string, unknown>) => createCronTask(context.database, body),
-      delete: (id: number) => deleteCronTask(context.database, id),
-      update: (id: number, body: Record<string, unknown>) => updateCronTask(context.database, id, body)
     },
     issueTemplates: {
       create: (body: Record<string, unknown>) => createIssueTemplate(context.database, body),

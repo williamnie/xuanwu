@@ -26,6 +26,10 @@ describe("read API route contracts", () => {
             "responsibility": "domain",
           },
           {
+            "id": "automation-legacy-redirects",
+            "responsibility": "legacy-compatibility",
+          },
+          {
             "id": "command-center",
             "responsibility": "projection",
           },
@@ -161,7 +165,6 @@ describe("read API route contracts", () => {
       [
         "DELETE /api/issues/:id",
         "GET /api/agent-profiles",
-        "GET /api/cron-tasks",
         "GET /api/issue-templates",
         "GET /api/issues",
         "GET /api/issues/:id",
@@ -201,7 +204,6 @@ describe("read API route contracts", () => {
     expect(captureRoutes(registerFrontendCompatRoutes)).toMatchInlineSnapshot(`
       [
         "DELETE /api/agent-profiles/:id",
-        "DELETE /api/cron-tasks/:id",
         "DELETE /api/issue-templates/:id",
         "DELETE /api/projects/:id",
         "GET /api/capabilities",
@@ -213,13 +215,11 @@ describe("read API route contracts", () => {
         "GET /api/session-images",
         "GET /api/uploads/:id/content",
         "PATCH /api/agent-profiles/:id",
-        "PATCH /api/cron-tasks/:id",
         "PATCH /api/issue-templates/:id",
         "PATCH /api/projects",
         "POST /api/agent-profiles",
         "POST /api/codex/approvals/:id/resolve",
         "POST /api/commands",
-        "POST /api/cron-tasks",
         "POST /api/issue-templates",
         "POST /api/issues/:id/verifier-report",
         "POST /api/notifications/:id/read",

@@ -2,10 +2,10 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import { isPiHeartbeatPaused } from "../db/repositories/pi.ts";
 import type { EventBus } from "../events/bus.ts";
-import { queueReadyFeishuCompletionWatchNotifications } from "../integrations/feishuCompletionWatchNotifications.ts";
 import { queueReadyFeishuDigestNotifications } from "../integrations/feishuLifecycleNotifications.ts";
 import type { PiGuardianDirectFeishuOptions } from "../integrations/feishuGuardianAlerts.ts";
 import type { FeishuMessageClient } from "../integrations/feishuClient.ts";
+import { createFeishuMessageClient } from "../integrations/feishuClient.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { runDigestFlushSchedulerOnce } from "../pi/digestFlushScheduler.ts";
 import { queueDailyNotificationDigests, type DailyDigestResult } from "../notifications/dailyDigest.ts";
@@ -27,14 +27,7 @@ import {
   type PiGuardianWatchdogSummary
 } from "../pi/guardianWatchdog.ts";
 import { resolveRecoveredAlerts } from "../pi/guardianWatchdogMaintenance.ts";
-import { runDelegationHeartbeatsOnce } from "../pi/heartbeatOrchestrator.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
-import { runDueCronTasks } from "./cronExecutor.ts";
-import {
-  runDuePiAutomations,
-  type PiAutomationExecutor,
-  type PiAutomationSchedulerResult
-} from "./piAutomationScheduler.ts";
 import {
   runDueAutomations,
   type AutomationExecutor,
@@ -42,6 +35,7 @@ import {
 } from "./automationScheduler.ts";
 import { createNativeAutomationExecutor } from "./automationRuntime.ts";
 import { runWatchAutomationsOnce } from "./watchAutomationRuntime.ts";
+import { dispatchFeishuOutbox } from "../pi/imReplyOutboxDispatcher.ts";
 import {
   signalOpenRunTerminalProviderErrors,
   type ProviderTerminalBackfillSummary
@@ -56,7 +50,7 @@ export type PiAutoManageProjectCycle = (input: PiAutoManageProjectCycleInput) =>
 export type PiAutoManageCycleResult = { projects: number; skipped: number; started: number };
 export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   automationCore: AutomationSchedulerResult;
-  automations: PiAutomationSchedulerResult;
+  automations: { executed: number; failed: number; scanned: number; skipped: number };
   cron: { executed: number; failed: number; scanned: number; skipped: number };
   delegations: { scanned: number; skipped: number; started: number };
   digestFlush: { flushed: number; scanned: number; skipped: number };
@@ -80,7 +74,6 @@ export type PiAutoManageCycleInput = {
   guardianDirectFeishuSender?: FeishuMessageClient;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   runAutomationCore?: AutomationExecutor;
-  runAutomation?: PiAutomationExecutor;
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
   watchdogNow?: Date | string;
@@ -171,24 +164,16 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   const supervisor = input.runSupervisor === false
     ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
     : await runPiIssueSupervisorSchedulerOnce({ database: input.database, providers: input.providers });
-  const cron = await runDueCronTasks({
-    bus: input.bus,
-    codexSessionsDir: input.codexSessionsDir,
-    config: input.config,
-    database: input.database,
-    runProjectCycle: input.runProjectCycle
-  });
-  const automations = await runDuePiAutomations({
-    database: input.database,
-    executeAutomation: input.runAutomation,
-    now: optionalDate(input.watchdogNow)
-  });
+  // W3 target-only cutover: compatibility result fields stay stable for one
+  // release, but legacy Cron/PI/delegation schedulers are no longer invoked.
+  const cron = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
+  const automations = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
   const automationCore = await runDueAutomations({
     database: input.database,
     executeAutomation: input.runAutomationCore ?? createNativeAutomationExecutor(input),
     now: optionalDate(input.watchdogNow)
   });
-  const delegations = await runDelegationHeartbeatsOnce({ database: input.database });
+  const delegations = { scanned: 0, skipped: 0, started: 0 };
   const providerTerminalSignals = signalOpenRunTerminalProviderErrors(input.database);
   const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
   const guardianActionDispatch = await dispatchApprovedGuardianActions({
@@ -205,10 +190,18 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
   resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
-  runWatchAutomationsOnce(input.database, { now: input.watchdogNow });
+  const watchResult = runWatchAutomationsOnce(input.database, { now: input.watchdogNow });
+  if (watchResult.queued > 0 && input.config) {
+    await dispatchFeishuOutbox({
+      config: input.config.integrations.feishu,
+      database: input.database,
+      now: optionalDate(input.watchdogNow),
+      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: input.config.integrations.feishu })
+    });
+  }
   const dailyDigestNotifications = queueDailyNotificationDigests(input.database, { now: optionalDate(input.watchdogNow) });
   const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
-  const completionWatchNotifications = queueReadyFeishuCompletionWatchNotifications(input.database);
+  const completionWatchNotifications = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
   const issueWatchdog = await runAutoRunIssueWatchdogOnce({
     bus: input.bus,
     database: input.database,

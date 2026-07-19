@@ -16,7 +16,6 @@ export function registerCoreReadRoutes(router: Router, context: ReadApiContext):
 
 function registerIssuesPageAuxRoutes(router: Router, handlers: ReadApiDomainHandlers): void {
   router.get("/api/agent-profiles", () => json(handlers.auxiliary.listAgentProfiles()));
-  router.get("/api/cron-tasks", () => json(handlers.auxiliary.listCronTasks()));
   router.get("/api/issue-templates", () => json(handlers.auxiliary.listIssueTemplates()));
 }
 

@@ -35,7 +35,7 @@ const USER_VISIBLE_SOURCES = [
   "backend-ts/src/pi/repoContextPack.ts",
   "backend-ts/src/pi/runnerActionTools.ts",
   "backend-ts/src/pi/supervisorCommitments.ts",
-  "backend-ts/src/runner/scheduleActionDispatcher.ts",
+  "backend-ts/src/runner/automationWorkRunExecutor.ts",
   "backend-ts/src/runner/watchAutomationRuntime.ts"
 ];
 const CURRENT_PRODUCT_DOCS = [

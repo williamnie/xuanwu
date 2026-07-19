@@ -1,10 +1,9 @@
 import { projectsApi } from '../api/projects.js';
 import { workApi } from '../api/work.js';
-import { automationApi } from '../api/automation.js';
+import { nativeAutomationsApi } from '../api/nativeAutomations.js';
 import { create } from 'zustand';
 import { clearAuthToken } from '../api/authToken';
 import {
-  sameCronTasks,
   sameGuardianAlerts,
   sameIssueTemplates,
   sameIssues,
@@ -27,9 +26,9 @@ const DATA_SLICE_CONFIG = {
     same: sameIssueTemplates,
     fallback: [],
   },
-  cronTasks: {
-    fetch: () => automationApi.getCronTasks(),
-    same: sameCronTasks,
+  automations: {
+    fetch: async () => (await nativeAutomationsApi.list()).automations || [],
+    same: (left, right) => JSON.stringify(left) === JSON.stringify(right),
     fallback: [],
   },
 };
@@ -67,7 +66,7 @@ export const useDataStore = create((set, get) => ({
   projects: [],
   issues: [],
   issueTemplates: [],
-  cronTasks: [],
+  automations: [],
   guardianAlerts: [],
   loading: true,
   backendOnline: false,
@@ -135,7 +134,7 @@ export const useDataStore = create((set, get) => ({
 export const selectProjects = (state) => state.projects;
 export const selectIssues = (state) => state.issues;
 export const selectIssueTemplates = (state) => state.issueTemplates;
-export const selectCronTasks = (state) => state.cronTasks;
+export const selectAutomations = (state) => state.automations;
 export const selectGuardianAlerts = (state) => state.guardianAlerts;
 export const selectBackendOnline = (state) => state.backendOnline;
 export const selectLoading = (state) => state.loading;

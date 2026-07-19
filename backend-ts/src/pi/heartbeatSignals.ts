@@ -155,16 +155,28 @@ function projectPiPolicy(db: RunnerDatabase, projectID: string) {
 
 function cronSignals(db: RunnerDatabase, projectID: string, nowText: string) {
   return {
-    active: countRows(db, "select count(*) as count from cron_tasks where project_id=? and status='active'", [projectID]),
-    due: countRows(db, "select count(*) as count from cron_tasks where project_id=? and status='active' and next_run_at<>'' and next_run_at<=?", [projectID, nowText]),
-    total: countRows(db, "select count(*) as count from cron_tasks where project_id=?", [projectID])
+    active: countRows(db, `select count(*) as count from automation_definitions d
+      join automation_trigger_configs c on c.automation_id=d.id and c.version=d.active_trigger_version
+      where d.scope_kind='project' and d.scope_id=? and d.status='active' and c.trigger_type in ('cron','manual')`, [projectID]),
+    due: countRows(db, `select count(*) as count from automation_definitions d
+      join automation_trigger_configs c on c.automation_id=d.id and c.version=d.active_trigger_version
+      where d.scope_kind='project' and d.scope_id=? and d.status='active'
+        and c.trigger_type in ('cron','manual') and d.next_run_at is not null and d.next_run_at<=?`, [projectID, nowText]),
+    total: countRows(db, `select count(*) as count from automation_definitions d
+      join automation_trigger_configs c on c.automation_id=d.id and c.version=d.active_trigger_version
+      where d.scope_kind='project' and d.scope_id=? and c.trigger_type in ('cron','manual')`, [projectID])
   };
 }
 
 function delegationSignals(db: RunnerDatabase, projectID: string, nowText: string) {
   return {
-    active: countRows(db, "select count(*) as count from pi_delegations where project_id=? and status='active'", [projectID]),
-    due: countRows(db, "select count(*) as count from pi_delegations where project_id=? and status='active' and (next_heartbeat_at='' or next_heartbeat_at<=?)", [projectID, nowText])
+    active: countRows(db, `select count(*) as count from automation_definitions d
+      join automation_trigger_configs c on c.automation_id=d.id and c.version=d.active_trigger_version
+      where d.scope_kind='project' and d.scope_id=? and d.status='active' and c.trigger_type='continuous'`, [projectID]),
+    due: countRows(db, `select count(*) as count from automation_definitions d
+      join automation_trigger_configs c on c.automation_id=d.id and c.version=d.active_trigger_version
+      where d.scope_kind='project' and d.scope_id=? and d.status='active' and c.trigger_type='continuous'
+        and d.next_run_at is not null and d.next_run_at<=?`, [projectID, nowText])
   };
 }
 

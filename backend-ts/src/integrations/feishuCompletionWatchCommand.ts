@@ -1,10 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue, listIssues, type Issue } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
-import {
-  createPiIssueCompletionWatch,
-  ISSUE_COMPLETION_TERMINAL_STATUSES
-} from "../db/repositories/pi.ts";
+import { ISSUE_COMPLETION_TERMINAL_STATUSES } from "../db/repositories/pi.ts";
+import { createIssueCompletionAutomation as createPiIssueCompletionWatch } from "../pi/issueCompletionAutomation.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 import type { FeishuConversationRoute } from "./feishuConversationRouting.ts";
 import type { FeishuProjectContextResult } from "./feishuProjectContext.ts";

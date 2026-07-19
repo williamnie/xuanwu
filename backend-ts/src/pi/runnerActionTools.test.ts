@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listCronTasks } from "../db/repositories/cronTasks.ts";
+import { listAutomations } from "../db/repositories/automations.ts";
 import type { AgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
@@ -592,7 +592,7 @@ describe("PI runner action tools", () => {
         next_run_at: "2999-01-01T00:00:00.000Z",
         rationale: "user picked later"
       }) as { action_id: string; decision: string; status: string };
-      const cron = listCronTasks(fixture.db)[0];
+      const automation = listAutomations(fixture.db).find((item) => item.id.startsWith("automation:issue-"));
 
       expect(result).toMatchObject({ decision: "execute", status: "completed" });
       expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
@@ -602,14 +602,13 @@ describe("PI runner action tools", () => {
         issue_id: issueID,
         status: "completed"
       });
-      expect(cron).toMatchObject({
-        action: "enqueue_issues",
-        mode: "once",
+      expect(automation).toMatchObject({
+        mode: "execute_allowed",
         next_run_at: "2999-01-01T00:00:00.000Z",
-        project_id: fixture.project.id,
+        owner: { kind: "project", project_id: fixture.project.id },
         status: "active"
       });
-      expect(JSON.parse(cron?.action_payload_json ?? "{}")).toEqual({ issue_ids: [issueID] });
+      expect(automation?.workflow_ref).toBe("workflow:implement@1");
       expect(getIssue(fixture.db, issueID)?.status).toBe("triage");
     } finally {
       await fixture.close();

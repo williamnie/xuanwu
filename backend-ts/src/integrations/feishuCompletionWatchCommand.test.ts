@@ -6,13 +6,12 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
-import { listActivePiIssueCompletionWatches } from "../db/repositories/pi.ts";
-import { evaluatePiIssueCompletionWatchesForIssue } from "../pi/issueCompletionWatchEvaluator.ts";
+import { listIssueCompletionAutomations } from "../pi/issueCompletionAutomation.ts";
+import { runWatchAutomationsOnce } from "../runner/watchAutomationRuntime.ts";
 import { buildFeishuConnectorConfig, normalizeFeishuMessageEvent } from "./feishu.ts";
 import { createFeishuAgentBridge } from "./feishuAgentBridge.ts";
 import type { FeishuTextMessageInput } from "./feishuClient.ts";
 import { ingestFeishuMessageEvent } from "./feishuIngest.ts";
-import { queueReadyFeishuCompletionWatchNotifications } from "./feishuCompletionWatchNotifications.ts";
 
 const tempRoots: string[] = [];
 
@@ -55,7 +54,7 @@ describe("Feishu completion watch command", () => {
       database
     ));
 
-    const watches = listActivePiIssueCompletionWatches(database);
+    const watches = listIssueCompletionAutomations(database, { status: "active" });
     expect(result).toEqual({ reason: "completion_watch_created", replied: true });
     expect(calls).toEqual([]);
     expect(watches).toHaveLength(1);
@@ -68,8 +67,8 @@ describe("Feishu completion watch command", () => {
 
     satisfyIssue(database, first.id, "done", "movo-web");
     satisfyIssue(database, second.id, "failed", "movo-web");
-    const queued = queueReadyFeishuCompletionWatchNotifications(database);
-    expect(queued).toMatchObject({ failed: 0, queued: 1 });
+    const queued = runWatchAutomationsOnce(database);
+    expect(queued).toMatchObject({ failed: 0, queued: 1, satisfied: 1 });
     expect(listSyncOutbox(database, { source: "feishu" })[0]).toMatchObject({
       target_chat_id: "oc_group",
       target_message_id: "om_watch_current_project"
@@ -102,7 +101,7 @@ describe("Feishu completion watch command", () => {
       database
     ));
 
-    const watch = listActivePiIssueCompletionWatches(database)[0];
+    const watch = listIssueCompletionAutomations(database, { status: "active" })[0];
     expect(result).toEqual({ reason: "completion_watch_created", replied: true });
     expect(watch?.project_id).toBe("demo");
     expect(watch?.items.map((item) => item.issue_id)).toEqual([first.id, second.id]);
@@ -136,7 +135,7 @@ describe("Feishu completion watch command", () => {
       database
     ));
 
-    const watch = listActivePiIssueCompletionWatches(database)[0];
+    const watch = listIssueCompletionAutomations(database, { status: "active" })[0];
     expect(result).toEqual({ reason: "completion_watch_created", replied: true });
     expect(watch?.project_id).toBe("movo-web");
     expect(watch?.items.map((item) => item.issue_id)).toEqual([target.id]);
@@ -171,7 +170,7 @@ describe("Feishu completion watch command", () => {
     ));
 
     expect(result).toEqual({ reason: "completion_watch_project_clarification", replied: true });
-    expect(listActivePiIssueCompletionWatches(database)).toHaveLength(0);
+    expect(listIssueCompletionAutomations(database, { status: "active" })).toHaveLength(0);
     expect(sent[0]?.text).toContain("多个项目还有未完成 issue");
     expect(sent[0]?.text).toContain("demo");
     expect(sent[0]?.text).toContain("movo-web");
@@ -204,7 +203,7 @@ describe("Feishu completion watch command", () => {
     ));
 
     expect(result).toEqual({ reason: "completion_watch_count_confirmation", replied: true });
-    expect(listActivePiIssueCompletionWatches(database)).toHaveLength(0);
+    expect(listIssueCompletionAutomations(database, { status: "active" })).toHaveLength(0);
     expect(sent[0]?.text).toContain("你说的是 2 个");
     expect(sent[0]?.text).toContain("当前找到 1 个");
     database.close();
@@ -256,15 +255,8 @@ function insertProject(db: RunnerDatabase, id: string, name: string): void {
   );
 }
 
-function satisfyIssue(db: RunnerDatabase, issueId: number, status: string, projectId: string): void {
+function satisfyIssue(db: RunnerDatabase, issueId: number, status: string, _projectId: string): void {
   updateIssue(db, issueId, { status });
-  evaluatePiIssueCompletionWatchesForIssue(db, {
-    eventID: `event-${issueId}-${status}`,
-    eventType: "issue.status_changed",
-    issueID: issueId,
-    projectID: projectId,
-    status
-  });
 }
 
 function fakeSender(sent: FeishuTextMessageInput[]) {

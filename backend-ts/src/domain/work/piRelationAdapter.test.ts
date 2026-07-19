@@ -6,13 +6,15 @@ import { join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
 import { createPiAction, createPiActionEvent } from "../../db/repositories/pi/actions.ts";
-import { createPiDelegation } from "../../db/repositories/pi/delegations.ts";
-import { createPiIssueCompletionWatch } from "../../db/repositories/pi/issueCompletionWatches.ts";
+import {
+  createIssueCompletionAutomation,
+  markIssueCompletionAutomationNotified,
+  markIssueCompletionAutomationSatisfied
+} from "../../pi/issueCompletionAutomation.ts";
 import { issueIDToWorkID } from "./issueAdapter.ts";
 import {
   listPiWorkRelations,
   piActionRelationLifecycle,
-  piDelegationRelationLifecycle,
   piWatchRelationLifecycle
 } from "./piRelationAdapter.ts";
 
@@ -29,21 +31,12 @@ afterEach(async () => {
 });
 
 describe("PI carrier to Work relation adapter", () => {
-  test("maps Action, Delegation and Completion Watch fixtures without creating duplicate Work", async () => {
+  test("maps Action and native Completion Watch fixtures without creating duplicate Work", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, PROJECT_ID);
       const first = createIssue(db, { project_id: PROJECT_ID, status: "todo", title: "First" });
       const second = createIssue(db, { project_id: PROJECT_ID, status: "done", title: "Second" });
-      createPiDelegation(db, {
-        allowed_actions_json: ["issue.comment"],
-        audit_source: "fixture-user",
-        id: "delegation-a",
-        project_id: PROJECT_ID,
-        scope_json: { issue_ids: [first.id, second.id] },
-        status: "active",
-        title: "Fixture delegation"
-      });
       createActionWithEvent(db, {
         delegation_id: "delegation-a",
         id: "action-completed",
@@ -56,7 +49,7 @@ describe("PI carrier to Work relation adapter", () => {
         issue_id: first.id,
         status: "executing"
       });
-      const watch = createPiIssueCompletionWatch(db, {
+      const watch = createIssueCompletionAutomation(db, {
         id: "watch-a",
         issue_ids: [first.id, second.id],
         origin_conversation_id: "conversation-a",
@@ -64,23 +57,18 @@ describe("PI carrier to Work relation adapter", () => {
         source_event_id: "external-event-a",
         source_message_id: "message-a"
       });
-      db.sqlite.run(
-        "update pi_issue_completion_watches set status='notified', updated_at=? where id=?",
-        ["2026-01-03T00:00:00Z", watch.id]
-      );
+      markIssueCompletionAutomationSatisfied(db, watch.id);
+      markIssueCompletionAutomationNotified(db, watch.id);
 
       const firstProjection = listPiWorkRelations(db, { project_id: PROJECT_ID });
       const replay = listPiWorkRelations(db, { project_id: PROJECT_ID });
       const counts = relationKindCounts(firstProjection.relations);
 
-      expect(counts).toEqual({ authorization: 2, execution: 2, observation: 2 });
+      expect(counts).toEqual({ execution: 2, observation: 2 });
       expect(firstProjection.unmapped).toEqual([]);
       expect(replay).toEqual(firstProjection);
       expect(new Set(firstProjection.relations.map((item) => item.relation_id)).size)
         .toBe(firstProjection.relations.length);
-      expect(firstProjection.relations.filter((item) =>
-        item.kind === "authorization" && item.work_id === issueIDToWorkID(first.id)
-      )).toHaveLength(1);
       expect(firstProjection.relations).toContainEqual(expect.objectContaining({
         kind: "execution",
         lifecycle: "completed",
@@ -98,24 +86,11 @@ describe("PI carrier to Work relation adapter", () => {
         source_ref: expect.objectContaining({ external_id: "action-executing" })
       }));
       expect(firstProjection.relations).toContainEqual(expect.objectContaining({
-        kind: "authorization",
-        lifecycle: "active",
-        source_ref: expect.objectContaining({
-          authority: "pi_delegations",
-          external_id: "delegation-a",
-          related_refs: expect.arrayContaining([
-            { authority: "pi_actions", external_id: "action-completed" },
-            { authority: "pi_actions", external_id: "action-executing" }
-          ])
-        }),
-        work_id: issueIDToWorkID(second.id)
-      }));
-      expect(firstProjection.relations).toContainEqual(expect.objectContaining({
         kind: "observation",
         lifecycle: "completed",
         source_ref: expect.objectContaining({
-          authority: "pi_issue_completion_watches",
-          external_id: "watch-a",
+          authority: "automation_watches",
+          external_id: watch.id,
           related_refs: expect.arrayContaining([
             { authority: "pi_conversations", external_id: "conversation-a" },
             { authority: "source_events", external_id: "external-event-a" },
@@ -174,16 +149,6 @@ describe("PI carrier to Work relation adapter", () => {
         project_id: "other-project",
         status: "denied"
       });
-      createPiDelegation(db, {
-        authorization_json: JSON.stringify({ scope: { issue_ids: [issue.id] } }),
-        id: "delegation-legacy-scope",
-        project_id: PROJECT_ID,
-        scope_json: {},
-        status: "paused"
-      });
-      insertEmptyWatch(db, "watch-without-items", PROJECT_ID);
-      db.sqlite.run("update pi_issue_completion_watches set status='old_watch' where id='watch-without-items'");
-
       const projection = listPiWorkRelations(db, { project_id: PROJECT_ID });
 
       expect(projection.relations).toContainEqual(expect.objectContaining({
@@ -198,20 +163,10 @@ describe("PI carrier to Work relation adapter", () => {
         source_ref: expect.objectContaining({ external_id: "action-payload-ref", source_status: "historic_state" }),
         work_id: issueIDToWorkID(issue.id)
       }));
-      expect(projection.relations).toContainEqual(expect.objectContaining({
-        kind: "authorization",
-        lifecycle: "paused",
-        source_ref: expect.objectContaining({ external_id: "delegation-legacy-scope" }),
-        work_id: issueIDToWorkID(issue.id)
-      }));
       expect(projection.unmapped).toEqual(expect.arrayContaining([
         expect.objectContaining({ reason: "missing_work_reference", source_ref: expect.objectContaining({ external_id: "action-no-work" }) }),
         expect.objectContaining({ candidate_issue_id: 999999, reason: "missing_work", source_ref: expect.objectContaining({ external_id: "action-missing-work" }) }),
-        expect.objectContaining({ candidate_issue_id: issue.id, reason: "project_mismatch", source_ref: expect.objectContaining({ external_id: "action-project-mismatch" }) }),
-        expect.objectContaining({
-          reason: "missing_work_reference",
-          source_ref: expect.objectContaining({ external_id: "watch-without-items", source_status: "old_watch" })
-        })
+        expect.objectContaining({ candidate_issue_id: issue.id, reason: "project_mismatch", source_ref: expect.objectContaining({ external_id: "action-project-mismatch" }) })
       ]));
       expect(rowCount(db, "works")).toBe(0);
       expect(rowCount(db, "work_relations")).toBe(0);
@@ -228,9 +183,6 @@ describe("PI carrier to Work relation adapter", () => {
       .map(piActionRelationLifecycle)).toEqual([
         "active", "completed", "failed", "failed", "paused", "cancelled", "legacy_unknown"
       ]);
-    expect(["active", "paused", "expired", "old"].map(piDelegationRelationLifecycle)).toEqual([
-      "active", "paused", "expired", "legacy_unknown"
-    ]);
     expect(["active", "satisfied", "notified", "cancelled", "failed", "old"]
       .map(piWatchRelationLifecycle)).toEqual([
         "active", "completed", "completed", "cancelled", "failed", "legacy_unknown"
@@ -240,12 +192,11 @@ describe("PI carrier to Work relation adapter", () => {
   test("keeps the compatibility window, rollback, deletion gates and non-migration list canonical", () => {
     const adr = readFileSync(resolve(REPO_ROOT, ADR_PATH), "utf8");
     for (const phrase of [
-      "execution / authorization / observation",
-      "legacy carrier 是唯一 source of truth",
+      "execution / observation",
+      "automation_watches` 是 observation relation 的唯一 source of truth",
       "不写 `works` 或 `work_relations`",
       "不迁移清单",
-      "W1",
-      "W2",
+      "W3/G4",
       "P11.03/P11.04/P11.05/P11.09",
       "LLM"
     ]) expect(adr).toContain(phrase);
@@ -288,16 +239,6 @@ function createActionWithEvent(
     project_id: PROJECT_ID,
     reason: "fixture audit"
   });
-}
-
-function insertEmptyWatch(db: RunnerDatabase, id: string, projectID: string): void {
-  const timestamp = "2026-01-01T00:00:00Z";
-  db.sqlite.run(
-    `insert into pi_issue_completion_watches
-      (id, idempotency_key, project_id, condition, status, created_at, updated_at)
-     values (?, ?, ?, '{}', 'active', ?, ?)`,
-    [id, `fixture:${id}`, projectID, timestamp, timestamp]
-  );
 }
 
 function relationKindCounts(relations: Array<{ kind: string }>): Record<string, number> {

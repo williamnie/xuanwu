@@ -34,8 +34,8 @@ export const AUTOMATION_API_AUTHORITY = {
   dual_write: "none",
   events: "automation_events+automation_run_events",
   runs: "automation_runs",
-  compatibility: "cron_tasks and pi_automations remain independent legacy authorities; this API does not dual-read or dual-write them",
-  rollback: "unregister /api/automations and restore the previous top-level Cron projection; native rows and audit history remain intact",
+  compatibility: "legacy Cron, PI Automation, delegation, and completion-watch routes permanently redirect here without legacy reads or writes",
+  rollback: "stop the target scheduler, restore the retained pre-cutover SQLite backup, and deploy the previous release; never enable both writers",
   final_delete_gate: "P11/G7 only after two releases with zero legacy producer/consumer, restart and retry parity, backup/restore evidence, and non-LLM destructive approval"
 } as const;
 
@@ -182,7 +182,8 @@ function triggerInput(value: unknown): AutomationTriggerConfig {
   if (type === "cron") return { type, config: { expression: requiredText(config.expression, "cron expression"), timezone: requiredText(config.timezone, "cron timezone") } };
   if (type === "continuous") return { type, config: { poll_interval_seconds: positiveInteger(config.poll_interval_seconds, "poll_interval_seconds") } };
   if (type === "webhook") return { type, config: { event_type: requiredText(config.event_type, "event_type"), ...(optionalText(config.secret_ref) ? { secret_ref: optionalText(config.secret_ref) } : {}) } };
-  return { type: "manual", config: {} };
+  const targetIssueID = Number(config.target_issue_id);
+  return { type: "manual", config: Number.isSafeInteger(targetIssueID) && targetIssueID > 0 ? { target_issue_id: targetIssueID } : {} };
 }
 
 function initialNextRun(trigger: AutomationTriggerConfig, now: Date): string | null {

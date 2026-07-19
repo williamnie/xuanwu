@@ -187,8 +187,13 @@ describe("Bun projects/issues read API", () => {
       expect(await templates.json()).toEqual([
         { id: "default", name: "Default", content: "{{issue.description}}", is_default: 1, created_at: "", updated_at: "" }
       ]);
-      expect(cron.status).toBe(200);
-      expect(await cron.json()).toEqual([]);
+      expect(cron.status).toBe(308);
+      expect(cron.headers.get("location")).toBe("/api/automations");
+      expect(await cron.json()).toMatchObject({
+        contract: "xw.automation-target-primary.v1",
+        deprecated: true,
+        location: "/api/automations"
+      });
       expect(profiles.status).toBe(200);
       expect(await profiles.json()).toEqual([]);
     } finally {

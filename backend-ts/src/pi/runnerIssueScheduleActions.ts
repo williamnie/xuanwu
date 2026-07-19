@@ -1,10 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { createCronTask } from "../db/repositories/cronTaskWrites.ts";
-import type { CronTask } from "../db/repositories/cronTasks.ts";
+import { createAutomation } from "../db/repositories/automations.ts";
 import { getIssue, type Issue } from "../db/repositories/issues.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { createPendingPiAction, type PiActionContext } from "./actionEngine.ts";
 import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
+import { IMPLEMENT_WORKFLOW_REF } from "../workflows/implement.ts";
 
 export type IssueScheduleEnqueueInput = {
   issue_id: number;
@@ -41,20 +41,34 @@ export function createIssueEnqueueCron(
   payload: Record<string, unknown>
 ): ScheduledIssueEnqueueResult {
   const issue = mustGetIssue(db, positiveID(payload.issue_id, "issue_id"));
-  const cron = createCronTask(db, {
-    action: "enqueue_issues",
-    action_payload_json: JSON.stringify({ issue_ids: [issue.id] }),
-    mode: "once",
-    name: cronName(issue, payload.name),
+  const now = new Date().toISOString();
+  const id = `automation:issue-${issue.id}-${crypto.randomUUID()}` as const;
+  const automation = createAutomation(db, {
+    id,
+    idempotency_namespace: `issue.schedule_enqueue:${issue.id}:${id}`,
+    mode: "execute_allowed",
+    name: automationName(issue, payload.name),
     next_run_at: requiredString(payload.next_run_at, "next_run_at"),
-    project_id: issue.project_id,
-    timezone: cleanString(payload.timezone) || "UTC"
+    owner: { kind: "project", project_id: issue.project_id },
+    permission_policy_ref: `project-policy:${issue.project_id}`,
+    status: "active",
+    trigger: { type: "manual", config: { target_issue_id: issue.id } },
+    trigger_created_by: "pi-action-dispatch",
+    workflow_ref: IMPLEMENT_WORKFLOW_REF
+  }, now, {
+    actor_id: "pi-action-dispatch",
+    actor_kind: "supervisor",
+    correlation_id: `issue.schedule_enqueue:${issue.id}`,
+    event_id: `automation-event:issue-schedule:${crypto.randomUUID()}`,
+    gate: { authority: "deterministic_policy", decision: "allow", policy_ref: "pi-action-approved-schedule:v1" },
+    occurred_at: now,
+    reason: `approved issue.schedule_enqueue for issue ${issue.id}`
   });
-  return scheduledResult(issue, cron);
+  return scheduledResult(issue, automation);
 }
 
 type ScheduledIssueEnqueueResult = {
-  cron_task_id: number;
+  automation_id: string;
   issue_id: number;
   next_run_at: string;
   status: string;
@@ -75,18 +89,18 @@ function schedulePayload(
 
 function scheduledResult(
   issue: Issue,
-  cron: CronTask
+  automation: ReturnType<typeof createAutomation>
 ): ScheduledIssueEnqueueResult {
   return {
-    cron_task_id: cron.id,
+    automation_id: automation.id,
     issue_id: issue.id,
-    next_run_at: cron.next_run_at,
-    status: cron.status,
+    next_run_at: automation.next_run_at || "",
+    status: automation.status,
     type: "issue.schedule_enqueue"
   };
 }
 
-function cronName(issue: Issue, name: unknown): string {
+function automationName(issue: Issue, name: unknown): string {
   return cleanString(name) || `定时执行 issue #${issue.id} - ${issue.title}`;
 }
 

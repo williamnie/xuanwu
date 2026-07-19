@@ -20,7 +20,6 @@ export function registerFrontendCompatRoutes(router: Router, context: FrontendCo
   registerAgentProfileRoutes(router, handlers);
   registerProjectCompatRoutes(router, handlers);
   registerTemplateRoutes(router, handlers);
-  registerCronRoutes(router, handlers);
   registerUtilityRoutes(router, handlers);
   registerUploadRoutes(router, handlers);
   registerAdvisoryIssueRoutes(router, handlers);
@@ -82,21 +81,6 @@ function registerTemplateRoutes(router: Router, handlers: FrontendCompatHandlers
   });
   router.delete("/api/issue-templates/:id", (request) => writeResponse(() => {
     handlers.issueTemplates.delete(lastPathPart(request));
-    return null;
-  }, 204));
-}
-
-function registerCronRoutes(router: Router, handlers: FrontendCompatHandlers): void {
-  router.post("/api/cron-tasks", async (request) => {
-    const body = await objectBody(request);
-    return writeResponse(() => handlers.cronTasks.create(body), 201);
-  });
-  router.patch("/api/cron-tasks/:id", async (request) => {
-    const body = await objectBody(request);
-    return writeResponse(() => handlers.cronTasks.update(numericID(request, "cron task id 不合法"), body));
-  });
-  router.delete("/api/cron-tasks/:id", (request) => writeResponse(() => {
-    handlers.cronTasks.delete(numericID(request, "cron task id 不合法"));
     return null;
   }, 204));
 }
@@ -200,7 +184,6 @@ function approvalID(request: Request): string { return pathPart(request, 2); }
 function uploadID(request: Request): string { return pathPart(request, 1); }
 function issueID(request: Request): number { return numericPathPart(request, 1, "issue id 不合法"); }
 function notificationID(request: Request): number { return numericPathPart(request, 1, "notification id 不合法"); }
-function numericID(request: Request, message: string): number { return numericPathPart(request, 1, message); }
 function numericPathPart(request: Request, index: number, message: string): number {
   const id = Number(pathPart(request, index));
   if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, message);

@@ -87,6 +87,34 @@ describe("P08 Automation scheduler", () => {
     } finally { db.close(); }
   });
 
+  test("executes a due manual trigger once and never scans a paused definition", async () => {
+    const db = await fixture();
+    try {
+      const manual = createAutomation(db, {
+        id: "automation:one-shot", idempotency_namespace: "automation:one-shot", mode: "propose",
+        name: "One shot", next_run_at: "2026-06-02T09:59:30.000Z", owner: { kind: "project", project_id: "demo" },
+        permission_policy_ref: "project-policy:demo", status: "active", workflow_ref: "workflow:implement@1",
+        trigger_created_by: "system", trigger: { type: "manual", config: { target_issue_id: 739 } }
+      }, "2026-06-02T09:00:00.000Z");
+      const paused = createAutomation(db, {
+        id: "automation:paused", idempotency_namespace: "automation:paused", mode: "propose",
+        name: "Paused", next_run_at: "2026-06-02T09:59:30.000Z", owner: { kind: "project", project_id: "demo" },
+        permission_policy_ref: "project-policy:demo", status: "paused", workflow_ref: "workflow:implement@1",
+        trigger_created_by: "system", trigger: { type: "manual", config: { target_issue_id: 740 } }
+      }, "2026-06-02T09:00:00.000Z");
+
+      const first = await runDueAutomations({ database: db, now: NOW, executeAutomation: async () => ({ detail: "once" }) });
+      const second = await runDueAutomations({ database: db, now: NOW, executeAutomation: async () => { throw new Error("duplicate"); } });
+
+      expect(first).toMatchObject({ executed: 1, scanned: 1 });
+      expect(second).toEqual({ deadLettered: 0, executed: 0, failed: 0, scanned: 0, skipped: 0 });
+      expect(getAutomation(db, manual.id)?.next_run_at).toBeNull();
+      expect(listAutomationRuns(db, manual.id)).toHaveLength(1);
+      expect(getAutomation(db, paused.id)?.next_run_at).toBe("2026-06-02T09:59:30.000Z");
+      expect(listAutomationRuns(db, paused.id)).toEqual([]);
+    } finally { db.close(); }
+  });
+
   test("dead-letters exactly once after the maximum retry budget and surfaces Attention", async () => {
     const db = await fixture();
     try {

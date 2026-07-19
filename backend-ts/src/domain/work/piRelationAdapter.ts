@@ -4,12 +4,8 @@ import {
   listPiActions,
   type PiAction
 } from "../../db/repositories/pi/actions.ts";
-import { listPiDelegations } from "../../db/repositories/pi/delegations.ts";
-import type { PiDelegation } from "../../db/repositories/pi/heartbeats.ts";
-import {
-  getPiIssueCompletionWatch,
-  type PiIssueCompletionWatch
-} from "../../db/repositories/pi/issueCompletionWatches.ts";
+import type { PiIssueCompletionWatch } from "../../db/repositories/pi/issueCompletionWatches.ts";
+import { listIssueCompletionAutomations } from "../../pi/issueCompletionAutomation.ts";
 import { listIssues, type Issue } from "../../db/repositories/issues.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import type { WorkID } from "./contracts.ts";
@@ -31,7 +27,7 @@ export const PI_WORK_RELATION_LIFECYCLES = [
 export type PiWorkRelationLifecycle = typeof PI_WORK_RELATION_LIFECYCLES[number];
 
 export type PiWorkCarrierAuthority =
-  "pi_actions" | "pi_delegations" | "pi_issue_completion_watches";
+  "pi_actions" | "automation_watches";
 
 export type PiWorkRelatedRef = {
   authority: string;
@@ -89,8 +85,8 @@ type MutableProjection = {
 };
 
 /**
- * Read-only W0/W1 compatibility projection. PI carriers remain authoritative and
- * this adapter never creates Work rows or writes work_relations.
+ * Read-only target-primary projection. PI actions and native Automation watches
+ * are related to authoritative Work without creating another relation store.
  */
 export function listPiWorkRelations(
   db: RunnerDatabase,
@@ -101,9 +97,6 @@ export function listPiWorkRelations(
   const output: MutableProjection = { relations: new Map(), unmapped: new Map() };
 
   for (const projection of actionProjections) projectActionRelations(output, issues, projection, filter);
-  for (const delegation of listPiDelegations(db)) {
-    projectDelegationRelations(output, issues, delegation, actionProjections, filter);
-  }
   for (const watch of listCompletionWatches(db)) projectWatchRelations(output, issues, watch, filter);
 
   return {
@@ -130,14 +123,6 @@ export function piActionRelationLifecycle(status: string): PiWorkRelationLifecyc
   if (["completed", "succeeded", "success", "done"].includes(value)) return "completed";
   if (["failed", "error", "denied", "rejected", "timeout"].includes(value)) return "failed";
   if (["cancelled", "canceled", "skipped", "superseded"].includes(value)) return "cancelled";
-  return "legacy_unknown";
-}
-
-export function piDelegationRelationLifecycle(status: string): PiWorkRelationLifecycle {
-  const value = normalized(status);
-  if (value === "active") return "active";
-  if (value === "paused") return "paused";
-  if (value === "expired") return "expired";
   return "legacy_unknown";
 }
 
@@ -177,37 +162,6 @@ function projectActionRelations(
   });
 }
 
-function projectDelegationRelations(
-  output: MutableProjection,
-  issues: Map<number, Issue>,
-  delegation: PiDelegation,
-  actions: ActionProjection[],
-  filter: PiWorkRelationFilter
-): void {
-  const linked = actions.filter((item) => item.action.delegation_id === delegation.id);
-  const issueIDs = uniquePositiveIDs([
-    ...delegationIssueIDs(delegation),
-    ...linked.flatMap((item) => item.issue_ids)
-  ]);
-  const eventRefs = uniqueStrings(linked.flatMap((item) => item.event_refs));
-  const relatedRefs = linked.map((item) => ({ authority: "pi_actions", external_id: item.action.id }));
-  projectCarrierTargets(output, issues, {
-    carrier_project_id: delegation.project_id,
-    filter,
-    issue_ids: issueIDs,
-    kind: "authorization",
-    lifecycle: piDelegationRelationLifecycle(delegation.status),
-    source_ref: sourceRef(
-      "pi_delegations",
-      delegation.id,
-      delegation.status,
-      delegation.updated_at,
-      eventRefs,
-      relatedRefs
-    )
-  });
-}
-
 function projectWatchRelations(
   output: MutableProjection,
   issues: Map<number, Issue>,
@@ -219,7 +173,7 @@ function projectWatchRelations(
   addRelatedRef(relatedRefs, "source_events", watch.source_event_id);
   addRelatedRef(relatedRefs, "source_messages", watch.source_message_id);
   const source = sourceRef(
-    "pi_issue_completion_watches",
+    "automation_watches",
     watch.id,
     watch.status,
     watch.updated_at,
@@ -333,36 +287,8 @@ function actionIssueIDs(action: PiAction): number[] {
   return uniquePositiveIDs(candidates.flatMap(positiveIDs));
 }
 
-function delegationIssueIDs(delegation: PiDelegation): number[] {
-  const scope = jsonObject(delegation.scope_json);
-  const authorization = jsonObject(delegation.authorization_json);
-  return uniquePositiveIDs([
-    ...scopeIssueIDs(scope),
-    ...scopeIssueIDs(authorization),
-    ...scopeIssueIDs(authorization.scope),
-    ...scopeIssueIDs(authorization.scopes)
-  ]);
-}
-
-function scopeIssueIDs(value: unknown): number[] {
-  if (Array.isArray(value)) return uniquePositiveIDs(value.flatMap(scopeIssueIDs));
-  if (!value || typeof value !== "object") return [];
-  const record = value as Record<string, unknown>;
-  return uniquePositiveIDs([
-    ...positiveIDs(record.issue_id),
-    ...positiveIDs(record.issue_ids),
-    ...positiveIDs(record.target_issue_id),
-    ...positiveIDs(record.target_issue_ids)
-  ]);
-}
-
 function listCompletionWatches(db: RunnerDatabase): CompletionWatchProjection[] {
-  return db.sqlite.query<{ id: string; status: string }, []>(
-    "select id, status from pi_issue_completion_watches order by created_at asc, id asc"
-  ).all().flatMap((row) => {
-    const watch = getPiIssueCompletionWatch(db, row.id);
-    return watch ? [{ ...watch, status: row.status }] : [];
-  });
+  return listIssueCompletionAutomations(db, { limit: 100 });
 }
 
 function positiveIDs(value: unknown): number[] {

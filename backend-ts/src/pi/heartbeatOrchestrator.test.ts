@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createAutomation } from "../db/repositories/automations.ts";
 import {
   diagnosePiHeartbeat,
   listPiActions,
@@ -70,7 +71,7 @@ describe("PI heartbeat orchestrator", () => {
       insertIssueEvent(db, issueID);
       insertAgentSession(db, "project-a", issueID);
       insertProjectHold(db, "project-a");
-      insertCronTask(db, "project-a");
+      insertTargetAutomations(db, "project-a");
       insertDelegation(db, "delegation-a", "project-a");
       insertPiConversation(db, "project-a");
       insertMemoryItem(db, "project-a");
@@ -313,13 +314,18 @@ function insertProjectHold(db: RunnerDatabase, projectID: string): void {
   );
 }
 
-function insertCronTask(db: RunnerDatabase, projectID: string): void {
-  db.sqlite.run(
-    `insert into cron_tasks
-      (name, project_id, action, mode, next_run_at, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["Heartbeat cron", projectID, "triage_to_todo", "once", "2026-06-02T09:59:00Z", "active", "2026-06-02T09:00:00Z", "2026-06-02T09:00:00Z"]
-  );
+function insertTargetAutomations(db: RunnerDatabase, projectID: string): void {
+  for (const [suffix, trigger] of [
+    ["schedule", { type: "manual", config: {} }],
+    ["standing-order", { type: "continuous", config: { poll_interval_seconds: 60 } }]
+  ] as const) {
+    createAutomation(db, {
+      id: `automation:${suffix}`, idempotency_namespace: `fixture:${suffix}`, mode: "observe",
+      name: suffix, next_run_at: "2026-06-02T09:59:00Z", owner: { kind: "project", project_id: projectID },
+      permission_policy_ref: `project-policy:${projectID}`, status: "active", trigger,
+      trigger_created_by: "fixture", workflow_ref: "workflow:investigate@1"
+    }, "2026-06-02T09:00:00Z");
+  }
 }
 
 function insertPiConversation(db: RunnerDatabase, projectID: string): void {

@@ -19,7 +19,7 @@ import {
   createIssueCompletionWatchAction,
   cancelIssueCompletionWatchAction
 } from "./issueCompletionWatchActions.ts";
-import { evaluatePiIssueCompletionWatchesForIssue } from "./issueCompletionWatchEvaluator.ts";
+import { runWatchAutomationsOnce } from "../runner/watchAutomationRuntime.ts";
 import {
   SUPERVISOR_COMMITMENT_RETENTION,
   buildSupervisorCommitmentPromptContext,
@@ -122,31 +122,22 @@ describe("Supervisor Goal, Commitment and conversation continuity", () => {
     });
 
     updateIssue(fixture.db, issue.id, { status: "pending_verification" });
-    const pending = evaluatePiIssueCompletionWatchesForIssue(fixture.db, {
-      eventID: "commitment-pending-verification",
-      issueID: issue.id,
-      status: "pending_verification"
-    });
+    const pending = runWatchAutomationsOnce(fixture.db);
     expect(pending.satisfied).toBe(0);
     expect(getPiIssueCompletionWatch(fixture.db, watchID)?.status).toBe("active");
-    expect(listPiNotificationIntents(fixture.db, { kind: "issue_completion_watch_satisfied" })).toEqual([]);
+    expect(listPiNotificationIntents(fixture.db, { kind: "automation_watch_terminal" })).toEqual([]);
 
     updateIssue(fixture.db, issue.id, { status: "done" });
-    const completed = evaluatePiIssueCompletionWatchesForIssue(fixture.db, {
-      eventID: "commitment-done",
-      eventType: "issue.status_changed",
-      issueID: issue.id,
-      status: "done"
-    });
+    const completed = runWatchAutomationsOnce(fixture.db);
     const projection = listSupervisorCommitments(fixture.db, { projectID: "demo" })[0];
 
-    expect(completed).toMatchObject({ intents: 1, satisfied: 1 });
+    expect(completed).toMatchObject({ queued: 1, satisfied: 1 });
     expect(projection).toMatchObject({
       completion_notification: { state: "pending" },
       status: "completed",
       watch_id: watchID
     });
-    expect(listPiNotificationIntents(fixture.db, { kind: "issue_completion_watch_satisfied" }))
+    expect(listPiNotificationIntents(fixture.db, { kind: "automation_watch_terminal" }))
       .toMatchObject([{ conversation_id: "conv-a", project_id: "demo", state: "ready" }]);
     expect(listPiActionEvents(fixture.db, {
       actionId: `supervisor-commitment:${watchID}`,

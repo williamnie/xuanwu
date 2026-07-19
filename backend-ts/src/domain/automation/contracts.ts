@@ -15,7 +15,7 @@ export type AutomationScope =
   | { control_plane_id: "local"; kind: "control_plane" };
 
 export type CronTriggerConfig = { expression: string; timezone: string };
-export type ManualTriggerConfig = Record<string, never>;
+export type ManualTriggerConfig = { target_issue_id?: number };
 export type WebhookTriggerConfig = { event_type: string; secret_ref?: string };
 export type ContinuousTriggerConfig = { poll_interval_seconds: number };
 export type AutomationTriggerConfig =
@@ -111,6 +111,10 @@ export function validateVersionedAutomationTrigger(trigger: VersionedAutomationT
   } else if (trigger.type === "continuous") {
     if (!Number.isSafeInteger(trigger.config.poll_interval_seconds) || trigger.config.poll_interval_seconds < 1) {
       errors.push("continuous poll_interval_seconds must be positive");
+    }
+  } else if (trigger.type === "manual" && trigger.config.target_issue_id !== undefined) {
+    if (!Number.isSafeInteger(trigger.config.target_issue_id) || trigger.config.target_issue_id < 1) {
+      errors.push("manual target_issue_id must be a positive integer");
     }
   }
   return errors;

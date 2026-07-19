@@ -63,7 +63,16 @@ export function createAutomationWorkRunExecutor(options: AutomationWorkRunExecut
     if (!existingLink && preparation.outcome === "skipped") {
       return { detail: preparation.detail, outcome: "skipped" };
     }
-    const link = existingLink ?? ensureLink(database, automation.id, automation.name, automation.workflow_ref, run.run_id, projectID, now);
+    const link = existingLink ?? ensureLink(
+      database,
+      automation.id,
+      automation.name,
+      automation.workflow_ref,
+      run.run_id,
+      projectID,
+      now,
+      input.trigger.type === "manual" ? input.trigger.config.target_issue_id : undefined
+    );
     const work = getIssueAsWork(database, link.issue_id);
     if (!work) throw new Error(`automation execution Work ${link.work_id} is missing`);
     try {
@@ -101,13 +110,14 @@ function ensureLink(
   workflowRef: string,
   automationRunID: string,
   projectID: string,
-  now: Date
+  now: Date,
+  targetIssueID?: number
 ): AutomationExecutionLink {
   const existing = getAutomationExecutionLink(database, automationRunID);
   if (existing) return existing;
   const timestamp = now.toISOString();
   const correlationID = `automation-run:${automationRunID}`;
-  const work = createIssueBackedWork(database, {
+  const work = targetIssueID ? getIssueAsWork(database, targetIssueID) : createIssueBackedWork(database, {
     audit: {
       actor: { id: "automation-runner", kind: "automation" },
       correlation_id: correlationID,
@@ -128,6 +138,7 @@ function ensureLink(
     title: `Automation: ${automationName}`.slice(0, 50),
     type: "engineering_task"
   }).work;
+  if (!work) throw new Error(`automation target issue ${targetIssueID} is unavailable`);
   const issueID = Number(work.id.slice("xw:work:issues:".length));
   const issueRun = createIssueRun(database, issueID);
   const runID = makeDomainID("run", "issue_runs", issueRun.id);

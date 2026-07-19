@@ -1,11 +1,12 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
+import type { PiIssueCompletionWatch } from "../db/repositories/pi.ts";
 import {
-  cancelPiIssueCompletionWatch,
-  createPiIssueCompletionWatch,
-  getPiIssueCompletionWatch,
-  type PiIssueCompletionWatch
-} from "../db/repositories/pi.ts";
+  cancelIssueCompletionAutomation as cancelPiIssueCompletionWatch,
+  createIssueCompletionAutomation as createPiIssueCompletionWatch,
+  getIssueCompletionAutomation as getPiIssueCompletionWatch,
+  listIssueCompletionAutomations
+} from "./issueCompletionAutomation.ts";
 import {
   cancelSupervisorCommitment,
   containsSupervisorCommitmentMetadata,
@@ -155,26 +156,11 @@ function watchedIssues(db: RunnerDatabase, watch: PiIssueCompletionWatch) {
 }
 
 function listWatches(db: RunnerDatabase, input: IssueCompletionWatchListInput): PiIssueCompletionWatch[] {
-  const ids = watchIDs(db, input);
-  return ids.map((id) => getPiIssueCompletionWatch(db, id)).filter((watch): watch is PiIssueCompletionWatch => Boolean(watch));
-}
-
-function watchIDs(db: RunnerDatabase, input: IssueCompletionWatchListInput): string[] {
-  const filters: string[] = [];
-  const params: Array<string | number> = [];
-  addFilter(filters, params, "project_id=?", input.project_id);
-  addFilter(filters, params, "status=?", input.status);
-  const where = filters.length > 0 ? ` where ${filters.join(" and ")}` : "";
-  return db.sqlite.query<{ id: string }, Array<string | number>>(
-    `select id from pi_issue_completion_watches${where} order by created_at desc, id desc limit ?`
-  ).all(...params, watchLimit(input.limit)).map((row) => row.id);
-}
-
-function addFilter(filters: string[], params: Array<string | number>, sql: string, value: unknown): void {
-  const text = cleanString(value);
-  if (text === "") return;
-  filters.push(sql);
-  params.push(text);
+  return listIssueCompletionAutomations(db, {
+    limit: input.limit,
+    projectId: input.project_id,
+    status: input.status
+  });
 }
 
 function conditionWithNote(condition: unknown, note: unknown): unknown {

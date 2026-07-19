@@ -17,50 +17,20 @@ afterEach(async () => {
 });
 
 describe("PI source policies API", () => {
-  test("lists policy layers and edits automation-owned source policy", async () => {
+  test("lists read-only policy layers and redirects retired automation-owned writes", async () => {
     const db = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database: db });
-      const created = await jsonRequest(router, "/api/pi/source-policies", {
-        body: JSON.stringify({
-          name: "Fixture source policy",
-          source: "fixture-im",
-          source_policy: {
-            action_mode: "propose_actions",
-            intake_mode: "mention_only",
-            issue_policy: { auto_create_triage_issue: true, require_project_confirmation: true },
-            profile: "company_chat",
-            reply_policy: { allowed_chats: ["oc_a"], auto_reply_enabled: true }
-          }
-        }),
-        method: "POST"
-      });
-
-      const patched = await jsonRequest(router, `/api/pi/source-policies/automations/${created.automation.id}`, {
-        body: JSON.stringify({
-          source_policy: {
-            action_mode: "auto_low_risk",
-            intake_mode: "continuous_llm_triage",
-            issue_policy: { auto_enqueue: true },
-            profile: "private_dm",
-            reply_policy: { allowed_people: ["alice"], auto_reply_enabled: true }
-          }
-        }),
-        method: "PATCH"
-      });
       const listed = await jsonRequest(router, "/api/pi/source-policies");
+      const redirected = await router.handle(new Request(`${BASE_URL}/api/pi/source-policies`, { method: "POST" }));
 
       expect(listed.layers.map((layer: { scope: string }) => layer.scope)).toEqual([
         "source_profile", "project", "global", "automation"
       ]);
       expect(listed.profiles.map((profile: { id: string }) => profile.id)).toContain("company_chat");
-      expect(patched.automation.source_policy).toMatchObject({
-        action_mode: "auto_low_risk",
-        intake_mode: "continuous_llm_triage",
-        issue_policy: { auto_enqueue: true },
-        reply_policy: { allowed_people: ["alice"], auto_reply_enabled: true }
-      });
-      expect(listed.automations.map((item: { id: number }) => item.id)).toContain(created.automation.id);
+      expect(listed.automations).toEqual([]);
+      expect(redirected.status).toBe(308);
+      expect(redirected.headers.get("location")).toBe("/api/automations");
     } finally {
       db.close();
     }

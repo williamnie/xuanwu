@@ -58,8 +58,7 @@ describe("Xuanwu Automation semantics", () => {
     }
 
     expect(AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS.map((item) => item.entrypoint)).toEqual([
-      "runDueCronTasks", "runDuePiAutomations", "runDueAutomations", "runDelegationHeartbeatsOnce",
-      "runWatchAutomationsOnce", "queueReadyFeishuCompletionWatchNotifications"
+      "runDueAutomations", "runWatchAutomationsOnce"
     ]);
     const scheduler = readFileSync(resolve(REPO_ROOT, "backend-ts/src/runner/piAutoManageScheduler.ts"), "utf8");
     const actualCalls = AUTOMATION_SCHEDULE_CYCLE_ENTRYPOINTS
@@ -75,17 +74,17 @@ describe("Xuanwu Automation semantics", () => {
     });
   });
 
-  test("covers all 34 automation API routes and marks every mutation", () => {
+  test("covers all 35 automation API routes and marks every mutation", () => {
     const expected = API_ROUTE_DISPOSITIONS
       .filter((route) => route.family === "automation")
       .map((route) => `${route.method} ${route.path}`)
       .sort();
     const actual = AUTOMATION_API_ROUTES.map((route) => `${route.method} ${route.path}`).sort();
     expect(actual).toEqual(expected);
-    expect(actual).toHaveLength(34);
+    expect(actual).toHaveLength(35);
     expect(new Set(actual).size).toBe(actual.length);
     expect(AUTOMATION_API_ROUTES.filter((route) => route.write)).toHaveLength(22);
-    expect(AUTOMATION_API_ROUTES.filter((route) => !route.write)).toHaveLength(12);
+    expect(AUTOMATION_API_ROUTES.filter((route) => !route.write)).toHaveLength(13);
     for (const route of AUTOMATION_API_ROUTES) {
       expect(route.write).toBe(route.method !== "GET");
       expect(["definition", "trigger", "control", "observation"]).toContain(route.role);
@@ -103,11 +102,7 @@ describe("Xuanwu Automation semantics", () => {
     expect(actualRoutes).toEqual(expectedRoutes);
     expect(actualRoutes).toHaveLength(3);
 
-    expect(PI_AUTOMATION_LEGACY_WRITER_SOURCES).toEqual([
-      "backend-ts/src/http/piAutomationsApi.ts",
-      "backend-ts/src/http/piSourcePoliciesApi.ts",
-      "backend-ts/src/pi/nonIssueProposalActions.ts"
-    ]);
+    expect(PI_AUTOMATION_LEGACY_WRITER_SOURCES).toEqual([]);
     for (const source of PI_AUTOMATION_LEGACY_WRITER_SOURCES) {
       expect(readFileSync(resolve(REPO_ROOT, source), "utf8"))
         .toContain("executePiAutomationLegacyCommand");
@@ -144,12 +139,12 @@ describe("Xuanwu Automation semantics", () => {
   });
 
   test("locks authority, bounded dual mode, rollback, deterministic permission, order, and deletion gates", () => {
-    expect(AUTOMATION_MIGRATION_CONTRACT.current_gate).toBe("G0");
-    expect(AUTOMATION_MIGRATION_CONTRACT.current_window).toBe("W1");
+    expect(AUTOMATION_MIGRATION_CONTRACT.current_gate).toBe("G4");
+    expect(AUTOMATION_MIGRATION_CONTRACT.current_window).toBe("W3");
     expect(AUTOMATION_MIGRATION_CONTRACT.target_authority).toContain("automation_definitions");
-    expect(AUTOMATION_MIGRATION_CONTRACT.target_authority).toContain("pi_automations remains legacy-primary");
-    expect(AUTOMATION_MIGRATION_CONTRACT.dual_read).toContain("at most two");
-    expect(AUTOMATION_MIGRATION_CONTRACT.dual_write).toContain("Default forbidden");
+    expect(AUTOMATION_MIGRATION_CONTRACT.target_authority).toContain("sole target-primary");
+    expect(AUTOMATION_MIGRATION_CONTRACT.dual_read).toContain("none");
+    expect(AUTOMATION_MIGRATION_CONTRACT.dual_write).toContain("forbidden");
     expect(AUTOMATION_MIGRATION_CONTRACT.rollback).toContain("restor");
     expect(AUTOMATION_MIGRATION_CONTRACT.permission).toContain("cannot approve");
     expect(AUTOMATION_MIGRATION_CONTRACT.notification_boundary).toContain("None of them proves Work completion");
@@ -162,9 +157,9 @@ describe("Xuanwu Automation semantics", () => {
     for (const heading of ["触发 / 执行 / 观察分类", "状态映射", "重复能力", "迁移顺序", "删除门禁", "live records 抽样", "API 覆盖"]) {
       expect(adr).toContain(heading);
     }
-    expect(adr).toContain("34");
+    expect(adr).toContain("35");
     expect(adr).toContain("11 张表");
-    expect(adr).toContain("W1 + W2 最多两个连续正式 release");
+    expect(adr).toContain("W1 dual mode 已结束");
   });
 
   test("samples live carrier records read-only when XUANWU_LIVE_DB is provided", () => {

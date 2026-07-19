@@ -4,8 +4,8 @@ import { turtleAssetForState } from './brandAssets.js';
 import { faviconHrefForState } from './brandFavicon.js';
 import { BRAND_STATES, isNightTime, resolveRunnerBrandState } from './brandState.js';
 
-const DAY = new Date('2026-07-02T14:00:00+08:00');
-const NIGHT = new Date('2026-07-02T23:00:00+08:00');
+const DAY = new Date(2026, 6, 2, 14, 0, 0);
+const NIGHT = new Date(2026, 6, 2, 23, 0, 0);
 
 test('runner brand state prioritizes offline and active issue work', () => {
   assert.equal(resolveRunnerBrandState({ backendOnline: false, now: DAY }), BRAND_STATES.offline);
@@ -27,6 +27,7 @@ test('runner brand state uses guardian turtle for verifier work', () => {
 test('runner brand state switches idle, monitor, and night watch turtles', () => {
   assert.equal(resolveRunnerBrandState({ now: DAY }), BRAND_STATES.idle);
   assert.equal(resolveRunnerBrandState({ projects: [{ auto_run: 1 }], now: DAY }), BRAND_STATES.monitor);
+  assert.equal(resolveRunnerBrandState({ automations: [{ status: 'active' }], now: DAY }), BRAND_STATES.monitor);
   assert.equal(resolveRunnerBrandState({ projects: [{ auto_run: 1 }], now: NIGHT }), BRAND_STATES.sleeping);
   assert.equal(isNightTime(new Date('2026-07-02T07:30:00+08:00')), true);
 });

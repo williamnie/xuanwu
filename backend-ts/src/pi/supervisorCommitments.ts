@@ -2,16 +2,16 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getPiConversation } from "../db/repositories/pi/conversations.ts";
 import { createPiActionEvent, listPiActionEvents } from "../db/repositories/pi/actions.ts";
 import {
-  cancelPiIssueCompletionWatch,
-  createPiIssueCompletionWatch,
-  getPiIssueCompletionWatch,
   type PiIssueCompletionWatch,
   type PiIssueCompletionWatchInput
 } from "../db/repositories/pi/issueCompletionWatches.ts";
 import {
-  listPiIssueCompletionWatchNotifications,
-  listPiIssueCompletionWatches
-} from "../db/repositories/pi/issueCompletionWatchAdmin.ts";
+  cancelIssueCompletionAutomation as cancelPiIssueCompletionWatch,
+  createIssueCompletionAutomation as createPiIssueCompletionWatch,
+  getIssueCompletionAutomation as getPiIssueCompletionWatch,
+  listIssueCompletionAutomationNotifications as listPiIssueCompletionWatchNotifications,
+  listIssueCompletionAutomations as listPiIssueCompletionWatches
+} from "./issueCompletionAutomation.ts";
 import { createNotification } from "../db/repositories/notifications.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 
@@ -49,7 +49,7 @@ export type SupervisorCommitment = {
   retention: typeof SUPERVISOR_COMMITMENT_RETENTION;
   source_of_truth: {
     audit: "pi_action_events";
-    lifecycle: "pi_issue_completion_watches";
+    lifecycle: "automation_watches";
     work: "issues-via-work-adapter";
   };
   status: SupervisorCommitmentStatus;
@@ -297,7 +297,7 @@ export function projectSupervisorCommitment(
     retention: SUPERVISOR_COMMITMENT_RETENTION,
     source_of_truth: {
       audit: "pi_action_events",
-      lifecycle: "pi_issue_completion_watches",
+      lifecycle: "automation_watches",
       work: "issues-via-work-adapter"
     },
     status: commitmentStatus(watch, workStatuses.map((item) => item.status), metadata.due_at),
@@ -330,7 +330,7 @@ export function buildSupervisorCommitmentPromptContext(
   return [
     "Supervisor commitment context (operational projection, not long-term memory):",
     projection.length > 0 ? JSON.stringify(projection, null, 2) : "- No active commitments for this context.",
-    "Authority: Work goal/status comes from issues-via-work-adapter; lifecycle and completion notification come from the existing audited completion-watch path.",
+    "Authority: Work goal/status comes from issues-via-work-adapter; lifecycle and completion notification come from native automation_watches.",
     "Never treat chat prose as a commitment. Create one only after authoritative Work exists and issue_completion_watch_create succeeds with xw.supervisor-commitment.v1 metadata.",
     "A temporary follow-up promise, due date, cancellation, or resume link must stay in this operational projection and must not be written to Supervisor long-term memory."
   ].join("\n");

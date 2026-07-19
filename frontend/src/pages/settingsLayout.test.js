@@ -198,15 +198,13 @@ test('Activity tab shows traceable redacted timeline from API', () => {
   assert.doesNotMatch(activityTimelineSource, /window\.confirm|window\.alert/);
 });
 
-test('Policies tab manages source policies from API', () => {
+test('Policies tab reads source profiles without retaining legacy Automation writers', () => {
   assert.match(sectionsSource, /SourcePoliciesPanel/);
   assert.match(automationApiSource, /getPiSourcePolicies/);
-  assert.match(automationApiSource, /updatePiAutomationSourcePolicy/);
+  assert.doesNotMatch(automationApiSource, /updatePiAutomationSourcePolicy|createPiSourcePolicy/);
   assert.match(sourcePoliciesSource, /Source Policy/);
-  assert.match(sourcePoliciesSource, /auto_create_triage_issue/);
-  assert.match(sourcePoliciesSource, /auto_enqueue/);
-  assert.match(sourcePoliciesSource, /require_project_confirmation/);
-  assert.match(sourcePoliciesSource, /allowed_chats/);
+  assert.match(sourcePoliciesSource, /Read-only source profiles/);
+  assert.match(sourcePoliciesSource, /permission_policy_ref/);
   assert.doesNotMatch(sourcePoliciesSource, /window\.confirm|window\.alert/);
 });
 

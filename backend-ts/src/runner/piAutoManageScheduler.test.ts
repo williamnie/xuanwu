@@ -189,7 +189,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("continues auto-manage when one delegation heartbeat fails", async () => {
+  test("ignores legacy delegation carriers while continuing native auto-manage", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     try {
@@ -200,9 +200,10 @@ describe("PI auto-manage scheduler", () => {
 
       const result = await runScheduleLayerCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
-      expect(result.delegations).toMatchObject({ scanned: 1, started: 1, skipped: 0 });
+      expect(result.delegations).toEqual({ scanned: 0, started: 0, skipped: 0 });
       expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
       expect(runner.calls).toEqual([{ maxActions: 5, projectId: "enabled" }]);
+      expect(heartbeatRunCount(db)).toBe(0);
     } finally {
       db.close();
     }

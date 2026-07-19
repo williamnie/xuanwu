@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../../database.ts";
+import { getIssueCompletionAutomation } from "../../../pi/issueCompletionAutomation.ts";
 import { getIssue, type Issue } from "../issues.ts";
 import {
   cleanString,
@@ -75,7 +76,7 @@ export function getPiIssueCompletionWatch(db: RunnerDatabase, id: string): PiIss
   const row = db.sqlite.query<Record<string, unknown>, [string]>(
     `select ${WATCH_COLUMNS} from ${WATCH_TABLE} where id=?`
   ).get(key);
-  return row ? withItems(db, mapWatch(row)) : null;
+  return row ? withItems(db, mapWatch(row)) : getIssueCompletionAutomation(db, key);
 }
 
 export function listActivePiIssueCompletionWatches(db: RunnerDatabase): PiIssueCompletionWatch[] {

@@ -203,36 +203,4 @@ export const assistantApi = {
     body: JSON.stringify({}),
   }),
 
-  getPiDelegations: ({ projectId = '', status = '' } = {}) => {
-    const params = new URLSearchParams();
-    if (projectId) params.append('project_id', projectId);
-    if (status) params.append('status', status);
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return request(`/api/pi/delegations${query}`);
-  },
-
-  createPiDelegation: (delegation) => request('/api/pi/delegations', {
-    method: 'POST',
-    body: JSON.stringify(delegation),
-  }),
-
-  pausePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/pause`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-
-  resumePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/resume`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
-
-  updatePiDelegation: (id, updates) => request(`/api/pi/delegations/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  }),
-
-  expirePiDelegation: (id) => request(`/api/pi/delegations/${encodeURIComponent(id)}/expire`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  }),
 };

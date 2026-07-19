@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { runMigrations } from "../db/migrations.ts";
+import { AUTOMATION_LEGACY_REDIRECT_ROUTES } from "../http/automationLegacyRedirectsApi.ts";
 import {
   API_ROUTE_DISPOSITIONS,
   API_ROUTE_FAMILIES,
@@ -74,7 +75,7 @@ describe("Xuanwu capability disposition inventory", () => {
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);
-    expect(inventoried).toHaveLength(241);
+    expect(inventoried).toHaveLength(242);
     expect(unique(inventoried)).toHaveLength(inventoried.length);
 
     const familyIDs = new Set(API_ROUTE_FAMILIES.map((family) => family.id));
@@ -101,23 +102,21 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(148);
+    expect(inventoriedPi).toHaveLength(147);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 
   test("keeps schedulers mapped and gives every delete item reproducible evidence and gates", () => {
-    expect(SCHEDULER_DISPOSITIONS).toHaveLength(15);
+    expect(SCHEDULER_DISPOSITIONS).toHaveLength(12);
     for (const scheduler of SCHEDULER_DISPOSITIONS) {
       expect(readFileSync(resolve(REPO_ROOT, scheduler.source_file), "utf8")).toContain(
         scheduler.entrypoint.split(" + ")[0].split(" / ")[0]
       );
     }
-    expect(SCHEDULER_DISPOSITIONS.filter((item) =>
-      item.entrypoint === "runDuePiAutomations" || item.entrypoint === "runDueAutomations"
-    )).toEqual([
-      expect.objectContaining({ id: "legacy-pi-automation-dispatch", disposition: "migrate" }),
+    expect(SCHEDULER_DISPOSITIONS.filter((item) => item.entrypoint === "runDueAutomations")).toEqual([
       expect.objectContaining({ id: "target-automation-dispatch", disposition: "keep" })
     ]);
+    expect(SCHEDULER_DISPOSITIONS.some((item) => item.entrypoint.startsWith("runDuePiAutomations"))).toBe(false);
 
     const deleteItems = TABLE_DISPOSITIONS.filter((item) => item.disposition === "delete");
     expect(deleteItems.map((item) => item.name)).toEqual(["nightly_batch_items", "nightly_batches"]);
@@ -157,6 +156,7 @@ function productionHttpRoutes(): string[] {
       if (path.startsWith("/api/")) routes.add(`${match[1].toUpperCase()} ${path}`);
     }
   }
+  for (const [method, path] of AUTOMATION_LEGACY_REDIRECT_ROUTES) routes.add(`${method} ${path}`);
   return [...routes].sort();
 }
 
@@ -174,6 +174,7 @@ function productionSourceText(): string {
     .filter((path) => !path.endsWith("/capabilityDispositionInventory.test.ts"))
     .filter((path) => !path.endsWith("/automationSemantics.ts"))
     .filter((path) => !path.endsWith("/automationSemantics.test.ts"))
+    .filter((path) => !path.endsWith("/consolidationAudit.ts"))
     .filter((path) => [".js", ".jsx", ".ts", ".tsx"].includes(extname(path)));
   return files.map((path) => readFileSync(path, "utf8")).join("\n");
 }

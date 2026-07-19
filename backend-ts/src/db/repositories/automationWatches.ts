@@ -17,8 +17,8 @@ import { INVESTIGATE_WORKFLOW_REF } from "../../workflows/investigate.ts";
 export type AutomationWatchStatus = "watching" | "satisfied" | "notified" | "expired" | "cancelled" | "failed";
 export type AutomationWatchOutcome = "" | "completion" | "failure" | "cancelled" | "thread_event" | "timeout";
 export type AutomationWatchCondition =
-  | { match: "all" | "any"; statuses: string[]; type: "issue_status" }
-  | { event_types: string[]; type: "external_thread_event" };
+  | { match: "all" | "any"; metadata?: Record<string, unknown>; statuses: string[]; type: "issue_status" }
+  | { event_types: string[]; metadata?: Record<string, unknown>; type: "external_thread_event" };
 export type AutomationWatchSubject =
   | { issue_ids: number[]; kind: "issues" }
   | { kind: "external_thread"; provider: string; thread_id: string };
@@ -51,6 +51,7 @@ export type AutomationWatch = {
   updated_at: string;
 };
 export type CreateAutomationWatchInput = {
+  allow_empty_notification_target?: boolean;
   condition: AutomationWatchCondition;
   dedupe_key: string;
   expires_at?: string;
@@ -154,6 +155,12 @@ export function listPendingAutomationWatchDeliveries(db: RunnerDatabase): Automa
   return db.sqlite.query<Row, []>(`select * from ${TABLE}
     where migration_mode='native' and status in ('satisfied', 'expired')
     order by satisfied_at asc, automation_id asc`).all().map(mapWatch);
+}
+
+export function listAutomationIssueWatches(db: RunnerDatabase): AutomationWatch[] {
+  return db.sqlite.query<Row, []>(`select * from ${TABLE}
+    where migration_mode='native' and json_extract(subject_json, '$.kind')='issues'
+    order by created_at desc, automation_id desc`).all().map(mapWatch);
 }
 
 export function cancelAutomationWatch(
@@ -287,7 +294,7 @@ function normalizeNativeInput(db: RunnerDatabase, input: CreateAutomationWatchIn
   if (condition.type === "external_thread_event" && subject.kind !== "external_thread") {
     throw new Error("thread condition requires an external thread target");
   }
-  const notificationTarget = normalizeNotificationTarget(input.notification_target, true);
+  const notificationTarget = normalizeNotificationTarget(input.notification_target, input.allow_empty_notification_target !== true);
   const dedupeKey = clean(input.dedupe_key);
   if (dedupeKey === "") throw new Error("automation watch dedupe_key is required");
   const expiresAt = optionalTimestamp(input.expires_at);
@@ -518,11 +525,11 @@ function normalizeCondition(value: AutomationWatchCondition): AutomationWatchCon
     const statuses = [...new Set((value.statuses ?? []).map(clean).filter((item) => TERMINAL_STATUSES.has(item)))].sort();
     if (statuses.length === 0) throw new Error("issue watch requires terminal statuses");
     if (!['all', 'any'].includes(value.match)) throw new Error("issue watch match must be all or any");
-    return { match: value.match, statuses, type: "issue_status" };
+    return { match: value.match, ...(value.metadata ? { metadata: parseObject(value.metadata) } : {}), statuses, type: "issue_status" };
   }
   if (value?.type === "external_thread_event") {
     const eventTypes = [...new Set((value.event_types ?? []).map(clean).filter(Boolean))].sort();
-    return { event_types: eventTypes, type: "external_thread_event" };
+    return { event_types: eventTypes, ...(value.metadata ? { metadata: parseObject(value.metadata) } : {}), type: "external_thread_event" };
   }
   throw new Error("unsupported automation watch condition");
 }

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { listCronTasks } from "../db/repositories/cronTasks.ts";
+import { getAutomationTrigger, listAutomations } from "../db/repositories/automations.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listIssues } from "../db/repositories/issues.ts";
 import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEvents, listPiActions, listPiMemoryItems } from "../db/repositories/pi.ts";
@@ -108,10 +108,13 @@ describe("Bun PI runtime v1 smoke", () => {
       expect(listIssues(database, { projectId: "demo" })).toMatchObject([
         { description: "Follow-up body", status: "triage", title: "Follow-up issue" }
       ]);
-      expect(listCronTasks(database)).toMatchObject([
-        { action: "enqueue_issues", mode: "once", next_run_at: "2999-01-01T00:00:00.000Z", status: "active" }
-      ]);
-      expect(JSON.parse(listCronTasks(database)[0]?.action_payload_json ?? "{}")).toEqual({ issue_ids: [1] });
+      const automation = listAutomations(database).find((item) => item.id.startsWith("automation:issue-"));
+      expect(automation).toMatchObject({
+        mode: "execute_allowed", next_run_at: "2999-01-01T00:00:00.000Z", status: "active"
+      });
+      expect(automation && getAutomationTrigger(database, automation.id)).toMatchObject({
+        type: "manual", config: { target_issue_id: 1 }
+      });
       expect(listPiActions(database, { status: "pending" })).toEqual([]);
       expect(listPiActions(database, { status: "completed" }).map((action) => action.action_type).sort())
         .toEqual(["issue.create", "issue.schedule_enqueue", "memory.write_candidate", "project.list"].sort());

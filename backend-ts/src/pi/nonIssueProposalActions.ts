@@ -3,9 +3,11 @@ import {
   createPiMemoryItem,
   type PiAction
 } from "../db/repositories/pi.ts";
-import { executePiAutomationLegacyCommand } from "../db/repositories/piAutomationCommands.ts";
+import { createAutomation } from "../db/repositories/automations.ts";
+import { createAutomationWatch } from "../db/repositories/automationWatches.ts";
 import { createIssueCompletionWatchAction } from "./issueCompletionWatchActions.ts";
 import { assertMemoryContentSafe } from "./memoryPolicy.ts";
+import { INVESTIGATE_WORKFLOW_REF } from "../workflows/investigate.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -68,34 +70,26 @@ export function createMemoryFromAction(db: RunnerDatabase, action: PiAction, pay
 export function createReminderFromAction(db: RunnerDatabase, action: PiAction, payload: JsonObject): JsonObject {
   const nextRunAt = firstString(payload.due_at, payload.next_run_at, payload.remind_at);
   if (nextRunAt === "") throw new Error("reminder.create due_at is required");
-  const automation = executePiAutomationLegacyCommand(db, { operation: "create", input: {
-    enabled: payload.enabled !== false,
-    filters: [traceFilter(action, payload)],
-    max_actions_per_run: 1,
-    mode: "draft",
+  const projectID = requiredProjectID(action, payload);
+  const audit = proposalAutomationAudit(action, "reminder");
+  const automation = createAutomation(db, {
+    id: `automation:reminder-${slug(action.id)}-${crypto.randomUUID()}`,
+    idempotency_namespace: `reminder:${action.id}`,
+    mode: "propose",
     name: firstString(payload.title, payload.summary, "Supervisor reminder"),
     next_run_at: nextRunAt,
-    source_policy: { external_writes: false, proposal_id: cleanString(payload.proposal_id) },
-    steps: [{
-      cursor: "",
-      idempotency_key: `reminder:${action.id}`,
-      skill_id: cleanString(payload.skill_id) || "pi.reminder.follow_up",
-      type: "domain_skill",
-      watermark: ""
-    }],
-    trigger: {
-      due_at: nextRunAt,
-      kind: "reminder",
-      proposal_id: cleanString(payload.proposal_id),
-      type: "schedule"
-    },
-    trigger_type: "schedule"
-  } }).automation;
+    owner: { kind: "project", project_id: projectID },
+    permission_policy_ref: `project-policy:${projectID}`,
+    status: payload.enabled === false ? "paused" : "active",
+    trigger: { type: "manual", config: {} },
+    trigger_created_by: audit.actor_id,
+    workflow_ref: INVESTIGATE_WORKFLOW_REF
+  }, audit.occurred_at, audit);
   return {
     automation_id: automation.id,
     next_run_at: automation.next_run_at,
-    reminder_id: `automation:${automation.id}`,
-    status: automation.enabled ? "scheduled" : "paused"
+    reminder_id: automation.id,
+    status: automation.status === "active" ? "scheduled" : "paused"
   };
 }
 
@@ -125,35 +119,56 @@ function createIssueWatch(db: RunnerDatabase, action: PiAction, payload: JsonObj
 function createThreadMonitor(db: RunnerDatabase, action: PiAction, payload: JsonObject): JsonObject {
   const threadID = firstString(payload.thread_id, payload.target_thread_id, payload.message_id);
   if (threadID === "") throw new Error("watch_thread thread_id or issue_ids is required");
-  const automation = executePiAutomationLegacyCommand(db, { operation: "create", input: {
-    enabled: payload.enabled !== false,
-    filters: [traceFilter(action, payload)],
-    max_actions_per_run: 1,
-    mode: "propose",
-    name: firstString(payload.title, payload.summary, `Watch thread ${threadID}`),
-    source_policy: { external_writes: false, proposal_id: cleanString(payload.proposal_id) },
-    steps: [{
-      cursor: "",
-      idempotency_key: `watch_thread:${action.id}`,
-      skill_id: cleanString(payload.skill_id),
-      type: "source_sync",
-      watermark: ""
-    }],
-    trigger: {
-      every: firstString(payload.every, payload.interval, "1h"),
-      kind: "watch_thread",
-      thread_id: threadID,
-      type: "continuous"
+  const projectID = requiredProjectID(action, payload);
+  const audit = proposalAutomationAudit(action, "thread-watch");
+  const automation = createAutomationWatch(db, {
+    allow_empty_notification_target: true,
+    condition: {
+      event_types: stringList(payload.event_types),
+      metadata: { action_id: action.id, proposal_id: cleanString(payload.proposal_id) },
+      type: "external_thread_event"
     },
-    trigger_type: "continuous"
-  } }).automation;
+    dedupe_key: `watch-thread:${action.id}`,
+    name: firstString(payload.title, payload.summary, `Watch thread ${threadID}`),
+    notification_target: {
+      channel: "feishu",
+      chat_id: cleanString(payload.target_chat_id),
+      message_id: cleanString(payload.target_message_id),
+      thread_id: firstString(payload.target_thread_id, threadID)
+    },
+    project_id: projectID,
+    subject: { kind: "external_thread", provider: firstString(payload.provider, "feishu"), thread_id: threadID }
+  }, audit);
   return {
-    automation_id: automation.id,
-    monitor_id: `automation:${automation.id}`,
-    next_run_at: automation.next_run_at,
-    status: automation.enabled ? "active" : "paused",
+    automation_id: automation.automation_id,
+    monitor_id: automation.automation_id,
+    next_run_at: null,
+    status: automation.status === "watching" ? "active" : automation.status,
     thread_id: threadID
   };
+}
+
+function requiredProjectID(action: PiAction, payload: JsonObject): string {
+  const projectID = firstString(payload.project_id, action.project_id);
+  if (projectID === "") throw new Error("native Automation requires project_id");
+  return projectID;
+}
+
+function proposalAutomationAudit(action: PiAction, operation: string) {
+  const occurredAt = new Date().toISOString();
+  return {
+    actor_id: "pi-action-dispatch",
+    actor_kind: "supervisor" as const,
+    correlation_id: `pi-action:${action.id}`,
+    event_id: `automation-event:${operation}:${crypto.randomUUID()}`,
+    gate: { authority: "deterministic_policy" as const, decision: "allow" as const, policy_ref: "approved-pi-action-to-automation:v1" },
+    occurred_at: occurredAt,
+    reason: `approved PI action ${action.id} created native Automation ${operation}`
+  };
+}
+
+function slug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "action";
 }
 
 function traceFilter(action: PiAction, payload: JsonObject): JsonObject {

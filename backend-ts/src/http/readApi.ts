@@ -1,4 +1,5 @@
 import { registerAutomationRoutes } from "./automationApi.ts";
+import { registerAutomationLegacyRedirectRoutes } from "./automationLegacyRedirectsApi.ts";
 import { registerCommandCenterRoutes } from "./commandCenterApi.ts";
 import { registerEventSummaryRoutes } from "./eventSummariesApi.ts";
 import { registerEvidenceRoutes } from "./evidenceApi.ts";
@@ -24,6 +25,7 @@ type ReadApiRouteRegistration = {
 
 export const READ_API_ROUTE_REGISTRY = [
   { id: "automations", register: registerAutomationRoutes, responsibility: "domain" },
+  { id: "automation-legacy-redirects", register: registerAutomationLegacyRedirectRoutes, responsibility: "legacy-compatibility" },
   { id: "command-center", register: registerCommandCenterRoutes, responsibility: "projection" },
   { id: "evidence", register: registerEvidenceRoutes, responsibility: "domain" },
   { id: "event-summaries", register: registerEventSummaryRoutes, responsibility: "projection" },

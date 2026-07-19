@@ -189,7 +189,7 @@ function materializeDueRuns(db: RunnerDatabase, now: Date): number {
     from automation_definitions d join automation_trigger_configs c
       on c.automation_id=d.id and c.version=d.active_trigger_version
     where d.status='active' and d.next_run_at is not null and d.next_run_at<=?
-      and c.trigger_type in ('cron', 'continuous')
+      and c.trigger_type in ('cron', 'continuous', 'manual')
       and not exists (select 1 from automation_runs r where r.automation_id=d.id and r.status in ('queued', 'running'))
     order by d.next_run_at asc, d.id asc`).all(now.toISOString());
   let skipped = 0;
