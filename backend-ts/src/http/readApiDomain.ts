@@ -23,6 +23,10 @@ import { cancelIssueWithInterrupt, retryIssueWithInterrupt } from "../runner/int
 import { issueMcpRequirementSummary, type McpRequirementSummary } from "../mcp/requirements.ts";
 import { startProjectLoop, type ProjectLoopStartOptions } from "../runner/projectLoopManager.ts";
 import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
+import {
+  readProjectIssueDependencies,
+  type IssueDependencyDiagnostic
+} from "../domain/work/issueDependency.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 
@@ -41,6 +45,7 @@ type PublicIssueRunView = PublicIssueRun & {
   service_tier_source: string;
 };
 type PublicIssue = Omit<Issue, "latest_run"> & {
+  dependency: IssueDependencyDiagnostic;
   latest_run?: PublicIssueRunView;
   mcp_requirements: McpRequirementSummary;
 };
@@ -195,18 +200,27 @@ function publishIssueStatusChange(context: ReadApiContext, issue: Issue, body: R
 function readIssue(context: ReadApiContext, id: number): PublicIssue {
   const issue = getIssue(context.database, id);
   if (!issue) throw new ProjectNotFoundError();
-  return publicIssue(issue, getProject(context.database, issue.project_id));
+  const dependency = readProjectIssueDependencies(context.database, issue.project_id).get(issue.id);
+  if (!dependency) throw new ProjectNotFoundError();
+  return publicIssue(issue, getProject(context.database, issue.project_id), dependency);
 }
 
 function publicIssues(context: ReadApiContext, issues: Issue[]): PublicIssue[] {
   const projects = projectsByID(listProjects(context.database));
-  return issues.map((issue) => publicIssue(issue, projects.get(issue.project_id) ?? null));
+  const dependencies = new Map([...new Set(issues.map((issue) => issue.project_id))].map((projectID) => (
+    [projectID, readProjectIssueDependencies(context.database, projectID)]
+  )));
+  return issues.map((issue) => {
+    const dependency = dependencies.get(issue.project_id)?.get(issue.id);
+    if (!dependency) throw new ProjectNotFoundError();
+    return publicIssue(issue, projects.get(issue.project_id) ?? null, dependency);
+  });
 }
 
-function publicIssue(issue: Issue, project: Project | null): PublicIssue {
+function publicIssue(issue: Issue, project: Project | null, dependency: IssueDependencyDiagnostic): PublicIssue {
   const mcp_requirements = issueMcpRequirementSummary(issue, project);
-  if (!issue.latest_run) return { ...issue, mcp_requirements } as PublicIssue;
-  return { ...issue, latest_run: publicIssueRun(issue.latest_run), mcp_requirements };
+  if (!issue.latest_run) return { ...issue, dependency, mcp_requirements } as PublicIssue;
+  return { ...issue, dependency, latest_run: publicIssueRun(issue.latest_run), mcp_requirements };
 }
 
 function publicIssueRuns(runs: IssueRun[]): PublicIssueRunView[] {

@@ -1415,6 +1415,25 @@ input:checked + .slider:before {
   margin-top: 2px;
 }
 
+.kanban-card-dependency {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-glow);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.kanban-card-dependency svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .kanban-card-runtime-meta,
 .kanban-card-actions {
   display: flex;

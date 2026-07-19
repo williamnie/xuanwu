@@ -49,3 +49,11 @@ test('specialized panels stay conditional and destructive actions stay in the mo
   assert.match(actionsSource, /className="issue-more-menu"/);
   assert.match(actionsSource, /issue\.status !== 'in_progress'/);
 });
+
+test('issue detail explains dependency waiting with direct and root blockers', () => {
+  const overviewSource = readFileSync(new URL('./issue-detail/IssueDetailOverview.jsx', import.meta.url), 'utf8');
+  assert.match(overviewSource, /dependency\.direct_dependencies/);
+  assert.match(overviewSource, /dependency\.root_blockers/);
+  assert.match(overviewSource, /dependency\.waiting_reason/);
+  assert.match(overviewSource, /relation_authority/);
+});

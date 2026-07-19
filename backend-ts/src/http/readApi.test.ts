@@ -5,6 +5,9 @@ import { basename, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 import { isProjectLoopActive } from "../runner/projectLoopManager.ts";
+import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
+import type { DependencyRelation } from "../domain/work/contracts.ts";
+import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -35,6 +38,13 @@ describe("Bun projects/issues read API", () => {
         status: "todo",
         sourceSessionId: "thread-a"
       });
+      const blockerId = insertIssue(database, {
+        projectId: "demo",
+        title: "Failed blocker",
+        status: "failed",
+        sourceSessionId: "thread-blocker"
+      });
+      addDependency(database, issueId, blockerId);
       insertIssue(database, {
         projectId: "other",
         title: "Hidden",
@@ -62,6 +72,16 @@ describe("Bun projects/issues read API", () => {
       expect((await issues.json() as Array<Record<string, unknown>>).map((item) => item.id)).toEqual([issueId]);
       expect(issue.status).toBe(200);
       expect(await issue.json()).toMatchObject({
+        dependency: {
+          compatibility: {
+            relation_authority: "work_relations(kind=depends_on)",
+            status_authority: "issues"
+          },
+          direct_dependencies: [{ issue_id: blockerId, status: "failed" }],
+          ready: false,
+          reason: "failed_dependency",
+          root_blockers: [{ issue_id: blockerId, status: "failed" }]
+        },
         id: issueId,
         project_id: "demo",
         title: "Read API",
@@ -672,6 +692,26 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");
   return row.id;
+}
+
+function addDependency(db: RunnerDatabase, issueID: number, dependencyID: number): void {
+  for (const id of [issueID, dependencyID]) {
+    const work = getIssueAsWork(db, id);
+    if (!work) throw new Error(`missing issue ${id}`);
+    insertWorkRecord(db, work);
+  }
+  const relation: DependencyRelation = {
+    actor: { id: "read-api-test", kind: "runner" },
+    audit_event_ref: `read-api-test:${issueID}:${dependencyID}`,
+    correlation_id: `read-api-test:${issueID}:${dependencyID}`,
+    depends_on_work_id: issueIDToWorkID(dependencyID),
+    kind: "depends_on",
+    occurred_at: "2026-01-01T00:00:00Z",
+    reason: "read API dependency fixture",
+    relation_id: `read-api-dependency:${issueID}:${dependencyID}`,
+    work_id: issueIDToWorkID(issueID)
+  };
+  insertWorkRelationRecord(db, "demo", relation);
 }
 
 class FakeExecutionProvider implements ExecutorProvider {

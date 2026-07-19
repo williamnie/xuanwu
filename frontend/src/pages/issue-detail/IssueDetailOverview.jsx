@@ -87,8 +87,22 @@ export default function IssueDetailOverview({
 }
 
 export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowLogs }) {
+  const dependency = issue.dependency;
+  const dependencyBlocked = issue.status === 'todo' && dependency?.ready === false;
+  const dependencyDanger = ['failed_dependency', 'missing_dependency', 'dependency_cycle'].includes(dependency?.reason);
   return (
     <>
+      {dependencyBlocked && (
+        <div className={`issue-inline-alert ${dependencyDanger ? 'danger' : 'warning'}`} role="status">
+          <AlertTriangle size={17} />
+          <div>
+            <strong>依赖等待 · {dependency.compatibility?.relation_authority || 'work_relations'}</strong>
+            <p>{dependency.waiting_reason}</p>
+            <p>直接依赖：{dependencyRefs(dependency.direct_dependencies)}；根 blocker：{dependencyRefs(dependency.root_blockers)}</p>
+          </div>
+        </div>
+      )}
+
       {executionSummary.statusConflict && (
         <div className="issue-inline-alert warning" role="status">
           <AlertTriangle size={17} />
@@ -112,6 +126,11 @@ export function IssueStatusAlerts({ issue, executionSummary, onShowRuns, onShowL
       )}
     </>
   );
+}
+
+function dependencyRefs(refs = []) {
+  if (refs.length === 0) return '无';
+  return refs.map(ref => ref.issue_id ? `#${ref.issue_id} (${ref.status})` : `${ref.work_id} (${ref.status})`).join('、');
 }
 
 function IssueExecutionOverview({ issue, latestRun, summary, sessionRef, navigateTo }) {

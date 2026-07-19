@@ -3,8 +3,7 @@ import { getProject } from "../db/repositories/projects.ts";
 import {
   countActiveExecutorWork,
   hasActiveExecutorWorkForProject,
-  hasProjectExecutionBlocker,
-  hasTodoIssue,
+  hasReadyIssue,
   projectExecutionLockKey
 } from "../db/repositories/issueQueue.ts";
 import type { RunnerDatabase } from "../db/database.ts";
@@ -100,7 +99,6 @@ async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): P
   while (shouldContinue(runtime.database, projectID, forcedProjects.has(projectID))) {
     const result = await runProjectLoopOnce(loopInput(runtime, projectID));
     if (!result.claimed) break;
-    if (result.run.runId === "failed") return false;
   }
   return true;
 }
@@ -108,7 +106,7 @@ async function runProjectLoop(runtime: ProjectLoopRuntime, projectID: string): P
 function shouldContinue(db: RunnerDatabase, projectID: string, forceOnce: boolean): boolean {
   if (hasActiveExecutorWorkForProject(db, projectID)) return false;
   if (forceOnce) return true;
-  return isAutoRunEnabled(db, projectID) && !hasProjectExecutionBlocker(db, projectID);
+  return isAutoRunEnabled(db, projectID) && hasReadyIssue(db, projectID);
 }
 
 function loopInput(runtime: ProjectLoopRuntime, projectID: string): ProjectLoopInput {
@@ -126,7 +124,7 @@ function requeueProjectsWithTodo(db: RunnerDatabase): void {
   ).all();
   for (const project of projects) {
     if (activeLoops.has(project.id) || hasActiveExecutorWorkForProject(db, project.id) ||
-      hasProjectExecutionBlocker(db, project.id) || !hasTodoIssue(db, project.id)) continue;
+      !hasReadyIssue(db, project.id)) continue;
     activeLoops.add(project.id);
     enqueueProject(project.id);
   }

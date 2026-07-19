@@ -322,7 +322,7 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
-  test("auto-run stops after provider startup failure and leaves remaining todos queued", async () => {
+  test("provider startup failure does not block an independent ready sibling", async () => {
     const db = await openFixtureDatabase();
     const provider = new FailingExecutionProvider();
     try {
@@ -334,17 +334,17 @@ describe("Bun project loop claim execution", () => {
       await waitFor(() => getIssue(db, first)?.status === "failed");
       await waitFor(() => !isProjectLoopActive("failure-demo"));
 
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([first, second]);
       expect(getIssue(db, first)).toMatchObject({ status: "failed", attempt_count: 1 });
-      expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
-      expect(listIssueRuns(db, second)).toEqual([]);
+      expect(getIssue(db, second)).toMatchObject({ status: "failed", attempt_count: 1 });
+      expect(listIssueRuns(db, second)).toHaveLength(1);
     } finally {
       db.close();
     }
   });
 
   for (const status of ["failed"] as const) {
-    test(`auto-run stays stopped after executor marks the current issue ${status}`, async () => {
+    test(`executor ${status} does not act as a project-wide fuse for ready siblings`, async () => {
       const db = await openFixtureDatabase();
       const provider = new TerminalExecutionProvider(db, status);
       try {
@@ -359,9 +359,9 @@ describe("Bun project loop claim execution", () => {
         kickAutoRunProjects({ database: db, providers: { [provider.id]: provider } });
         await Bun.sleep(20);
 
-        expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
-        expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });
-        expect(listIssueRuns(db, second)).toEqual([]);
+        expect(provider.inputs.map((input) => input.issueId)).toEqual([first, second]);
+        expect(getIssue(db, second)).toMatchObject({ status, attempt_count: 1 });
+        expect(listIssueRuns(db, second)).toHaveLength(1);
       } finally {
         db.close();
       }

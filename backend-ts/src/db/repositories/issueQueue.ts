@@ -2,11 +2,10 @@ import type { RunnerDatabase } from "../database.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { createIssueRun } from "./issueRuns.ts";
 import { getIssue, type Issue } from "./issues.ts";
+import { readProjectIssueDependencies } from "../../domain/work/issueDependency.ts";
 
 const STATUS_TODO = "todo";
 const STATUS_IN_PROGRESS = "in_progress";
-const PROJECT_EXECUTION_BLOCKING_STATUSES = ["failed"] as const;
-
 type ClaimedIssueRow = { id: number };
 type CountRow = { count: number };
 type ProjectCwdRow = { cwd: string };
@@ -62,14 +61,10 @@ export function hasTodoIssue(db: RunnerDatabase, projectID: string): boolean {
   return countRows(db, sql, [cleanProjectID, STATUS_TODO]) > 0;
 }
 
-export function hasProjectExecutionBlocker(db: RunnerDatabase, projectID: string): boolean {
+export function hasReadyIssue(db: RunnerDatabase, projectID: string): boolean {
   const cleanProjectID = projectID.trim();
   if (cleanProjectID === "") return false;
-  const placeholders = PROJECT_EXECUTION_BLOCKING_STATUSES.map(() => "?").join(",");
-  return countRows(db, `
-    select count(*) as count from issues
-    where project_id=? and status in (${placeholders})
-  `, [cleanProjectID, ...PROJECT_EXECUTION_BLOCKING_STATUSES]) > 0;
+  return nextIssueRow(db, cleanProjectID) !== null;
 }
 
 function claimNextIssueID(db: RunnerDatabase, projectID: string): number {
@@ -103,10 +98,12 @@ function parsedProjectExecutionLockKey(db: RunnerDatabase, projectID: string): {
 }
 
 function nextIssueRow(db: RunnerDatabase, projectID: string): ClaimedIssueRow | null {
-  return db.sqlite.query<ClaimedIssueRow, [string, string]>(`
+  const dependencyByIssueID = readProjectIssueDependencies(db, projectID);
+  const rows = db.sqlite.query<ClaimedIssueRow, [string, string]>(`
     select id from issues where project_id=? and status=?
-    order by priority desc, created_at asc, id asc limit 1
-  `).get(projectID, STATUS_TODO) ?? null;
+    order by priority desc, created_at asc, id asc
+  `).all(projectID, STATUS_TODO);
+  return rows.find((row) => dependencyByIssueID.get(row.id)?.ready === true) ?? null;
 }
 
 function recordClaimEvent(db: RunnerDatabase, issueID: number, timestamp: string): void {

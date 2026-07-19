@@ -57,6 +57,9 @@ export default function IssueCard({
       </div>
 
       {issue.status === 'failed' && failureReason && <IssueFailureSummary reason={failureReason} />}
+      {issue.status === 'todo' && issue.dependency?.ready === false && (
+        <IssueDependencySummary dependency={issue.dependency} />
+      )}
       <IssueRunMetadata issue={issue} run={run} />
       <IssueQuickActions
         issue={issue}
@@ -69,6 +72,15 @@ export default function IssueCard({
         onServiceTierChange={onServiceTierChange}
       />
       <IssueCardFooter issue={issue} project={project} getRelativeTime={getRelativeTime} />
+    </div>
+  );
+}
+
+function IssueDependencySummary({ dependency }) {
+  return (
+    <div className="kanban-card-dependency" title={dependency.waiting_reason}>
+      <Link2 size={13} />
+      <span>{dependency.waiting_reason}</span>
     </div>
   );
 }

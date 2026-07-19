@@ -36,3 +36,11 @@ test('issue card runtime details stay available through tooltip text', () => {
   assert.match(cardSource, /`Session: \$\{sessionId \|\| '暂无'\}`/);
   assert.match(cardSource, /`Turn: \$\{turnId \|\| '暂无'\}`/);
 });
+
+test('todo cards expose dependency waiting without inventing a new issue status', () => {
+  assert.match(cardSource, /issue\.status === 'todo'/);
+  assert.match(cardSource, /issue\.dependency\?\.ready === false/);
+  assert.match(cardSource, /IssueDependencySummary/);
+  assert.match(cardSource, /dependency\.waiting_reason/);
+  assert.match(ruleFor('.kanban-card-dependency'), /var\(--warning-bg\)/);
+});
