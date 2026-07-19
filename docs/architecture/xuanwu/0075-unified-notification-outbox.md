@@ -1,6 +1,6 @@
 # ADR-XW-0075：统一通知 Intent、Outbox 与 Daily Digest
 
-- 状态：Accepted（W1 additive compatibility）
+- 状态：Accepted（W2 single-writer cutover；见 ADR-XW-0083）
 - 日期：2026-07-18
 - 路线 issue：XW P08.10 / Runner #716
 - 硬依赖：P08.06 / #712、P08.07 / #713、P05.08 / #679（均为 `done`）
@@ -22,11 +22,11 @@
 
 `routeNotification` 为每个 channel 生成稳定 child idempotency key，确定性读取既有 run-group/conversation/project/global preference；`digest_policy_json.channels` 可收窄 channel。`needs_user`、approval 与 urgent 仍立即入 outbox，普通消息在项目 quiet hours 或 digest/quiet preference 下保持为 `aggregated` intent。`queueDailyNotificationDigests` 在项目 timezone 的 `daily_at`（默认 09:00）后聚合无 run-group 的 deferred intent；run-group digest 继续由既有 scheduler 负责，二者不竞争。
 
-`notificationOutbox.ts` 只抽取既有 draft/outbox 写入与 retry policy。Feishu wrapper 已调用该 core，生产 Feishu 的 card-aware dispatch 仍由 `imReplyOutboxDispatcher` 承担；多 channel sender 合同用于 fixture 和后续 connector adapter，不解析 provider payload，也不绕过 approval/action gate。
+`notificationOutbox.ts` 只承载既有 draft/outbox 写入与 retry policy。P11.06 已删除 Feishu notification draft wrapper，所有 notification producer 经 `unifiedNotificationPipeline.ts` 进入该 core；生产 Feishu 的 card-aware dispatch 仍由 `imReplyOutboxDispatcher` 承担。多 channel sender 合同不解析 provider payload，也不绕过 approval/action gate。
 
 ## 兼容、回滚与删除门禁
 
-- **W1 双读=0、双写=0：** intent、draft、outbox 和 external link 都只写既有 authority；旧 Feishu API/row shape 保持不变。`sync_outbox.feishu_message_id` 在 W1 对 generic fixture 仅承载 provider receipt，正式非 Feishu adapter 应在 P09 cutover 前完成字段映射。
+- **W2 双读=0、双写=0：** intent、draft、outbox 和 external link 都只写既有 authority；旧 Feishu API/row shape 保持不变。P11.06 只删除无状态 wrapper，不 backfill 或删除历史 row；`sync_outbox.feishu_message_id` 继续作为 compatibility receipt carrier，直至独立 provider-neutral schema migration 完成。
 - **回滚：** 停止 scheduler 的 daily digest 调用并让 Feishu wrapper 回到原 helper 即可；既有 intent/outbox row 可继续由原 dispatcher 恢复，不删除数据、不反写业务状态。
 - **最终删除门禁：** P09 channel adapter 完成 receipt/cursor/idempotency/audit parity；连续两个正式 release legacy-only producer/consumer 为 0；restart/retry、quiet hours、多 channel、backup/restore rehearsal 通过；有新鲜备份、隔离恢复证据和非 LLM cutover approval。缺一项不得删除 legacy Feishu carrier 或字段。
 

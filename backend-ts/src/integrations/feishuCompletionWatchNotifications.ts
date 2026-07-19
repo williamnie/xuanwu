@@ -10,7 +10,6 @@ import {
 } from "../pi/notificationCoordinator.ts";
 import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { formatIssueCompletionWatchNotification } from "./feishuNotificationFormatters.ts";
-import { alreadyQueuedFeishuNotification } from "./feishuNotificationDrafts.ts";
 
 export type CompletionWatchQueueResult = {
   failed: number;
@@ -62,10 +61,6 @@ function queueWatchIntent(
   }
   const payload = parseRecord(intent.payload_json);
   const notifyID = watchNotificationID(intent, payload);
-  if (alreadyQueuedFeishuNotification(db, COMPLETION_WATCH_NOTIFY_TYPE, notifyID)) {
-    result.skipped += 1;
-    return;
-  }
   const queued = queueExistingNotificationIntent(db, {
     content: formatIssueCompletionWatchNotification(payload),
     deepLink: intent.issue_id > 0 ? `/api/issues/${intent.issue_id}` : "#/automations",

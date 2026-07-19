@@ -20,9 +20,6 @@ import {
 import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { formatIssueStatusNotification } from "./feishuNotificationFormatters.ts";
 import {
-  alreadyQueuedFeishuNotification
-} from "./feishuNotificationDrafts.ts";
-import {
   feishuFallbackTargetForProject,
   feishuTargetForConversation,
   feishuTargetForIssue
@@ -32,7 +29,6 @@ export type QueueResult = { queued: boolean; reason: string };
 export type DigestQueueResult = { failed: number; queued: number; scanned: number; skipped: number };
 
 const ISSUE_STATUS_NOTIFY_TYPE = "feishu_issue_status_notification";
-const APPROVAL_NOTIFY_TYPE = "feishu_approval_notification";
 const DIGEST_NOTIFY_TYPE = "feishu_run_group_digest_notification";
 const DEFAULT_DIGEST_LIMIT = 20;
 
@@ -78,7 +74,7 @@ export function queueFeishuIssueStatusNotification(
     suppressLifecycleIntent(db, intentResult.intent, "missing_feishu_link");
     return { queued: false, reason: "missing_feishu_link" };
   }
-  return queueLegacyFeishuDraft(db, issue, target, intentResult);
+  return queueLifecycleIntent(db, issue, target, intentResult);
 }
 
 export function queueReadyFeishuDigestNotifications(
@@ -175,20 +171,13 @@ function sourceSessionConversationID(value: string): string {
   return text.startsWith("feishu:") ? cleanString(text.slice("feishu:".length)) : "";
 }
 
-function queueLegacyFeishuDraft(
+function queueLifecycleIntent(
   db: RunnerDatabase,
   issue: Issue,
   target: NonNullable<ReturnType<typeof feishuTargetForIssue>>,
   intentResult: LifecycleIntentResult
 ): QueueResult {
   const notifyID = issueNotificationID(issue);
-  if (alreadyQueuedFeishuNotification(db, APPROVAL_NOTIFY_TYPE, notifyID) ||
-    alreadyQueuedFeishuNotification(db, ISSUE_STATUS_NOTIFY_TYPE, notifyID)) {
-    if (intentResult.intent.state !== "sent") {
-      suppressLifecycleIntent(db, intentResult.intent, "duplicate_legacy_feishu_notification");
-    }
-    return { queued: false, reason: "duplicate" };
-  }
   const queued = queueExistingNotificationIntent(db, {
     content: formatIssueStatusNotification(issue),
     deepLink: `/api/issues/${issue.id}`,
@@ -232,10 +221,6 @@ function queueDigestIntent(
   if (!target) {
     markNotificationIntentRetry(db, intent, "missing_feishu_target");
     result.failed += 1;
-    return;
-  }
-  if (alreadyQueuedFeishuNotification(db, DIGEST_NOTIFY_TYPE, digestNotificationID(intent))) {
-    result.skipped += 1;
     return;
   }
   const queued = queueExistingNotificationIntent(db, {

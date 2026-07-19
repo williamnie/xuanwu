@@ -86,7 +86,14 @@ export function queueExistingNotificationIntent(
     projectID: updated.project_id,
     target: route
   });
-  if (!queued.queued) return duplicateResult(updated, route);
+  if (!queued.queued) {
+    const duplicate = updatePiNotificationIntent(db, updated.id, {
+      decision: "suppress",
+      error: "duplicate_notification_link",
+      state: "suppressed"
+    });
+    return duplicateResult(duplicate, route);
+  }
   const sent = updatePiNotificationIntent(db, updated.id, {
     error: "",
     sent_at: new Date().toISOString(),

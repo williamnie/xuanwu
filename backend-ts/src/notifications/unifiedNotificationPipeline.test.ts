@@ -28,6 +28,48 @@ afterEach(async () => {
 });
 
 describe("unified notification intent/outbox", () => {
+  test("suppresses a replay when historical notification links predate unified intents", async () => {
+    const db = await fixture();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "Historical delivery" });
+      createExternalLink(db, {
+        external_id: `historical:${issue.id}:done`,
+        external_type: "fixture_historical_done",
+        issue_id: issue.id,
+        project_id: "demo",
+        relationship: "notification",
+        source: "feishu"
+      });
+
+      const [result] = routeNotification(db, {
+        content: "historical completion replay",
+        idempotencyKey: `historical:issue:${issue.id}:done`,
+        issueID: issue.id,
+        kind: "issue_done",
+        notificationID: `historical:${issue.id}:done`,
+        notificationType: "fixture_historical_done",
+        projectID: "demo",
+        routes: [{ channel: "feishu", chatID: "oc_historical" }],
+        sourceEventID: `issue:${issue.id}:done`,
+        sourceEventType: "issue.status_changed",
+        summary: `issue #${issue.id} historical completion`
+      });
+
+      expect(result).toMatchObject({ queued: false, reason: "duplicate" });
+      expect(listSyncOutbox(db)).toHaveLength(0);
+      expect(listPiNotificationIntents(db, { issueId: issue.id })).toMatchObject([
+        expect.objectContaining({
+          decision: "suppress",
+          error: "duplicate_notification_link",
+          sent_outbox_id: 0,
+          state: "suppressed"
+        })
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("dedupes one event per channel, preserves deep links, and retries a failed channel", async () => {
     const db = await fixture();
     try {

@@ -137,6 +137,7 @@
 - [ADR-XW-0080：旧 Inbox、Approval、Activity 与 Settings 占位入口退出](xuanwu/0080-placeholder-route-retirement.md)
 - [ADR-XW-0081：Issues/Sessions 用户路由退役与 compat v1](xuanwu/0081-issues-sessions-route-retirement.md)
 - [ADR-XW-0082：用户可见命名迁移与内部兼容清单](xuanwu/0082-user-facing-naming-migration.md)
+- [ADR-XW-0083：legacy/compat 引用审计与通知单写路径收敛](xuanwu/0083-legacy-compat-notification-cleanup.md)
 
 ## 3. 历史归档与 superseded 映射
 

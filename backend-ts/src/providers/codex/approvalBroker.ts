@@ -35,6 +35,7 @@ export class CodexApprovalBroker {
   }
 
   async request(jsonRpcId: string | number, method: string, params: unknown): Promise<unknown> {
+    if (!this.canHandle(method)) throw new Error(`unsupported approval method: ${method.trim()}`);
     const startedAt = performance.now();
     const request = approvalRequest(jsonRpcId, method, params);
     const fastDecision = evaluateApprovalFastPolicy({ method: request.method, params: request.params });
@@ -124,7 +125,10 @@ function approvalResponse(
   if (method === "item/permissions/requestApproval") return permissionsResponse(params, decision);
   if (method === "item/commandExecution/requestApproval") return { decision: commandDecision(decision) };
   if (method === "item/fileChange/requestApproval") return { decision: fileChangeDecision(decision) };
-  return { decision: legacyDecision(decision) };
+  if (method === "execCommandApproval" || method === "applyPatchApproval") {
+    return { decision: legacyDecision(decision) };
+  }
+  throw new Error(`unsupported approval method: ${method}`);
 }
 
 function approvalFastResolvedEvent(

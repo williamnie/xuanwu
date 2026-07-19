@@ -14,8 +14,7 @@ import { getSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { createPiNotificationIntent, getPiNotificationIntent } from "../db/repositories/pi.ts";
 import type { AutomationAudit } from "../domain/automation/contracts.ts";
-import { createFeishuNotificationDraft } from "../integrations/feishuNotificationDrafts.ts";
-import { markNotificationIntentSent } from "../pi/notificationCoordinator.ts";
+import { queueExistingNotificationIntent } from "../notifications/unifiedNotificationPipeline.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { SUPERVISOR_NOTIFICATION_PREFIX } from "../xuanwu/userFacingTerminology.ts";
 
@@ -125,20 +124,20 @@ function settleAndNotify(db: RunnerDatabase, watch: AutomationWatch, match: Matc
       target_message_id: terminal.notification_target.message_id,
       target_thread_id: terminal.notification_target.thread_id
     });
-    const outbox = createFeishuNotificationDraft(db, {
-      id: notificationIssueID(watch),
-      project_id: projectID(db, watch)
-    }, {
-      chatID: terminal.notification_target.chat_id,
-      eventID: sourceExternalEventID(match.sourceEventID),
-      messageID: terminal.notification_target.message_id,
-      threadID: terminal.notification_target.thread_id
-    }, {
+    const queued = queueExistingNotificationIntent(db, {
       content: notificationText(watch, match),
-      notifyID: watch.automation_id,
-      type: WATCH_NOTIFICATION_TYPE
+      intent,
+      notificationID: watch.automation_id,
+      notificationType: WATCH_NOTIFICATION_TYPE,
+      route: {
+        channel: terminal.notification_target.channel,
+        chatID: terminal.notification_target.chat_id,
+        eventID: sourceExternalEventID(match.sourceEventID),
+        messageID: terminal.notification_target.message_id,
+        threadID: terminal.notification_target.thread_id
+      }
     });
-    markNotificationIntentSent(db, intent, outbox.outboxID);
+    if (!queued.queued) return false;
     recordAutomationWatchNotificationQueued(db, terminal, audit(watch, now, "notification-queued"));
     return true;
   });

@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { CodexApprovalBroker, codexProviderApprovalDecision } from "./approvalBroker.ts";
 
 describe("Codex approval broker fast policy", () => {
+  test("rejects unknown approval methods instead of using a compatibility default", async () => {
+    const broker = new CodexApprovalBroker();
+
+    expect(broker.canHandle("approval/resolve")).toBe(false);
+    await expect(broker.request("rpc-unknown", "approval/resolve", {}))
+      .rejects.toThrow("unsupported approval method: approval/resolve");
+  });
+
   test("accepts exact low-risk approvals once without creating pending approval state", async () => {
     const events: unknown[] = [];
     const broker = new CodexApprovalBroker({ onEvent: (event) => events.push(event) });

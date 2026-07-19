@@ -76,8 +76,8 @@ export type NotificationOutboxDispatchResult = {
 
 /**
  * sync_outbox remains the only external-delivery authority. The source column is
- * the channel route during the W1 compatibility window; legacy Feishu callers
- * still use the same im_reply draft/outbox rows through their thin wrapper.
+ * the channel route. Unified notification producers use the same im_reply
+ * draft/outbox rows, while historical Feishu links remain valid dedupe facts.
  */
 export function queueNotificationOutbox(
   db: RunnerDatabase,

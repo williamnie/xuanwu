@@ -8,6 +8,7 @@ import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { listSyncOutbox } from "../db/repositories/imReplyOutbox.ts";
+import { listPiNotificationIntents } from "../db/repositories/pi.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { EventBus } from "../events/bus.ts";
 import { createDefaultRouter } from "../http/server.ts";
@@ -191,7 +192,8 @@ describe("Feishu notification queue", () => {
       const first = queueFeishuPiNeedsUserNotification(db, event);
       const second = queueFeishuPiNeedsUserNotification(db, event);
       const outbox = listSyncOutbox(db, { source: "feishu" });
-      const text = JSON.stringify(outbox);
+      const intents = listPiNotificationIntents(db, { issueId: issueID });
+      const text = JSON.stringify({ intents, outbox });
 
       expect(first).toMatchObject({ queued: true, reason: "queued" });
       expect(second).toMatchObject({ queued: false, reason: "duplicate" });
@@ -201,6 +203,14 @@ describe("Feishu notification queue", () => {
         issue_id: issueID,
         target_chat_id: "oc_group"
       });
+      expect(intents).toMatchObject([
+        expect.objectContaining({
+          kind: "pi_needs_user",
+          sent_outbox_id: outbox[0]?.id,
+          state: "sent",
+          target_channel: "feishu"
+        })
+      ]);
       expect(text).toContain("我暂时没有继续自动重试");
       expect(text).not.toContain("Provider：");
       expect(text).not.toContain("诊断：");
