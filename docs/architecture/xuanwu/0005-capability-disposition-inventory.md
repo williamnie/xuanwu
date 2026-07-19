@@ -416,16 +416,16 @@ GET /api/issues/:id/runs
 | surface | page ids | 结论 | 目标 | source files |
 | --- | --- | --- | --- | --- |
 | `assistant-runtime` | `pi-chat`, `pi-overview`, `pi-memory` | **keep** | Operator conversation and supporting memory/config | `PiAgentSettingsPanel.jsx`, `PiChat.jsx`, `PiChatComposerMeta.jsx`, `PiMemoryPanel.jsx` |
-| `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | `AttentionInbox.jsx` |
-| `automation` | `cron`, `pi-automations` | **migrate** | Automation API with legacy cron/delegation compatibility | `Automations.jsx`, `AutomationsRuntimePanel.jsx`, `Cron.jsx` |
-| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsPlaceholders.jsx`, `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
+| `attention` | `pi-inbox`, `attention-inbox` | **merge** | Attention projections with deterministic resolution gates | —（已合并到 Command Center） |
+| `automation` | `cron`, `pi-automations` | **migrate** | Automation API with legacy cron/delegation compatibility | `Automations.jsx` |
+| `capability-policy` | `settings`, `pi-connectors`, `pi-skills`, `pi-policies` | **keep** | Capability registry and deterministic permission policy | `AssistantSettingsSections.jsx`, `ConnectorDiagnosticsPanel.jsx`, `FeishuSettingsPanel.jsx`, `NotificationSettingsPanel.jsx`, `PermissionsSettingsPanel.jsx`, `PiMcpManagementPanel.jsx`, `ProviderAvailabilityPanel.jsx`, `RunnerSettingsPanel.jsx`, `Settings.jsx`, `SettingsChrome.jsx`, `SkillsRuntimePanel.jsx`, `SourcePoliciesPanel.jsx` |
 | `evidence-handoff` | `handoffs`, `pi-activity`, `pi-approvals` | **merge** | Evidence/Handoff read models and audited action requests | `ActivityTimelinePanel.jsx`, `Handoffs.jsx` |
 | `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `Projects.jsx` |
 | `run-session-drilldown` | `runs`, `sessions` | **merge** | Run with provider Session drill-down | `Runs.jsx`, `Sessions.jsx` |
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
 | `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `IssueTemplatesPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
 
-页面迁移规则：`Issues`/`IssueDetail` 先保留现有 API 与状态机，逐步改为 Work 术语；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`Cron` 与 Automation 设置最终合并，但在 cron cursor parity 前保留现页；`pi-inbox`/`attention-inbox` 是同一 Attention surface 的兼容 page id。
+页面迁移规则：`Issues`/`IssueDetail` 保留为 Work feature flag 的 rollback surface；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`cron`/`pi-automations` page id 统一投影到 `Automations`；`pi-inbox`/`attention-inbox` page id 统一投影到 Command Center。兼容 page id 不再拥有独立 JSX/CSS。
 
 ## 7. 后台调度器清单
 

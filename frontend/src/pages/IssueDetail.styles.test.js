@@ -36,15 +36,6 @@ test('issue detail workspace keeps activity, notes, and advanced data in bounded
   assert.match(ruleFor('.issue-detail-terminal'), /max-height:\s*620px/);
 });
 
-test('issue workflow evidence panel keeps compact long evidence inside sidebar', () => {
-  for (const selector of ['.issue-workflow-panel', '.issue-workflow-steps', '.issue-workflow-step', '.issue-workflow-evidence-summary', '.issue-workflow-latest-run']) {
-    assert.match(ruleFor(selector), /min-width:\s*0/);
-  }
-
-  assert.match(ruleFor('.issue-workflow-step-evidence'), /overflow-wrap:\s*anywhere/);
-  assert.match(ruleFor('.issue-workflow-summary-field strong,\n.issue-workflow-latest-run strong,\n.issue-workflow-latest-run code,\n.issue-workflow-latest-run p'), /overflow-wrap:\s*anywhere/);
-});
-
 test('issue detail exposes Supervisor panel without native browser dialogs', () => {
   const source = readFileSync(new URL('./IssueDetail.jsx', import.meta.url), 'utf8');
   const dataSource = readFileSync(new URL('./issue-detail/useIssueDetailData.js', import.meta.url), 'utf8');

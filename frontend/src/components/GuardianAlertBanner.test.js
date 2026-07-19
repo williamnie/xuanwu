@@ -17,7 +17,9 @@ const cssSource = readFileSync(new URL('../App.css', import.meta.url), 'utf8');
 test('Guardian alert banner is mounted globally above routed pages', () => {
   assert.match(appSource, /import GuardianAlertBanner from '\.\/components\/GuardianAlertBanner'/);
   assert.match(appSource, /import '\.\/App\.css'/);
-  assert.match(appSource, /<main className="main-content">\s*<GuardianAlertBanner \/>/);
+  const mainIndex = appSource.indexOf('<main className=');
+  const bannerIndex = appSource.indexOf('<GuardianAlertBanner />');
+  assert.ok(mainIndex >= 0 && bannerIndex > mainIndex);
   assert.match(cssSource, /\.guardian-alert-stack/);
   assert.match(cssSource, /position:\s*sticky/);
 });

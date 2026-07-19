@@ -18,11 +18,12 @@ test('Work Detail composes canonical sections without replacing existing domain 
   assert.match(detail, /assistantApi\.getPiGuardianAlerts/);
 });
 
-test('Work Board offers board/list views, opens Work Detail, and retains Issue compatibility deep link', () => {
+test('Work Board offers board/list views and opens canonical Work Detail', () => {
   assert.match(board, /onViewChange\('board'\)/);
   assert.match(board, /onViewChange\('list'\)/);
   assert.match(board, /navigateTo\('work', work\.id\)/);
-  assert.match(board, /navigateTo\('issues', issueId\)/);
+  assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);
+  assert.match(board, /Issue #\{issueId\} authority/);
   assert.match(board, /<WorkDetail/);
 });
 

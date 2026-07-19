@@ -687,7 +687,7 @@ export const PAGE_SURFACES = [
   {
     id: "automation", disposition: "migrate", target: "Automation API with legacy cron/delegation compatibility",
     page_ids: ["cron", "pi-automations"],
-    source_files: ["frontend/src/pages/Automations.jsx", "frontend/src/pages/AutomationsRuntimePanel.jsx", "frontend/src/pages/Cron.jsx"]
+    source_files: ["frontend/src/pages/Automations.jsx"]
   },
   {
     id: "capability-policy", disposition: "keep", target: "Capability registry and deterministic permission policy",

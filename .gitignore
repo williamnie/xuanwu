@@ -11,6 +11,7 @@ logs/
 # Build outputs
 /dist/
 /build/
+/output/
 frontend/dist/
 
 # Dependencies

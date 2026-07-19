@@ -3,18 +3,15 @@
 /* Dashboard and shared metrics */
 .dashboard-page { gap: 26px !important; }
 .dashboard-page > .grid-cols-3 { gap: 14px; }
-.dashboard-page > .grid-cols-3 > .glass-card,
-.cron-page > .grid-cols-3 > .glass-card {
+.dashboard-page > .grid-cols-3 > .glass-card {
   min-height: 108px;
   padding: 18px 20px;
 }
-.dashboard-page > .grid-cols-3 > .glass-card > div:first-child,
-.cron-page > .grid-cols-3 > .glass-card > div:first-child {
+.dashboard-page > .grid-cols-3 > .glass-card > div:first-child {
   border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   border-radius: var(--radius-md) !important;
 }
-.dashboard-page > .grid-cols-3 > .glass-card > div:last-child > div:first-child,
-.cron-page > .grid-cols-3 > .glass-card > div:last-child > div:first-child {
+.dashboard-page > .grid-cols-3 > .glass-card > div:last-child > div:first-child {
   font-family: var(--font-mono);
   letter-spacing: -0.055em;
 }
@@ -69,15 +66,12 @@
 .kanban-card-runtime-pill, [data-theme="dark"] .kanban-card-runtime-pill { background: var(--bg-secondary); border-color: var(--border-light); border-radius: var(--radius-xs); }
 .kanban-card-action-btn, .kanban-card-more-trigger { border-radius: var(--radius-xs); }
 .issue-detail-grid { gap: 14px; }
-.issue-supervisor-panel, .issue-workflow-panel, .issue-workflow-step,
-.issue-workflow-latest-run, .issue-workflow-summary-field {
+.issue-supervisor-panel {
   background: var(--panel-gradient);
   border-color: var(--border-color);
   border-radius: var(--radius-md);
 }
-.issue-workflow-step { box-shadow: var(--shadow-sm); }
-
-/* Projects and Cron */
+/* Projects */
 .projects-grid { gap: 14px; }
 .project-card {
   background: var(--panel-gradient);
@@ -92,10 +86,6 @@
 .project-card-stat strong { font-family: var(--font-mono); }
 .project-card-details, .project-card-footer { border-color: var(--border-light); }
 .project-card-loop-btn { border-radius: var(--radius-sm); }
-.cron-page .page-intro { padding-bottom: 16px !important; }
-.cron-page > div:last-child > .glass-card,
-.cron-page > div:last-child section { border-radius: var(--radius-lg); }
-
 /* PI Assistant Chat */
 .pi-chat-page, [data-theme="dark"] .pi-chat-page { background: transparent; color: var(--text-primary); padding: 0; }
 .pi-chat-shell { gap: 12px; grid-template-columns: minmax(272px, 298px) minmax(0, 1fr); }
@@ -271,34 +261,18 @@
   color: var(--text-secondary);
 }
 
-.session-create-modal,
 .approval-card,
-[data-theme="dark"] .session-create-modal,
 [data-theme="dark"] .approval-card {
   background: var(--panel-gradient);
   border-color: var(--border-color);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 }
-.session-create-header h3,
 .approval-header h3,
-[data-theme="dark"] .session-create-header h3,
 [data-theme="dark"] .approval-header h3,
 .approval-command pre,
 [data-theme="dark"] .approval-command pre { color: var(--text-primary); }
-.session-create-header p,
-.session-create-section small,
-.session-create-hint,
 .approval-header p { color: var(--text-muted); }
-.session-create-icon {
-  background: var(--primary-gradient);
-  border-radius: var(--radius-md);
-  color: var(--primary-ink);
-}
-.session-create-section > label,
-.session-create-select > span { color: var(--text-secondary); }
-.session-create-runtime,
-[data-theme="dark"] .session-create-runtime,
 .approval-reason,
 .approval-command,
 .approval-paths,

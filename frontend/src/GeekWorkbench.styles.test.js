@@ -51,7 +51,6 @@ test('page refinements keep chat layouts bounded on narrow screens', () => {
 
 test('low-frequency global panels use the same visual system without owning Sessions page styles', () => {
   for (const selector of [
-    '.session-create-modal',
     '.approval-card',
     '.prompt-suggestion-menu',
     '.prompt-image-attachment-card',
