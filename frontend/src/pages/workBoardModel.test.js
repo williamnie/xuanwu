@@ -9,6 +9,7 @@ import {
   resolveWorkBoardPage,
   workBoardEnabled,
   workDeliveryStage,
+  workDropOperation,
   workNeedsAttention,
   workIdFromIssueId,
 } from './workBoardModel.js';
@@ -43,6 +44,19 @@ test('Attention and delivery projections stay deterministic', () => {
   assert.equal(workNeedsAttention(works[2], relations.get(works[2].id)), true);
   assert.equal(workDeliveryStage(works[1]), 'delivered');
   assert.equal(workDeliveryStage(works[2]), 'outstanding');
+});
+
+test('board drops preserve runner-aware lifecycle actions', () => {
+  assert.equal(workDropOperation('triage', 'todo'), 'update');
+  assert.equal(workDropOperation('todo', 'in_progress'), 'enqueue');
+  assert.equal(workDropOperation('in_progress', 'todo'), 'retry');
+  assert.equal(workDropOperation('failed', 'todo'), 'retry');
+  assert.equal(workDropOperation('in_progress', 'cancelled'), 'cancel');
+  assert.equal(workDropOperation('pending_verification', 'cancelled'), 'cancel');
+  assert.equal(workDropOperation('pending_verification', 'done'), 'blocked');
+  assert.equal(workDropOperation('in_progress', 'failed'), 'blocked');
+  assert.equal(workDropOperation('done', 'todo'), 'blocked');
+  assert.equal(workDropOperation('done', 'done'), 'none');
 });
 
 test('board filters combine type, status, project, Attention and delivery', () => {

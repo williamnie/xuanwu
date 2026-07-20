@@ -80,3 +80,21 @@ export function groupWorksByStatus(works) {
   });
   return groups;
 }
+
+export function workDropOperation(currentStatus, targetStatus) {
+  if (currentStatus === targetStatus) return 'none';
+  if (['done', 'failed', 'pending_verification'].includes(targetStatus)) return 'blocked';
+  if (['done', 'cancelled'].includes(currentStatus)) return 'blocked';
+  if (currentStatus === 'pending_verification') return targetStatus === 'cancelled' ? 'cancel' : 'blocked';
+  if (targetStatus === 'cancelled') return 'cancel';
+  if (targetStatus === 'todo') {
+    if (currentStatus === 'in_progress' || currentStatus === 'failed') return 'retry';
+    return currentStatus === 'triage' ? 'update' : 'blocked';
+  }
+  if (targetStatus === 'in_progress') {
+    if (currentStatus === 'failed') return 'retry';
+    return currentStatus === 'triage' || currentStatus === 'todo' ? 'enqueue' : 'blocked';
+  }
+  if (targetStatus === 'triage') return currentStatus === 'todo' || currentStatus === 'failed' ? 'update' : 'blocked';
+  return 'blocked';
+}

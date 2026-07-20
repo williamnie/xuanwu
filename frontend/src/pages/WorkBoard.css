@@ -1,6 +1,11 @@
 .work-board-page {
   color: var(--text-primary);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
   padding: 26px 0 12px;
 }
 
@@ -222,25 +227,48 @@
 }
 
 .work-board-scroll {
+  display: flex;
+  flex: 1;
   margin-top: 14px;
-  min-height: 360px;
+  min-height: 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
   padding-bottom: 14px;
   position: relative;
 }
 
 .work-board-columns {
+  align-items: stretch;
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  height: 100%;
+  min-height: 0;
 }
 
 .work-column {
   background: color-mix(in srgb, var(--bg-secondary) 62%, transparent);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  min-height: 330px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+.work-column.is-drop-allowed {
+  background: color-mix(in srgb, var(--primary) 7%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border-color));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.work-column.is-drop-blocked {
+  background: color-mix(in srgb, var(--error) 5%, var(--bg-secondary));
+  border-color: color-mix(in srgb, var(--error) 48%, var(--border-color));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--error) 18%, transparent);
 }
 
 .work-column-header {
@@ -269,7 +297,17 @@
 .work-column[data-tone='red'] .work-column-marker { background: var(--error); }
 .work-column[data-tone='green'] .work-column-marker { background: var(--success); }
 
-.work-column-stack { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+.work-column-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+  scrollbar-gutter: stable;
+}
 
 .work-card {
   background: var(--bg-card);
@@ -278,10 +316,15 @@
   box-shadow: var(--shadow-sm);
   contain-intrinsic-size: auto 220px;
   content-visibility: auto;
+  cursor: grab;
   padding: 12px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
 }
 
 .work-card:hover { border-color: color-mix(in srgb, var(--primary) 34%, var(--border-color)); }
+.work-card:active { cursor: grabbing; }
+.work-card.is-dragging { opacity: 0.38; }
+.work-card.is-moving { cursor: wait; opacity: 0.62; pointer-events: none; }
 
 .work-card-topline { align-items: center; display: flex; gap: 6px; justify-content: space-between; }
 .work-type-badge,
@@ -313,7 +356,7 @@
 .work-column-empty { border: 1px dashed var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; padding: 24px 12px; text-align: center; }
 .work-board-loading { align-items: center; background: color-mix(in srgb, var(--bg-primary) 72%, transparent); display: flex; font-family: var(--font-mono); inset: 0; justify-content: center; position: absolute; }
 
-.work-board-scroll.is-list { overflow-x: auto; }
+.work-board-scroll.is-list { overflow: auto; }
 .work-list { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); min-width: 920px; overflow: hidden; }
 .work-list-header,
 .work-list-row { align-items: center; display: grid; gap: 12px; grid-template-columns: 105px minmax(240px, 1.8fr) minmax(130px, 1fr) 105px 95px 145px 94px; }

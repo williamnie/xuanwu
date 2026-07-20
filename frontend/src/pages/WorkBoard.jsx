@@ -16,6 +16,7 @@ import {
 import { workApi } from '../api/work.js';
 import EvidencePanel from '../components/EvidencePanel.jsx';
 import { selectProjects, useDataStore } from '../store/dataStore';
+import { message } from '../store/toastStore.js';
 import WorkDetail from './WorkDetail.jsx';
 import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import {
@@ -26,6 +27,7 @@ import {
   WORK_BOARD_STATUSES,
   WORK_BOARD_TYPES,
   workDeliveryStage,
+  workDropOperation,
   workNeedsAttention,
 } from './workBoardModel.js';
 import './WorkBoard.css';
@@ -72,6 +74,9 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [draggingWork, setDraggingWork] = useState(null);
+  const [draggedOverStatus, setDraggedOverStatus] = useState('');
+  const [movingWorkId, setMovingWorkId] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -125,6 +130,69 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
   };
 
   const refresh = () => setRefreshVersion(version => version + 1);
+
+  const handleDragStart = (event, work) => {
+    if (event.target instanceof Element && event.target.closest('button')) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer.setData('text/plain', JSON.stringify({ workId: work.id }));
+    event.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => setDraggingWork({ id: work.id, status: work.status }), 0);
+  };
+
+  const resetDragState = () => {
+    setDraggingWork(null);
+    setDraggedOverStatus('');
+  };
+
+  const handleDragOver = (event, status) => {
+    if (movingWorkId || !draggingWork || draggingWork.status === status) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = workDropOperation(draggingWork.status, status) === 'blocked' ? 'none' : 'move';
+    if (draggedOverStatus !== status) setDraggedOverStatus(status);
+  };
+
+  const handleDragLeave = (event, status) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    if (draggedOverStatus === status) setDraggedOverStatus('');
+  };
+
+  const handleDrop = async (event, targetStatus) => {
+    event.preventDefault();
+    const payload = dragPayload(event.dataTransfer.getData('text/plain'));
+    const work = works.find(item => item.id === payload?.workId);
+    resetDragState();
+    if (!work || work.status === targetStatus || movingWorkId) return;
+
+    const operation = workDropOperation(work.status, targetStatus);
+    if (operation === 'blocked') {
+      message.warning('该状态由执行或验收流程推进，不能手动拖入');
+      return;
+    }
+
+    setMovingWorkId(work.id);
+    try {
+      const result = await moveWorkAfterDrop(work, targetStatus);
+      const actualStatus = result?.status || targetStatus;
+      const targetLabel = STATUS_META[targetStatus]?.label || targetStatus;
+      const actualLabel = STATUS_META[actualStatus]?.label || actualStatus;
+      if (result.operation === 'enqueue') {
+        message.success(`Work #${issueIdFromWorkId(work.id)} 已加入执行队列`);
+      } else if (result.operation === 'retry') {
+        message.success(`Work #${issueIdFromWorkId(work.id)} 已重新加入队列`);
+      } else if (actualStatus === targetStatus) {
+        message.success(`Work #${issueIdFromWorkId(work.id)} 已移至 ${targetLabel}`);
+      } else {
+        message.success(`状态门禁已将 Work 转入 ${actualLabel}`);
+      }
+      refresh();
+    } catch (moveError) {
+      message.error(`移动 Work 失败: ${moveError.message || '网络异常'}`);
+    } finally {
+      setMovingWorkId('');
+    }
+  };
 
   if (selectedWorkId) {
     return (
@@ -189,12 +257,20 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
               {visibleStatuses.map(status => (
                 <WorkColumn
                   key={status}
+                  dropState={workColumnDropState(draggingWork, draggedOverStatus, status)}
+                  draggingWorkId={draggingWork?.id || ''}
                   navigateTo={navigateTo}
                   onEdit={work => setDialog({ mode: 'edit', work })}
                   onEvidence={setEvidenceWork}
+                  onDragEnd={resetDragState}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
                   projectNames={projectNames}
                   relationIndex={relationIndex}
                   status={status}
+                  movingWorkId={movingWorkId}
                   works={groupedWorks.get(status) || []}
                 />
               ))}
@@ -323,10 +399,32 @@ function FilterSelect({ children, label, onChange, value }) {
   );
 }
 
-function WorkColumn({ navigateTo, onEdit, onEvidence, projectNames, relationIndex, status, works }) {
+function WorkColumn({
+  dropState,
+  draggingWorkId,
+  movingWorkId,
+  navigateTo,
+  onDragEnd,
+  onDragLeave,
+  onDragOver,
+  onDragStart,
+  onDrop,
+  onEdit,
+  onEvidence,
+  projectNames,
+  relationIndex,
+  status,
+  works,
+}) {
   const meta = STATUS_META[status] || { label: status, tone: 'slate' };
   return (
-    <section className="work-column" data-tone={meta.tone}>
+    <section
+      className={`work-column ${dropState ? `is-drag-over is-drop-${dropState}` : ''}`.trim()}
+      data-tone={meta.tone}
+      onDragLeave={event => onDragLeave(event, status)}
+      onDragOver={event => onDragOver(event, status)}
+      onDrop={event => onDrop(event, status)}
+    >
       <header className="work-column-header">
         <span className="work-column-marker" />
         <h2>{meta.label}</h2>
@@ -337,8 +435,12 @@ function WorkColumn({ navigateTo, onEdit, onEvidence, projectNames, relationInde
           <WorkCard
             key={work.id}
             navigateTo={navigateTo}
+            dragging={draggingWorkId === work.id}
+            moving={movingWorkId === work.id}
             onEdit={onEdit}
             onEvidence={onEvidence}
+            onDragEnd={onDragEnd}
+            onDragStart={onDragStart}
             projectName={projectNames.get(work.owner?.project_id) || work.owner?.project_id || 'Unscoped'}
             relations={relationIndex.get(work.id) || []}
             work={work}
@@ -351,11 +453,18 @@ function WorkColumn({ navigateTo, onEdit, onEvidence, projectNames, relationInde
   );
 }
 
-function WorkCard({ navigateTo, onEdit, onEvidence, projectName, relations, work }) {
+function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit, onEvidence, projectName, relations, work }) {
   const issueId = issueIdFromWorkId(work.id);
   const needsAttention = workNeedsAttention(work, relations);
   return (
-    <article className="work-card">
+    <article
+      aria-busy={moving}
+      aria-grabbed={dragging}
+      className={`work-card ${dragging ? 'is-dragging' : ''} ${moving ? 'is-moving' : ''}`.trim()}
+      draggable={!moving}
+      onDragEnd={onDragEnd}
+      onDragStart={event => onDragStart(event, work)}
+    >
       <div className="work-card-topline">
         <span className="work-type-badge">{TYPE_LABELS[work.type] || work.type}</span>
         {needsAttention ? <span className="work-attention-badge"><AlertTriangle size={12} /> Attention</span> : null}
@@ -449,4 +558,32 @@ function WorkEvidenceDialog({ onClose, work }) {
 function formatWorkTime(value) {
   const date = new Date(value || '');
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : '—';
+}
+
+function dragPayload(value) {
+  try {
+    const payload = JSON.parse(value);
+    return typeof payload?.workId === 'string' ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+async function moveWorkAfterDrop(work, targetStatus) {
+  const issueId = issueIdFromWorkId(work.id);
+  if (!issueId) throw new Error('当前 Work 没有可写的 Issue authority');
+  const operation = workDropOperation(work.status, targetStatus);
+  if (operation === 'none') return { operation, status: work.status };
+  if (operation === 'blocked') throw new Error('该状态由执行或验收流程推进，不能手动拖入');
+  let result;
+  if (operation === 'enqueue') result = await workApi.enqueueIssue(issueId);
+  else if (operation === 'retry') result = await workApi.retryIssue(issueId);
+  else if (operation === 'cancel') result = await workApi.cancelIssue(issueId);
+  else result = await workApi.updateIssue(issueId, { status: targetStatus });
+  return { operation, status: result?.status || targetStatus };
+}
+
+function workColumnDropState(draggingWork, draggedOverStatus, status) {
+  if (!draggingWork || draggedOverStatus !== status) return '';
+  return workDropOperation(draggingWork.status, status) === 'blocked' ? 'blocked' : 'allowed';
 }
