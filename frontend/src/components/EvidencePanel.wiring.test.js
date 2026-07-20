@@ -9,7 +9,7 @@ const sessionWorkspace = readFileSync(new URL('../pages/sessions/SessionChatWork
 test('Work and Run surfaces share the user-readable Evidence panel', () => {
   assert.match(workBoard, /<EvidencePanel title="Work Evidence" workId=\{work\.id\}/);
   assert.match(workBoard, /className="work-evidence-link"/);
-  assert.match(sessionWorkspace, /<EvidencePanel compact sessionRef=\{selectedId\} title="Run Evidence"/);
+  assert.match(sessionWorkspace, /showEvidence && selectedId \? <EvidencePanel compact sessionRef=\{selectedId\} title="Run Evidence"/);
 });
 
 test('Evidence panel has bounded list, empty/error states, artifact access and raw drill-down', () => {

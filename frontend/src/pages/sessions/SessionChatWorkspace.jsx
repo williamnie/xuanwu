@@ -15,6 +15,7 @@ export default function SessionChatWorkspace({
   optimisticUserMessages,
   pendingApproval,
   observationNotice,
+  showEvidence = true,
   navigateTo,
   approvalRequest,
   approvalSubmitting,
@@ -72,7 +73,7 @@ export default function SessionChatWorkspace({
           <div className="session-empty">选择一个 provider session 查看历史，或创建新 session。</div>
         )}
 
-        {selectedId ? <EvidencePanel compact sessionRef={selectedId} title="Run Evidence" /> : null}
+        {showEvidence && selectedId ? <EvidencePanel compact sessionRef={selectedId} title="Run Evidence" /> : null}
 
         {observationNotice ? (
           <div className="session-read-only-notice">{observationNotice}</div>

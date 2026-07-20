@@ -46,6 +46,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   const [activeRunId, setActiveRunId] = useState(selectedRunId);
   const [runDetail, setRunDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [activeRunSection, setActiveRunSection] = useState('summary');
 
   const loadFirstPage = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -126,6 +127,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   const selectRun = useCallback((id) => {
     setSurface('run');
     setActiveRunId(id);
+    setActiveRunSection('summary');
     navigateTo?.('runs', null, id);
   }, [navigateTo]);
 
@@ -145,8 +147,9 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
       run_id: surface === 'run' ? runDetail?.id || activeRunId || '' : '',
       session_id: surface === 'run' ? providerSessionRef : selectedSessionId,
       work_id: surface === 'run' ? runDetail?.work_id || '' : '',
+      interaction_surface: surface !== 'run' || activeRunSection === 'provider' ? 'provider-session' : '',
     });
-  }, [activeRunId, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
+  }, [activeRunId, activeRunSection, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
 
   return (
     <section className="runs-page-shell">
@@ -194,7 +197,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
             }}
             run={runDetail}
           />
-          <RunDetail navigateTo={navigateTo} run={runDetail} />
+          <RunDetail navigateTo={navigateTo} onActiveSectionChange={setActiveRunSection} run={runDetail} />
         </div>
       ) : (
         <div className="run-provider-empty">

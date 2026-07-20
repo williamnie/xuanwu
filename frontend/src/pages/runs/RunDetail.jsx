@@ -39,7 +39,7 @@ const DETAIL_SECTIONS = [
   { id: 'advanced', icon: ListTree, label: 'Advanced' },
 ];
 
-export default function RunDetail({ navigateTo, run }) {
+export default function RunDetail({ navigateTo, onActiveSectionChange, run }) {
   const [activeSection, setActiveSection] = useState('summary');
   const [selectedAttemptId, setSelectedAttemptId] = useState(() => run?.attempts?.at(-1)?.id || '');
   const attempts = useMemo(() => Array.isArray(run?.attempts) ? run.attempts : [], [run]);
@@ -59,6 +59,10 @@ export default function RunDetail({ navigateTo, run }) {
   useEffect(() => {
     if (selectedAttempt?.id && selectedAttempt.id !== selectedAttemptId) setSelectedAttemptId(selectedAttempt.id);
   }, [selectedAttempt, selectedAttemptId]);
+
+  useEffect(() => {
+    onActiveSectionChange?.(activeSection);
+  }, [activeSection, onActiveSectionChange]);
 
   return (
     <div className="run-detail-workspace">
@@ -304,6 +308,7 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
         navigateTo={navigateTo}
         observationNotice="Provider session 是低层观测与续聊入口；手动消息会继续同一 session，Run/Attempt lifecycle、控制与完成状态仍以 canonical Run authority 为准。"
         selectedSessionId={sessionRef}
+        showEvidence={false}
         showSidebar={false}
       />
     </section>

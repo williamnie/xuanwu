@@ -44,7 +44,7 @@ export default function GlobalAskComposer({
   const [permissionMode, setPermissionMode] = useState('controlled');
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const visible = isGlobalAskComposerVisible(currentPage);
+  const visible = isGlobalAskComposerVisible(currentPage, pageContext);
   const pageReference = useMemo(() => buildGlobalComposerPageReference({
     currentPage,
     filterProject,

@@ -78,6 +78,7 @@ export default function Sessions({
   navigateTo,
   observationNotice = '',
   selectedSessionId = '',
+  showEvidence = true,
   showSidebar = true,
 }) {
   const projects = useDataStore(selectProjects);
@@ -774,6 +775,7 @@ export default function Sessions({
           optimisticUserMessages,
           pendingApproval: hasApprovalForSession(approvalQueue, selectedId),
           observationNotice,
+          showEvidence,
           navigateTo,
           approvalRequest,
           approvalSubmitting,

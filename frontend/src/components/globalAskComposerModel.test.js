@@ -24,6 +24,7 @@ test('global composer stays on product pages but does not duplicate the full Ask
   assert.equal(isGlobalAskComposerVisible('command-center'), true);
   assert.equal(isGlobalAskComposerVisible('work'), true);
   assert.equal(isGlobalAskComposerVisible('runs'), true);
+  assert.equal(isGlobalAskComposerVisible('runs', { interaction_surface: 'provider-session' }), false);
   assert.equal(isGlobalAskComposerVisible('ask-xuanwu'), false);
 });
 

@@ -20,8 +20,9 @@ const PAGE_LABELS = {
 
 const MAX_WORK_SUGGESTIONS = 16;
 
-export function isGlobalAskComposerVisible(page) {
-  return clean(page) !== 'ask-xuanwu';
+export function isGlobalAskComposerVisible(page, pageContext = null) {
+  return clean(page) !== 'ask-xuanwu'
+    && clean(pageContext?.interaction_surface) !== 'provider-session';
 }
 
 export function buildGlobalComposerPageReference(route = {}, works = []) {
