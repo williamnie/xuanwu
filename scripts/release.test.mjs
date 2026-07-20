@@ -133,6 +133,20 @@ test('release package keeps PI Bun assets beside the executable and smokes the h
   assert.doesNotMatch(script, /"\$pkg_dir\/pi-coding-agent\/package\.json"/);
 });
 
+test('release rollback snapshots split and compatibility service registrations', async () => {
+  const [installer, updater] = await Promise.all([
+    readFile(join(root, 'scripts', 'install-release.sh'), 'utf8'),
+    readFile(join(root, 'scripts', 'update-release.sh'), 'utf8'),
+  ]);
+  assert.doesNotMatch(installer, /rm -f "\$legacy_plist"/);
+  assert.match(installer, /disable --now "\$SERVICE_NAME\.service"/);
+  assert.match(updater, /\$LABEL\.web\.plist/);
+  assert.match(updater, /\$LABEL\.core\.plist/);
+  assert.match(updater, /\$SERVICE_NAME-web\.service/);
+  assert.match(updater, /\$SERVICE_NAME-core\.service/);
+  assert.match(updater, /restore_service_registration "\$snapshot"/);
+});
+
 async function createRelease(temp, name, version) {
   const release = join(temp, `release-${name}`);
   const fixture = join(temp, `fixture-${name}`);

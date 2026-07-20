@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
+CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
+WEB_LABEL="${LABEL}.web"
+CORE_LABEL="${LABEL}.core"
 APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
 DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
@@ -24,7 +27,9 @@ CODEX_SERVER_MODE="${CODEX_RUNNER_CODEX_SERVER_MODE:-cli}"
 CODEX_APP_CMD="${CODEX_RUNNER_CODEX_APP_CMD:-}"
 AUTOMATION_SHADOW_W1="${CODEX_RUNNER_AUTOMATION_SHADOW_W1:-0}"
 PATH_VALUE="${CODEX_RUNNER_PATH:-$PATH}"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LEGACY_PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
+CORE_PLIST="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
 DOMAIN="gui/$(id -u)"
 
 xml_escape() {
@@ -37,12 +42,13 @@ xml_escape() {
 }
 
 service_url() {
-  if [[ "$ADDR" == 0.0.0.0:* ]]; then
-    printf 'http://127.0.0.1:%s' "${ADDR##*:}"
-  elif [[ "$ADDR" == :* ]]; then
-    printf 'http://127.0.0.1%s' "$ADDR"
+  local addr="$1"
+  if [[ "$addr" == 0.0.0.0:* ]]; then
+    printf 'http://127.0.0.1:%s' "${addr##*:}"
+  elif [[ "$addr" == :* ]]; then
+    printf 'http://127.0.0.1%s' "$addr"
   else
-    printf 'http://%s' "$ADDR"
+    printf 'http://%s' "$addr"
   fi
 }
 
@@ -71,6 +77,22 @@ stage_launchd_binary() {
   stage_file_atomically "$BINARY_PATH" "$LAUNCHD_BINARY_PATH" 0755
   if [ -f "$BINARY_PATH.build.stamp" ]; then
     stage_file_atomically "$BINARY_PATH.build.stamp" "$LAUNCHD_BINARY_PATH.build.stamp" 0644
+  fi
+}
+
+backup_current_runtime() {
+  local rollback_dir="" source
+  for source in "$LAUNCHD_BINARY_PATH" "$LAUNCHD_BINARY_PATH.build.stamp" "$LEGACY_PLIST" "$WEB_PLIST" "$CORE_PLIST"; do
+    [ -e "$source" ] || continue
+    if [ -z "$rollback_dir" ]; then
+      rollback_dir="$APP_SUPPORT_DIR/rollback/$(date -u '+%Y%m%dT%H%M%SZ')"
+      mkdir -p "$rollback_dir"
+    fi
+    cp -p "$source" "$rollback_dir/$(basename "$source")"
+  done
+  if [ -n "$rollback_dir" ]; then
+    printf '%s\n' "$rollback_dir" > "$STATE_DIR/latest-runtime-rollback"
+    echo "[launchd] rollback snapshot: $rollback_dir"
   fi
 }
 
@@ -133,34 +155,78 @@ CODEX_RUNNER_CODESIGN_IDENTIFIER="${CODEX_RUNNER_CODESIGN_IDENTIFIER:-$LABEL}" \
 CODEX_RUNNER_VERSION="$APP_VERSION" \
   "$ROOT_DIR/backend-ts/scripts/build-binary.sh"
 mkdir -p "$STATE_DIR" "$(dirname "$DB_PATH")" "$(dirname "$AUTH_TOKEN_FILE")" "$LOG_DIR" "$HOME/Library/LaunchAgents"
+backup_current_runtime
 stage_launchd_binary
 stage_pi_package_assets
 stage_web_dir
 write_custom_auth_token_file
 
-cat > "$PLIST" <<PLIST
+cat > "$WEB_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$(xml_escape "$LABEL")</string>
+  <string>$(xml_escape "$WEB_LABEL")</string>
   <key>Program</key>
   <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
   <key>ProgramArguments</key>
   <array>
     <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
     <string>serve</string>
+    <string>--role</string>
+    <string>web</string>
     <string>--addr</string>
     <string>$(xml_escape "$ADDR")</string>
+    <string>--core-addr</string>
+    <string>$(xml_escape "$CORE_ADDR")</string>
+    <string>--web-dir</string>
+    <string>$(xml_escape "$WEB_DIR")</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>$(xml_escape "$HOME")</string>
+    <key>PATH</key>
+    <string>$(xml_escape "$PATH_VALUE")</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.web.out.log")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.web.err.log")</string>
+</dict>
+</plist>
+PLIST
+
+cat > "$CORE_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(xml_escape "$CORE_LABEL")</string>
+  <key>Program</key>
+  <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$LAUNCHD_BINARY_PATH")</string>
+    <string>serve</string>
+    <string>--role</string>
+    <string>core</string>
+    <string>--addr</string>
+    <string>$(xml_escape "$CORE_ADDR")</string>
     <string>--state-dir</string>
     <string>$(xml_escape "$STATE_DIR")</string>
     <string>--db</string>
     <string>$(xml_escape "$DB_PATH")</string>
     <string>--auth-token-file</string>
     <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
-    <string>--web-dir</string>
-    <string>$(xml_escape "$WEB_DIR")</string>
     <string>--codex-cmd</string>
     <string>$(xml_escape "$CODEX_CMD")</string>
   </array>
@@ -193,15 +259,23 @@ cat > "$PLIST" <<PLIST
 </plist>
 PLIST
 
-plutil -lint "$PLIST" >/dev/null
-launchctl bootout "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true
-launchctl bootstrap "$DOMAIN" "$PLIST"
-launchctl enable "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
-launchctl kickstart -k "$DOMAIN/$LABEL"
-wait_for_health "$(service_url)"
+plutil -lint "$WEB_PLIST" >/dev/null
+plutil -lint "$CORE_PLIST" >/dev/null
+launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || launchctl bootout "$DOMAIN" "$LEGACY_PLIST" >/dev/null 2>&1 || true
+rm -f "$LEGACY_PLIST"
+launchctl bootout "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
+launchctl bootout "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
+launchctl bootstrap "$DOMAIN" "$CORE_PLIST"
+launchctl bootstrap "$DOMAIN" "$WEB_PLIST"
+launchctl enable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
+launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
+launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
+wait_for_health "$(service_url "$CORE_ADDR")"
+launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
+wait_for_health "$(service_url "$ADDR")"
 
 "$ROOT_DIR/scripts/status-launchd.sh"
-echo "[launchd] installed plist: $PLIST"
+echo "[launchd] installed plists: $WEB_PLIST $CORE_PLIST"
 echo "[launchd] binary: $LAUNCHD_BINARY_PATH"
 echo "[launchd] web: $WEB_DIR"
-echo "[launchd] logs: $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"
+echo "[launchd] logs: $LOG_DIR/launchd.web.*.log $LOG_DIR/launchd.out.log $LOG_DIR/launchd.err.log"

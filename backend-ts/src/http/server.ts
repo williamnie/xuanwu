@@ -1,4 +1,5 @@
 import type { RunnerConfig } from "../config/env.ts";
+import { parseListenAddress } from "../config/listenAddress.ts";
 import { EventBus } from "../events/bus.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
@@ -33,7 +34,6 @@ import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import type { FeishuReceiverStatus } from "../integrations/feishuReceiver.ts";
 
-type ListenAddress = { hostname: string; port: number };
 type ServerRuntime = DefaultRouterOptions & { database: RunnerDatabase; startedAt?: Date };
 type DefaultRouterOptions = {
   auditSystemRestart?: (event: SystemRestartAuditEvent) => void;
@@ -53,7 +53,9 @@ type DefaultRouterOptions = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
+  role?: "all" | "core";
   supervisorManaged?: boolean;
+  testBlockMs?: number;
   webhookSigningSecret?: string;
 };
 
@@ -131,6 +133,7 @@ export async function startServer(
   const address = parseListenAddress(config.addr);
   const authToken = await loadAuthToken(config);
   const activeRouter = router ?? createDefaultRouter({ ...runtime, codexSessionsDir: config.codexSessionsDir, config });
+  registerControlledBlockRoute(activeRouter, runtime.testBlockMs ?? Number(Bun.env.CODEX_RUNNER_TEST_BLOCK_MS ?? "0"));
   registerSystemStatusRoute(activeRouter, { authToken, config, ...runtime });
   registerSystemLogsRoute(activeRouter, { config });
   return Bun.serve({
@@ -158,6 +161,7 @@ export function registerSystemStatusRoute(
     database: context.database,
     feishuReceiverStatus: context.feishuReceiverStatus,
     processGroupMemory: context.processGroupMemory,
+    role: context.role ?? "all",
     startedAt,
     webhookSigningSecret: context.webhookSigningSecret
   };
@@ -170,7 +174,17 @@ export function registerSystemStatusRoute(
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }
 
+export function registerControlledBlockRoute(router: Router, blockMs: number): void {
+  if (!Number.isInteger(blockMs) || blockMs <= 0) return;
+  const boundedMs = Math.min(blockMs, 30_000);
+  router.get(CONTROLLED_BLOCK_PATH, () => {
+    Bun.sleepSync(boundedMs);
+    return json({ blocked_ms: boundedMs, ok: true });
+  });
+}
+
 type RequestHandlerOptions = { database?: RunnerDatabase; webDir?: string };
+const CONTROLLED_BLOCK_PATH = "/api/system/test/block";
 
 export function createRequestHandler(
   router: Router,
@@ -201,14 +215,4 @@ function isApiPath(request: Request): boolean {
 
 function clean(value: string | undefined): string {
   return value?.trim() ?? "";
-}
-
-export function parseListenAddress(addr: string): ListenAddress {
-  const trimmed = addr.trim();
-  const separator = trimmed.lastIndexOf(":");
-  if (separator <= 0) throw new Error(`Invalid listen address: ${addr}`);
-  const hostname = trimmed.slice(0, separator);
-  const port = Number(trimmed.slice(separator + 1));
-  if (!Number.isInteger(port) || port <= 0) throw new Error(`Invalid listen port: ${addr}`);
-  return { hostname, port };
 }

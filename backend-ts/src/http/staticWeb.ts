@@ -32,10 +32,13 @@ function staticTarget(root: string, pathname: string): string | undefined {
 }
 
 function fileResponse(request: Request, path: string): Response {
-  const headers = new Headers({ "content-type": contentType(path) });
-  if (request.method === "HEAD") return new Response(null, { headers });
   const body = readFileSync(path);
-  headers.set("content-length", String(body.byteLength));
+  const headers = new Headers({
+    "cache-control": cacheControl(path),
+    "content-length": String(body.byteLength),
+    "content-type": contentType(path)
+  });
+  if (request.method === "HEAD") return new Response(null, { headers });
   return new Response(body, { headers });
 }
 
@@ -82,4 +85,11 @@ function isInside(root: string, target: string): boolean {
 
 function contentType(path: string): string {
   return CONTENT_TYPES[extname(path).toLowerCase()] ?? "application/octet-stream";
+}
+
+function cacheControl(path: string): string {
+  if (path.endsWith("index.html")) return "no-cache";
+  return /(?:^|[/\\])assets[/\\].+-[A-Za-z0-9_-]{8,}\.[^/\\]+$/.test(path)
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
 }

@@ -727,7 +727,7 @@ export const PAGE_SURFACES = [
 ] as const;
 
 export const SCHEDULER_DISPOSITIONS = [
-  { id: "startup-recovery", disposition: "keep", target: "Run recovery", entrypoint: "recoverInProgressIssues", source_file: "backend-ts/src/main.ts" },
+  { id: "startup-recovery", disposition: "keep", target: "Run recovery", entrypoint: "recoverInProgressIssues", source_file: "backend-ts/src/runtime/core.ts" },
   { id: "project-execution-loop", disposition: "keep", target: "Work queue to ordered Run attempts", entrypoint: "startProjectLoop / runProjectLoopOnce", source_file: "backend-ts/src/runner/projectLoopManager.ts" },
   { id: "auto-manage-timer", disposition: "keep", target: "Single local scheduler infrastructure", entrypoint: "createPiAutoManageScheduler", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "issue-supervisor-scan", disposition: "merge", target: "Run recovery Evidence and Attention", entrypoint: "runPiIssueSupervisorSchedulerOnce", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },

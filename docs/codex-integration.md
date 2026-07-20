@@ -17,6 +17,8 @@ Bun 后端启动时会创建 provider adapter，但不会立刻拉起 Codex app-
 
 ```txt
 CODEX_RUNNER_ADDR             默认 127.0.0.1:3008（源码 launchd 使用 0.0.0.0:3008）
+CODEX_RUNNER_ROLE             默认 all；正式部署分别使用 web / core
+CODEX_RUNNER_CORE_ADDR        Web 代理的 Core 地址，正式部署默认 127.0.0.1:3009
 CODEX_RUNNER_STATE_DIR        默认 data-bun
 CODEX_RUNNER_DB               默认 <state-dir>/runner.db
 CODEX_RUNNER_AUTH_TOKEN_FILE  默认 <state-dir>/auth_token
@@ -42,6 +44,8 @@ CODEX_RUNNER_WEB_DIR          默认空；源码/Release 部署会传入已构�
 3. 注册 HTTP API、SSE、system status/logs、静态前端。
 4. 恢复 in-progress issue 状态。
 5. 启动 auto-run project loop 和 Supervisor auto-manage scheduler。
+
+上述顺序只在 `core`/`all` 执行。`web` role 使用独立的轻量入口，不打开 DB、不执行 migration，也不加载 PI SDK、provider、scheduler 或 connector；它直接服务 SPA/hashed assets，并以流式反代保留 API/SSE/upload/download 的请求与响应语义。Core 不可用时 Web 页面壳仍可访问，动态 API 返回 bounded `503`。正式 launchd/systemd 默认双进程，`--role all` 与未指定 role 的行为保留一个 release window 作为开发/回滚兼容入口。
 
 ## Codex app-server 协议
 

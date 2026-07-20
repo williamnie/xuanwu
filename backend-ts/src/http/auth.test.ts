@@ -69,12 +69,32 @@ describe("Bun HTTP bearer auth", () => {
     const denied = await handle(new Request(`${BASE_URL}/api/protected`, {
       headers: { authorization: `Bearer ${secret}`, origin: "https://evil.example" }
     }));
+    const proxiedSameOrigin = await handle(new Request(`${BASE_URL}/api/protected`, {
+      headers: {
+        authorization: `Bearer ${secret}`,
+        host: "127.0.0.1:3009",
+        origin: "https://runner.example",
+        "x-forwarded-host": "runner.example",
+        "x-forwarded-proto": "https"
+      }
+    }));
+    const untrustedForwarder = await handle(new Request("http://runner.example/api/protected", {
+      headers: {
+        authorization: `Bearer ${secret}`,
+        host: "runner.example",
+        origin: "https://evil.example",
+        "x-forwarded-host": "evil.example",
+        "x-forwarded-proto": "https"
+      }
+    }));
 
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-origin")).toBe(origin);
     expect(allowed.status).toBe(200);
     expect(allowed.headers.get("access-control-allow-origin")).toBe(origin);
     expect(denied.status).toBe(403);
+    expect(proxiedSameOrigin.status).toBe(200);
+    expect(untrustedForwarder.status).toBe(403);
   });
 
   test("accepts same-origin cookie auth for browser SSE compatibility", async () => {

@@ -23,6 +23,7 @@ type SystemStatusContext = {
   database: RunnerDatabase;
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   processGroupMemory?: { snapshot(): Record<string, unknown> };
+  role?: "all" | "core";
   startedAt: Date;
   webhookSigningSecret?: string;
 };
@@ -41,7 +42,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
   const runProgressProjection = runProgressProjectionStatus(context.database);
   const observability = buildRuntimeObservability(context.database);
   const status = {
-    service: serviceStatus(context.startedAt),
+    service: serviceStatus(context.startedAt, context.role),
     db: databaseStatus(context.database),
     auth: { enabled: context.authEnabled },
     config: configStatus(context),
@@ -63,7 +64,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
 export function buildCompactSystemStatus(context: SystemStatusContext): Record<string, unknown> {
   const command = redactSensitiveText(context.config.providers.codex?.command ?? "");
   return {
-    service: serviceStatus(context.startedAt),
+    service: serviceStatus(context.startedAt, context.role),
     db: databaseStatus(context.database),
     auth: { enabled: context.authEnabled },
     config: configStatus(context),
@@ -100,13 +101,14 @@ export function summarizeRuntimePath(path: string, stateDir: string): string {
   return `<${basename(cleanPath) || "path"}>`;
 }
 
-function serviceStatus(startedAt: Date): Record<string, unknown> {
+function serviceStatus(startedAt: Date, role: "all" | "core" = "all"): Record<string, unknown> {
   const build = bunBuildInfo();
   const memory = process.memoryUsage();
   return {
     alive: true,
     name: "codex-issue-runner backend-ts",
     runtime: "bun",
+    role,
     bun_version: build.bun_version,
     version: build.version,
     build,
@@ -133,6 +135,7 @@ function databaseStatus(database: RunnerDatabase): CheckStatus {
 function configStatus(context: SystemStatusContext): Record<string, unknown> {
   return {
     addr: context.config.addr,
+    role: context.role ?? "all",
     db_path: summarizeRuntimePath(context.database.path, context.config.stateDir),
     auth_enabled: context.authEnabled,
     origin_policy: "local_only",

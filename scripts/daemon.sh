@@ -5,6 +5,8 @@ set -euo pipefail
 # service registration: SQLite state, tokens, and user data are never removed.
 SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+WEB_LABEL="${LABEL}.web"
+CORE_LABEL="${LABEL}.core"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
@@ -13,7 +15,11 @@ BIN_PATH="${CODEX_RUNNER_BINARY:-$INSTALL_DIR/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
 DOMAIN="gui/$(id -u)"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+WEB_PLIST="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
+CORE_PLIST="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
 UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME.service"
+WEB_UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME-web.service"
+CORE_UNIT_FILE="$HOME/.config/systemd/user/$SERVICE_NAME-core.service"
 AUDIT_LOG="$LOG_DIR/daemon-lifecycle.log"
 
 usage() {
@@ -44,24 +50,43 @@ audit() {
 }
 
 start_macos() {
-  [ -f "$PLIST" ] || { echo "[daemon] missing launchd plist: $PLIST" >&2; return 1; }
+  if [ -f "$WEB_PLIST" ] && [ -f "$CORE_PLIST" ]; then
+    launchctl bootstrap "$DOMAIN" "$CORE_PLIST" >/dev/null 2>&1 || true
+    launchctl bootstrap "$DOMAIN" "$WEB_PLIST" >/dev/null 2>&1 || true
+    launchctl enable "$DOMAIN/$CORE_LABEL"
+    launchctl enable "$DOMAIN/$WEB_LABEL"
+    launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
+    launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
+    return
+  fi
+  [ -f "$PLIST" ] || { echo "[daemon] missing launchd split plists: $WEB_PLIST $CORE_PLIST" >&2; return 1; }
   launchctl bootstrap "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true
   launchctl enable "$DOMAIN/$LABEL"
   launchctl kickstart -k "$DOMAIN/$LABEL"
 }
 
 stop_macos() {
+  launchctl disable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
+  launchctl disable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
+  launchctl bootout "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
+  launchctl bootout "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
   launchctl disable "$DOMAIN/$LABEL" >/dev/null 2>&1 || true
   launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || launchctl bootout "$DOMAIN" "$PLIST" >/dev/null 2>&1 || true
 }
 
 start_linux() {
   systemctl --user daemon-reload
-  systemctl --user enable --now "$SERVICE_NAME.service"
+  if [ -f "$WEB_UNIT_FILE" ] && [ -f "$CORE_UNIT_FILE" ]; then
+    systemctl --user enable --now "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"
+  else
+    systemctl --user enable --now "$SERVICE_NAME.service"
+  fi
 }
 
 stop_linux() {
-  systemctl --user disable --now "$SERVICE_NAME.service"
+  systemctl --user disable --now "$SERVICE_NAME-web.service" >/dev/null 2>&1 || true
+  systemctl --user disable --now "$SERVICE_NAME-core.service" >/dev/null 2>&1 || true
+  systemctl --user disable --now "$SERVICE_NAME.service" >/dev/null 2>&1 || true
 }
 
 start_service() {
@@ -82,8 +107,21 @@ stop_service() {
 
 restart_service() {
   case "$(uname -s)" in
-    Darwin) launchctl kickstart -k "$DOMAIN/$LABEL" ;;
-    Linux) systemctl --user restart "$SERVICE_NAME.service" ;;
+    Darwin)
+      if [ -f "$WEB_PLIST" ] && [ -f "$CORE_PLIST" ]; then
+        launchctl kickstart -k "$DOMAIN/$CORE_LABEL"
+        launchctl kickstart -k "$DOMAIN/$WEB_LABEL"
+      else
+        launchctl kickstart -k "$DOMAIN/$LABEL"
+      fi
+      ;;
+    Linux)
+      if [ -f "$WEB_UNIT_FILE" ] && [ -f "$CORE_UNIT_FILE" ]; then
+        systemctl --user restart "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"
+      else
+        systemctl --user restart "$SERVICE_NAME.service"
+      fi
+      ;;
     *) echo "[daemon] unsupported platform: $(uname -s)" >&2; return 1 ;;
   esac
 }
@@ -91,8 +129,8 @@ restart_service() {
 uninstall_service() {
   stop_service
   case "$(uname -s)" in
-    Darwin) rm -f "$PLIST" ;;
-    Linux) rm -f "$UNIT_FILE"; systemctl --user daemon-reload ;;
+    Darwin) rm -f "$PLIST" "$WEB_PLIST" "$CORE_PLIST" ;;
+    Linux) rm -f "$UNIT_FILE" "$WEB_UNIT_FILE" "$CORE_UNIT_FILE"; systemctl --user daemon-reload ;;
   esac
 }
 
@@ -110,13 +148,28 @@ run_mutation() {
 status_service() {
   case "$(uname -s)" in
     Darwin)
-      echo "[daemon] manager=launchd label=$LABEL"
-      launchctl print "$DOMAIN/$LABEL" 2>&1 | awk '/state =|pid =|last exit code =/ { print "[daemon] " $0 }'
+      if [ -f "$WEB_PLIST" ] && [ -f "$CORE_PLIST" ]; then
+        for label in "$WEB_LABEL" "$CORE_LABEL"; do
+          echo "[daemon] manager=launchd label=$label"
+          launchctl print "$DOMAIN/$label" 2>&1 | awk '/state =|pid =|last exit code =/ { print "[daemon] " $0 }'
+        done
+      else
+        echo "[daemon] manager=launchd label=$LABEL"
+        launchctl print "$DOMAIN/$LABEL" 2>&1 | awk '/state =|pid =|last exit code =/ { print "[daemon] " $0 }'
+      fi
       ;;
     Linux)
-      echo "[daemon] manager=systemd service=$SERVICE_NAME.service"
-      systemctl --user is-enabled "$SERVICE_NAME.service" 2>&1 | sed 's/^/[daemon] enabled=/'
-      systemctl --user is-active "$SERVICE_NAME.service" 2>&1 | sed 's/^/[daemon] active=/'
+      if [ -f "$WEB_UNIT_FILE" ] && [ -f "$CORE_UNIT_FILE" ]; then
+        for service in "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"; do
+          echo "[daemon] manager=systemd service=$service"
+          systemctl --user is-enabled "$service" 2>&1 | sed 's/^/[daemon] enabled=/'
+          systemctl --user is-active "$service" 2>&1 | sed 's/^/[daemon] active=/'
+        done
+      else
+        echo "[daemon] manager=systemd service=$SERVICE_NAME.service"
+        systemctl --user is-enabled "$SERVICE_NAME.service" 2>&1 | sed 's/^/[daemon] enabled=/'
+        systemctl --user is-active "$SERVICE_NAME.service" 2>&1 | sed 's/^/[daemon] active=/'
+      fi
       loginctl show-user "$USER" -p Linger 2>&1 | sed 's/^/[daemon] /'
       ;;
     *) echo "[daemon] unsupported platform: $(uname -s)" >&2; return 1 ;;

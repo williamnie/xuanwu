@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Support/codex-issue-runner-bun-live}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
+DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
 
 log() { printf '[redeploy] %s\n' "$*"; }
@@ -71,6 +72,32 @@ verify_live_service() {
   log "verified: health, system status, projects API"
 }
 
+backup_live_database() {
+  [ -f "$DB_PATH" ] || { log "no existing DB to back up: $DB_PATH"; return; }
+  local backup_dir backup_path
+  backup_dir="$APP_SUPPORT_DIR/backups/predeploy-$(date -u '+%Y%m%dT%H%M%SZ')"
+  backup_path="$backup_dir/runner.db"
+  mkdir -p "$backup_dir"
+  python3 - "$DB_PATH" "$backup_path" <<'PY'
+import sqlite3, sys
+source = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+target = sqlite3.connect(sys.argv[2])
+try:
+    source.backup(target)
+    source_check = source.execute("pragma quick_check").fetchone()[0]
+    backup_check = target.execute("pragma quick_check").fetchone()[0]
+finally:
+    target.close()
+    source.close()
+if source_check != "ok" or backup_check != "ok":
+    raise SystemExit(f"quick_check failed: source={source_check} backup={backup_check}")
+print(f"[redeploy] DB backup quick_check: source={source_check} backup={backup_check}")
+PY
+  printf '%s\n' "$backup_path" > "$STATE_DIR/latest-predeploy-backup"
+  log "DB backup: $backup_path"
+}
+
+backup_live_database
 log "building and restarting Bun live service..."
 "$ROOT_DIR/deploy.sh" "$@"
 url="$(service_url)"

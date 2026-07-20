@@ -6,6 +6,8 @@ INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
 LOG_DIR="${CODEX_RUNNER_LOG_DIR:-$STATE_DIR/logs}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
+LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
 BIN_PATH="${CODEX_RUNNER_BINARY:-$INSTALL_DIR/codex-issue-runner}"
 DAEMON_PATH="$INSTALL_DIR/codex-issue-runner-daemon"
 INSTALLER_PATH="${CODEX_RUNNER_INSTALLER:-$INSTALL_DIR/codex-issue-runner-install}"
@@ -136,7 +138,7 @@ snapshot_release() {
   local version="$1" stamp snapshot
   stamp="$(date -u '+%Y%m%dT%H%M%SZ')-$$"
   snapshot="$RELEASES_DIR/${version//\//_}-$stamp"
-  mkdir -p "$snapshot/bin" "$snapshot/state"
+  mkdir -p "$snapshot/bin" "$snapshot/state" "$snapshot/service"
   copy_file_if_present "$BIN_PATH" "$snapshot/bin/codex-issue-runner"
   copy_file_if_present "$DAEMON_PATH" "$snapshot/bin/codex-issue-runner-daemon"
   copy_file_if_present "$INSTALLER_PATH" "$snapshot/bin/codex-issue-runner-install"
@@ -144,6 +146,13 @@ snapshot_release() {
   copy_file_if_present "$INSTALL_DIR/photon_rs_bg.wasm" "$snapshot/bin/photon_rs_bg.wasm"
   copy_dir_if_present "$STATE_DIR/web" "$snapshot/state/web"
   copy_dir_if_present "$STATE_DIR/pi-coding-agent" "$snapshot/state/pi-coding-agent"
+  copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.plist" "$snapshot/service/$LABEL.plist"
+  copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.web.plist" "$snapshot/service/$LABEL.web.plist"
+  copy_file_if_present "$HOME/Library/LaunchAgents/$LABEL.core.plist" "$snapshot/service/$LABEL.core.plist"
+  copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME.service" "$snapshot/service/$SERVICE_NAME.service"
+  copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME-web.service" "$snapshot/service/$SERVICE_NAME-web.service"
+  copy_file_if_present "$HOME/.config/systemd/user/$SERVICE_NAME-core.service" "$snapshot/service/$SERVICE_NAME-core.service"
+  printf '1\n' > "$snapshot/service/version"
   printf '%s\n' "$version" > "$snapshot/version"
   printf '%s' "$snapshot"
 }
@@ -179,8 +188,26 @@ restore_snapshot() {
   restore_file "$snapshot/bin/photon_rs_bg.wasm" "$INSTALL_DIR/photon_rs_bg.wasm" 0644
   restore_dir "$snapshot/state/web" "$STATE_DIR/web"
   restore_dir "$snapshot/state/pi-coding-agent" "$STATE_DIR/pi-coding-agent"
+  restore_service_registration "$snapshot"
   "$DAEMON_PATH" start >/dev/null
   wait_ready
+}
+
+restore_service_registration() {
+  local snapshot="$1" name source target
+  [ -f "$snapshot/service/version" ] || return 0
+  mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.config/systemd/user"
+  for name in "$LABEL.plist" "$LABEL.web.plist" "$LABEL.core.plist"; do
+    source="$snapshot/service/$name"
+    target="$HOME/Library/LaunchAgents/$name"
+    restore_file "$source" "$target" 0644
+  done
+  for name in "$SERVICE_NAME.service" "$SERVICE_NAME-web.service" "$SERVICE_NAME-core.service"; do
+    source="$snapshot/service/$name"
+    target="$HOME/.config/systemd/user/$name"
+    restore_file "$source" "$target" 0644
+  done
+  if command -v systemctl >/dev/null 2>&1; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
 }
 
 wait_ready() {

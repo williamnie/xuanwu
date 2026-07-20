@@ -5,7 +5,10 @@ REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
 VERSION="${CODEX_RUNNER_VERSION:-latest}"
 VERIFY_ATTESTATION="${CODEX_RUNNER_VERIFY_ATTESTATION:-auto}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
+CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
+WEB_LABEL="${LABEL}.web"
+CORE_LABEL="${LABEL}.core"
 SERVICE_NAME="${CODEX_RUNNER_SERVICE_NAME:-codex-issue-runner}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"
@@ -34,6 +37,7 @@ Usage:
 Useful environment variables:
   CODEX_RUNNER_VERSION=v0.1.0          Install a fixed release tag instead of latest
   CODEX_RUNNER_ADDR=0.0.0.0:3008       Service listen address
+  CODEX_RUNNER_CORE_ADDR=127.0.0.1:3009 Internal Core listen address
   CODEX_RUNNER_INSTALL_DIR=~/.local/bin Binary install directory
   CODEX_RUNNER_STATE_DIR=~/.local/state/codex-issue-runner
   CODEX_RUNNER_CODEX_CMD=/path/to/codex Codex CLI path
@@ -79,14 +83,15 @@ xml_escape() {
 }
 
 service_url() {
-  if [[ "$ADDR" == 0.0.0.0:* ]]; then
-    printf 'http://127.0.0.1:%s' "${ADDR##*:}"
+  local addr="$1"
+  if [[ "$addr" == 0.0.0.0:* ]]; then
+    printf 'http://127.0.0.1:%s' "${addr##*:}"
     return
   fi
-  if [[ "$ADDR" == :* ]]; then
-    printf 'http://127.0.0.1%s' "$ADDR"
+  if [[ "$addr" == :* ]]; then
+    printf 'http://127.0.0.1%s' "$addr"
   else
-    printf 'http://%s' "$ADDR"
+    printf 'http://%s' "$addr"
   fi
 }
 
@@ -233,30 +238,72 @@ wait_until_ready() {
   return 1
 }
 
-write_macos_plist() {
-  local plist="$1" codex_cmd="$2"
-  cat > "$plist" <<PLIST
+write_macos_plists() {
+  local web_plist="$1" core_plist="$2" codex_cmd="$3"
+  cat > "$web_plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>$(xml_escape "$LABEL")</string>
+  <string>$(xml_escape "$WEB_LABEL")</string>
   <key>ProgramArguments</key>
   <array>
     <string>$(xml_escape "$BIN_PATH")</string>
     <string>serve</string>
+    <string>--role</string>
+    <string>web</string>
     <string>--addr</string>
     <string>$(xml_escape "$ADDR")</string>
+    <string>--core-addr</string>
+    <string>$(xml_escape "$CORE_ADDR")</string>
+    <string>--web-dir</string>
+    <string>$(xml_escape "$STATE_DIR/web")</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>$(xml_escape "$HOME")</string>
+    <key>PATH</key>
+    <string>$(xml_escape "$PATH_VALUE")</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.web.out.log")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$LOG_DIR/launchd.web.err.log")</string>
+</dict>
+</plist>
+PLIST
+
+  cat > "$core_plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(xml_escape "$CORE_LABEL")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$BIN_PATH")</string>
+    <string>serve</string>
+    <string>--role</string>
+    <string>core</string>
+    <string>--addr</string>
+    <string>$(xml_escape "$CORE_ADDR")</string>
     <string>--state-dir</string>
     <string>$(xml_escape "$STATE_DIR")</string>
     <string>--db</string>
     <string>$(xml_escape "$DB_PATH")</string>
-    <string>--web-dir</string>
-    <string>$(xml_escape "$STATE_DIR/web")</string>
+    <string>--auth-token-file</string>
+    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
     <string>--codex-cmd</string>
     <string>$(xml_escape "$codex_cmd")</string>
-$(auth_token_file_macos_args)
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -286,15 +333,6 @@ $(auth_token_file_macos_args)
 PLIST
 }
 
-auth_token_file_macos_args() {
-  if [ -n "$AUTH_TOKEN_FILE" ]; then
-    cat <<ARGS
-    <string>--auth-token-file</string>
-    <string>$(xml_escape "$AUTH_TOKEN_FILE")</string>
-ARGS
-  fi
-}
-
 auth_token_file_systemd_args() {
   if [ -n "$AUTH_TOKEN_FILE" ]; then
     printf ' --auth-token-file %q' "$AUTH_TOKEN_FILE"
@@ -310,34 +348,45 @@ write_custom_auth_token_file() {
 }
 
 install_macos_launchd() {
-  local codex_cmd plist domain url
+  local codex_cmd web_plist core_plist legacy_plist domain web_url core_url
   codex_cmd="$(resolve_codex_cmd)"
-  plist="$HOME/Library/LaunchAgents/$LABEL.plist"
+  web_plist="$HOME/Library/LaunchAgents/$WEB_LABEL.plist"
+  core_plist="$HOME/Library/LaunchAgents/$CORE_LABEL.plist"
+  legacy_plist="$HOME/Library/LaunchAgents/$LABEL.plist"
   domain="gui/$(id -u)"
   mkdir -p "$HOME/Library/LaunchAgents"
-  write_macos_plist "$plist" "$codex_cmd"
-  plutil -lint "$plist" >/dev/null
-  launchctl bootout "$domain" "$plist" >/dev/null 2>&1 || true
-  launchctl bootstrap "$domain" "$plist"
-  launchctl enable "$domain/$LABEL" >/dev/null 2>&1 || true
-  launchctl kickstart -k "$domain/$LABEL"
-  url="$(service_url)"
-  wait_until_ready "$url" || fail "service did not become ready at $url"
-  log "launchd service installed: $plist"
+  write_macos_plists "$web_plist" "$core_plist" "$codex_cmd"
+  plutil -lint "$web_plist" >/dev/null
+  plutil -lint "$core_plist" >/dev/null
+  launchctl bootout "$domain/$LABEL" >/dev/null 2>&1 || launchctl bootout "$domain" "$legacy_plist" >/dev/null 2>&1 || true
+  launchctl bootout "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
+  launchctl bootout "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
+  launchctl bootstrap "$domain" "$core_plist"
+  launchctl bootstrap "$domain" "$web_plist"
+  launchctl enable "$domain/$CORE_LABEL" >/dev/null 2>&1 || true
+  launchctl enable "$domain/$WEB_LABEL" >/dev/null 2>&1 || true
+  launchctl kickstart -k "$domain/$CORE_LABEL"
+  core_url="$(service_url "$CORE_ADDR")"
+  wait_until_ready "$core_url" || fail "Core did not become ready at $core_url"
+  launchctl kickstart -k "$domain/$WEB_LABEL"
+  web_url="$(service_url "$ADDR")"
+  wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"
+  log "launchd services installed: $web_plist $core_plist"
 }
 
 install_linux_systemd() {
-  local codex_cmd unit_dir unit_file url
+  local codex_cmd unit_dir web_unit core_unit web_url core_url
   require_cmd systemctl
   require_cmd loginctl
   loginctl enable-linger "$USER" || fail "failed to enable user linger; systemd user service would stop after logout"
   codex_cmd="$(resolve_codex_cmd)"
   unit_dir="$HOME/.config/systemd/user"
-  unit_file="$unit_dir/$SERVICE_NAME.service"
+  web_unit="$unit_dir/$SERVICE_NAME-web.service"
+  core_unit="$unit_dir/$SERVICE_NAME-core.service"
   mkdir -p "$unit_dir"
-  cat > "$unit_file" <<UNIT
+  cat > "$core_unit" <<UNIT
 [Unit]
-Description=Xuanwu (codex-issue-runner)
+Description=Xuanwu Runner Core
 After=network.target
 
 [Service]
@@ -348,7 +397,26 @@ Environment=PATH=$PATH_VALUE
 Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
 Environment="CODEX_RUNNER_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
 Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
-ExecStart=$BIN_PATH serve --addr $ADDR --state-dir $STATE_DIR --db $DB_PATH --web-dir $STATE_DIR/web --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
+ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
+UNIT
+  cat > "$web_unit" <<UNIT
+[Unit]
+Description=Xuanwu Web Gateway
+After=$SERVICE_NAME-core.service
+
+[Service]
+Type=simple
+WorkingDirectory=$STATE_DIR
+Environment=HOME=$HOME
+Environment=PATH=$PATH_VALUE
+ExecStart=$BIN_PATH serve --role web --addr $ADDR --core-addr $CORE_ADDR --web-dir $STATE_DIR/web
 Restart=always
 RestartSec=2
 KillSignal=SIGTERM
@@ -358,11 +426,14 @@ TimeoutStopSec=30
 WantedBy=default.target
 UNIT
   systemctl --user daemon-reload
-  systemctl --user enable --now "$SERVICE_NAME.service"
-  systemctl --user restart "$SERVICE_NAME.service"
-  url="$(service_url)"
-  wait_until_ready "$url" || fail "service did not become ready at $url"
-  log "systemd user service installed: $unit_file"
+  systemctl --user disable --now "$SERVICE_NAME.service" >/dev/null 2>&1 || true
+  systemctl --user enable --now "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"
+  systemctl --user restart "$SERVICE_NAME-core.service" "$SERVICE_NAME-web.service"
+  core_url="$(service_url "$CORE_ADDR")"
+  web_url="$(service_url "$ADDR")"
+  wait_until_ready "$core_url" || fail "Core did not become ready at $core_url"
+  wait_until_ready "$web_url" || fail "Web did not become ready at $web_url"
+  log "systemd user services installed: $web_unit $core_unit"
 }
 
 main() {
@@ -387,7 +458,7 @@ main() {
   esac
   audit applied
   trap - ERR
-  log "ready: $(service_url)/"
+  log "ready: $(service_url "$ADDR")/"
   log "data: $STATE_DIR"
 }
 

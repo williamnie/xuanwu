@@ -80,6 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 
 ```bash
 export CODEX_RUNNER_ADDR=0.0.0.0:3008
+export CODEX_RUNNER_CORE_ADDR=127.0.0.1:3009
 export CODEX_RUNNER_STATE_DIR=$HOME/.local/state/codex-issue-runner
 export CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex
 export CODEX_RUNNER_CODEX_SERVER_MODE=cli  # cli 或 app；也可在 Settings 页面切换
@@ -95,7 +96,7 @@ curl -fsSL https://raw.githubusercontent.com/williamnie/codex-issue-runner/main/
 访问:   http://127.0.0.1:3008/（局域网使用 http://<本机LAN-IP>:3008/）
 ```
 
-安装可重复执行：新二进制会先写入临时文件再原子替换，随后由 launchd/systemd 重启；`runner.db`、token 和日志不会被升级脚本替换。Linux 额外执行 `loginctl enable-linger "$USER"`，使 user systemd 在退出登录和重启后仍会启动。macOS 的 LaunchAgent 使用 `ProcessType=Background`，作为非 GUI daemon 运行，不依赖前台 App 的 App Nap 调度。
+安装可重复执行：新二进制会先写入临时文件再原子替换，随后由 launchd/systemd 启动同 artifact 的 Web Gateway 与 Runner Core 两个进程；公开的 `3008` 只服务静态资源和代理 `/api/*`，Core 默认仅监听 `127.0.0.1:3009` 并独占 DB、scheduler、provider 与 connector。`runner.db`、token 和日志不会被升级脚本替换。Linux 额外执行 `loginctl enable-linger "$USER"`，使 user systemd 在退出登录和重启后仍会启动。macOS 的 LaunchAgent 使用 `ProcessType=Background`，作为非 GUI daemon 运行，不依赖前台 App 的 App Nap 调度。
 
 installer 会先验证 `checksums.txt` 和 binary/release metadata 版本一致性；生产环境可设置 `CODEX_RUNNER_VERIFY_ATTESTATION=require`，通过 GitHub CLI 验证由 release workflow 签发的 provenance。安装后可只读检查更新，升级和回滚则必须提供显式 apply、非 LLM actor、已验证 backup ref 和 audit ref：
 
@@ -152,13 +153,13 @@ codex-issue-runner-daemon uninstall  # 仅移除 launchd/systemd 注册，保留
 默认配置：
 
 ```txt
-服务名: com.xiaobei.codex-issue-runner
-监听:   0.0.0.0:3008
+服务名: com.xiaobei.codex-issue-runner.web / .core
+监听:   Web 0.0.0.0:3008 / Core 127.0.0.1:3009
 State:  ~/Library/Application Support/codex-issue-runner-bun-live/state
 DB:     ~/Library/Application Support/codex-issue-runner-bun-live/state/runner.db
 Web:    state/web
 二进制: dist/codex-issue-runner
-日志:   ~/Library/Application Support/codex-issue-runner-bun-live/logs/launchd.out.log / launchd.err.log
+日志:   ~/Library/Application Support/codex-issue-runner-bun-live/logs/launchd.web.*.log / launchd.out.log / launchd.err.log
 Token:  默认在服务首次启动时自动生成并写入 state/auth_token 文件中
 ```
 
@@ -166,12 +167,15 @@ Token:  默认在服务首次启动时自动生成并写入 state/auth_token 文
 
 ```bash
 CODEX_RUNNER_ADDR=0.0.0.0:3008 \
+CODEX_RUNNER_CORE_ADDR=127.0.0.1:3009 \
 CODEX_RUNNER_DB=/absolute/path/runner.db \
 CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex \
 CODEX_RUNNER_CODEX_SERVER_MODE=cli \
 CODEX_RUNNER_AUTH_TOKEN=your_custom_token \
 ./deploy.sh
 ```
+
+直接开发时，`serve` 未指定 role 仍保持单进程 `all` 兼容行为；也可显式使用 `--role all`。正式安装默认使用 `--role web` 与 `--role core`，不要并行启动额外的 `core`/`all`。隔离验证和回滚见 [Web/Core 双进程运行手册](docs/runbooks/web-core-split.md)。
 
 ## 首次使用启动器与 Codex Server 选择
 
