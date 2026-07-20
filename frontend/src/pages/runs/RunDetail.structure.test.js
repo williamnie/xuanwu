@@ -19,9 +19,9 @@ test('Run Detail exposes summary, timeline, Attempts, logs, approvals, Evidence,
 
 test('provider drill-down reuses Sessions for observation and same-session follow-up while Run controls remain external', () => {
   assert.match(detailSource, /<Sessions/);
-  assert.match(detailSource, /Provider session 是低层观测与续聊入口/);
   assert.match(detailSource, /showEvidence=\{false\}/);
   assert.match(detailSource, /not Run authority/);
+  assert.doesNotMatch(detailSource, /observationNotice=/);
   assert.doesNotMatch(detailSource, /interruptSession\(/);
   assert.doesNotMatch(detailSource, /sendSessionMessage\(/);
 });

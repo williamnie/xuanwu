@@ -24,7 +24,8 @@ test('Runs list uses the canonical API and provider sessions keep Run authority 
   assert.match(clientSource, /request\(`\/api\/runs\?\$\{params\.toString\(\)\}`\)/);
   assert.match(clientSource, /request\(`\/api\/runs\/\$\{encodeURIComponent\(id\)\}`\)/);
   assert.match(pageSource, /runProviderSessionRef\(runDetail\)/);
-  assert.match(detailSource, /observationNotice="Provider session 是低层观测与续聊入口/);
+  assert.match(detailSource, /not Run authority/);
+  assert.doesNotMatch(detailSource, /observationNotice=/);
   assert.match(sessionsSource, /showSidebar \? \(/);
   assert.match(sessionsSource, /observationNotice,/);
 });
