@@ -46,7 +46,7 @@ export function evaluateEnduranceGate(samplesInput: EnduranceSample[]): Record<s
   const drift = measured.length < 2 ? 0 : Math.max(0, measured.at(-1)! - measured[0]!);
   const memoryPassed = samples.length > 0 && samples.every((sample) =>
     sample.budget_status === "within_budget" &&
-    (sample.measurement_source === "footprint" || sample.measurement_source === "rss")) &&
+    (sample.measurement_source === "footprint" || sample.measurement_source === "footprint+rss" || sample.measurement_source === "rss")) &&
     !monotonic && drift <= PROCESS_GROUP_MEMORY_BUDGETS.soak_drift_bytes.hard;
   const completedRuns = first && last ? last.completed_runs - first.completed_runs : 0;
   const databaseGrowth = first && last ? Math.max(0, last.database_bytes - first.database_bytes) : 0;

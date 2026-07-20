@@ -106,6 +106,30 @@ describe("runner process-group memory observer", () => {
     });
   });
 
+  test("uses RSS only for descendants that appeared after the last footprint instead of discarding physical memory", async () => {
+    let rows = fixtureRows(200, 130);
+    const observer = new ProcessGroupMemoryObserver({
+      footprint: async (pids) => new Map(pids.map((pid) => [pid, pid === 50 ? 190 * MIB : 80 * MIB])),
+      footprintIntervalMs: 60_000,
+      inspect: () => rows,
+      memoryUsage: () => memoryUsage(198),
+      now: tickingClock(),
+      runnerPid: 50
+    });
+
+    observer.sample();
+    await Bun.sleep(0);
+    rows = [...rows, row(101, 100, 10, "Mon Jul 20 01:01:00 2026\t/tool-host")];
+    const snapshot = observer.sample() as Snapshot;
+
+    expect(snapshot.budget).toMatchObject({
+      measured_group_bytes: 280 * MIB,
+      measured_main_bytes: 190 * MIB,
+      measurement_source: "footprint+rss",
+      status: "within_budget"
+    });
+  });
+
   test("requires the process group to return to its measured idle baseline after provider TTL", () => {
     let activeRuns = 0;
     let groupMiB = 250;

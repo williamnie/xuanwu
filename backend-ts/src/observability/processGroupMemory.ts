@@ -51,7 +51,14 @@ type ObservedProcess = ProcessTreeEntry & {
   role: string;
   started_at: string;
 };
-type FootprintState = { bytes: number; main_bytes: number; observed_at: string; process_count: number };
+type FootprintMeasurementSource = "footprint" | "footprint+rss" | "rss";
+type FootprintState = {
+  bytes: number;
+  by_identity: Map<string, number>;
+  main_bytes: number;
+  observed_at: string;
+  process_count: number;
+};
 
 export class ProcessGroupMemoryObserver {
   private activeAlert = "";
@@ -203,7 +210,7 @@ export class ProcessGroupMemoryObserver {
 
   private budgetStatus(
     phase: ProcessMemoryPhase,
-    measurement: { group_bytes: number; main_bytes: number; source: "footprint" | "rss" },
+    measurement: { group_bytes: number; main_bytes: number; source: FootprintMeasurementSource },
     p95RSS: number,
     mainRSS: number,
     groupRSS: number,
@@ -247,16 +254,32 @@ export class ProcessGroupMemoryObserver {
     p95RSS: number,
     mainRSS: number,
     now: Date
-  ): { group_bytes: number; main_bytes: number; source: "footprint" | "rss" } {
+  ): { group_bytes: number; main_bytes: number; source: FootprintMeasurementSource } {
     const footprint = this.footprint;
     const observedAt = Date.parse(footprint?.observed_at ?? "");
     const footprintInterval = this.options.footprintIntervalMs ?? 60_000;
     const maxAge = Math.max(PROCESS_GROUP_MEMORY_FRESHNESS_MS, footprintInterval * 2);
-    const processCount = rows.filter((row) => row.rss_bytes > 0).length;
     if (footprint && footprint.bytes > 0 && footprint.main_bytes > 0
-      && footprint.process_count === processCount
+      && footprint.by_identity.size > 0
       && Number.isFinite(observedAt) && now.getTime() - observedAt <= maxAge) {
-      return { group_bytes: footprint.bytes, main_bytes: footprint.main_bytes, source: "footprint" };
+      let covered = 0;
+      let groupBytes = 0;
+      let measuredMain = mainRSS;
+      for (const row of rows) {
+        const physical = footprint.by_identity.get(row.identity);
+        if (physical === undefined) {
+          groupBytes += row.rss_bytes;
+          continue;
+        }
+        covered += 1;
+        groupBytes += physical;
+        if (row.pid === this.runnerPid()) measuredMain = physical;
+      }
+      if (covered > 0) return {
+        group_bytes: groupBytes,
+        main_bytes: measuredMain,
+        source: covered === rows.length ? "footprint" : "footprint+rss"
+      };
     }
     return { group_bytes: p95RSS, main_bytes: mainRSS, source: "rss" };
   }
@@ -329,6 +352,7 @@ export class ProcessGroupMemoryObserver {
       const validValues = new Map(valid);
       this.footprint = {
         bytes: valid.reduce((total, [, bytes]) => total + bytes, 0),
+        by_identity: new Map(valid.map(([pid, bytes]) => [expected.get(pid)!, bytes])),
         main_bytes: validValues.get(this.runnerPid()) ?? 0,
         observed_at: this.now().toISOString(),
         process_count: valid.length
