@@ -2,9 +2,26 @@ import { authHeader } from './authToken.js';
 import { ApiError } from './errors.js';
 
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || '';
+const inflightGetRequests = new Map();
 
 /** @param {string} path @param {import('./types.js').ApiRequestOptions} [options] */
 export async function request(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const dedupeKey = method === 'GET' && !options.signal ? `${API_BASE}${path}` : '';
+  if (dedupeKey && inflightGetRequests.has(dedupeKey)) {
+    return inflightGetRequests.get(dedupeKey);
+  }
+  const pending = executeRequest(path, options);
+  if (!dedupeKey) return pending;
+  inflightGetRequests.set(dedupeKey, pending);
+  try {
+    return await pending;
+  } finally {
+    if (inflightGetRequests.get(dedupeKey) === pending) inflightGetRequests.delete(dedupeKey);
+  }
+}
+
+async function executeRequest(path, options) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {

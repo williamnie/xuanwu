@@ -215,8 +215,7 @@
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
-  contain-intrinsic-size: auto 220px;
-  content-visibility: auto;
+  contain: layout paint style;
   cursor: grab;
   padding: 12px;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
@@ -256,6 +255,22 @@
 .work-source-label { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.56rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-column-empty { border: 1px dashed var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-family: var(--font-mono); font-size: 0.66rem; padding: 24px 12px; text-align: center; }
 .work-board-loading { align-items: center; background: color-mix(in srgb, var(--bg-primary) 72%, transparent); display: flex; font-family: var(--font-mono); inset: 0; justify-content: center; position: absolute; }
+
+.work-column-load-more {
+  align-self: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  margin: 4px 0 2px;
+  padding: 6px 13px;
+}
+
+.work-column-load-more:disabled { cursor: wait; opacity: 0.65; }
 
 .work-board-error {
   align-items: center;

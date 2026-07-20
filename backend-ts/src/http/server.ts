@@ -27,7 +27,7 @@ import { createRouter, type Router } from "./router.ts";
 import { buildRuntimeLogs, runtimeLogLineLimit } from "./systemLogs.ts";
 import { staticWebResponse } from "./staticWeb.ts";
 import { buildPiGuardianSystemStatus } from "./piGuardianStatus.ts";
-import { buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
+import { buildCompactSystemStatus, buildRuntimeDoctor, buildSystemStatus } from "./systemStatus.ts";
 import { registerSystemRestartRoute, type SystemRestartAuditEvent } from "./systemRestartApi.ts";
 import { setProjectLoopMaxParallelProjects } from "../runner/projectLoopManager.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
@@ -161,8 +161,10 @@ export function registerSystemStatusRoute(
     startedAt,
     webhookSigningSecret: context.webhookSigningSecret
   };
-  router.get("/api/system/status", () => json({
-    ...buildSystemStatus(statusContext),
+  router.get("/api/system/status", (request) => json({
+    ...(new URL(request.url).searchParams.get("compact") === "1"
+      ? buildCompactSystemStatus(statusContext)
+      : buildSystemStatus(statusContext)),
     pi_guardian: buildPiGuardianSystemStatus(context.database)
   }));
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));

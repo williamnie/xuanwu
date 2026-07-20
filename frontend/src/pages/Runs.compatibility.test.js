@@ -21,8 +21,8 @@ test('Runs is the canonical page while old Sessions navigation remains a deep-li
 });
 
 test('Runs list uses the canonical API and provider sessions keep Run authority separate from follow-up chat', () => {
-  assert.match(clientSource, /request\(`\/api\/runs\?\$\{params\.toString\(\)\}`\)/);
-  assert.match(clientSource, /request\(`\/api\/runs\/\$\{encodeURIComponent\(id\)\}`\)/);
+  assert.match(clientSource, /request\(`\/api\/runs\?\$\{params\.toString\(\)\}`, options\)/);
+  assert.match(clientSource, /request\(`\/api\/runs\/\$\{encodeURIComponent\(id\)\}`, options\)/);
   assert.match(pageSource, /runProviderSessionRef\(runDetail\)/);
   assert.match(detailSource, /not Run authority/);
   assert.doesNotMatch(detailSource, /observationNotice=/);

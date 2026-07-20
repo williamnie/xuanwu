@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -22,6 +22,7 @@ import {
   groupWorksByStatus,
   indexRelationsByWork,
   issueIdFromWorkId,
+  laneScrollDecision,
   WORK_BOARD_STATUSES,
   workDropOperation,
   workNeedsAttention,
@@ -66,32 +67,96 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
   const [dialog, setDialog] = useState(null);
   const [evidenceWork, setEvidenceWork] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMoreStatus, setLoadingMoreStatus] = useState('');
   const [error, setError] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [lanePages, setLanePages] = useState({});
+  const [totalWorks, setTotalWorks] = useState(0);
   const [draggingWork, setDraggingWork] = useState(null);
   const [draggedOverStatus, setDraggedOverStatus] = useState('');
   const [movingWorkId, setMovingWorkId] = useState('');
+  const loadMoreController = useRef(null);
+  const loadingMoreStatusRef = useRef('');
+  const laneScrollArmed = useRef(new Map(WORK_BOARD_STATUSES.map(status => [status, true])));
 
   useEffect(() => {
+    if (selectedWorkId) {
+      setLoading(false);
+      return undefined;
+    }
+    const controller = new AbortController();
     let active = true;
+    loadMoreController.current?.abort();
+    loadingMoreStatusRef.current = '';
+    laneScrollArmed.current = new Map(WORK_BOARD_STATUSES.map(status => [status, true]));
+    setLoadingMoreStatus('');
     setLoading(true);
     setError('');
-    Promise.all([workApi.getAllWorks(), workApi.getAllWorkRelations()])
-      .then(([workResponse, relationResponse]) => {
+    workApi.getWorkBoard({}, { signal: controller.signal })
+      .then((boardResponse) => {
         if (!active) return;
-        setWorks(workResponse?.items || []);
-        setRelations(relationResponse?.items || []);
+        const snapshot = normalizeBoardSnapshot(boardResponse);
+        setWorks(snapshot.items);
+        setRelations([]);
+        setLanePages(snapshot.lanePages);
+        setTotalWorks(snapshot.total);
       })
       .catch((loadError) => {
-        if (active) setError(loadError.message || '加载 Work Ledger 失败');
+        if (active && loadError?.name !== 'AbortError') setError(loadError.message || '加载 Work Ledger 失败');
       })
       .finally(() => {
         if (active) setLoading(false);
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [refreshVersion]);
+  }, [refreshVersion, selectedWorkId]);
+
+  useEffect(() => () => loadMoreController.current?.abort(), []);
+
+  const loadMore = useCallback(async (status) => {
+    const lane = lanePages[status];
+    if (
+      selectedWorkId || loading || loadingMoreStatusRef.current ||
+      !lane || lane.page >= lane.totalPages
+    ) return;
+    const controller = new AbortController();
+    loadMoreController.current = controller;
+    loadingMoreStatusRef.current = status;
+    setLoadingMoreStatus(status);
+    try {
+      const response = await workApi.getWorks({
+        page: lane.page + 1,
+        pageSize: lane.pageSize,
+        statuses: [status],
+      }, { signal: controller.signal });
+      setWorks(current => mergeWorks(current, response?.items || []));
+      const nextLane = normalizeLanePage(response, lane.pageSize);
+      setLanePages(current => ({ ...current, [status]: nextLane }));
+      setTotalWorks(current => current - lane.total + nextLane.total);
+    } catch (loadError) {
+      if (loadError?.name !== 'AbortError') message.error(loadError.message || '继续加载 Work 失败');
+    } finally {
+      if (loadMoreController.current === controller) {
+        loadMoreController.current = null;
+        loadingMoreStatusRef.current = '';
+        setLoadingMoreStatus('');
+      }
+    }
+  }, [lanePages, loading, selectedWorkId]);
+
+  const handleColumnScroll = useCallback((event, status) => {
+    const target = event.currentTarget;
+    const decision = laneScrollDecision({
+      armed: laneScrollArmed.current.get(status) !== false,
+      clientHeight: target.clientHeight,
+      scrollHeight: target.scrollHeight,
+      scrollTop: target.scrollTop,
+    });
+    laneScrollArmed.current.set(status, decision.armed);
+    if (decision.load) void loadMore(status);
+  }, [loadMore]);
 
   const relationIndex = useMemo(() => indexRelationsByWork(relations), [relations]);
   const projectNames = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
@@ -108,7 +173,10 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
     });
   }, [onPageContextChange, selectedWorkId]);
 
-  const refresh = () => setRefreshVersion(version => version + 1);
+  const refresh = () => {
+    loadMoreController.current?.abort();
+    setRefreshVersion(version => version + 1);
+  };
 
   const handleDragStart = (event, work) => {
     if (event.target instanceof Element && event.target.closest('button')) {
@@ -189,12 +257,13 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
     <section className="work-board-page">
       <WorkBoardHeader
         filteredCount={filteredWorks.length}
+        loadedCount={works.length}
         loading={loading}
         onCreate={() => setDialog({ mode: 'create' })}
         onQueryChange={query => setFilters({ ...EMPTY_FILTERS, query })}
         onRefresh={refresh}
         query={filters.query}
-        total={works.length}
+        total={totalWorks}
       />
 
       {error ? (
@@ -212,26 +281,33 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
             className="work-board-columns"
             style={{ minWidth: `${WORK_BOARD_STATUSES.length * 276}px` }}
           >
-            {WORK_BOARD_STATUSES.map(status => (
-              <WorkColumn
-                key={status}
-                dropState={workColumnDropState(draggingWork, draggedOverStatus, status)}
-                draggingWorkId={draggingWork?.id || ''}
-                navigateTo={navigateTo}
-                onEdit={work => setDialog({ mode: 'edit', work })}
-                onEvidence={setEvidenceWork}
-                onDragEnd={resetDragState}
-                onDragLeave={handleDragLeave}
-                onDragOver={handleDragOver}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                projectNames={projectNames}
-                relationIndex={relationIndex}
-                status={status}
-                movingWorkId={movingWorkId}
-                works={groupedWorks.get(status) || []}
-              />
-            ))}
+            {WORK_BOARD_STATUSES.map(status => {
+              const lane = lanePages[status];
+              return (
+                <WorkColumn
+                  key={status}
+                  dropState={workColumnDropState(draggingWork, draggedOverStatus, status)}
+                  draggingWorkId={draggingWork?.id || ''}
+                  hasMore={Boolean(lane && lane.page < lane.totalPages)}
+                  loadingMore={loadingMoreStatus === status}
+                  navigateTo={navigateTo}
+                  onEdit={work => setDialog({ mode: 'edit', work })}
+                  onEvidence={setEvidenceWork}
+                  onLoadMore={loadMore}
+                  onReachEnd={handleColumnScroll}
+                  onDragEnd={resetDragState}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
+                  projectNames={projectNames}
+                  relationIndex={relationIndex}
+                  status={status}
+                  movingWorkId={movingWorkId}
+                  works={groupedWorks.get(status) || []}
+                />
+              );
+            })}
           </div>
           {loading ? <div className="work-board-loading">正在读取统一 Work Ledger…</div> : null}
         </div>
@@ -257,14 +333,14 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
   );
 }
 
-function WorkBoardHeader({ filteredCount, loading, onCreate, onQueryChange, onRefresh, query, total }) {
+function WorkBoardHeader({ filteredCount, loadedCount, loading, onCreate, onQueryChange, onRefresh, query, total }) {
   return (
     <header className="work-ledger-header">
       <div className="work-ledger-title">
         <div className="work-ledger-kicker"><BriefcaseBusiness size={14} /> Unified work ledger</div>
         <div className="work-ledger-heading-row">
           <h1>Work Board</h1>
-          <span>{filteredCount === total ? `${total} Works` : `${filteredCount} / ${total} Works`}</span>
+          <span>{filteredCount === loadedCount ? `${loadedCount} / ${total} Works` : `${filteredCount} / ${loadedCount} loaded · ${total} total`}</span>
         </div>
       </div>
       <div className="work-ledger-actions">
@@ -292,6 +368,8 @@ function WorkBoardHeader({ filteredCount, loading, onCreate, onQueryChange, onRe
 function WorkColumn({
   dropState,
   draggingWorkId,
+  hasMore,
+  loadingMore,
   movingWorkId,
   navigateTo,
   onDragEnd,
@@ -301,6 +379,8 @@ function WorkColumn({
   onDrop,
   onEdit,
   onEvidence,
+  onLoadMore,
+  onReachEnd,
   projectNames,
   relationIndex,
   status,
@@ -320,7 +400,7 @@ function WorkColumn({
         <h2>{meta.label}</h2>
         <span>{works.length}</span>
       </header>
-      <div className="work-column-stack">
+      <div className="work-column-stack" onScroll={event => onReachEnd(event, status)}>
         {works.length > 0 ? works.map(work => (
           <WorkCard
             key={work.id}
@@ -338,9 +418,47 @@ function WorkColumn({
         )) : (
           <div className="work-column-empty">No Work in this lane</div>
         )}
+        {hasMore ? (
+          <button
+            className="work-column-load-more"
+            disabled={loadingMore}
+            onClick={() => onLoadMore(status)}
+            type="button"
+          >
+            {loadingMore ? '正在加载…' : `继续加载 ${meta.label}`}
+          </button>
+        ) : null}
       </div>
     </section>
   );
+}
+
+function mergeWorks(current, incoming) {
+  const merged = new Map(current.map(work => [work.id, work]));
+  incoming.forEach(work => merged.set(work.id, work));
+  return [...merged.values()];
+}
+
+function normalizeBoardSnapshot(response) {
+  const lanePages = {};
+  const items = [];
+  let total = 0;
+  WORK_BOARD_STATUSES.forEach((status) => {
+    const lane = response?.lanes?.[status] || {};
+    lanePages[status] = normalizeLanePage(lane, response?.page_size || 20);
+    items.push(...(lane?.items || []));
+    total += lanePages[status].total;
+  });
+  return { items: mergeWorks([], items), lanePages, total };
+}
+
+function normalizeLanePage(response, fallbackPageSize) {
+  return {
+    page: Number(response?.page || 1),
+    pageSize: Number(response?.page_size || fallbackPageSize || 20),
+    total: Number(response?.total || 0),
+    totalPages: Number(response?.total_pages || 0),
+  };
 }
 
 function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit, onEvidence, projectName, relations, work }) {

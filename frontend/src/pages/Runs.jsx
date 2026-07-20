@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -24,7 +24,7 @@ import {
 } from './runs/runPageModel.js';
 import './runs/Runs.css';
 
-const RUN_PAGE_SIZE = 50;
+const RUN_PAGE_SIZE = 30;
 const RUN_RECONCILE_INTERVAL_MS = 30_000;
 const RUN_REFRESH_EVENT_TYPES = new Set([
   'issue.runtime_updated',
@@ -47,48 +47,96 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   const [runDetail, setRunDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [activeRunSection, setActiveRunSection] = useState('summary');
+  const listRequest = useRef(null);
+  const listController = useRef(null);
+  const loadMoreController = useRef(null);
 
   const loadFirstPage = useCallback(async ({ silent = false } = {}) => {
+    if (listRequest.current) return listRequest.current;
     if (!silent) setLoading(true);
+    const controller = new AbortController();
+    listController.current = controller;
+    const pending = runsApi.getRuns(
+      { page: 1, pageSize: RUN_PAGE_SIZE },
+      { signal: controller.signal },
+    );
+    listRequest.current = pending;
     try {
-      const response = await runsApi.getRuns({ page: 1, pageSize: RUN_PAGE_SIZE });
-      setRuns(response?.items || []);
+      const response = await pending;
+      const firstPage = response?.items || [];
+      setRuns(current => silent ? mergeRunPages(firstPage, current) : firstPage);
       setCompatibility(response?.compatibility || null);
-      setPage(Number(response?.page || 1));
+      if (!silent) setPage(Number(response?.page || 1));
       setTotalPages(Number(response?.total_pages || 0));
       setError('');
     } catch (loadError) {
-      setError(loadError.message || '加载 Runs 失败');
+      if (loadError?.name !== 'AbortError') setError(loadError.message || '加载 Runs 失败');
     } finally {
+      if (listRequest.current === pending) listRequest.current = null;
+      if (listController.current === controller) listController.current = null;
       if (!silent) setLoading(false);
     }
   }, []);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || page >= totalPages) return;
+    const controller = new AbortController();
+    loadMoreController.current = controller;
     setLoadingMore(true);
     try {
-      const response = await runsApi.getRuns({ page: page + 1, pageSize: RUN_PAGE_SIZE });
+      const response = await runsApi.getRuns(
+        { page: page + 1, pageSize: RUN_PAGE_SIZE },
+        { signal: controller.signal },
+      );
       setRuns(current => mergeRunPages(current, response?.items || []));
       setPage(Number(response?.page || page + 1));
       setTotalPages(Number(response?.total_pages || totalPages));
     } catch (loadError) {
-      toast.error(loadError.message || '继续加载 Runs 失败');
+      if (loadError?.name !== 'AbortError') toast.error(loadError.message || '继续加载 Runs 失败');
     } finally {
+      if (loadMoreController.current === controller) loadMoreController.current = null;
       setLoadingMore(false);
     }
   }, [loadingMore, page, totalPages]);
 
-  useEffect(() => { loadFirstPage(); }, [loadFirstPage]);
-
   useEffect(() => {
-    const interval = window.setInterval(() => loadFirstPage({ silent: true }), RUN_RECONCILE_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    loadFirstPage();
+    return () => {
+      listController.current?.abort();
+      loadMoreController.current?.abort();
+    };
   }, [loadFirstPage]);
 
-  useEffect(() => eventsApi.subscribeToEvents((event) => {
-    if (RUN_REFRESH_EVENT_TYPES.has(event.type)) loadFirstPage({ silent: true });
-  }), [loadFirstPage]);
+  useEffect(() => {
+    let stopped = false;
+    let timer = 0;
+    const schedule = () => {
+      timer = window.setTimeout(async () => {
+        await loadFirstPage({ silent: true });
+        if (!stopped) schedule();
+      }, RUN_RECONCILE_INTERVAL_MS);
+    };
+    schedule();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [loadFirstPage]);
+
+  useEffect(() => {
+    let timer = 0;
+    const unsubscribe = eventsApi.subscribeToEvents((event) => {
+      if (!RUN_REFRESH_EVENT_TYPES.has(event.type) || timer) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        loadFirstPage({ silent: true });
+      }, 250);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadFirstPage]);
 
   useEffect(() => {
     if (selectedSessionId) {
@@ -101,27 +149,27 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   }, [selectedRunId, selectedSessionId]);
 
   useEffect(() => {
-    if (surface === 'run' && !activeRunId && runs[0]?.id) setActiveRunId(runs[0].id);
-  }, [activeRunId, runs, surface]);
-
-  useEffect(() => {
     if (surface !== 'run' || !activeRunId) {
       setRunDetail(null);
       return undefined;
     }
+    const controller = new AbortController();
     let active = true;
     setDetailLoading(true);
-    runsApi.getRun(activeRunId)
+    runsApi.getRun(activeRunId, { signal: controller.signal })
       .then(response => {
         if (active) setRunDetail(response?.run || null);
       })
       .catch(detailError => {
-        if (active) toast.error(detailError.message || '读取 Run 详情失败');
+        if (active && detailError?.name !== 'AbortError') toast.error(detailError.message || '读取 Run 详情失败');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [activeRunId, surface]);
 
   const selectRun = useCallback((id) => {
@@ -202,8 +250,8 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
       ) : (
         <div className="run-provider-empty">
           <History size={24} />
-          <strong>{loading ? '正在读取 Runs…' : '暂无可显示的 Run'}</strong>
-          <span>Work 被 runner claim 后会生成统一 Run。</span>
+          <strong>{loading ? '正在读取 Runs…' : runs.length > 0 ? '选择左侧 Run 查看详情' : '暂无可显示的 Run'}</strong>
+          <span>{runs.length > 0 ? '列表已就绪；详情只在选择后按需读取。' : 'Work 被 runner claim 后会生成统一 Run。'}</span>
         </div>
       )}
     </section>

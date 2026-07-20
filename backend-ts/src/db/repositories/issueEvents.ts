@@ -103,6 +103,37 @@ export function listIssueEvents(
   return query.reverseResult ? rows.reverse() : rows;
 }
 
+/**
+ * Reads one latest event of the requested type for each Issue in a single
+ * query. Work list projections use this instead of issuing one query per row.
+ */
+export function latestIssueEventsByIssueID(
+  db: RunnerDatabase,
+  issueIDs: number[],
+  type: string
+): Map<number, IssueEvent> {
+  const ids = [...new Set(issueIDs.map((id) => positiveInteger(id, "issue id")))];
+  const eventType = type.trim();
+  if (ids.length === 0) return new Map();
+  if (ids.length > 100) throw new Error("latest Issue event batch supports at most 100 Issues");
+  if (eventType === "") throw new Error("Issue event type is required");
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db.sqlite.query<IssueEventRow, Array<number | string>>(`
+    select event.id, event.issue_id, event.type, event.payload, event.created_at
+    from issue_events event
+    join (
+      select issue_id, max(id) as id
+      from issue_events
+      where issue_id in (${placeholders}) and type=?
+      group by issue_id
+    ) latest on latest.id=event.id
+  `).all(...ids, eventType);
+  return new Map(rows.map((row) => {
+    const event = mapIssueEventRow(db, row, true);
+    return [event.issue_id, event];
+  }));
+}
+
 export function createIssueComment(db: RunnerDatabase, issueID: number, input: CreateIssueCommentInput): IssueEvent {
   ensureIssueExists(db, issueID);
   const body = cleanString(input.body);

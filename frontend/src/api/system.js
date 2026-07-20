@@ -1,17 +1,42 @@
 import { clearAuthToken } from './authToken.js';
 import { request, uploadImage } from './base.js';
 
+const SYSTEM_STATUS_TTL_MS = 5_000;
+let systemStatusCache = null;
+let systemStatusExpiresAt = 0;
+let systemStatusRequest = null;
+
+async function getCompactSystemStatus({ force = false } = {}) {
+  if (!force && systemStatusCache && Date.now() < systemStatusExpiresAt) return systemStatusCache;
+  if (!force && systemStatusRequest) return systemStatusRequest;
+  const pending = request('/api/system/status?compact=1');
+  systemStatusRequest = pending;
+  try {
+    const status = await pending;
+    systemStatusCache = status;
+    systemStatusExpiresAt = Date.now() + SYSTEM_STATUS_TTL_MS;
+    return status;
+  } finally {
+    if (systemStatusRequest === pending) systemStatusRequest = null;
+  }
+}
+
 export const systemApi = {
-  validateAuthToken: () => request('/api/system/status'),
+  validateAuthToken: () => getCompactSystemStatus(),
 
   clearAuthToken,
 
-  getCodexUsage: (limit = 0) => {
-    const query = limit > 0 ? `?limit=${encodeURIComponent(limit)}` : '';
+  getCodexUsage: (options = 0) => {
+    const limit = typeof options === 'number' ? options : Number(options?.limit || 0);
+    const compact = typeof options === 'object' && options?.compact === true;
+    const params = new URLSearchParams();
+    if (limit > 0) params.set('limit', String(limit));
+    if (compact) params.set('compact', '1');
+    const query = params.size > 0 ? `?${params}` : '';
     return request(`/api/usage/codex${query}`);
   },
 
-  getSystemStatus: () => request('/api/system/status'),
+  getSystemStatus: (options = {}) => getCompactSystemStatus(options),
 
   getRunnerSettings: () => request('/api/runner/settings'),
 

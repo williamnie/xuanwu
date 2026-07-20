@@ -1,17 +1,17 @@
 import { systemApi } from '../api/system.js';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { BarChart3, ChevronDown, Gauge, RefreshCw, Zap } from 'lucide-react';
 import CodexUsageBreakdown from './CodexUsageBreakdown';
 import './CodexUsagePanel.css';
 import './CodexUsagePanel.details.css';
 
 export default function CodexUsagePanel() {
-  const [state, setState] = useState({ loading: true, data: null, error: '' });
+  const [state, setState] = useState({ loading: false, data: null, error: '' });
 
   const loadUsage = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await systemApi.getCodexUsage();
+      const data = await systemApi.getCodexUsage({ compact: true });
       setState({ loading: false, data, error: '' });
     } catch (err) {
       setState(prev => ({
@@ -21,12 +21,6 @@ export default function CodexUsagePanel() {
       }));
     }
   }, []);
-
-  useEffect(() => {
-    loadUsage();
-    const timer = setInterval(loadUsage, 60_000);
-    return () => clearInterval(timer);
-  }, [loadUsage]);
 
   const { data, error, loading } = state;
   return (
@@ -60,6 +54,7 @@ function UsageContent({ data, loading }) {
   if (loading && !data) {
     return <div className="codex-usage-loading">正在读取 Codex 用量…</div>;
   }
+  if (!data) return <div className="codex-usage-empty">点击刷新后按需读取 Codex 用量，不阻塞工作台首屏。</div>;
   if (!data || data.events_scanned === 0) return <EmptyUsage />;
   return (
     <div className="codex-usage-content">

@@ -49,7 +49,7 @@ function aggregateUsage(
 function addBucket(state: UsageState, bucket: UsageBucket): void {
   state.events_scanned += bucket.events;
   addUsageToSummary(state, new Date(bucket.timestamp), bucket.usage);
-  addDimensionUsage(state.dimensions, bucket.meta, bucket.usage);
+  if (state.includeDimensions) addDimensionUsage(state.dimensions, bucket.meta, bucket.usage);
 }
 
 function addRecord(state: UsageState, record: UsageRecord): void {
@@ -59,7 +59,7 @@ function addRecord(state: UsageState, record: UsageRecord): void {
     state.events_scanned += 1;
     addUsageToSummary(state, timestamp(event), usage);
     captureLatestUsage(state, event);
-    addDimensionUsage(state.dimensions, record.meta, usage);
+    if (state.includeDimensions) addDimensionUsage(state.dimensions, record.meta, usage);
   }
   if (event.payload?.rate_limits) captureLatestLimits(state, event);
 }
@@ -71,6 +71,7 @@ function newUsageState(root: string, now: Date, options: UsageOptions) {
     dimensions: newDimensionState(options),
     events_scanned: 0,
     freshness: {} as Record<string, unknown>,
+    includeDimensions: options.includeDimensions !== false,
     generated_at: now.toISOString(),
     latest_limit_ms: -1,
     latest_usage: undefined as Record<string, unknown> | undefined,
@@ -134,7 +135,10 @@ function finishUsageState(state: UsageState): UsageReport {
     daily: periodsFromMap(state.daily, MAX_DAILY_PERIODS),
     weekly: periodsFromMap(state.weekly, MAX_WEEKLY_PERIODS),
     monthly: periodsFromMap(state.monthly, MAX_MONTHLY_PERIODS),
-    project_usage: finishDimensions(state.dimensions, state.summary.all_time.total_tokens)
+    compact: !state.includeDimensions,
+    project_usage: state.includeDimensions
+      ? finishDimensions(state.dimensions, state.summary.all_time.total_tokens)
+      : []
   };
 }
 

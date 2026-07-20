@@ -26,6 +26,13 @@ export default function RunSidebar({
 
   if (!portalTarget) return null;
 
+  const loadOnScroll = (event) => {
+    const target = event.currentTarget;
+    if (hasMore && !loadingMore && target.scrollHeight - target.scrollTop - target.clientHeight <= 120) {
+      onLoadMore();
+    }
+  };
+
   return createPortal((
     <div className="sessions-app-sidebar-panel runs-app-sidebar-panel">
       <div className="sidebar-shortcut-items">
@@ -45,7 +52,7 @@ export default function RunSidebar({
         </button>
       </div>
 
-      <div className="sidebar-scroll-area runs-sidebar-scroll">
+      <div className="sidebar-scroll-area runs-sidebar-scroll" onScroll={loadOnScroll}>
         {loading && runs.length === 0 ? (
           <div className="session-list-loading"><TurtleLoader compact label="正在读取 Runs…" /></div>
         ) : runs.length === 0 ? (

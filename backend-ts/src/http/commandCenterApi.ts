@@ -291,6 +291,7 @@ function activeWorkSummary(db: RunnerDatabase, work: WorkLedgerEntry, run: RunVi
 
 function runSummary(run: RunView): Record<string, unknown> {
   return {
+    ended_at: run.ended_at,
     id: run.id,
     phase: run.progress.provider_phase,
     progress: {
@@ -299,6 +300,7 @@ function runSummary(run: RunView): Record<string, unknown> {
       updated_at: run.progress.updated_at
     },
     provider: run.provider,
+    started_at: run.started_at,
     status: run.status,
     updated_at: run.updated_at
   };

@@ -194,9 +194,11 @@ describe("read API route contracts", () => {
         "GET /api/works/:id",
         "GET /api/works/:id/relations",
         "GET /api/works/:id/timeline",
+        "GET /api/works/board",
         "PATCH /api/works/:id",
         "POST /api/works",
         "POST /api/works/:id/actions/:action",
+        "PUT /api/works/:id/readiness-requirements",
       ]
     `);
   });

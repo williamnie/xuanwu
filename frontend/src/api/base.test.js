@@ -55,6 +55,26 @@ test('base request preserves empty 204 response semantics', async () => {
   }
 });
 
+test('base request shares one in-flight GET for identical URLs', async () => {
+  let calls = 0;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const restore = installRequestGlobals(async () => {
+    calls += 1;
+    await gate;
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  });
+  try {
+    const first = request('/api/shared');
+    const second = request('/api/shared');
+    release();
+    assert.deepEqual(await Promise.all([first, second]), [{ ok: true }, { ok: true }]);
+    assert.equal(calls, 1);
+  } finally {
+    restore();
+  }
+});
+
 class MemoryStorage {
   constructor() {
     this.items = new Map();

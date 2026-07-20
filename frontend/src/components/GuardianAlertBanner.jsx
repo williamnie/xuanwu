@@ -31,7 +31,7 @@ export default function GuardianAlertBanner() {
   }, [setGuardianAlerts]);
   const handleRefresh = useCallback(() => {
     refreshAlerts();
-    status.reload();
+    status.reload({ force: true });
   }, [refreshAlerts, status]);
   const handleAck = useCallback(async (id) => {
     setAckingId(id);
@@ -71,10 +71,10 @@ export default function GuardianAlertBanner() {
 
 function useGuardianStatus() {
   const [state, setState] = useState({ data: null, error: '', loading: false });
-  const reload = useCallback(async () => {
+  const reload = useCallback(async ({ force = false } = {}) => {
     setState((current) => ({ ...current, loading: true }));
     try {
-      const data = await systemApi.getSystemStatus();
+      const data = await systemApi.getSystemStatus({ force });
       setState({ data, error: '', loading: false });
     } catch (error) {
       setState((current) => ({ ...current, error: errorMessage(error), loading: false }));

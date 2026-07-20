@@ -78,12 +78,12 @@ test('open actions accept only the returned matching Handoff link and HTTP(S) UR
   })).externalHref, '');
 });
 
-test('Command Center refreshes summary and Handoff status without adding a write path', () => {
+test('Command Center trusts the aggregate Handoff status without per-card hydration or a write path', () => {
   const page = readFileSync(new URL('./RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
   const dashboard = readFileSync(new URL('../Dashboard.jsx', import.meta.url), 'utf8');
   assert.match(page, /sections: \['recent_deliveries'\]/);
-  assert.match(page, /handoffsApi\.getHandoff\(item\.id\)/);
-  assert.match(page, /event\.type === 'handoff\.notification'/);
+  assert.doesNotMatch(page, /handoffsApi\.getHandoff\(item\.id\)/);
+  assert.match(page, /event\.type !== 'handoff\.notification'/);
   assert.match(page, /REFRESH_INTERVAL_MS = 30_000/);
   assert.match(page, /navigator\.clipboard\.writeText/);
   assert.match(page, /history\?\.replaceState\?\.\(null, '', item\.links\.view\)/);

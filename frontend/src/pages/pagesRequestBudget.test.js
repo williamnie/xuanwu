@@ -8,6 +8,11 @@ const dashboardSource = readFileSync(new URL('./Dashboard.jsx', import.meta.url)
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
 const templatesSource = readFileSync(new URL('./IssueTemplatesPanel.jsx', import.meta.url), 'utf8');
+const runsSource = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
+const activeWorkSource = readFileSync(new URL('./command-center/ActiveWorkSection.jsx', import.meta.url), 'utf8');
+const recentDeliveriesSource = readFileSync(new URL('./command-center/RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
+const firstDeliverySource = readFileSync(new URL('./command-center/FirstDeliveryGuide.jsx', import.meta.url), 'utf8');
+const usageSource = readFileSync(new URL('../components/CodexUsagePanel.jsx', import.meta.url), 'utf8');
 
 test('sessions page initial store refresh does not fetch global issue list or capabilities', () => {
   assert.match(sessionsSource, /refreshData\(\['projects'\]\)/);
@@ -43,4 +48,29 @@ test('project and template writes avoid refreshAllData fan-out', () => {
   assert.doesNotMatch(templatesSource, /refreshAllData/);
   assert.match(projectsSource, /refreshData\(\['projects', 'issues'\]\)/);
   assert.match(templatesSource, /refreshData\(\['issueTemplates'\]\)/);
+});
+
+test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail only after selection', () => {
+  assert.match(runsSource, /if \(listRequest\.current\) return listRequest\.current/);
+  assert.match(runsSource, /signal: controller\.signal/);
+  assert.match(runsSource, /window\.setTimeout/);
+  assert.doesNotMatch(runsSource, /window\.setInterval/);
+  assert.doesNotMatch(runsSource, /runs\[0\]\?\.id\) setActiveRunId/);
+  assert.match(runsSource, /silent \? mergeRunPages\(firstPage, current\) : firstPage/);
+});
+
+test('Command Center trusts bounded summaries instead of hydrating every card detail', () => {
+  assert.doesNotMatch(activeWorkSource, /hydrateRunDetails/);
+  assert.doesNotMatch(recentDeliveriesSource, /hydrateDeliveryStatuses|handoffsApi\.getHandoff/);
+  assert.match(recentDeliveriesSource, /if \(!visible\) return undefined/);
+  assert.match(recentDeliveriesSource, /setVisible\(true\)/);
+  assert.match(usageSource, /getCodexUsage\(\{ compact: true \}\)/);
+  assert.doesNotMatch(usageSource, /useEffect|setInterval/);
+});
+
+test('first delivery onboarding uses bounded Work and Evidence reads', () => {
+  assert.match(firstDeliverySource, /workApi\.getWorks\(\{ pageSize: 8 \}/);
+  assert.doesNotMatch(firstDeliverySource, /workApi\.getAllWorks\(\)/);
+  assert.doesNotMatch(firstDeliverySource, /Promise\.allSettled/);
+  assert.match(firstDeliverySource, /candidateWorkID/);
 });

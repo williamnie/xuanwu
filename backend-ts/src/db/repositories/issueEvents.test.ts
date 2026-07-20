@@ -8,6 +8,7 @@ import { parseIssueEventProviderError } from "../../pi/providerErrorParser.ts";
 import {
   ISSUE_LOG_ARTIFACT_THRESHOLD_BYTES,
   ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES,
+  latestIssueEventsByIssueID,
   listIssueEvents,
   recordIssueLogEvent
 } from "./issueEvents.ts";
@@ -28,6 +29,34 @@ afterEach(async () => {
 });
 
 describe("Bun issue event repository logs", () => {
+  test("loads the latest typed event for many Issues in one batch", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const first = insertIssue(database, "demo");
+      const second = insertIssue(database, "demo");
+      database.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.created', ?, ?)",
+        [first, JSON.stringify({ version: 1 }), "2026-01-01T00:00:01Z"]
+      );
+      database.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.created', ?, ?)",
+        [first, JSON.stringify({ version: 2 }), "2026-01-01T00:00:02Z"]
+      );
+      database.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.created', ?, ?)",
+        [second, JSON.stringify({ version: 3 }), "2026-01-01T00:00:03Z"]
+      );
+
+      const events = latestIssueEventsByIssueID(database, [first, second], "issue.created");
+
+      expect(JSON.parse(events.get(first)?.payload ?? "{}")).toEqual({ version: 2 });
+      expect(JSON.parse(events.get(second)?.payload ?? "{}")).toEqual({ version: 3 });
+    } finally {
+      database.close();
+    }
+  });
+
   test("records normalized provider error events as issue.log rows", async () => {
     const database = await openFixtureDatabase();
     try {

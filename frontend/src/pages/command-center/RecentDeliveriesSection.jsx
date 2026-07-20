@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -12,13 +12,9 @@ import {
 } from 'lucide-react';
 import { commandCenterApi } from '../../api/commandCenter.js';
 import { eventsApi } from '../../api/events.js';
-import { handoffsApi } from '../../api/handoffs.js';
 import { message as toast } from '../../store/toastStore.js';
 import { displayRef } from '../handoffPageModel.js';
-import {
-  mergeRecentDeliveryDetail,
-  recentDeliveryView,
-} from './recentDeliveriesModel.js';
+import { recentDeliveryView } from './recentDeliveriesModel.js';
 import './RecentDeliveriesSection.css';
 
 const RECENT_DELIVERY_LIMIT = 5;
@@ -28,43 +24,66 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [visible, setVisible] = useState(false);
+  const requestRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
+    if (requestRef.current) return requestRef.current.promise;
     if (!silent) setLoading(true);
+    const controller = new AbortController();
+    const promise = commandCenterApi.getSummary({
+      limit: RECENT_DELIVERY_LIMIT,
+      sections: ['recent_deliveries'],
+    }, { signal: controller.signal });
+    requestRef.current = { controller, promise };
     try {
-      const response = await commandCenterApi.getSummary({
-        limit: RECENT_DELIVERY_LIMIT,
-        sections: ['recent_deliveries'],
-      });
+      const response = await promise;
       const section = response?.sections?.recent_deliveries;
       if (!section || section.status !== 'ok') {
         throw new Error(section?.error?.message || 'Recent Deliveries 分区暂不可用');
       }
       const snapshots = Array.isArray(section.items) ? section.items : [];
-      const hydrated = await hydrateDeliveryStatuses(snapshots);
       setSummary({
         compatibility: response.compatibility || null,
-        detailFailures: hydrated.detailFailures,
-        section: { ...section, items: hydrated.items },
+        detailFailures: 0,
+        section: { ...section, items: snapshots },
       });
       setError('');
     } catch (loadError) {
-      setError(loadError.message || '加载 Recent Deliveries 失败');
+      if (loadError?.name !== 'AbortError') setError(loadError.message || '加载 Recent Deliveries 失败');
     } finally {
+      if (requestRef.current?.promise === promise) requestRef.current = null;
       if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!visible) return undefined;
+    load();
+    return () => requestRef.current?.controller.abort();
+  }, [load, visible]);
 
   useEffect(() => {
+    if (!visible) return undefined;
     const interval = window.setInterval(() => load({ silent: true }), REFRESH_INTERVAL_MS);
     return () => window.clearInterval(interval);
-  }, [load]);
+  }, [load, visible]);
 
-  useEffect(() => eventsApi.subscribeToEvents((event) => {
-    if (event.type === 'handoff.notification') load({ silent: true });
-  }), [load]);
+  useEffect(() => {
+    if (!visible) return undefined;
+    let timer = 0;
+    const unsubscribe = eventsApi.subscribeToEvents((event) => {
+      if (timer || event.type !== 'handoff.notification') return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        load({ silent: true });
+      }, 250);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [load, visible]);
 
   const projectNames = useMemo(
     () => new Map(projects.map(project => [project.id, project.name])),
@@ -92,7 +111,7 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
   };
 
   return (
-    <section className="recent-deliveries-section" aria-busy={loading}>
+    <section className="recent-deliveries-section" aria-busy={visible && loading}>
       <header className="recent-deliveries-header">
         <div>
           <div className="recent-deliveries-kicker"><PackageCheck size={15} /> Recent Deliveries</div>
@@ -106,13 +125,18 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
             </span>
           ) : null}
           <span className="recent-deliveries-count">{summary?.section?.counts?.total ?? items.length}</span>
-          <button aria-label="刷新 Recent Deliveries" disabled={loading} onClick={() => load()} type="button">
+          <button aria-label="刷新 Recent Deliveries" disabled={!visible || loading} onClick={() => load()} type="button">
             <RefreshCw className={loading ? 'is-spinning' : ''} size={15} />
           </button>
         </div>
       </header>
 
-      {error ? (
+      {!visible ? (
+        <div className="recent-deliveries-state empty">
+          <strong>最近交付按需读取，不阻塞工作台首屏</strong>
+          <button onClick={() => setVisible(true)} type="button">加载最近交付</button>
+        </div>
+      ) : error ? (
         <div className="recent-deliveries-state error" role="alert">
           <AlertTriangle size={18} />
           <div><strong>Recent Deliveries 暂不可用</strong><span>{error}</span></div>
@@ -203,21 +227,6 @@ export default function RecentDeliveriesSection({ navigateTo, projects = [] }) {
       ) : null}
     </section>
   );
-}
-
-async function hydrateDeliveryStatuses(items) {
-  const results = await Promise.all(items.map(async item => {
-    try {
-      const detail = await handoffsApi.getHandoff(item.id);
-      return { item: mergeRecentDeliveryDetail(item, detail), refreshed: true };
-    } catch {
-      return { item, refreshed: false };
-    }
-  }));
-  return {
-    detailFailures: results.filter(result => !result.refreshed).length,
-    items: results.map(result => result.item),
-  };
 }
 
 function formatTime(value) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -34,41 +34,61 @@ const REFRESH_EVENT_TYPES = new Set([
 
 export default function ActiveWorkSection({ navigateTo, projects = [] }) {
   const [summary, setSummary] = useState(null);
-  const [runDetails, setRunDetails] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const requestRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
+    if (requestRef.current) return requestRef.current.promise;
     if (!silent) setLoading(true);
+    const controller = new AbortController();
+    const promise = commandCenterApi.getSummary(
+      { limit: 10, sections: ['active_work'] },
+      { signal: controller.signal },
+    );
+    requestRef.current = { controller, promise };
     try {
-      const response = await commandCenterApi.getSummary({ limit: 10, sections: ['active_work'] });
+      const response = await promise;
       const section = response?.sections?.active_work;
       if (!section || section.status !== 'ok') {
         throw new Error(section?.error?.message || 'Active Work 分区暂不可用');
       }
-      const items = Array.isArray(section.items) ? section.items : [];
       setSummary({ compatibility: response.compatibility || null, section });
       setError('');
-      void hydrateRunDetails(items, setRunDetails);
     } catch (loadError) {
-      setError(loadError.message || '加载 Active Work 失败');
+      if (loadError?.name !== 'AbortError') setError(loadError.message || '加载 Active Work 失败');
     } finally {
+      if (requestRef.current?.promise === promise) requestRef.current = null;
       if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return () => requestRef.current?.controller.abort();
+  }, [load]);
 
   useEffect(() => {
     const interval = window.setInterval(() => load({ silent: true }), REFRESH_INTERVAL_MS);
     return () => window.clearInterval(interval);
   }, [load]);
 
-  useEffect(() => eventsApi.subscribeToEvents((event) => {
-    if (REFRESH_EVENT_TYPES.has(event.type)) load({ silent: true });
-  }), [load]);
+  useEffect(() => {
+    let timer = 0;
+    const unsubscribe = eventsApi.subscribeToEvents((event) => {
+      if (timer || !REFRESH_EVENT_TYPES.has(event.type)) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        load({ silent: true });
+      }, 250);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [load]);
 
   const projectNames = useMemo(
     () => new Map(projects.map(project => [project.id, project.name])),
@@ -91,7 +111,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
     setSubmitting(true);
     try {
       if (pending.action === 'pause') {
-        const detail = runDetails[item.latest_run?.id] || await loadRunDetail(item.latest_run?.id);
+        const detail = await loadRunDetail(item.latest_run?.id);
         if (!activeWorkCanPause(item, detail)) {
           throw new Error('当前 Run 没有可暂停的活动 provider turn，请打开 Run 查看最新状态');
         }
@@ -154,7 +174,7 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       ) : (
         <div className="active-work-list">
           {items.map(item => {
-            const detail = item.latest_run?.id ? runDetails[item.latest_run.id] : null;
+            const detail = null;
             const view = activeWorkView(item, detail);
             const confirmation = pending?.id === item.id ? pending.action : '';
             return (
@@ -229,22 +249,6 @@ export default function ActiveWorkSection({ navigateTo, projects = [] }) {
       ) : null}
     </section>
   );
-}
-
-async function hydrateRunDetails(items, setRunDetails) {
-  const ids = [...new Set(items.map(item => item.latest_run?.id).filter(Boolean))];
-  if (ids.length === 0) {
-    setRunDetails({});
-    return;
-  }
-  const entries = await Promise.all(ids.map(async id => {
-    try {
-      return [id, await loadRunDetail(id)];
-    } catch {
-      return [id, null];
-    }
-  }));
-  setRunDetails(Object.fromEntries(entries));
 }
 
 async function loadRunDetail(id) {

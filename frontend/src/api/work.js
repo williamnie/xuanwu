@@ -1,7 +1,7 @@
 import { request } from './base.js';
 import { eventSummaryParams } from './events.js';
 
-const WORK_PAGE_SIZE = 100;
+const WORK_PAGE_SIZE = 50;
 
 function appendMany(params, key, values) {
   const items = Array.isArray(values) ? values : values ? [values] : [];
@@ -37,6 +37,16 @@ function workTimelineParams({ cursor = '', limit = 50 } = {}) {
   return params;
 }
 
+function workBoardParams({ order = 'desc', pageSize = 20, projectId = '', sort = 'updated_at' } = {}) {
+  const params = new URLSearchParams({
+    order,
+    page_size: String(pageSize),
+    sort,
+  });
+  if (projectId) params.set('project_id', projectId);
+  return params;
+}
+
 function issueIdFromWorkId(id) {
   const match = /^xw:work:issues:([1-9]\d*)$/.exec(String(id || ''));
   if (!match) throw new Error('Work id is not backed by a compatible Issue');
@@ -57,7 +67,9 @@ async function allPages(fetchPage) {
 }
 
 export const workApi = {
-  getWorks: (filters = {}) => request(`/api/works?${workListParams(filters)}`),
+  getWorks: (filters = {}, options = {}) => request(`/api/works?${workListParams(filters)}`, options),
+
+  getWorkBoard: (filters = {}, options = {}) => request(`/api/works/board?${workBoardParams(filters)}`, options),
 
   getAllWorks: (filters = {}) => allPages(page => (
     request(`/api/works?${workListParams({ ...filters, page, pageSize: WORK_PAGE_SIZE })}`)

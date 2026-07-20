@@ -18,6 +18,7 @@ export type UsageIssueRef = {
 };
 
 export type UsageOptions = {
+  includeDimensions?: boolean;
   issues?: UsageIssueRef[];
   limit?: number;
   projects?: UsageProjectRef[];

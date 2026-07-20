@@ -10,6 +10,14 @@ export const WORK_BOARD_STATUSES = [
 
 export const WORK_BOARD_TYPES = ['objective', 'engineering_task'];
 
+export function laneScrollDecision({ armed, clientHeight, scrollHeight, scrollTop }, threshold = 160) {
+  const remaining = scrollHeight - scrollTop - clientHeight;
+  const nearEnd = scrollHeight > clientHeight && remaining <= threshold;
+  if (!nearEnd) return { armed: true, load: false };
+  if (!armed) return { armed: false, load: false };
+  return { armed: false, load: true };
+}
+
 const ATTENTION_STATUSES = new Set(['triage', 'pending_verification', 'failed']);
 const ATTENTION_RELATION_LIFECYCLES = new Set(['pending', 'paused', 'failed', 'legacy_unknown']);
 

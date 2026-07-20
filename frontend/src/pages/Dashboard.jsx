@@ -109,7 +109,7 @@ export default function Dashboard({
         </div>
       )}
 
-      <FirstDeliveryGuide navigateTo={navigateTo} projects={projects} />
+      {issues.length === 0 ? <FirstDeliveryGuide navigateTo={navigateTo} projects={projects} /> : null}
 
       <RuntimeHealthStrip backendOnline={backendOnline} navigateTo={navigateTo} />
 

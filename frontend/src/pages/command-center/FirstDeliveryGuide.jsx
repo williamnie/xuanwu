@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Clipboard, FolderPlus, Loader2,
   RefreshCw, Rocket, Settings2,
@@ -31,38 +31,48 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
   const [cwd, setCwd] = useState('');
   const [selectedProjectID, setSelectedProjectID] = useState(projects[0]?.id || '');
   const [creationNeedsRefresh, setCreationNeedsRefresh] = useState(false);
+  const requestRef = useRef(null);
 
   const load = useCallback(async () => {
+    if (requestRef.current) return requestRef.current.promise;
     setLoading(true);
+    const controller = new AbortController();
+    const promise = Promise.all([
+      systemApi.getRuntimeDoctor(),
+      workApi.getWorks({ pageSize: 8 }, { signal: controller.signal }),
+      handoffsApi.getHandoffs({ limit: 20 }),
+    ]);
+    requestRef.current = { controller, promise };
     try {
-      const [doctor, worksPage, handoffPage] = await Promise.all([
-        systemApi.getRuntimeDoctor(),
-        workApi.getAllWorks(),
-        handoffsApi.getHandoffs({ limit: 20 }),
-      ]);
+      const [doctor, worksPage, handoffPage] = await promise;
       const works = worksPage?.items || [];
       const handoffs = handoffPage?.items || [];
       const sample = works.find(work => work?.title === FIRST_DELIVERY_TITLE);
-      const candidateWorkIDs = [...new Set([
+      const candidateWorkID = [
         sample?.id,
         ...handoffs.filter(item => item?.evidence_count > 0).map(item => item.work_id),
         works[0]?.id,
-      ].filter(Boolean))].slice(0, 8);
-      const results = await Promise.allSettled(candidateWorkIDs.map(workId => (
-        evidenceApi.listEvidence({ limit: 10, status: 'passed', workId })
-      )));
-      const evidence = results.flatMap(result => result.status === 'fulfilled' ? result.value?.items || [] : []);
+      ].find(Boolean);
+      const evidencePage = candidateWorkID
+        ? await evidenceApi.listEvidence({ limit: 10, status: 'passed', workId: candidateWorkID })
+        : null;
+      const evidence = evidencePage?.items || [];
+      if (controller.signal.aborted) return;
       setSnapshot({ connectionTest: readFirstDeliveryConnectionTest(), doctor, evidence, handoffs, works });
       setError('');
       setCreationNeedsRefresh(false);
     } catch (loadError) {
-      setError(loadError.message || '无法读取首次交付状态');
+      if (loadError?.name !== 'AbortError') setError(loadError.message || '无法读取首次交付状态');
     } finally {
-      setLoading(false);
+      if (requestRef.current?.promise === promise) requestRef.current = null;
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return () => requestRef.current?.controller.abort();
+  }, [load]);
   useEffect(() => {
     if (!projects.some(project => project.id === selectedProjectID)) {
       setSelectedProjectID(projects[0]?.id || '');
@@ -111,7 +121,11 @@ export default function FirstDeliveryGuide({ navigateTo, projects }) {
     setBusy('work');
     setError('');
     try {
-      const authority = await workApi.getAllWorks({ projectId: project.id });
+      const authority = await workApi.getWorks({
+        pageSize: 10,
+        projectId: project.id,
+        query: FIRST_DELIVERY_TITLE,
+      });
       const existing = (authority?.items || []).find(work => work?.title === FIRST_DELIVERY_TITLE);
       if (!existing) await workApi.createWork(sampleWorkPayload(project.id));
       await projectsApi.startProjectLoop(project.id);

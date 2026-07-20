@@ -81,6 +81,8 @@ describe("usage reader cache", () => {
       events_scanned: 1,
       summary: { all_time: { total_tokens: 1500 } }
     });
+    const compact = await readCodexUsage({ root, options: { includeDimensions: false } });
+    expect(compact).toMatchObject({ compact: true, events_scanned: 1500, project_usage: [] });
   });
 
   test("reopens the persistent index after process-state reset and reads only appended bytes", async () => {

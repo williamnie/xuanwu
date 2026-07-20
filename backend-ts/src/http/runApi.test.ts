@@ -66,7 +66,7 @@ describe("Run HTTP API", () => {
       expect(body.items).toHaveLength(25);
       expect(body.items[0]).toMatchObject({
         attempt_count: 1,
-        progress: { attempt_status: "succeeded", phase: "succeeded" },
+        progress: { attempt_status: "succeeded", phase: "succeeded", projection_mode: "list_summary" },
         project_id: "demo",
         provider: "codex",
         status: "succeeded",
@@ -92,6 +92,7 @@ describe("Run HTTP API", () => {
           logs: expect.stringContaining("type=issue.log")
         }
       });
+      expect(detailBody.run.progress.projection_mode).toBe("read_through_rebuild");
     } finally {
       db.close();
     }

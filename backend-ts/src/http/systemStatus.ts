@@ -59,6 +59,19 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
   return { ...status, health: systemHealth({ ...status, required_provider_ids: requiredProviderIDs(context.database) }) };
 }
 
+/** Lightweight authenticated liveness payload for the Web shell. */
+export function buildCompactSystemStatus(context: SystemStatusContext): Record<string, unknown> {
+  const command = redactSensitiveText(context.config.providers.codex?.command ?? "");
+  return {
+    service: serviceStatus(context.startedAt),
+    db: databaseStatus(context.database),
+    auth: { enabled: context.authEnabled },
+    config: configStatus(context),
+    codex: { command, command_ok: command.trim() !== "" },
+    runner: runnerStatus(context.database)
+  };
+}
+
 export function buildRuntimeDoctor(context: SystemStatusContext): Record<string, unknown> {
   const status = buildSystemStatus(context) as RuntimeStatus;
   return {

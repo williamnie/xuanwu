@@ -6,6 +6,7 @@ import {
   filterWorkBoardItems,
   indexRelationsByWork,
   issueIdFromWorkId,
+  laneScrollDecision,
   resolveWorkBoardPage,
   workBoardEnabled,
   workDeliveryStage,
@@ -57,6 +58,25 @@ test('board drops preserve runner-aware lifecycle actions', () => {
   assert.equal(workDropOperation('in_progress', 'failed'), 'blocked');
   assert.equal(workDropOperation('done', 'todo'), 'blocked');
   assert.equal(workDropOperation('done', 'done'), 'none');
+});
+
+test('lane scroll loads once until the user leaves the end threshold', () => {
+  assert.deepEqual(
+    laneScrollDecision({ armed: true, clientHeight: 600, scrollHeight: 1500, scrollTop: 800 }),
+    { armed: false, load: true },
+  );
+  assert.deepEqual(
+    laneScrollDecision({ armed: false, clientHeight: 600, scrollHeight: 1500, scrollTop: 820 }),
+    { armed: false, load: false },
+  );
+  assert.deepEqual(
+    laneScrollDecision({ armed: false, clientHeight: 600, scrollHeight: 1900, scrollTop: 820 }),
+    { armed: true, load: false },
+  );
+  assert.deepEqual(
+    laneScrollDecision({ armed: true, clientHeight: 600, scrollHeight: 600, scrollTop: 0 }),
+    { armed: true, load: false },
+  );
 });
 
 test('board filters combine type, status, project, Attention and delivery', () => {

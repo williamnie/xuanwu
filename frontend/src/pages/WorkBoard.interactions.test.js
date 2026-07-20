@@ -24,6 +24,22 @@ test('Work Board keeps the viewport fixed and scrolls each lane independently', 
   assert.match(css, /\.work-column-stack\s*\{[\s\S]*flex:\s*1;[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/);
 });
 
+test('Work Board opens from one grouped snapshot and loads only the scrolled lane', () => {
+  assert.match(board, /workApi\.getWorkBoard\(\{\}, \{ signal: controller\.signal \}\)/);
+  assert.match(board, /statuses: \[status\]/);
+  assert.match(board, /page: lane\.page \+ 1/);
+  assert.match(board, /onScroll=\{event => onReachEnd\(event, status\)\}/);
+  assert.match(board, /laneScrollArmed/);
+  assert.match(board, /继续加载 \$\{meta\.label\}/);
+  assert.doesNotMatch(board, /getAllWorks|getAllWorkRelations/);
+});
+
+test('Work Board avoids learned intrinsic card heights that move the lane scrollbar', () => {
+  assert.match(css, /\.work-card\s*\{[\s\S]*contain:\s*layout paint style;/);
+  assert.doesNotMatch(css, /content-visibility|contain-intrinsic-size/);
+  assert.match(css, /\.work-column-stack\s*\{[\s\S]*scrollbar-gutter:\s*stable;/);
+});
+
 test('Work Board keeps search in the header, exposes board only, and restores height when the global composer is collapsed', () => {
   assert.doesNotMatch(board, /work-ledger-stats|CompatibilityNotice/);
   assert.match(board, /className="work-header-search"/);

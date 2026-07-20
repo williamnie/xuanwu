@@ -32,6 +32,34 @@ describe("Bun system status endpoints", () => {
     expect(await response.json()).toEqual({ status: "ok" });
   });
 
+  test("returns a compact authenticated Web-shell status without heavy projections", async () => {
+    const { config, database } = await openFixtureRuntime();
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, {
+        authToken: "status-secret",
+        config,
+        database,
+        startedAt: new Date("2026-05-28T00:00:00.000Z")
+      });
+      const handle = createRequestHandler(router, "status-secret");
+      const response = await handle(new Request(`${BASE_URL}/api/system/status?compact=1`, {
+        headers: { authorization: "Bearer status-secret" }
+      }));
+      const body = await response.json() as Record<string, any>;
+      expect(response.status).toBe(200);
+      expect(body.service.alive).toBe(true);
+      expect(body.db.ok).toBe(true);
+      expect(body.codex.command_ok).toBe(true);
+      expect(body.pi_guardian.watchdog).toBeDefined();
+      expect(body.event_projection).toBeUndefined();
+      expect(body.run_progress_projection).toBeUndefined();
+      expect(body.observability).toBeUndefined();
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns service db auth and config summary", async () => {
     const { config, database } = await openFixtureRuntime();
     try {

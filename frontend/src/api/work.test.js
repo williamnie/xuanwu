@@ -10,21 +10,37 @@ test('Work client exhausts every page for a large board', async () => {
     const parsed = new URL(url, 'http://runner.local');
     const page = Number(parsed.searchParams.get('page'));
     requestedPages.push(page);
-    const start = (page - 1) * 100;
-    const count = page < 3 ? 100 : 5;
+    const start = (page - 1) * 50;
+    const count = page < 5 ? 50 : 5;
     return jsonResponse({
       items: Array.from({ length: count }, (_, index) => ({ id: `xw:work:issues:${start + index + 1}` })),
       page,
-      page_size: 100,
+      page_size: 50,
       total: 205,
-      total_pages: 3,
+      total_pages: 5,
     });
   };
 
   try {
     const response = await workApi.getAllWorks({ projectId: 'demo' });
     assert.equal(response.items.length, 205);
-    assert.deepEqual(requestedPages.sort((a, b) => a - b), [1, 2, 3]);
+    assert.deepEqual(requestedPages.sort((a, b) => a - b), [1, 2, 3, 4, 5]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('Work board client reads every lane through one bounded snapshot request', async () => {
+  const previousFetch = globalThis.fetch;
+  let requestedUrl = '';
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return jsonResponse({ lanes: {}, page_size: 20 });
+  };
+
+  try {
+    await workApi.getWorkBoard({ pageSize: 20, projectId: 'demo' });
+    assert.equal(requestedUrl, '/api/works/board?order=desc&page_size=20&sort=updated_at&project_id=demo');
   } finally {
     globalThis.fetch = previousFetch;
   }

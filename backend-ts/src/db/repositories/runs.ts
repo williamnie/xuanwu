@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../database.ts";
 import {
+  RUN_PROGRESS_STALLED_AFTER_MS,
   rebuildRunProgressProjection,
   type RunProgressProjection
 } from "./runProgress.ts";
@@ -139,7 +140,7 @@ type AttemptRow = {
   updated_at: string;
 };
 
-const RUN_COLUMNS = `
+const RUN_DETAIL_COLUMNS = `
   run.id as legacy_id,
   run.run_id,
   run.work_id,
@@ -181,43 +182,171 @@ const RUN_COLUMNS = `
   ${runStatusSql("run", "latest")} as unified_status`;
 
 export function listRuns(db: RunnerDatabase, filter: RunListFilter): RunView[] {
-  const query = runQuery(filter);
+  const query = runBaseQuery(filter);
+  const status = runStatusFilter(filter.statuses);
+  return listRunSummaryRows(db, {
+    args: [...query.args, ...status.args, filter.limit, filter.offset],
+    candidateWhere: query.where,
+    limit: "limit ? offset ?",
+    order: runOrder(filter, "run"),
+    selectedWhere: status.where
+  }).map((row) => mapRunRow(db, row, "summary"));
+}
+
+function listRunSummaryRows(
+  db: RunnerDatabase,
+  query: {
+    args: Array<number | string>;
+    candidateWhere: string;
+    limit: string;
+    order: string;
+    selectedWhere: string;
+  }
+): RunRow[] {
   return db.sqlite.query<RunRow, Array<number | string>>(`
-    select ${RUN_COLUMNS}
-    from issue_runs run
-    join issues issue on issue.id=run.issue_id
-    left join run_attempts latest
-      on latest.issue_run_id=run.id
-      and latest.sequence=(select max(candidate.sequence) from run_attempts candidate where candidate.issue_run_id=run.id)
-    ${query.where}
-    ${runOrder(filter)}
-    limit ? offset ?
-  `).all(...query.args, filter.limit, filter.offset).map((row) => mapRunRow(db, row, 0));
+    with candidate_runs as materialized (
+      select
+        run.id as legacy_id,
+        run.issue_id,
+        run.run_id,
+        run.work_id,
+        run.run_sequence,
+        run.status,
+        run.status as legacy_status,
+        run.provider,
+        run.started_at,
+        run.ended_at,
+        run.exit_reason,
+        run.error,
+        issue.project_id,
+        issue.title as work_title
+      from issue_runs run
+      join issues issue on issue.id=run.issue_id
+      ${query.candidateWhere}
+    ),
+    attempt_stats as materialized (
+      select attempt.issue_run_id, count(*) as attempt_count, max(attempt.sequence) as latest_sequence
+      from run_attempts attempt
+      join candidate_runs candidate on candidate.legacy_id=attempt.issue_run_id
+      group by attempt.issue_run_id
+    ),
+    ranked_runs as materialized (
+      select
+        candidate.*,
+        latest.attempt_id as latest_attempt_id,
+        latest.sequence as latest_attempt_sequence,
+        latest.kind as latest_attempt_kind,
+        latest.status as latest_attempt_status,
+        latest.revision as latest_attempt_revision,
+        latest.updated_at as latest_attempt_updated_at,
+        coalesce(stats.attempt_count, 0) as attempt_count,
+        ${runStatusSql("candidate", "latest")} as unified_status
+      from candidate_runs candidate
+      left join attempt_stats stats on stats.issue_run_id=candidate.legacy_id
+      left join run_attempts latest
+        on latest.issue_run_id=candidate.legacy_id and latest.sequence=stats.latest_sequence
+    ),
+    selected_runs as materialized (
+      select * from ranked_runs run
+      ${query.selectedWhere}
+      ${query.order}
+      ${query.limit}
+    ),
+    lifecycle_rollup as materialized (
+      select
+        run.run_id,
+        coalesce(max(cast(json_extract(event.payload, '$.after_revision') as integer)), 0) as revision,
+        max(case when event.type='run.lifecycle.run_materialized.v1' then event.id end) as materialized_event_id
+      from selected_runs run
+      left join issue_events event
+        on event.issue_id=run.issue_id
+        and event.type in ('run.lifecycle.intent.v1', 'run.lifecycle.outcome.v1',
+          'run.lifecycle.run_materialized.v1', 'run.lifecycle.run_requested.v1')
+        and json_valid(event.payload)
+        and json_extract(event.payload, '$.run_id')=run.run_id
+      group by run.run_id
+    )
+    select
+      run.legacy_id,
+      run.run_id,
+      run.work_id,
+      run.run_sequence,
+      run.legacy_status,
+      run.provider,
+      run.started_at,
+      run.ended_at,
+      run.exit_reason,
+      run.error,
+      run.project_id,
+      run.work_title,
+      run.latest_attempt_id,
+      run.latest_attempt_sequence,
+      run.latest_attempt_kind,
+      run.latest_attempt_status,
+      run.latest_attempt_revision,
+      run.latest_attempt_updated_at,
+      run.attempt_count,
+      rollup.revision,
+      json_extract(materialized.payload, '$.trigger') as trigger,
+      json_extract(materialized.payload, '$.supersedes_run_id') as supersedes_run_id,
+      run.unified_status
+    from selected_runs run
+    join lifecycle_rollup rollup on rollup.run_id=run.run_id
+    left join issue_events materialized on materialized.id=rollup.materialized_event_id
+    ${query.order}
+  `).all(...query.args);
 }
 
 export function countRuns(db: RunnerDatabase, filter: Omit<RunListFilter, "limit" | "offset">): number {
-  const query = runQuery(filter);
+  const query = runBaseQuery(filter);
+  const status = runStatusFilter(filter.statuses);
+  if (status.args.length === 0) {
+    return db.sqlite.query<{ count: number }, Array<number | string>>(`
+      select count(*) as count
+      from issue_runs run
+      join issues issue on issue.id=run.issue_id
+      ${query.where}
+    `).get(...query.args)?.count ?? 0;
+  }
   return db.sqlite.query<{ count: number }, Array<number | string>>(`
-    select count(*) as count
-    from issue_runs run
-    join issues issue on issue.id=run.issue_id
-    left join run_attempts latest
-      on latest.issue_run_id=run.id
-      and latest.sequence=(select max(candidate.sequence) from run_attempts candidate where candidate.issue_run_id=run.id)
-    ${query.where}
-  `).get(...query.args)?.count ?? 0;
+    with candidate_runs as materialized (
+      select run.id, run.status
+      from issue_runs run
+      join issues issue on issue.id=run.issue_id
+      ${query.where}
+    ),
+    attempt_stats as materialized (
+      select attempt.issue_run_id, max(attempt.sequence) as latest_sequence
+      from run_attempts attempt
+      join candidate_runs candidate on candidate.id=attempt.issue_run_id
+      group by attempt.issue_run_id
+    )
+    select count(*) as count from (
+      select ${runStatusSql("candidate", "latest")} as unified_status
+      from candidate_runs candidate
+      left join attempt_stats stats on stats.issue_run_id=candidate.id
+      left join run_attempts latest
+        on latest.issue_run_id=candidate.id and latest.sequence=stats.latest_sequence
+    ) run
+    ${status.where}
+  `).get(...query.args, ...status.args)?.count ?? 0;
 }
 
 export function countRunsByStatus(db: RunnerDatabase): Record<RunStatus, number> {
   const counts = Object.fromEntries(RUN_STATUSES.map((status) => [status, 0])) as Record<RunStatus, number>;
   const rows = db.sqlite.query<{ count: number; status: string | null }, []>(`
-    select unified_status as status, count(*) as count from (
+    with attempt_stats as materialized (
+      select issue_run_id, max(sequence) as latest_sequence
+      from run_attempts
+      group by issue_run_id
+    ), grouped as (
       select ${runStatusSql("run", "latest")} as unified_status
       from issue_runs run
+      left join attempt_stats stats on stats.issue_run_id=run.id
       left join run_attempts latest
-        on latest.issue_run_id=run.id
-        and latest.sequence=(select max(candidate.sequence) from run_attempts candidate where candidate.issue_run_id=run.id)
-    ) grouped
+        on latest.issue_run_id=run.id and latest.sequence=stats.latest_sequence
+    )
+    select unified_status as status, count(*) as count from grouped
     group by unified_status
   `).all();
   for (const row of rows) {
@@ -231,25 +360,22 @@ export function listLatestRunsForWorkIDs(db: RunnerDatabase, workIDs: WorkID[]):
   if (requested.length === 0) return [];
   if (requested.length > 100) throw new Error("latest Runs query supports at most 100 Work ids");
   const placeholders = requested.map(() => "?").join(", ");
-  return db.sqlite.query<RunRow, string[]>(`
-    select ${RUN_COLUMNS}
-    from issue_runs run
-    join issues issue on issue.id=run.issue_id
-    left join run_attempts latest
-      on latest.issue_run_id=run.id
-      and latest.sequence=(select max(candidate.sequence) from run_attempts candidate where candidate.issue_run_id=run.id)
-    where run.work_id in (${placeholders})
+  return listRunSummaryRows(db, {
+    args: requested,
+    candidateWhere: `where run.work_id in (${placeholders})
       and not exists (
         select 1 from issue_runs newer
         where newer.work_id=run.work_id and newer.run_sequence>run.run_sequence
-      )
-    order by coalesce(nullif(run.ended_at, ''), latest.updated_at, run.started_at) desc, run.run_id asc
-  `).all(...requested).map((row) => mapRunRow(db, row, 0));
+      )`,
+    limit: "",
+    order: runOrder({ order: "desc", sort: "updated_at" }, "run"),
+    selectedWhere: ""
+  }).map((row) => mapRunRow(db, row, "summary"));
 }
 
 export function getRun(db: RunnerDatabase, runID: RunID): RunDetail | null {
   const row = db.sqlite.query<RunRow, [string]>(`
-    select ${RUN_COLUMNS}
+    select ${RUN_DETAIL_COLUMNS}
     from issue_runs run
     join issues issue on issue.id=run.issue_id
     left join run_attempts latest
@@ -283,7 +409,7 @@ function listRunAttempts(
   `).all(legacyID).map((row) => mapAttemptRow(row, runID, runError));
 }
 
-function runQuery(filter: Omit<RunListFilter, "limit" | "offset">): {
+function runBaseQuery(filter: Omit<RunListFilter, "limit" | "offset">): {
   args: Array<number | string>;
   where: string;
 } {
@@ -292,20 +418,29 @@ function runQuery(filter: Omit<RunListFilter, "limit" | "offset">): {
   addFilter(clauses, args, "run.work_id=?", filter.work_id);
   addFilter(clauses, args, "issue.project_id=?", filter.project_id);
   addListFilter(clauses, args, "run.provider", filter.providers);
-  const statuses = unique(filter.statuses ?? []);
-  if (statuses.length > 0) {
-    clauses.push(`${runStatusSql("run", "latest")} in (${statuses.map(() => "?").join(", ")})`);
-    args.push(...statuses);
-  }
   return { args, where: clauses.length > 0 ? `where ${clauses.join(" and ")}` : "" };
 }
 
-function runOrder(filter: Pick<RunListFilter, "order" | "sort">): string {
+function runStatusFilter(statuses: RunStatus[] | undefined): {
+  args: RunStatus[];
+  where: string;
+} {
+  const requested = unique(statuses ?? []);
+  return {
+    args: requested,
+    where: requested.length > 0
+      ? `where run.unified_status in (${requested.map(() => "?").join(", ")})`
+      : ""
+  };
+}
+
+function runOrder(filter: Pick<RunListFilter, "order" | "sort">, run = "run", latest = "latest"): string {
   const direction = filter.order === "asc" ? "asc" : "desc";
-  if (filter.sort === "provider") return `order by run.provider ${direction}, run.run_id asc`;
-  if (filter.sort === "status") return `order by unified_status ${direction}, run.run_id asc`;
-  if (filter.sort === "created_at") return `order by run.started_at ${direction}, run.run_id asc`;
-  return `order by coalesce(nullif(run.ended_at, ''), latest.updated_at, run.started_at) ${direction}, run.run_id asc`;
+  if (filter.sort === "provider") return `order by ${run}.provider ${direction}, ${run}.run_id asc`;
+  if (filter.sort === "status") return `order by ${run}.unified_status ${direction}, ${run}.run_id asc`;
+  if (filter.sort === "created_at") return `order by ${run}.started_at ${direction}, ${run}.run_id asc`;
+  const latestUpdatedAt = run === "run" ? `${run}.latest_attempt_updated_at` : `${latest}.updated_at`;
+  return `order by coalesce(nullif(${run}.ended_at, ''), ${latestUpdatedAt}, ${run}.started_at) ${direction}, ${run}.run_id asc`;
 }
 
 function runStatusSql(run: string, latest: string): string {
@@ -320,7 +455,7 @@ function runStatusSql(run: string, latest: string): string {
     else null end`;
 }
 
-function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number): RunView {
+function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number | "summary"): RunView {
   const id = row.run_id as RunID;
   const workID = row.work_id as WorkID;
   const status = RUN_STATUSES.includes(row.unified_status as RunStatus) ? row.unified_status as RunStatus : null;
@@ -331,9 +466,11 @@ function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number): Run
     ? row.trigger as RunTrigger
     : row.run_sequence === 1 ? "initial" : null;
   const updatedAt = clean(row.ended_at) || clean(row.latest_attempt_updated_at) || row.started_at;
-  const progress = rebuildRunProgressProjection(db, id, {
-    ...(timelineLimit === undefined ? {} : { timelineLimit })
-  });
+  const progress = timelineLimit === "summary"
+    ? summarizedRunProgress(status, attemptStatus, updatedAt)
+    : rebuildRunProgressProjection(db, id, {
+        ...(timelineLimit === undefined ? {} : { timelineLimit })
+      });
   if (!progress) throw new Error(`Run progress projection source is missing: ${id}`);
   const mappingErrors = [
     ...(status ? [] : [`unsupported legacy issue_run status: ${row.legacy_status}`]),
@@ -375,6 +512,54 @@ function mapRunRow(db: RunnerDatabase, row: RunRow, timelineLimit?: number): Run
     updated_at: progress.updated_at || updatedAt,
     work_id: workID,
     work_title: row.work_title
+  };
+}
+
+function summarizedRunProgress(
+  status: RunStatus | null,
+  attemptStatus: AttemptStatus | null,
+  updatedAt: string
+): RunProgressProjection {
+  const evaluatedAt = new Date();
+  const elapsed = evaluatedAt.getTime() - Date.parse(updatedAt);
+  const stalled = ["running", "recovering"].includes(status ?? "")
+    && Number.isFinite(elapsed)
+    && elapsed >= RUN_PROGRESS_STALLED_AFTER_MS;
+  const providerPhase = status ?? (
+    attemptStatus === "created" ? "queued"
+      : attemptStatus === "running" ? "running"
+        : attemptStatus === "succeeded" ? "succeeded"
+          : attemptStatus === "failed" ? "failed"
+            : attemptStatus === "cancelled" ? "cancelled"
+              : attemptStatus === "interrupted" ? "interrupted"
+                : "unknown"
+  );
+  return {
+    invalid_event_count: 0,
+    latest: null,
+    phase_summary: [],
+    projected_by: "xuanwu.run-progress-projector.v1",
+    projection_mode: "list_summary",
+    provider_phase: providerPhase,
+    replay: {
+      duplicate_event_count: 0,
+      ignored_event_count: 0,
+      source_event_count: 0,
+      timeline_truncated: 0,
+      unique_event_count: 0,
+      unmapped_event_count: 0
+    },
+    source_event_range: null,
+    source_of_truth: "issue_runs+run_attempts+issue_events",
+    stalled: {
+      detected: stalled,
+      evaluated_at: evaluatedAt.toISOString(),
+      reason: stalled ? "no_progress_for_threshold" : "",
+      since: updatedAt,
+      threshold_ms: RUN_PROGRESS_STALLED_AFTER_MS
+    },
+    timeline: [],
+    updated_at: updatedAt
   };
 }
 

@@ -59,6 +59,7 @@ type PageInput = {
 
 export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
   router.get("/api/works", (request) => workResponse(() => listResponse(context.database, request)));
+  router.get("/api/works/board", (request) => workResponse(() => boardResponse(context.database, request)));
   router.get("/api/works/:id", (request) => workResponse(() => detailResponse(context.database, request)));
   router.get("/api/works/:id/timeline", (request) => (
     workResponse(() => timelineResponse(context.database, request))
@@ -147,6 +148,40 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     if (result.applied) kickProject(context, result.work);
     return mutationResponse(result);
   }));
+}
+
+function boardResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
+  const params = new URL(request.url).searchParams;
+  const projectID = optionalString(params.get("project_id"));
+  if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
+  const pageSize = positiveIntegerParam(params.get("page_size"), "page_size", 20, MAX_PAGE_SIZE);
+  const sort = enumParam(
+    params.get("sort"),
+    ["created_at", "status", "title", "updated_at"] as const,
+    "updated_at",
+    "sort"
+  );
+  const order = enumParam(params.get("order"), ["asc", "desc"] as const, "desc", "order");
+  const page = { page: 1, page_size: pageSize };
+  const lanes = Object.fromEntries(WORK_STATUSES.map((status) => {
+    const filter = {
+      limit: pageSize,
+      offset: 0,
+      projectId: projectID,
+      sort,
+      sortOrder: order,
+      statuses: [status]
+    };
+    const total = countIssueBackedWorks(db, filter);
+    return [status, pagedItemsResponse(listIssueBackedWorks(db, filter), total, page, {})];
+  }));
+  return {
+    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
+    lanes,
+    page_size: pageSize,
+    project_id: projectID,
+    sort: { field: sort, order }
+  };
 }
 
 function listResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {

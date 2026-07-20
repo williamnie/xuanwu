@@ -37,7 +37,7 @@ export type RunProgressProjection = {
   latest: RunProgressLatest | null;
   phase_summary: RunProgressPhaseSummary[];
   projected_by: typeof RUN_PROGRESS_PROJECTOR_VERSION;
-  projection_mode: "read_through_rebuild";
+  projection_mode: "list_summary" | "read_through_rebuild";
   provider_phase: RunProgressPhase;
   replay: {
     duplicate_event_count: number;

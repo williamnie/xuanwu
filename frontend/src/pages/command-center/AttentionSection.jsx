@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowUpRight, BellRing, Check, RefreshCw, ShieldCheck, ShieldX, TimerReset, X } from 'lucide-react';
 import { commandCenterApi } from '../../api/commandCenter.js';
 import { eventsApi } from '../../api/events.js';
@@ -15,30 +15,53 @@ export default function AttentionSection() {
   const [submitting, setSubmitting] = useState('');
   const [approval, setApproval] = useState({ detail: null, error: '', loading: false });
   const [typeFilter, setTypeFilter] = useState('');
+  const requestRef = useRef(null);
 
   const load = useCallback(async ({ silent = false } = {}) => {
+    if (requestRef.current) return requestRef.current.promise;
     if (!silent) setLoading(true);
+    const controller = new AbortController();
+    const promise = commandCenterApi.getSummary(
+      { limit: 25, sections: ['attention'] },
+      { signal: controller.signal },
+    );
+    requestRef.current = { controller, promise };
     try {
-      const response = await commandCenterApi.getSummary({ limit: 25, sections: ['attention'] });
+      const response = await promise;
       const section = response?.sections?.attention;
       if (!section || section.status !== 'ok') throw new Error(section?.error?.message || 'Attention 分区暂不可用');
       setSummary({ compatibility: response.compatibility || null, section });
       setError('');
     } catch (loadError) {
-      setError(loadError.message || '加载 Attention 失败');
+      if (loadError?.name !== 'AbortError') setError(loadError.message || '加载 Attention 失败');
     } finally {
+      if (requestRef.current?.promise === promise) requestRef.current = null;
       if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return () => requestRef.current?.controller.abort();
+  }, [load]);
   useEffect(() => {
     const interval = window.setInterval(() => load({ silent: true }), REFRESH_INTERVAL_MS);
     return () => window.clearInterval(interval);
   }, [load]);
-  useEffect(() => eventsApi.subscribeToEvents(event => {
-    if (event?.type === 'approval.resolved' || String(event?.type || '').startsWith('issue.')) load({ silent: true });
-  }), [load]);
+  useEffect(() => {
+    let timer = 0;
+    const unsubscribe = eventsApi.subscribeToEvents(event => {
+      if (timer || !(event?.type === 'approval.resolved' || String(event?.type || '').startsWith('issue.'))) return;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        load({ silent: true });
+      }, 250);
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [load]);
 
   const items = useMemo(() => summary?.section?.items || [], [summary]);
   const filteredItems = useMemo(() => typeFilter ? items.filter(item => item.type === typeFilter) : items, [items, typeFilter]);

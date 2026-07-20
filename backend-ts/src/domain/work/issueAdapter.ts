@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../../db/database.ts";
 import { enqueueIssue, retryIssue, cancelIssue } from "../../db/repositories/issueActions.ts";
 import { createIssue } from "../../db/repositories/issueCreate.ts";
-import { listIssueEvents, recordIssueEvent, type IssueEvent } from "../../db/repositories/issueEvents.ts";
+import {
+  latestIssueEventsByIssueID,
+  listIssueEvents,
+  recordIssueEvent,
+  type IssueEvent
+} from "../../db/repositories/issueEvents.ts";
 import { countIssues, getIssue, listIssues, type Issue, type IssueFilter } from "../../db/repositories/issues.ts";
 import { updateIssue } from "../../db/repositories/issueUpdate.ts";
 import { getWork } from "../../db/repositories/workLedger.ts";
@@ -119,7 +124,9 @@ export function getIssueAsWork(db: RunnerDatabase, issueID: number): WorkLedgerE
 }
 
 export function listIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): WorkLedgerEntry[] {
-  return listIssues(db, filter).map((issue) => projectIssueAsWork(db, issue));
+  const issues = listIssues(db, filter);
+  const createdEvents = latestIssueEventsByIssueID(db, issues.map((issue) => issue.id), "issue.created");
+  return issues.map((issue) => issueAsWork(issue, createdEvents.get(issue.id)));
 }
 
 export function countIssueBackedWorks(db: RunnerDatabase, filter: IssueFilter = {}): number {
