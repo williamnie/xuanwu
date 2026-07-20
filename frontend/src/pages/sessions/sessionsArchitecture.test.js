@@ -27,6 +27,8 @@ test('list workspace transcript composer and info areas have explicit component 
   assert.match(workspaceSource, /<NewSessionWorkspace/);
   assert.match(chatSource, /<SessionTranscript/);
   assert.match(chatSource, /<SessionComposer/);
+  assert.match(chatSource, /observationNotice \? \(/);
+  assert.match(chatSource, /className="client-chat-composer-section"/);
   assert.match(newSessionSource, /<PromptEditor/);
   assert.match(transcriptSource, /<SessionInfoPopover/);
   assert.match(infoSource, /className="session-info-panel"/);

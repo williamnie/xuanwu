@@ -204,7 +204,7 @@ describe("Codex executor provider", () => {
     expect(runtime.released).toBe(1);
   });
 
-  test("reads manual Sessions API detail through resume to hydrate transcript", async () => {
+  test("reads manual Sessions API detail passively with turns included", async () => {
     const adapter = new FakeCodexIssueAdapter();
     adapter.readThreadResult = {
       id: "codex:thread-1",
@@ -213,15 +213,6 @@ describe("Codex executor provider", () => {
       sessionId: "thread-1",
       ephemeral: false,
       status: { type: "notLoaded" },
-      turns: []
-    };
-    adapter.resumeThreadResult = {
-      id: "codex:thread-1",
-      provider: "codex",
-      provider_session_id: "thread-1",
-      sessionId: "thread-1",
-      ephemeral: false,
-      status: { type: "loaded" },
       turns: [{ id: "turn-1", items: [{ type: "agentMessage", text: "hydrated" }] }]
     };
 
@@ -230,12 +221,12 @@ describe("Codex executor provider", () => {
     expect(detail).toMatchObject({
       id: "codex:thread-1",
       provider_session_id: "thread-1",
-      status: { type: "loaded" },
+      status: { type: "notLoaded" },
       turns: [{ id: "turn-1" }]
     });
     expect(adapter.calls).toEqual([
       { method: "initialize" },
-      { method: "thread/resume", params: { threadID: "thread-1" } }
+      { method: "thread/read", params: { threadID: "thread-1" } }
     ]);
   });
 

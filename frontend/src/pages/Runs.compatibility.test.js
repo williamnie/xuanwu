@@ -20,13 +20,13 @@ test('Runs is the canonical page while old Sessions navigation remains a deep-li
   assert.doesNotMatch(sidebarSource, /aria-label="Sessions"/);
 });
 
-test('Runs list uses the canonical API and provider sessions stay observation-only drill-down', () => {
+test('Runs list uses the canonical API and provider sessions keep Run authority separate from follow-up chat', () => {
   assert.match(clientSource, /request\(`\/api\/runs\?\$\{params\.toString\(\)\}`\)/);
   assert.match(clientSource, /request\(`\/api\/runs\/\$\{encodeURIComponent\(id\)\}`\)/);
   assert.match(pageSource, /runProviderSessionRef\(runDetail\)/);
-  assert.match(detailSource, /readOnlyNotice="Provider session 仅用于低层观测与追溯/);
+  assert.match(detailSource, /observationNotice="Provider session 是低层观测与续聊入口/);
   assert.match(sessionsSource, /showSidebar \? \(/);
-  assert.match(sessionsSource, /readOnlyNotice,/);
+  assert.match(sessionsSource, /observationNotice,/);
 });
 
 test('old operations map to audited Run control while compatibility mode retains session operations', () => {

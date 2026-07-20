@@ -76,7 +76,7 @@ const DEFAULT_SESSION_PROVIDER = 'codex';
 export default function Sessions({
   autoSelectFirstSession = true,
   navigateTo,
-  readOnlyNotice = '',
+  observationNotice = '',
   selectedSessionId = '',
   showSidebar = true,
 }) {
@@ -773,7 +773,7 @@ export default function Sessions({
           sessionRunning,
           optimisticUserMessages,
           pendingApproval: hasApprovalForSession(approvalQueue, selectedId),
-          readOnlyNotice,
+          observationNotice,
           navigateTo,
           approvalRequest,
           approvalSubmitting,

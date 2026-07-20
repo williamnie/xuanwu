@@ -302,7 +302,7 @@ function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
         autoSelectFirstSession={false}
         key={sessionRef}
         navigateTo={navigateTo}
-        readOnlyNotice="Provider session 仅用于低层观测与追溯；Run/Attempt lifecycle、控制与完成状态仍以 canonical Run authority 为准。"
+        observationNotice="Provider session 是低层观测与续聊入口；手动消息会继续同一 session，Run/Attempt lifecycle、控制与完成状态仍以 canonical Run authority 为准。"
         selectedSessionId={sessionRef}
         showSidebar={false}
       />

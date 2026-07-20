@@ -117,7 +117,7 @@ export class CodexAdapter {
   }
 
   async readThread(threadID: string): Promise<ThreadSummary> {
-    const result = await this.lifecycleRequest("thread/read", threadIDParams(threadID));
+    const result = await this.lifecycleRequest("thread/read", { ...threadIDParams(threadID), includeTurns: true });
     return normalizeThreadResult(result);
   }
 

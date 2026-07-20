@@ -197,7 +197,7 @@ describe("Codex adapter RPC methods", () => {
     });
 
     expect(rpc.calls.slice(0, 3)).toEqual([
-      { method: "thread/read", params: { threadId: "thread-1" } },
+      { method: "thread/read", params: { threadId: "thread-1", includeTurns: true } },
       { method: "thread/resume", params: { threadId: "thread-1" } },
       { method: "thread/name/set", params: { threadId: "thread-1", name: "Issue title" } }
     ]);
