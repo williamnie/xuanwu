@@ -36,8 +36,16 @@ test('Ask Xuanwu page uses canonical Chat naming in visible copy', () => {
 
 test('PI Assistant chat renders messages as Markdown instead of raw prewrapped text', () => {
   assert.match(pageSource, /import MarkdownPreview from '\.\.\/components\/editor\/MarkdownPreview'/);
-  assert.match(pageSource, /<MarkdownPreview text=\{displayText\} className="pi-chat-markdown" \/>/);
+  assert.match(pageSource, /<PiChatMessageContent advanced=\{advanced\} text=\{displayText\} \/>/);
+  assert.match(pageSource, /<MarkdownPreview key=\{`markdown-\$\{index\}`\} text=\{segment\.text\} className="pi-chat-markdown" \/>/);
   assert.doesNotMatch(pageSource, /pi-chat-bubble-text/);
+});
+
+test('runner_ui_context renders as a compact custom component instead of raw XML', () => {
+  assert.match(pageSource, /parsePiChatMessageContent\(text\)/);
+  assert.match(pageSource, /function RunnerUiContextCard/);
+  assert.match(pageSource, /已附带 Runner 上下文/);
+  assert.match(pageSource, /runnerContextReferenceLabel\(reference\)/);
 });
 
 test('PI Assistant chat removes the oversized hero banner in favor of compact chrome', () => {

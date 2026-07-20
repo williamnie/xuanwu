@@ -10,7 +10,9 @@ import {
   MessageSquarePlus,
   RefreshCw,
   Settings2,
+  ShieldCheck,
   SlidersHorizontal,
+  UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
 import { PRODUCT_NAV_LABELS, PRODUCT_TERMS } from '../brand';
@@ -21,6 +23,11 @@ import PiChatComposerMeta from './PiChatComposerMeta';
 import { buildPiChatProjectSuggestions, buildPiChatReferenceDetails } from './piChatComposer';
 import { copyPiDebugText, formatPiConversationDebugInfo, formatPiMessageDebugInfo } from './piChatDiagnostics';
 import { projectFromPrompt } from './piChatProjectContext';
+import {
+  parsePiChatMessageContent,
+  runnerContextModeLabel,
+  runnerContextReferenceLabel,
+} from './piChatMessageContent';
 import { displayPiConversationTitle, piChatStatusSummary, piChatWorkLinks } from './piChatPresentation';
 import { shortId, usePiChatState } from './piChatState';
 import { useSmartAutoScroll } from './sessions/smartAutoScroll';
@@ -373,14 +380,23 @@ function ChatBubble({ advanced, conversation, item }) {
   const displayText = item.role === 'error' && !advanced
     ? '此轮未完成。请重试；若问题持续，可在 Advanced 查看诊断。'
     : item.text;
+  const assistant = item.role === 'assistant';
+  const error = item.role === 'error';
   return (
     <article
       className={`pi-chat-bubble ${item.role}`}
       onContextMenu={advanced ? (event) => copyMessageDebugInfo(event, item, conversation) : undefined}
       title={advanced ? '右键复制消息诊断信息' : undefined}
     >
-      <div className="pi-chat-bubble-role">{item.role === 'assistant' ? PRODUCT_TERMS.productLatin : item.role === 'error' ? '未完成' : 'You'}</div>
-      <MarkdownPreview text={displayText} className="pi-chat-markdown" />
+      <header className="pi-chat-bubble-header">
+        <span className="pi-chat-bubble-avatar" aria-hidden="true">
+          {assistant ? <Bot size={15} /> : error ? <AlertTriangle size={15} /> : <UserRound size={15} />}
+        </span>
+        <span className="pi-chat-bubble-role">{assistant ? PRODUCT_TERMS.productLatin : error ? '未完成' : '你'}</span>
+      </header>
+      <div className="pi-chat-bubble-content">
+        <PiChatMessageContent advanced={advanced} text={displayText} />
+      </div>
       {advanced && (conversationId || sessionId) && (
         <div className="pi-chat-bubble-meta">
           <span>{piBubbleMetaLabel(conversationId, sessionId)}</span>
@@ -390,6 +406,51 @@ function ChatBubble({ advanced, conversation, item }) {
         </div>
       )}
     </article>
+  );
+}
+
+function PiChatMessageContent({ advanced, text }) {
+  return parsePiChatMessageContent(text).map((segment, index) => {
+    if (segment.type === 'runner_ui_context') {
+      return <RunnerUiContextCard advanced={advanced} context={segment.context} key={`context-${index}`} />;
+    }
+    return <MarkdownPreview key={`markdown-${index}`} text={segment.text} className="pi-chat-markdown" />;
+  });
+}
+
+function RunnerUiContextCard({ advanced, context }) {
+  const mode = context.fields.permission_mode || '';
+  const references = context.references || [];
+  return (
+    <section className="pi-chat-context-card" aria-label="Runner 页面上下文">
+      <div className="pi-chat-context-card-icon"><ShieldCheck size={16} /></div>
+      <div className="pi-chat-context-card-copy">
+        <div className="pi-chat-context-card-title">
+          <strong>已附带 Runner 上下文</strong>
+          <span data-mode={mode}>{runnerContextModeLabel(mode)}</span>
+        </div>
+        <p>{mode === 'read_only' ? 'Xuanwu 只会读取当前页面信息。' : 'Xuanwu 可以识别当前页面，但操作仍受运行时门禁约束。'}</p>
+        {references.length > 0 && (
+          <div className="pi-chat-context-card-references">
+            {references.map((reference, index) => <span key={`${reference.type}-${index}`}>{runnerContextReferenceLabel(reference)}</span>)}
+          </div>
+        )}
+        {advanced && <RunnerUiContextDetails context={context} />}
+      </div>
+    </section>
+  );
+}
+
+function RunnerUiContextDetails({ context }) {
+  return (
+    <details className="pi-chat-context-card-details">
+      <summary>技术上下文</summary>
+      <dl>
+        {Object.entries(context.fields).map(([key, value]) => (
+          <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
+        ))}
+      </dl>
+    </details>
   );
 }
 

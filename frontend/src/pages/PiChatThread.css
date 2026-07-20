@@ -182,6 +182,29 @@
   text-transform: uppercase;
 }
 
+.pi-chat-bubble-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.pi-chat-bubble-avatar {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.pi-chat-bubble-content > * + * {
+  margin-top: 12px;
+}
+
 .pi-chat-markdown {
   color: var(--text-primary);
   font-size: 0.92rem;
@@ -213,6 +236,118 @@
 
 .pi-chat-markdown strong {
   color: inherit;
+}
+
+.pi-chat-context-card {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--info) 6%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--info) 18%, var(--border-color));
+  border-radius: 13px;
+  display: flex;
+  gap: 11px;
+  margin-bottom: 14px;
+  padding: 12px 13px;
+}
+
+.pi-chat-context-card-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--info) 11%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--info) 18%, var(--border-light));
+  border-radius: 9px;
+  color: var(--info);
+  display: flex;
+  flex: 0 0 auto;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.pi-chat-context-card-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.pi-chat-context-card-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pi-chat-context-card-title strong {
+  color: var(--text-primary);
+  font-size: 0.79rem;
+}
+
+.pi-chat-context-card-title span,
+.pi-chat-context-card-references span {
+  border: 1px solid color-mix(in srgb, var(--info) 18%, var(--border-light));
+  border-radius: 999px;
+  color: var(--info);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  line-height: 1.25;
+  padding: 3px 7px;
+}
+
+.pi-chat-context-card-title span[data-mode="read_only"] {
+  border-color: color-mix(in srgb, var(--warning) 24%, var(--border-light));
+  color: var(--warning);
+}
+
+.pi-chat-context-card-copy > p {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.pi-chat-context-card-references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.pi-chat-context-card-references span {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.pi-chat-context-card-details {
+  border-top: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.pi-chat-context-card-details summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.pi-chat-context-card-details dl,
+.pi-chat-context-card-details dl div {
+  display: grid;
+  gap: 5px 10px;
+}
+
+.pi-chat-context-card-details dl {
+  margin: 9px 0 0;
+}
+
+.pi-chat-context-card-details dl div {
+  grid-template-columns: minmax(100px, 0.3fr) minmax(0, 1fr);
+}
+
+.pi-chat-context-card-details :where(dt, dd) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pi-chat-context-card-details dt {
+  font-family: var(--font-mono);
 }
 
 .pi-chat-bubble-meta {
@@ -586,8 +721,9 @@
 
 .pi-chat-sidebar .btn.btn-primary,
 [data-theme="dark"] .pi-chat-sidebar .btn.btn-primary {
-  background: var(--primary-gradient);
-  color: white;
+  background: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
+  color: var(--button-primary-fg);
 }
 
 .pi-chat-conversation,
@@ -616,9 +752,51 @@
 
 .pi-chat-bubble.user,
 [data-theme="dark"] .pi-chat-bubble.user {
-  background: var(--bg-secondary);
-  border-color: var(--border-light);
+  background: var(--message-user);
+  border-color: var(--message-user-border);
   color: var(--text-primary);
+}
+
+.pi-chat-bubble.assistant,
+[data-theme="dark"] .pi-chat-bubble.assistant {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px 16px;
+  width: min(760px, 94%);
+}
+
+.pi-chat-bubble.assistant .pi-chat-bubble-avatar {
+  background: var(--button-primary-bg);
+  border-color: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+}
+
+.pi-chat-bubble.user .pi-chat-bubble-avatar {
+  background: color-mix(in srgb, var(--info) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--info) 18%, var(--border-light));
+  color: var(--info);
+}
+
+.pi-chat-bubble .pi-chat-bubble-role {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  margin: 0;
+  opacity: 1;
+  text-transform: none;
+}
+
+.pi-chat-bubble.assistant {
+  border-left: 1px solid var(--border-light);
+}
+
+.pi-chat-bubble.user {
+  border-bottom-right-radius: 5px;
+}
+
+.pi-chat-bubble.assistant {
+  border-top-left-radius: 5px;
 }
 
 .pi-chat-composer {
