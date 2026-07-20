@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
+import { Database } from "bun:sqlite";
 import {
   capacityReportMarkdown,
   evaluateRunnerMemoryCapacity,
@@ -13,6 +15,12 @@ import {
   type RunnerMemoryCapacitySample
 } from "../backend-ts/src/benchmarks/xuanwuCapacity.ts";
 import { openDatabase } from "../backend-ts/src/db/database.ts";
+import {
+  evaluateEnduranceGate,
+  ENDURANCE_REQUIRED_OPERATIONS,
+  type EnduranceOperation,
+  type EnduranceSample
+} from "../backend-ts/src/benchmarks/enduranceGate.ts";
 
 type Flags = Record<string, string | boolean>;
 
@@ -99,7 +107,133 @@ async function main(): Promise<void> {
     print({ captured: captured.length, output: basename(output) });
     return;
   }
-  throw new Error("usage: xuanwu-capacity-benchmark.ts <snapshot|generate|run|memory-capture|memory-run> [flags]");
+  if (command === "endurance-run") {
+    allowOnly(flags, ["json-out", "samples-file"]);
+    const samples = JSON.parse(await readFile(resolve(required(flags, "samples-file")), "utf8")) as unknown;
+    if (!Array.isArray(samples)) throw new Error("--samples-file must contain one JSON array");
+    const report = evaluateEnduranceGate(samples as EnduranceSample[]);
+    const jsonPath = optional(flags, "json-out");
+    if (jsonPath) {
+      const target = resolve(jsonPath);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    }
+    print(report);
+    if (report.status !== "passed") process.exitCode = 1;
+    return;
+  }
+  if (command === "endurance-capture") {
+    allowOnly(flags, ["addr", "db", "operation", "output", "root"]);
+    const operation = required(flags, "operation") as EnduranceOperation;
+    if (operation !== "idle" && !ENDURANCE_REQUIRED_OPERATIONS.includes(operation as typeof ENDURANCE_REQUIRED_OPERATIONS[number])) {
+      throw new Error(`invalid endurance operation: ${operation}`);
+    }
+    const output = resolve(required(flags, "output"));
+    const existing = await readEnduranceSamples(output);
+    const sample = await captureEnduranceSample({
+      addr: optional(flags, "addr") ?? Bun.env.CODEX_RUNNER_ADDR ?? "127.0.0.1:3008",
+      dbPath: resolve(required(flags, "db")),
+      operation,
+      root: resolve(required(flags, "root"))
+    });
+    await writeJSONAtomically(output, [...existing, sample]);
+    print({ captured: 1, operation, output: basename(output), samples: existing.length + 1 });
+    return;
+  }
+  throw new Error("usage: xuanwu-capacity-benchmark.ts <snapshot|generate|run|memory-capture|memory-run|endurance-capture|endurance-run> [flags]");
+}
+
+async function captureEnduranceSample(input: {
+  addr: string;
+  dbPath: string;
+  operation: EnduranceOperation;
+  root: string;
+}): Promise<EnduranceSample> {
+  const base = /^https?:\/\//.test(input.addr) ? input.addr : `http://${input.addr}`;
+  const response = await fetch(`${base.replace(/\/$/, "")}/api/system/status`, { headers: authHeaders() });
+  if (!response.ok) throw new Error(`system status returned HTTP ${response.status}`);
+  const status = await response.json() as Record<string, unknown>;
+  const memory = object(status.process_group_memory);
+  const budget = object(memory.budget);
+  const aggregate = object(memory.aggregate);
+  const roles = Array.isArray(memory.roles) ? memory.roles.map(object) : [];
+  const sqlite = new Database(input.dbPath, { readonly: true, strict: true });
+  let completedRuns = 0;
+  let staleSessions = 0;
+  try {
+    completedRuns = Number(sqlite.query<{ count: number }, []>(
+      "select count(*) as count from issue_runs where ended_at <> ''"
+    ).get()?.count ?? 0);
+    staleSessions = Number(sqlite.query<{ count: number }, []>(`
+      select count(*) as count from agent_sessions s
+      where lower(s.status) in ('running','inprogress')
+        and not exists (
+          select 1 from issue_runs r
+          where r.issue_id=s.issue_id and r.status='in_progress'
+            and (r.provider_session_id='' or s.provider_session_id='' or r.provider_session_id=s.provider_session_id)
+        )
+    `).get()?.count ?? 0);
+  } finally {
+    sqlite.close();
+  }
+  return {
+    application_support_bytes: await directoryBytes(input.root),
+    artifact_bytes: await sumDirectories([
+      join(input.root, "state", "artifacts"), join(input.root, "evidence"), join(input.root, "migration-artifacts")
+    ]),
+    budget_status: String(budget.status ?? "unknown"),
+    completed_runs: completedRuns,
+    database_bytes: (await stat(input.dbPath)).size,
+    measured_group_bytes: requiredNumber(budget.measured_group_bytes ?? aggregate.rss_p95_bytes, "budget.measured_group_bytes"),
+    measured_main_bytes: requiredNumber(budget.measured_main_bytes ?? object(memory.main).ps_rss_bytes, "budget.measured_main_bytes"),
+    measurement_source: String(budget.measurement_source ?? "rss"),
+    observed_at: String(memory.sampled_at ?? new Date().toISOString()),
+    operation: input.operation,
+    orphan_processes: roles.filter((role) => String(role.role ?? "") === "runner-child")
+      .reduce((total, role) => total + Number(role.process_count ?? 0), 0),
+    stale_sessions: staleSessions
+  };
+}
+
+async function readEnduranceSamples(path: string): Promise<EnduranceSample[]> {
+  try {
+    const value = JSON.parse(await readFile(path, "utf8")) as unknown;
+    if (!Array.isArray(value)) throw new Error("existing endurance output must contain one JSON array");
+    return value as EnduranceSample[];
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function directoryBytes(root: string): Promise<number> {
+  const inspected = await stat(root).catch(() => undefined);
+  if (!inspected) return 0;
+  if (inspected.isFile()) return inspected.size;
+  if (!inspected.isDirectory()) return 0;
+  let total = 0;
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    total += await directoryBytes(join(root, entry.name));
+  }
+  return total;
+}
+
+async function sumDirectories(paths: string[]): Promise<number> {
+  let total = 0;
+  for (const path of paths) total += await directoryBytes(path);
+  return total;
+}
+
+async function writeJSONAtomically(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.partial-${randomUUID()}`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 async function captureRunnerMemory(input: {

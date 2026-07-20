@@ -97,7 +97,8 @@ export class ProcessGroupMemoryObserver {
       this.idleBaselineBytes = percentile(phaseRSS.slice(-60), 0.5);
     }
     const main = rows.find((row) => row.pid === this.runnerPid());
-    const budget = this.budgetStatus(phase, p95RSS, main?.rss_bytes ?? memory.rss, groupRSS, now);
+    const budgetMeasurement = this.budgetMeasurement(rows, p95RSS, main?.rss_bytes ?? memory.rss, now);
+    const budget = this.budgetStatus(phase, budgetMeasurement, p95RSS, main?.rss_bytes ?? memory.rss, groupRSS, now);
     const roles = roleSummaries(rows);
     const sampledAt = now.toISOString();
     this.sampleValue = {
@@ -200,14 +201,25 @@ export class ProcessGroupMemoryObserver {
     return rows.some((row) => row.role === "usage-index") ? "usage" : "idle";
   }
 
-  private budgetStatus(phase: ProcessMemoryPhase, p95RSS: number, mainRSS: number, groupRSS: number, now: Date): Record<string, unknown> {
+  private budgetStatus(
+    phase: ProcessMemoryPhase,
+    measurement: { group_bytes: number; main_bytes: number; source: "footprint" | "rss" },
+    p95RSS: number,
+    mainRSS: number,
+    groupRSS: number,
+    now: Date
+  ): Record<string, unknown> {
     const group = phase === "run"
       ? PROCESS_GROUP_MEMORY_BUDGETS.active_run_group_rss_p95_bytes
       : PROCESS_GROUP_MEMORY_BUDGETS.idle_group_rss_p95_bytes;
     const main = PROCESS_GROUP_MEMORY_BUDGETS.idle_main_rss_bytes;
     const postRun = this.postRunStatus(phase, groupRSS, now);
-    const hardExceeded = p95RSS > group.hard || (phase !== "run" && mainRSS > main.hard) || postRun.hard_exceeded;
-    const softExceeded = p95RSS > group.soft || (phase !== "run" && mainRSS > main.soft) || postRun.soft_exceeded;
+    const hardExceeded = measurement.group_bytes > group.hard
+      || (phase !== "run" && measurement.main_bytes > main.hard)
+      || postRun.hard_exceeded;
+    const softExceeded = measurement.group_bytes > group.soft
+      || (phase !== "run" && measurement.main_bytes > main.soft)
+      || postRun.soft_exceeded;
     this.consecutiveHard = hardExceeded ? this.consecutiveHard + 1 : 0;
     this.consecutiveSoft = softExceeded ? this.consecutiveSoft + 1 : 0;
     const alertingHard = this.consecutiveHard >= PROCESS_GROUP_MEMORY_BUDGETS.consecutive.hard;
@@ -221,10 +233,32 @@ export class ProcessGroupMemoryObserver {
       main_hard_bytes: phase === "run" ? null : main.hard,
       main_rss_bytes: mainRSS,
       main_soft_bytes: phase === "run" ? null : main.soft,
+      measured_group_bytes: measurement.group_bytes,
+      measured_main_bytes: measurement.main_bytes,
+      measurement_source: measurement.source,
       post_run: postRun.public,
       soft_bytes: group.soft,
       status: alertingHard ? "hard_exceeded" : alertingSoft ? "soft_exceeded" : hardExceeded ? "hard_pending" : softExceeded ? "soft_pending" : "within_budget"
     };
+  }
+
+  private budgetMeasurement(
+    rows: ObservedProcess[],
+    p95RSS: number,
+    mainRSS: number,
+    now: Date
+  ): { group_bytes: number; main_bytes: number; source: "footprint" | "rss" } {
+    const footprint = this.footprint;
+    const observedAt = Date.parse(footprint?.observed_at ?? "");
+    const footprintInterval = this.options.footprintIntervalMs ?? 60_000;
+    const maxAge = Math.max(PROCESS_GROUP_MEMORY_FRESHNESS_MS, footprintInterval * 2);
+    const processCount = rows.filter((row) => row.rss_bytes > 0).length;
+    if (footprint && footprint.bytes > 0 && footprint.main_bytes > 0
+      && footprint.process_count === processCount
+      && Number.isFinite(observedAt) && now.getTime() - observedAt <= maxAge) {
+      return { group_bytes: footprint.bytes, main_bytes: footprint.main_bytes, source: "footprint" };
+    }
+    return { group_bytes: p95RSS, main_bytes: mainRSS, source: "rss" };
   }
 
   private postRunStatus(phase: ProcessMemoryPhase, groupRSS: number, now: Date): {

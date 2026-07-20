@@ -80,6 +80,32 @@ describe("runner process-group memory observer", () => {
     }));
   });
 
+  test("uses a fresh complete macOS footprint for budgets while retaining RSS diagnostics", async () => {
+    const rows = fixtureRows(200, 130);
+    const observer = new ProcessGroupMemoryObserver({
+      footprint: async (pids) => new Map(pids.map((pid) => [pid, pid === 50 ? 190 * MIB : 80 * MIB])),
+      footprintIntervalMs: 60_000,
+      inspect: () => rows,
+      memoryUsage: () => memoryUsage(198),
+      now: tickingClock(),
+      runnerPid: 50
+    });
+
+    observer.sample();
+    await Bun.sleep(0);
+    const snapshot = observer.sample() as Snapshot;
+
+    expect(snapshot).toMatchObject({
+      aggregate: { footprint_bytes: 270 * MIB, rss_p95_bytes: 330 * MIB },
+      budget: {
+        measured_group_bytes: 270 * MIB,
+        measured_main_bytes: 190 * MIB,
+        measurement_source: "footprint",
+        status: "within_budget"
+      }
+    });
+  });
+
   test("requires the process group to return to its measured idle baseline after provider TTL", () => {
     let activeRuns = 0;
     let groupMiB = 250;
