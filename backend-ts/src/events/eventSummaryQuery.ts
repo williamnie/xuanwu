@@ -2,9 +2,15 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import {
   eventProjectionStatus,
-  listEventSummaryProjection,
+  type EventSummaryProjection,
   type EventSummaryProjectionFilter
 } from "../db/repositories/eventSummaryProjection.ts";
+import {
+  compactProjectionStatus,
+  getEventSummaryProjectionSwitch,
+  listEventSummaryProjectionForRead,
+  projectPendingCompactEventSummaries
+} from "../db/repositories/compactEventSummaryProjection.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import {
   EVENT_SUMMARY_PROJECTOR_VERSION,
@@ -35,7 +41,7 @@ export type EventSummaryQueryResult = {
   items: PublicEventSummary[];
   schema_version: typeof EVENT_SUMMARY_QUERY_SCHEMA_VERSION;
   source_of_truth: "issue_events";
-  watermark: ReturnType<typeof eventProjectionStatus>;
+  watermark: ReturnType<typeof eventProjectionStatus> | ReturnType<typeof compactProjectionStatus>;
 };
 
 export function queryEventSummaries(
@@ -44,15 +50,21 @@ export function queryEventSummaries(
 ): EventSummaryQueryResult {
   if (filter.issueID !== undefined && !getIssue(db, filter.issueID)) throw new ProjectNotFoundError();
   projectPendingEventSummaries(db);
+  const projectionSwitch = getEventSummaryProjectionSwitch(db);
+  if (projectionSwitch.read_version === "v2" || projectionSwitch.observation_started_at) {
+    projectPendingCompactEventSummaries(db);
+  }
   return {
-    items: listEventSummaryProjection(db, filter).map(publicSummary),
+    items: listEventSummaryProjectionForRead(db, filter).map(publicSummary),
     schema_version: EVENT_SUMMARY_QUERY_SCHEMA_VERSION,
     source_of_truth: "issue_events",
-    watermark: eventProjectionStatus(db)
+    watermark: projectionSwitch.read_version === "v2"
+      ? compactProjectionStatus(db)
+      : eventProjectionStatus(db)
   };
 }
 
-function publicSummary(row: ReturnType<typeof listEventSummaryProjection>[number]): PublicEventSummary {
+function publicSummary(row: EventSummaryProjection): PublicEventSummary {
   return {
     id: row.source_event_id,
     source_event_id: row.source_event_id,

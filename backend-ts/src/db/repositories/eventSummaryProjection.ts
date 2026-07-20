@@ -60,7 +60,7 @@ type EventProjectionWatermarkRow = Record<keyof EventProjectionWatermark, unknow
 
 export function listSourceIssueEvents(
   db: RunnerDatabase,
-  input: { afterID: number; limit: number }
+  input: { afterID: number; hydrateIssueLogs?: boolean; limit: number }
 ): SourceIssueEvent[] {
   return db.sqlite.query<SourceIssueEventRow, [number, number]>(`
     select e.id, e.issue_id, i.project_id, e.type as event_type, e.payload, e.created_at,
@@ -74,7 +74,7 @@ export function listSourceIssueEvents(
       order by candidate.started_at desc, candidate.attempt desc limit 1
     )
     where e.id>? order by e.id asc limit ?
-  `).all(input.afterID, input.limit).map((row) => mapSourceIssueEvent(db, row));
+  `).all(input.afterID, input.limit).map((row) => mapSourceIssueEvent(db, row, input.hydrateIssueLogs !== false));
 }
 
 export function upsertEventSummaryProjection(db: RunnerDatabase, row: EventSummaryProjectionWrite): boolean {
@@ -300,7 +300,7 @@ function emptyWatermark(): EventProjectionWatermark {
   };
 }
 
-function mapSourceIssueEvent(db: RunnerDatabase, row: SourceIssueEventRow): SourceIssueEvent {
+function mapSourceIssueEvent(db: RunnerDatabase, row: SourceIssueEventRow, hydrateIssueLogs: boolean): SourceIssueEvent {
   const eventType = requiredText(row.event_type, "issue_events.type");
   const storedPayload = optionalText(row.payload);
   return {
@@ -309,7 +309,7 @@ function mapSourceIssueEvent(db: RunnerDatabase, row: SourceIssueEventRow): Sour
     project_id: requiredText(row.project_id, "issues.project_id"),
     run_id: optionalText(row.run_id),
     event_type: eventType,
-    payload: eventType === "issue.log" ? hydrateStoredIssueLogPayload(db, storedPayload) : storedPayload,
+    payload: hydrateIssueLogs && eventType === "issue.log" ? hydrateStoredIssueLogPayload(db, storedPayload) : storedPayload,
     created_at: requiredText(row.created_at, "issue_events.created_at")
   };
 }

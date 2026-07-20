@@ -278,6 +278,30 @@ bun run src/main.ts maintenance events rebuild-projection \
 
 重建只清理 derived projection/watermark，started/paused/completed/failed 会写入 `pi_action_events`；`actor=llm` 或未知 `actor-kind` 会拒绝。该 cursor watermark 不能作为 raw 删除授权，P01.02 的 archive/summary/hold/reference/destructive gates 仍全部适用。完整 contract 见 `docs/architecture/xuanwu/0009-event-summary-projection.md`。
 
+MEM-06 compact V2 先在含 `artifacts/issue-logs` companion snapshot 的 fresh backup 副本上
+执行 shadow rebuild/verify，再进入限时 dual-read。以下命令均不删除 V1；observe/cutover/
+rollback 的 apply 还要求 non-LLM actor、backup/no-writer confirmations 和 audit provenance：
+
+```bash
+bun run src/main.ts maintenance events rebuild-compact-projection --db "$COPY_DB" \
+  --actor operator-id --actor-kind user --audit-ref issue:767:rehearsal \
+  --reason "compact projection shadow rebuild" --batch-size 2000 --json
+bun run src/main.ts maintenance events verify-compact-projection \
+  --db "$COPY_DB" --performance-samples 20 --json
+bun run src/main.ts maintenance events observe-compact-projection --db "$COPY_DB" \
+  --actor operator-id --actor-kind user --audit-ref issue:767:rehearsal \
+  --reason "bounded dual-read" --duration-seconds 86400 \
+  --apply --confirm-backup-tested --confirm-no-active-writers --json
+bun run src/main.ts maintenance events cutover-compact-projection --db "$COPY_DB" \
+  --actor operator-id --actor-kind user --audit-ref issue:767:rehearsal \
+  --reason "atomic compact cutover" --minimum-observation-seconds 86400 \
+  --apply --confirm-backup-tested --confirm-no-active-writers --json
+bun run src/main.ts maintenance events rollback-compact-projection --db "$COPY_DB" \
+  --actor operator-id --actor-kind user --audit-ref issue:767:rehearsal \
+  --reason "atomic read rollback" \
+  --apply --confirm-backup-tested --confirm-no-active-writers --json
+```
+
 ## 事件归档与数据库维护 runbook
 
 维护命令直接操作指定 SQLite 文件，不经过 HTTP。`issue_events` 仍是唯一 source of truth；归档目录只是 append-only shadow archive，不参与 Issue / Session / Guardian / Supervisor 的 live read。首次演练必须使用 SQLite online backup 副本，不能直接拿正式库试验。

@@ -1,6 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { redactRegisteredSecrets } from "../security/redactionRegistry.ts";
+import {
+  eventSummaryTypeCountsForRead,
+  listEventSummaryProjectionForRead
+} from "../db/repositories/compactEventSummaryProjection.ts";
 
 export const RUNTIME_OBSERVABILITY_SCHEMA_VERSION = "xuanwu.runtime-observability.v1" as const;
 
@@ -118,10 +122,8 @@ function statusCounts(database: RunnerDatabase, table: "issues" | "issue_runs" |
 }
 
 function eventTypeCounts(database: RunnerDatabase): CountRow[] {
-  return database.sqlite.query<{ count: number; event_type: string }, []>(`
-    select event_type, count(*) as count from event_summary_projection
-    group by event_type order by count desc, event_type asc
-  `).all().map((row) => ({ count: Number(row.count), key: String(row.event_type) }));
+  return eventSummaryTypeCountsForRead(database)
+    .map((row) => ({ count: Number(row.count), key: String(row.event_type) }));
 }
 
 function dimension(rows: CountRow[], source: string): Record<string, unknown> {
@@ -275,12 +277,16 @@ function traceView(row: TraceRow): Record<string, unknown> {
 }
 
 function structuredEventRows(database: RunnerDatabase): EventRow[] {
-  return database.sqlite.query<EventRow, []>(`
-    select source_event_id, issue_id, project_id, run_id, event_type, summary,
-      summary_payload, event_created_at
-    from event_summary_projection
-    order by source_event_id desc limit 50
-  `).all();
+  return listEventSummaryProjectionForRead(database, { limit: 50 }).map((row) => ({
+    event_created_at: row.event_created_at,
+    event_type: row.event_type,
+    issue_id: row.issue_id,
+    project_id: row.project_id,
+    run_id: row.run_id,
+    source_event_id: row.source_event_id,
+    summary: row.summary,
+    summary_payload: row.summary_payload
+  }));
 }
 
 function structuredEventView(row: EventRow): Record<string, unknown> {

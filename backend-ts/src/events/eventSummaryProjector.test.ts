@@ -5,10 +5,22 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import {
   getEventProjectionWatermark,
-  listEventSummaryProjection
+  listEventSummaryProjection,
+  listSourceIssueEvents,
+  upsertEventSummaryProjection
 } from "../db/repositories/eventSummaryProjection.ts";
+import {
+  persistPlannedIssueLogArtifact,
+  planIssueLogPayloadExternalization
+} from "../db/repositories/issueEvents.ts";
 import { queryEventSummaries } from "./eventSummaryQuery.ts";
-import { projectPendingEventSummaries } from "./eventSummaryProjector.ts";
+import { projectPendingEventSummaries, projectSourceIssueEvent } from "./eventSummaryProjector.ts";
+import {
+  clearCompactEventSummaryProjection,
+  listCompactEventSummaryProjection,
+  projectPendingCompactEventSummaries,
+  updateEventSummaryProjectionSwitch
+} from "../db/repositories/compactEventSummaryProjection.ts";
 import { createDefaultRouter } from "../http/server.ts";
 
 const roots: string[] = [];
@@ -105,6 +117,70 @@ describe("event summary projector", () => {
         "http://127.0.0.1:3008/api/issues/999/event-summaries"
       ));
       expect(missing.status).toBe(404);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("dual-reads compact rows and fails closed on a parity conflict", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = seedIssueEvents(db);
+      projectPendingEventSummaries(db);
+      projectPendingCompactEventSummaries(db);
+      updateEventSummaryProjectionSwitch(db, {
+        cutover_at: "",
+        expectedRevision: 0,
+        observation_expires_at: "2099-01-02T00:00:00.000Z",
+        observation_started_at: "2026-01-01T00:00:00.000Z",
+        read_version: "v1",
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      });
+
+      expect(queryEventSummaries(db, { issueID }).items).toHaveLength(4);
+      db.sqlite.run("delete from event_summary_projection_compact where source_event_id=2");
+      expect(() => queryEventSummaries(db, { issueID })).toThrow("event summary projection parity conflict");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retains the V1 stored-reference compatibility mode across compact rebuilds", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = seedIssueEvents(db);
+      const original = JSON.stringify({
+        raw_method: "item/completed",
+        text: "large output ".repeat(8_000),
+        type: "tool"
+      });
+      const plan = planIssueLogPayloadExternalization(original, 0)!;
+      persistPlannedIssueLogArtifact(db, plan);
+      db.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+        [issueID, plan.stored_payload, "2026-01-01T00:00:04Z"]
+      );
+      projectPendingEventSummaries(db);
+      const storedSource = listSourceIssueEvents(db, {
+        afterID: 4,
+        hydrateIssueLogs: false,
+        limit: 1
+      })[0]!;
+      upsertEventSummaryProjection(db, projectSourceIssueEvent(storedSource, "2026-01-01T00:00:05Z"));
+
+      projectPendingCompactEventSummaries(db);
+
+      expect(listCompactEventSummaryProjection(db, { issueID })).toEqual(
+        listEventSummaryProjection(db, { issueID }).map((row) => ({ ...row, projected_at: "" }))
+      );
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from event_summary_projection_compat_modes"
+      ).get()?.count).toBe(1);
+      clearCompactEventSummaryProjection(db);
+      projectPendingCompactEventSummaries(db);
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from event_summary_projection_compat_modes"
+      ).get()?.count).toBe(1);
     } finally {
       db.close();
     }

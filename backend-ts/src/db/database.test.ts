@@ -66,6 +66,13 @@ describe("Bun SQLite database connection", () => {
         "cron_tasks",
         "event_projection_watermarks",
         "event_summary_projection",
+        "event_summary_projection_compact",
+        "event_summary_projection_compat_modes",
+        "event_summary_projection_payloads",
+        "event_summary_projection_projects",
+        "event_summary_projection_runs",
+        "event_summary_projection_switch",
+        "event_summary_projection_types",
         "external_events",
         "external_links",
         "feishu_conversation_state",
@@ -224,12 +231,25 @@ describe("Bun SQLite database connection", () => {
         { id: "049_automation_execution_links" },
         { id: "050_automation_watches" },
         { id: "051_remove_production_fixtures" },
-        { id: "052_consolidate_pi_decision_layers" }
+        { id: "052_consolidate_pi_decision_layers" },
+        { id: "054_compact_event_summary_projection" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
         "idx_event_summary_projection_issue",
         "idx_event_summary_projection_project"
+      ]));
+      expect(indexNames(connection, "event_summary_projection_compact")).toEqual(expect.arrayContaining([
+        "idx_event_summary_projection_compact_issue",
+        "idx_event_summary_projection_compact_project"
+      ]));
+      expect(columnNames(connection, "event_summary_projection_compact")).toEqual(expect.arrayContaining([
+        "event_type_ref",
+        "payload_ref",
+        "project_ref",
+        "run_ref",
+        "source_event_id",
+        "source_sha256"
       ]));
       expect(columnNames(connection, "event_projection_watermarks")).toEqual(expect.arrayContaining([
         "last_event_id",
@@ -781,7 +801,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 52 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 53 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

@@ -8,6 +8,13 @@ import {
 } from "../events/maintenanceService.ts";
 import { rebuildEventSummaryProjection } from "../events/eventSummaryProjectionService.ts";
 import {
+  cutoverCompactEventSummaryProjection,
+  observeCompactEventSummaryProjection,
+  rebuildCompactEventSummaryProjection,
+  rollbackCompactEventSummaryProjection,
+  verifyCompactEventSummaryProjection
+} from "../events/compactEventSummaryProjectionService.ts";
+import {
   compactHistoricalIssueLogPayloads,
   restoreHistoricalIssueLogPayloads
 } from "../events/payloadCompactionService.ts";
@@ -62,6 +69,71 @@ export function runMaintenance(args: string[]): string {
       maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
       reason: required(flags, "reason"),
       resume: enabled(flags, "resume")
+    });
+  } else if (family === "events" && command === "rebuild-compact-projection") {
+    allowOnly(flags, ["actor", "actor-kind", "audit-ref", "batch-size", "db", "json", "max-batches", "reason", "resume"]);
+    report = rebuildCompactEventSummaryProjection({
+      actor: required(flags, "actor"),
+      actorKind: actorKind(flags["actor-kind"]),
+      auditRef: required(flags, "audit-ref"),
+      batchSize: optionalInteger(flags["batch-size"], "--batch-size"),
+      dbPath: required(flags, "db"),
+      maxBatches: optionalInteger(flags["max-batches"], "--max-batches"),
+      reason: required(flags, "reason"),
+      resume: enabled(flags, "resume")
+    });
+  } else if (family === "events" && command === "verify-compact-projection") {
+    allowOnly(flags, ["db", "json", "performance-samples"]);
+    report = verifyCompactEventSummaryProjection({
+      dbPath: required(flags, "db"),
+      performanceSamples: optionalInteger(flags["performance-samples"], "--performance-samples")
+    });
+  } else if (family === "events" && command === "observe-compact-projection") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "confirm-backup-tested",
+      "confirm-no-active-writers", "db", "duration-seconds", "json", "reason"
+    ]);
+    report = observeCompactEventSummaryProjection({
+      actor: required(flags, "actor"),
+      actorKind: actorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: required(flags, "audit-ref"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      durationSeconds: optionalNonNegativeInteger(flags["duration-seconds"], "--duration-seconds"),
+      reason: required(flags, "reason")
+    });
+  } else if (family === "events" && command === "cutover-compact-projection") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "confirm-backup-tested",
+      "confirm-no-active-writers", "db", "json", "minimum-observation-seconds", "reason"
+    ]);
+    report = cutoverCompactEventSummaryProjection({
+      actor: required(flags, "actor"),
+      actorKind: actorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: required(flags, "audit-ref"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      minimumObservationSeconds: optionalNonNegativeInteger(flags["minimum-observation-seconds"], "--minimum-observation-seconds"),
+      reason: required(flags, "reason")
+    });
+  } else if (family === "events" && command === "rollback-compact-projection") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "confirm-backup-tested",
+      "confirm-no-active-writers", "db", "json", "reason"
+    ]);
+    report = rollbackCompactEventSummaryProjection({
+      actor: required(flags, "actor"),
+      actorKind: actorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: required(flags, "audit-ref"),
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      reason: required(flags, "reason")
     });
   } else if (family === "events" && command === "compact-payloads") {
     allowOnly(flags, [

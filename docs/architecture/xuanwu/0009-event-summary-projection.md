@@ -62,3 +62,57 @@ Migration `040_event_summary_projection` 新增：
 3. 非 log payload 与 raw 完全相等，log allowlist/截断与 source sample/hash 一致；
 4. query API 返回 cursor metadata 和过滤结果；
 5. rebuild/resume 的 audit events 完整。
+
+## 7. MEM-06 紧凑投影与消费者盘点
+
+Migration `054_compact_event_summary_projection` 新增 shadow-only V2。V1 不会由 migration
+自动 backfill、切读或删除；首次历史重建仍必须在 SQLite online backup 副本以及对应的
+`artifacts/issue-logs` companion snapshot 上执行。
+
+运行态消费者与读取字段如下：
+
+| 消费者 | 查询/排序 | 实际读取 |
+| --- | --- | --- |
+| `/api/event-summaries`、Dashboard/Supervisor Activity | project/type、`source_event_id desc`、limit | summary + bounded payload |
+| `/api/issues/:id/event-summaries`、PI Activity、Work timeline | issue/type/exclude type、before/after cursor、`source_event_id` | summary + bounded payload + run/hash metadata |
+| Runtime Observability diagnostics | event type aggregate；全局最近 50 条 | aggregate 不读 payload；最近项读 summary + bounded payload |
+| Logs、Session/Guardian、legacy `/events` | 不读 summary projection | 继续读取 `issue_events` authority |
+
+V2 的逐事件行只保留 source event/issue 与 project/run/type/payload 的整数引用、原 payload
+byte count 和 32-byte source SHA-256 BLOB。project/run/type 使用低基数字典；summary payload
+使用 SHA-256 前 128 bit content-addressed key 的字典，key 冲突会对完整 payload 复核并 fail
+closed。payload 以 UTF-8 BLOB 或 `deflate-raw` BLOB 存储（`payload_codec=0|1`），只有物理
+变小时才压缩。summary、raw method、retention policy/tier 与 summary hash 在 bounded payload
+上确定性重建，不重复落 TEXT。V2 只保留：
+
+- rowid/主键支持全局 cursor；
+- `(issue_id, source_event_id)` 支持 Issue/Work timeline；
+- `(project_ref, source_event_id)` 支持低基数 project filter。
+
+V1 的 `(source, source_event_id)` auto index 及 TEXT project index 只随 V1 保留；V2 不复制
+source 常量，也不建立 raw method、policy、tier、payload 或 event type 的低价值逐行索引。
+
+MEM-05 对少量 `issue.log` 做过 artifact 外置。V2 对这些行沿用 V1 的 stored-reference
+source hash/byte count 和 bounded inline summary，不把 artifact body 再复制进 projection；
+cutover report 仍单列 `representation_differences`。逐项 parity 严格比较 cursor、
+issue/project/run/type、summary、bounded payload、classification、source/summary hash 和时间，
+任一差异都 fail closed。
+
+## 8. Shadow、dual-read、cutover 与删除门禁
+
+1. `rebuild-compact-projection` 只从 `issue_events` 重建 V2，并以独立 watermark 断点续跑；
+   非 resume 清空仅允许在 V1 读且无 active observation 时执行；
+2. `verify-compact-projection` 必须证明 row coverage、cursor/max ID、lag=0、逐项 parity、
+   V2 table+dictionary+index 不超过 100 MiB，以及三类关键 SQL P95 不劣于 V1 20%；
+3. `observe-compact-projection` 在有期限窗口内保持 V1 返回、每次同时读取 V2；任何差异
+   拒绝请求，不静默 fallback；
+4. `cutover-compact-projection` 在同一 transaction/revision compare 中将 read version 切到
+   V2。它要求 fresh verification、backup/restore 与 no-writer confirmations、非 LLM actor、
+   audit ref/reason 和已满足的 observation duration；
+5. `rollback-compact-projection` 原子恢复 V1 read version，且要求 V1 lag=0。数据库级回滚
+   使用 fresh backup restore，不执行 generic down migration。
+
+旧表和索引的物理删除不属于 MEM-06。只有 consumer-zero、fresh backup checksum 与隔离
+restore、served-runtime observation window、保留 rollback artifact、明确 non-LLM approval
+全部满足时，后续独立 issue 才能删除；所有 MEM-06 report 固定返回
+`legacy_rows_deleted=0` / `authorized=false`。
