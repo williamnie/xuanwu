@@ -197,6 +197,7 @@ function RuntimeStatusBody({ status, loading }) {
     ['Codex server', `${status.codex?.server_mode || 'cli'} · ${status.codex?.command || 'missing'}`, status.codex?.command_ok],
     ['Auth enabled', status.config?.auth_enabled ? 'enabled' : 'disabled', !status.config?.auth_enabled],
     ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress / max ${status.runner?.max_parallel_projects || 1}`, true],
+    ['Process-group memory', processGroupMemorySummary(status.process_group_memory), memoryBudgetOk(status.process_group_memory)],
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -213,8 +214,66 @@ function RuntimeStatusBody({ status, loading }) {
           </div>
         ))}
       </div>
+      <ProcessGroupMemoryStatus memory={status.process_group_memory} />
     </div>
   );
+}
+
+function ProcessGroupMemoryStatus({ memory }) {
+  if (!memory || memory.freshness?.status === 'unavailable') return null;
+  const roles = Array.isArray(memory.roles) ? memory.roles : [];
+  const top = Array.isArray(memory.top_by_rss) ? memory.top_by_rss.slice(0, 5) : [];
+  return (
+    <div style={{ border: '1px solid var(--border-light)', borderRadius: '14px', padding: '12px', background: 'var(--bg-secondary)' }}>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <strong>Runner process-group memory</strong>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+          sampled {formatMemorySampleTime(memory.sampled_at)} · {memory.freshness?.status || 'unknown'} · no auto-restart
+        </span>
+      </div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '8px' }}>
+        Group footprint {formatMiB(memory.aggregate?.footprint_bytes)} · main heap {formatMiB(memory.main?.heap_used_bytes)} · external {formatMiB(memory.main?.external_bytes)} · array buffers {formatMiB(memory.main?.array_buffers_bytes)}
+      </div>
+      <div style={{ display: 'grid', gap: '8px', marginTop: '10px' }}>
+        {roles.map(role => (
+          <div key={role.role} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '0.82rem' }}>
+            <span>{role.role} · {role.process_count || 0} PID</span>
+            <strong>{formatMiB(role.rss_bytes)}</strong>
+          </div>
+        ))}
+      </div>
+      {top.length > 0 && (
+        <div style={{ display: 'grid', gap: '6px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-light)' }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Top PID by macOS ps RSS</span>
+          {top.map(process => (
+            <div key={`${process.pid}-${process.started_at}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '0.78rem' }}>
+              <span>PID {process.pid} · {process.role} · {process.owner}</span>
+              <strong>{formatMiB(process.rss_bytes)}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function processGroupMemorySummary(memory) {
+  if (!memory || memory.freshness?.status === 'unavailable') return 'unavailable';
+  return `${memory.phase || 'unknown'} · RSS ${formatMiB(memory.aggregate?.rss_bytes)} · P95 ${formatMiB(memory.aggregate?.rss_p95_bytes)} · ${memory.budget?.status || 'unknown'}`;
+}
+
+function memoryBudgetOk(memory) {
+  return memory?.budget?.status === 'within_budget';
+}
+
+function formatMiB(bytes) {
+  if (!Number.isFinite(Number(bytes))) return 'n/a';
+  return `${(Number(bytes) / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function formatMemorySampleTime(value) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleTimeString() : 'unknown';
 }
 
 function SecurityWarnings({ warnings }) {

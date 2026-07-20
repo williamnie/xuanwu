@@ -12,6 +12,10 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
 import { queryWorkTimeline } from "../domain/work/timeline.ts";
 import { projectPendingEventSummaries } from "../events/eventSummaryProjector.ts";
+import {
+  PROCESS_GROUP_MEMORY_BUDGETS,
+  PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS
+} from "../observability/processGroupMemory.ts";
 
 export const CAPACITY_REPORT_SCHEMA = "xuanwu.capacity-benchmark.v1" as const;
 
@@ -30,11 +34,51 @@ export const CAPACITY_BUDGETS = {
     "timeline.long_session_first_60": { p50: 750, p95: 1_500 }
   },
   memory: {
-    peak_rss_bytes: 1024 * 1024 * 1024,
-    rss_growth_bytes: 896 * 1024 * 1024
+    peak_rss_bytes: 512 * 1024 * 1024,
+    rss_growth_bytes: 384 * 1024 * 1024,
+    process_group: PROCESS_GROUP_MEMORY_BUDGETS
   },
   regression: { minimum_delta_ms: 5, p95_ratio: 1.25 }
 } as const;
+
+export const RUNNER_MEMORY_CAPACITY_PHASES = [
+  "cold_start", "idle", "usage_first", "usage_warm", "run", "cancel",
+  "failure_retry", "restart", "lifecycle", "post_ttl", "soak"
+] as const;
+export type RunnerMemoryCapacityPhase = typeof RUNNER_MEMORY_CAPACITY_PHASES[number];
+export type RunnerMemoryCapacitySample = {
+  cycle?: number;
+  footprint_bytes?: number | null;
+  freshness_status: string;
+  group_rss_bytes: number;
+  main_array_buffers_bytes?: number;
+  main_external_bytes?: number;
+  main_heap_used_bytes?: number;
+  main_process_rss_bytes: number;
+  main_ps_rss_bytes: number;
+  observed_at: string;
+  phase: RunnerMemoryCapacityPhase;
+  sample_age_ms: number;
+};
+export type RunnerMemoryCapacityReport = {
+  baseline_evidence_id: string;
+  budgets: typeof PROCESS_GROUP_MEMORY_BUDGETS;
+  group_p95_rss_bytes: { active_run: number; inactive: number; main_idle: number };
+  lifecycle: { cycles: number; monotonic_growth: boolean; status: "passed" | "failed" };
+  metric_definitions: typeof PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS;
+  missing_phases: RunnerMemoryCapacityPhase[];
+  phase_p95_footprint_bytes: Partial<Record<RunnerMemoryCapacityPhase, number>>;
+  phase_p95_main_memory_bytes: {
+    array_buffers: Partial<Record<RunnerMemoryCapacityPhase, number>>;
+    external: Partial<Record<RunnerMemoryCapacityPhase, number>>;
+    heap_used: Partial<Record<RunnerMemoryCapacityPhase, number>>;
+  };
+  phase_p95_rss_bytes: Partial<Record<RunnerMemoryCapacityPhase, number>>;
+  reviewed_by: string;
+  sampling: { fresh: boolean; samples: number; status: "passed" | "failed" };
+  soak: { drift_bytes: number; duration_ms: number; status: "passed" | "failed" };
+  status: "passed" | "failed";
+};
 
 export type DatasetScale = {
   automations_per_project: number;
@@ -260,6 +304,103 @@ export function capacityReportMarkdown(report: CapacityReport): string {
     ""
   ];
   return lines.join("\n");
+}
+
+export function evaluateRunnerMemoryCapacity(input: {
+  baselineEvidenceId: string;
+  reviewedBy: string;
+  samples: RunnerMemoryCapacitySample[];
+}): RunnerMemoryCapacityReport {
+  const samples = [...input.samples].sort((left, right) => Date.parse(left.observed_at) - Date.parse(right.observed_at));
+  const missingPhases = RUNNER_MEMORY_CAPACITY_PHASES.filter((phase) => !samples.some((sample) => sample.phase === phase));
+  const phaseP95 = Object.fromEntries(RUNNER_MEMORY_CAPACITY_PHASES.flatMap((phase) => {
+    const values = samples.filter((sample) => sample.phase === phase).map((sample) => sample.group_rss_bytes);
+    return values.length === 0 ? [] : [[phase, samplePercentile(values, 0.95)]];
+  })) as Partial<Record<RunnerMemoryCapacityPhase, number>>;
+  const phaseFootprintP95 = Object.fromEntries(RUNNER_MEMORY_CAPACITY_PHASES.flatMap((phase) => {
+    const values = samples.filter((sample) => sample.phase === phase && Number.isFinite(sample.footprint_bytes))
+      .map((sample) => Number(sample.footprint_bytes));
+    return values.length === 0 ? [] : [[phase, samplePercentile(values, 0.95)]];
+  })) as Partial<Record<RunnerMemoryCapacityPhase, number>>;
+  const phaseMainP95 = {
+    array_buffers: optionalPhaseP95(samples, "main_array_buffers_bytes"),
+    external: optionalPhaseP95(samples, "main_external_bytes"),
+    heap_used: optionalPhaseP95(samples, "main_heap_used_bytes")
+  };
+  const lifecycleEnds = lifecycleCycleEnds(samples);
+  const lifecycleMonotonicGrowth = lifecycleEnds.length >= 2 &&
+    lifecycleEnds.at(-1)! > lifecycleEnds[0]! &&
+    lifecycleEnds.every((value, index) => index === 0 || value >= (lifecycleEnds[index - 1] ?? value));
+  const soakSamples = samples.filter((sample) => sample.phase === "soak");
+  const soakDuration = durationMs(soakSamples);
+  const soakDrift = driftBytes(soakSamples);
+  const idleSamples = samples.filter((sample) => sample.phase === "idle");
+  const postTTL = samples.filter((sample) => sample.phase === "post_ttl");
+  const activeSamples = samples.filter((sample) => ["run", "cancel", "failure_retry"].includes(sample.phase));
+  const inactiveSamples = samples.filter((sample) => !["run", "cancel", "failure_retry"].includes(sample.phase));
+  const idleBaseline = samplePercentile(idleSamples.map((sample) => sample.group_rss_bytes), 0.5);
+  const mainIdleP95 = samplePercentile(inactiveSamples.map((sample) => Math.max(sample.main_process_rss_bytes, sample.main_ps_rss_bytes)), 0.95);
+  const inactiveGroupP95 = samplePercentile(inactiveSamples.map((sample) => sample.group_rss_bytes), 0.95);
+  const activeGroupP95 = samplePercentile(activeSamples.map((sample) => sample.group_rss_bytes), 0.95);
+  const lifecycleStatus = lifecycleEnds.length === 20 && !lifecycleMonotonicGrowth ? "passed" : "failed";
+  const soakStatus = soakDuration >= 30 * 60_000 && soakDrift <= PROCESS_GROUP_MEMORY_BUDGETS.soak_drift_bytes.hard
+    ? "passed" : "failed";
+  const phaseBudgetsPassed = inactiveGroupP95 <= PROCESS_GROUP_MEMORY_BUDGETS.idle_group_rss_p95_bytes.hard &&
+    activeGroupP95 <= PROCESS_GROUP_MEMORY_BUDGETS.active_run_group_rss_p95_bytes.hard &&
+    mainIdleP95 <= PROCESS_GROUP_MEMORY_BUDGETS.idle_main_rss_bytes.hard &&
+    postTTL.length > 0 && postTTL.every((sample) => sample.group_rss_bytes <= idleBaseline + PROCESS_GROUP_MEMORY_BUDGETS.post_run_delta_bytes.hard);
+  const reviewed = input.baselineEvidenceId.trim().startsWith("xw:evidence:") && input.reviewedBy.trim() !== "";
+  const samplingFresh = samples.length > 0 && samples.every((sample) => sample.freshness_status === "fresh" && sample.sample_age_ms <= 5_000);
+  return {
+    baseline_evidence_id: input.baselineEvidenceId.trim(),
+    budgets: PROCESS_GROUP_MEMORY_BUDGETS,
+    group_p95_rss_bytes: { active_run: activeGroupP95, inactive: inactiveGroupP95, main_idle: mainIdleP95 },
+    lifecycle: { cycles: lifecycleEnds.length, monotonic_growth: lifecycleMonotonicGrowth, status: lifecycleStatus },
+    metric_definitions: PROCESS_GROUP_MEMORY_METRIC_DEFINITIONS,
+    missing_phases: missingPhases,
+    phase_p95_footprint_bytes: phaseFootprintP95,
+    phase_p95_main_memory_bytes: phaseMainP95,
+    phase_p95_rss_bytes: phaseP95,
+    reviewed_by: input.reviewedBy.trim(),
+    sampling: { fresh: samplingFresh, samples: samples.length, status: samplingFresh ? "passed" : "failed" },
+    soak: { drift_bytes: soakDrift, duration_ms: soakDuration, status: soakStatus },
+    status: missingPhases.length === 0 && lifecycleStatus === "passed" && soakStatus === "passed" && phaseBudgetsPassed && reviewed && samplingFresh
+      ? "passed" : "failed"
+  };
+}
+
+function lifecycleCycleEnds(samples: RunnerMemoryCapacitySample[]): number[] {
+  const cycles = new Map<number, RunnerMemoryCapacitySample>();
+  for (const sample of samples) {
+    if (sample.phase !== "lifecycle" || !Number.isInteger(sample.cycle) || (sample.cycle ?? 0) < 1) continue;
+    cycles.set(sample.cycle!, sample);
+  }
+  return [...cycles].sort(([left], [right]) => left - right).map(([, sample]) => sample.group_rss_bytes);
+}
+
+function durationMs(samples: RunnerMemoryCapacitySample[]): number {
+  if (samples.length < 2) return 0;
+  return Math.max(0, Date.parse(samples.at(-1)!.observed_at) - Date.parse(samples[0]!.observed_at));
+}
+
+function driftBytes(samples: RunnerMemoryCapacitySample[]): number {
+  if (samples.length < 2) return 0;
+  return Math.max(0, samples.at(-1)!.group_rss_bytes - samples[0]!.group_rss_bytes);
+}
+
+function samplePercentile(values: number[], quantile: number): number {
+  return percentile([...values].sort((left, right) => left - right), quantile);
+}
+
+function optionalPhaseP95(
+  samples: RunnerMemoryCapacitySample[],
+  key: "main_array_buffers_bytes" | "main_external_bytes" | "main_heap_used_bytes"
+): Partial<Record<RunnerMemoryCapacityPhase, number>> {
+  return Object.fromEntries(RUNNER_MEMORY_CAPACITY_PHASES.flatMap((phase) => {
+    const values = samples.filter((sample) => sample.phase === phase && Number.isFinite(sample[key]))
+      .map((sample) => Number(sample[key]));
+    return values.length === 0 ? [] : [[phase, samplePercentile(values, 0.95)]];
+  })) as Partial<Record<RunnerMemoryCapacityPhase, number>>;
 }
 
 function seedDataset(db: RunnerDatabase, scale: DatasetScale): void {

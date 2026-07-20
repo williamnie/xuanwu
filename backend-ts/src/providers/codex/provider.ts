@@ -87,7 +87,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       });
       lease.bind(thread.provider_session_id);
       await this.nameThread(thread.provider_session_id, input.issueId);
-      stopForwarding = this.forwardRunEvents(input, thread.provider_session_id);
+      stopForwarding = this.forwardRunEvents(input, thread.provider_session_id, () => lease.release());
       const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
@@ -167,7 +167,7 @@ export class CodexExecutorProvider implements ExecutorProvider {
       const session = await this.adapter.resumeThread(input.session.sessionId);
       const threadID = session.provider_session_id || input.session.sessionId;
       lease.bind(threadID);
-      stopForwarding = this.forwardRunEvents(input, threadID);
+      stopForwarding = this.forwardRunEvents(input, threadID, () => lease.release());
       const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
@@ -221,13 +221,16 @@ export class CodexExecutorProvider implements ExecutorProvider {
     await this.adapter.setThreadName(threadID, `Issue #${issueID}`);
   }
 
-  private forwardRunEvents(input: ProviderRunInput, threadID: string): () => void {
+  private forwardRunEvents(input: ProviderRunInput, threadID: string, release: () => void): () => void {
     if (!this.eventSource) return () => {};
     let stop = () => {};
     stop = this.eventSource.subscribe((event) => {
       if (!sameThreadEvent(event, threadID)) return;
       input.onEvent?.(event);
-      if (terminalCodexEvent(event)) stop();
+      if (terminalCodexEvent(event)) {
+        release();
+        stop();
+      }
     });
     return stop;
   }

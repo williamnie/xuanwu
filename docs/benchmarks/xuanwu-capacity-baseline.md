@@ -5,6 +5,8 @@
 - 报告 schema：`xuanwu.capacity-benchmark.v1`
 - 基准环境：macOS 15.7.7、arm64、12 logical CPUs、24 GiB RAM、Bun 1.3.10
 
+> **历史基线，不是当前 Runner 内存预算 authority。** 本文及 2026-07-18 JSON 中的 `1 GiB` 单进程 ceiling 仅保留为历史对照，不得恢复或用于放行。当前门禁以 `PROCESS_GROUP_MEMORY_BUDGETS`、`/api/system/status.process_group_memory` 和带 baseline Evidence/review 的 `memory-run` 报告为准，同时保留 macOS `ps` RSS、`footprint` 与进程内 RSS 三种口径。
+
 ## 结论
 
 当前正式库副本和补充合成容量集均通过预算。正式库副本的主要热路径是 Runs 首屏和长 Timeline 首屏；P95 分别为 `779.04 ms` 和 `725.05 ms`。当前事件 raw + summary projection 增长率为 `1,881.01 bytes/event`，低于 `4,096 bytes/event` 预算。

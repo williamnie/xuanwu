@@ -66,6 +66,11 @@ describe("Bun system status endpoints", () => {
         heap_used_bytes: expect.any(Number),
         rss_bytes: expect.any(Number)
       });
+      expect(body.process_group_memory).toMatchObject({
+        contract: "runner-process-group-memory.v1",
+        freshness: { status: "unavailable" },
+        budget: { auto_restart: false, status: "unavailable" }
+      });
       expect(body.db.ok).toBe(true);
       expect(body.auth.enabled).toBe(true);
       expect(body.config.addr).toBe("127.0.0.1:3008");
@@ -471,6 +476,7 @@ type SystemStatusBody = {
   event_projection: Record<string, unknown>;
   health: Record<string, unknown>;
   observability: Record<string, unknown>;
+  process_group_memory: Record<string, unknown>;
   run_progress_projection: Record<string, unknown>;
   providers: Array<{ id: string } & Record<string, unknown>>;
   runner: Record<string, number>;

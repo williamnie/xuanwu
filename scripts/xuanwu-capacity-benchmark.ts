@@ -1,13 +1,16 @@
 #!/usr/bin/env bun
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import {
   capacityReportMarkdown,
+  evaluateRunnerMemoryCapacity,
   generateCapacityDataset,
+  RUNNER_MEMORY_CAPACITY_PHASES,
   runCapacityBenchmark,
   snapshotDatabase,
   type CapacityReport,
-  type DatasetScale
+  type DatasetScale,
+  type RunnerMemoryCapacitySample
 } from "../backend-ts/src/benchmarks/xuanwuCapacity.ts";
 import { openDatabase } from "../backend-ts/src/db/database.ts";
 
@@ -61,7 +64,117 @@ async function main(): Promise<void> {
     if (report.status !== "passed") process.exitCode = 1;
     return;
   }
-  throw new Error("usage: xuanwu-capacity-benchmark.ts <snapshot|generate|run> [flags]");
+  if (command === "memory-run") {
+    allowOnly(flags, ["baseline-evidence", "json-out", "reviewed-by", "samples-file"]);
+    const samples = JSON.parse(await readFile(resolve(required(flags, "samples-file")), "utf8")) as unknown;
+    if (!Array.isArray(samples)) throw new Error("--samples-file must contain one JSON array");
+    const report = evaluateRunnerMemoryCapacity({
+      baselineEvidenceId: required(flags, "baseline-evidence"),
+      reviewedBy: required(flags, "reviewed-by"),
+      samples: samples as RunnerMemoryCapacitySample[]
+    });
+    const jsonPath = optional(flags, "json-out");
+    if (jsonPath) {
+      const target = resolve(jsonPath);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    }
+    print(report);
+    if (report.status !== "passed") process.exitCode = 1;
+    return;
+  }
+  if (command === "memory-capture") {
+    allowOnly(flags, ["addr", "cycle", "duration-seconds", "interval-ms", "output", "phase"]);
+    const output = resolve(required(flags, "output"));
+    const captured = await captureRunnerMemory({
+      addr: optional(flags, "addr") ?? Bun.env.CODEX_RUNNER_ADDR ?? "127.0.0.1:3008",
+      cycle: optionalInteger(flags, "cycle"),
+      durationSeconds: optionalInteger(flags, "duration-seconds") ?? 0,
+      intervalMs: optionalInteger(flags, "interval-ms") ?? 1_000,
+      phase: required(flags, "phase") as RunnerMemoryCapacitySample["phase"]
+    });
+    const existing = await readSamples(output);
+    await mkdir(dirname(output), { recursive: true });
+    await writeFile(output, `${JSON.stringify([...existing, ...captured], null, 2)}\n`, "utf8");
+    print({ captured: captured.length, output: basename(output) });
+    return;
+  }
+  throw new Error("usage: xuanwu-capacity-benchmark.ts <snapshot|generate|run|memory-capture|memory-run> [flags]");
+}
+
+async function captureRunnerMemory(input: {
+  addr: string;
+  cycle?: number;
+  durationSeconds: number;
+  intervalMs: number;
+  phase: RunnerMemoryCapacitySample["phase"];
+}): Promise<RunnerMemoryCapacitySample[]> {
+  const allowed = new Set<string>(RUNNER_MEMORY_CAPACITY_PHASES);
+  if (!allowed.has(input.phase)) throw new Error(`invalid memory phase: ${input.phase}`);
+  if (input.durationSeconds < 0 || input.intervalMs < 250) throw new Error("duration must be >= 0 and interval must be >= 250 ms");
+  const deadline = Date.now() + input.durationSeconds * 1_000;
+  const samples: RunnerMemoryCapacitySample[] = [];
+  do {
+    const base = /^https?:\/\//.test(input.addr) ? input.addr : `http://${input.addr}`;
+    const response = await fetch(`${base.replace(/\/$/, "")}/api/system/status`, {
+      headers: authHeaders()
+    });
+    if (!response.ok) throw new Error(`system status returned HTTP ${response.status}`);
+    const status = await response.json() as Record<string, unknown>;
+    const memory = object(status.process_group_memory);
+    const aggregate = object(memory.aggregate);
+    const freshness = object(memory.freshness);
+    const main = object(memory.main);
+    samples.push({
+      ...(input.cycle === undefined ? {} : { cycle: input.cycle }),
+      footprint_bytes: nullableNumber(aggregate.footprint_bytes),
+      freshness_status: String(freshness.status ?? "unknown"),
+      group_rss_bytes: requiredNumber(aggregate.rss_bytes, "aggregate.rss_bytes"),
+      main_array_buffers_bytes: requiredNumber(main.array_buffers_bytes, "main.array_buffers_bytes"),
+      main_external_bytes: requiredNumber(main.external_bytes, "main.external_bytes"),
+      main_heap_used_bytes: requiredNumber(main.heap_used_bytes, "main.heap_used_bytes"),
+      main_process_rss_bytes: requiredNumber(main.process_rss_bytes, "main.process_rss_bytes"),
+      main_ps_rss_bytes: requiredNumber(main.ps_rss_bytes, "main.ps_rss_bytes"),
+      observed_at: String(memory.sampled_at ?? new Date().toISOString()),
+      phase: input.phase,
+      sample_age_ms: requiredNumber(freshness.age_ms, "freshness.age_ms")
+    });
+    if (Date.now() >= deadline) break;
+    await Bun.sleep(Math.min(input.intervalMs, Math.max(0, deadline - Date.now())));
+  } while (true);
+  return samples;
+}
+
+async function readSamples(path: string): Promise<RunnerMemoryCapacitySample[]> {
+  try {
+    const text = await readFile(path, "utf8");
+    if (text.trim() === "") return [];
+    const parsed = JSON.parse(text) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("existing output must contain one JSON array");
+    return parsed as RunnerMemoryCapacitySample[];
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = Bun.env.CODEX_RUNNER_AUTH_TOKEN?.trim() ?? "";
+  return token === "" ? {} : { authorization: `Bearer ${token}` };
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function requiredNumber(value: unknown, field: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) throw new Error(`${field} is unavailable`);
+  return parsed;
+}
+
+function nullableNumber(value: unknown): number | null {
+  return value === null || value === undefined ? null : requiredNumber(value, "footprint_bytes");
 }
 
 function datasetScale(flags: Flags): Partial<DatasetScale> {

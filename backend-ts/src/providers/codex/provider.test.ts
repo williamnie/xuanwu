@@ -67,6 +67,23 @@ class FakeCodexEventSource {
   }
 }
 
+class FakeCodexRuntimeControl {
+  acquired: string[] = [];
+  released = 0;
+
+  acquire(owner: string) {
+    this.acquired.push(owner);
+    return {
+      bind: () => {},
+      release: () => { this.released += 1; }
+    };
+  }
+
+  releaseSession(): void {}
+  runtimeSnapshot() { return { idle_ttl_ms: 15_000, owners: [] }; }
+  async stop(): Promise<void> {}
+}
+
 describe("Codex executor provider", () => {
   test("starts a Codex thread and one issue turn", async () => {
     const adapter = new FakeCodexIssueAdapter();
@@ -142,9 +159,10 @@ describe("Codex executor provider", () => {
   test("forwards live Codex app-server notifications for the issue thread", async () => {
     const adapter = new FakeCodexIssueAdapter();
     const source = new FakeCodexEventSource();
+    const runtime = new FakeCodexRuntimeControl();
     const events: unknown[] = [];
 
-    await new CodexExecutorProvider(adapter, "instructions", source).run({
+    await new CodexExecutorProvider(adapter, "instructions", source, runtime).run({
       issueId: 160,
       projectId: "demo",
       cwd: "/tmp/demo",
@@ -182,6 +200,8 @@ describe("Codex executor provider", () => {
       { type: "done", status: "completed" }
     ]);
     expect(source.handlers.size).toBe(0);
+    expect(runtime.acquired).toEqual(["project:demo:issue:160:run"]);
+    expect(runtime.released).toBe(1);
   });
 
   test("reads manual Sessions API detail through resume to hydrate transcript", async () => {

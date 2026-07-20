@@ -18,6 +18,7 @@ import { setProjectLoopMaxParallelProjects, startProjectLoop } from "./runner/pr
 import { recoverInProgressIssues } from "./runner/recovery.ts";
 import { reconcileStaleAgentSessions } from "./runner/staleSessionReconciler.ts";
 import { redactSensitiveText } from "./util/redact.ts";
+import { ProcessGroupMemoryObserver, writeProcessGroupMemoryAlert } from "./observability/processGroupMemory.ts";
 
 if (Bun.argv[2] === "__usage-index-worker") {
   const [, root = "", indexPath = "", forceRebuild = "0", parentPIDText = "0"] = Bun.argv.slice(2);
@@ -60,6 +61,14 @@ const bus = new EventBus();
 const codexOwnershipFile = join(config.stateDir, "codex-process-ownership.json");
 const processReconciliation = await reconcileStaleCodexProcessOwnership(codexOwnershipFile);
 const providers = executorProviders(config, bus, codexOwnershipFile);
+const processGroupMemory = new ProcessGroupMemoryObserver({
+  activeRuns: () => database.sqlite.query<{ count: number }, []>(
+    "select count(*) as count from issue_runs where ended_at=''"
+  ).get()?.count ?? 0,
+  onAlert: (alert) => writeProcessGroupMemoryAlert(database, alert),
+  providerRuntime: () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot()
+});
+processGroupMemory.start();
 const sessionReconciliation = reconcileStaleAgentSessions(database, processReconciliation);
 coldStartTrace("providers_initialized");
 setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
@@ -90,9 +99,10 @@ const server = await startServer(config, {
   feishuAgentBridge: feishuBridge,
   feishuReceiverStatus: () => feishuReceiver.status(),
   onFeishuConfigChanged: restartFeishuReceiver,
+  processGroupMemory,
   providers
 });
-installTerminationHandlers(providers, database, server);
+installTerminationHandlers(providers, database, server, processGroupMemory);
 coldStartTrace("http_routes_registered");
 void restartFeishuReceiver(config.integrations.feishu);
 void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config, processReconciliation);
@@ -126,13 +136,15 @@ function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus
 function installTerminationHandlers(
   providers: ReturnType<typeof executorProviders>,
   database: Awaited<ReturnType<typeof openDatabase>>,
-  server: { stop(closeActiveConnections?: boolean): void }
+  server: { stop(closeActiveConnections?: boolean): void },
+  processGroupMemory: ProcessGroupMemoryObserver
 ): void {
   let stopping = false;
   const stop = async (signal: string) => {
     if (stopping) return;
     stopping = true;
     console.info(JSON.stringify({ event: "runner.shutdown_started", signal }));
+    processGroupMemory.stop();
     server.stop(true);
     await Promise.all(Object.values(providers).map(async (provider) => {
       const stopProvider = (provider as { stop?: () => Promise<void> } | undefined)?.stop;

@@ -15,12 +15,14 @@ import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection
 import { runProgressProjectionStatus } from "../db/repositories/runProgress.ts";
 import { isSensitiveFieldName } from "../security/redactionRegistry.ts";
 import { buildRuntimeObservability } from "../observability/runtimeObservability.ts";
+import { PROCESS_GROUP_MEMORY_CONTRACT } from "../observability/processGroupMemory.ts";
 
 type SystemStatusContext = {
   authEnabled: boolean;
   config: RunnerConfig;
   database: RunnerDatabase;
   feishuReceiverStatus?: () => FeishuReceiverStatus;
+  processGroupMemory?: { snapshot(): Record<string, unknown> };
   startedAt: Date;
   webhookSigningSecret?: string;
 };
@@ -51,7 +53,8 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     event_projection: eventProjection,
     run_progress_projection: runProgressProjection,
     runner: runnerStatus(context.database),
-    observability
+    observability,
+    process_group_memory: context.processGroupMemory?.snapshot() ?? unavailableProcessGroupMemory()
   };
   return { ...status, health: systemHealth({ ...status, required_provider_ids: requiredProviderIDs(context.database) }) };
 }
@@ -71,6 +74,7 @@ export function buildRuntimeDoctor(context: SystemStatusContext): Record<string,
     providers: status.providers.map(doctorProvider),
     connectors: status.connectors,
     observability: status.observability,
+    process_group_memory: status.process_group_memory,
     recent_errors: { count: 0, sources: [] }
   };
 }
@@ -353,6 +357,7 @@ type RuntimeStatus = {
   event_projection: Record<string, unknown>;
   health: Record<string, unknown>;
   observability: Record<string, unknown>;
+  process_group_memory: Record<string, unknown>;
   providers: ProviderStatus[];
   run_progress_projection: Record<string, unknown>;
   runner: Record<string, number>;
@@ -365,6 +370,7 @@ function systemHealth(status: {
   db: CheckStatus;
   event_projection: Record<string, unknown>;
   observability: Record<string, unknown>;
+  process_group_memory: Record<string, unknown>;
   providers: ProviderStatus[];
   required_provider_ids: Set<string>;
   run_progress_projection: Record<string, unknown>;
@@ -395,8 +401,31 @@ function systemHealth(status: {
   for (const signal of arrayObjects(healthSignals.reasons)) {
     reasons.push(healthReason(String(signal.code ?? "observability_degraded"), "warning", String(signal.source_ref ?? "observability"), `${Number(signal.count ?? 0)} affected`));
   }
+  const memoryBudget = object(status.process_group_memory.budget);
+  if (memoryBudget.status === "hard_exceeded" || memoryBudget.status === "soft_exceeded") {
+    reasons.push(healthReason(
+      "process_group_memory_budget_exceeded",
+      memoryBudget.status === "hard_exceeded" ? "critical" : "warning",
+      "process_group_memory",
+      String(memoryBudget.status)
+    ));
+  }
   const state = reasons.some((item) => item.severity === "critical") ? "failed" : reasons.length > 0 ? "degraded" : "healthy";
   return { state, reasons };
+}
+
+function unavailableProcessGroupMemory(): Record<string, unknown> {
+  return {
+    contract: PROCESS_GROUP_MEMORY_CONTRACT,
+    sampled_at: "",
+    freshness: { age_ms: null, stale_after_ms: 5_000, status: "unavailable" },
+    phase: "unknown",
+    aggregate: { footprint_bytes: null, process_count: 0, rss_bytes: null, rss_p95_bytes: null },
+    roles: [],
+    top_by_rss: [],
+    recently_exited: [],
+    budget: { auto_restart: false, status: "unavailable" }
+  };
 }
 
 function healthReason(code: string, severity: "critical" | "warning", sourceRef: string, message: string): Record<string, unknown> {

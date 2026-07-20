@@ -49,6 +49,7 @@ type DefaultRouterOptions = {
   feishuIntakePolicy?: EventRouterSourcePolicy;
   feishuSender?: FeishuMessageSender;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
+  processGroupMemory?: { snapshot(): Record<string, unknown> };
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
@@ -156,6 +157,7 @@ export function registerSystemStatusRoute(
     config: context.config,
     database: context.database,
     feishuReceiverStatus: context.feishuReceiverStatus,
+    processGroupMemory: context.processGroupMemory,
     startedAt,
     webhookSigningSecret: context.webhookSigningSecret
   };

@@ -77,6 +77,18 @@ test('ordinary Settings route does not render raw runtime controls', () => {
   assert.match(piAgentSource, /<ProviderSummary/);
 });
 
+test('advanced Runtime status exposes process-group memory freshness, roles, P95, and budget state', () => {
+  assert.match(settingsSource, /status\.process_group_memory/);
+  assert.match(settingsSource, /Runner process-group memory/);
+  assert.match(settingsSource, /memory\.freshness/);
+  assert.match(settingsSource, /memory\.roles/);
+  assert.match(settingsSource, /Top PID by macOS ps RSS/);
+  assert.match(settingsSource, /Group footprint/);
+  assert.match(settingsSource, /array buffers/);
+  assert.match(settingsSource, /rss_p95_bytes/);
+  assert.match(settingsSource, /no auto-restart/);
+});
+
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');

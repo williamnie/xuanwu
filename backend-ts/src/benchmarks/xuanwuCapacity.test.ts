@@ -4,9 +4,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CAPACITY_BUDGETS,
   CAPACITY_REPORT_SCHEMA,
   capacityLatencyRegressions,
   capacityReportMarkdown,
+  evaluateRunnerMemoryCapacity,
   generateCapacityDataset,
   runCapacityBenchmark,
   snapshotDatabase
@@ -19,6 +21,77 @@ afterEach(async () => {
 });
 
 describe("Xuanwu capacity benchmark", () => {
+  test("rejects the previous one-gigabyte memory ceiling", () => {
+    expect(CAPACITY_BUDGETS.memory).toMatchObject({
+      peak_rss_bytes: 512 * 1024 * 1024,
+      rss_growth_bytes: 384 * 1024 * 1024,
+      process_group: {
+        idle_group_rss_p95_bytes: { hard: 320 * 1024 * 1024 },
+        active_run_group_rss_p95_bytes: { hard: 700 * 1024 * 1024 },
+        post_run_delta_bytes: { hard: 32 * 1024 * 1024 },
+        soak_drift_bytes: { hard: 64 * 1024 * 1024 }
+      }
+    });
+    expect(JSON.stringify(CAPACITY_BUDGETS.memory)).not.toContain(String(1024 * 1024 * 1024));
+  });
+
+  test("gates every runner lifecycle phase, 20 cycles, 30-minute soak, baseline Evidence and review", () => {
+    const mib = 1024 * 1024;
+    const base = Date.parse("2026-07-20T00:00:00.000Z");
+    const sample = (phase: Parameters<typeof evaluateRunnerMemoryCapacity>[0]["samples"][number]["phase"], offset: number, group = 250, cycle?: number) => ({
+      ...(cycle === undefined ? {} : { cycle }),
+      footprint_bytes: 190 * mib,
+      freshness_status: "fresh",
+      group_rss_bytes: group * mib,
+      main_array_buffers_bytes: 5 * mib,
+      main_external_bytes: 10 * mib,
+      main_heap_used_bytes: 20 * mib,
+      main_process_rss_bytes: 180 * mib,
+      main_ps_rss_bytes: 181 * mib,
+      observed_at: new Date(base + offset).toISOString(),
+      phase,
+      sample_age_ms: 100
+    });
+    const samples = [
+      sample("cold_start", 0), sample("idle", 1_000), sample("usage_first", 2_000, 310),
+      sample("usage_warm", 3_000, 280), sample("run", 4_000, 620), sample("cancel", 5_000, 300),
+      sample("failure_retry", 6_000, 650), sample("restart", 7_000, 290), sample("post_ttl", 8_000, 270),
+      ...Array.from({ length: 20 }, (_, index) => sample("lifecycle", 10_000 + index * 1_000, 260 + (index % 2), index + 1)),
+      sample("soak", 30_000, 260), sample("soak", 30_000 + 30 * 60_000, 300)
+    ];
+    const report = evaluateRunnerMemoryCapacity({
+      baselineEvidenceId: "xw:evidence:issue_events:765-baseline",
+      reviewedBy: "capacity-review:mem-04",
+      samples
+    });
+
+    expect(report).toMatchObject({
+      lifecycle: { cycles: 20, monotonic_growth: false, status: "passed" },
+      group_p95_rss_bytes: { active_run: 650 * mib, inactive: 300 * mib, main_idle: 181 * mib },
+      metric_definitions: {
+        footprint_bytes: expect.stringContaining("macOS footprint"),
+        process_rss_bytes: expect.stringContaining("main process only"),
+        ps_rss_bytes: expect.stringContaining("macOS ps")
+      },
+      missing_phases: [],
+      phase_p95_footprint_bytes: { idle: 190 * mib, run: 190 * mib, soak: 190 * mib },
+      phase_p95_main_memory_bytes: {
+        array_buffers: { idle: 5 * mib, run: 5 * mib },
+        external: { idle: 10 * mib, run: 10 * mib },
+        heap_used: { idle: 20 * mib, run: 20 * mib }
+      },
+      soak: { drift_bytes: 40 * mib, duration_ms: 30 * 60_000, status: "passed" },
+      sampling: { fresh: true, samples: samples.length, status: "passed" },
+      status: "passed"
+    });
+    expect(evaluateRunnerMemoryCapacity({ baselineEvidenceId: "", reviewedBy: "", samples })).toMatchObject({ status: "failed" });
+    expect(evaluateRunnerMemoryCapacity({
+      baselineEvidenceId: "xw:evidence:issue_events:765-baseline",
+      reviewedBy: "capacity-review:mem-04",
+      samples: samples.map((item, index) => index === 0 ? { ...item, freshness_status: "stale", sample_age_ms: 6_000 } : item)
+    })).toMatchObject({ sampling: { status: "failed" }, status: "failed" });
+  });
+
   test("generates all capacity dimensions and emits executable P50/P95 budgets", async () => {
     const root = await fixtureRoot();
     const dbPath = join(root, "capacity.db");
