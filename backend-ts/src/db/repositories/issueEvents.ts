@@ -4,6 +4,9 @@ import { dirname, resolve, sep } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { RunnerDatabase } from "../database.ts";
 import type { ProviderEvent } from "../../providers/types.ts";
+import { createContextBundle } from "./contextBundles.ts";
+import { upsertAttentionInboxItemByEvidence } from "./attentionInboxItemUpsert.ts";
+import { createIntakeRun } from "./intakeRuns.ts";
 import { cleanString, issueTimestamp } from "./issueCreate.ts";
 import { getIssue } from "./issues.ts";
 import { ProjectNotFoundError } from "./projects.ts";
@@ -38,6 +41,7 @@ export type ListIssueEventsOptions = {
 };
 
 export const ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES = 64 * 1024;
+export const ISSUE_LOG_ARTIFACT_THRESHOLD_BYTES = 8 * 1024;
 
 const ISSUE_LOG_ARTIFACT_ROOT = "artifacts/issue-logs";
 const ISSUE_LOG_ARTIFACT_SCHEMA = "issue-log-payload-artifact.v1";
@@ -45,6 +49,15 @@ const SUMMARY_TEXT_BYTES = 16 * 1024;
 const SUMMARY_ERROR_BYTES = 16 * 1024;
 const SUMMARY_COMMAND_BYTES = 4 * 1024;
 const SUMMARY_PATH_BYTES = 2 * 1024;
+const ISSUE_LOG_ARTIFACT_ATTENTION_SOURCE = "runner.issue_log_artifact_integrity";
+const EARLY_ARTIFACT_METHODS = new Set([
+  "item/agentMessage/delta",
+  "item/commandExecution/outputDelta",
+  "item/fileChange/outputDelta",
+  "item/started",
+  "item/completed",
+  "turn/diff/updated"
+]);
 
 export type IssueLogArtifactRef = {
   bytes: number;
@@ -140,7 +153,10 @@ function storedIssueLogPayload(
 ): string {
   const body = issueLogPayload(event, correlation);
   const serialized = JSON.stringify(body);
-  if (Buffer.byteLength(serialized) <= ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES) return serialized;
+  const bytes = Buffer.byteLength(serialized);
+  const method = typeof body.raw_method === "string" ? body.raw_method : "";
+  if (bytes <= ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES &&
+      (bytes <= ISSUE_LOG_ARTIFACT_THRESHOLD_BYTES || !EARLY_ARTIFACT_METHODS.has(method))) return serialized;
   const artifact = writeIssueLogArtifact(db, serialized);
   const summary = JSON.stringify(issueLogArtifactSummary(body, artifact));
   if (Buffer.byteLength(summary) > ISSUE_LOG_INLINE_PAYLOAD_LIMIT_BYTES) {
@@ -358,14 +374,22 @@ function mapIssueEventRow(db: RunnerDatabase, row: IssueEventRow, hydrateArtifac
 }
 
 export function hydrateStoredIssueLogPayload(
-  db: Pick<RunnerDatabase, "path">,
+  db: RunnerDatabase,
   storedPayload: string
 ): string {
+  if (!hasIssueLogArtifactMarker(storedPayload)) return storedPayload;
   try {
     return hydrateStoredIssueLogPayloadStrict(db, storedPayload);
-  } catch {
-    // The bounded inline diagnostic remains readable if an artifact is missing or corrupt.
-    return storedPayload;
+  } catch (error) {
+    try {
+      recordIssueLogArtifactAttention(db, storedPayload, error);
+    } catch (attentionError) {
+      throw new AggregateError(
+        [error, attentionError],
+        "issue.log artifact integrity failure; Attention write failed"
+      );
+    }
+    throw error;
   }
 }
 
@@ -417,6 +441,68 @@ function issueLogArtifactRef(payload: string): IssueLogArtifactRef | undefined {
     };
   } catch {
     return undefined;
+  }
+}
+
+function hasIssueLogArtifactMarker(payload: string): boolean {
+  const body = jsonObject(payload);
+  return Boolean(body && Object.prototype.hasOwnProperty.call(body, "issue_log_artifact"));
+}
+
+function recordIssueLogArtifactAttention(db: RunnerDatabase, storedPayload: string, error: unknown): void {
+  const body = jsonObject(storedPayload) ?? {};
+  const candidate = body.issue_log_artifact && typeof body.issue_log_artifact === "object" && !Array.isArray(body.issue_log_artifact)
+    ? body.issue_log_artifact as Record<string, unknown>
+    : {};
+  const rows = db.sqlite.query<{ created_at: string; id: number; issue_id: number }, [string]>(`
+    select id, issue_id, created_at from issue_events where type='issue.log' and payload=? order by id
+  `).all(storedPayload);
+  for (const row of rows) {
+    const evidenceRef = `issue_event:${row.id}:issue_log_artifact`;
+    const existing = db.sqlite.query<{ id: number }, [string, string]>(`
+      select id from attention_inbox_items where source=? and evidence_refs_json=? limit 1
+    `).get(ISSUE_LOG_ARTIFACT_ATTENTION_SOURCE, JSON.stringify([evidenceRef]));
+    if (existing) continue;
+    db.transaction(() => {
+      const bundle = createContextBundle(db, {
+        created_by: "system",
+        event_refs: [row.id],
+        evidence_refs: [evidenceRef],
+        reason: "issue_log_artifact_integrity_failed",
+        source: ISSUE_LOG_ARTIFACT_ATTENTION_SOURCE,
+        source_query: { issue_event_id: row.id, issue_id: row.issue_id },
+        trigger: "continuous",
+        window: { from: row.created_at, to: row.created_at }
+      });
+      const intake = createIntakeRun(db, {
+        bundle_id: bundle.id,
+        input_summary: { issue_event_id: row.id, issue_id: row.issue_id },
+        schema_output: { route: "attention" },
+        skill_id: "issue-log-artifact-integrity",
+        status: "succeeded"
+      });
+      upsertAttentionInboxItemByEvidence(db, {
+        bundle_id: bundle.id,
+        confidence: 1,
+        evidence_refs: [evidenceRef],
+        intake_run_id: intake.id,
+        primary_intent: "artifact_integrity_failure",
+        schema_item: {
+          error: error instanceof Error ? error.message : String(error),
+          issue_event_id: row.id,
+          issue_id: row.issue_id,
+          ref: typeof candidate.ref === "string" ? candidate.ref : "invalid",
+          sha256: typeof candidate.sha256 === "string" ? candidate.sha256 : "invalid",
+          type: "issue_log_artifact_integrity_failure"
+        },
+        source: ISSUE_LOG_ARTIFACT_ATTENTION_SOURCE,
+        suggested_actions: ["restore_artifact_from_verified_backup", "verify_sha256_before_retry"],
+        summary: `Issue event ${row.id} artifact is missing, malformed, or corrupt; legacy hydration stopped fail closed.`,
+        target_hints: [{ issue_id: row.issue_id, issue_event_id: row.id }],
+        title: `Issue log artifact integrity failure #${row.id}`,
+        urgency: "high"
+      });
+    }).immediate();
   }
 }
 

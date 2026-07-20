@@ -1,5 +1,6 @@
 import { getAgentSession, upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
+  hydrateStoredIssueLogPayload,
   recordIssueLogEvent,
   RUNTIME_EVIDENCE_CORRELATION_CONTRACT,
   type RuntimeEvidenceCorrelation
@@ -173,10 +174,14 @@ function persistRuntimeEvent(
     projectID: input.projectId
   });
   if (event.raw?.method !== "item/completed") return;
+  const evidenceEvent = {
+    ...persisted,
+    payload: hydrateStoredIssueLogPayload(input.database, persisted.payload)
+  };
   return captureRuntimeEvidenceFromIssueLog(
     input.database,
     input.issueId,
-    persisted,
+    evidenceEvent,
     activeRunID
   ).then(() => undefined).catch((error) => {
     input.onLog?.({

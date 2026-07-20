@@ -138,6 +138,7 @@
 - [ADR-XW-0081：Issues/Sessions 用户路由退役与 compat v1](xuanwu/0081-issues-sessions-route-retirement.md)
 - [ADR-XW-0082：用户可见命名迁移与内部兼容清单](xuanwu/0082-user-facing-naming-migration.md)
 - [ADR-XW-0083：legacy/compat 引用审计与通知单写路径收敛](xuanwu/0083-legacy-compat-notification-cleanup.md)
+- [ADR-XW-0084：Issue event 写预算与有界 artifact](xuanwu/0084-issue-event-write-budgets.md)
 
 ## 3. 历史归档与 superseded 映射
 

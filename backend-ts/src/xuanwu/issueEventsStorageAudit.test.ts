@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  auditIssueEventRuns,
   auditIssueEventsStorage,
   classifyRetentionValue,
   compareIssueEventsStorage
@@ -107,6 +108,46 @@ describe("issue_events storage audit", () => {
       "风险报告"
     ]) expect(adr).toContain(marker);
   });
+
+  test("profiles rows, bytes, duplicates, terminal status and consumers per Run", () => {
+    const directory = mkdtempSync(join(tmpdir(), "issue-events-run-audit-"));
+    const path = join(directory, "snapshot.db");
+    const duplicate = JSON.stringify({ provider: "codex", raw_method: "turn/diff/updated", payload: "same" });
+    try {
+      createFixture(path, [
+        [1, "issue.log", duplicate, "2026-01-01T00:00:01Z"],
+        [1, "issue.log", duplicate, "2026-01-01T00:00:02Z"],
+        [1, "issue.log", JSON.stringify({ provider: "codex", raw_method: "turn/completed", status: "completed" }), "2026-01-01T00:00:03Z"],
+        [1, "issue.log", JSON.stringify({ provider: "codex", raw_method: "error", error: "failed" }), "2026-01-02T00:00:01Z"]
+      ]);
+      const sqlite = new Database(path, { strict: true });
+      sqlite.run("insert into issue_runs (id, issue_id, attempt, status, started_at) values (?, ?, ?, ?, ?)", [
+        "run-success", 1, 1, "done", "2026-01-01T00:00:00Z"
+      ]);
+      sqlite.run("insert into issue_runs (id, issue_id, attempt, status, started_at) values (?, ?, ?, ?, ?)", [
+        "run-failed", 1, 2, "failed", "2026-01-02T00:00:00Z"
+      ]);
+      sqlite.close();
+
+      const audit = auditIssueEventRuns(path);
+
+      expect(audit.source_of_truth).toBe("issue_runs+issue_events");
+      expect(audit.rows).toContainEqual(expect.objectContaining({
+        duplicate_rows: 1,
+        duplicate_share: 0.5,
+        raw_method: "turn/diff/updated",
+        row_count: 2,
+        run_id: "run-success",
+        terminal_status: "done",
+        unique_payloads: 1
+      }));
+      expect(audit.rows).toContainEqual(expect.objectContaining({ raw_method: "error", run_id: "run-failed", terminal_status: "failed" }));
+      expect(audit.retention_matrix.find((row) => row.selector.includes("approval/error"))).toMatchObject({ protected: true });
+      expect(audit.retention_matrix.find((row) => row.selector.startsWith("delta"))).toMatchObject({ protected: false });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 type EventFixture = [issueID: number, type: string, payload: string, createdAt: string];
@@ -119,6 +160,10 @@ function createFixture(path: string, events: EventFixture[]): void {
     sqlite.run(`create table issue_events (
       id integer primary key autoincrement, issue_id integer not null, type text not null,
       payload text not null default '', created_at text not null
+    )`);
+    sqlite.run(`create table issue_runs (
+      id text primary key, issue_id integer not null, attempt integer not null,
+      status text not null, started_at text not null
     )`);
     sqlite.run("create index idx_issue_events_issue_type on issue_events(issue_id, type)");
     sqlite.run("insert into projects (id) values ('alpha'), ('beta')");

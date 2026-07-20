@@ -1,5 +1,7 @@
 # XW P01.04：`issue.log` 生产端收敛与超大 payload
 
+> 历史实现记录：本页保留原路径供旧 issue/commit 审计；其中无界长期采样、lifecycle 完整 envelope 与 artifact 缺失时 fail-soft 的描述，已由 [ADR-XW-0084](0084-issue-event-write-budgets.md) supersede，不再是当前规范。
+
 状态：accepted（2026-07-16）
 
 依赖：XW P01.01（issue 637，`done`）、XW P01.02（issue 638，`done`）

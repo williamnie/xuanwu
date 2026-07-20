@@ -161,7 +161,7 @@ class VerificationCodexFixtureProvider implements ExecutorProvider {
         params: {
           completedAtMs,
           item: {
-            aggregatedOutput: "1 pass",
+            aggregatedOutput: "1 pass\n".repeat(2_000),
             command: "bun test src/runner/providerRuntime.test.ts",
             commandActions: [{ type: "unknown", command: "bun test src/runner/providerRuntime.test.ts" }],
             cwd: "/tmp/project",
@@ -362,7 +362,14 @@ describe("executor provider runtime seam", () => {
       });
 
       const records = listStoredEvidence(db, { issue_ids: [issueId], limit: 10 }).items;
+      const completed = db.sqlite.query<{ payload: string }, [number]>(`
+        select payload from issue_events where issue_id=? and type='issue.log'
+          and json_extract(payload, '$.raw_method')='item/completed' limit 1
+      `).get(issueId);
       expect(records).toHaveLength(1);
+      expect(JSON.parse(completed?.payload ?? "{}")).toMatchObject({
+        issue_log_artifact: { schema_version: "issue-log-payload-artifact.v1" }
+      });
       expect(records[0]?.evidence).toMatchObject({
         decisive_output: { facts: { correlation_channel: "terminal_interaction", terminal_interaction_count: 1 } },
         kind: "test",

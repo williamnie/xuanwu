@@ -81,6 +81,32 @@ export type IssueEventsStorageGrowth = {
   database_file_bytes_per_day: number;
 };
 
+export type IssueEventRunStorageRow = {
+  duplicate_rows: number;
+  duplicate_share: number;
+  event_type: string;
+  payload_bytes: number;
+  raw_method: string;
+  row_count: number;
+  run_id: string;
+  terminal_status: string;
+  unique_payloads: number;
+};
+
+export type IssueEventRetentionMatrixRow = {
+  consumers: string[];
+  protected: boolean;
+  selector: string;
+  storage_policy: string;
+};
+
+export type IssueEventRunStorageAudit = {
+  retention_matrix: IssueEventRetentionMatrixRow[];
+  rows: IssueEventRunStorageRow[];
+  schema_version: "issue-event-run-storage-audit.v1";
+  source_of_truth: "issue_runs+issue_events";
+};
+
 type AuditOptions = { duplicateLimit?: number; issueLimit?: number };
 type CountBytesRow = { count: number; payload_bytes: number };
 type SummaryRow = CountBytesRow & { first_event_at: string; last_event_at: string };
@@ -203,6 +229,106 @@ export function compareIssueEventsStorage(
   };
 }
 
+export function auditIssueEventRuns(path: string, limit = 500): IssueEventRunStorageAudit {
+  const bounded = boundedRunLimit(limit);
+  const sqlite = new Database(path, { readonly: true, strict: true });
+  sqlite.run("pragma query_only=on");
+  try {
+    assertRunAuditSchema(sqlite);
+    const rows = sqlite.query<{
+      duplicate_rows: number;
+      event_type: string;
+      payload_bytes: number;
+      raw_method: string;
+      row_count: number;
+      run_id: string;
+      terminal_status: string;
+      unique_payloads: number;
+    }, [number]>(`
+      with run_bounds as (
+        select id, issue_id, status, started_at,
+          lead(started_at) over (partition by issue_id order by started_at, attempt, id) as next_started_at
+        from issue_runs
+      ), grouped as (
+        select r.id as run_id, r.status as terminal_status, e.type as event_type,
+          case when json_valid(e.payload)
+            then coalesce(nullif(json_extract(e.payload, '$.raw_method'), ''), 'unknown')
+            else 'invalid-json' end as raw_method,
+          count(*) as row_count,
+          sum(length(cast(e.payload as blob))) as payload_bytes,
+          count(distinct e.type || char(0) || e.payload) as unique_payloads
+        from run_bounds r join issue_events e on e.issue_id=r.issue_id
+          and e.created_at>=r.started_at
+          and (r.next_started_at is null or e.created_at<r.next_started_at)
+        group by r.id, r.status, e.type, raw_method
+      )
+      select run_id, terminal_status, event_type, raw_method, row_count, payload_bytes,
+        unique_payloads, row_count-unique_payloads as duplicate_rows
+      from grouped order by payload_bytes desc, row_count desc, run_id, event_type, raw_method
+      limit ?
+    `).all(bounded).map((row) => ({
+      duplicate_rows: Number(row.duplicate_rows),
+      duplicate_share: ratio(Number(row.duplicate_rows), Number(row.row_count)),
+      event_type: row.event_type,
+      payload_bytes: Number(row.payload_bytes),
+      raw_method: row.raw_method,
+      row_count: Number(row.row_count),
+      run_id: row.run_id,
+      terminal_status: row.terminal_status,
+      unique_payloads: Number(row.unique_payloads)
+    }));
+    return {
+      retention_matrix: issueEventRetentionMatrix(),
+      rows,
+      schema_version: "issue-event-run-storage-audit.v1",
+      source_of_truth: "issue_runs+issue_events"
+    };
+  } finally {
+    sqlite.close();
+  }
+}
+
+export function issueEventRetentionMatrix(): IssueEventRetentionMatrixRow[] {
+  return [
+    {
+      consumers: ["Issue/Run UI", "sessionObserver", "eventSummaryProjection"],
+      protected: false,
+      selector: "delta: message/command/file",
+      storage_policy: "bounded concatenated chunks; explicit overflow marker; terminal item carries final state"
+    },
+    {
+      consumers: ["Run diff/log UI", "eventSummaryProjection", "runtimeObservability"],
+      protected: false,
+      selector: "cumulative: diff/plan/progress/tokenUsage",
+      storage_policy: "first + interval samples + final sample; fixed rows per method"
+    },
+    {
+      consumers: ["meaningfulProgress", "sessionObserver", "Run timeline"],
+      protected: false,
+      selector: "item/started and non-decisive item/completed",
+      storage_policy: "necessary snapshot; omit repeated raw envelope; 256 rows per method/item type then marker"
+    },
+    {
+      consumers: ["completionGate Evidence", "Issue/Run UI", "sessionObserver"],
+      protected: true,
+      selector: "item/completed command/file/agentMessage",
+      storage_policy: "preserve final content; artifact when large; 1024 rows per method then fail closed"
+    },
+    {
+      consumers: ["providerApprovalRequests", "providerTerminalSignals", "providerErrorParser", "Guardian"],
+      protected: true,
+      selector: "approval/error/turn terminal",
+      storage_policy: "never sample/coalesce; approval overflow fails closed; terminal/error always preserved"
+    },
+    {
+      consumers: ["Evidence API", "Handoff", "verification gate"],
+      protected: true,
+      selector: "issue Evidence/status/audit events",
+      storage_policy: "unchanged append-only authority"
+    }
+  ];
+}
+
 export function classifyRetentionValue(eventType: string, rawMethod: string): RetentionValue {
   if (eventType !== "issue.log") return "R3_AUDIT";
   return classifyIssueLogRetentionTier(rawMethod);
@@ -214,6 +340,15 @@ function assertAuditSchema(sqlite: Database): void {
   `).all().map((row) => row.name));
   if (!tables.has("issues") || !tables.has("issue_events")) {
     throw new Error("database must contain issues and issue_events tables");
+  }
+}
+
+function assertRunAuditSchema(sqlite: Database): void {
+  const tables = new Set(sqlite.query<{ name: string }, []>(`
+    select name from sqlite_master where type='table' and name in ('issue_runs', 'issue_events')
+  `).all().map((row) => row.name));
+  if (!tables.has("issue_runs") || !tables.has("issue_events")) {
+    throw new Error("database must contain issue_runs and issue_events tables");
   }
 }
 
@@ -353,6 +488,13 @@ function scalar(sqlite: Database, sql: string): number {
 function boundedLimit(value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   if (!Number.isSafeInteger(value) || value <= 0 || value > 100) throw new Error("audit limit must be an integer from 1 to 100");
+  return value;
+}
+
+function boundedRunLimit(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 10_000) {
+    throw new Error("run audit limit must be an integer from 1 to 10000");
+  }
   return value;
 }
 
