@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { dirname, join } from "node:path";
 import { listIssues, type Issue } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import { readCodexUsage } from "../usage/codex.ts";
@@ -27,6 +28,8 @@ async function safeUsageReport(context: UsageApiContext, request: Request): Prom
 
 async function usageReport(context: UsageApiContext, request: Request): Promise<Record<string, unknown>> {
   return await readCodexUsage({
+    backgroundRefresh: true,
+    indexPath: join(dirname(context.database.path), "codex-usage-index-v1.sqlite"),
     options: {
       issues: issueRefs(listIssues(context.database)),
       limit: usageLimit(request),

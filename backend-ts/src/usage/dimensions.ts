@@ -1,6 +1,6 @@
 import { normalize } from "node:path";
 import { addUsage, clean, numeric, zeroUsage } from "./helpers.ts";
-import { UNKNOWN_USAGE_KEY, type TokenUsage, type UsageIssueRef, type UsageOptions, type UsageProjectRef, type UsageRecord } from "./types.ts";
+import { UNKNOWN_USAGE_KEY, type TokenUsage, type UsageIssueRef, type UsageMeta, type UsageOptions, type UsageProjectRef } from "./types.ts";
 
 export function newDimensionState(options: UsageOptions) {
   return {
@@ -11,14 +11,14 @@ export function newDimensionState(options: UsageOptions) {
   };
 }
 
-export function addDimensionUsage(dim: ReturnType<typeof newDimensionState>, record: UsageRecord, usage: TokenUsage): void {
+export function addDimensionUsage(dim: ReturnType<typeof newDimensionState>, meta: UsageMeta, usage: TokenUsage): void {
   if (usage.total_tokens === 0) return;
-  const projectRef = dim.projectsByCwd.get(normalizeCWD(record.meta.cwd));
+  const projectRef = dim.projectsByCwd.get(normalizeCWD(meta.cwd));
   const project = ensureProject(dim, projectRef);
   addUsage(project.usage as TokenUsage, usage);
-  const session = ensureSession(dim, project.id as string, record.meta.id);
+  const session = ensureSession(dim, project.id as string, meta.id);
   addUsage(session.usage as TokenUsage, usage);
-  addIssueUsage(dim, project, session, record.meta.id, usage);
+  addIssueUsage(dim, project, session, meta.id, usage);
 }
 
 export function finishDimensions(dim: ReturnType<typeof newDimensionState>, totalTokens: number): Array<Record<string, unknown>> {

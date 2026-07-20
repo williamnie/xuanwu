@@ -25,6 +25,12 @@ export type UsageOptions = {
 
 export type UsageMeta = { cwd: string; id: string };
 export type UsageRecord = { event: TokenEvent; meta: UsageMeta };
+export type UsageBucket = {
+  events: number;
+  meta: UsageMeta;
+  timestamp: string;
+  usage: TokenUsage;
+};
 export type TokenEvent = {
   payload?: { info?: TokenInfo | null; rate_limits?: RateLimits | null; type?: string };
   timestamp?: string;

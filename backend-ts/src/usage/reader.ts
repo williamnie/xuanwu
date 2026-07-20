@@ -1,108 +1,140 @@
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { readdir } from "node:fs/promises";
-import { extname, join } from "node:path";
-import { createInterface } from "node:readline";
-import { clean, parseJSON } from "./helpers.ts";
-import type { TokenEvent, UsageMeta, UsageRecord } from "./types.ts";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import {
+  queryUsageIndex,
+  refreshUsageIndexInWorker,
+  usageIndexIsValid,
+  type UsageIndexMetrics
+} from "./usageIndex.ts";
+import type { UsageBucket, UsageRecord } from "./types.ts";
 
-type FileSnapshot = { lastMeta: UsageMeta; mtimeMs: number; records: UsageRecord[]; size: number };
-type UsageSnapshot = {
-  cache: { files_incremental: number; files_reused: number; files_scanned: number; files_total: number };
-  records: UsageRecord[];
+export type UsageSnapshot = {
+  buckets: UsageBucket[];
+  cache: UsageIndexMetrics;
+  freshness: {
+    corrupt_lines: number;
+    indexed_at: string;
+    index_path: string;
+    index_version: number;
+    last_error?: string;
+    state: "fresh" | "refreshing" | "stale";
+  };
+  latestLimits?: UsageRecord;
+  latestUsage?: UsageRecord;
+  recent: UsageRecord[];
 };
 
-const snapshotCache = new Map<string, Map<string, FileSnapshot>>();
+export type UsageReaderOptions = {
+  backgroundRefresh?: boolean;
+  indexPath?: string;
+};
 
-export async function readUsageRecords(root: string): Promise<UsageRecord[]> {
-  return (await readUsageSnapshot(root)).records;
-}
+type ReaderState = {
+  cache: Map<number, UsageSnapshot>;
+  lastError?: string;
+  refresh?: Promise<void>;
+  root: string;
+  validated: boolean;
+};
 
-export async function readUsageSnapshot(root: string): Promise<UsageSnapshot> {
-  const files = await jsonlFiles(root);
-  const previous = snapshotCache.get(root) ?? new Map<string, FileSnapshot>();
-  const next = new Map<string, FileSnapshot>();
-  const records: UsageRecord[] = [];
-  const cache = { files_incremental: 0, files_reused: 0, files_scanned: 0, files_total: files.length };
-  for (const path of files) {
-    const snapshot = await readFileSnapshot(path, previous.get(path), cache);
-    next.set(path, snapshot);
-    records.push(...snapshot.records);
+const states = new Map<string, ReaderState>();
+
+export async function readUsageSnapshot(
+  root: string,
+  recentLimit = 0,
+  options: UsageReaderOptions = {}
+): Promise<UsageSnapshot> {
+  const indexPath = options.indexPath ?? defaultUsageIndexPath(root);
+  const state = stateFor(indexPath, root);
+  const hasSnapshot = await ensureValidSnapshot(root, indexPath, state);
+
+  if (!hasSnapshot || !options.backgroundRefresh) {
+    await runRefresh(root, indexPath, state);
+  } else {
+    startBackgroundRefresh(root, indexPath, state);
   }
-  snapshotCache.set(root, next);
-  return { cache, records };
-}
 
-async function jsonlFiles(root: string): Promise<string[]> {
-  const files: string[] = [];
-  await collectJsonlFiles(root, files);
-  return files.sort();
-}
-
-async function collectJsonlFiles(dir: string, files: string[]): Promise<void> {
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) await collectJsonlFiles(path, files);
-    else if (entry.isFile() && extname(entry.name) === ".jsonl") files.push(path);
+  try {
+    const cached = recentLimit === 0 ? state.cache.get(recentLimit) : undefined;
+    if (cached) return withCurrentFreshness(cached, state);
+    const snapshot = queryUsageIndex(indexPath, root, recentLimit, {
+      lastError: state.lastError,
+      refreshing: Boolean(state.refresh)
+    });
+    if (recentLimit === 0) state.cache.set(recentLimit, snapshot);
+    return snapshot;
+  } catch {
+    state.validated = false;
+    state.cache.clear();
+    await runRefresh(root, indexPath, state, true);
+    return queryUsageIndex(indexPath, root, recentLimit, {
+      lastError: state.lastError,
+      refreshing: Boolean(state.refresh)
+    });
   }
 }
 
-async function scanUsageFile(path: string, records: UsageRecord[]): Promise<UsageMeta> {
-  const meta = { cwd: "", id: "" };
-  const reader = createInterface({ crlfDelay: Infinity, input: createReadStream(path, { encoding: "utf8" }) });
-  for await (const line of reader) handleUsageLine(line, meta, records);
-  return meta;
+export function defaultUsageIndexPath(root: string): string {
+  return join(root, ".codex-usage-index-v1.sqlite");
 }
 
-async function readFileSnapshot(
-  path: string,
-  previous: FileSnapshot | undefined,
-  cache: UsageSnapshot["cache"]
-): Promise<FileSnapshot> {
-  const current = await stat(path);
-  if (previous && previous.size === current.size && previous.mtimeMs === current.mtimeMs) {
-    cache.files_reused += 1;
-    return previous;
+export async function rebuildUsageIndex(root: string, indexPath = defaultUsageIndexPath(root)): Promise<UsageIndexMetrics> {
+  const state = stateFor(indexPath, root);
+  await runRefresh(root, indexPath, state, true);
+  return queryUsageIndex(indexPath, root, 0, { refreshing: false }).cache;
+}
+
+export function resetUsageReaderState(): void {
+  states.clear();
+}
+
+async function ensureValidSnapshot(root: string, indexPath: string, state: ReaderState): Promise<boolean> {
+  if (state.validated) return true;
+  if (!existsSync(indexPath)) return false;
+  const valid = usageIndexIsValid(indexPath, root);
+  state.validated = valid;
+  return valid;
+}
+
+async function runRefresh(root: string, indexPath: string, state: ReaderState, forceRebuild = false): Promise<void> {
+  if (state.refresh) return await state.refresh;
+  state.refresh = refreshUsageIndexInWorker(root, indexPath, { forceRebuild })
+    .then(() => {
+      state.cache.clear();
+      state.lastError = undefined;
+      state.validated = true;
+    })
+    .catch((error) => {
+      state.lastError = error instanceof Error ? error.message : String(error);
+      throw error;
+    })
+    .finally(() => {
+      state.refresh = undefined;
+    });
+  return await state.refresh;
+}
+
+function startBackgroundRefresh(root: string, indexPath: string, state: ReaderState): void {
+  if (state.refresh) return;
+  void runRefresh(root, indexPath, state).catch(() => undefined);
+}
+
+function stateFor(indexPath: string, root: string): ReaderState {
+  let state = states.get(indexPath);
+  if (!state || state.root !== root) {
+    state = { cache: new Map(), root, validated: false };
+    states.set(indexPath, state);
   }
-  if (previous && current.size > previous.size) return await appendFileSnapshot(path, previous, current.size, current.mtimeMs, cache);
-  const records: UsageRecord[] = [];
-  const lastMeta = await scanUsageFile(path, records);
-  cache.files_scanned += 1;
-  return { lastMeta, mtimeMs: current.mtimeMs, records, size: current.size };
+  return state;
 }
 
-async function appendFileSnapshot(
-  path: string,
-  previous: FileSnapshot,
-  size: number,
-  mtimeMs: number,
-  cache: UsageSnapshot["cache"]
-): Promise<FileSnapshot> {
-  const records = previous.records.slice();
-  const meta = { ...previous.lastMeta };
-  const reader = createInterface({
-    crlfDelay: Infinity,
-    input: createReadStream(path, { encoding: "utf8", start: previous.size })
-  });
-  for await (const line of reader) handleUsageLine(line, meta, records);
-  cache.files_incremental += 1;
-  return { lastMeta: meta, mtimeMs, records, size };
-}
-
-function handleUsageLine(line: string, meta: UsageMeta, records: UsageRecord[]): void {
-  if (line.includes("session_meta")) {
-    updateSessionMeta(line, meta);
-    return;
-  }
-  if (!line.includes("token_count")) return;
-  const event = parseJSON(line) as TokenEvent | null;
-  if (event?.type !== "event_msg" || event.payload?.type !== "token_count") return;
-  records.push({ event, meta: { ...meta } });
-}
-
-function updateSessionMeta(line: string, meta: UsageMeta): void {
-  const session = parseJSON(line) as { payload?: { cwd?: string; id?: string }; type?: string } | null;
-  if (session?.type !== "session_meta") return;
-  meta.cwd = clean(session.payload?.cwd);
-  meta.id = clean(session.payload?.id);
+function withCurrentFreshness(snapshot: UsageSnapshot, state: ReaderState): UsageSnapshot {
+  return {
+    ...snapshot,
+    freshness: {
+      ...snapshot.freshness,
+      ...(state.lastError ? { last_error: state.lastError } : {}),
+      state: state.refresh ? "refreshing" : state.lastError ? "stale" : "fresh"
+    }
+  };
 }

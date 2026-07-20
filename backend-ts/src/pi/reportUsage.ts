@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { dirname, join } from "node:path";
 import { listIssues } from "../db/repositories/issues.ts";
 import { listProjects } from "../db/repositories/projects.ts";
 import { readCodexUsage } from "../usage/codex.ts";
@@ -13,7 +14,12 @@ export async function buildUsageCostSummary(input: UsageCostInput): Promise<Reco
   try {
     const root = clean(input.codexSessionsDir);
     if (root === "") throw new Error("codex sessions dir 未配置");
-    const report = await readCodexUsage({ root, options: usageOptions(input.database) });
+    const report = await readCodexUsage({
+      backgroundRefresh: true,
+      indexPath: join(dirname(input.database.path), "codex-usage-index-v1.sqlite"),
+      root,
+      options: usageOptions(input.database)
+    });
     const project = projectUsage(report, input.projectID);
     return {
       events_scanned: numberValue(report.events_scanned),
