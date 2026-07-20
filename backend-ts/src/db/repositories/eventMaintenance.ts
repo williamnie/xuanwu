@@ -5,6 +5,7 @@ export type MaintenanceEventRow = {
   event_type: string;
   id: number;
   issue_id: number;
+  issue_status: string;
   payload: string;
   project_id: string;
   raw_method: string;
@@ -38,7 +39,7 @@ export function listMaintenanceEvents(
   if (input.before) args.push(input.before);
   args.push(input.limit);
   return sqlite.query<EventRow, Array<number | string>>(`
-    select e.id, e.issue_id, i.project_id, e.type as event_type, e.payload, e.created_at,
+    select e.id, e.issue_id, i.project_id, i.status as issue_status, e.type as event_type, e.payload, e.created_at,
       case when json_valid(e.payload) then coalesce(json_extract(e.payload, '$.raw_method'), '') else '' end as raw_method,
       coalesce(r.id, '') as run_id, coalesce(r.status, '') as run_status
     from issue_events e
@@ -87,7 +88,7 @@ export function currentIssueEventRows(sqlite: SQLiteDatabase, ids: number[]): Ma
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(", ");
   return sqlite.query<EventRow, number[]>(`
-    select e.id, e.issue_id, i.project_id, e.type as event_type, e.payload, e.created_at,
+    select e.id, e.issue_id, i.project_id, i.status as issue_status, e.type as event_type, e.payload, e.created_at,
       case when json_valid(e.payload) then coalesce(json_extract(e.payload, '$.raw_method'), '') else '' end as raw_method,
       coalesce(r.id, '') as run_id, coalesce(r.status, '') as run_status
     from issue_events e
@@ -121,6 +122,9 @@ export function deleteIssueEventBatch(sqlite: SQLiteDatabase, ids: number[]): nu
     const existing = sqlite.query<{ count: number }, number[]>(
       `select count(*) as count from issue_events where id in (${placeholders})`
     ).get(...eventIDs)?.count ?? 0;
+    if (hasTable(sqlite, "event_summary_projection")) {
+      sqlite.run(`delete from event_summary_projection where source='issue_events' and source_event_id in (${placeholders})`, eventIDs);
+    }
     const result = sqlite.run(`delete from issue_events where id in (${placeholders})`, eventIDs);
     const changes = Number(result.changes);
     if (changes !== existing) throw new Error(`delete batch expected ${existing} existing rows, changed ${changes}`);
@@ -214,6 +218,7 @@ function mapEventRow(row: EventRow): MaintenanceEventRow {
   return {
     id: integer(row.id),
     issue_id: integer(row.issue_id),
+    issue_status: text(row.issue_status),
     project_id: text(row.project_id),
     event_type: text(row.event_type),
     payload: text(row.payload),

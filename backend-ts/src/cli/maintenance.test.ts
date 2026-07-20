@@ -20,11 +20,11 @@ describe("maintenance CLI", () => {
     const sqlite = new Database(dbPath, { create: true });
     sqlite.run(`
       create table projects (id text primary key);
-      create table issues (id integer primary key, project_id text not null);
+      create table issues (id integer primary key, project_id text not null, status text not null);
       create table issue_runs (id text primary key, issue_id integer, attempt integer, status text, started_at text, ended_at text);
       create table issue_events (id integer primary key, issue_id integer, type text, payload text, created_at text);
       insert into projects values ('demo');
-      insert into issues values (1, 'demo');
+      insert into issues values (1, 'demo', 'done');
       insert into issue_events values (1, 1, 'issue.status_changed', '{}', '2025-01-01T00:00:00Z');
     `);
     sqlite.close();

@@ -5,22 +5,14 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  EVENT_DELETE_EVIDENCE_SCHEMA_VERSION,
   archiveEventMaintenance,
   checkpointEventDatabase,
   deleteArchivedEvents,
+  prepareEventDeleteEvidence,
   restoreArchivedEvents,
-  vacuumEventDatabase,
-  type EventArchiveManifest,
-  type EventDeleteEvidence
+  verifyEventArchive,
+  vacuumEventDatabase
 } from "./maintenanceService.ts";
-import {
-  DEFAULT_EVENT_RETENTION_CONFIG,
-  EVENT_RETENTION_POLICY_VERSION,
-  SUMMARY_WATERMARK_SCHEMA_VERSION,
-  type EventRetentionConfig,
-  type EventRetentionPolicyID
-} from "./retentionPolicy.ts";
 
 const roots: string[] = [];
 const NOW = "2026-07-16T00:00:00Z";
@@ -68,17 +60,26 @@ describe("event maintenance service", () => {
     expect(Number((archiveReport.archive as Record<string, unknown>).compressed_bytes)).toBeGreaterThan(0);
     expect(Number((archiveReport.archive as Record<string, unknown>).compressed_bytes)).toBeLessThan(600_000);
     expect(readEventRows(dbPath)).toEqual(expectedRows);
+    expect(statSync(join(archiveDir, "manifest.json")).mode & 0o777).toBe(0o400);
+    expect(verifyEventArchive({ archiveDir, sampleSize: 2 })).toMatchObject({
+      operation: "verify_archive", verified: true, rows: 3, samples: [{ id: 1 }, { id: 3 }]
+    });
 
-    const manifest = JSON.parse(readFileSync(join(archiveDir, "manifest.json"), "utf8")) as EventArchiveManifest;
     const evidencePath = join(root, "delete-evidence.json");
-    writeFileSync(evidencePath, JSON.stringify(deleteEvidence(manifest)));
+    expect(prepareEventDeleteEvidence({
+      actor: { ...ACTOR, actorKind: "user" },
+      archiveDir,
+      backupDbPath: sourcePath,
+      correlationID: "maintenance-test-1",
+      dbPath,
+      outputPath: evidencePath
+    })).toMatchObject({ operation: "prepare_delete_evidence", scopes: 3 });
     const deleteCheckpoint = join(root, "delete-checkpoint.json");
     const deleteDryRun = deleteArchivedEvents({
       archiveDir,
       checkpointPath: deleteCheckpoint,
       dbPath,
       evidencePath,
-      now: NOW,
       reportPath: join(root, "delete-dry-run.json")
     });
     expect(deleteDryRun).toMatchObject({ dry_run: true, eligible_rows: 2, deleted_rows: 0 });
@@ -96,7 +97,6 @@ describe("event maintenance service", () => {
       dbPath,
       evidencePath,
       maxBatches: 1,
-      now: NOW,
       reportPath: join(root, "delete-paused.json")
     });
     expect(pausedDelete).toMatchObject({ dry_run: false, paused: true, deleted_rows: 1 });
@@ -111,13 +111,13 @@ describe("event maintenance service", () => {
       confirmNoActiveWriters: true,
       dbPath,
       evidencePath,
-      now: NOW,
       reportPath: join(root, "delete.json"),
       resume: true
     });
     expect(deleteReport).toMatchObject({ dry_run: false, eligible_rows: 2, deleted_rows: 2 });
     expect(readEventRows(dbPath).map((row) => row.id)).toEqual([1, 4]);
     expect(readEventRows(dbPath).find((row) => row.id === 1)?.type).toBe("issue.status_changed");
+    expect(projectionIDs(dbPath)).toEqual([1, 4]);
 
     const checkpointDryRun = checkpointEventDatabase({
       actor: ACTOR,
@@ -228,7 +228,7 @@ function createFixture(path: string): void {
   try {
     sqlite.run(`
       create table projects (id text primary key);
-      create table issues (id integer primary key, project_id text not null);
+      create table issues (id integer primary key, project_id text not null, status text not null);
       create table issue_runs (
         id text primary key, issue_id integer not null, attempt integer not null,
         status text not null, started_at text not null, ended_at text not null
@@ -245,9 +245,14 @@ function createFixture(path: string): void {
         payload_json text not null default '{}', result_json text not null default '{}', error text not null default '',
         delegation_id text not null default '', heartbeat_id text not null default '', created_at text not null
       );
+      create table event_summary_projection (
+        source text not null, source_event_id integer not null, primary key(source, source_event_id)
+      );
+      create table event_summary_projection_switch (projection_id text primary key, read_version text not null);
+      create table event_projection_watermarks (projection_id text primary key, last_event_id integer not null);
     `);
     sqlite.run("insert into projects (id) values ('demo')");
-    sqlite.run("insert into issues (id, project_id) values (1, 'demo')");
+    sqlite.run("insert into issues (id, project_id, status) values (1, 'demo', 'done')");
     sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
       values ('issue-1-attempt-1', 1, 1, 'done', '2024-01-01T00:00:00Z', '2025-02-01T00:00:00Z')`);
     const insert = sqlite.query("insert into issue_events (issue_id, type, payload, created_at) values (1, ?, ?, ?)");
@@ -255,6 +260,20 @@ function createFixture(path: string): void {
     insert.run("issue.log", payload("item/agentMessage/delta", "a"), "2025-01-02T00:00:00Z");
     insert.run("issue.log", payload("item/completed", "b"), "2025-01-03T00:00:00Z");
     insert.run("issue.future_unknown", "{}", "2025-01-04T00:00:00Z");
+    sqlite.run("insert into event_summary_projection values ('issue_events', 1), ('issue_events', 2), ('issue_events', 3), ('issue_events', 4)");
+    sqlite.run("insert into event_summary_projection_switch values ('issue_events_summary', 'v2')");
+    sqlite.run("insert into event_projection_watermarks values ('issue_events_summary_v2', 4)");
+  } finally {
+    sqlite.close();
+  }
+}
+
+function projectionIDs(path: string): number[] {
+  const sqlite = new Database(path, { readonly: true, strict: true });
+  try {
+    return sqlite.query<{ source_event_id: number }, []>(
+      "select source_event_id from event_summary_projection order by source_event_id"
+    ).all().map((row) => row.source_event_id);
   } finally {
     sqlite.close();
   }
@@ -273,63 +292,6 @@ function readEventRows(path: string): Array<{ created_at: string; id: number; is
   } finally {
     sqlite.close();
   }
-}
-
-function deleteEvidence(manifest: EventArchiveManifest): EventDeleteEvidence {
-  const config = structuredClone(DEFAULT_EVENT_RETENTION_CONFIG) as unknown as EventRetentionConfig;
-  config.execution_mode = "delete_enabled";
-  config.execution_authorization = {
-    actor_id: ACTOR.actor,
-    actor_kind: "user",
-    audit_event_ref: ACTOR.auditRef,
-    authorized_at: NOW,
-    observation_window_ref: "retention-observation:test",
-    policy_version: EVENT_RETENTION_POLICY_VERSION,
-    reason: ACTOR.reason,
-    restore_test_ref: "archive-restore:test"
-  };
-  return {
-    archive_manifest_sha256: manifest.manifest_sha256,
-    config,
-    holds: [],
-    schema_version: EVENT_DELETE_EVIDENCE_SCHEMA_VERSION,
-    scopes: ([
-      ["raw_operational", 2],
-      ["raw_durable", 3]
-    ] as Array<[EventRetentionPolicyID, number]>).map(([policyID, eventID]) => ({
-      destructive_gate: {
-        actor_id: ACTOR.actor,
-        actor_kind: "user",
-        audit_event_ref: ACTOR.auditRef,
-        decision: "allow",
-        evaluated_at: NOW,
-        policy_version: EVENT_RETENTION_POLICY_VERSION,
-        reason: ACTOR.reason
-      },
-      issue_id: 1,
-      policy_id: policyID,
-      references: { handoff_evidence: false, unresolved_refs: [] },
-      run_id: "issue-1-attempt-1",
-      summary_watermark: {
-        actor_id: ACTOR.actor,
-        audit_event_ref: ACTOR.auditRef,
-        contiguous: true,
-        covered_through_event_id: eventID,
-        issue_id: 1,
-        policy_id: policyID,
-        policy_version: EVENT_RETENTION_POLICY_VERSION,
-        reason: ACTOR.reason,
-        run_id: "issue-1-attempt-1",
-        schema_version: SUMMARY_WATERMARK_SCHEMA_VERSION,
-        source: "issue_events",
-        summary_ref: `summary:test:${policyID}`,
-        summary_sha256: hash(policyID),
-        verified_at: NOW,
-        verifier: "deterministic_retention_worker"
-      }
-    })),
-    source_snapshot: manifest.source.snapshot
-  };
 }
 
 function hash(value: string): string {

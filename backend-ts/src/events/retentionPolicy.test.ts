@@ -188,6 +188,23 @@ describe("event retention policy", () => {
     expect(failed.action).not.toBe("delete_candidate");
   });
 
+  test("excludes active, failed, and pending-verification issues from archive and delete", () => {
+    for (const [issueStatus, blocker] of [
+      ["in_progress", "active_issue"],
+      ["failed", "failed_issue"],
+      ["pending_verification", "pending_verification_issue"]
+    ] as const) {
+      const input = eligibleInput();
+      const result = evaluateEventRetention({
+        ...input,
+        event: { ...input.event, issue_status: issueStatus }
+      });
+      expect(result.blockers).toContain(blocker);
+      expect(result.action).toBe("keep");
+      expect(result.can_execute_delete).toBe(false);
+    }
+  });
+
   test("protects handoff evidence and unresolved activity references", () => {
     const input = eligibleInput();
     const result = evaluateEventRetention({
@@ -293,6 +310,7 @@ function eligibleInput() {
     first_event_id: 1,
     issue_id: event.issue_id!,
     manifest_sha256: SHA_B,
+    policy_id: "raw_operational",
     policy_version: DEFAULT_EVENT_RETENTION_CONFIG.policy_version,
     reason: "archive checksum and restore verified",
     restored_at: "2026-03-02T00:00:00Z",

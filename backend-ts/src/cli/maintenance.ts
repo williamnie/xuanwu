@@ -2,8 +2,10 @@ import {
   archiveEventMaintenance,
   checkpointEventDatabase,
   deleteArchivedEvents,
+  prepareEventDeleteEvidence,
   previewEventMaintenance,
   restoreArchivedEvents,
+  verifyEventArchive,
   vacuumEventDatabase
 } from "../events/maintenanceService.ts";
 import { rebuildEventSummaryProjection } from "../events/eventSummaryProjectionService.ts";
@@ -201,6 +203,31 @@ export function runMaintenance(args: string[]): string {
       now: flags.now,
       reportPath: required(flags, "report"),
       resume: enabled(flags, "resume")
+    });
+  } else if (family === "events" && command === "prepare-delete-evidence") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "archive", "audit-ref", "backup", "correlation-id",
+      "db", "holds", "json", "now", "output", "reason"
+    ]);
+    report = prepareEventDeleteEvidence({
+      actor: {
+        ...actor(flags),
+        actorKind: actorKind(flags["actor-kind"])
+      },
+      archiveDir: required(flags, "archive"),
+      backupDbPath: required(flags, "backup"),
+      correlationID: required(flags, "correlation-id"),
+      dbPath: required(flags, "db"),
+      holdsPath: flags.holds,
+      now: flags.now,
+      outputPath: required(flags, "output")
+    });
+  } else if (family === "events" && command === "verify-archive") {
+    allowOnly(flags, ["archive", "json", "report", "sample-size"]);
+    report = verifyEventArchive({
+      archiveDir: required(flags, "archive"),
+      reportPath: flags.report,
+      sampleSize: optionalInteger(flags["sample-size"], "--sample-size")
     });
   } else if (family === "events" && command === "restore") {
     allowOnly(flags, ["actor", "apply", "archive", "audit-ref", "batch-size", "checkpoint", "confirm-backup-tested", "confirm-no-active-writers", "db", "json", "max-batches", "reason", "report", "resume"]);

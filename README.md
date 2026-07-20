@@ -331,7 +331,7 @@ bun run src/main.ts maintenance events report \
   --json
 ```
 
-归档按 batch 生成 `0600` 的 gzip JSONL chunks、manifest、SHA-256、row count、provenance 和隔离恢复演练结果；不会删除 source row。每个 batch 后原子更新 manifest。可用 `--max-batches N` 主动中断演练，或在进程中断后用完全相同的 selection/audit 参数加 `--resume` 继续：
+归档按 batch 生成 gzip JSONL chunks、manifest、SHA-256、row count、连续 watermark、provenance 和隔离恢复演练结果；完成后 manifest/chunk 收口为只读 `0400`，不会删除 source row。每个 batch 后原子更新 manifest。开始前会校验最坏双份空间；可用 `--max-batches N` 主动中断演练，或在进程中断后用完全相同的 selection/audit 参数加 `--resume` 继续：
 
 ```bash
 bun run src/main.ts maintenance events archive \
@@ -357,9 +357,30 @@ bun run src/main.ts maintenance events archive \
   --json
 ```
 
-`delete` 默认为 dry-run，且必须读取 `xuanwu.event-maintenance-delete-evidence.v1` 证据文件。该文件要绑定 archive manifest SHA-256 和 source snapshot，并携带 P01.02 的 `delete_enabled` config、audited authorization、pin/legal hold snapshot，以及每个 `(issue_id, run_id, policy_id)` 的 deterministic summary watermark、reference check 和 destructive gate。缺失或变化一项都会 fail closed；`actor_kind=llm` 不合法。证据 contract 以 `backend-ts/src/events/maintenanceService.ts` 和 `backend-ts/src/events/retentionPolicy.ts` 为准。
+显式 verify 阶段会重算所有 chunk/row/manifest hash，并返回均匀抽样的 event id/hash；它同时复核完整 restore rehearsal receipt：
 
 ```bash
+bun run src/main.ts maintenance events verify-archive \
+  --archive /tmp/runner-event-archive \
+  --report /tmp/event-archive-verify.json \
+  --sample-size 20 --json
+```
+
+`delete` 默认为 dry-run，且必须读取 `xuanwu.event-maintenance-delete-evidence.v1` 证据文件。先用确定性命令生成该文件；它会核对 fresh backup 与 archive snapshot、backup `quick_check`、compact V2 consumer-zero/watermark、writer quiesce、pin/legal hold snapshot、correlation，以及每个 `(issue_id, run_id, policy_id)` 的 summary watermark、archive receipt 和 destructive gate。缺失或变化一项都会 fail closed；`actor_kind=llm` 不合法。
+
+```bash
+touch /secure/path/retention-holds.json
+printf '[]\n' > /secure/path/retention-holds.json
+bun run src/main.ts maintenance events prepare-delete-evidence \
+  --db "$COPY_DB" --backup "$BACKUP_DB" \
+  --archive /tmp/runner-event-archive \
+  --holds /secure/path/retention-holds.json \
+  --output /secure/path/delete-evidence.json \
+  --actor operator-id --actor-kind user \
+  --audit-ref "pi_action_events:approved-maintenance-id" \
+  --correlation-id "event-retention:$(date -u +%Y%m%dT%H%M%SZ)" \
+  --reason "verified retention delete on isolated copy" --json
+
 # 先预览；不会创建 delete checkpoint，也不会写数据库
 bun run src/main.ts maintenance events delete \
   --db "$COPY_DB" \
@@ -383,7 +404,7 @@ bun run src/main.ts maintenance events delete \
   --json
 ```
 
-批删 checkpoint 绑定 manifest/evidence hash，并在每批事务提交后原子落盘；暂停后使用相同命令加 `--resume`。Apply 会向现有 `pi_action_events` 写 started/paused/completed 审计。回滚使用 archive 原 ID、issue、type、payload、timestamp 恢复，已存在但 hash 不同的行会拒绝覆盖：
+批删 checkpoint 绑定 manifest/evidence hash，并在每批事务提交后原子落盘；暂停后使用相同命令加 `--resume`。Apply 会向现有 `pi_action_events` 写 started/paused/completed 审计，并在同一事务清理对应的 R0 legacy summary row；compact V2 仍保留 hash/summary。回滚使用 archive 原 ID、issue、type、payload、timestamp 恢复，已存在但 hash 不同的行会拒绝覆盖：
 
 ```bash
 bun run src/main.ts maintenance events restore \
@@ -428,6 +449,13 @@ bun run src/main.ts maintenance db vacuum \
 副本验收至少核对 maintenance reports 的 before/after `issue_event_count`、`payload_bytes`、`file_bytes`、`quick_check`，抽查关键 state/audit/delivery event，并完整跑一次 restore。source-row 回滚走 archive restore；VACUUM 或整个维护批次的物理回滚走维护前 online backup。副本验证通过后，正式库仍须先停止 writer、创建新备份并使用与副本相同的 manifest/evidence gate；不要复用陈旧 snapshot。
 
 当前没有双写/双读：archive 只做 shadow copy。正式 source delete 仍需 [P01.02 最终删除门禁](docs/architecture/xuanwu/0007-event-retention-policy.md#9-最终删除门禁) 全部通过；后续 dual-read parity 若未在两个 release window 内达标，必须回到 `report_only` 并停止 delete。状态、审计、交付和 unknown event 在 v1 永远不会被批删。
+
+### 月度计划、状态与责任边界
+
+- 每月首个维护窗口由 owner 在现有 Automation authority 创建 cron（建议 `0 3 1 * *`、本地 IANA timezone），workflow 只运行 `report → archive → verify`；Automation API `/api/automations` 和 Automations UI 是唯一计划/状态入口，不另建 cron 或状态表。
+- `delete → checkpoint → vacuum` 永远不由月度 cron 自动执行；当月 operator 必须审查告警、提供 fresh backup/restore、holds、consumer-zero 与非 LLM destructive approval。archive 不得删除当时唯一的 backup 或唯一 restore receipt。
+- 默认 archive SLA 是 24 小时内完成 verify；单个随机 restore smoke 4 小时内、完整 restore rehearsal 24 小时内完成。失败时暂停 Automation、保留 manifest/checkpoint/backup，并由当班 operator 负责 rollback；产品/法务 owner 负责 legal/audit hold 的建立和显式解除。
+- Vacuum 报告的目标是 `file_bytes <= 400 MiB`；未达标时报告会携带 `object_usage` 和 alert，下一决定必须基于逐对象物理占用，不能把逻辑 delete 当作物理回收。
 
 ## Codex Skill（可选）
 

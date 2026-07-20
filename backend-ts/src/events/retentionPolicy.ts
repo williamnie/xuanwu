@@ -13,7 +13,7 @@ export const EVENT_RETENTION_POLICY_IDS = [
 ] as const;
 
 export type EventRetentionPolicyID = typeof EVENT_RETENTION_POLICY_IDS[number];
-export type EventRetentionTier = "R1_OPERATIONAL" | "R2_DURABLE" | "R3_AUDIT" | "REVIEW_REQUIRED";
+export type EventRetentionTier = "R0_DERIVED" | "R1_OPERATIONAL" | "R2_DURABLE" | "R3_AUDIT" | "REVIEW_REQUIRED";
 export type EventRetentionClass = "raw_log" | "state_event" | "audit_event" | "delivery_evidence" | "review_required";
 export type EventRetentionSource =
   | "issue_events"
@@ -124,6 +124,7 @@ export type RetainedEvent = {
   event_type: string;
   id: number;
   issue_id?: number;
+  issue_status?: string;
   project_id: string;
   raw_method?: string;
   run_id?: string;
@@ -179,6 +180,7 @@ export type ArchiveReceipt = {
   first_event_id: number;
   issue_id: number;
   manifest_sha256: string;
+  policy_id: EventRetentionPolicyID;
   policy_version: string;
   restored_at: string;
   reason: string;
@@ -218,6 +220,9 @@ export const RETENTION_BLOCKER_CODES = [
   "minimum_retention_not_met",
   "pin",
   "legal_hold",
+  "active_issue",
+  "failed_issue",
+  "pending_verification_issue",
   "active_run",
   "failed_run",
   "non_successful_run",
@@ -331,6 +336,8 @@ export function evaluateEventRetention(input: RetentionEvaluationInput): Retenti
   if (activeHolds.some((hold) => hold.kind === "pin")) blockers.push("pin");
   if (activeHolds.some((hold) => hold.kind === "legal_hold")) blockers.push("legal_hold");
 
+  addIssueBlocker(blockers, input.event.issue_status);
+
   if (classificationResult.event_class === "raw_log") addRunBlocker(blockers, input.event, input.run);
   if (input.references?.handoff_evidence) blockers.push("handoff_evidence");
   if ((input.references?.unresolved_refs.length ?? 0) > 0) blockers.push("unresolved_reference");
@@ -348,7 +355,9 @@ export function evaluateEventRetention(input: RetentionEvaluationInput): Retenti
   addDestructiveGateBlocker(blockers, input.destructive_gate, config);
 
   const uniqueBlockers = [...new Set(blockers)];
-  const archiveDue = policy.archive_after_days !== null && ageDays !== null && ageDays >= policy.archive_after_days &&
+  const issueProtected = blockers.some((blocker) =>
+    blocker === "active_issue" || blocker === "failed_issue" || blocker === "pending_verification_issue");
+  const archiveDue = !issueProtected && policy.archive_after_days !== null && ageDays !== null && ageDays >= policy.archive_after_days &&
     !validArchiveReceipt(input.event, input.archive_receipt, config);
   const action = uniqueBlockers.length === 0 ? "delete_candidate" : archiveDue ? "archive" : "keep";
   return {
@@ -359,6 +368,13 @@ export function evaluateEventRetention(input: RetentionEvaluationInput): Retenti
     event_age_days: ageDays,
     policy
   };
+}
+
+function addIssueBlocker(blockers: RetentionBlockerCode[], value: string | undefined): void {
+  const status = value?.trim().toLowerCase() ?? "";
+  if (["triage", "todo", "ready", "in_progress"].includes(status)) blockers.push("active_issue");
+  else if (status === "failed") blockers.push("failed_issue");
+  else if (status === "pending_verification") blockers.push("pending_verification_issue");
 }
 
 export function retentionScopeID(event: RetainedEvent, scope: RetentionHold["scope"]): string {

@@ -21,6 +21,7 @@
 
 | policy id | 事件等级 | 典型 carrier | 最小 source 保留 | 可开始归档 | archive 最小保留 | 默认 source 删除 |
 | --- | --- | --- | ---: | ---: | ---: | --- |
+| derived projection | R0 derived/rebuildable | legacy/compact summary projection、可重建索引 | source 覆盖且 consumer-zero 前保留 | 不单独归档；随 source archive/backup 恢复 | n/a | 仅与已获准 source event 同批清理 |
 | `raw_operational` | R1 operational raw log | delta、diff、token/status update | 30 天 | 7 天 | 365 天 | 30 天后仅成为候选 |
 | `raw_durable` | R2 durable raw log | `item/started`、`item/completed` | 180 天 | 30 天 | 2555 天 | 180 天后仅成为候选 |
 | `state_event` | R3 state event | `issue.created`、`issue.status_changed`、recovery state | 365 天 | 365 天 | indefinite | 禁止 |
@@ -79,7 +80,7 @@ archive storage 的访问控制、加密、物理位置和 archive 自身销毁�
 1. event 类型 unknown / legacy，需要 `review_required`；
 2. source policy 禁止删除或未达到默认保留期；
 3. active `pin` 或 `legal hold`；
-4. raw log 所属 Run 是 active run、failed run、cancelled/其他非成功状态，或 Run 状态未知；
+4. issue 是 active、failed 或 `pending_verification`，或 raw log 所属 Run 是 active run、failed run、cancelled/其他非成功状态，或 Run 状态未知；
 5. event 是 Handoff Evidence，或仍有 Guardian、PI activity、Session/UI 等未解析引用；
 6. summary watermark 缺失、跨 scope、非连续、hash/policy version/verifier 不合法；
 7. archive receipt 缺失、未覆盖 event、checksum 不合法或未完成恢复演练；
@@ -88,7 +89,7 @@ archive storage 的访问控制、加密、物理位置和 archive 自身销毁�
 
 destructive gate 的 actor kind 只允许 `user`、`retention_worker`、`system`；contract 不接受 `llm` actor。LLM 输出不能直接变更 `execution_mode`、伪造 gate、释放 hold 或执行 delete。
 
-特别保护规则：failed run 保留完整 raw/terminal/error 证据；active run 不移动或删除 source；Handoff Evidence 在引用解除且 Handoff superseded 之前不删；pin/legal hold 优先级高于时间窗口。
+特别保护规则：active、failed、`pending_verification` issue 不进入 archive/delete；failed run 保留完整 raw/terminal/error 证据；Handoff Evidence 在引用解除且 Handoff superseded 之前不删；pin/legal hold 优先级高于时间窗口。R0 projection 不是归档 authority，只有 compact V2 已切为唯一 reader、watermark 覆盖 source snapshot、fresh backup/restore 和 writer quiesce 同时成立时，才可与对应 source event 在同一事务删除旧 V1 projection row。
 
 ## 7. 配置 contract
 

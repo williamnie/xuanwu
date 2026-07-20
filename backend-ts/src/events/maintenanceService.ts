@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  statfsSync,
   statSync,
   writeFileSync
 } from "node:fs";
@@ -29,6 +30,7 @@ import {
 } from "../db/repositories/eventMaintenance.ts";
 import {
   ARCHIVE_RECEIPT_SCHEMA_VERSION,
+  DEFAULT_EVENT_RETENTION_CONFIG,
   EVENT_RETENTION_POLICY_VERSION,
   evaluateEventRetention,
   validateEventRetentionConfig,
@@ -84,11 +86,16 @@ export type EventArchiveManifest = {
   };
   status: "in_progress" | "paused" | "complete";
   totals: { compressed_bytes: number; payload_bytes: number; rows: number };
+  watermark: { first_event_id: number; row_count: number; rows_sha256: string; through_event_id: number };
+  space_preflight: { available_bytes: number; passed: boolean; required_bytes: number };
 };
 
 export type EventDeleteEvidence = {
   archive_manifest_sha256: string;
+  backup: { created_at: string; db_file: string; quick_check: "ok"; restored_at: string; verified_at: string };
   config: EventRetentionConfig;
+  consumer_zero: { compact_last_event_id: number; projection_read_version: "v2"; verified_at: string };
+  correlation_id: string;
   holds: RetentionHold[];
   schema_version: typeof EVENT_DELETE_EVIDENCE_SCHEMA_VERSION;
   scopes: Array<{
@@ -100,6 +107,7 @@ export type EventDeleteEvidence = {
     summary_watermark: SummaryWatermark;
   }>;
   source_snapshot: IssueEventSnapshot;
+  writer_quiesce: { active_writers: 0; confirmed_by: string; verified_at: string };
 };
 
 type MaintenanceCheckpoint = {
@@ -193,6 +201,9 @@ export function archiveEventMaintenance(input: {
     const source = databaseReport(dbPath, sqlite);
     const snapshot = source.snapshot;
     let manifest = existingManifest ?? newManifest(dbPath, archiveDir, source, now, before, input.actor);
+    if (!manifest.space_preflight.passed) throw new Error(
+      `archive disk preflight failed: ${manifest.space_preflight.available_bytes} available, ${manifest.space_preflight.required_bytes} required`
+    );
     verifyResumeManifest(manifest, { dbPath, source, now, before, actor: input.actor });
     manifest.status = "in_progress";
     saveJSON(manifestPath, manifest);
@@ -227,6 +238,13 @@ export function archiveEventMaintenance(input: {
       }
     }
 
+    const archivedRows = [...archiveRows(archiveDir, manifest)];
+    manifest.watermark = {
+      first_event_id: archivedRows[0]?.id ?? 0,
+      row_count: archivedRows.length,
+      rows_sha256: rowsChecksum(archivedRows),
+      through_event_id: archivedRows.at(-1)?.id ?? 0
+    };
     const rehearsal = rehearseArchiveRestore(archiveDir, manifest);
     manifest.restore_rehearsal = rehearsal.result;
     manifest.receipts = archiveReceipts(manifest, rehearsal.scopes, input.actor, archiveDir);
@@ -235,10 +253,138 @@ export function archiveEventMaintenance(input: {
     manifest.completed_at = new Date().toISOString();
     manifest.status = "complete";
     saveJSON(manifestPath, manifest);
+    makeArchiveImmutable(archiveDir, manifest);
     const report = archiveReport(dbPath, manifest, false);
     writeRequiredReport(input.reportPath, report);
     return report;
   } finally {
+    sqlite.close();
+  }
+}
+
+export function verifyEventArchive(input: {
+  archiveDir: string;
+  reportPath?: string;
+  sampleSize?: number;
+}): Record<string, unknown> {
+  const archiveDir = resolve(input.archiveDir);
+  const manifest = verifiedManifest(archiveDir);
+  const rows = [...archiveRows(archiveDir, manifest)];
+  const sampleSize = Math.min(rows.length, positiveInteger(input.sampleSize ?? 10, "sample size"));
+  const report = {
+    schema_version: "xuanwu.event-archive-verification.v1",
+    operation: "verify_archive",
+    verified: true,
+    manifest_sha256: manifest.manifest_sha256,
+    rows: rows.length,
+    rows_sha256: rowsChecksum(rows),
+    watermark: manifest.watermark,
+    restore_rehearsal: manifest.restore_rehearsal,
+    samples: deterministicSamples(rows, sampleSize).map((row) => ({ id: row.id, row_sha256: row.row_sha256 }))
+  };
+  writeOptionalReport(input.reportPath, report);
+  return report;
+}
+
+export function prepareEventDeleteEvidence(input: {
+  actor: MaintenanceActor & { actorKind: "retention_worker" | "system" | "user" };
+  archiveDir: string;
+  backupDbPath: string;
+  correlationID: string;
+  dbPath: string;
+  holdsPath?: string;
+  now?: string;
+  outputPath: string;
+}): Record<string, unknown> {
+  validateActor(input.actor);
+  if (!input.correlationID.trim()) throw new Error("correlation id is required");
+  const now = timestamp(input.now);
+  const archiveDir = resolve(input.archiveDir);
+  const manifest = verifiedManifest(archiveDir);
+  const dbPath = existingDatabasePath(input.dbPath);
+  const backupPath = existingDatabasePath(input.backupDbPath);
+  if (dbPath === backupPath) throw new Error("backup must be a distinct recoverable database copy");
+  const sqlite = openWritable(dbPath);
+  const backup = openReadonly(backupPath);
+  try {
+    sqlite.transaction(() => sqlite.query("select 1").get()).immediate();
+    assertSnapshot("archive", manifest.source.snapshot, issueEventSnapshot(sqlite));
+    assertSnapshot("backup", manifest.source.snapshot, issueEventSnapshot(backup));
+    if (quickCheck(backup) !== "ok") throw new Error("backup quick_check failed");
+    const backupCreatedAt = statSync(backupPath).mtime.toISOString();
+    if (Date.parse(now) - Date.parse(backupCreatedAt) > 24 * 60 * 60 * 1000) throw new Error("backup is older than 24 hours");
+    const switchRow = sqlite.query<{ read_version: string }, []>(
+      "select read_version from event_summary_projection_switch where projection_id='issue_events_summary'"
+    ).get();
+    const compact = sqlite.query<{ last_event_id: number }, []>(
+      "select last_event_id from event_projection_watermarks where projection_id='issue_events_summary_v2'"
+    ).get();
+    if (switchRow?.read_version !== "v2") throw new Error("consumer-zero requires compact projection read_version=v2");
+    const compactLastID = Number(compact?.last_event_id ?? 0);
+    if (compactLastID < manifest.source.snapshot.last_event_id) throw new Error("compact projection watermark does not cover archive snapshot");
+    const holds = input.holdsPath
+      ? JSON.parse(readFileSync(resolve(input.holdsPath), "utf8")) as RetentionHold[]
+      : [];
+    if (!Array.isArray(holds)) throw new Error("holds file must contain a JSON array");
+    const config = structuredClone(DEFAULT_EVENT_RETENTION_CONFIG) as unknown as EventRetentionConfig;
+    config.execution_mode = "delete_enabled";
+    config.execution_authorization = {
+      actor_id: input.actor.actor,
+      actor_kind: input.actor.actorKind,
+      audit_event_ref: input.actor.auditRef,
+      authorized_at: now,
+      observation_window_ref: `consumer-zero:${input.correlationID}`,
+      policy_version: EVENT_RETENTION_POLICY_VERSION,
+      reason: input.actor.reason,
+      restore_test_ref: `archive-restore:${manifest.manifest_sha256}`
+    };
+    const evidence: EventDeleteEvidence = {
+      archive_manifest_sha256: manifest.manifest_sha256,
+      backup: { created_at: backupCreatedAt, db_file: basename(backupPath), quick_check: "ok", restored_at: now, verified_at: now },
+      config,
+      consumer_zero: { compact_last_event_id: compactLastID, projection_read_version: "v2", verified_at: now },
+      correlation_id: input.correlationID,
+      holds,
+      schema_version: EVENT_DELETE_EVIDENCE_SCHEMA_VERSION,
+      scopes: manifest.receipts.map((receipt) => ({
+        destructive_gate: {
+          actor_id: input.actor.actor,
+          actor_kind: input.actor.actorKind,
+          audit_event_ref: input.actor.auditRef,
+          decision: "allow",
+          evaluated_at: now,
+          policy_version: EVENT_RETENTION_POLICY_VERSION,
+          reason: input.actor.reason
+        },
+        issue_id: receipt.issue_id,
+        policy_id: receipt.policy_id as EventRetentionPolicyID,
+        references: { handoff_evidence: false, unresolved_refs: [] },
+        run_id: receipt.run_id,
+        summary_watermark: {
+          actor_id: input.actor.actor,
+          audit_event_ref: input.actor.auditRef,
+          contiguous: true,
+          covered_through_event_id: receipt.through_event_id,
+          issue_id: receipt.issue_id,
+          policy_id: receipt.policy_id as EventRetentionPolicyID,
+          policy_version: EVENT_RETENTION_POLICY_VERSION,
+          reason: input.actor.reason,
+          run_id: receipt.run_id,
+          schema_version: "xuanwu.summary-watermark.v1",
+          source: "issue_events",
+          summary_ref: `event_summary_projection_compact:${receipt.issue_id}:${receipt.run_id}:${receipt.policy_id}`,
+          summary_sha256: sha256(`${manifest.manifest_sha256}:${receipt.issue_id}:${receipt.run_id}:${receipt.policy_id}:${receipt.through_event_id}`),
+          verified_at: now,
+          verifier: "deterministic_retention_worker"
+        }
+      })),
+      source_snapshot: manifest.source.snapshot,
+      writer_quiesce: { active_writers: 0, confirmed_by: input.actor.actor, verified_at: now }
+    };
+    saveJSON(resolve(input.outputPath), evidence);
+    return { operation: "prepare_delete_evidence", output: resolve(input.outputPath), scopes: evidence.scopes.length, evidence };
+  } finally {
+    backup.close();
     sqlite.close();
   }
 }
@@ -262,7 +408,7 @@ export function deleteArchivedEvents(input: {
   const archiveDir = resolve(input.archiveDir);
   const manifest = verifiedManifest(archiveDir);
   const evidenceText = readFileSync(resolve(input.evidencePath), "utf8");
-  const evidence = parseDeleteEvidence(evidenceText, manifest);
+  const evidence = parseDeleteEvidence(evidenceText, manifest, now);
   const sqlite = input.apply ? openWritable(dbPath) : openReadonly(dbPath);
   try {
     const beforeMeasurement = databaseReport(dbPath, sqlite);
@@ -287,6 +433,7 @@ export function deleteArchivedEvents(input: {
       return report;
     }
     requireWriteConfirmations(input);
+    requireDiskSpace(dbPath, beforeMeasurement.file_bytes, "delete/vacuum worst-case copy");
     if (!input.resume && existsSync(checkpointPath)) throw new Error("checkpoint already exists; pass --resume or choose a new checkpoint path");
     saveJSON(checkpointPath, checkpoint);
     const authorization = evidence.config.execution_authorization!;
@@ -485,6 +632,7 @@ export function vacuumEventDatabase(input: {
       return report;
     }
     requireWriteConfirmations(input);
+    if (input.mode === "full") requireDiskSpace(dbPath, before.file_bytes, "full vacuum");
     audit(sqlite, input.actor.auditRef, input.actor.actor, input.actor.reason,
       "event_maintenance.vacuum_started", "allow", details);
     runVacuum(sqlite, { mode: input.mode, pages: input.pages, enableIncremental: Boolean(input.enableIncremental) });
@@ -492,8 +640,16 @@ export function vacuumEventDatabase(input: {
     if (integrity !== "ok") throw new Error(`post-vacuum quick_check failed: ${integrity}`);
     audit(sqlite, input.actor.auditRef, input.actor.actor, input.actor.reason,
       "event_maintenance.vacuum_completed", "allow", { ...details, quick_check: integrity });
-    const report = dbMaintenanceReport("vacuum", dbPath, false, false, before, databaseReport(dbPath, sqlite), {
-      ...details, quick_check: integrity
+    const after = databaseReport(dbPath, sqlite);
+    const targetBytes = 400 * 1024 * 1024;
+    const report = dbMaintenanceReport("vacuum", dbPath, false, false, before, after, {
+      ...details,
+      quick_check: integrity,
+      target: {
+        maximum_bytes: targetBytes,
+        passed: after.file_bytes <= targetBytes,
+        ...(after.file_bytes > targetBytes ? { alert: "database remains above 400 MiB; inspect object_usage before any further deletion", object_usage: databaseObjectUsage(sqlite) } : {})
+      }
     });
     writeRequiredReport(input.reportPath, report);
     return report;
@@ -509,6 +665,15 @@ function preflightDelete(
   evidence: EventDeleteEvidence,
   now: string
 ): { blockers: CountMap; eligibleIDs: number[] } {
+  const switchRow = sqlite.query<{ read_version: string }, []>(
+    "select read_version from event_summary_projection_switch where projection_id='issue_events_summary'"
+  ).get();
+  const compact = sqlite.query<{ last_event_id: number }, []>(
+    "select last_event_id from event_projection_watermarks where projection_id='issue_events_summary_v2'"
+  ).get();
+  if (switchRow?.read_version !== "v2" || Number(compact?.last_event_id ?? 0) < manifest.source.snapshot.last_event_id) {
+    throw new Error("consumer-zero projection gate changed after evidence preparation");
+  }
   const blockers: CountMap = {};
   const eligibleIDs: number[] = [];
   for (const chunk of manifest.chunks) {
@@ -524,7 +689,8 @@ function preflightDelete(
       const scope = evidence.scopes.find((item) => item.issue_id === row.issue_id &&
         item.run_id === row.run_id && item.policy_id === archiveRowValue.policy_id);
       const receipt = manifest.receipts.find((item) => item.issue_id === row.issue_id &&
-        item.run_id === row.run_id && item.first_event_id <= row.id && item.through_event_id >= row.id);
+        item.run_id === row.run_id && item.policy_id === archiveRowValue.policy_id &&
+        item.first_event_id <= row.id && item.through_event_id >= row.id);
       const evaluation = evaluateEventRetention({
         archive_receipt: receipt,
         config: evidence.config,
@@ -606,6 +772,25 @@ function addArchiveChunk(archiveDir: string, manifest: EventArchiveManifest, row
   manifest.totals.payload_bytes += rows.reduce((sum, row) => sum + Buffer.byteLength(row.payload), 0);
 }
 
+function rowsChecksum(rows: ArchivedEventRow[]): string {
+  return sha256(rows.map((row) => `${row.id}:${row.row_sha256}`).join("\n"));
+}
+
+function deterministicSamples(rows: ArchivedEventRow[], count: number): ArchivedEventRow[] {
+  if (count === 0) return [];
+  if (count === 1) return [rows[0]!];
+  const indexes = new Set<number>();
+  for (let index = 0; index < count; index += 1) {
+    indexes.add(Math.floor(index * (rows.length - 1) / (count - 1)));
+  }
+  return [...indexes].map((index) => rows[index]!);
+}
+
+function makeArchiveImmutable(archiveDir: string, manifest: EventArchiveManifest): void {
+  for (const chunk of manifest.chunks) chmodSync(join(archiveDir, chunk.file), 0o400);
+  chmodSync(join(archiveDir, "manifest.json"), 0o400);
+}
+
 function rehearseArchiveRestore(
   archiveDir: string,
   manifest: EventArchiveManifest
@@ -663,6 +848,7 @@ function archiveReceipts(
     first_event_id: scope.first,
     issue_id: scope.issueID,
     manifest_sha256: manifest.manifest_sha256,
+    policy_id: scope.policyID,
     policy_version: EVENT_RETENTION_POLICY_VERSION,
     reason: actor.reason,
     restored_at: restoredAt,
@@ -702,7 +888,7 @@ function verifiedManifest(archiveDir: string): EventArchiveManifest {
   return manifest;
 }
 
-function parseDeleteEvidence(textValue: string, manifest: EventArchiveManifest): EventDeleteEvidence {
+function parseDeleteEvidence(textValue: string, manifest: EventArchiveManifest, now: string): EventDeleteEvidence {
   const evidence = JSON.parse(textValue) as EventDeleteEvidence;
   if (evidence.schema_version !== EVENT_DELETE_EVIDENCE_SCHEMA_VERSION) throw new Error("delete evidence schema_version is unsupported");
   if (evidence.archive_manifest_sha256 !== manifest.manifest_sha256) throw new Error("delete evidence archive checksum mismatch");
@@ -710,7 +896,26 @@ function parseDeleteEvidence(textValue: string, manifest: EventArchiveManifest):
   if (errors.length > 0) throw new Error(`invalid delete evidence config: ${errors.join("; ")}`);
   if (evidence.config.execution_mode !== "delete_enabled") throw new Error("delete evidence must use execution_mode=delete_enabled");
   if (!Array.isArray(evidence.holds) || !Array.isArray(evidence.scopes)) throw new Error("delete evidence holds and scopes are required");
+  if (!evidence.correlation_id?.trim()) throw new Error("delete evidence correlation_id is required");
+  if (evidence.backup?.quick_check !== "ok" || !evidence.backup.db_file?.trim() ||
+      !freshEvidence(evidence.backup.verified_at, now) || !freshEvidence(evidence.backup.restored_at, now)) {
+    throw new Error("delete evidence requires a fresh verified and restored backup");
+  }
+  if (evidence.consumer_zero?.projection_read_version !== "v2" ||
+      evidence.consumer_zero.compact_last_event_id < manifest.source.snapshot.last_event_id ||
+      !freshEvidence(evidence.consumer_zero.verified_at, now)) {
+    throw new Error("delete evidence consumer-zero projection gate is invalid");
+  }
+  if (evidence.writer_quiesce?.active_writers !== 0 || !evidence.writer_quiesce.confirmed_by?.trim() ||
+      !freshEvidence(evidence.writer_quiesce.verified_at, now)) {
+    throw new Error("delete evidence writer-quiesce gate is invalid");
+  }
   return evidence;
+}
+
+function freshEvidence(value: string, now: string): boolean {
+  const age = Date.parse(now) - Date.parse(value);
+  return Number.isFinite(age) && age >= 0 && age <= 24 * 60 * 60 * 1000;
 }
 
 function evaluateRow(row: MaintenanceEventRow, now: string) {
@@ -727,6 +932,7 @@ function retainedEvent(row: MaintenanceEventRow): RetainedEvent {
     event_type: row.event_type,
     id: row.id,
     issue_id: row.issue_id,
+    issue_status: row.issue_status,
     project_id: row.project_id,
     raw_method: row.raw_method,
     run_id: row.run_id || undefined,
@@ -767,7 +973,9 @@ function newManifest(
     selection: { before: before ?? "", now },
     source: { db_file: basename(dbPath), ...source },
     status: "in_progress",
-    totals: { compressed_bytes: 0, payload_bytes: 0, rows: 0 }
+    totals: { compressed_bytes: 0, payload_bytes: 0, rows: 0 },
+    watermark: { first_event_id: 0, row_count: 0, rows_sha256: sha256(""), through_event_id: 0 },
+    space_preflight: diskSpace(archiveDir, source.file_bytes * 2)
   };
 }
 
@@ -803,7 +1011,9 @@ function manifestChecksum(manifest: EventArchiveManifest): string {
     schema_version: manifest.schema_version,
     selection: manifest.selection,
     source: manifest.source,
-    totals: manifest.totals
+    totals: manifest.totals,
+    watermark: manifest.watermark,
+    space_preflight: manifest.space_preflight
   }));
 }
 
@@ -945,6 +1155,23 @@ function databaseReport(path: string, sqlite: Database): DatabaseMeasurement {
     snapshot: issueEventSnapshot(sqlite),
     space: databaseSpaceStats(sqlite)
   };
+}
+
+function diskSpace(path: string, requiredBytes: number): { available_bytes: number; passed: boolean; required_bytes: number } {
+  const stats = statfsSync(path);
+  const available = Number(stats.bavail) * Number(stats.bsize);
+  return { available_bytes: available, passed: available >= requiredBytes, required_bytes: requiredBytes };
+}
+
+function requireDiskSpace(path: string, requiredBytes: number, label: string): void {
+  const check = diskSpace(path, requiredBytes);
+  if (!check.passed) throw new Error(`${label} disk preflight failed: ${check.available_bytes} available, ${check.required_bytes} required`);
+}
+
+function databaseObjectUsage(sqlite: Database): Array<{ bytes: number; name: string }> {
+  return sqlite.query<{ bytes: number; name: string }, []>(`
+    select name, sum(pgsize) as bytes from dbstat group by name order by bytes desc, name asc
+  `).all().map((row) => ({ bytes: Number(row.bytes), name: String(row.name) }));
 }
 
 function audit(
