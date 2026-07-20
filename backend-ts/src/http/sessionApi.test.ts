@@ -220,6 +220,41 @@ describe("Bun Sessions API compatibility", () => {
     }
   });
 
+  test("read session detail does not persist Codex process load state as lifecycle activity", async () => {
+    const database = await openFixtureDatabase();
+    const provider = new SessionsProvider();
+    provider.readSessionResult = {
+      ...sessionSummary("thread-passive"),
+      status: { type: "notLoaded" },
+      turns: [{ id: "turn-passive", status: "completed" }]
+    };
+    try {
+      upsertAgentSession(database, {
+        provider: "codex",
+        provider_session_id: "thread-passive",
+        status: "idle"
+      });
+      const before = getAgentSession(database, "codex:thread-passive");
+
+      const response = await createDefaultRouter({
+        database,
+        providers: { codex: provider }
+      }).handle(new Request(`${BASE_URL}/api/sessions/codex:thread-passive`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: "codex:thread-passive",
+        status: { type: "notLoaded" }
+      });
+      expect(getAgentSession(database, "codex:thread-passive")).toMatchObject({
+        status: "idle",
+        updated_at: before?.updated_at
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("list sessions reconciles stale running Codex session indexes", async () => {
     const database = await openFixtureDatabase();
     const provider = new SessionsProvider();

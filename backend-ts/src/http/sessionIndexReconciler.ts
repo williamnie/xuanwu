@@ -43,6 +43,7 @@ function sessionStatusText(value: unknown): string {
 
 function canonicalSessionStatus(value: string): string {
   const normalized = value.trim().toLowerCase().replaceAll("_", "-");
+  if (["loaded", "notloaded", "not-loaded"].includes(normalized)) return "";
   if (["running", "active", "busy", "streaming"].includes(normalized)) return "running";
   if (["inprogress", "in-progress"].includes(normalized)) return "inProgress";
   if (["completed", "done"].includes(normalized)) return "completed";
