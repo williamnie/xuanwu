@@ -1,4 +1,5 @@
 import { formatBunVersion } from "./buildInfo.ts";
+import { join } from "node:path";
 import { coldStartTrace } from "./benchmarks/coldStart.ts";
 import { commandMode } from "./mainMode.ts";
 import { loadConfig } from "./config/env.ts";
@@ -11,9 +12,11 @@ import { createFeishuAgentBridge } from "./integrations/feishuAgentBridge.ts";
 import { createFeishuReceiverManager } from "./integrations/feishuReceiver.ts";
 import { createClaudeExecutorProvider } from "./providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "./providers/codex/provider.ts";
+import { reconcileStaleCodexProcessOwnership } from "./providers/codex/processLifecycle.ts";
 import { createPiAutoManageScheduler } from "./runner/piAutoManageScheduler.ts";
 import { setProjectLoopMaxParallelProjects, startProjectLoop } from "./runner/projectLoopManager.ts";
 import { recoverInProgressIssues } from "./runner/recovery.ts";
+import { reconcileStaleAgentSessions } from "./runner/staleSessionReconciler.ts";
 import { redactSensitiveText } from "./util/redact.ts";
 
 const { serve, args, version } = commandMode(Bun.argv.slice(2));
@@ -34,7 +37,10 @@ coldStartTrace("config_loaded");
 const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
 coldStartTrace("database_opened");
 const bus = new EventBus();
-const providers = executorProviders(config, bus);
+const codexOwnershipFile = join(config.stateDir, "codex-process-ownership.json");
+const processReconciliation = await reconcileStaleCodexProcessOwnership(codexOwnershipFile);
+const providers = executorProviders(config, bus, codexOwnershipFile);
+const sessionReconciliation = reconcileStaleAgentSessions(database, processReconciliation);
 coldStartTrace("providers_initialized");
 setProjectLoopMaxParallelProjects(config.runner.maxParallelProjects);
 const feishuBridge = createFeishuAgentBridge({
@@ -66,9 +72,10 @@ const server = await startServer(config, {
   onFeishuConfigChanged: restartFeishuReceiver,
   providers
 });
+installTerminationHandlers(providers, database, server);
 coldStartTrace("http_routes_registered");
 void restartFeishuReceiver(config.integrations.feishu);
-void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config);
+void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config, processReconciliation);
 coldStartTrace("scheduler_watchdog_initialized");
 
 console.log(JSON.stringify({
@@ -79,16 +86,43 @@ console.log(JSON.stringify({
     addr: config.addr,
     stateDir: config.stateDir,
     dbPath: database.path
-  }
+  },
+  lifecycle_reconciliation: sessionReconciliation
 }, null, 2));
 
-function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus) {
+function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus, codexOwnershipFile = "") {
   const providers: Partial<Record<"codex" | "claude", ReturnType<typeof createCodexExecutorProvider> | ReturnType<typeof createClaudeExecutorProvider>>> = {};
   const codexConfig = config.providers.codex;
   const claudeConfig = config.providers.claude;
-  if (codexConfig) providers.codex = createCodexExecutorProvider(codexConfig, (event) => bus?.publish(event));
+  if (codexConfig) providers.codex = createCodexExecutorProvider(
+    codexConfig,
+    (event) => bus?.publish(event),
+    { ownershipFile: codexOwnershipFile }
+  );
   if (claudeConfig) providers.claude = createClaudeExecutorProvider(claudeConfig);
   return providers;
+}
+
+function installTerminationHandlers(
+  providers: ReturnType<typeof executorProviders>,
+  database: Awaited<ReturnType<typeof openDatabase>>,
+  server: { stop(closeActiveConnections?: boolean): void }
+): void {
+  let stopping = false;
+  const stop = async (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    console.info(JSON.stringify({ event: "runner.shutdown_started", signal }));
+    server.stop(true);
+    await Promise.all(Object.values(providers).map(async (provider) => {
+      const stopProvider = (provider as { stop?: () => Promise<void> } | undefined)?.stop;
+      if (stopProvider) await stopProvider.call(provider).catch(() => {});
+    }));
+    database.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", () => { void stop("SIGINT"); });
+  process.on("SIGTERM", () => { void stop("SIGTERM"); });
 }
 
 async function startAutoRunLoops(
@@ -96,11 +130,13 @@ async function startAutoRunLoops(
   providers: ReturnType<typeof executorProviders>,
   bus: EventBus,
   codexSessionsDir: string,
-  config: ReturnType<typeof loadConfig>
+  config: ReturnType<typeof loadConfig>,
+  processReconciliation: Awaited<ReturnType<typeof reconcileStaleCodexProcessOwnership>>
 ): Promise<void> {
   await recoverInProgressIssues({ database, providers }).catch((error) => {
     console.error(JSON.stringify({ ok: false, service: "codex-issue-runner backend-ts", error: safeError(error) }));
   });
+  reconcileStaleAgentSessions(database, processReconciliation);
   const projects = database.sqlite.query<{ id: string }, []>(
     "select id from projects where auto_run=1 order by sort_order asc, created_at asc, id asc"
   ).all();

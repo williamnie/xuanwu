@@ -171,6 +171,60 @@ describe("Codex stdio JSON-RPC transport", () => {
     await expect(fake.exited).resolves.toBe(0);
   });
 
+  test("keeps one owned app-server through an active turn and idle-stops it after the terminal event", async () => {
+    let fake!: FakeCodexProcess;
+    const transport = new CodexStdioJsonRpcTransport(config, {
+      idleTtlMs: 1,
+      processFactory: () => {
+        fake = new FakeCodexProcess((request, process) => {
+          process.sendStdout({ id: request.id, result: { ok: true } });
+        });
+        return fake;
+      }
+    });
+    const lease = transport.acquire("project:demo:issue:1:run");
+    lease.bind("thread-owned", "turn-owned");
+
+    await transport.request("initialize", {});
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(transport.runtimeSnapshot().owners).toEqual(["project:demo:issue:1:run"]);
+
+    fake.sendNotification("turn/completed", {
+      threadId: "thread-owned",
+      turn: { id: "turn-owned", status: "completed" }
+    });
+    await expect(fake.exited).resolves.toBe(0);
+    expect(transport.runtimeSnapshot().owners).toEqual([]);
+  });
+
+  test("returns to the zero-process baseline across 20 idle reuse cycles", async () => {
+    const processes: FakeCodexProcess[] = [];
+    let live = 0;
+    let peak = 0;
+    const transport = new CodexStdioJsonRpcTransport(config, {
+      idleTtlMs: 1,
+      processFactory: () => {
+        live += 1;
+        peak = Math.max(peak, live);
+        const fake = new FakeCodexProcess((request, process) => {
+          process.sendStdout({ id: request.id, result: { cycle: processes.length } });
+        });
+        void fake.exited.then(() => { live -= 1; });
+        processes.push(fake);
+        return fake;
+      }
+    });
+
+    for (let cycle = 0; cycle < 20; cycle += 1) {
+      await transport.request("thread/list", {});
+      await waitFor(() => live === 0);
+    }
+
+    expect(processes).toHaveLength(20);
+    expect(peak).toBe(1);
+    expect(live).toBe(0);
+  });
+
   test("advances process generation when a timeout stops the stale process", async () => {
     let fake!: FakeCodexProcess;
     const transport = new CodexStdioJsonRpcTransport({ ...config, timeoutMs: 1 }, {
@@ -483,6 +537,14 @@ describe("Codex stdio JSON-RPC transport", () => {
 
 async function flushTimers(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function waitFor(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error("condition not met before timeout");
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
 }
 
 function encode(text: string): Uint8Array {

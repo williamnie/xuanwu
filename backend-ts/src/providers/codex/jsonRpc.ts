@@ -3,6 +3,7 @@ import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 import { CodexApprovalBroker } from "./approvalBroker.ts";
 import { normalizeCodexEvent } from "./events.ts";
+import { CodexProcessGroupLifecycle, type CodexProcessOwnership } from "./processLifecycle.ts";
 
 export type JsonRpcParams = Record<string, unknown> | unknown[] | null;
 
@@ -26,6 +27,7 @@ export type CodexJsonRpcProcess = {
   stderr: ReadableStream<Uint8Array> | null;
   exited: Promise<number>;
   kill(signal?: string | number): unknown;
+  pid?: number;
 };
 
 export type CodexJsonRpcProcessFactory = (options: {
@@ -36,15 +38,24 @@ export type CodexJsonRpcProcessFactory = (options: {
 
 export type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown> | unknown;
 export type CodexTransportOptions = {
+  idleTtlMs?: number;
   onEvent?: (event: ProviderEvent) => void;
+  ownershipFile?: string;
   processFactory?: CodexJsonRpcProcessFactory;
+  processLifecycle?: CodexProcessGroupLifecycle;
   onDiagnostic?: (event: ProviderEvent) => void;
   onServerRequest?: ServerRequestHandler;
+};
+
+export type CodexProcessLease = {
+  bind(sessionID: string, turnID?: string): void;
+  release(): void;
 };
 
 const MAX_STDERR_LINES = 50;
 const MAX_LINE_BYTES = 10 * 1024 * 1024;
 export const CODEX_APP_SERVER_RPC_TIMEOUT_MS = 90_000;
+export const CODEX_APP_SERVER_IDLE_TTL_MS = 15_000;
 
 export class CodexStdioJsonRpcTransport {
   private nextId = 0;
@@ -53,42 +64,114 @@ export class CodexStdioJsonRpcTransport {
   private readonly pending = new Map<number, PendingRequest>();
   private readonly approvals: CodexApprovalBroker;
   private readonly stderrBuffer: string[] = [];
+  private readonly leases = new Map<number, { owner: string; sessionID: string; turnID: string }>();
+  private readonly processLifecycle: CodexProcessGroupLifecycle;
+  private idleTimer?: ReturnType<typeof setTimeout>;
+  private nextLeaseID = 0;
+  private stopping?: Promise<void>;
   private stopped = false;
 
   constructor(private readonly config: ProviderRuntimeConfig, private readonly options: CodexTransportOptions = {}) {
     this.approvals = new CodexApprovalBroker({ onEvent: (event) => this.options.onEvent?.(event) });
+    this.processLifecycle = options.processLifecycle ?? new CodexProcessGroupLifecycle(
+      options.ownershipFile ?? "",
+      splitCommand(config.command)
+    );
   }
 
   async start(): Promise<void> {
+    if (this.stopping) await this.stopping;
     if (this.process) return;
+    this.cancelIdleStop();
     this.stopped = false;
-    this.process = this.processFactory()({
+    const spawned = this.processFactory()({
       command: splitCommand(this.config.command),
       cwd: this.config.cwd.trim() || undefined,
       env: { ...Bun.env, ...this.config.env }
     });
+    this.process = spawned;
+    try {
+      await this.processLifecycle.register(spawned);
+    } catch (error) {
+      this.process = undefined;
+      spawned.kill("SIGTERM");
+      throw error;
+    }
     this.readStdout(this.process.stdout);
     this.readStderr(this.process.stderr);
     this.watchExit(this.process);
   }
 
   async stop(): Promise<void> {
+    if (this.stopping) return await this.stopping;
+    const stopping = this.stopCurrent();
+    this.stopping = stopping;
+    try {
+      await stopping;
+    } finally {
+      if (this.stopping === stopping) this.stopping = undefined;
+    }
+  }
+
+  private async stopCurrent(): Promise<void> {
     this.stopped = true;
+    this.cancelIdleStop();
     const current = this.process;
     this.process = undefined;
     if (!current) return;
     this.processGeneration += 1;
     this.failPending(new Error("codex app-server transport stopped"));
-    current.kill("SIGINT");
-    await current.exited.catch(() => 1);
     current.stdin.end?.();
+    await this.processLifecycle.stop(current);
   }
 
   generation(): number {
     return this.processGeneration;
   }
 
+  acquire(owner: string): CodexProcessLease {
+    const id = ++this.nextLeaseID;
+    this.cancelIdleStop();
+    this.leases.set(id, { owner: owner.trim(), sessionID: "", turnID: "" });
+    let released = false;
+    return {
+      bind: (sessionID, turnID = "") => {
+        if (released) return;
+        const lease = this.leases.get(id);
+        if (!lease) return;
+        lease.sessionID = sessionID.trim();
+        lease.turnID = turnID.trim();
+      },
+      release: () => {
+        if (released) return;
+        released = true;
+        this.leases.delete(id);
+        this.scheduleIdleStop();
+      }
+    };
+  }
+
+  releaseSession(sessionID: string, turnID = ""): void {
+    const cleanSessionID = sessionID.trim();
+    const cleanTurnID = turnID.trim();
+    for (const [id, lease] of this.leases) {
+      if (lease.sessionID !== cleanSessionID) continue;
+      if (cleanTurnID !== "" && lease.turnID !== "" && lease.turnID !== cleanTurnID) continue;
+      this.leases.delete(id);
+    }
+    this.scheduleIdleStop();
+  }
+
+  runtimeSnapshot(): { idle_ttl_ms: number; owners: string[]; process?: CodexProcessOwnership } {
+    return {
+      idle_ttl_ms: this.idleTtlMs(),
+      owners: [...this.leases.values()].map((lease) => lease.owner),
+      process: this.processLifecycle.snapshot()
+    };
+  }
+
   async request(method: string, params: JsonRpcParams = null): Promise<unknown> {
+    this.cancelIdleStop();
     await this.start();
     const id = this.registerRequest();
     const response = new Promise<unknown>((resolve, reject) => {
@@ -106,7 +189,12 @@ export class CodexStdioJsonRpcTransport {
       clearPendingTimeout(pending);
       throw error;
     }
-    return await response;
+    try {
+      return await response;
+    } finally {
+      void this.processLifecycle.refresh(this.process as CodexJsonRpcProcess).catch(() => {});
+      this.scheduleIdleStop();
+    }
   }
 
   stderrLines(): string[] {
@@ -178,7 +266,12 @@ export class CodexStdioJsonRpcTransport {
   }
 
   private deliverEvent(method: string, params: unknown): void {
-    this.options.onEvent?.(normalizeCodexEvent({ method, params }));
+    const event = normalizeCodexEvent({ method, params });
+    void this.processLifecycle.refresh(this.process as CodexJsonRpcProcess).catch(() => {});
+    if (event.runEvent?.terminal && event.session?.sessionId) {
+      this.releaseSession(event.session.sessionId, event.session.turnId);
+    }
+    this.options.onEvent?.(event);
   }
 
   private deliverResponse(id: number, message: JsonRpcResponse): void {
@@ -205,11 +298,17 @@ export class CodexStdioJsonRpcTransport {
       if (this.process !== process) return;
       this.process = undefined;
       this.processGeneration += 1;
+      this.leases.clear();
+      this.cancelIdleStop();
+      void this.processLifecycle.processExited(process).catch(() => {});
       if (!this.stopped) this.failPending(new Error(`codex app-server exited before response (code ${code})`));
     }, (error) => {
       if (this.process !== process) return;
       this.process = undefined;
       this.processGeneration += 1;
+      this.leases.clear();
+      this.cancelIdleStop();
+      void this.processLifecycle.processExited(process).catch(() => {});
       this.failPending(asError(error));
     });
   }
@@ -244,10 +343,36 @@ export class CodexStdioJsonRpcTransport {
 
   private async restartAfterTimeout(): Promise<void> {
     try {
+      this.leases.clear();
       await this.stop();
     } catch (error) {
       this.emitDiagnostic("process/restart_failed", asError(error).message, asError(error).message);
     }
+  }
+
+  private scheduleIdleStop(): void {
+    if (!this.process || this.pending.size > 0 || this.leases.size > 0 || this.stopped) return;
+    this.cancelIdleStop();
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = undefined;
+      if (this.pending.size > 0 || this.leases.size > 0 || !this.process) return;
+      void this.stop().catch((error) => {
+        this.emitDiagnostic("process/idle_stop_failed", asError(error).message, asError(error).message);
+      });
+    }, this.idleTtlMs());
+    this.idleTimer.unref?.();
+  }
+
+  private cancelIdleStop(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
+  }
+
+  private idleTtlMs(): number {
+    const configured = this.options.idleTtlMs;
+    return typeof configured === "number" && Number.isFinite(configured) && configured >= 0
+      ? configured
+      : CODEX_APP_SERVER_IDLE_TTL_MS;
   }
 }
 
@@ -283,7 +408,7 @@ function spawnCodexProcess({ command, cwd, env }: {
   cwd?: string;
   env: Record<string, string | undefined>;
 }): CodexJsonRpcProcess {
-  return Bun.spawn(command, { cwd, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  return Bun.spawn(command, { cwd, detached: true, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
 }
 
 export function splitCommand(command: string): string[] {

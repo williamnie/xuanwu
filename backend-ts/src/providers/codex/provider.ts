@@ -19,7 +19,7 @@ import type {
   ProviderEvent
 } from "../types.ts";
 import type { CodexInitializeResult, ThreadSummary, TurnStartResult } from "./adapter.ts";
-import { CodexStdioJsonRpcTransport } from "./jsonRpc.ts";
+import { CodexStdioJsonRpcTransport, type CodexProcessLease } from "./jsonRpc.ts";
 
 const PROVIDER_CODEX = "codex";
 const DEFAULT_DEVELOPER_INSTRUCTIONS = "Keep changes scoped to the runner issue and explicitly update the issue status when done.";
@@ -40,7 +40,12 @@ type CodexIssueAdapter = {
 export type CodexEventHandler = (event: ProviderEvent) => void;
 export type CodexEventSource = { subscribe(handler: CodexEventHandler): () => void };
 export type CodexAppEventSink = (event: AppEvent) => void;
-type CodexRuntimeControl = { stop(): Promise<void> };
+type CodexRuntimeControl = {
+  acquire(owner: string): CodexProcessLease;
+  releaseSession(sessionID: string, turnID?: string): void;
+  runtimeSnapshot(): ReturnType<CodexStdioJsonRpcTransport["runtimeSnapshot"]>;
+  stop(): Promise<void>;
+};
 
 class CodexEventHub implements CodexEventSource {
   readonly handlers = new Set<CodexEventHandler>();
@@ -66,20 +71,23 @@ export class CodexExecutorProvider implements ExecutorProvider {
   ) {}
 
   async run(input: ProviderRunInput): Promise<ProviderRunResult> {
-    const initialized = await this.adapter.initialize();
-    const thread = await this.adapter.startThread({
-      cwd: input.cwd,
-      model: input.model,
-      reasoningEffort: input.reasoningEffort,
-      serviceTier: input.serviceTier,
-      approvalPolicy: input.approvalPolicy,
-      sandbox: input.sandbox,
-      developerInstructions: this.developerInstructions,
-      threadSource: "subagent"
-    });
-    await this.nameThread(thread.provider_session_id, input.issueId);
-    const stopForwarding = this.forwardRunEvents(input, thread.provider_session_id);
+    const lease = this.acquire(`project:${input.projectId}:issue:${input.issueId}:run`);
+    let stopForwarding = () => {};
     try {
+      const initialized = await this.adapter.initialize();
+      const thread = await this.adapter.startThread({
+        cwd: input.cwd,
+        model: input.model,
+        reasoningEffort: input.reasoningEffort,
+        serviceTier: input.serviceTier,
+        approvalPolicy: input.approvalPolicy,
+        sandbox: input.sandbox,
+        developerInstructions: this.developerInstructions,
+        threadSource: "subagent"
+      });
+      lease.bind(thread.provider_session_id);
+      await this.nameThread(thread.provider_session_id, input.issueId);
+      stopForwarding = this.forwardRunEvents(input, thread.provider_session_id);
       const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
@@ -87,10 +95,12 @@ export class CodexExecutorProvider implements ExecutorProvider {
         approvalPolicy: input.approvalPolicy,
         sandbox: input.sandbox
       });
+      lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
       return { runId: runID(turn), session: sessionRef(turn) };
     } catch (error) {
       stopForwarding();
+      lease.release();
       throw error;
     }
   }
@@ -106,34 +116,58 @@ export class CodexExecutorProvider implements ExecutorProvider {
   }
 
   async createSession(input: SessionCreateInput): Promise<SessionCreateResult> {
-    await this.adapter.initialize();
-    const thread = await this.adapter.startThread({ ...threadOptions(input, this.developerInstructions), threadSource: "user" });
-    const result = createResult(thread.provider_session_id);
-    if (input.prompt?.trim()) {
-      const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), turnOptions(input));
-      result.turn_id = turn.turn_id;
-      result.provider_turn_id = turn.turn_id;
+    const lease = this.acquire(`project:${input.projectId ?? "manual"}:session:create`);
+    try {
+      await this.adapter.initialize();
+      const thread = await this.adapter.startThread({ ...threadOptions(input, this.developerInstructions), threadSource: "user" });
+      lease.bind(thread.provider_session_id);
+      const result = createResult(thread.provider_session_id);
+      if (input.prompt?.trim()) {
+        const turn = await this.adapter.startTurn(thread.provider_session_id, codexUserInputs(input), turnOptions(input));
+        lease.bind(turn.provider_session_id, turn.turn_id);
+        result.turn_id = turn.turn_id;
+        result.provider_turn_id = turn.turn_id;
+      } else {
+        lease.release();
+      }
+      return result;
+    } catch (error) {
+      lease.release();
+      throw error;
     }
-    return result;
   }
 
   async sendSessionMessage(input: SessionMessageInput): Promise<SessionMessageResult> {
-    await this.adapter.initialize();
     const threadID = input.sessionId.trim();
-    if (input.mode?.trim() === "steer") {
-      const turnID = input.turnId?.trim() ?? "";
-      if (turnID === "") throw new Error("当前 session 没有可引导的运行中 turn");
-      return await this.adapter.steerTurn(threadID, turnID, codexUserInputs(input));
+    const lease = this.acquire(`session:${threadID}:message`);
+    lease.bind(threadID, input.turnId);
+    try {
+      await this.adapter.initialize();
+      if (input.mode?.trim() === "steer") {
+        const turnID = input.turnId?.trim() ?? "";
+        if (turnID === "") throw new Error("当前 session 没有可引导的运行中 turn");
+        const turn = await this.adapter.steerTurn(threadID, turnID, codexUserInputs(input));
+        lease.bind(turn.provider_session_id, turn.turn_id);
+        return turn;
+      }
+      const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), turnOptions(input));
+      lease.bind(turn.provider_session_id, turn.turn_id);
+      return turn;
+    } catch (error) {
+      lease.release();
+      throw error;
     }
-    return await this.adapter.startTurn(threadID, codexUserInputs(input), turnOptions(input));
   }
 
   async recover(input: ProviderRecoveryInput): Promise<ProviderRunResult> {
-    const initialized = await this.adapter.initialize();
-    const session = await this.adapter.resumeThread(input.session.sessionId);
-    const threadID = session.provider_session_id || input.session.sessionId;
-    const stopForwarding = this.forwardRunEvents(input, threadID);
+    const lease = this.acquire(`project:${input.projectId}:issue:${input.issueId}:recovery`);
+    let stopForwarding = () => {};
     try {
+      const initialized = await this.adapter.initialize();
+      const session = await this.adapter.resumeThread(input.session.sessionId);
+      const threadID = session.provider_session_id || input.session.sessionId;
+      lease.bind(threadID);
+      stopForwarding = this.forwardRunEvents(input, threadID);
       const turn = await this.adapter.startTurn(threadID, codexUserInputs(input), {
         model: input.model,
         reasoningEffort: input.reasoningEffort,
@@ -141,10 +175,12 @@ export class CodexExecutorProvider implements ExecutorProvider {
         approvalPolicy: input.approvalPolicy,
         sandbox: input.sandbox
       });
+      lease.bind(turn.provider_session_id, turn.turn_id);
       input.onEvent?.(turnStartedEvent(turn, input, initialized));
       return { runId: runID(turn), session: sessionRef(turn) };
     } catch (error) {
       stopForwarding();
+      lease.release();
       throw error;
     }
   }
@@ -165,10 +201,19 @@ export class CodexExecutorProvider implements ExecutorProvider {
     const turnID = input.session.turnId?.trim() ?? "";
     if (threadID === "" || turnID === "") throw new Error("codex interrupt requires thread and turn ids");
     await this.adapter.interruptTurn(threadID, turnID);
+    this.runtimeControl?.releaseSession(threadID, turnID);
   }
 
   async stop(): Promise<void> {
     await this.runtimeControl?.stop();
+  }
+
+  runtimeSnapshot(): ReturnType<CodexStdioJsonRpcTransport["runtimeSnapshot"]> | undefined {
+    return this.runtimeControl?.runtimeSnapshot();
+  }
+
+  private acquire(owner: string): CodexProcessLease {
+    return this.runtimeControl?.acquire(owner) ?? { bind: () => {}, release: () => {} };
   }
 
   private async nameThread(threadID: string, issueID: number): Promise<void> {
@@ -190,7 +235,8 @@ export class CodexExecutorProvider implements ExecutorProvider {
 
 export function createCodexExecutorProvider(
   config: ProviderRuntimeConfig,
-  appEventSink?: CodexAppEventSink
+  appEventSink?: CodexAppEventSink,
+  options: { ownershipFile?: string } = {}
 ): CodexExecutorProvider {
   const events = new CodexEventHub();
   const publish = (event: ProviderEvent) => {
@@ -199,7 +245,8 @@ export function createCodexExecutorProvider(
   };
   const transport = new CodexStdioJsonRpcTransport(config, {
     onDiagnostic: publish,
-    onEvent: publish
+    onEvent: publish,
+    ownershipFile: options.ownershipFile
   });
   return new CodexExecutorProvider(new CodexAdapter(transport), DEFAULT_DEVELOPER_INSTRUCTIONS, events, transport);
 }
