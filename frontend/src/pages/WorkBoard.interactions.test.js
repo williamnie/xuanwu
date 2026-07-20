@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('./WorkBoard.css', import.meta.url), 'utf8');
+const composerCss = readFileSync(new URL('../components/GlobalAskComposer.css', import.meta.url), 'utf8');
 
 test('Work Board cards restore drag and drop through guarded Issue actions', () => {
   assert.match(board, /draggable=\{!moving\}/);
@@ -21,4 +22,12 @@ test('Work Board keeps the viewport fixed and scrolls each lane independently', 
   assert.match(css, /\.work-board-scroll\s*\{[\s\S]*flex:\s*1;[\s\S]*overflow-y:\s*hidden;/);
   assert.match(css, /\.work-column\s*\{[\s\S]*display:\s*flex;[\s\S]*height:\s*100%;[\s\S]*min-height:\s*0;/);
   assert.match(css, /\.work-column-stack\s*\{[\s\S]*flex:\s*1;[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/);
+});
+
+test('Work Board keeps search in the header, exposes board only, and restores height when the global composer is collapsed', () => {
+  assert.doesNotMatch(board, /work-ledger-stats|CompatibilityNotice/);
+  assert.match(board, /className="work-header-search"/);
+  assert.match(board, /aria-label="搜索 Work"/);
+  assert.doesNotMatch(board, /WorkFilters|WorkList|onViewChange|work-filter-toggle/);
+  assert.match(composerCss, /global-ask-composer-shell\.collapsed[\s\S]*padding-bottom:\s*88px;/);
 });

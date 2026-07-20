@@ -20,9 +20,9 @@ test('Work Detail composes canonical sections without replacing existing domain 
   assert.match(detail, /missing_evidence/);
 });
 
-test('Work Board offers board/list views and opens canonical Work Detail', () => {
-  assert.match(board, /onViewChange\('board'\)/);
-  assert.match(board, /onViewChange\('list'\)/);
+test('Work Board stays board-only and opens canonical Work Detail', () => {
+  assert.doesNotMatch(board, /onViewChange|WorkList|work-view-toggle/);
+  assert.match(board, /WORK_BOARD_STATUSES\.map\(status =>/);
   assert.match(board, /navigateTo\('work', work\.id\)/);
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);
   assert.match(board, /Issue #\{issueId\} authority/);

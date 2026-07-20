@@ -176,6 +176,10 @@
   padding-bottom: 190px;
 }
 
+.app-container:has(> .global-ask-composer-shell.collapsed) > .main-content.has-global-ask-composer {
+  padding-bottom: 88px;
+}
+
 @media (max-width: 768px) {
   .global-ask-composer-shell {
     bottom: max(8px, env(safe-area-inset-bottom));
@@ -212,6 +216,10 @@
 
   .main-content.has-global-ask-composer {
     padding-bottom: 176px;
+  }
+
+  .app-container:has(> .global-ask-composer-shell.collapsed) > .main-content.has-global-ask-composer {
+    padding-bottom: 72px;
   }
 }
 
