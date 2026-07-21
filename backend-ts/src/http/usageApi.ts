@@ -27,9 +27,11 @@ async function safeUsageReport(context: UsageApiContext, request: Request): Prom
 }
 
 async function usageReport(context: UsageApiContext, request: Request): Promise<Record<string, unknown>> {
-  const compact = new URL(request.url).searchParams.get("compact") === "1";
+  const params = new URL(request.url).searchParams;
+  const compact = params.get("compact") === "1";
+  const refresh = params.get("refresh") === "1";
   return await readCodexUsage({
-    backgroundRefresh: true,
+    backgroundRefresh: !refresh,
     indexPath: join(dirname(context.database.path), "codex-usage-index-v1.sqlite"),
     options: {
       includeDimensions: !compact,

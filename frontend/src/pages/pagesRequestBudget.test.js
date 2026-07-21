@@ -64,8 +64,9 @@ test('Command Center trusts bounded summaries instead of hydrating every card de
   assert.doesNotMatch(recentDeliveriesSource, /hydrateDeliveryStatuses|handoffsApi\.getHandoff/);
   assert.match(recentDeliveriesSource, /if \(!visible\) return undefined/);
   assert.match(recentDeliveriesSource, /setVisible\(true\)/);
-  assert.match(usageSource, /getCodexUsage\(\{ compact: true \}\)/);
-  assert.doesNotMatch(usageSource, /useEffect|setInterval/);
+  assert.match(usageSource, /getCodexUsage\(\{ compact: true, refresh: true \}\)/);
+  assert.match(usageSource, /useEffect/);
+  assert.doesNotMatch(usageSource, /setInterval/);
 });
 
 test('first delivery onboarding uses bounded Work and Evidence reads', () => {

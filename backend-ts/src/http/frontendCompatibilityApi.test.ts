@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
@@ -270,19 +270,29 @@ describe("Bun frontend API compatibility", () => {
   test("reads Codex usage from configured sessions dir", async () => {
     const { database } = await openFixtureDatabase();
     const sessionsDir = await tempDir("codex-runner-bun-sessions-");
-    await writeUsageJSONL(sessionsDir, "2026/05/31/session.jsonl", [
+    const usagePath = await writeUsageJSONL(sessionsDir, "2026/05/31/session.jsonl", [
       `{"timestamp":"2026-05-31T08:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15}}}}`
     ]);
     try {
       const router = createDefaultRouter({ database, codexSessionsDir: sessionsDir });
 
-      const usage = await requestJSON(router, "/api/usage/codex", "GET");
+      const usage = await requestJSON(router, "/api/usage/codex?refresh=1", "GET");
 
       expect(usage).toMatchObject({
         source: sessionsDir,
         events_scanned: 1,
         summary: { all_time: { total_tokens: 15 } },
         latest_usage: { last_token_usage: { total_tokens: 15 } }
+      });
+
+      await appendFile(usagePath,
+        `{"timestamp":"2026-05-31T09:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":4,"output_tokens":3,"total_tokens":7}}}}\n`);
+      const refreshed = await requestJSON(router, "/api/usage/codex?compact=1&refresh=1", "GET");
+      expect(refreshed).toMatchObject({
+        compact: true,
+        events_scanned: 2,
+        project_usage: [],
+        summary: { all_time: { total_tokens: 22 } }
       });
     } finally {
       database.close();
@@ -368,8 +378,9 @@ async function tempDir(prefix: string): Promise<string> {
   return root;
 }
 
-async function writeUsageJSONL(root: string, name: string, lines: string[]): Promise<void> {
+async function writeUsageJSONL(root: string, name: string, lines: string[]): Promise<string> {
   const path = join(root, ...name.split("/"));
   await mkdir(join(path, ".."), { recursive: true });
   await writeFile(path, `${lines.join("\n")}\n`);
+  return path;
 }

@@ -1,19 +1,24 @@
 import { systemApi } from '../api/system.js';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BarChart3, ChevronDown, Gauge, RefreshCw, Zap } from 'lucide-react';
+import { readCodexUsageCache, writeCodexUsageCache } from '../utils/codexUsageCache.js';
 import CodexUsageBreakdown from './CodexUsageBreakdown';
 import './CodexUsagePanel.css';
 import './CodexUsagePanel.details.css';
 
 export default function CodexUsagePanel() {
-  const [state, setState] = useState({ loading: false, data: null, error: '' });
+  const [state, setState] = useState(() => ({ loading: true, data: readCodexUsageCache(), error: '' }));
 
-  const loadUsage = useCallback(async () => {
+  const loadUsage = useCallback(async (isActive = () => true) => {
+    if (!isActive()) return;
     setState(prev => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await systemApi.getCodexUsage({ compact: true });
+      const data = await systemApi.getCodexUsage({ compact: true, refresh: true });
+      writeCodexUsageCache(data);
+      if (!isActive()) return;
       setState({ loading: false, data, error: '' });
     } catch (err) {
+      if (!isActive()) return;
       setState(prev => ({
         ...prev,
         loading: false,
@@ -21,6 +26,12 @@ export default function CodexUsagePanel() {
       }));
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void loadUsage(() => active);
+    return () => { active = false; };
+  }, [loadUsage]);
 
   const { data, error, loading } = state;
   return (
@@ -41,7 +52,7 @@ function UsageHeader({ data, loading, onRefresh }) {
       </div>
       <div className="codex-usage-actions">
         <span>{formatUpdatedAt(data?.generated_at)}</span>
-        <button className="btn btn-secondary" onClick={onRefresh} disabled={loading} type="button">
+        <button className="btn btn-secondary" onClick={() => onRefresh()} disabled={loading} type="button">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           {loading ? '刷新中' : '刷新'}
         </button>
@@ -54,7 +65,7 @@ function UsageContent({ data, loading }) {
   if (loading && !data) {
     return <div className="codex-usage-loading">正在读取 Codex 用量…</div>;
   }
-  if (!data) return <div className="codex-usage-empty">点击刷新后按需读取 Codex 用量，不阻塞工作台首屏。</div>;
+  if (!data) return <div className="codex-usage-empty">Codex 用量将在后台读取完成后显示。</div>;
   if (!data || data.events_scanned === 0) return <EmptyUsage />;
   return (
     <div className="codex-usage-content">

@@ -29,9 +29,11 @@ export const systemApi = {
   getCodexUsage: (options = 0) => {
     const limit = typeof options === 'number' ? options : Number(options?.limit || 0);
     const compact = typeof options === 'object' && options?.compact === true;
+    const refresh = typeof options === 'object' && options?.refresh === true;
     const params = new URLSearchParams();
     if (limit > 0) params.set('limit', String(limit));
     if (compact) params.set('compact', '1');
+    if (refresh) params.set('refresh', '1');
     const query = params.size > 0 ? `?${params}` : '';
     return request(`/api/usage/codex${query}`);
   },
