@@ -57,8 +57,8 @@ export function firstDeliveryRecovery(state, doctor) {
     const available = state.availableProviders.length > 0;
     const providers = (doctor?.providers || []).map(provider => provider?.label || provider?.id).filter(Boolean).join(' / ') || 'Codex';
     return available
-      ? '执行器 CLI 已可用，但当前浏览器会话还没有成功的 provider 连接测试。在普通 Settings → Models & Agents 测试并保存；无需进入 Advanced。'
-      : `未找到可用执行器（${providers}）。先确认 CLI 已安装并登录，再在普通 Settings → Models & Agents 执行连接测试。`;
+      ? '执行器 CLI 已可用，但当前浏览器会话还没有成功的 provider 连接测试。在 Connections → AI Providers 测试并保存；无需进入 Advanced。'
+      : `未找到可用执行器（${providers}）。先确认 CLI 已安装并登录，再到 Connections → AI Providers 执行连接测试。`;
   }
   if (!state.steps[2].complete) {
     return '还没有项目。输入一个已存在的本地仓库绝对路径；创建失败时保留原路径，修正后可直接重试。';

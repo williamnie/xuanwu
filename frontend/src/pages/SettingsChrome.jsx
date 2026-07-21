@@ -1,6 +1,6 @@
 import { systemApi } from '../api/system.js';
-import { useState } from 'react';
-import { AlertTriangle, Boxes, ChevronLeft, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Boxes, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { message } from '../store/toastStore';
 import { SETTINGS_ADVANCED_TABS, SETTINGS_PRIMARY_TABS } from './settingsNavigation';
 
@@ -22,6 +22,18 @@ export function SettingsHeader({ onRouteChange, route, title = 'Settings' }) {
 
 function SettingsNavigation({ onRouteChange, route }) {
   const advanced = route.tier === 'advanced';
+  const lastPrimaryTab = useRef(advanced ? 'general' : route.tab);
+
+  useEffect(() => {
+    if (!advanced) lastPrimaryTab.current = route.tab;
+  }, [advanced, route.tab]);
+
+  const toggleAdvanced = () => {
+    onRouteChange(advanced
+      ? { tier: 'primary', tab: lastPrimaryTab.current }
+      : { tier: 'advanced', tab: 'runtime' });
+  };
+
   return (
     <div className="settings-navigation-stack">
       <div className="settings-navigation-row">
@@ -36,9 +48,10 @@ function SettingsNavigation({ onRouteChange, route }) {
           ))}
         </nav>
         <button
+          aria-label={advanced ? '关闭 Advanced 设置' : '打开 Advanced 设置'}
           aria-pressed={advanced}
           className={`settings-advanced-gate ${advanced ? 'active' : ''}`}
-          onClick={() => onRouteChange({ tier: 'advanced', tab: 'runtime' })}
+          onClick={toggleAdvanced}
           type="button"
         >
           <SlidersHorizontal size={15} /> Advanced
@@ -46,13 +59,6 @@ function SettingsNavigation({ onRouteChange, route }) {
       </div>
       {advanced && (
         <div className="settings-advanced-navigation">
-          <button
-            className="settings-advanced-back"
-            onClick={() => onRouteChange({ tier: 'primary', tab: 'general' })}
-            type="button"
-          >
-            <ChevronLeft size={15} /> 普通设置
-          </button>
           <nav className="settings-tabs settings-advanced-tabs" role="tablist" aria-label="Advanced Settings sections">
             {SETTINGS_ADVANCED_TABS.map((tab) => (
               <TabButton

@@ -164,7 +164,7 @@
 .settings-tabs {
   background: var(--button-secondary-bg);
   border-color: var(--button-border);
-  border-radius: var(--button-radius);
+  border-radius: var(--radius-md);
   box-shadow: none;
 }
 .proposal-action-row { border-radius: var(--radius-md); }
@@ -174,8 +174,8 @@
   font-weight: 600;
   letter-spacing: 0.06em;
 }
-.settings-tabs { border-radius: var(--button-radius); gap: 3px; padding: 4px; }
-.settings-tab { border-radius: var(--button-radius); font-size: 0.75rem; letter-spacing: 0.025em; text-transform: uppercase; }
+.settings-tabs { border-radius: var(--radius-md); gap: 3px; padding: 4px; }
+.settings-tab { border-radius: var(--radius-sm); font-size: 0.75rem; letter-spacing: 0.025em; text-transform: uppercase; }
 .settings-tab.active, [data-theme="dark"] .settings-tab.active {
   background: var(--button-primary-bg);
   border-color: var(--button-primary-bg);

@@ -81,7 +81,8 @@ export function usePiAgentSettingsState() {
       modelProvider: preset.id
     }));
   };
-  const handleSave = () => savePiSettings({ form, setForm, setPromptSummary, setProviders, setSaving });
+  const handleConnectionSave = () => savePiConnectionSettings({ form, setForm, setProviders, setSaving });
+  const handleAgentSave = () => savePiAgentSettings({ form, setForm, setPromptSummary, setProviders, setSaving });
   const testConnection = () => testPiConnection(form, setConnectionTest);
   const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
   const copyPiCodexOAuthUrl = () => copyOAuthUrl(oauthStatus?.auth_url);
@@ -93,7 +94,7 @@ export function usePiAgentSettingsState() {
   }, []);
 
   return { connectionTest, form, loading, modelOptions, oauthBusy, oauthStatus, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
-    copyPiCodexOAuthUrl, handleSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
+    copyPiCodexOAuthUrl, handleAgentSave, handleConnectionSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
 }
 
 function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary) {
@@ -207,17 +208,31 @@ async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLo
   }
 }
 
-async function savePiSettings({ form, setForm, setPromptSummary, setProviders, setSaving }) {
+async function savePiConnectionSettings({ form, setForm, setProviders, setSaving }) {
   if (!isValidForm(form)) return;
   setSaving(true);
   try {
-    await assistantApi.updatePiProviderSettings(form.modelProvider.trim(), providerPayload(form));
+    const providerID = form.modelProvider.trim();
+    await assistantApi.updatePiProviderSettings(providerID, providerPayload(form));
+    message.success('Provider 连接设置已保存');
+    await refreshProviderAfterSave(providerID, setProviders, setForm);
+  } catch (err) {
+    message.error(err.message || '保存 Provider 连接设置失败');
+  } finally {
+    setSaving(false);
+  }
+}
+
+async function savePiAgentSettings({ form, setForm, setPromptSummary, setProviders, setSaving }) {
+  if (!isValidAgentForm(form)) return;
+  setSaving(true);
+  try {
     await saveAgent(agentPayload(form));
-    message.success('Supervisor Settings 已保存');
+    message.success('Supervisor 行为设置已保存');
     setPromptSummary(null);
     await refreshAfterSave(setProviders, setForm);
   } catch (err) {
-    message.error(err.message || '保存 Supervisor Settings 失败');
+    message.error(err.message || '保存 Supervisor 行为设置失败');
   } finally {
     setSaving(false);
   }
@@ -235,9 +250,31 @@ async function refreshAfterSave(setProviders, setForm) {
   setForm({ ...formFromState(nextAgents, nextProviders), apiKey: '' });
 }
 
+async function refreshProviderAfterSave(providerID, setProviders, setForm) {
+  const providerSettings = await assistantApi.getPiProviderSettings();
+  const nextProviders = providerSettings?.providers || [];
+  const provider = nextProviders.find(item => item.id === providerID);
+  setProviders(nextProviders);
+  setForm(current => ({
+    ...current,
+    api: provider?.api || current.api,
+    apiKey: '',
+    baseUrl: provider?.base_url || current.baseUrl,
+    modelId: provider?.models?.[0] || current.modelId,
+    modelProvider: providerID,
+    userAgent: provider?.user_agent || current.userAgent,
+  }));
+}
+
 function isValidForm(form) {
   if (form.modelProvider.trim() && form.modelId.trim() && form.api.trim()) return true;
   message.error('provider、model、API 类型不能为空');
+  return false;
+}
+
+function isValidAgentForm(form) {
+  if (form.modelProvider.trim() && form.modelId.trim()) return true;
+  message.error('provider 和 model 不能为空');
   return false;
 }
 

@@ -1,5 +1,9 @@
 # ADR-XW-0080：旧 Inbox、Approval、Activity 与 Settings 占位入口退出
 
+> **历史迁移记录（2026-07-21 更新）**：本文的 Settings Connector/MCP carrier 描述对应 2026-07-18
+> 部署快照。当前 Connections 已成为独立产品页，`pi-connectors` 与旧 Settings `connections|connectors`
+> 输入统一 redirect 到顶层 Connections；当前 IA 以 [ADR-XW-0050](0050-product-navigation-compatibility.md) 为准。
+
 - 状态：Accepted
 - 日期：2026-07-18
 - 路线 issue：XW P11.02 / Runner #737

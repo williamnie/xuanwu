@@ -2,38 +2,59 @@ import { Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, Refre
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
 
-export default function PiAgentSettingsPanel({ advanced = false }) {
+export default function PiAgentSettingsPanel({ view = 'agent' }) {
   const state = usePiAgentSettingsState();
 
   return (
     <section className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <PanelHeader advanced={advanced} loading={state.loading} onRefresh={state.loadSettings} />
+      <PanelHeader loading={state.loading} onRefresh={state.loadSettings} view={view} />
       {state.loading ? (
         <PanelLoader label="玄武正在读取 Supervisor 配置…" />
       ) : (
-        <PiSettingsForm advanced={advanced} state={state} />
+        <PiSettingsForm state={state} view={view} />
       )}
     </section>
   );
 }
 
-function PiSettingsForm({ advanced, state }) {
-  if (!advanced) return <RecommendedProviderSettings state={state} />;
+function PiSettingsForm({ state, view }) {
+  if (view === 'connection') return <RecommendedProviderSettings state={state} />;
+  if (view === 'agent') return <AgentBehaviorSettings state={state} />;
   return (
     <>
       <div className="provider-advanced-heading">
         <SlidersHorizontal size={17} />
         <div>
           <strong>Custom advanced</strong>
-          <span>直接编辑 provider ID、API type、base URL、thinking 与 runtime instructions。</span>
+          <span>直接编辑 provider ID、API type、base URL、User-Agent 与 credential。</span>
         </div>
       </div>
-      <PiSettingsGrid advanced form={state.form} updateField={state.updateField} />
+      <AdvancedProviderGrid state={state} />
       <ProviderCredentialFields state={state} />
       <CodexOAuthPanel state={state} />
-      <AgentEnableField form={state.form} updateField={state.updateField} />
-      <SaveRow advanced onSave={state.handleSave} saving={state.saving} />
+      <SaveRow mode="connection" onSave={state.handleConnectionSave} saving={state.saving} />
       <ProviderSummary providers={state.providers} />
+    </>
+  );
+}
+
+function AgentBehaviorSettings({ state }) {
+  return (
+    <>
+      <div className="provider-advanced-heading">
+        <Bot size={17} />
+        <div>
+          <strong>Supervisor behavior</strong>
+          <span>选择已经配置的 provider/model，并维护名称、thinking 与运行指令；连接凭据统一在 Connections 管理。</span>
+        </div>
+      </div>
+      <AgentSettingsGrid state={state} />
+      <Field label="Runtime Instructions">
+        <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
+      </Field>
+      <PromptSummaryDebug state={state} />
+      <AgentEnableField form={state.form} updateField={state.updateField} />
+      <SaveRow mode="agent" onSave={state.handleAgentSave} saving={state.saving} />
     </>
   );
 }
@@ -49,12 +70,11 @@ function RecommendedProviderSettings({ state }) {
           <SlidersHorizontal size={18} />
           <div>
             <strong>当前使用自定义 provider：{state.form.modelProvider || '未命名'}</strong>
-            <span>为避免默认页面暴露底层连接参数，请在 Advanced · Model runtime 中维护。</span>
+            <span>为避免推荐页面暴露底层连接参数，请在 Connections · Custom Provider 中维护。</span>
           </div>
         </div>
       )}
-      <AgentEnableField form={state.form} updateField={state.updateField} />
-      <SaveRow onSave={state.handleSave} saving={state.saving} />
+      <SaveRow mode="connection" onSave={state.handleConnectionSave} saving={state.saving} />
     </>
   );
 }
@@ -104,7 +124,7 @@ function RecommendedProviderConfiguration({ state }) {
           <h3>{preset.label}</h3>
           <p>{configured ? '凭据已安全配置；更新时不会回显旧密钥。' : preset.auth === 'oauth' ? '使用 OAuth 完成连接。' : '输入 API key 后可先测试连接再保存。'}</p>
         </div>
-        <span className="provider-default-model"><ShieldCheck size={14} /> 默认 {preset.recommended_model}</span>
+        <span className="provider-default-model"><ShieldCheck size={14} /> 推荐 {preset.recommended_model}</span>
       </div>
       {preset.auth === 'oauth' ? <CodexOAuthPanel state={state} /> : <RecommendedApiKeyField state={state} />}
       <div className="provider-recommended-actions">
@@ -134,7 +154,7 @@ function RecommendedApiKeyField({ state }) {
 
 function RecommendedModelField({ state }) {
   return (
-    <Field label="Model">
+    <Field label="Connection model">
       <select className="form-control" value={state.form.modelId} onChange={(event) => state.updateField('modelId', event.target.value)}>
         {state.modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
       </select>
@@ -174,17 +194,16 @@ function providerCardStatus(state, preset) {
   return { Icon: CircleDashed, label: '未连接', tone: 'idle' };
 }
 
-function PanelHeader({ advanced, loading, onRefresh }) {
+function PanelHeader({ loading, onRefresh, view }) {
+  const copy = panelHeaderCopy(view);
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
       <div>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Bot size={18} color="var(--primary)" /> {advanced ? 'Xuanwu Supervisor · Runtime' : 'Models & Agents'}
+          <Bot size={18} color="var(--primary)" /> {copy.title}
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
-          {advanced
-            ? '配置这个唯一 Supervisor 的 provider、API path、API key、模型、thinking 与运行指令；不会创建多个独立 agent。'
-            : '从推荐连接开始，只在需要自定义兼容端点时进入 Advanced；不会创建多个独立 agent。'}
+          {copy.description}
         </p>
       </div>
       <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -192,6 +211,25 @@ function PanelHeader({ advanced, loading, onRefresh }) {
       </button>
     </div>
   );
+}
+
+function panelHeaderCopy(view) {
+  if (view === 'connection') {
+    return {
+      title: 'AI Providers',
+      description: '配置 OpenAI、Codex、Anthropic 或兼容 provider 的凭据、可用模型与连接测试。',
+    };
+  }
+  if (view === 'advanced') {
+    return {
+      title: 'Custom Provider',
+      description: '维护自定义 provider 的底层 API path、API type、User-Agent 与凭据；Supervisor 行为仍在 Settings 管理。',
+    };
+  }
+  return {
+    title: 'Models & Agents',
+    description: '配置唯一 Supervisor 的模型选择、thinking 与运行指令；provider 凭据和连接测试统一在 Connections 管理。',
+  };
 }
 
 function Field({ children, label }) {
@@ -203,14 +241,36 @@ function Field({ children, label }) {
   );
 }
 
-function PiSettingsGrid({ advanced, form, updateField }) {
+function AdvancedProviderGrid({ state }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-      <TextField form={form} label="Supervisor Display Name" name="agentName" updateField={updateField} />
-      <TextField form={form} label="Model Provider" name="modelProvider" placeholder="openai / anthropic / local" updateField={updateField} />
-      <TextField form={form} label="Model ID" name="modelId" placeholder="gpt-5.4" updateField={updateField} />
-      {advanced && <ApiTypeField form={form} updateField={updateField} />}
-      <ThinkingField form={form} updateField={updateField} />
+      <TextField form={state.form} label="Model Provider" name="modelProvider" placeholder="openai / anthropic / local" updateField={state.updateField} />
+      <TextField form={state.form} label="Available Model" name="modelId" placeholder="gpt-5.4" updateField={state.updateField} />
+      <ApiTypeField form={state.form} updateField={state.updateField} />
+    </div>
+  );
+}
+
+function AgentSettingsGrid({ state }) {
+  const providerOptions = [...new Set([
+    state.form.modelProvider,
+    ...state.providers.map((provider) => provider.id),
+    ...state.providerCatalog.presets.map((preset) => preset.id),
+  ].filter(Boolean))];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+      <TextField form={state.form} label="Supervisor Display Name" name="agentName" updateField={state.updateField} />
+      <Field label="Model Provider">
+        <select className="form-control" value={state.form.modelProvider} onChange={(event) => state.updateField('modelProvider', event.target.value)}>
+          {providerOptions.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+        </select>
+      </Field>
+      <Field label="Model ID">
+        <select className="form-control" value={state.form.modelId} onChange={(event) => state.updateField('modelId', event.target.value)}>
+          {state.modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+        </select>
+      </Field>
+      <ThinkingField form={state.form} updateField={state.updateField} />
     </div>
   );
 }
@@ -258,10 +318,6 @@ function ProviderCredentialFields({ state }) {
           placeholder={configured ? '已配置，输入新 key 可覆盖' : '输入 Supervisor provider API key'}
         />
       </Field>
-      <Field label="Runtime Instructions">
-        <textarea className="form-control" rows={3} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
-      </Field>
-      <PromptSummaryDebug state={state} />
     </>
   );
 }
@@ -353,17 +409,18 @@ function AgentEnableField({ form, updateField }) {
   );
 }
 
-function SaveRow({ advanced, onSave, saving }) {
+function SaveRow({ mode, onSave, saving }) {
+  const connection = mode === 'connection';
   return (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
       <button className="btn btn-primary" onClick={onSave} disabled={saving}>
         {saving ? <Loader2 size={15} className="spin-animation" /> : <Save size={15} />}
-        保存 Supervisor Settings
+        {connection ? '保存 Provider 连接' : '保存 Supervisor 行为'}
       </button>
       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-        {advanced
-          ? 'API key 只写入后端 provider 配置；读取时只显示是否 configured，不回显明文。'
-          : '保存时沿用现有底层连接参数，不会在普通设置中回显。'}
+        {connection
+          ? '凭据和可用模型只写入现有 provider authority；不会改变 Supervisor 默认选择。'
+          : '只更新 Supervisor 行为与默认模型，不写 provider 凭据或连接参数。'}
       </span>
     </div>
   );

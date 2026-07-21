@@ -56,7 +56,7 @@ export const PRODUCT_NAV_ITEMS = Object.freeze([
     label: PRODUCT_NAV_LABELS.connections,
     icon: 'connections',
     placement: 'primary',
-    availability: 'compatibility',
+    availability: 'available',
   },
   {
     page: 'settings',

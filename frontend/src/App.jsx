@@ -23,7 +23,6 @@ import { Menu } from 'lucide-react';
 import ToastContainer from './components/ToastContainer';
 import { message as toast } from './store/toastStore';
 import AuthGate from './components/AuthGate';
-import { PRODUCT_NAV_LABELS } from './brand.js';
 import { issueIdFromWorkId, workIdFromIssueId, WORK_BOARD_ENABLED } from './pages/workBoardModel.js';
 import { handoffRouteFromHash } from './pages/handoffPageModel.js';
 import './App.css';
@@ -41,6 +40,7 @@ const Handoffs = lazy(() => import('./pages/Handoffs'));
 const PiChat = lazy(() => import('./pages/PiChat'));
 const GlobalAskComposer = lazy(() => import('./components/GlobalAskComposer'));
 const Automations = lazy(() => import('./pages/Automations'));
+const Connections = lazy(() => import('./pages/Connections'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 const ACTIVE_RECONCILE_EVENT_TYPES = new Set([
@@ -406,7 +406,7 @@ export default function App() {
             ) : currentPage === 'automations' ? (
               <Automations />
             ) : currentPage === 'connections' ? (
-              <Settings initialTab="connectors" pageTitle={PRODUCT_NAV_LABELS.connections} navigateTo={navigateTo} />
+              <Connections />
             ) : currentPage === 'settings' ? (
               <Settings navigateTo={navigateTo} />
             ) : (

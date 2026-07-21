@@ -7,18 +7,15 @@ import {
   settingsRouteId,
 } from './settingsNavigation.js';
 
-test('Settings exposes five primary tabs and keeps runtime details in Advanced', () => {
+test('Settings exposes behavior tabs and keeps runtime details in Advanced', () => {
   assert.deepEqual(SETTINGS_PRIMARY_TABS.map(tab => tab.label), [
     'General',
     'Models & Agents',
-    'Connections',
     'Permissions',
     'Notifications',
   ]);
   assert.deepEqual(SETTINGS_ADVANCED_TABS.map(tab => tab.id), [
     'runtime',
-    'model-runtime',
-    'mcp',
     'skills',
     'memory',
     'activity',
@@ -29,7 +26,9 @@ test('Settings exposes five primary tabs and keeps runtime details in Advanced',
 test('Settings migrates configuration tabs but excludes product work queues', () => {
   assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'models-agents' });
   assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'advanced', tab: 'runtime' });
-  assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'primary', tab: 'connections' });
+  assert.deepEqual(resolveSettingsRoute('connections'), { tier: 'product', tab: 'connections' });
+  assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'product', tab: 'connections' });
+  assert.deepEqual(resolveSettingsRoute('advanced:model-runtime'), { tier: 'product', tab: 'connections' });
   assert.deepEqual(resolveSettingsRoute('skills'), { tier: 'advanced', tab: 'skills' });
   assert.deepEqual(resolveSettingsRoute('automations'), { tier: 'primary', tab: 'general' });
   assert.deepEqual(resolveSettingsRoute('approvals'), { tier: 'primary', tab: 'general' });
@@ -39,9 +38,9 @@ test('Settings migrates configuration tabs but excludes product work queues', ()
 });
 
 test('Settings canonical routes round-trip and unknown routes fail safe to General', () => {
-  const advanced = resolveSettingsRoute('advanced:model-runtime');
-  assert.deepEqual(advanced, { tier: 'advanced', tab: 'model-runtime' });
-  assert.equal(settingsRouteId(advanced), 'advanced:model-runtime');
+  const advanced = resolveSettingsRoute('advanced:runtime');
+  assert.deepEqual(advanced, { tier: 'advanced', tab: 'runtime' });
+  assert.equal(settingsRouteId(advanced), 'advanced:runtime');
   assert.equal(settingsRouteId(resolveSettingsRoute('notifications')), 'notifications');
   assert.deepEqual(resolveSettingsRoute('unknown'), { tier: 'primary', tab: 'general' });
 });

@@ -54,7 +54,7 @@ function PanelHeader({ loading, onRefresh, onScan, scanning }) {
           发现不等于启用；Supervisor 只会使用你显式启用的 server 和 capability，secret/env/header 始终显示为 {redactedText}。
         </p>
       </div>
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <button className="btn btn-secondary" disabled={loading || scanning} onClick={onRefresh} type="button"><RefreshCw size={14} /> Refresh</button>
         <button className="btn btn-primary" disabled={scanning} onClick={onScan} type="button">{scanning ? 'Scanning...' : 'Scan local MCP configs'}</button>
       </div>
@@ -76,7 +76,7 @@ function Notice({ error }) {
 function Sources({ sources }) {
   if (!sources.length) return null;
   return (
-    <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+    <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
       {sources.map((source) => <SourceCard key={source.id} source={source} />)}
     </div>
   );
@@ -123,7 +123,7 @@ function ManualServerForm({ form, saving, setForm, submit }) {
   return (
     <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <h3 style={sectionTitleStyle}>Manual MCP servers</h3>
-      <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         <TextField label="Name" onChange={(value) => update('name', value)} placeholder="Fixture MCP" value={form.name} />
         <TextField label="stdio command" onChange={(value) => update('command', value)} placeholder="node /path/server.js" value={form.command} />
         <TextField label="args" onChange={(value) => update('args', value)} placeholder="--flag value" value={form.args} />

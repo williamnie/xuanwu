@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const settingsSource = readFileSync(new URL('./Settings.jsx', import.meta.url), 'utf8');
 const chromeSource = readFileSync(new URL('./SettingsChrome.jsx', import.meta.url), 'utf8');
+const connectionsSource = readFileSync(new URL('./Connections.jsx', import.meta.url), 'utf8');
 const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
 const settingsNavigationSource = readFileSync(new URL('./settingsNavigation.js', import.meta.url), 'utf8');
 const modulesSource = readFileSync(new URL('./assistantModules.js', import.meta.url), 'utf8');
@@ -23,21 +24,29 @@ const appStylesSource = readFileSync(new URL('../index.css', import.meta.url), '
 const piAgentSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
 const runtimeDiagnosticsSource = readFileSync(new URL('../utils/runtimeDiagnostics.js', import.meta.url), 'utf8');
 
-test('Settings renders five primary sections and gates internal panels behind Advanced', () => {
+test('Settings renders behavior sections and gates internal panels behind Advanced', () => {
   assert.match(settingsSource, /initialTab = 'general'/);
   assert.match(settingsSource, /resolveSettingsRoute\(initialTab\)/);
-  for (const tab of ['general', 'models-agents', 'connections', 'permissions', 'notifications']) {
+  for (const tab of ['general', 'models-agents', 'permissions', 'notifications']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
-  for (const tab of ['runtime', 'model-runtime', 'mcp', 'skills', 'memory', 'activity', 'policies']) {
+  for (const tab of ['runtime', 'skills', 'memory', 'activity', 'policies']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
   assert.match(sectionsSource, /tier === 'advanced'/);
   assert.match(chromeSource, /SETTINGS_PRIMARY_TABS/);
   assert.match(chromeSource, /SETTINGS_ADVANCED_TABS/);
   assert.match(chromeSource, /settings-advanced-gate/);
+  assert.match(chromeSource, /const toggleAdvanced/);
+  assert.match(chromeSource, /tab: lastPrimaryTab\.current/);
+  assert.doesNotMatch(chromeSource, /普通设置|settings-advanced-back|ChevronLeft/);
+  assert.match(stylesSource, /\.settings-navigation-row \{\s*flex-wrap: wrap;/);
+  assert.match(stylesSource, /\.settings-tab \{[\s\S]*?border-radius: var\(--radius-sm\);/);
   assert.doesNotMatch(settingsSource, /CronTasksPanel/);
   assert.doesNotMatch(chromeSource, /Cron 任务已在侧边栏/);
+  assert.doesNotMatch(settingsNavigationSource, /label: 'Connections'/);
+  assert.doesNotMatch(settingsNavigationSource, /id: 'mcp'/);
+  assert.doesNotMatch(settingsNavigationSource, /id: 'model-runtime'/);
 });
 
 test('Settings primary IA includes project settings without duplicating its source of truth', () => {
@@ -47,14 +56,13 @@ test('Settings primary IA includes project settings without duplicating its sour
   assert.match(sectionsSource, /navigateTo\?\.\('projects'\)/);
   assert.match(sectionsSource, /不会产生双写/);
   assert.match(settingsNavigationSource, /Models & Agents/);
-  assert.match(settingsNavigationSource, /Connections/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
-  assert.match(sectionsSource, /<PiAgentSettingsPanel \/>/);
-  assert.match(sectionsSource, /<PiAgentSettingsPanel advanced \/>/);
-  assert.match(piAgentSource, /if \(!advanced\) return <RecommendedProviderSettings state=\{state\} \/>/);
+  assert.match(sectionsSource, /<PiAgentSettingsPanel view="agent" \/>/);
+  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel view="advanced"/);
+  assert.match(piAgentSource, /view === 'connection'/);
   assert.match(piAgentSource, /<ProviderCredentialFields state=\{state\} \/>/);
-  assert.match(piAgentSource, /advanced && <ApiTypeField form=\{form\} updateField=\{updateField\} \/>/);
+  assert.match(piAgentSource, /<ApiTypeField form=\{state\.form\} updateField=\{state\.updateField\} \/>/);
   assert.match(piAgentSource, /<ProviderSummary providers=\{state\.providers\} \/>/);
   assert.equal(existsSync(placeholderPath), false);
   assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|placeholder/i);
@@ -69,11 +77,11 @@ test('ordinary Settings route does not render raw runtime controls', () => {
   const advancedStart = sectionsSource.indexOf('function AdvancedSettingsTab');
   const primarySource = sectionsSource.slice(primaryStart, advancedStart);
   assert.doesNotMatch(primarySource, /Runtime API Type|User-Agent|Prompt 摘要|PiMcpManagementPanel|RuntimeStatusPanel/);
-  assert.match(piAgentSource, /advanced = false/);
-  assert.match(piAgentSource, /if \(!advanced\) return <RecommendedProviderSettings/);
-  assert.match(piAgentSource, /<PiSettingsGrid advanced/);
+  assert.match(piAgentSource, /view = 'agent'/);
+  assert.match(piAgentSource, /return <AgentBehaviorSettings state=\{state\} \/>/);
+  assert.match(piAgentSource, /<AdvancedProviderGrid state=\{state\} \/>/);
   assert.match(piAgentSource, /<ProviderCredentialFields/);
-  assert.match(piAgentSource, /\{advanced && <ApiTypeField/);
+  assert.doesNotMatch(sectionsSource, /ApiTypeField|ProviderCredentialFields/);
   assert.match(piAgentSource, /<ProviderSummary/);
 });
 
@@ -142,8 +150,13 @@ test('Advanced Runtime exports one redacted diagnostics bundle from existing sys
   assert.doesNotMatch(settingsSource, /window\.confirm|window\.alert/);
 });
 
-test('Connections shows connector health, test and inline revoke controls from API', () => {
-  assert.match(sectionsSource, /ConnectorDiagnosticsPanel/);
+test('Connections owns provider, connector and MCP management without Settings duplication', () => {
+  assert.match(connectionsSource, /PiAgentSettingsPanel view="connection"/);
+  assert.match(connectionsSource, /PiAgentSettingsPanel view="advanced"/);
+  assert.match(connectionsSource, /ConnectorDiagnosticsPanel/);
+  assert.match(connectionsSource, /FeishuSettingsPanel/);
+  assert.match(connectionsSource, /PiMcpManagementPanel/);
+  assert.doesNotMatch(sectionsSource, /ConnectorDiagnosticsPanel|FeishuSettingsPanel|PiMcpManagementPanel/);
   assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
   assert.match(connectorsApiSource, /testPiConnector/);
   assert.match(connectorsApiSource, /revokePiConnectorSecret/);

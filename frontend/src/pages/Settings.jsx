@@ -17,8 +17,15 @@ export default function Settings({ initialTab = 'general', navigateTo, pageTitle
   const [route, setRoute] = useState(() => resolveSettingsRoute(initialTab));
 
   useEffect(() => {
-    setRoute(resolveSettingsRoute(initialTab));
-  }, [initialTab]);
+    const nextRoute = resolveSettingsRoute(initialTab);
+    if (nextRoute.tier === 'product') {
+      navigateTo?.(nextRoute.tab);
+      return;
+    }
+    setRoute(nextRoute);
+  }, [initialTab, navigateTo]);
+
+  if (route.tier === 'product') return null;
 
   return (
     <div className="settings-page animate-fade-in">

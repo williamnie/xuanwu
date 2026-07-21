@@ -1,9 +1,6 @@
 import IssueTemplatesPanel from './IssueTemplatesPanel';
-import ConnectorDiagnosticsPanel from './ConnectorDiagnosticsPanel';
-import FeishuSettingsPanel from './FeishuSettingsPanel';
 import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
-import PiMcpManagementPanel from './PiMcpManagementPanel';
 import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
 import PermissionsSettingsPanel from './PermissionsSettingsPanel';
@@ -21,7 +18,6 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
     <>
       {activeTab === 'general' && <GeneralSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'models-agents' && <ModelsAgentsSettingsTab />}
-      {activeTab === 'connections' && <ConnectionsSettingsTab />}
       {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'notifications' && <NotificationsSettingsTab />}
     </>
@@ -44,16 +40,7 @@ function GeneralSettingsTab({ navigateTo }) {
 }
 
 function ModelsAgentsSettingsTab() {
-  return <PiAgentSettingsPanel />;
-}
-
-function ConnectionsSettingsTab() {
-  return (
-    <>
-      <ConnectorDiagnosticsPanel />
-      <FeishuSettingsPanel />
-    </>
-  );
+  return <PiAgentSettingsPanel view="agent" />;
 }
 
 function PermissionsSettingsTab({ navigateTo }) {
@@ -68,8 +55,6 @@ function AdvancedSettingsTab({ activeTab, RuntimeStatusPanel, navigateTo }) {
   return (
     <>
       {activeTab === 'runtime' && <AdvancedRuntimeSettingsTab RuntimeStatusPanel={RuntimeStatusPanel} />}
-      {activeTab === 'model-runtime' && <PiAgentSettingsPanel advanced />}
-      {activeTab === 'mcp' && <AdvancedConnectionsSettingsTab />}
       {activeTab === 'skills' && <AdvancedSkillsSettingsTab />}
       {activeTab === 'memory' && <MemorySettingsTab />}
       {activeTab === 'activity' && <ActivityTimelinePanel navigateTo={navigateTo} />}
@@ -92,15 +77,6 @@ function AdvancedRuntimeSettingsTab({ RuntimeStatusPanel }) {
       <RuntimeStatusPanel />
       <RunnerSettingsPanel />
       <ProviderAvailabilityPanel />
-    </>
-  );
-}
-
-function AdvancedConnectionsSettingsTab() {
-  return (
-    <>
-      <PiMcpManagementPanel />
-      <ConnectorDiagnosticsPanel />
     </>
   );
 }

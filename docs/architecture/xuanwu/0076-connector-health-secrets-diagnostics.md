@@ -5,7 +5,7 @@
 - 路线 issue：XW P09.07 / Runner #723
 - 硬依赖：XW P09.01 / #717、XW P10.06 / #729（均为 `done`）
 - canonical 实现：`backend-ts/src/integrations/connectorDiagnostics.ts`
-- UI/API：Settings → Connections、`/api/pi/connectors*`
+- UI/API：顶层 Connections → Integrations、`/api/pi/connectors*`
 
 ## 决策与边界
 

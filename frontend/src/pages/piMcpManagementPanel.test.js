@@ -3,11 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const panelSource = readFileSync(new URL('./PiMcpManagementPanel.jsx', import.meta.url), 'utf8');
-const sectionsSource = readFileSync(new URL('./AssistantSettingsSections.jsx', import.meta.url), 'utf8');
+const connectionsSource = readFileSync(new URL('./Connections.jsx', import.meta.url), 'utf8');
 const connectorsSource = readFileSync(new URL('../api/connectors.js', import.meta.url), 'utf8');
 
-test('Assistant Settings exposes MCP discovery and enablement management without secret echo', () => {
-  assert.match(sectionsSource, /PiMcpManagementPanel/);
+test('Connections exposes MCP discovery and enablement management without secret echo', () => {
+  assert.match(connectionsSource, /PiMcpManagementPanel/);
   assert.match(panelSource, /Detected MCP servers/);
   assert.match(panelSource, /Manual MCP servers/);
   assert.match(panelSource, /Capabilities/);

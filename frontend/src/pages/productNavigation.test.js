@@ -74,7 +74,8 @@ test('App routes canonical pages to the currently verified compatibility surface
   assert.match(appSource, /currentPage === 'command-center'[\s\S]*<Dashboard navigateTo=\{navigateTo\} \/>/);
   assert.match(appSource, /currentPage === 'ask-xuanwu'[\s\S]*<PiChat navigateTo=\{navigateTo\} initialConversationId=\{selectedPiConversationId\} \/>/);
   assert.match(appSource, /currentPage === 'automations'[\s\S]*<Automations \/>/);
-  assert.match(appSource, /currentPage === 'connections'[\s\S]*initialTab="connectors"/);
+  assert.match(appSource, /const Connections = lazy\(\(\) => import\('\.\/pages\/Connections'\)\)/);
+  assert.match(appSource, /currentPage === 'connections'[\s\S]*<Connections \/>/);
   assert.doesNotMatch(appSource, /AttentionInbox|currentPage === 'attention-inbox'|currentPage === 'pi-inbox'/);
 });
 
