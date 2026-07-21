@@ -152,7 +152,8 @@ test('Advanced Runtime exports one redacted diagnostics bundle from existing sys
 
 test('Connections owns provider, connector and MCP management without Settings duplication', () => {
   assert.match(connectionsSource, /PiAgentSettingsPanel view="connection"/);
-  assert.match(connectionsSource, /PiAgentSettingsPanel view="advanced"/);
+  assert.match(connectionsSource, /PiAgentSettingsPanel view="agent"/);
+  assert.doesNotMatch(connectionsSource, /PiAgentSettingsPanel view="advanced"/);
   assert.match(connectionsSource, /ConnectorDiagnosticsPanel/);
   assert.match(connectionsSource, /FeishuSettingsPanel/);
   assert.match(connectionsSource, /PiMcpManagementPanel/);

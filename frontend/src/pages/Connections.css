@@ -97,6 +97,60 @@
   padding-bottom: 24px;
 }
 
+.provider-advanced-disclosure {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.provider-advanced-disclosure > summary {
+  align-items: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  padding: 13px 14px;
+}
+
+.provider-advanced-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.provider-advanced-disclosure > summary::after {
+  color: var(--text-muted);
+  content: '+';
+  font-size: 1.1rem;
+  margin-left: auto;
+}
+
+.provider-advanced-disclosure[open] > summary::after {
+  content: '−';
+}
+
+.provider-advanced-disclosure > summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.provider-advanced-disclosure > summary strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+.provider-advanced-disclosure > summary small {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.provider-advanced-content {
+  border-top: 1px solid var(--border-color);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
 @media (max-width: 720px) {
   .connections-tabs {
     display: grid;

@@ -36,14 +36,16 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
 
 test('Connections provider view uses recommended cards, connection state, and discovered models', () => {
   assert.match(panelSource, /view === 'connection'/);
-  assert.match(panelSource, /return <RecommendedProviderSettings state=\{state\} \/>/);
+  assert.match(panelSource, /return <ProviderConnectionSettings state=\{state\} \/>/);
   assert.match(panelSource, /ProviderPresetCards/);
   assert.match(panelSource, /provider-connection-chip/);
   assert.match(panelSource, /测试连接并发现模型/);
   assert.match(panelSource, /state\.handleConnectionSave/);
   assert.match(panelSource, /state\.modelOptions\.map/);
-  assert.match(panelSource, /Custom advanced/);
-  assert.match(panelSource, /Connections · Custom Provider/);
+  assert.match(panelSource, /自定义 \/ 高级 Provider/);
+  assert.match(panelSource, /仅在接入自定义网关、代理或兼容 API 时使用/);
+  assert.match(panelSource, /<AdvancedProviderDisclosure state=\{state\} \/>/);
+  assert.doesNotMatch(panelSource, /Connections · Custom Provider/);
   assert.match(stateSource, /getPiProviderCatalog/);
   assert.match(stateSource, /testPiProviderConnection/);
   assert.match(stateSource, /getPiProviderModels/);
@@ -88,7 +90,7 @@ test('recommended defaults remain stable and API keys stay write-only in local s
 });
 
 test('Supervisor settings no longer expose multi-agent creation controls', () => {
-  assert.match(panelSource, /Custom Provider/);
+  assert.match(panelSource, /自定义 \/ 高级 Provider/);
   assert.doesNotMatch(panelSource, /PI Assistant/);
   assert.doesNotMatch(panelSource, /Runner Brain/);
   assert.match(panelSource, /配置唯一 Supervisor/);

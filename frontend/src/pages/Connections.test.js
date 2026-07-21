@@ -13,14 +13,16 @@ test('top-level Connections is an independent product surface', () => {
   assert.doesNotMatch(appSource, /currentPage === 'connections'[\s\S]*initialTab="connectors"/);
   assert.match(connectionsSource, /Runtime connectivity/);
   assert.match(connectionsSource, /AI Providers/);
+  assert.match(connectionsSource, /PI Agent/);
   assert.match(connectionsSource, /Integrations/);
   assert.match(connectionsSource, /MCP/);
 });
 
-test('Connections exclusively owns connection writers and diagnostics', () => {
-  for (const component of ['PiAgentSettingsPanel view="connection"', 'PiAgentSettingsPanel view="advanced"', 'ConnectorDiagnosticsPanel', 'FeishuSettingsPanel', 'PiMcpManagementPanel']) {
+test('Connections presents provider then PI Agent configuration and owns connection diagnostics', () => {
+  for (const component of ['PiAgentSettingsPanel view="connection"', 'PiAgentSettingsPanel view="agent"', 'ConnectorDiagnosticsPanel', 'FeishuSettingsPanel', 'PiMcpManagementPanel']) {
     assert.match(connectionsSource, new RegExp(component));
   }
+  assert.doesNotMatch(connectionsSource, /PiAgentSettingsPanel view="advanced"/);
   assert.doesNotMatch(sectionsSource, /ConnectorDiagnosticsPanel|FeishuSettingsPanel|PiMcpManagementPanel/);
   assert.match(sectionsSource, /PiAgentSettingsPanel view="agent"/);
   assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel view="advanced"/);

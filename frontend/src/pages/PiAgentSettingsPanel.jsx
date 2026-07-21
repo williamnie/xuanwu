@@ -18,28 +18,9 @@ export default function PiAgentSettingsPanel({ view = 'agent' }) {
 }
 
 function PiSettingsForm({ state, view }) {
-  if (view === 'connection') return <RecommendedProviderSettings state={state} />;
+  if (view === 'connection') return <ProviderConnectionSettings state={state} />;
   if (view === 'agent') return <AgentBehaviorSettings state={state} />;
-  return (
-    <>
-      <div className="provider-advanced-heading">
-        <SlidersHorizontal size={17} />
-        <div>
-          <strong>Custom advanced</strong>
-          <span>直接编辑 provider ID、API type、base URL、User-Agent 与 credential。</span>
-        </div>
-      </div>
-      <AdvancedProviderGrid state={state} />
-      <ProviderCredentialFields state={state} />
-      <CodexOAuthPanel state={state} />
-      <div className="provider-recommended-actions">
-        <ConnectionTestAction state={state} />
-      </div>
-      <ConnectionResult state={state} />
-      <SaveRow mode="connection" onSave={state.handleConnectionSave} saving={state.saving} />
-      <ProviderSummary providers={state.providers} />
-    </>
-  );
+  return <AgentBehaviorSettings state={state} />;
 }
 
 function AgentBehaviorSettings({ state }) {
@@ -63,7 +44,7 @@ function AgentBehaviorSettings({ state }) {
   );
 }
 
-function RecommendedProviderSettings({ state }) {
+function ProviderConnectionSettings({ state }) {
   return (
     <>
       <ProviderPresetCards state={state} />
@@ -74,12 +55,37 @@ function RecommendedProviderSettings({ state }) {
           <SlidersHorizontal size={18} />
           <div>
             <strong>当前使用自定义 provider：{state.form.modelProvider || '未命名'}</strong>
-            <span>为避免推荐页面暴露底层连接参数，请在 Connections · Custom Provider 中维护。</span>
+            <span>展开下方“自定义 / 高级 Provider”即可维护底层连接参数。</span>
           </div>
         </div>
       )}
+      <AdvancedProviderDisclosure state={state} />
       <SaveRow mode="connection" onSave={state.handleConnectionSave} saving={state.saving} />
+      <ProviderSummary providers={state.providers} />
     </>
+  );
+}
+
+function AdvancedProviderDisclosure({ state }) {
+  return (
+    <details className="provider-advanced-disclosure" defaultOpen={!state.selectedPreset}>
+      <summary>
+        <SlidersHorizontal size={17} />
+        <span>
+          <strong>自定义 / 高级 Provider</strong>
+          <small>仅在接入自定义网关、代理或兼容 API 时使用</small>
+        </span>
+      </summary>
+      <div className="provider-advanced-content">
+        <AdvancedProviderGrid state={state} />
+        <ProviderCredentialFields state={state} />
+        {state.form.api === 'openai-codex-responses' && <CodexOAuthPanel state={state} />}
+        <div className="provider-recommended-actions">
+          <ConnectionTestAction state={state} />
+        </div>
+        <ConnectionResult state={state} />
+      </div>
+    </details>
   );
 }
 
@@ -218,14 +224,8 @@ function panelHeaderCopy(view) {
       description: '配置 OpenAI、Codex、Anthropic 或兼容 provider 的凭据、可用模型与连接测试。',
     };
   }
-  if (view === 'advanced') {
-    return {
-      title: 'Custom Provider',
-      description: '维护自定义 provider 的底层 API path、API type、User-Agent 与凭据；Supervisor 行为仍在 Settings 管理。',
-    };
-  }
   return {
-    title: 'Models & Agents',
+    title: 'PI Agent',
     description: '配置唯一 Supervisor 的模型选择、thinking 与运行指令；provider 凭据和连接测试统一在 Connections 管理。',
   };
 }

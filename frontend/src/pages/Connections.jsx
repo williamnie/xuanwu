@@ -9,7 +9,7 @@ import './Connections.css';
 
 const CONNECTION_SECTIONS = Object.freeze([
   { id: 'providers', label: 'AI Providers', icon: Bot },
-  { id: 'custom-provider', label: 'Custom Provider', icon: Workflow },
+  { id: 'pi-agent', label: 'PI Agent', icon: Workflow },
   { id: 'integrations', label: 'Integrations', icon: Cable },
   { id: 'mcp', label: 'MCP', icon: PlugZap },
 ]);
@@ -22,7 +22,7 @@ export default function Connections({ initialSection = 'providers' }) {
         <div>
           <span className="connections-kicker"><Workflow size={14} /> Runtime connectivity</span>
           <h1>{PRODUCT_NAV_LABELS.connections}</h1>
-          <p>集中管理 AI provider、外部集成和 MCP；Settings 只保留 Supervisor 行为、权限与通知偏好。</p>
+          <p>先连接 AI provider，再配置 PI Agent；Provider 连接与 Supervisor 行为分别保存，互不覆盖。</p>
         </div>
       </header>
       <nav className="connections-tabs" role="tablist" aria-label="Connection types">
@@ -41,7 +41,7 @@ export default function Connections({ initialSection = 'providers' }) {
       </nav>
       <main className="connections-content" role="tabpanel">
         {activeSection === 'providers' && <PiAgentSettingsPanel view="connection" />}
-        {activeSection === 'custom-provider' && <PiAgentSettingsPanel view="advanced" />}
+        {activeSection === 'pi-agent' && <PiAgentSettingsPanel view="agent" />}
         {activeSection === 'integrations' && <IntegrationsSection />}
         {activeSection === 'mcp' && <PiMcpManagementPanel />}
       </main>

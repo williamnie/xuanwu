@@ -26,14 +26,14 @@
 | `handoffs` | 现有 Handoffs 页面与 API | available |
 | `automations` | 现有 Cron 页面 | compatibility；P08 统一 Automation 前不合并状态机 |
 | `projects` | 现有 Projects 页面与 API | available |
-| `connections` | 独立 Connections：AI Providers、Integrations、MCP | available |
+| `connections` | 独立 Connections：AI Providers、PI Agent、Integrations、MCP | available |
 | `settings` | 现有 Settings 页面 | available；普通/Advanced 两层由 P07.11/P07.14 迁移 |
 
 `availability` 只描述当前 UI carrier，不改变底层完成状态、权限或 authority。受 feature flag 关闭的页面不得留下可点击死入口。
 
 ### 1.1 Settings 两层 IA
 
-Settings 普通层固定为 General、Models & Agents、Permissions、Notifications。Models & Agents 只写 Supervisor 行为与默认模型，不写 provider credential；推荐/自定义 AI provider、外部 connector 与 MCP 的连接 writer 统一归属顶层 Connections。Runtime、Skills、Memory、Activity、Policies、诊断导出与 Restart 只能从显式 Advanced gate 进入。General 的项目设置入口跳转现有 Projects 编辑面，不复制项目表单或状态。
+Settings 普通层固定为 General、Models & Agents、Permissions、Notifications。Connections 将 AI Providers 与 PI Agent 按配置顺序相邻呈现；自定义 Provider 收进 AI Providers 的高级折叠入口。Connections PI Agent 与 Settings Models & Agents 复用同一组件和 agent writer，只写 Supervisor 行为与默认模型，不写 provider credential。外部 connector 与 MCP 的连接 writer 统一归属顶层 Connections。Runtime、Skills、Memory、Activity、Policies、诊断导出与 Restart 只能从显式 Advanced gate 进入。General 的项目设置入口跳转现有 Projects 编辑面，不复制项目表单或状态。
 
 旧 tab 按确定性规则继续可读：`assistant → Models & Agents`、`runner-brain → Advanced / Runtime`、`connections|connectors|advanced:model-runtime → 顶层 Connections`、`skills → Advanced / Skills`、`approvals → Permissions`、`memory → Advanced / Memory`、`activity → Advanced / Activity`、`policies → Advanced / Policies`。新入口使用 canonical page/tab id；旧 id 只作为兼容输入。`mcp` 和 `model-runtime` 不再是 Settings tab，MCP 与自定义 provider 管理只在顶层 Connections 挂载。
 
