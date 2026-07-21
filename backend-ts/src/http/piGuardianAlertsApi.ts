@@ -7,6 +7,7 @@ import {
   type PiGuardianAlertFilter
 } from "../db/repositories/pi.ts";
 import { redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
+import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
@@ -14,6 +15,7 @@ type PiGuardianAlertsContext = { database: RunnerDatabase };
 
 export function registerPiGuardianAlertRoutes(router: Router, context: PiGuardianAlertsContext): void {
   router.get("/api/pi/guardian/alerts", (request) => json(alertsResponse(context.database, request)));
+  router.get("/api/pi/guardian/alerts/:id", (request) => json(alertResponse(requireAlert(context.database, alertID(request)))));
   router.post("/api/pi/guardian/alerts/:id/ack", (request) => json(ackAlertResponse(context.database, request)));
 }
 
@@ -51,6 +53,7 @@ function alertResponse(alert: PiGuardianAlert): Record<string, unknown> {
     message: safeText(alert.message),
     next_retry_at: alert.next_retry_at,
     project_id: alert.project_id,
+    presentation: guardianAlertPresentation(alert),
     retry_count: alert.retry_count,
     run_group_id: alert.run_group_id,
     severity: alert.severity,

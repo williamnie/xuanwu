@@ -75,7 +75,7 @@ describe("Xuanwu capability disposition inventory", () => {
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);
-    expect(inventoried).toHaveLength(246);
+    expect(inventoried).toHaveLength(247);
     expect(unique(inventoried)).toHaveLength(inventoried.length);
 
     const familyIDs = new Set(API_ROUTE_FAMILIES.map((family) => family.id));
@@ -102,7 +102,7 @@ describe("Xuanwu capability disposition inventory", () => {
     );
     const inventoriedPi: string[] = PI_MODULE_FAMILIES.flatMap((family) => [...family.source_files]).sort();
     expect(inventoriedPi).toEqual(piFiles);
-    expect(inventoriedPi).toHaveLength(147);
+    expect(inventoriedPi).toHaveLength(149);
     expect(unique(inventoriedPi)).toHaveLength(inventoriedPi.length);
   });
 

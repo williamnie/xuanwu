@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, BellRing, Check, RefreshCw, ShieldCheck, ShieldX, TimerReset, X } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, BellRing, Bot, Check, CheckCircle2, Clock3, History, MapPin, RefreshCw, ShieldCheck, ShieldX, TimerReset, Wrench, X } from 'lucide-react';
 import { commandCenterApi } from '../../api/commandCenter.js';
 import { eventsApi } from '../../api/events.js';
 import { message as toast } from '../../store/toastStore.js';
@@ -111,8 +111,8 @@ export default function AttentionSection() {
       <header className="attention-section-header">
         <div>
           <div className="attention-section-kicker"><BellRing size={15} /> Attention</div>
-          <h3>优先处理需要人工介入的事项</h3>
-          <p>等待审批、阻塞、失败、等待输入和待验收事项按确定性优先级排列。</p>
+          <h3>这里只放真正需要你处理的事项</h3>
+          <p>PI 能处理的运行告警会自动恢复并进入日报；这里只保留审批、输入、验收或已耗尽恢复预算的问题。</p>
         </div>
         <div className="attention-section-header-actions">
           <select aria-label="Attention 类型筛选" className="attention-type-filter" onChange={event => setTypeFilter(event.target.value)} value={typeFilter}>
@@ -124,6 +124,8 @@ export default function AttentionSection() {
           <button aria-label="刷新 Attention" disabled={loading} onClick={() => load()} type="button"><RefreshCw className={loading ? 'is-spinning' : ''} size={15} /></button>
         </div>
       </header>
+
+      {!error && summary ? <PiOperationsSummary operations={summary.section.operations} recentHistory={summary.section.recent_history} /> : null}
 
       {error ? <State error={error} onRetry={() => load()} /> : loading && !summary ? <State loading /> : filteredItems.length === 0 ? <State filtered={Boolean(typeFilter)} /> : (
         <div className="attention-priority-groups">
@@ -142,23 +144,62 @@ export default function AttentionSection() {
 
 function AttentionCard({ item, onReviewApproval, onSubmit, submitting }) {
   const view = attentionView(item);
+  const details = item.details || {};
   const pending = (action) => submitting === `${item.id}:${action}`;
   return <article className={`attention-card ${view.tone}`}>
-    <div className="attention-card-topline"><span>{view.typeLabel}</span><span>{view.statusLabel}</span></div>
-    <strong>{item.summary}</strong>
-    <p>{view.actionLabel}</p>
+    <div className="attention-card-topline"><span>{view.typeLabel}</span><span>{details.state_label || view.statusLabel}</span></div>
+    <strong>{details.title || item.summary}</strong>
+    <p>{details.description || view.actionLabel}</p>
+    {details.diagnostic && details.diagnostic !== details.title ? <code className="attention-card-diagnostic">{details.diagnostic}</code> : null}
+    <div className="attention-card-facts">
+      <span><MapPin size={12} />{details.location || 'Runner 系统'}</span>
+      <span><Clock3 size={12} />首次 {formatTime(details.first_seen_at || item.created_at)}</span>
+      <span><Wrench size={12} />来源 {details.component || details.source || 'Attention'}</span>
+    </div>
+    <div className="attention-card-next"><strong>需要你做什么</strong><span>{details.user_action || view.actionLabel}</span></div>
+    {details.pi_action ? <div className="attention-card-pi"><Bot size={14} /><span><strong>PI 已经做的：</strong>{details.pi_action}</span></div> : null}
     <div className="attention-card-actions">
-      {view.canAcknowledge ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'acknowledge')} type="button"><Check size={13} /> {pending('acknowledge') ? '提交中…' : '确认'}</button> : null}
-      {view.canSnooze ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'snooze')} type="button"><TimerReset size={13} /> {pending('snooze') ? '提交中…' : '暂停 1 小时'}</button> : null}
+      {view.canAcknowledge ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'acknowledge')} type="button"><Check size={13} /> {pending('acknowledge') ? '提交中…' : '我知道了，不再显示'}</button> : null}
+      {view.canSnooze ? <button disabled={Boolean(submitting)} onClick={() => onSubmit(item, 'snooze')} type="button"><TimerReset size={13} /> {pending('snooze') ? '提交中…' : '稍后提醒'}</button> : null}
       {item.type === 'approval_required' ? (
         <button className="open" onClick={() => onReviewApproval(item)} type="button">审阅 Decision <ShieldCheck size={13} /></button>
       ) : item.links?.view === '#/attention-inbox' ? (
         <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">查看来源事实 <ArrowUpRight size={13} /></a>
       ) : (
-        <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">打开来源 <ArrowUpRight size={13} /></a>
+        <a className="open" href={item.links?.self} rel="noreferrer noopener" target="_blank">打开具体来源 <ArrowUpRight size={13} /></a>
       )}
     </div>
   </article>;
+}
+
+function PiOperationsSummary({ operations, recentHistory }) {
+  const summary = operations?.summary || {};
+  const active = operations?.active || [];
+  const history = recentHistory || [];
+  return <section className="pi-operations-summary">
+    <header>
+      <div><Bot size={17} /><span><strong>PI 自动运维</strong><small>过去 24 小时</small></span></div>
+      <span className="pi-operations-state"><CheckCircle2 size={14} />{summary.active_user_action_required > 0 ? `${summary.active_user_action_required} 项待你处理` : '无需人工介入'}</span>
+    </header>
+    <div className="pi-operations-metrics">
+      <Metric label="发现告警" value={summary.alerts_detected} />
+      <Metric label="自动恢复" value={summary.alerts_recovered} success />
+      <Metric label="恢复会话" value={summary.session_recoveries} success />
+      <Metric label="恢复 Issue" value={summary.issue_retries_recovered} success />
+    </div>
+    {active.length > 0 ? <div className="pi-operations-active"><strong><Bot size={13} /> PI 正在处理 {active.length} 项</strong>{active.map(item => <span key={item.id}>{item.details?.title || item.summary} · {item.details?.location}</span>)}</div> : null}
+    {history.length > 0 ? <details className="pi-operations-history"><summary><History size={13} /> 最近已恢复 {history.length} 项</summary>{history.map(item => <span key={item.alert_id}>{item.title} · {item.location} · {formatTime(item.last_seen_at)}</span>)}</details> : null}
+    <footer>运行过程不再逐条弹警告；PI 每天按通知偏好发送一份运维日报。</footer>
+  </section>;
+}
+
+function Metric({ label, success = false, value = 0 }) {
+  return <div className={success ? 'success' : ''}><strong>{value ?? 0}</strong><span>{label}</span></div>;
+}
+
+function formatTime(value) {
+  const time = Date.parse(value || '');
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : '时间未知';
 }
 
 function ApprovalDetail({ approval, onClose, onResolve, submitting }) {
@@ -189,5 +230,5 @@ function ApprovalFact({ label, value }) { return <div><small>{label}</small><str
 function State({ error = '', filtered = false, loading = false, onRetry }) {
   if (error) return <div className="attention-state error" role="alert"><AlertTriangle size={18} /><span>{error}</span><button onClick={onRetry} type="button">重试</button></div>;
   if (loading) return <div className="attention-state"><RefreshCw className="is-spinning" size={20} /><strong>正在读取 Attention…</strong></div>;
-  return <div className="attention-state"><BellRing size={22} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有需要关注的事项'}</strong><span>{filtered ? '选择其他类型查看 Attention queue。' : '新的审批、阻塞、失败、输入或验收事项会实时出现在这里。'}</span></div>;
+  return <div className="attention-state"><CheckCircle2 size={22} /><strong>{filtered ? '当前筛选下没有事项' : '当前没有需要你介入的事项'}</strong><span>{filtered ? '选择其他类型查看。' : 'PI 正在后台处理运行告警；需要你决定时才会出现在这里。'}</span></div>;
 }

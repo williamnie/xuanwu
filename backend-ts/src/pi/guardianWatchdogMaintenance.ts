@@ -35,11 +35,13 @@ export function resolveRecoveredAlerts(
     if (!check.ok) continue;
     const alertType = ALERT_TYPE_BY_COMPONENT[check.component];
     if (!alertType) continue;
-    for (const alert of listPiGuardianAlerts(db, { alertType, status: "open" })) {
-      resolvePiGuardianAlert(db, alert.id, {
-        message: `${check.component} recovered`,
-        watchdog_seen_at: seenAt
-      });
+    for (const status of ["open", "acked"] as const) {
+      for (const alert of listPiGuardianAlerts(db, { alertType, status })) {
+        resolvePiGuardianAlert(db, alert.id, {
+          message: `${check.component} recovered`,
+          watchdog_seen_at: seenAt
+        });
+      }
     }
   }
 }

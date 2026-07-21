@@ -9,7 +9,13 @@ import {
   listPersistedAttention,
   persistAttentionCommand
 } from "../domain/attention/persistence.ts";
-import { getActionProposal, getPiAction, getPiApprovalRequest } from "../db/repositories/pi.ts";
+import {
+  getActionProposal,
+  getPiAction,
+  getPiApprovalRequest,
+  getPiGuardianAlert,
+  type PiAction
+} from "../db/repositories/pi.ts";
 import type { AttentionCommand, AttentionRecord, AttentionTransitionAudit } from "../domain/attention/contracts.ts";
 import { eventProjectionStatus } from "../db/repositories/eventSummaryProjection.ts";
 import {
@@ -29,6 +35,11 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import type { Router } from "./router.ts";
 import { resolveAttentionDecision } from "./attentionDecisionService.ts";
+import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
+import {
+  guardianOperationsSnapshot,
+  latestGuardianOperationsReport
+} from "../pi/guardianOperationsDailyReport.ts";
 
 export const COMMAND_CENTER_SUMMARY_CONTRACT = "xw.command-center.summary.v1" as const;
 
@@ -65,6 +76,8 @@ export type CommandCenterFreshness = {
 export type CommandCenterSectionPayload = {
   counts: Record<string, number>;
   freshness: CommandCenterFreshness;
+  operations?: Record<string, unknown>;
+  recent_history?: unknown[];
   items?: unknown[];
   links: Record<string, string>;
   summary?: Record<string, unknown>;
@@ -155,17 +168,46 @@ export function commandCenterSectionReaders(db: RunnerDatabase): CommandCenterSe
 }
 
 function attentionSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
-  const all = listPersistedAttention(db).filter((item) => item.status !== "resolved" && item.status !== "dismissed");
-  const items = all.slice(0, input.limit);
+  const projected = listPersistedAttention(db)
+    .filter((item) => attentionIsVisible(item, input.now));
+  const piHandling = projected.filter((item) => attentionHandling(db, item, input.now) === "pi_handling");
+  const userItems = projected.filter((item) => attentionHandling(db, item, input.now) === "user_action_required");
+  const historical = projected.filter((item) => attentionHandling(db, item, input.now) === "historical");
+  const items = userItems.slice(0, input.limit);
+  const operations = guardianOperationsSnapshot(db, { now: input.now });
   return {
     counts: {
+      pi_handling: piHandling.length,
       returned: items.length,
-      total: all.length
+      total: userItems.length,
+      resolved_24h: operations.summary.alerts_recovered,
+      source_total: userItems.length + piHandling.length,
+      historical_hidden: historical.length
     },
-    freshness: freshness(input.now, all.map((item) => item.updated_at), 5 * 60),
-    items: items.map(attentionSummary),
+    // This section is a request-time read of current authorities. An unchanged
+    // queue is not stale data; transport/read failures are reported by the
+    // section error envelope instead.
+    freshness: freshness(input.now, [input.now.toISOString()], 60),
+    items: items.map((item) => attentionSummary(db, item, input.now)),
+    operations: {
+      active: piHandling.slice(0, 5).map((item) => attentionSummary(db, item, input.now)),
+      latest_report: latestGuardianOperationsReport(db),
+      summary: operations.summary,
+      window: operations.window
+    },
+    recent_history: [
+      ...operations.incidents.filter((item) => item.historical === true),
+      ...historical.map((item) => historicalAttentionSummary(db, item, input.now))
+    ].sort((left, right) => String(right.last_seen_at).localeCompare(String(left.last_seen_at))).slice(0, 5),
     links: { collection: "/api/command-center/summary?sections=attention" }
   };
+}
+
+function attentionIsVisible(item: AttentionRecord, now: Date): boolean {
+  if (item.status !== "open" && item.status !== "waiting") return false;
+  if (!item.snoozed_until) return true;
+  const until = Date.parse(item.snoozed_until);
+  return !Number.isFinite(until) || until <= now.getTime();
 }
 
 function activeWorkSection(db: RunnerDatabase, input: SectionInput): CommandCenterSectionPayload {
@@ -246,7 +288,7 @@ function systemHealthSection(db: RunnerDatabase, input: SectionInput): CommandCe
   };
 }
 
-export function attentionSummary(item: AttentionRecord): Record<string, unknown> {
+export function attentionSummary(db: RunnerDatabase, item: AttentionRecord, now = new Date()): Record<string, unknown> {
   const primary = item.source_refs[0];
   return {
     created_at: item.created_at,
@@ -256,6 +298,7 @@ export function attentionSummary(item: AttentionRecord): Record<string, unknown>
       self: attentionSourceLink(primary.authority, primary.local_id),
       view: primary.authority === "attention_inbox_items" ? "#/attention-inbox" : "#/command-center"
     },
+    details: attentionDetails(db, item, now),
     next_action: item.next_action,
     priority: item.priority,
     required_actor: item.required_actor,
@@ -268,6 +311,216 @@ export function attentionSummary(item: AttentionRecord): Record<string, unknown>
     updated_at: item.updated_at,
     severity: item.severity
   };
+}
+
+function attentionHandling(db: RunnerDatabase, item: AttentionRecord, now: Date): string {
+  return attentionDetails(db, item, now).handling as string;
+}
+
+function attentionDetails(db: RunnerDatabase, item: AttentionRecord, now: Date): Record<string, unknown> {
+  const guardianRef = item.source_refs.find((ref) => ref.authority === "pi_guardian_alerts");
+  const guardian = guardianRef ? getPiGuardianAlert(db, guardianRef.local_id) : null;
+  if (guardian) {
+    return {
+      ...guardianAlertPresentation(guardian, now),
+      diagnostic: item.summary,
+      reason_code: item.reason_code,
+      source: "PI Guardian"
+    };
+  }
+  const actionRef = item.source_refs.find((ref) => ref.authority === "pi_actions");
+  const action = actionRef ? getPiAction(db, actionRef.local_id) : null;
+  if (action) return piActionAttentionDetails(db, action, item, now);
+  const projectID = item.owner.kind === "project" ? item.owner.project_id : "";
+  return {
+    active: item.status !== "resolved" && item.status !== "dismissed",
+    component: attentionComponent(item.type),
+    description: attentionDescription(item.type),
+    diagnostic: item.summary,
+    first_seen_at: item.created_at,
+    handling: "user_action_required",
+    historical: false,
+    last_seen_at: item.updated_at,
+    location: projectID ? `项目 ${projectID}` : "Runner 系统",
+    pi_action: "PI 已整理来源事实，并在你决定前保持业务状态不变。",
+    pi_can_handle: false,
+    requires_user: true,
+    state_label: "当前事项 · 需要你处理",
+    title: attentionTitle(item.type, item.summary),
+    user_action: attentionUserAction(item.type),
+    source: item.source_refs[0]?.authority ?? "Attention"
+  };
+}
+
+function piActionAttentionDetails(
+  db: RunnerDatabase,
+  action: PiAction,
+  item: AttentionRecord,
+  now: Date
+): Record<string, unknown> {
+  const target = piActionTarget(db, action);
+  const location = [
+    action.project_id ? `项目 ${action.project_id}` : "Runner 系统",
+    target.issueID > 0 ? `Issue #${target.issueID}` : "",
+    action.action_type ? `动作 ${action.action_type}` : ""
+  ].filter(Boolean).join(" · ");
+  if (piActionIsHistorical(action, target.issueStatus)) {
+    return {
+      active: false,
+      component: "Action Gate",
+      description: `原操作目标已经进入 ${target.issueStatus || "终态"}，这条旧请求不再需要执行。`,
+      diagnostic: item.summary,
+      first_seen_at: item.created_at,
+      handling: "historical",
+      historical: true,
+      last_seen_at: target.updatedAt || item.updated_at,
+      location,
+      pi_action: "PI 已根据当前 Issue 状态把它从用户待办中移出；原审计记录继续保留。",
+      pi_can_handle: false,
+      requires_user: false,
+      state_label: "历史记录 · 目标已结束",
+      title: "旧操作请求已失效",
+      user_action: "当前无需操作。",
+      source: "pi_actions"
+    };
+  }
+  const snoozedUntil = Date.parse(action.snoozed_until);
+  const piWaiting = action.status === "snoozed" && (
+    (Number.isFinite(snoozedUntil) && snoozedUntil > now.getTime()) ||
+    action.gate_reason === "recovery cooldown has not elapsed"
+  );
+  if (piWaiting) {
+    return {
+      active: true,
+      component: "PI 恢复调度器",
+      description: "恢复动作处于确定性冷却窗口，PI 会在窗口到期后重新评估。",
+      diagnostic: item.summary,
+      first_seen_at: item.created_at,
+      handling: "pi_handling",
+      historical: false,
+      last_seen_at: item.updated_at,
+      location,
+      pi_action: "PI 正在等待恢复冷却窗口，期间不会重复启动会话或打扰你。",
+      pi_can_handle: true,
+      requires_user: false,
+      state_label: "当前事项 · PI 等待后重试",
+      title: "PI 已延后恢复动作",
+      user_action: "当前无需操作。",
+      source: "pi_actions"
+    };
+  }
+  return {
+    active: true,
+    component: "Action Gate",
+    description: `PI 请求执行 ${action.action_type}，该动作需要你的明确决定。`,
+    diagnostic: item.summary,
+    first_seen_at: item.created_at,
+    handling: "user_action_required",
+    historical: false,
+    last_seen_at: item.updated_at,
+    location,
+    pi_action: `PI 已在 Action Gate 停止执行；原因：${action.gate_reason || "等待人工决定"}。`,
+    pi_can_handle: false,
+    requires_user: true,
+    state_label: "当前事项 · 需要你决定",
+    title: `是否允许 ${action.action_type}`,
+    user_action: "审阅动作范围、目标和风险，然后批准、拒绝或要求修改。",
+    source: "pi_actions"
+  };
+}
+
+function piActionTarget(
+  db: RunnerDatabase,
+  action: PiAction
+): { issueID: number; issueStatus: string; updatedAt: string } {
+  const payload = safeRecord(action.payload_json);
+  let issueID = positiveID(action.issue_id) || positiveID(payload.issue_id);
+  if (issueID <= 0) {
+    const providerSessionID = cleanText(payload.provider_session_id);
+    const session = providerSessionID ? db.sqlite.query<{ issue_id: number }, [string]>(`
+      select issue_id from agent_sessions where provider_session_id=? order by updated_at desc limit 1
+    `).get(providerSessionID) : null;
+    issueID = positiveID(session?.issue_id);
+  }
+  if (issueID <= 0) return { issueID: 0, issueStatus: "", updatedAt: "" };
+  const issue = db.sqlite.query<{ status: string; updated_at: string }, [number]>(
+    "select status, updated_at from issues where id=?"
+  ).get(issueID);
+  return { issueID, issueStatus: cleanText(issue?.status), updatedAt: cleanText(issue?.updated_at) };
+}
+
+function piActionIsHistorical(action: PiAction, issueStatus: string): boolean {
+  if (!new Set(["done", "cancelled"]).has(issueStatus)) return false;
+  return new Set([
+    "issue.retry", "issue.retry_after", "issue.state_repair",
+    "session.resume_followup", "session.steer"
+  ]).has(action.action_type);
+}
+
+function historicalAttentionSummary(
+  db: RunnerDatabase,
+  item: AttentionRecord,
+  now: Date
+): Record<string, unknown> {
+  const details = attentionDetails(db, item, now);
+  return {
+    alert_id: item.id,
+    historical: true,
+    last_seen_at: details.last_seen_at,
+    location: details.location,
+    state_label: details.state_label,
+    title: details.title
+  };
+}
+
+function safeRecord(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value || "{}") as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function positiveID(value: unknown): number {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function attentionComponent(type: string): string {
+  if (type === "approval_required") return "Action Gate";
+  if (type === "input_required") return "PI 对话";
+  if (type === "verification_required") return "验收门禁";
+  if (type === "connection_issue") return "连接与 Provider";
+  return "Work Runtime";
+}
+
+function attentionDescription(type: string): string {
+  if (type === "approval_required") return "有一项可能改变外部状态或执行结果的操作，必须由你决定。";
+  if (type === "input_required") return "PI 缺少继续执行所需的信息，无法安全地自行猜测。";
+  if (type === "verification_required") return "工作已经产出结果，但还缺少你的验收或必要证据。";
+  if (type === "connection_issue") return "连接或 Provider 不可用，PI 已停止可能产生重复副作用的操作。";
+  return "当前故障或阻塞无法在自动恢复预算内解决。";
+}
+
+function attentionTitle(type: string, summary: string): string {
+  if (type === "approval_required") return "需要你决定一项操作";
+  if (type === "input_required") return "PI 需要你补充信息";
+  if (type === "verification_required") return "结果等待你的验收";
+  if (type === "connection_issue") return "连接问题需要人工处理";
+  return boundedText(summary);
+}
+
+function attentionUserAction(type: string): string {
+  if (type === "approval_required") return "审阅操作内容和风险，然后批准或拒绝。";
+  if (type === "input_required") return "打开来源并回答 PI 提出的问题。";
+  if (type === "verification_required") return "查看交付证据并确认通过，或说明需要修改的内容。";
+  if (type === "connection_issue") return "检查对应连接配置；恢复后 PI 会继续执行。";
+  return "打开来源查看失败事实，决定重试、修改或停止。";
 }
 
 function activeWorkSummary(db: RunnerDatabase, work: WorkLedgerEntry, run: RunView | undefined): Record<string, unknown> {
@@ -331,7 +584,7 @@ function handoffSummary(record: StoredHandoffRecord): Record<string, unknown> {
 
 function attentionSourceLink(authority: string, localID: string): string {
   if (authority === "attention_inbox_items") return `/api/pi/attention-inbox/items/${encodeURIComponent(localID)}`;
-  if (authority === "pi_guardian_alerts") return "/api/pi/guardian/alerts?status=all";
+  if (authority === "pi_guardian_alerts") return `/api/pi/guardian/alerts/${encodeURIComponent(localID)}`;
   if (authority === "pi_approval_requests") return "/api/pi/approval-requests?status=open";
   return "/api/issues";
 }
@@ -341,7 +594,7 @@ function attentionDetailResponse(db: RunnerDatabase, request: Request): Response
   const attention = getPersistedAttention(db, id);
   if (!attention) throw new HttpError(404, "Attention not found");
   return json({
-    attention: attentionSummary(attention),
+    attention: attentionSummary(db, attention),
     decisions: attentionDecisionDetails(db, attention)
   });
 }
@@ -361,12 +614,12 @@ async function attentionCommandResponse(context: ReadApiContext, request: Reques
       sourceRefs: current.source_refs
     });
     const refreshed = getPersistedAttention(context.database, id);
-    return json({ attention: refreshed ? attentionSummary(refreshed) : null, decision });
+    return json({ attention: refreshed ? attentionSummary(context.database, refreshed) : null, decision });
   }
   const command = attentionCommandInput(action, body);
   try {
     const result = persistAttentionCommand(context.database, id, command);
-    return json({ attention: attentionSummary(result.attention), mutation: { audit_event: result.audit_event, replayed: false } });
+    return json({ attention: attentionSummary(context.database, result.attention), mutation: { audit_event: result.audit_event, replayed: false } });
   } catch (error) {
     throw new HttpError(409, error instanceof Error ? error.message : "Attention command failed");
   }

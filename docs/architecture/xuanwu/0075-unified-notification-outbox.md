@@ -26,6 +26,12 @@ Agent 调用失败、返回无效结果，或错误压制 `requires_user` 事项
 
 `notificationOutbox.ts` 只承载既有 draft/outbox 写入与 retry policy。P11.06 已删除 Feishu notification draft wrapper，所有 notification producer 经 `unifiedNotificationPipeline.ts` 进入该 core；生产 Feishu 的 card-aware dispatch 仍由 `imReplyOutboxDispatcher` 承担。多 channel sender 合同不解析 provider payload，也不绕过 approval/action gate。
 
+## Guardian 运维日报与 Attention 降噪
+
+Guardian 运行告警不再默认等同于“用户待办”。`guardianAlertPresentation.ts` 在读取时明确投影故障组件、范围、首次/最近发现时间、PI 已执行动作以及用户下一步，并把事件分为 `pi_handling`、`user_action_required` 和 `historical`：可自动恢复的告警只进入 Command Center 的紧凑运维摘要；仅审批、缺少输入、验收、连接/调度配置问题或已耗尽确定性恢复预算的事件进入用户 Attention。用户 acknowledge 后不再显示，snooze 在到期前不再显示；来源恢复时 `open`/`acked` 告警都自动归档，历史记录不会重新冒充当前故障。
+
+`guardianOperationsDailyReport.ts` 每个项目按既有通知偏好的 timezone 与 `daily_at`（默认 09:00）汇总过去 24 小时发现/恢复的告警、恢复会话和恢复 Issue 数量。日报仍调用 `routeNotification` 写入 `pi_notification_intents`，由既有 Agent communication gateway、draft/outbox 与 receipt 链路发送；`pi_reports(type='daily_operations_digest')` 只保存可审计报告快照和幂等日桶，不构成第二通知 authority。没有可用通知目标时不凭空创建旁路目标，也不会绕过既有偏好。
+
 ## 兼容、回滚与删除门禁
 
 - **W2 双读=0、双写=0：** intent、draft、outbox 和 external link 都只写既有 authority；旧 Feishu API/row shape 保持不变。P11.06 只删除无状态 wrapper，不 backfill 或删除历史 row；`sync_outbox.feishu_message_id` 继续作为 compatibility receipt carrier，直至独立 provider-neutral schema migration 完成。

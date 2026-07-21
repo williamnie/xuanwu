@@ -6,6 +6,7 @@ import {
   PROCESS_GROUP_MEMORY_BUDGETS,
   PROCESS_GROUP_MEMORY_CONTRACT,
   ProcessGroupMemoryObserver,
+  resolveRecoveredProcessGroupMemoryAlerts,
   type ProcessMemoryBudgetAlert,
   writeProcessGroupMemoryAlert
 } from "./processGroupMemory.ts";
@@ -196,6 +197,32 @@ describe("runner process-group memory observer", () => {
       });
       expect(stored[0]?.evidence_json).toContain('"pid":50');
       expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+      database.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("resolves open and acknowledged memory incidents after a healthy sample", async () => {
+    const root = await mkdtemp(join(tmpdir(), "runner-memory-recovery-"));
+    const database = await openDatabase({ dbPath: join(root, "runner.db"), stateDir: root });
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      for (const phase of ["idle", "run"] as const) {
+        writeProcessGroupMemoryAlert(database, {
+          budget: { status: "hard_exceeded" }, level: "hard", phase, sample: {}
+        });
+      }
+      database.sqlite.run("update pi_guardian_alerts set status='acked' where run_group_id='runner-memory:run:hard'");
+
+      const resolved = resolveRecoveredProcessGroupMemoryAlerts(database, {
+        budget: { status: "within_budget" }, phase: "idle", sampled_at: "2026-07-21T03:46:49Z"
+      });
+
+      expect(resolved).toBe(2);
+      expect(listPiGuardianAlerts(database, { alertType: "runner_process_group_memory_budget", status: "resolved" }))
+        .toHaveLength(2);
     } finally {
       warn.mockRestore();
       database.close();

@@ -238,7 +238,7 @@ describe("PI Guardian watchdog detector", () => {
     }
   });
 
-  for (const status of ["acked", "resolved", "suppressed"] as const) {
+  for (const status of ["acked", "suppressed"] as const) {
     test(`does not reopen or retry ${status} alerts for the same watchdog condition`, async () => {
       const db = await openFixtureDatabase();
       const sender = new FakeGuardianFeishuSender([{ messageId: "om_guardian_sent_1" }]);
@@ -269,6 +269,37 @@ describe("PI Guardian watchdog detector", () => {
       }
     });
   }
+
+
+  test("creates a new incident when the same watchdog condition recurs after recovery", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianFeishuSender([
+      { messageId: "om_guardian_first" },
+      { messageId: "om_guardian_recurrence" }
+    ]);
+    try {
+      insertProject(db, "demo");
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()], directFeishu: { config: feishuConfig(), sender }, now: NOW, staleAfterMs: STALE_MS
+      });
+      const first = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+      if (!first) throw new Error("expected first alert");
+      markAlertStatus(db, first.id, "resolved");
+
+      await runPiGuardianWatchdogOnce(db, {
+        checks: [failingProbe()], directFeishu: { config: feishuConfig(), sender },
+        now: new Date("2026-06-19T01:15:00Z"), staleAfterMs: STALE_MS
+      });
+
+      expect(sender.calls).toHaveLength(2);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "resolved" })).toHaveLength(1);
+      const recurrence = listPiGuardianAlerts(db, { projectId: "demo", status: "open" })[0];
+      expect(recurrence).toMatchObject({ status: "open" });
+      expect(recurrence?.id).not.toBe(first.id);
+    } finally {
+      db.close();
+    }
+  });
 
   test("writes PI runtime alert, refreshes liveness, and avoids PI/outbox side effects", async () => {
     const db = await openFixtureDatabase();

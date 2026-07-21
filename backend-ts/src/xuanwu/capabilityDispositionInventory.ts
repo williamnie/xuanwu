@@ -614,6 +614,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/pi/delegations/:id/pause", family: "automation" },
   { method: "POST", path: "/api/pi/delegations/:id/resume", family: "automation" },
   { method: "GET", path: "/api/pi/guardian/alerts", family: "attention" },
+  { method: "GET", path: "/api/pi/guardian/alerts/:id", family: "attention" },
   { method: "POST", path: "/api/pi/guardian/alerts/:id/ack", family: "attention" },
   { method: "POST", path: "/api/pi/guardian/digest/flush", family: "attention" },
   { method: "GET", path: "/api/pi/guardian/notification-intents", family: "evidence-handoff" },
@@ -774,7 +775,7 @@ export const SCHEDULER_DISPOSITIONS = [
   { id: "target-watch-dispatch", disposition: "keep", target: "automation_watches/intents/outbox execution", entrypoint: "runWatchAutomationsOnce", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "provider-terminal-reconcile", disposition: "merge", target: "Run terminal Evidence", entrypoint: "signalOpenRunTerminalProviderErrors", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "guardian-decision-and-action", disposition: "merge", target: "Attention/Evidence with deterministic gate", entrypoint: "drainGuardianDecisionOrchestrator + dispatchApprovedGuardianActions", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
-  { id: "digest-and-delivery", disposition: "merge", target: "Attention delivery projection", entrypoint: "runDigestFlushSchedulerOnce + queueReady*Notifications", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
+  { id: "digest-and-delivery", disposition: "merge", target: "Attention delivery projection", entrypoint: "runDigestFlushSchedulerOnce + queueGuardianOperationsDailyReports + queueReady*Notifications", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "guardian-watchdog", disposition: "merge", target: "Attention runtime health", entrypoint: "runPiGuardianWatchdogOnce + missed-intent sweep", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "issue-watchdog", disposition: "merge", target: "Work blocker Attention", entrypoint: "runAutoRunIssueWatchdogOnce", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
   { id: "pi-project-cycle", disposition: "merge", target: "Automation-triggered Work proposals", entrypoint: "runPiAutoManageCycle", source_file: "backend-ts/src/runner/piAutoManageScheduler.ts" },
@@ -795,7 +796,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "guardian-attention", disposition: "merge", target: "Attention detection, routing and delivery", source_of_truth: "Guardian authorities projected into Attention",
-    source_files: ["backend-ts/src/pi/attentionRouter.ts", "backend-ts/src/pi/digestFlushScheduler.ts", "backend-ts/src/pi/digestFormatter.ts", "backend-ts/src/pi/failurePatternCandidates.ts", "backend-ts/src/pi/failurePatterns.ts", "backend-ts/src/pi/guardianActionLease.ts", "backend-ts/src/pi/guardianAlertRetryPolicy.ts", "backend-ts/src/pi/guardianDecisionActionCandidates.ts", "backend-ts/src/pi/guardianDecisionActions.ts", "backend-ts/src/pi/guardianDecisionMerge.ts", "backend-ts/src/pi/guardianDecisionOrchestrator.ts", "backend-ts/src/pi/guardianDecisionRateLimit.ts", "backend-ts/src/pi/guardianEventIngest.ts", "backend-ts/src/pi/guardianFailureClassifier.ts", "backend-ts/src/pi/guardianMissedDigestFallback.ts", "backend-ts/src/pi/guardianMissedIntentDigest.ts", "backend-ts/src/pi/guardianMissedIntentSweep.ts", "backend-ts/src/pi/guardianSignals.ts", "backend-ts/src/pi/guardianWatchdog.ts", "backend-ts/src/pi/guardianWatchdogAlerts.ts", "backend-ts/src/pi/guardianWatchdogMaintenance.ts", "backend-ts/src/pi/imReplyOutboxDispatcher.ts", "backend-ts/src/pi/notificationCoordinator.ts", "backend-ts/src/pi/notificationPreferenceResolver.ts", "backend-ts/src/pi/notificationPreferenceService.ts"]
+    source_files: ["backend-ts/src/pi/attentionRouter.ts", "backend-ts/src/pi/digestFlushScheduler.ts", "backend-ts/src/pi/digestFormatter.ts", "backend-ts/src/pi/failurePatternCandidates.ts", "backend-ts/src/pi/failurePatterns.ts", "backend-ts/src/pi/guardianActionLease.ts", "backend-ts/src/pi/guardianAlertPresentation.ts", "backend-ts/src/pi/guardianAlertRetryPolicy.ts", "backend-ts/src/pi/guardianDecisionActionCandidates.ts", "backend-ts/src/pi/guardianDecisionActions.ts", "backend-ts/src/pi/guardianDecisionMerge.ts", "backend-ts/src/pi/guardianDecisionOrchestrator.ts", "backend-ts/src/pi/guardianDecisionRateLimit.ts", "backend-ts/src/pi/guardianEventIngest.ts", "backend-ts/src/pi/guardianFailureClassifier.ts", "backend-ts/src/pi/guardianMissedDigestFallback.ts", "backend-ts/src/pi/guardianMissedIntentDigest.ts", "backend-ts/src/pi/guardianMissedIntentSweep.ts", "backend-ts/src/pi/guardianSignals.ts", "backend-ts/src/pi/guardianWatchdog.ts", "backend-ts/src/pi/guardianWatchdogAlerts.ts", "backend-ts/src/pi/guardianWatchdogMaintenance.ts", "backend-ts/src/pi/imReplyOutboxDispatcher.ts", "backend-ts/src/pi/notificationCoordinator.ts", "backend-ts/src/pi/notificationPreferenceResolver.ts", "backend-ts/src/pi/notificationPreferenceService.ts"]
   },
   {
     id: "intake-context", disposition: "merge", target: "Attention intake and Evidence context", source_of_truth: "external events, context bundles and intake audit",
@@ -811,7 +812,7 @@ export const PI_MODULE_FAMILIES = [
   },
   {
     id: "reporting", disposition: "merge", target: "Evidence/Handoff reporting projections", source_of_truth: "underlying immutable facts remain authoritative",
-    source_files: ["backend-ts/src/pi/nightRunSummary.ts", "backend-ts/src/pi/reportHealth.ts", "backend-ts/src/pi/reportIssueSummary.ts", "backend-ts/src/pi/reportSupervisorSummary.ts", "backend-ts/src/pi/reportUsage.ts", "backend-ts/src/pi/reports.ts", "backend-ts/src/pi/runGroupReportStatus.ts", "backend-ts/src/pi/runGroupService.ts"]
+    source_files: ["backend-ts/src/pi/guardianOperationsDailyReport.ts", "backend-ts/src/pi/nightRunSummary.ts", "backend-ts/src/pi/reportHealth.ts", "backend-ts/src/pi/reportIssueSummary.ts", "backend-ts/src/pi/reportSupervisorSummary.ts", "backend-ts/src/pi/reportUsage.ts", "backend-ts/src/pi/reports.ts", "backend-ts/src/pi/runGroupReportStatus.ts", "backend-ts/src/pi/runGroupService.ts"]
   },
   {
     id: "test-support", disposition: "keep", target: "Focused deterministic fixtures", source_of_truth: "test-only import graph",

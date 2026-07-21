@@ -43,7 +43,10 @@ const UPDATE_COLUMNS = [
   "next_retry_at", "retry_count", "max_retry_count", "watchdog_seen_at"
 ] as const;
 const STATUSES = new Set<PiGuardianAlertStatus>(["open", "acked", "resolved", "suppressed"]);
-const SILENCED_STATUSES: PiGuardianAlertStatus[] = ["acked", "resolved", "suppressed"];
+// acknowledged/suppressed incidents stay quiet while the same condition is
+// active. A resolved incident is historical evidence; a later recurrence must
+// create a new incident instead of being swallowed by that history row.
+const SILENCED_STATUSES: PiGuardianAlertStatus[] = ["acked", "suppressed"];
 
 export function upsertPiGuardianAlert(
   db: RunnerDatabase,
@@ -54,6 +57,10 @@ export function upsertPiGuardianAlert(
   if (existing) return refreshPiGuardianAlert(db, existing.id, record);
   const silenced = findSilencedAlert(db, record);
   if (silenced) return silenced;
+  // Some producers use a deterministic id for the first incident. Once that
+  // row is resolved it must remain immutable history, so a later recurrence
+  // receives a fresh id rather than colliding with the historical primary key.
+  if (getPiGuardianAlert(db, record.id)) record.id = crypto.randomUUID();
   db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (${placeholders(19)})`, [
     record.id, record.alert_type, record.severity, record.status,
     record.project_id, record.issue_id, record.run_group_id, record.message,

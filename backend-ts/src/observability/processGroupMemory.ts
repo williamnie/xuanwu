@@ -1,4 +1,8 @@
-import { upsertPiGuardianAlert } from "../db/repositories/pi/guardianAlerts.ts";
+import {
+  listPiGuardianAlerts,
+  resolvePiGuardianAlert,
+  upsertPiGuardianAlert
+} from "../db/repositories/pi/guardianAlerts.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { CodexProcessOwnership, ProcessTreeEntry } from "../providers/codex/processLifecycle.ts";
 import { redactSensitiveText } from "../util/redact.ts";
@@ -29,6 +33,11 @@ export type ProcessMemoryBudgetAlert = {
   phase: ProcessMemoryPhase;
   sample: Record<string, unknown>;
 };
+export type ProcessMemoryBudgetRecovery = {
+  budget: Record<string, unknown>;
+  phase: ProcessMemoryPhase;
+  sampled_at: string;
+};
 
 type RuntimeOwnership = { idle_ttl_ms?: number; owners: string[]; process?: CodexProcessOwnership } | undefined;
 type ProcessMemoryUsage = ReturnType<typeof process.memoryUsage>;
@@ -40,6 +49,7 @@ type ProcessGroupMemoryOptions = {
   memoryUsage?: () => ProcessMemoryUsage;
   now?: () => Date;
   onAlert?: (alert: ProcessMemoryBudgetAlert) => void;
+  onRecovery?: (recovery: ProcessMemoryBudgetRecovery) => void;
   providerRuntime?: () => RuntimeOwnership;
   runnerPid?: number;
   sampleIntervalMs?: number;
@@ -67,6 +77,7 @@ export class ProcessGroupMemoryObserver {
   private footprint?: FootprintState;
   private footprintInFlight = false;
   private history: Array<{ phase: ProcessMemoryPhase; rss_bytes: number; sampled_at: string }> = [];
+  private healthyNotified = false;
   private idleBaselineBytes?: number;
   private lastRunObservedAt?: number;
   private lastProcesses = new Map<string, ObservedProcess & { last_seen_at: string; peak_rss_bytes: number }>();
@@ -316,11 +327,27 @@ export class ProcessGroupMemoryObserver {
     const status = String(budget.status ?? "");
     const key = status === "hard_exceeded" ? `${phase}:hard` : status === "soft_exceeded" ? `${phase}:soft` : "";
     if (!key) {
+      if (status === "within_budget" && (!this.healthyNotified || this.activeAlert !== "")) {
+        try {
+          this.options.onRecovery?.({
+            budget,
+            phase,
+            sampled_at: String(this.sampleValue?.sampled_at ?? this.now().toISOString())
+          });
+        } catch (error) {
+          console.error(JSON.stringify({
+            event: "runner.process_group_memory_recovery_write_failed",
+            error: redactSensitiveText(error instanceof Error ? error.message : String(error))
+          }));
+        }
+        this.healthyNotified = true;
+      }
       this.activeAlert = "";
       return;
     }
     if (this.activeAlert === key) return;
     this.activeAlert = key;
+    this.healthyNotified = false;
     const level = key.endsWith(":hard") ? "hard" : "soft";
     try {
       this.options.onAlert?.({
@@ -384,6 +411,32 @@ export function writeProcessGroupMemoryAlert(database: RunnerDatabase, alert: Pr
     severity: alert.level === "hard" ? "urgent" : "high",
     status: "open"
   });
+}
+
+export function resolveRecoveredProcessGroupMemoryAlerts(
+  database: RunnerDatabase,
+  recovery: ProcessMemoryBudgetRecovery
+): number {
+  let resolved = 0;
+  for (const status of ["open", "acked"] as const) {
+    for (const alert of listPiGuardianAlerts(database, {
+      alertType: "runner_process_group_memory_budget",
+      status
+    })) {
+      resolvePiGuardianAlert(database, alert.id, {
+        evidence_json: {
+          event: "runner.process_group_memory_budget_recovered",
+          phase: recovery.phase,
+          sampled_at: recovery.sampled_at,
+          status: recovery.budget.status
+        },
+        message: "Runner process-group memory recovered within budget",
+        watchdog_seen_at: recovery.sampled_at
+      });
+      resolved += 1;
+    }
+  }
+  return resolved;
 }
 
 export function inspectMemoryProcessTable(): ProcessTreeEntry[] {

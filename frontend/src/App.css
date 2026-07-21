@@ -102,6 +102,13 @@
   margin: 0;
 }
 
+.guardian-alert-body .guardian-alert-user-action {
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  border-left: 2px solid var(--warning);
+  font-size: 0.74rem;
+  padding: 5px 7px;
+}
+
 .guardian-alert-body small {
   color: var(--text-muted);
   font-size: 0.72rem;

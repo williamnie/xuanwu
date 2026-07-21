@@ -45,11 +45,46 @@ describe("PI guardian alerts API", () => {
       expect(response.status).toBe(200);
       expect(body).toHaveLength(1);
       expect(body[0]).toMatchObject({ id: "alert-open", status: "open", project_id: "demo" });
+      expect(body[0]).toMatchObject({
+        presentation: {
+          component: "通知发送队列",
+          location: "项目 demo",
+          title: "通知发送暂时延迟"
+        }
+      });
       expect(text).not.toContain("evidence_json");
       expect(text).not.toContain("fixture-secret");
       expect(text).not.toContain("/Users/xiaobei/private");
       expect(text).toContain("[redacted]");
       expect(text).toContain("[redacted-path]");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("returns one exact alert with its user-facing diagnosis", async () => {
+    const db = await fixtureDatabase();
+    try {
+      upsertPiGuardianAlert(db, {
+        alert_type: "scheduler_stalled",
+        id: "alert-detail",
+        message: "scheduler stalled",
+        project_id: "demo"
+      });
+      const router = createDefaultRouter({ database: db });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/pi/guardian/alerts/alert-detail`));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: "alert-detail",
+        presentation: {
+          component: "Supervisor 调度器",
+          handling: "user_action_required",
+          requires_user: true,
+          user_action: expect.stringContaining("Core 服务")
+        }
+      });
     } finally {
       db.close();
     }

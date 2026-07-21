@@ -37,13 +37,29 @@ const SEVERITY_LABELS = {
 };
 
 export function buildGuardianAlertDisplay(alert = {}) {
+  if (alert.presentation && typeof alert.presentation === 'object') {
+    const presentation = alert.presentation;
+    return {
+      handling: presentation.handling,
+      message: presentation.description,
+      meta: [presentation.location, presentation.state_label].filter(Boolean).join(' · '),
+      requiresUser: presentation.requires_user === true,
+      severityLabel: guardianSeverityLabel(alert.severity),
+      title: presentation.title,
+      userAction: presentation.user_action,
+    };
+  }
   const severityLabel = guardianSeverityLabel(alert.severity);
   const display = ALERT_TYPE_DISPLAYS[alert.alert_type] ?? fallbackDisplay();
+  const requiresUser = fallbackRequiresUser(alert);
   return {
+    handling: requiresUser ? 'user_action_required' : 'pi_handling',
     message: alertMessage(display, alert),
     meta: alertMeta(alert, severityLabel),
+    requiresUser,
     severityLabel,
     title: display.title,
+    userAction: requiresUser ? '请按提示检查对应配置或服务；恢复后告警会自动归档。' : '当前无需操作，PI 会继续处理。',
   };
 }
 
@@ -102,6 +118,15 @@ function fallbackDisplay() {
     message: 'Guardian 发现一条系统告警，可能影响自动恢复或通知链路。请检查 Guardian 状态页和后端日志。',
     title: 'Guardian 系统告警',
   };
+}
+
+function fallbackRequiresUser(alert) {
+  const type = cleanText(alert?.alert_type);
+  if (['scheduler_stalled', 'pi_runtime_down', 'approval_fast_path_error'].includes(type)) return true;
+  if (/connect|provider|auth|unavailable/i.test(type) && type !== 'issue_watchdog_runnable_without_runtime') return true;
+  const retries = Number(alert?.retry_count || 0);
+  const maximum = Number(alert?.max_retry_count || 0);
+  return maximum > 0 && retries >= maximum;
 }
 
 function formatDate(value) {

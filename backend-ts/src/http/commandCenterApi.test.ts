@@ -211,6 +211,16 @@ describe("Command Center aggregate API", () => {
       });
       expect(db.sqlite.query<{ count: number }, []>("select count(*) as count from attention_command_events").get()?.count).toBe(1);
 
+      const beforeReminderRouter = createRouter();
+      registerCommandCenterRoutes(beforeReminderRouter, { database: db }, {
+        now: () => new Date("2026-07-17T08:30:00.000Z")
+      });
+      const beforeReminder = await beforeReminderRouter.handle(new Request(
+        `${BASE_URL}/api/command-center/summary?sections=attention&limit=10`
+      ));
+      const beforeReminderItems = ((await beforeReminder.json()) as Record<string, any>).sections.attention.items;
+      expect(beforeReminderItems.find((item: Record<string, any>) => item.id === target.id)).toBeUndefined();
+
       const refreshed = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
       const refreshedItems = ((await refreshed.json()) as Record<string, any>).sections.attention.items;
       expect(refreshedItems.find((item: Record<string, any>) => item.id === target.id)).toMatchObject({ revision: 1, status: "waiting" });
@@ -221,6 +231,107 @@ describe("Command Center aggregate API", () => {
       ));
       expect(stale.status).toBe(409);
       expect((await stale.json()) as Record<string, unknown>).toMatchObject({ message: expect.stringContaining("revision conflict") });
+
+      const acknowledged = await router.handle(jsonRequest(
+        `/api/command-center/attention/${encodeURIComponent(target.id)}/actions/acknowledge`,
+        attentionCommand(1, "acknowledge")
+      ));
+      expect(acknowledged.status).toBe(200);
+      expect(await acknowledged.json()).toMatchObject({ attention: { status: "acknowledged" } });
+      const afterAck = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
+      const afterAckItems = ((await afterAck.json()) as Record<string, any>).sections.attention.items;
+      expect(afterAckItems.find((item: Record<string, any>) => item.id === target.id)).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  test("shows only user-owned incidents while PI-handled and recovered alerts become an operations summary", async () => {
+    const db = await fixtureDatabase();
+    try {
+      upsertPiGuardianAlert(db, {
+        alert_type: "outbox_stalled", id: "guardian-auto", message: "outbox stalled: 1 stale item(s)", project_id: "demo"
+      });
+      upsertPiGuardianAlert(db, {
+        alert_type: "scheduler_stalled", id: "guardian-user", message: "scheduler stalled", project_id: "demo"
+      });
+      upsertPiGuardianAlert(db, {
+        alert_type: "coordinator_stalled", id: "guardian-acked", message: "coordinator stalled", project_id: "demo", status: "acked"
+      });
+      upsertPiGuardianAlert(db, {
+        alert_type: "guardian_inbox_stalled", id: "guardian-history", message: "inbox stalled", project_id: "demo", status: "resolved"
+      });
+      db.sqlite.run("update pi_guardian_alerts set created_at=?, updated_at=?, watchdog_seen_at=?", [SOURCE_TIME, SOURCE_TIME, SOURCE_TIME]);
+      const router = createRouter();
+      registerCommandCenterRoutes(router, { database: db }, { now: () => new Date(NOW) });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention&limit=10`));
+      const section = ((await response.json()) as Record<string, any>).sections.attention;
+
+      expect(section).toMatchObject({
+        counts: { pi_handling: 1, returned: 1, resolved_24h: 1, source_total: 2, total: 1 },
+        freshness: { is_stale: false, state: "current" },
+        operations: {
+          summary: { active_pi_handling: 1, active_user_action_required: 1, alerts_recovered: 1 }
+        }
+      });
+      expect(section.items).toMatchObject([{
+        details: {
+          component: "Supervisor 调度器",
+          handling: "user_action_required",
+          location: "项目 demo",
+          requires_user: true,
+          title: "Supervisor 调度器已停止响应"
+        },
+        links: { self: "/api/pi/guardian/alerts/guardian-user" }
+      }]);
+      expect(section.operations.active).toHaveLength(1);
+      expect(section.recent_history).toMatchObject([expect.objectContaining({
+        alert_id: "guardian-history", historical: true, state_label: "历史记录 · 已恢复"
+      })]);
+      expect(JSON.stringify(section.items)).not.toContain("guardian-auto");
+      expect(JSON.stringify(section.items)).not.toContain("guardian-acked");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("moves stale recovery actions for terminal issues into history instead of user Attention", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issue = createIssue(db, { project_id: "demo", status: "done", title: "already finished" });
+      createPiAction(db, {
+        action_type: "session.steer",
+        gate_decision: "ask",
+        gate_reason: "risk requires user confirmation",
+        id: "stale-session-steer",
+        issue_id: issue.id,
+        project_id: "demo",
+        rationale: "steer an old session",
+        status: "pending"
+      });
+      createPiAction(db, {
+        action_type: "issue.retry",
+        gate_decision: "snooze",
+        gate_reason: "recovery cooldown has not elapsed",
+        id: "stale-retry",
+        issue_id: issue.id,
+        project_id: "demo",
+        rationale: "retry after cooldown",
+        status: "snoozed"
+      });
+      const router = createRouter();
+      registerCommandCenterRoutes(router, { database: db }, { now: () => new Date(NOW) });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/command-center/summary?sections=attention`));
+      const section = ((await response.json()) as Record<string, any>).sections.attention;
+
+      expect(section.counts).toMatchObject({ historical_hidden: 2, returned: 0, source_total: 0, total: 0 });
+      expect(section.items).toEqual([]);
+      expect(section.recent_history).toHaveLength(2);
+      expect(section.recent_history).toEqual(expect.arrayContaining([
+        expect.objectContaining({ historical: true, state_label: "历史记录 · 目标已结束", title: "旧操作请求已失效" })
+      ]));
     } finally {
       db.close();
     }

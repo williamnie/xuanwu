@@ -76,11 +76,13 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
   const now = optionalDate(input.now) ?? new Date();
   const staleAfterMs = positiveInteger(input.staleAfterMs, DEFAULT_STALE_AFTER_MS);
   const escalateAfterMs = positiveInteger(input.escalateAfterMs, DEFAULT_ESCALATE_AFTER_MS);
+  const cutoff = cutoffISO(now, staleAfterMs);
   const rows = uniqueProjectRows(listStaleTodoWithoutRuntime(
     input.database,
-    cutoffISO(now, staleAfterMs),
+    cutoff,
     positiveInteger(input.limit, DEFAULT_LIMIT)
   ));
+  resolveInactiveWatchdogAlerts(input.database, cutoff, now);
   const summary: IssueWatchdogSummary = {
     attentioned: 0,
     candidates: rows.length,
@@ -321,14 +323,47 @@ function resolveChangedWatchdogAlerts(
   activeStateKey: string,
   now: Date
 ): void {
-  for (const alert of listPiGuardianAlerts(db, { projectId: row.project_id, status: "open" })) {
-    if (alert.issue_id !== row.id || !alert.alert_type.startsWith(WATCHDOG_ALERT_PREFIX) ||
-      alert.run_group_id === activeStateKey) continue;
-    resolvePiGuardianAlert(db, alert.id, {
-      evidence_json: alert.evidence_json,
-      watchdog_seen_at: now.toISOString()
-    });
+  for (const status of ["open", "acked"] as const) {
+    for (const alert of listPiGuardianAlerts(db, { projectId: row.project_id, status })) {
+      if (alert.issue_id !== row.id || !alert.alert_type.startsWith(WATCHDOG_ALERT_PREFIX) ||
+        alert.run_group_id === activeStateKey) continue;
+      resolvePiGuardianAlert(db, alert.id, {
+        evidence_json: alert.evidence_json,
+        message: `issue #${row.id} watchdog condition recovered`,
+        watchdog_seen_at: now.toISOString()
+      });
+    }
   }
+}
+
+function resolveInactiveWatchdogAlerts(db: RunnerDatabase, cutoff: string, now: Date): void {
+  for (const status of ["open", "acked"] as const) {
+    for (const alert of listPiGuardianAlerts(db, { status })) {
+      if (!alert.alert_type.startsWith(WATCHDOG_ALERT_PREFIX) || alert.issue_id <= 0) continue;
+      if (issueStillWatchdogCandidate(db, alert.issue_id, cutoff)) continue;
+      resolvePiGuardianAlert(db, alert.id, {
+        evidence_json: alert.evidence_json,
+        message: `issue #${alert.issue_id} watchdog condition recovered`,
+        watchdog_seen_at: now.toISOString()
+      });
+    }
+  }
+}
+
+function issueStillWatchdogCandidate(db: RunnerDatabase, issueID: number, cutoff: string): boolean {
+  return (db.sqlite.query<{ active: number }, [number, string]>(`
+    select exists(
+      select 1 from issues i join projects p on p.id=i.project_id
+      where i.id=? and p.auto_run=1 and i.status='todo'
+        and coalesce(nullif(i.updated_at, ''), i.created_at)<=?
+        and not exists (select 1 from issue_runs ir where ir.issue_id=i.id and ir.ended_at='')
+        and not exists (
+          select 1 from agent_sessions s where s.issue_id=i.id
+            and lower(replace(replace(replace(s.status, '_', ''), '-', ''), ' ', ''))
+              in ('active', 'busy', 'inprogress', 'running')
+        )
+    ) as active
+  `).get(issueID, cutoff)?.active ?? 0) === 1;
 }
 
 function watchdogAttentionMessage(row: StaleTodoRow, state: WatchdogState): string {

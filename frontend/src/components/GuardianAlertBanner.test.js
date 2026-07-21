@@ -25,11 +25,13 @@ test('Guardian alert banner is mounted globally above routed pages', () => {
 });
 
 test('Guardian banner reads alerts and watchdog stale without native dialogs', () => {
-  assert.match(bannerSource, /systemApi\.getSystemStatus\(\)/);
+  assert.match(bannerSource, /systemApi\.getSystemStatus\(\{ force \}\)/);
   assert.match(bannerSource, /pi_guardian\?\.watchdog/);
   assert.match(bannerSource, /watchdog\?\.is_stale/);
   assert.match(bannerSource, /Guardian 心跳已超时/);
   assert.match(bannerSource, /assistantApi\.ackPiGuardianAlert\(id\)/);
+  assert.match(bannerSource, /buildGuardianAlertDisplay\(alert\)\.requiresUser/);
+  assert.match(bannerSource, /需要你做/);
   assert.doesNotMatch(bannerSource, /window\.(alert|confirm)/);
 });
 
@@ -57,6 +59,7 @@ test('Guardian alert display maps missed digest pending to actionable Chinese co
 
   assert.equal(display.title, '飞书摘要通知暂时不可用');
   assert.equal(display.severityLabel, '观察');
+  assert.equal(display.requiresUser, false);
   assert.match(display.message, /待补发的通知摘要/);
   assert.match(display.message, /恢复后会自动补发/);
   assert.match(display.message, /检查 Guardian 的 digest\/coordinator\/outbox 状态/);

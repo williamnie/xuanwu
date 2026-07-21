@@ -100,6 +100,32 @@ describe("PI guardian watchdog repositories", () => {
     }
   });
 
+  test("preserves resolved history and gives a deterministic-id recurrence a fresh incident id", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const first = upsertPiGuardianAlert(db, {
+        alert_type: "handoff_tracker_update_failed",
+        id: "deterministic-alert",
+        message: "first incident",
+        project_id: "demo"
+      });
+      resolvePiGuardianAlert(db, first.id, { message: "recovered" });
+      const recurrence = upsertPiGuardianAlert(db, {
+        alert_type: "handoff_tracker_update_failed",
+        id: "deterministic-alert",
+        message: "recurrence",
+        project_id: "demo"
+      });
+
+      expect(recurrence.id).not.toBe(first.id);
+      expect(recurrence).toMatchObject({ message: "recurrence", status: "open" });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "resolved" })).toHaveLength(1);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("upserts singleton watchdog liveness status", async () => {
     const db = await openFixtureDatabase();
     try {

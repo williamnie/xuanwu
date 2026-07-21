@@ -102,6 +102,7 @@ function GuardianAlertItem({ alert, acking, onAck }) {
           <span className={`guardian-alert-severity ${urgent ? 'urgent' : ''}`}>{display.severityLabel}</span>
         </div>
         <p>{display.message}</p>
+        {display.userAction ? <p className="guardian-alert-user-action"><strong>需要你做：</strong>{display.userAction}</p> : null}
         <small>{display.meta}</small>
       </div>
       <button className="guardian-alert-action" disabled={acking} onClick={() => onAck(alert.id)} type="button">
@@ -152,6 +153,7 @@ function visibleOpenAlerts(alerts, ackedIds) {
   if (!Array.isArray(alerts)) return [];
   return alerts
     .filter((alert) => alert?.status === 'open' && alert.ui_visible !== 0 && !ackedIds.has(alert.id))
+    .filter((alert) => buildGuardianAlertDisplay(alert).requiresUser)
     .sort((left, right) => alertRank(left) - alertRank(right));
 }
 

@@ -142,7 +142,10 @@ function recoveredOutageAlerts(
   watchdog: PiGuardianWatchdogSummary | undefined
 ): PiGuardianAlert[] {
   const recovered = recoveredComponents(watchdog);
-  return listPiGuardianAlerts(db, { status: "open" })
+  return [
+    ...listPiGuardianAlerts(db, { status: "open" }),
+    ...listPiGuardianAlerts(db, { status: "acked" })
+  ]
     .filter((alert) => outageComponent(alert) !== undefined)
     .filter((alert) => recovered.size === 0 || recovered.has(outageComponent(alert)!));
 }

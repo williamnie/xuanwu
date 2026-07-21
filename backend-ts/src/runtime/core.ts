@@ -13,7 +13,11 @@ import {
   resolveFeishuContinuationTarget
 } from "../integrations/feishuConversationContext.ts";
 import { createFeishuReceiverManager } from "../integrations/feishuReceiver.ts";
-import { ProcessGroupMemoryObserver, writeProcessGroupMemoryAlert } from "../observability/processGroupMemory.ts";
+import {
+  ProcessGroupMemoryObserver,
+  resolveRecoveredProcessGroupMemoryAlerts,
+  writeProcessGroupMemoryAlert
+} from "../observability/processGroupMemory.ts";
 import { createClaudeExecutorProvider } from "../providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
@@ -45,6 +49,7 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
       "select count(*) as count from issue_runs where ended_at=''"
     ).get()?.count ?? 0,
     onAlert: (alert) => writeProcessGroupMemoryAlert(database, alert),
+    onRecovery: (recovery) => resolveRecoveredProcessGroupMemoryAlerts(database, recovery),
     providerRuntime: () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot()
   });
   processGroupMemory.start();

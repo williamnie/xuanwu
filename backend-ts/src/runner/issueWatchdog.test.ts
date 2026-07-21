@@ -201,6 +201,14 @@ describe("issue watchdog queue readiness", () => {
       });
       expect(reactivated).toMatchObject({ attentioned: 1, kicked: 0, waiting: 1 });
       expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(1);
+
+      db.sqlite.run("update pi_guardian_alerts set status='acked' where project_id='demo'");
+      db.sqlite.run("update issues set status='done', updated_at=? where id=?", [NOW.toISOString(), waiting]);
+      await runAutoRunIssueWatchdogOnce({
+        database: db, now: new Date(NOW.getTime() + 5 * 60_000), providers: {}, staleAfterMs: 60_000
+      });
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "acked" })).toEqual([]);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "resolved" })).toHaveLength(2);
     } finally {
       db.close();
     }

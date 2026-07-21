@@ -32,6 +32,10 @@ import {
   type PiGuardianWatchdogSummary
 } from "../pi/guardianWatchdog.ts";
 import { resolveRecoveredAlerts } from "../pi/guardianWatchdogMaintenance.ts";
+import {
+  queueGuardianOperationsDailyReports,
+  type GuardianOperationsDailyReportResult
+} from "../pi/guardianOperationsDailyReport.ts";
 import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
 import {
   runDueAutomations,
@@ -69,6 +73,7 @@ export type ScheduleLayerCycleResult = PiAutoManageCycleResult & {
   providerTerminalSignals: ProviderTerminalBackfillSummary;
   supervisor: { decisions: number; failed: number; scanned: number; signaled: number; skipped: number };
   issueWatchdog: IssueWatchdogSummary;
+  operationsDailyReports: GuardianOperationsDailyReportResult;
   watchdog: PiGuardianWatchdogSummary;
 };
 
@@ -201,6 +206,9 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
   });
   const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
   resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
+  const operationsDailyReports = queueGuardianOperationsDailyReports(input.database, {
+    now: optionalDate(input.watchdogNow)
+  });
   const watchResult = runWatchAutomationsOnce(input.database, { now: input.watchdogNow });
   if (watchResult.queued > 0 && input.config) {
     await dispatchFeishuOutbox({
@@ -248,6 +256,7 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     guardianDecisions,
     issueWatchdog,
     missedIntentSweep,
+    operationsDailyReports,
     providerTerminalSignals,
     supervisor,
     watchdog
