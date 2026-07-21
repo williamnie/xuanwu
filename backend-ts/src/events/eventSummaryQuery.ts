@@ -8,14 +8,12 @@ import {
 import {
   compactProjectionStatus,
   getEventSummaryProjectionSwitch,
-  listEventSummaryProjectionForRead,
-  projectPendingCompactEventSummaries
+  listEventSummaryProjectionForRead
 } from "../db/repositories/compactEventSummaryProjection.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import {
   EVENT_SUMMARY_PROJECTOR_VERSION,
-  EVENT_SUMMARY_QUERY_SCHEMA_VERSION,
-  projectPendingEventSummaries
+  EVENT_SUMMARY_QUERY_SCHEMA_VERSION
 } from "./eventSummaryProjector.ts";
 
 export type PublicEventSummary = {
@@ -49,11 +47,7 @@ export function queryEventSummaries(
   filter: EventSummaryProjectionFilter = {}
 ): EventSummaryQueryResult {
   if (filter.issueID !== undefined && !getIssue(db, filter.issueID)) throw new ProjectNotFoundError();
-  projectPendingEventSummaries(db);
   const projectionSwitch = getEventSummaryProjectionSwitch(db);
-  if (projectionSwitch.read_version === "v2" || projectionSwitch.observation_started_at) {
-    projectPendingCompactEventSummaries(db);
-  }
   return {
     items: listEventSummaryProjectionForRead(db, filter).map(publicSummary),
     schema_version: EVENT_SUMMARY_QUERY_SCHEMA_VERSION,

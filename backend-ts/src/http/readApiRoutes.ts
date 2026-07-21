@@ -8,10 +8,13 @@ import type { Router } from "./router.ts";
 
 export function registerCoreReadRoutes(router: Router, context: ReadApiContext): void {
   const handlers = createReadApiDomainHandlers(context);
-  registerIssuesPageAuxRoutes(router, handlers);
-  registerProjectRoutes(router, handlers);
-  registerIssueCollectionRoutes(router, handlers);
-  registerIssueItemRoutes(router, handlers);
+  const readHandlers = context.readDatabase
+    ? createReadApiDomainHandlers({ ...context, database: context.readDatabase })
+    : handlers;
+  registerIssuesPageAuxRoutes(router, readHandlers);
+  registerProjectRoutes(router, handlers, readHandlers);
+  registerIssueCollectionRoutes(router, handlers, readHandlers);
+  registerIssueItemRoutes(router, handlers, readHandlers);
 }
 
 function registerIssuesPageAuxRoutes(router: Router, handlers: ReadApiDomainHandlers): void {
@@ -19,9 +22,9 @@ function registerIssuesPageAuxRoutes(router: Router, handlers: ReadApiDomainHand
   router.get("/api/issue-templates", () => json(handlers.auxiliary.listIssueTemplates()));
 }
 
-function registerProjectRoutes(router: Router, handlers: ReadApiDomainHandlers): void {
-  router.get("/api/projects", () => json(handlers.projects.list()));
-  router.get("/api/projects/:id", (request) => readResponse(() => handlers.projects.read(projectID(request))));
+function registerProjectRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
+  router.get("/api/projects", () => json(readHandlers.projects.list()));
+  router.get("/api/projects/:id", (request) => readResponse(() => readHandlers.projects.read(projectID(request))));
   router.post("/api/projects", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => handlers.projects.create(body), 201);
@@ -32,15 +35,15 @@ function registerProjectRoutes(router: Router, handlers: ReadApiDomainHandlers):
   });
 }
 
-function registerIssueCollectionRoutes(router: Router, handlers: ReadApiDomainHandlers): void {
-  router.get("/api/issues", (request) => json(handlers.issues.list(issueFilter(request))));
+function registerIssueCollectionRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
+  router.get("/api/issues", (request) => json(readHandlers.issues.list(issueFilter(request))));
   router.post("/api/issues", async (request) => {
     const body = await parseObjectBody(request);
     return writeResponse(() => handlers.issues.create(body), 201);
   });
 }
 
-function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers): void {
+function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers, readHandlers = handlers): void {
   router.post("/api/issues/:id/enqueue", (request) => actionResponse(handlers, request, "enqueue"));
   router.post("/api/issues/:id/retry", (request) => actionResponse(handlers, request, "retry"));
   router.post("/api/issues/:id/cancel", (request) => asyncWriteResponse(() => handlers.issues.cancel(issueID(request))));
@@ -48,7 +51,7 @@ function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers
     const body = await parseObjectBody(request);
     return writeResponse(() => handlers.issues.verify(issueID(request), body));
   });
-  router.get("/api/issues/:id", (request) => readResponse(() => handlers.issues.read(issueID(request))));
+  router.get("/api/issues/:id", (request) => readResponse(() => readHandlers.issues.read(issueID(request))));
   router.patch("/api/issues/:id", async (request) => {
     const body = await parseObjectBody(request);
     return asyncWriteResponse(() => handlers.issues.update(issueID(request), body));
@@ -62,9 +65,9 @@ function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers
     return writeResponse(() => handlers.issues.comment(issueID(request), body), 201);
   });
   router.get("/api/issues/:id/events", (request) => writeResponse(() => (
-    handlers.issues.events(issueID(request), issueEventFilter(request))
+    readHandlers.issues.events(issueID(request), issueEventFilter(request))
   )));
-  router.get("/api/issues/:id/runs", (request) => writeResponse(() => handlers.issues.runs(issueID(request))));
+  router.get("/api/issues/:id/runs", (request) => writeResponse(() => readHandlers.issues.runs(issueID(request))));
 }
 
 async function actionResponse(

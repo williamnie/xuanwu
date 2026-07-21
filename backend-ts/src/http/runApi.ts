@@ -73,9 +73,10 @@ export function registerRunRoutes(router: Router, context: ReadApiContext): void
 }
 
 function listResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
+  const database = context.readDatabase ?? context.database;
   const params = new URL(request.url).searchParams;
   const projectID = optionalString(params.get("project_id"));
-  if (projectID && !getProject(context.database, projectID)) {
+  if (projectID && !getProject(database, projectID)) {
     throw runError(404, "project_not_found", "Project not found");
   }
   const workIDValue = optionalString(params.get("work_id"));
@@ -100,7 +101,7 @@ function listResponse(context: ReadApiContext, request: Request): Record<string,
     statuses,
     ...(workIDFilter ? { work_id: workIDFilter } : {})
   };
-  const total = countRuns(context.database, filter);
+  const total = countRuns(database, filter);
   return {
     compatibility: RUN_HTTP_COMPATIBILITY_POLICY,
     filters: {
@@ -109,7 +110,7 @@ function listResponse(context: ReadApiContext, request: Request): Record<string,
       status: statuses,
       work_id: workIDFilter ?? ""
     },
-    items: listRuns(context.database, filter),
+    items: listRuns(database, filter),
     page: page.page,
     page_size: page.page_size,
     sort: { field: sort, order },
@@ -121,7 +122,7 @@ function listResponse(context: ReadApiContext, request: Request): Record<string,
 function detailResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
   return {
     compatibility: RUN_HTTP_COMPATIBILITY_POLICY,
-    run: requireRun(context, runID(request))
+    run: requireRun(context, runID(request), context.readDatabase ?? context.database)
   };
 }
 
@@ -341,8 +342,8 @@ function latestAttempt(run: RunDetail): RunAttemptView {
   return attempt;
 }
 
-function requireRun(context: ReadApiContext, id: RunID): RunDetail {
-  const run = getRun(context.database, id);
+function requireRun(context: ReadApiContext, id: RunID, database = context.database): RunDetail {
+  const run = getRun(database, id);
   if (!run) throw runError(404, "run_not_found", "Run not found");
   return run;
 }

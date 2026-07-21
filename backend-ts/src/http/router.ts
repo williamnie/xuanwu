@@ -1,4 +1,4 @@
-import { errorResponse, jsonError } from "./errors.ts";
+import { errorResponse, isSqliteContention, jsonError } from "./errors.ts";
 
 type Handler = (request: Request) => Response | Promise<Response>;
 type HttpMethod = "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
@@ -39,6 +39,15 @@ async function dispatch(routes: Route[], request: Request): Promise<Response> {
     if (route) return await route.handler(request);
     return missingRouteResponse(routes, path);
   } catch (error) {
+    if (isSqliteContention(error)) {
+      const url = new URL(request.url);
+      console.warn(JSON.stringify({
+        event: "sqlite.contention",
+        method: request.method.slice(0, 12),
+        path: url.pathname.slice(0, 160),
+        policy: "bounded-fast-fail"
+      }));
+    }
     return errorResponse(error);
   }
 }

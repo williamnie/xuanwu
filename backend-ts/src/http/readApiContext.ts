@@ -9,6 +9,7 @@ export type ReadApiContext = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database: RunnerDatabase;
+  readDatabase?: RunnerDatabase;
   interruptTimeoutMs?: number;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;

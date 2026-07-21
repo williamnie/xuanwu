@@ -41,6 +41,7 @@ type DefaultRouterOptions = {
   codexSessionsDir?: string;
   config?: RunnerConfig;
   database?: RunnerDatabase;
+  readDatabase?: RunnerDatabase;
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   interruptTimeoutMs?: number;
   onFeishuConfigChanged?: (config: FeishuConnectorConfig) => Promise<void> | void;
@@ -50,6 +51,7 @@ type DefaultRouterOptions = {
   feishuSender?: FeishuMessageSender;
   piOpenAICodexOAuthLogin?: PiOpenAICodexOAuthLogin;
   processGroupMemory?: { snapshot(): Record<string, unknown> };
+  projectionWorker?: { snapshot(): Record<string, unknown> };
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   restartDelayMs?: number;
   restartProcess?: () => void;
@@ -116,6 +118,7 @@ export function createDefaultRouter(runtime: DefaultRouterOptions = {}): Router 
       codexSessionsDir: runtime.codexSessionsDir,
       config: runtime.config,
       database: runtime.database,
+      readDatabase: runtime.readDatabase,
       interruptTimeoutMs: runtime.interruptTimeoutMs,
       piOpenAICodexOAuthLogin: runtime.piOpenAICodexOAuthLogin,
       providers: runtime.providers,
@@ -158,9 +161,10 @@ export function registerSystemStatusRoute(
   const statusContext = {
     authEnabled: context.authToken.trim() !== "",
     config: context.config,
-    database: context.database,
+    database: context.readDatabase ?? context.database,
     feishuReceiverStatus: context.feishuReceiverStatus,
     processGroupMemory: context.processGroupMemory,
+    projectionWorker: context.projectionWorker,
     role: context.role ?? "all",
     startedAt,
     webhookSigningSecret: context.webhookSigningSecret
@@ -169,7 +173,7 @@ export function registerSystemStatusRoute(
     ...(new URL(request.url).searchParams.get("compact") === "1"
       ? buildCompactSystemStatus(statusContext)
       : buildSystemStatus(statusContext)),
-    pi_guardian: buildPiGuardianSystemStatus(context.database)
+    pi_guardian: buildPiGuardianSystemStatus(context.readDatabase ?? context.database)
   }));
   router.get("/api/system/doctor", () => json(buildRuntimeDoctor(statusContext)));
 }

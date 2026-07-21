@@ -545,6 +545,7 @@ function summarizedRunProgress(
       duplicate_event_count: 0,
       ignored_event_count: 0,
       source_event_count: 0,
+      source_event_truncated: false,
       timeline_truncated: 0,
       unique_event_count: 0,
       unmapped_event_count: 0

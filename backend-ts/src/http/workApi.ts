@@ -58,14 +58,15 @@ type PageInput = {
 };
 
 export function registerWorkRoutes(router: Router, context: ReadApiContext): void {
-  router.get("/api/works", (request) => workResponse(() => listResponse(context.database, request)));
-  router.get("/api/works/board", (request) => workResponse(() => boardResponse(context.database, request)));
-  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(context.database, request)));
+  const readDatabase = context.readDatabase ?? context.database;
+  router.get("/api/works", (request) => workResponse(() => listResponse(readDatabase, request)));
+  router.get("/api/works/board", (request) => workResponse(() => boardResponse(readDatabase, request)));
+  router.get("/api/works/:id", (request) => workResponse(() => detailResponse(readDatabase, request)));
   router.get("/api/works/:id/timeline", (request) => (
-    workResponse(() => timelineResponse(context.database, request))
+    workResponse(() => timelineResponse(readDatabase, request))
   ));
   router.get("/api/works/:id/relations", (request) => (
-    workResponse(() => workRelationsResponse(context.database, request))
+    workResponse(() => workRelationsResponse(readDatabase, request))
   ));
   router.put("/api/works/:id/readiness-requirements", async (request) => workResponse(async () => {
     const work = requireWork(context.database, workID(request));
@@ -82,7 +83,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     };
   }));
   router.get("/api/work-relations", (request) => (
-    workResponse(() => relationListResponse(context.database, request))
+    workResponse(() => relationListResponse(readDatabase, request))
   ));
   router.post("/api/works", async (request) => workResponse(async () => {
     const body = await objectBody(request);

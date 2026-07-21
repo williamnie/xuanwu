@@ -108,10 +108,11 @@ export function registerCommandCenterRoutes(
   context: ReadApiContext,
   options: CommandCenterRouteOptions = {}
 ): void {
+  const readDatabase = context.readDatabase ?? context.database;
   router.get("/api/command-center/summary", (request) => commandCenterResponse(() => (
-    buildCommandCenterSummary(context, request, options)
+    buildCommandCenterSummary({ ...context, database: readDatabase }, request, options)
   )));
-  router.get("/api/command-center/attention/:id", (request) => attentionDetailResponse(context.database, request));
+  router.get("/api/command-center/attention/:id", (request) => attentionDetailResponse(readDatabase, request));
   router.post("/api/command-center/attention/:id/actions/:action", async (request) => (
     attentionCommandResponse(context, request)
   ));

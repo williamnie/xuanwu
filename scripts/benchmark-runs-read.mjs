@@ -81,6 +81,7 @@ function summarize(samples) {
     min_ms: sorted[0] ?? 0,
     p50_ms: percentile(sorted, 0.50),
     p95_ms: percentile(sorted, 0.95),
+    p99_ms: percentile(sorted, 0.99),
     samples_ms: samples,
   };
 }

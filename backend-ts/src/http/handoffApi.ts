@@ -95,8 +95,9 @@ type ReviewSummary = {
 };
 
 export function registerHandoffRoutes(router: Router, context: ReadApiContext): void {
-  router.get("/api/handoffs", (request) => handoffResponse(() => listResponse(context.database, request)));
-  router.get("/api/handoffs/:id", (request) => handoffResponse(() => detailResponse(context.database, request)));
+  const readDatabase = context.readDatabase ?? context.database;
+  router.get("/api/handoffs", (request) => handoffResponse(() => listResponse(readDatabase, request)));
+  router.get("/api/handoffs/:id", (request) => handoffResponse(() => detailResponse(readDatabase, request)));
   router.post("/api/handoffs/:id/reviews", (request) => handoffResponse(() => reviewResponse(context.database, request)));
 }
 

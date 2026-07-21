@@ -4,15 +4,15 @@ import { queryEventSummaries } from "../events/eventSummaryQuery.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
 
-type EventSummariesContext = { database: RunnerDatabase };
+type EventSummariesContext = { database: RunnerDatabase; readDatabase?: RunnerDatabase };
 
 export function registerEventSummaryRoutes(router: Router, context: EventSummariesContext): void {
   router.get("/api/event-summaries", (request) => eventSummaryResponse(() => queryEventSummaries(
-    context.database,
+    context.readDatabase ?? context.database,
     eventSummaryFilter(request, 100)
   )));
   router.get("/api/issues/:id/event-summaries", (request) => eventSummaryResponse(() => queryEventSummaries(
-    context.database,
+    context.readDatabase ?? context.database,
     { ...eventSummaryFilter(request), issueID: issueID(request) }
   )));
 }

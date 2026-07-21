@@ -80,4 +80,18 @@ describe("Bun HTTP router", () => {
     expect(response.status).toBe(418);
     expect(await readJson(response)).toEqual({ message: "short and stout" });
   });
+
+  test("fails SQLite contention fast with bounded retry semantics", async () => {
+    const router = createRouter();
+    router.get("/busy", () => {
+      const error = new Error("database is locked") as Error & { code: string };
+      error.code = "SQLITE_BUSY";
+      throw error;
+    });
+
+    const response = await router.handle(new Request("http://127.0.0.1/busy"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("1");
+    expect(await response.json()).toEqual({ message: "database temporarily busy" });
+  });
 });

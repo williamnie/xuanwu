@@ -63,7 +63,9 @@ export function instrumentLegacyCompatibilityResponse(
   const family = apiFamily(new URL(request.url).pathname);
   if (!family || response.status === 401 || response.status === 403) return response;
 
-  if (database) {
+  // Ordinary reads must remain side-effect free. Explicit POST usage reporting
+  // remains the audited telemetry path for legacy UI navigation.
+  if (database && request.method !== "GET" && request.method !== "HEAD") {
     recordLegacyCompatibilityUsage(database, {
       client: requestClient(request),
       family,

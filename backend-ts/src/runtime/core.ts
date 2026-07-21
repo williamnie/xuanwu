@@ -3,6 +3,7 @@ import { coldStartTrace } from "../benchmarks/coldStart.ts";
 import { loadConfig } from "../config/env.ts";
 import { openDatabase } from "../db/database.ts";
 import { EventBus } from "../events/bus.ts";
+import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
 import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { startServer } from "../http/server.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
@@ -28,8 +29,10 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   if (role === "core") assertInternalCoreAddress(config.addr);
   coldStartTrace("config_loaded");
   const database = await openDatabase({ dbPath: config.dbPath, stateDir: config.stateDir });
+  const readDatabase = await openDatabase({ readonlyImportPath: database.path });
   coldStartTrace("database_opened");
   const bus = new EventBus();
+  const projectionWorker = new BackgroundProjectionWorker(database);
   const codexOwnershipFile = join(config.stateDir, "codex-process-ownership.json");
   const processReconciliation = await reconcileStaleCodexProcessOwnership(codexOwnershipFile);
   const providers = executorProviders(config, bus, codexOwnershipFile);
@@ -69,16 +72,19 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   const server = await startServer(config, {
     bus,
     database,
+    readDatabase,
     feishuAgentBridge: feishuBridge,
     feishuReceiverStatus: () => feishuReceiver.status(),
     onFeishuConfigChanged: restartFeishuReceiver,
     processGroupMemory,
+    projectionWorker,
     providers,
     role
   });
-  installTerminationHandlers(providers, database, server, processGroupMemory);
+  installTerminationHandlers(providers, database, readDatabase, server, processGroupMemory, projectionWorker);
   coldStartTrace("http_routes_registered");
   void restartFeishuReceiver(config.integrations.feishu);
+  projectionWorker.start();
   void startAutoRunLoops(database, providers, bus, config.codexSessionsDir, config, processReconciliation);
   coldStartTrace("scheduler_watchdog_initialized");
 
@@ -113,8 +119,10 @@ function executorProviders(config: ReturnType<typeof loadConfig>, bus?: EventBus
 function installTerminationHandlers(
   providers: ReturnType<typeof executorProviders>,
   database: Awaited<ReturnType<typeof openDatabase>>,
+  readDatabase: Awaited<ReturnType<typeof openDatabase>>,
   server: { stop(closeActiveConnections?: boolean): void },
-  processGroupMemory: ProcessGroupMemoryObserver
+  processGroupMemory: ProcessGroupMemoryObserver,
+  projectionWorker: BackgroundProjectionWorker
 ): void {
   let stopping = false;
   const stop = async (signal: string) => {
@@ -122,11 +130,13 @@ function installTerminationHandlers(
     stopping = true;
     console.info(JSON.stringify({ event: "runner.shutdown_started", role: "core", signal }));
     processGroupMemory.stop();
+    projectionWorker.stop();
     server.stop(true);
     await Promise.all(Object.values(providers).map(async (provider) => {
       const stopProvider = (provider as { stop?: () => Promise<void> } | undefined)?.stop;
       if (stopProvider) await stopProvider.call(provider).catch(() => {});
     }));
+    readDatabase.close();
     database.close();
     process.exit(0);
   };

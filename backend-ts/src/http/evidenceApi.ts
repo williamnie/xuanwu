@@ -72,10 +72,11 @@ type ParsedFilter = {
 };
 
 export function registerEvidenceRoutes(router: Router, context: ReadApiContext): void {
-  router.get("/api/evidence", (request) => evidenceResponse(() => listResponse(context.database, request)));
-  router.get("/api/evidence/:id", (request) => evidenceResponse(() => detailResponse(context.database, request)));
+  const readDatabase = context.readDatabase ?? context.database;
+  router.get("/api/evidence", (request) => evidenceResponse(() => listResponse(readDatabase, request)));
+  router.get("/api/evidence/:id", (request) => evidenceResponse(() => detailResponse(readDatabase, request)));
   router.get("/api/evidence/:id/artifacts/:index", (request) => (
-    evidenceResponse(() => artifactResponse(context.database, request))
+    evidenceResponse(() => artifactResponse(readDatabase, request))
   ));
   router.post("/api/issues/:id/evidence/command", (request) => (
     evidenceResponse(() => captureResponse(context.database, request))

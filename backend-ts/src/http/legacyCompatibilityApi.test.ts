@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe("legacy Issues/Sessions compatibility", () => {
-  test("adds versioned deprecation headers and persists API usage without changing the payload", async () => {
+  test("adds versioned deprecation headers without write-on-read telemetry", async () => {
     const database = await fixtureDatabase();
     try {
       const handle = createRequestHandler(createDefaultRouter({ database }), "", { database });
@@ -34,15 +34,7 @@ describe("legacy Issues/Sessions compatibility", () => {
       expect(await report.json()).toMatchObject({
         contract: LEGACY_COMPATIBILITY_CONTRACT,
         removal: { earliest_version: LEGACY_COMPATIBILITY_REMOVAL_VERSION },
-        usage: [{
-          client: "contract-test",
-          count: 1,
-          family: "issues",
-          method: "GET",
-          path: "/api/issues",
-          status: 200,
-          surface: "http_api",
-        }],
+        usage: [],
       });
     } finally {
       database.close();

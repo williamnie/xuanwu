@@ -23,6 +23,8 @@ import {
 } from "../../events/runProgressProjector.ts";
 
 export const RUN_PROGRESS_STALLED_AFTER_MS = 15 * 60 * 1000;
+export const RUN_PROGRESS_SOURCE_EVENT_LIMIT = 5000;
+export const RUN_PROGRESS_STATUS_RUN_LIMIT = 32;
 
 export type RunProgressStalledSignal = {
   detected: boolean;
@@ -43,6 +45,7 @@ export type RunProgressProjection = {
     duplicate_event_count: number;
     ignored_event_count: number;
     source_event_count: number;
+    source_event_truncated: boolean;
     timeline_truncated: number;
     unique_event_count: number;
     unmapped_event_count: number;
@@ -86,6 +89,7 @@ type ParsedEvents = {
   invalid: number;
   lastID: number;
   sourceCount: number;
+  sourceTruncated: boolean;
   unmapped: number;
 };
 
@@ -127,6 +131,7 @@ export function rebuildRunProgressProjection(
       duplicate_event_count: sum(projections.map((projection) => projection.duplicate_event_count)),
       ignored_event_count: sum(projections.map((projection) => projection.ignored_event_count)),
       source_event_count: parsed.sourceCount,
+      source_event_truncated: parsed.sourceTruncated,
       timeline_truncated: sum(projections.map((projection) => projection.timeline_truncated)) + combinedTruncated,
       unique_event_count: sum(projections.map((projection) => projection.unique_event_count)),
       unmapped_event_count: parsed.unmapped
@@ -140,15 +145,21 @@ export function rebuildRunProgressProjection(
 }
 
 export function runProgressProjectionStatus(db: RunnerDatabase, now = new Date()): Record<string, unknown> {
+  const activeRuns = Number(db.sqlite.query<{ count: number }, []>(
+    "select count(*) as count from issue_runs where status='in_progress'"
+  ).get()?.count ?? 0);
   const runIDs = db.sqlite.query<{ run_id: string }, []>(`
-    select run_id from issue_runs where status='in_progress' order by started_at asc, id asc
+    select run_id from issue_runs where status='in_progress' order by started_at desc, id desc
+    limit ${RUN_PROGRESS_STATUS_RUN_LIMIT}
   `).all().map((row) => row.run_id as RunID);
   const projections = runIDs.flatMap((runID) => {
     const projection = rebuildRunProgressProjection(db, runID, { now, timelineLimit: 0 });
     return projection ? [projection] : [];
   });
   return {
-    active_runs: runIDs.length,
+    active_runs: activeRuns,
+    backpressure: activeRuns > runIDs.length,
+    evaluated_active_runs: runIDs.length,
     latest_source_event_id: db.sqlite.query<{ id: number }, []>(`
       select coalesce(max(id), 0) as id from issue_events
       where type='issue.log' and json_valid(payload)
@@ -203,13 +214,18 @@ function projectionEventRows(db: RunnerDatabase, run: RunProjectionRow): EventRo
       and (?='' or julianday(created_at)<=julianday(?))
       and json_valid(payload)
       and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
-    order by created_at asc, id asc
-  `).all(run.issue_id, run.started_at, upperBound, upperBound);
+    order by created_at desc, id desc
+    limit ${RUN_PROGRESS_SOURCE_EVENT_LIMIT + 1}
+  `).all(run.issue_id, run.started_at, upperBound, upperBound).reverse();
 }
 
 function parseProjectionEvents(rows: EventRow[], attempts: AttemptProjectionRow[]): ParsedEvents {
-  const result: ParsedEvents = { events: [], firstID: 0, invalid: 0, lastID: 0, sourceCount: rows.length, unmapped: 0 };
-  for (const row of rows) {
+  const boundedRows = rows.slice(-RUN_PROGRESS_SOURCE_EVENT_LIMIT);
+  const result: ParsedEvents = {
+    events: [], firstID: 0, invalid: 0, lastID: 0,
+    sourceCount: boundedRows.length, sourceTruncated: rows.length > RUN_PROGRESS_SOURCE_EVENT_LIMIT, unmapped: 0
+  };
+  for (const row of boundedRows) {
     if (result.firstID === 0) result.firstID = row.id;
     result.lastID = row.id;
     const payload = jsonObject(row.payload);

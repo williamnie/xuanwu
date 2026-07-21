@@ -35,6 +35,7 @@ import {
   cleanupLegacyAutomationSchema,
   verifyLegacyAutomationArchive
 } from "../db/legacyAutomationCleanup.ts";
+import { runWalMaintenance } from "../db/walMaintenance.ts";
 import { formatJSON } from "./output.ts";
 
 const BOOLEAN_FLAGS = new Set([
@@ -268,6 +269,23 @@ export function runMaintenance(args: string[]): string {
       pages: optionalInteger(flags.pages, "--pages"),
       reportPath: required(flags, "report")
     });
+  } else if (family === "db" && command === "wal") {
+    allowOnly(flags, [
+      "actor", "actor-kind", "apply", "audit-ref", "confirm-backup-tested",
+      "confirm-no-active-writers", "db", "json", "operation", "reason", "report"
+    ]);
+    report = runWalMaintenance({
+      actor: flags.actor,
+      actorKind: workActorKind(flags["actor-kind"]),
+      apply: enabled(flags, "apply"),
+      auditRef: flags["audit-ref"],
+      confirmBackupTested: enabled(flags, "confirm-backup-tested"),
+      confirmNoActiveWriters: enabled(flags, "confirm-no-active-writers"),
+      dbPath: required(flags, "db"),
+      operation: walOperation(required(flags, "operation")),
+      reason: flags.reason,
+      reportPath: required(flags, "report")
+    });
   } else if (family === "db" && command === "migration-preflight") {
     allowOnly(flags, ["compat-version", "db", "json", "report"]);
     report = preflightDatabaseMigration({
@@ -485,6 +503,11 @@ function vacuumMode(value: string | undefined): "full" | "incremental" {
   const mode = value?.trim().toLowerCase() || "full";
   if (mode === "full" || mode === "incremental") return mode;
   throw new Error("--mode must be full or incremental");
+}
+
+function walOperation(value: string): "apply" | "dry-run" | "rollback" | "verify" {
+  if (value === "apply" || value === "dry-run" || value === "rollback" || value === "verify") return value;
+  throw new Error("--operation must be apply, dry-run, verify, or rollback");
 }
 
 function humanSummary(report: Record<string, unknown>, reportPath: string | undefined): string {

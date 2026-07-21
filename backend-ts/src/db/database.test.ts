@@ -4,7 +4,13 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDatabase, type RunnerDatabase } from "./database.ts";
+import {
+  READONLY_BUSY_TIMEOUT_MS,
+  WAL_AUTOCHECKPOINT_PAGES,
+  WRITER_BUSY_TIMEOUT_MS,
+  openDatabase,
+  type RunnerDatabase
+} from "./database.ts";
 
 const tempRoots: string[] = [];
 
@@ -34,7 +40,8 @@ describe("Bun SQLite database connection", () => {
       expect(connection.path).toBe(join(stateDir, "runner.db"));
       expect(existsSync(stateDir)).toBe(true);
       expect(existsSync(connection.path)).toBe(true);
-      expect(connection.sqlite.query("pragma busy_timeout").get()).toEqual({ timeout: 5000 });
+      expect(connection.connectionRole).toBe("writer");
+      expect(connection.sqlite.query("pragma busy_timeout").get()).toEqual({ timeout: WRITER_BUSY_TIMEOUT_MS });
       expect(connection.sqlite.query("select name from items").get()).toEqual({ name: "alpha" });
     } finally {
       connection.close();
@@ -818,9 +825,33 @@ describe("Bun SQLite database connection", () => {
     const connection = await openDatabase({ readonlyImportPath: importPath });
 
     try {
+      expect(connection.connectionRole).toBe("reader");
       expect(connection.readonly).toBe(true);
+      expect(connection.sqlite.query("pragma busy_timeout").get()).toEqual({ timeout: READONLY_BUSY_TIMEOUT_MS });
+      expect(connection.sqlite.query("pragma query_only").get()).toEqual({ query_only: 1 });
       expect(connection.sqlite.query("select name from items").get()).toEqual({ name: "fixture" });
       expect(() => connection.sqlite.run("insert into items (name) values ('write')")).toThrow();
+    } finally {
+      connection.close();
+    }
+  });
+
+  test("configures WAL connection settings without switching journal mode at startup", async () => {
+    const root = await tempPath("codex-runner-bun-wal-settings-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    expect(first.sqlite.query("pragma journal_mode").get()).toEqual({ journal_mode: "delete" });
+    first.close();
+
+    const raw = new Database(join(stateDir, "runner.db"));
+    raw.query("pragma journal_mode=wal").get();
+    raw.close();
+
+    const connection = await openDatabase({ stateDir });
+    try {
+      expect(connection.sqlite.query("pragma journal_mode").get()).toEqual({ journal_mode: "wal" });
+      expect(connection.sqlite.query("pragma synchronous").get()).toEqual({ synchronous: 1 });
+      expect(connection.sqlite.query("pragma wal_autocheckpoint").get()).toEqual({ wal_autocheckpoint: WAL_AUTOCHECKPOINT_PAGES });
     } finally {
       connection.close();
     }

@@ -11,6 +11,10 @@ type OpenDatabaseOptions = {
   stateDir?: string;
 };
 
+export const WRITER_BUSY_TIMEOUT_MS = 250;
+export const READONLY_BUSY_TIMEOUT_MS = 50;
+export const WAL_AUTOCHECKPOINT_PAGES = 1000;
+
 type TransactionRunner<A extends any[], T> = {
   (...args: A): T;
   deferred(...args: A): T;
@@ -20,6 +24,7 @@ type TransactionRunner<A extends any[], T> = {
 
 export type RunnerDatabase = {
   close(): void;
+  connectionRole?: "reader" | "writer";
   path: string;
   readonly: boolean;
   sqlite: SQLiteDatabase;
@@ -36,23 +41,35 @@ export async function openDatabase(options: OpenDatabaseOptions = {}): Promise<R
     readwrite: !target.readonly,
     strict: true
   });
-  // Runtime observability commands open short-lived read-only connections to the
-  // same database. Wait for those readers instead of letting a transient lock
-  // terminate the launchd process while it persists provider events.
-  sqlite.run("pragma busy_timeout = 5000");
+  sqlite.run(`pragma busy_timeout = ${target.readonly ? READONLY_BUSY_TIMEOUT_MS : WRITER_BUSY_TIMEOUT_MS}`);
   sqlite.run("pragma foreign_keys = on");
+  if (target.readonly) sqlite.run("pragma query_only = on");
   if (!target.readonly) {
     runMigrations(sqlite);
     ensureDefaultPiAgent({ readonly: false, sqlite });
+    configureWalConnection(sqlite);
   }
 
   return {
+    connectionRole: target.readonly ? "reader" : "writer",
     path: target.path,
     readonly: target.readonly,
     sqlite,
     close: () => sqlite.close(),
     transaction: (inside) => sqlite.transaction(inside)
   };
+}
+
+/**
+ * WAL is enabled only by the audited maintenance cutover. Runtime startup must
+ * never perform that state transition implicitly; it only applies per-connection
+ * settings after the database has already been switched.
+ */
+function configureWalConnection(sqlite: SQLiteDatabase): void {
+  const mode = String(sqlite.query<Record<string, unknown>, []>("pragma journal_mode").get()?.journal_mode ?? "");
+  if (mode.toLowerCase() !== "wal") return;
+  sqlite.run("pragma synchronous = normal");
+  sqlite.run(`pragma wal_autocheckpoint = ${WAL_AUTOCHECKPOINT_PAGES}`);
 }
 
 type DatabaseTarget = { path: string; readonly: boolean; stateDir: string };

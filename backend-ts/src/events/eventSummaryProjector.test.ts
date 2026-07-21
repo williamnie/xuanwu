@@ -22,6 +22,7 @@ import {
   updateEventSummaryProjectionSwitch
 } from "../db/repositories/compactEventSummaryProjection.ts";
 import { createDefaultRouter } from "../http/server.ts";
+import { BackgroundProjectionWorker } from "./projectionWorker.ts";
 
 const roots: string[] = [];
 
@@ -60,6 +61,7 @@ describe("event summary projector", () => {
     const db = await fixtureDatabase();
     try {
       const issueID = seedIssueEvents(db);
+      projectPendingEventSummaries(db);
       const result = queryEventSummaries(db, { issueID });
       const created = result.items.find((item) => item.type === "issue.created");
       const log = result.items.find((item) => item.type === "issue.log");
@@ -97,6 +99,7 @@ describe("event summary projector", () => {
     const db = await fixtureDatabase();
     try {
       const issueID = seedIssueEvents(db);
+      projectPendingEventSummaries(db);
       const router = createDefaultRouter({ database: db });
       const response = await router.handle(new Request(
         `http://127.0.0.1:3008/api/issues/${issueID}/event-summaries?exclude_type=issue.log&limit=2`
@@ -117,6 +120,26 @@ describe("event summary projector", () => {
         "http://127.0.0.1:3008/api/issues/999/event-summaries"
       ));
       expect(missing.status).toBe(404);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps HTTP summary reads side-effect free and catches up only in the bounded background worker", async () => {
+    const db = await fixtureDatabase();
+    try {
+      const issueID = seedIssueEvents(db);
+      const before = queryEventSummaries(db, { issueID });
+      expect(before.items).toHaveLength(0);
+      expect(before.watermark).toMatchObject({ last_event_id: 0, lag_rows: 4, status: "lagging" });
+
+      const worker = new BackgroundProjectionWorker(db);
+      const completed = worker.runOnce();
+      expect(completed).toMatchObject({ completed_batches: 1, completed_rows: 4, error: "" });
+      expect(queryEventSummaries(db, { issueID })).toMatchObject({
+        items: expect.any(Array),
+        watermark: { last_event_id: 4, lag_rows: 0, status: "ready" }
+      });
     } finally {
       db.close();
     }

@@ -23,6 +23,7 @@ type SystemStatusContext = {
   database: RunnerDatabase;
   feishuReceiverStatus?: () => FeishuReceiverStatus;
   processGroupMemory?: { snapshot(): Record<string, unknown> };
+  projectionWorker?: { snapshot(): Record<string, unknown> };
   role?: "all" | "core";
   startedAt: Date;
   webhookSigningSecret?: string;
@@ -55,7 +56,8 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
     run_progress_projection: runProgressProjection,
     runner: runnerStatus(context.database),
     observability,
-    process_group_memory: context.processGroupMemory?.snapshot() ?? unavailableProcessGroupMemory()
+    process_group_memory: context.processGroupMemory?.snapshot() ?? unavailableProcessGroupMemory(),
+    background_projection: context.projectionWorker?.snapshot() ?? { status: "unavailable" }
   };
   return { ...status, health: systemHealth({ ...status, required_provider_ids: requiredProviderIDs(context.database) }) };
 }

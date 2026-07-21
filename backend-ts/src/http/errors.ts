@@ -44,5 +44,17 @@ export function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) {
     return jsonError(error.status, error.message);
   }
+  if (isSqliteContention(error)) {
+    return jsonError(503, "database temporarily busy", { "retry-after": "1" });
+  }
   return jsonError(500, "internal server error");
+}
+
+export function isSqliteContention(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  const code = String(candidate.code ?? "").toUpperCase();
+  const message = String(candidate.message ?? "").toLowerCase();
+  return code === "SQLITE_BUSY" || code === "SQLITE_LOCKED" ||
+    message.includes("database is locked") || message.includes("database is busy");
 }
