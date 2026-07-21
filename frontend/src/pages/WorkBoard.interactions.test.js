@@ -40,10 +40,10 @@ test('Work Board avoids learned intrinsic card heights that move the lane scroll
   assert.match(css, /\.work-column-stack\s*\{[\s\S]*scrollbar-gutter:\s*stable;/);
 });
 
-test('Work Board keeps search in the header, exposes board only, and restores height when the global composer is collapsed', () => {
+test('Work Board keeps search in the header, exposes board only, and does not lose height to the global composer', () => {
   assert.doesNotMatch(board, /work-ledger-stats|CompatibilityNotice/);
   assert.match(board, /className="work-header-search"/);
   assert.match(board, /aria-label="搜索 Work"/);
   assert.doesNotMatch(board, /WorkFilters|WorkList|onViewChange|work-filter-toggle/);
-  assert.match(composerCss, /global-ask-composer-shell\.collapsed[\s\S]*padding-bottom:\s*88px;/);
+  assert.doesNotMatch(composerCss, /\.main-content\.has-global-ask-composer\s*\{/);
 });

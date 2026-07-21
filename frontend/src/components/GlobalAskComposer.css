@@ -1,5 +1,8 @@
 .global-ask-composer-shell {
-  bottom: 14px;
+  align-items: flex-end;
+  bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
   left: calc(var(--sidebar-width) + 28px);
   pointer-events: none;
   position: fixed;
@@ -18,10 +21,10 @@
   border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
   border-radius: 18px;
   box-shadow: 0 18px 54px rgba(8, 45, 40, 0.16), 0 2px 10px rgba(8, 45, 40, 0.07);
-  margin: 0 auto;
-  max-width: 980px;
+  max-width: 880px;
   overflow: hidden;
   pointer-events: auto;
+  width: 100%;
 }
 
 .global-ask-composer-header {
@@ -31,10 +34,6 @@
   justify-content: space-between;
   min-height: 42px;
   padding: 6px 10px 6px 12px;
-}
-
-.global-ask-composer-shell.collapsed .global-ask-composer-header {
-  border-bottom: 0;
 }
 
 .global-ask-composer-brand {
@@ -100,6 +99,57 @@
 .global-ask-composer-toggle:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
+}
+
+.global-ask-composer-launcher {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-card) 96%, var(--brand-mint));
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--primary));
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(8, 45, 40, 0.14), 0 2px 8px rgba(8, 45, 40, 0.06);
+  color: var(--text-primary);
+  display: flex;
+  gap: 9px;
+  max-width: min(320px, 100%);
+  min-height: 48px;
+  padding: 7px 10px;
+  pointer-events: auto;
+  text-align: left;
+  width: 100%;
+}
+
+.global-ask-composer-launcher:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-color));
+  box-shadow: 0 12px 34px rgba(8, 45, 40, 0.18), 0 2px 8px rgba(8, 45, 40, 0.08);
+  transform: translateY(-1px);
+}
+
+.global-ask-composer-launcher:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  outline-offset: 2px;
+}
+
+.global-ask-composer-launcher-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.global-ask-composer-launcher strong {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.global-ask-composer-launcher small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.global-ask-composer-launcher > svg {
+  color: var(--text-muted);
+  flex: 0 0 auto;
 }
 
 .global-ask-composer-card .session-composer {
@@ -172,14 +222,6 @@
   max-width: 180px;
 }
 
-.main-content.has-global-ask-composer {
-  padding-bottom: 190px;
-}
-
-.app-container:has(> .global-ask-composer-shell.collapsed) > .main-content.has-global-ask-composer {
-  padding-bottom: 88px;
-}
-
 @media (max-width: 768px) {
   .global-ask-composer-shell {
     bottom: max(8px, env(safe-area-inset-bottom));
@@ -214,17 +256,17 @@
     max-width: 88px;
   }
 
-  .main-content.has-global-ask-composer {
-    padding-bottom: 176px;
-  }
-
-  .app-container:has(> .global-ask-composer-shell.collapsed) > .main-content.has-global-ask-composer {
-    padding-bottom: 72px;
+  .global-ask-composer-launcher {
+    max-width: min(280px, 100%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .global-ask-composer-shell {
     transition: none;
+  }
+
+  .global-ask-composer-launcher:hover {
+    transform: none;
   }
 }

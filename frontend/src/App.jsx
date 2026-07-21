@@ -363,7 +363,7 @@ export default function App() {
       />
 
       {/* 右侧主工作区 */}
-      <main className={`main-content ${currentPage === 'ask-xuanwu' ? '' : 'has-global-ask-composer'}`}>
+      <main className="main-content">
         <GuardianAlertBanner />
         {loading ? (
           <div className="app-loading-stage">

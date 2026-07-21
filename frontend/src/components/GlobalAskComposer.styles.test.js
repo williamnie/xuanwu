@@ -23,5 +23,13 @@ test('global composer remains reachable on mobile and respects safe areas', () =
   assert.match(css, /@media \(max-width: 768px\)/);
   assert.match(css, /bottom:\s*max\(8px, env\(safe-area-inset-bottom\)\)/);
   assert.match(css, /\.sidebar-collapsed \.global-ask-composer-shell/);
-  assert.match(css, /\.main-content\.has-global-ask-composer/);
+  assert.match(css, /\.global-ask-composer-launcher/);
+});
+
+test('global composer starts as a compact launcher and expands as an overlay without reserving page height', () => {
+  assert.match(source, /const \[expanded, setExpanded\] = useState\(false\)/);
+  assert.match(source, /className="global-ask-composer-launcher"/);
+  assert.match(source, /onClick=\{\(\) => setExpanded\(true\)\}/);
+  assert.doesNotMatch(css, /\.main-content\.has-global-ask-composer\s*\{/);
+  assert.doesNotMatch(css, /padding-bottom:\s*(?:190|176|88|72)px/);
 });

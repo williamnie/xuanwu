@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronsDown, ChevronsUp, MessageCircleMore, Paperclip, ShieldCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, MessageCircleMore, Minimize2, Paperclip, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { assistantApi } from '../api/assistant.js';
 import { workApi } from '../api/work.js';
@@ -43,7 +43,7 @@ export default function GlobalAskComposer({
   const [prompt, setPrompt] = useState('');
   const [permissionMode, setPermissionMode] = useState('controlled');
   const [sending, setSending] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const visible = isGlobalAskComposerVisible(currentPage, pageContext);
   const pageReference = useMemo(() => buildGlobalComposerPageReference({
     currentPage,
@@ -128,25 +128,25 @@ export default function GlobalAskComposer({
       aria-label="Global Ask Xuanwu composer"
       className={`global-ask-composer-shell ${expanded ? 'expanded' : 'collapsed'}`}
     >
-      <div className="global-ask-composer-card">
-        <header className="global-ask-composer-header">
-          <button className="global-ask-composer-brand" onClick={onOpenAskXuanwu} type="button">
-            <span className="global-ask-composer-mark"><MessageCircleMore size={15} /></span>
-            <span>
-              <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
-              <small>{prompt.trim() ? 'Draft retained across pages' : 'Context-aware Supervisor'}</small>
-            </span>
-          </button>
-          <button
-            aria-label={expanded ? '收起全局 Ask Xuanwu 输入框' : '展开全局 Ask Xuanwu 输入框'}
-            className="global-ask-composer-toggle"
-            onClick={() => setExpanded(value => !value)}
-            type="button"
-          >
-            {expanded ? <ChevronsDown size={16} /> : <ChevronsUp size={16} />}
-          </button>
-        </header>
-        {expanded ? (
+      {expanded ? (
+        <div className="global-ask-composer-card">
+          <header className="global-ask-composer-header">
+            <button className="global-ask-composer-brand" onClick={onOpenAskXuanwu} type="button">
+              <span className="global-ask-composer-mark"><MessageCircleMore size={15} /></span>
+              <span>
+                <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
+                <small>{prompt.trim() ? 'Draft retained across pages' : 'Context-aware Supervisor'}</small>
+              </span>
+            </button>
+            <button
+              aria-label="收起全局 Ask Xuanwu 输入框"
+              className="global-ask-composer-toggle"
+              onClick={() => setExpanded(false)}
+              type="button"
+            >
+              <Minimize2 size={15} />
+            </button>
+          </header>
           <SessionComposer
             interruptState={null}
             models={[]}
@@ -169,8 +169,23 @@ export default function GlobalAskComposer({
             suggestions={suggestions}
             value={prompt}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <button
+          aria-expanded="false"
+          aria-label="展开全局 Ask Xuanwu 输入框"
+          className="global-ask-composer-launcher"
+          onClick={() => setExpanded(true)}
+          type="button"
+        >
+          <span className="global-ask-composer-mark"><MessageCircleMore size={15} /></span>
+          <span className="global-ask-composer-launcher-copy">
+            <strong>{PRODUCT_NAV_LABELS.askXuanwu}</strong>
+            <small>{prompt.trim() ? '草稿已保留' : '随时提问'}</small>
+          </span>
+          <ChevronUp aria-hidden="true" size={15} />
+        </button>
+      )}
     </aside>
   );
 }
