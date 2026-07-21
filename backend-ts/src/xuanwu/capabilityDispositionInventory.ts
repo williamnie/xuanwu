@@ -657,6 +657,7 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/pi/provider-settings", family: "capability-policy" },
   { method: "GET", path: "/api/pi/provider-settings/catalog", family: "capability-policy" },
   { method: "PUT", path: "/api/pi/provider-settings/:id", family: "capability-policy" },
+  { method: "POST", path: "/api/pi/provider-settings/:id/models", family: "capability-policy" },
   { method: "POST", path: "/api/pi/provider-settings/:id/test-connection", family: "capability-policy" },
   { method: "GET", path: "/api/pi/reports", family: "evidence-handoff" },
   { method: "GET", path: "/api/pi/reports/:id", family: "evidence-handoff" },

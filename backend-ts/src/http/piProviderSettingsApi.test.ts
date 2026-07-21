@@ -264,6 +264,13 @@ describe("Bun PI provider settings API", () => {
       });
       expect(JSON.parse(audit?.result_json ?? "{}")).toMatchObject({ discovered_model_count: 2, status: "connected" });
       expect(JSON.stringify(audit)).not.toContain(secret);
+
+      const discovery = await post(router, "/api/pi/provider-settings/acme/models", {});
+      expect(await discovery.json()).toMatchObject({
+        models: ["custom-reasoner", "custom-fast"],
+        ok: true,
+        provider_id: "acme"
+      });
     } finally {
       database.close();
     }
@@ -310,7 +317,21 @@ describe("Bun PI provider settings API", () => {
   test("reports Codex OAuth credential connection state without echoing OAuth tokens", async () => {
     const database = await openFixtureDatabase();
     try {
-      const router = createDefaultRouter({ database });
+      const router = createDefaultRouter({
+        database,
+        providers: {
+          codex: {
+            id: "codex",
+            capabilities: [],
+            async listModels() {
+              return { data: [{ id: "gpt-5.6", name: "GPT-5.6" }, { id: "gpt-5.5", name: "GPT-5.5" }] };
+            },
+            async run() {
+              throw new Error("not used");
+            }
+          }
+        }
+      });
       const missing = await post(router, "/api/pi/provider-settings/openai-codex/test-connection", {});
       expect(await missing.json()).toMatchObject({
         auth: "oauth",
@@ -327,7 +348,7 @@ describe("Bun PI provider settings API", () => {
       const configured = await post(router, "/api/pi/provider-settings/openai-codex/test-connection", {});
       const body = await configured.json() as { models: string[]; [key: string]: unknown };
       expect(body).toMatchObject({ auth: "oauth", ok: true, provider_id: "openai-codex", status: "connected" });
-      expect(body.models).toContain("gpt-5.4");
+      expect(body.models).toEqual(["gpt-5.6", "gpt-5.5"]);
       expect(JSON.stringify(body)).not.toContain("oauth-access-secret");
       const audits = database.sqlite.query<{ payload_json: string; result_json: string }, []>(
         "select payload_json, result_json from pi_action_events where event_type='provider_connection_tested' order by id"

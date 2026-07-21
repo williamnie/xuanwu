@@ -7,15 +7,15 @@
 
 ## 1. Connections 与 Advanced
 
-顶层 `Connections → AI Providers` 展示 OpenAI、Codex、Anthropic 推荐卡片、脱敏连接状态、API key/OAuth 入口、provider 可用模型和显式连接测试；保存只写 provider authority，不改变 Supervisor 默认选择。provider ID、base URL、API type 与 User-Agent 在 `Connections → Custom Provider` 编辑。`Settings → Models & Agents` 只维护 Supervisor 名称、已配置 provider/model 的默认选择、thinking、instructions 与 enabled，不写 provider credential。
+顶层 `Connections → AI Providers` 展示 OpenAI、Codex、Anthropic 推荐卡片、脱敏连接状态、API key/OAuth 入口、provider 可用模型和显式连接测试；保存只写 provider authority，不改变 Supervisor 默认选择。provider ID、base URL、API type 与 User-Agent 在 `Connections → Custom Provider` 编辑。`Settings → Models & Agents` 维护 Supervisor 名称、provider/model 默认选择、thinking、instructions 与 enabled；选择远端发现但尚未登记的新模型时，只把该 model ID 登记到现有 provider 后再保存 agent，不改写 credential。
 
 推荐卡片不持久化第二份配置。`GET /api/pi/provider-settings/catalog` 从版本化 preset 与 `pi-ai` 内置 model catalog 生成只读 projection；保存仍调用现有 provider settings 与 PI agent writer。OpenAI + `gpt-5.4` 保持当前默认选择，不在读取时后台改写已有 provider/model。
 
 ## 2. 连接测试与模型发现
 
-`POST /api/pi/provider-settings/:id/test-connection` 使用请求中的未保存配置或现有已保存配置，对 API-key provider 的 `/models` 执行一次显式只读探测；禁止 redirect，限制为 `http/https`，拒绝 URL 内凭据、query 和 fragment，并设置 10 秒超时。成功响应中的模型 ID 与本地 catalog 合并为当前页面选项，但只有用户保存后才进入 source of truth。
+`POST /api/pi/provider-settings/:id/models` 使用请求中的未保存配置或现有已保存配置读取远端 model API；显式连接测试 `POST /api/pi/provider-settings/:id/test-connection` 复用同一发现链路。API-key provider 读取 `/models`，禁止 redirect，限制为 `http/https`，拒绝 URL 内凭据、query 和 fragment，并设置 10 秒超时。远端成功返回非空模型列表时，所有模型编辑控件只显示下拉选项；远端请求失败或返回空列表时才显示 model ID 手填兜底。模型发现结果只存在于当前请求和前端内存，只有用户保存后才进入 source of truth。
 
-Codex OAuth 的连接测试只验证 PI OAuth credential store 已配置并返回本地 model catalog，不读取 Codex CLI token，也不把 credential 放进响应。API key、OAuth token、provider 错误 body 均不得出现在 HTTP response 或 audit payload；旧 key 继续以 `api_key_configured` 布尔值表示。
+Codex OAuth 先验证 PI OAuth credential store，再通过当前 Codex provider 的 `model/list` 获取真实远端模型，不用 `pi-ai` 本地 catalog 充当可用模型列表，也不读取或回显 Codex CLI token。API key、OAuth token、provider 错误 body 均不得出现在 HTTP response 或 audit payload；旧 key 继续以 `api_key_configured` 布尔值表示。
 
 ## 3. 审计、兼容与回滚
 

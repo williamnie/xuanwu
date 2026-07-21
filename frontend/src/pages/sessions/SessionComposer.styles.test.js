@@ -50,3 +50,11 @@ test('session composer exposes a speed control backed by service tier', () => {
   assert.match(source, /onSettingChange\('serviceTier', value\)/);
   assert.match(source, /serviceTierOptions\(effectiveModel, settings\.serviceTier\)/);
 });
+
+test('session model uses remote options and only exposes manual input after model API failure', () => {
+  assert.match(source, /modelsError \? \(/);
+  assert.match(source, /aria-label="手动填写模型 ID"/);
+  assert.match(source, /远端 model API 失败，已启用手填/);
+  assert.match(source, /models\.map\(\(model\) => <option/);
+  assert.match(css, /\.session-composer-model-manual input/);
+});

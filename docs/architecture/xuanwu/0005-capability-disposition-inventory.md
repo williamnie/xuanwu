@@ -254,6 +254,7 @@ POST /api/pi/oauth/openai-codex/logout
 GET /api/pi/oauth/openai-codex/status
 GET /api/pi/provider-settings
 PUT /api/pi/provider-settings/:id
+POST /api/pi/provider-settings/:id/models
 GET /api/pi/skills
 GET /api/pi/skills/:id
 POST /api/pi/skills/:id/domain-runs

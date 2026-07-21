@@ -32,6 +32,7 @@ const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelId', 'model
 
 export function usePiAgentSettingsState() {
   const [connectionTest, setConnectionTest] = useState({ busy: false, providerId: '', result: null });
+  const [modelDiscovery, setModelDiscovery] = useState({ busy: false, providerId: '', result: null });
   const [providers, setProviders] = useState([]);
   const [providerCatalog, setProviderCatalog] = useState({ presets: [] });
   const [form, setForm] = useState(DEFAULT_PI_AGENT_FORM);
@@ -50,12 +51,13 @@ export function usePiAgentSettingsState() {
     [form.modelProvider, providerCatalog.presets]
   );
   const modelOptions = useMemo(
-    () => providerModelOptions(form, selectedPreset, selectedProvider, connectionTest),
-    [connectionTest, form, selectedPreset, selectedProvider]
+    () => providerModelOptions(form, modelDiscovery),
+    [form, modelDiscovery]
   );
+  const modelSelectAvailable = modelDiscovery.providerId === form.modelProvider && modelDiscovery.result?.ok === true;
 
   const loadSettings = () => {
-    loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary);
+    loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery);
     loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   };
   const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
@@ -70,20 +72,23 @@ export function usePiAgentSettingsState() {
     clearFirstDeliveryConnectionTest();
     const configured = providers.find((provider) => provider.id === preset.id);
     setConnectionTest({ busy: false, providerId: '', result: null });
-    setForm((current) => ({
-      ...current,
+    const next = {
+      ...form,
       api: configured?.api || preset.api,
       apiKey: '',
       baseUrl: configured?.base_url || preset.base_url,
-      modelId: current.modelProvider === preset.id
-        ? current.modelId
+      modelId: form.modelProvider === preset.id
+        ? form.modelId
         : configured?.models?.[0] || preset.recommended_model,
       modelProvider: preset.id
-    }));
+    };
+    setForm(next);
+    void discoverPiModels(next, setModelDiscovery);
   };
   const handleConnectionSave = () => savePiConnectionSettings({ form, setForm, setProviders, setSaving });
-  const handleAgentSave = () => savePiAgentSettings({ form, setForm, setPromptSummary, setProviders, setSaving });
-  const testConnection = () => testPiConnection(form, setConnectionTest);
+  const handleAgentSave = () => savePiAgentSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving });
+  const selectModelProvider = (providerId) => selectConfiguredProvider(providerId, form, providers, providerCatalog.presets, setForm, setConnectionTest, setModelDiscovery);
+  const testConnection = () => testPiConnection(form, setConnectionTest, setModelDiscovery);
   const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
   const copyPiCodexOAuthUrl = () => copyOAuthUrl(oauthStatus?.auth_url);
   const openPiCodexOAuthUrl = () => openOAuthUrl(oauthStatus?.auth_url);
@@ -93,11 +98,11 @@ export function usePiAgentSettingsState() {
     loadSettings();
   }, []);
 
-  return { connectionTest, form, loading, modelOptions, oauthBusy, oauthStatus, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
-    copyPiCodexOAuthUrl, handleAgentSave, handleConnectionSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
+  return { connectionTest, form, loading, modelDiscovery, modelOptions, modelSelectAvailable, oauthBusy, oauthStatus, promptSummary, promptSummaryLoading, providerCatalog, providers, saving, selectedPreset, selectedProvider,
+    copyPiCodexOAuthUrl, handleAgentSave, handleConnectionSave, loadOAuthStatus, loadPromptSummary, loadSettings, logoutPiCodexOAuth, openPiCodexOAuthUrl, selectModelProvider, selectProviderPreset, startPiCodexOAuthLogin, testConnection, updateField };
 }
 
-function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary) {
+function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery) {
   setLoading(true);
   Promise.all([assistantApi.getPiAgents(), assistantApi.getPiProviderSettings(), assistantApi.getPiProviderCatalog()])
     .then(([agentList, providerSettings, providerCatalog]) => {
@@ -105,14 +110,32 @@ function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, s
       const nextProviders = providerSettings?.providers || [];
       setProviders(nextProviders);
       setProviderCatalog({ presets: providerCatalog?.presets || [] });
-      setForm(formFromState(nextAgents, nextProviders));
+      const nextForm = formFromState(nextAgents, nextProviders);
+      setForm(nextForm);
       setPromptSummary(null);
+      void discoverPiModels(nextForm, setModelDiscovery);
     })
     .catch((err) => message.error(err.message || '读取 Supervisor 设置失败'))
     .finally(() => setLoading(false));
 }
 
-async function testPiConnection(form, setConnectionTest) {
+async function discoverPiModels(form, setModelDiscovery) {
+  const providerId = form.modelProvider.trim();
+  if (!providerId) return;
+  setModelDiscovery({ busy: true, providerId, result: null });
+  try {
+    const result = await assistantApi.getPiProviderModels(providerId, providerPayload(form));
+    setModelDiscovery((current) => current.providerId === providerId ? { busy: false, providerId, result } : current);
+  } catch (err) {
+    setModelDiscovery((current) => current.providerId === providerId ? {
+      busy: false,
+      providerId,
+      result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' }
+    } : current);
+  }
+}
+
+async function testPiConnection(form, setConnectionTest, setModelDiscovery) {
   const providerId = form.modelProvider.trim();
   if (!providerId) return message.error('请先选择 provider');
   setConnectionTest({ busy: true, providerId, result: null });
@@ -120,11 +143,13 @@ async function testPiConnection(form, setConnectionTest) {
     const result = await assistantApi.testPiProviderConnection(providerId, providerPayload(form));
     recordFirstDeliveryConnectionTest(result);
     setConnectionTest({ busy: false, providerId, result });
+    setModelDiscovery({ busy: false, providerId, result });
     if (result.ok) message.success(result.message || 'Provider 连接成功');
     else message.error(result.message || 'Provider 连接失败');
   } catch (err) {
     clearFirstDeliveryConnectionTest();
     setConnectionTest({ busy: false, providerId, result: { error: 'request_failed', message: err.message || 'Provider 连接失败', ok: false, status: 'failed' } });
+    setModelDiscovery({ busy: false, providerId, result: { error: 'request_failed', message: err.message || '读取远端模型列表失败', models: [], ok: false, status: 'failed' } });
     message.error(err.message || 'Provider 连接失败');
   }
 }
@@ -223,10 +248,11 @@ async function savePiConnectionSettings({ form, setForm, setProviders, setSaving
   }
 }
 
-async function savePiAgentSettings({ form, setForm, setPromptSummary, setProviders, setSaving }) {
+async function savePiAgentSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving }) {
   if (!isValidAgentForm(form)) return;
   setSaving(true);
   try {
+    await ensureSelectedProviderModel(form, providers);
     await saveAgent(agentPayload(form));
     message.success('Supervisor 行为设置已保存');
     setPromptSummary(null);
@@ -236,6 +262,14 @@ async function savePiAgentSettings({ form, setForm, setPromptSummary, setProvide
   } finally {
     setSaving(false);
   }
+}
+
+async function ensureSelectedProviderModel(form, providers) {
+  const providerID = form.modelProvider.trim();
+  const modelID = form.modelId.trim();
+  const configured = providers.find((provider) => provider.id === providerID);
+  if (configured?.models?.includes(modelID)) return;
+  await assistantApi.updatePiProviderSettings(providerID, providerPayload(form));
 }
 
 async function saveAgent(payload) {
@@ -320,10 +354,29 @@ function formFromState(agents, providers) {
   };
 }
 
-function providerModelOptions(form, preset, provider, connectionTest) {
-  const discovered = connectionTest.providerId === form.modelProvider ? connectionTest.result?.models || [] : [];
-  const catalog = preset?.models?.map((model) => model.id) || [];
-  return [...new Set([form.modelId, ...(provider?.models || []), ...discovered, ...catalog].filter(Boolean))];
+function selectConfiguredProvider(providerId, form, providers, presets, setForm, setConnectionTest, setModelDiscovery) {
+  const configured = providers.find((provider) => provider.id === providerId);
+  const preset = presets.find((item) => item.id === providerId);
+  const next = {
+    ...form,
+    api: configured?.api || preset?.api || form.api,
+    apiKey: '',
+    baseUrl: configured?.base_url || preset?.base_url || '',
+    modelId: configured?.models?.[0] || preset?.recommended_model || form.modelId,
+    modelProvider: providerId,
+    userAgent: configured?.user_agent || '',
+  };
+  clearFirstDeliveryConnectionTest();
+  setConnectionTest({ busy: false, providerId: '', result: null });
+  setForm(next);
+  void discoverPiModels(next, setModelDiscovery);
+}
+
+function providerModelOptions(form, modelDiscovery) {
+  const discovered = modelDiscovery.providerId === form.modelProvider && modelDiscovery.result?.ok
+    ? modelDiscovery.result.models || []
+    : [];
+  return [...new Set([form.modelId, ...discovered].filter(Boolean))];
 }
 
 function normalizedInstructions(instructions) {

@@ -57,5 +57,8 @@ test('project config modal reads Codex model options from provider API', () => {
   assert.match(source, /systemApi\.getCodexModels\(\)/);
   assert.match(source, /buildCodexModelOptions\(codexModels, formModel, profileForm\.model\)/);
   assert.match(source, /codexModelOptions\.map\(option =>/);
+  assert.match(source, /远端 model API 读取失败，已启用手填/);
+  assert.match(source, /模型 API 失败，请手动填写 model ID/);
+  assert.doesNotMatch(source, /FALLBACK_CODEX_MODEL_OPTIONS/);
   assert.doesNotMatch(source, /CODEX_MODEL_OPTIONS\.some\(option => option\.value === model\)/);
 });

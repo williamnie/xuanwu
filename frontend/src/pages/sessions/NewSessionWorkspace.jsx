@@ -32,6 +32,8 @@ export default function NewSessionWorkspace({
   sessionSettings,
   handleSettingChange,
   models,
+  modelsError,
+  modelsLoading,
   projectId,
   handleProjectChange,
   sessionProjects,
@@ -82,6 +84,8 @@ export default function NewSessionWorkspace({
               <NewSessionComposerActions
                 settings={sessionSettings}
                 models={models}
+                modelsError={modelsError}
+                modelsLoading={modelsLoading}
                 sending={sending}
                 canSubmit={!promptCommand && hasComposerContent(prompt, promptReferences) && !newSessionReferenceValidation.hasErrors}
                 onModelChange={(value) => handleSettingChange('model', value)}
@@ -161,22 +165,29 @@ function permissionPresetLabel(settings) {
   }
 }
 
-function NewSessionComposerActions({ settings, models, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
+function NewSessionComposerActions({ settings, models, modelsError, modelsLoading, sending, canSubmit, onModelChange, onServiceTierChange, onSubmit }) {
   const tierOptions = serviceTierOptions(effectiveModelForSettings(settings, models), settings.serviceTier);
   return (
     <>
-      <div className="composer-embedded-select">
-        <Brain size={13} />
-        <span>{settings.model ? compactModelName(settings.model) : '5.5 超高'}</span>
-        <select value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
-          <option value="">Codex 默认</option>
-          {models.map((model) => (
-            <option key={model.id || model.model} value={model.id || model.model}>
-              {compactModelName(modelLabel(model))}
-            </option>
-          ))}
-        </select>
-      </div>
+      {modelsError ? (
+        <label className="composer-embedded-model-manual" title={`远端 model API 失败，已启用手填：${modelsError}`}>
+          <Brain size={13} />
+          <input aria-label="手动填写模型 ID" value={settings.model} onChange={(event) => onModelChange(event.target.value)} placeholder="手填 model ID" />
+        </label>
+      ) : (
+        <div className="composer-embedded-select">
+          <Brain size={13} />
+          <span>{modelsLoading ? '读取模型' : settings.model ? compactModelName(settings.model) : 'Codex 默认'}</span>
+          <select disabled={modelsLoading} value={settings.model} onChange={(event) => onModelChange(event.target.value)}>
+            <option value="">Codex 默认</option>
+            {models.map((model) => (
+              <option key={model.id || model.model} value={model.id || model.model}>
+                {compactModelName(modelLabel(model))}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="composer-embedded-select">
         <Gauge size={13} />
         <span>{serviceTierLabel(settings, models)}</span>

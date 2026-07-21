@@ -835,6 +835,8 @@ export default function Sessions({
           sessionSettings,
           handleSettingChange,
           models,
+          modelsError,
+          modelsLoading,
           projectId,
           handleProjectChange,
           sessionProjects,

@@ -325,6 +325,30 @@
   cursor: pointer;
 }
 
+.composer-embedded-model-manual {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.composer-embedded-model-manual input {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  color: #9a3412;
+  font-size: 0.78rem;
+  height: 30px;
+  max-width: 150px;
+  outline: none;
+  padding: 0 8px;
+}
+
+[data-theme="dark"] .composer-embedded-model-manual input {
+  background: rgba(154, 52, 18, 0.22);
+  border-color: rgba(251, 146, 60, 0.5);
+  color: #fed7aa;
+}
+
 /* 圆圈发送/创建按钮 */
 .composer-circle-submit {
   width: 34px;

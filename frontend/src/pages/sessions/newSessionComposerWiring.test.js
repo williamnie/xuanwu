@@ -40,6 +40,13 @@ test('new and existing session payloads include service tier', () => {
   assert.match(newSessionSource, /onServiceTierChange=\{\(value\) => handleSettingChange\('serviceTier', value\)\}/);
 });
 
+test('new session model field receives remote model state and falls back to manual input only on error', () => {
+  assert.match(sessionsSource, /modelsError,[\s\S]*modelsLoading,[\s\S]*projectId/);
+  assert.match(newSessionSource, /modelsError \? \(/);
+  assert.match(newSessionSource, /aria-label="手动填写模型 ID"/);
+  assert.match(newSessionSource, /select disabled=\{modelsLoading\}/);
+});
+
 test('new session permission control labels every authorization preset explicitly', () => {
   assert.match(newSessionSource, /function permissionPresetLabel/);
   assert.match(newSessionSource, /permissionPresetLabel\(settings\)/);

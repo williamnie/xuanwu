@@ -9,8 +9,13 @@ import type { Router } from "./router.ts";
 import { registerSecretForRedaction } from "../security/redactionRegistry.ts";
 import { SecretStoreError } from "../security/secrets/contracts.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
+import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 
-type PiProviderSettingsContext = { database: RunnerDatabase; secrets?: SecretService };
+type PiProviderSettingsContext = {
+  database: RunnerDatabase;
+  providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  secrets?: SecretService;
+};
 type ModelsConfig = { providers: Record<string, ProviderConfig> };
 type ProviderModelConfig = {
   id: string;
@@ -112,6 +117,9 @@ export function registerPiProviderSettingsRoutes(
   router.put("/api/pi/provider-settings/:id", async (request) => {
     return json(await upsertProviderSettings(activeContext, providerID(request), await parseObjectBody(request)));
   });
+  router.post("/api/pi/provider-settings/:id/models", async (request) => {
+    return json(await discoverProviderModels(activeContext, providerID(request), await parseObjectBody(request)));
+  });
   router.post("/api/pi/provider-settings/:id/test-connection", async (request) => {
     return json(await testProviderConnection(activeContext, providerID(request), await parseObjectBody(request)));
   });
@@ -157,33 +165,61 @@ async function testProviderConnection(
   id: string,
   body: Record<string, unknown>
 ): Promise<ProviderConnectionResult> {
+  const startedAt = Date.now();
   const config = await readModelsConfig(modelsPath(context.database));
   const current = config.providers[id] ?? {};
   const preset = PROVIDER_PRESETS.find((item) => item.id === id);
-  const auth = preset?.auth ?? "api_key";
-  const startedAt = Date.now();
-  let result: ProviderConnectionResult;
-  if (auth === "oauth") {
-    result = await oauthConnectionResult(context.database, id);
-  } else {
-    result = await probeApiKeyProvider(id, body, current, preset, context.secrets!);
-  }
+  const result = await discoverProviderModels(context, id, body, current, preset);
   recordProviderConnectionAudit(context.database, id, body, current, preset, result, Date.now() - startedAt);
   return result;
 }
 
-async function oauthConnectionResult(database: RunnerDatabase, id: string): Promise<ProviderConnectionResult> {
-  const configured = id === "openai-codex" && await isPiOpenAICodexOAuthConfigured(database);
-  return {
+async function discoverProviderModels(
+  context: PiProviderSettingsContext,
+  id: string,
+  body: Record<string, unknown>,
+  current?: ProviderConfig,
+  preset?: ProviderPreset
+): Promise<ProviderConnectionResult> {
+  const config = current ? undefined : await readModelsConfig(modelsPath(context.database));
+  const activeCurrent = current ?? config?.providers[id] ?? {};
+  const activePreset = preset ?? PROVIDER_PRESETS.find((item) => item.id === id);
+  if ((activePreset?.auth ?? "api_key") === "oauth") {
+    return await oauthModelDiscoveryResult(context, id);
+  }
+  return await probeApiKeyProvider(id, body, activeCurrent, activePreset, context.secrets!);
+}
+
+async function oauthModelDiscoveryResult(context: PiProviderSettingsContext, id: string): Promise<ProviderConnectionResult> {
+  const configured = id === "openai-codex" && await isPiOpenAICodexOAuthConfigured(context.database);
+  const failure = (error: string, message: string): ProviderConnectionResult => ({
     auth: "oauth",
     checked_at: new Date().toISOString(),
-    ...(!configured ? { error: "oauth_not_configured" } : {}),
-    message: configured ? "OAuth credential is configured" : "请先完成 Codex OAuth 登录",
-    models: builtinModelIDs(id),
-    ok: configured,
+    error,
+    message,
+    models: [],
+    ok: false,
     provider_id: id,
-    status: configured ? "connected" : "failed"
-  };
+    status: "failed"
+  });
+  if (!configured) return failure("oauth_not_configured", "请先完成 Codex OAuth 登录");
+  const provider = context.providers?.codex;
+  if (!provider?.listModels) return failure("model_api_unavailable", "Codex model API 暂不可用");
+  try {
+    const models = modelIDsFromPayload(await provider.listModels());
+    if (models.length === 0) return failure("model_list_empty", "Codex model API 未返回可用模型");
+    return {
+      auth: "oauth",
+      checked_at: new Date().toISOString(),
+      message: `连接成功，发现 ${models.length} 个模型`,
+      models,
+      ok: true,
+      provider_id: id,
+      status: "connected"
+    };
+  } catch {
+    return failure("model_api_failed", "Codex model API 请求失败");
+  }
 }
 
 async function probeApiKeyProvider(
@@ -235,6 +271,7 @@ async function probeApiKeyProvider(
       return failure("provider_http_error", `Provider returned HTTP ${response.status}`, response.status);
     }
     const models = await discoveredModelIDs(response);
+    if (models.length === 0) return failure("model_list_empty", "Provider model API 未返回可用模型", response.status);
     return {
       auth: "api_key",
       checked_at: new Date().toISOString(),
@@ -271,8 +308,17 @@ function providerDiscoveryHeaders(api: string, apiKey: string): Record<string, s
 
 async function discoveredModelIDs(response: Response): Promise<string[]> {
   const raw = await response.json().catch(() => null);
-  if (!isObject(raw)) return [];
-  const values = Array.isArray(raw.data) ? raw.data : Array.isArray(raw.models) ? raw.models : [];
+  return modelIDsFromPayload(raw);
+}
+
+function modelIDsFromPayload(raw: unknown): string[] {
+  const values = Array.isArray(raw)
+    ? raw
+    : isObject(raw) && Array.isArray(raw.data)
+      ? raw.data
+      : isObject(raw) && Array.isArray(raw.models)
+        ? raw.models
+        : [];
   return [...new Set(values.map((item) => discoveredModelID(item)).filter(Boolean))].slice(0, 200);
 }
 
@@ -510,10 +556,6 @@ function builtinModelCatalog(providerID: string) {
     name: model.name,
     reasoning: model.reasoning
   }));
-}
-
-function builtinModelIDs(providerID: string): string[] {
-  return builtinModelCatalog(providerID).map((model) => model.id);
 }
 
 function recordProviderSettingsAudit(

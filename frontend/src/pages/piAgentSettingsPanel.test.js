@@ -46,9 +46,13 @@ test('Connections provider view uses recommended cards, connection state, and di
   assert.match(panelSource, /Connections · Custom Provider/);
   assert.match(stateSource, /getPiProviderCatalog/);
   assert.match(stateSource, /testPiProviderConnection/);
+  assert.match(stateSource, /getPiProviderModels/);
   assert.match(stateSource, /providerModelOptions/);
   assert.match(assistantSource, /\/api\/pi\/provider-settings\/catalog/);
   assert.match(assistantSource, /\/api\/pi\/provider-settings\/\$\{encodeURIComponent\(id\)\}\/test-connection/);
+  assert.match(assistantSource, /\/api\/pi\/provider-settings\/\$\{encodeURIComponent\(id\)\}\/models/);
+  assert.match(panelSource, /远端模型列表不可用，已启用手填/);
+  assert.match(panelSource, /disabled=\{!state\.modelSelectAvailable/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
   const connectionSaveStart = stateSource.indexOf('async function savePiConnectionSettings');
   const agentSaveStart = stateSource.indexOf('async function savePiAgentSettings');
@@ -57,7 +61,7 @@ test('Connections provider view uses recommended cards, connection state, and di
   assert.doesNotMatch(connectionSaveSource, /saveAgent\(/);
 });
 
-test('Models & Agents updates behavior without rewriting provider credentials', () => {
+test('Models & Agents registers a newly discovered model without rewriting provider credentials', () => {
   assert.match(panelSource, /view === 'agent'/);
   assert.match(panelSource, /<AgentBehaviorSettings state=\{state\} \/>/);
   assert.match(panelSource, /provider 凭据和连接测试统一在 Connections 管理/);
@@ -66,8 +70,11 @@ test('Models & Agents updates behavior without rewriting provider credentials', 
   const agentSaveStart = stateSource.indexOf('async function savePiAgentSettings');
   const nextFunction = stateSource.indexOf('async function saveAgent', agentSaveStart);
   const agentSaveSource = stateSource.slice(agentSaveStart, nextFunction);
+  assert.match(agentSaveSource, /ensureSelectedProviderModel\(form, providers\)/);
   assert.match(agentSaveSource, /saveAgent\(agentPayload\(form\)\)/);
-  assert.doesNotMatch(agentSaveSource, /updatePiProviderSettings/);
+  assert.match(stateSource, /configured\?\.models\?\.includes\(modelID\)/);
+  assert.match(stateSource, /updatePiProviderSettings\(providerID, providerPayload\(form\)\)/);
+  assert.match(panelSource, /不会改写凭据/);
 });
 
 test('recommended defaults remain stable and API keys stay write-only in local state', () => {

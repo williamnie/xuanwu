@@ -39,16 +39,6 @@ const DEFAULT_PROJECT_NAME = 'project';
 const DEFAULT_CODEX_MODEL = 'codex-default';
 const DEFAULT_PROVIDER = 'codex';
 
-const FALLBACK_CODEX_MODEL_OPTIONS = [
-  { value: DEFAULT_CODEX_MODEL, label: '系统默认模型' },
-  { value: 'gpt-5.5', label: 'GPT-5.5' },
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
-  { value: 'gpt-5.3-codex-spark', label: 'GPT-5.3 Codex Spark' },
-  { value: 'gpt-5.2', label: 'GPT-5.2' },
-];
-
 function projectNameFromPath(cwd) {
   const trimmed = cwd.trim().replace(/[\\/]+$/, '');
   return trimmed.split(/[\\/]/).pop() || DEFAULT_PROJECT_NAME;
@@ -83,11 +73,7 @@ function buildCodexModelOptions(models, ...selectedValues) {
   pushOption(DEFAULT_CODEX_MODEL, '系统默认模型');
 
   const liveModels = Array.isArray(models) ? models.filter(model => !model?.hidden) : [];
-  if (liveModels.length > 0) {
-    liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
-  } else {
-    FALLBACK_CODEX_MODEL_OPTIONS.slice(1).forEach(option => pushOption(option.value, option.label));
-  }
+  liveModels.forEach(model => pushOption(model?.id || model?.model, model?.displayName || model?.name || model?.id || model?.model));
 
   selectedValues.forEach(value => {
     const normalizedValue = normalizeCodexModel(value);
@@ -696,20 +682,30 @@ export default function Projects() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                 <div className="form-group">
                   <label>Codex 执行模型</label>
-                  <select 
-                    className="form-control" 
-                    value={formModel}
-                    onChange={(e) => setFormField('formModel', e.target.value)}
-                  >
-                    {codexModelOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  {codexModelsError ? (
+                    <input
+                      className="form-control"
+                      value={formModel}
+                      onChange={(e) => setFormField('formModel', e.target.value)}
+                      placeholder="模型 API 失败，请手动填写 model ID"
+                    />
+                  ) : (
+                    <select
+                      className="form-control"
+                      disabled={codexModelsLoading}
+                      value={formModel}
+                      onChange={(e) => setFormField('formModel', e.target.value)}
+                    >
+                      {codexModelOptions.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  )}
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     {codexModelsLoading
                       ? '正在读取 Codex 模型列表…'
                       : codexModelsError
-                        ? `读取失败，已使用内置备用列表：${codexModelsError}`
+                        ? `远端 model API 读取失败，已启用手填：${codexModelsError}`
                         : '模型列表来自当前 Codex provider。'}
                   </span>
                 </div>
@@ -779,6 +775,8 @@ export default function Projects() {
                 form={profileForm}
                 error={profileError}
                 modelOptions={codexModelOptions}
+                modelsError={codexModelsError}
+                modelsLoading={codexModelsLoading}
                 onFieldChange={setProfileFormField}
                 onSubmit={handleProfileSubmit}
                 onEdit={handleEditProfile}
@@ -830,7 +828,7 @@ function ProjectMetaRow({ label, value, strong = false }) {
   );
 }
 
-function AgentProfileManager({ profiles, loading, form, error, modelOptions, onFieldChange, onSubmit, onEdit, onReset }) {
+function AgentProfileManager({ profiles, loading, form, error, modelOptions, modelsError, modelsLoading, onFieldChange, onSubmit, onEdit, onReset }) {
   return (
     <div className="glass-card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.025)' }}>
       <div>
@@ -851,9 +849,13 @@ function AgentProfileManager({ profiles, loading, form, error, modelOptions, onF
           </select>
           <input className="form-control" placeholder="Profile ID（可留空自动生成）" value={form.id} onChange={(e) => onFieldChange('id', e.target.value)} />
           <input className="form-control" placeholder="Profile 名称" value={form.name} onChange={(e) => onFieldChange('name', e.target.value)} />
-          <select className="form-control" value={form.model} onChange={(e) => onFieldChange('model', e.target.value)}>
-            {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          {modelsError ? (
+            <input className="form-control" placeholder="模型 API 失败，请手动填写 model ID" value={form.model} onChange={(e) => onFieldChange('model', e.target.value)} />
+          ) : (
+            <select className="form-control" disabled={modelsLoading} value={form.model} onChange={(e) => onFieldChange('model', e.target.value)}>
+              {modelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          )}
           <select className="form-control" value={form.reasoning_effort} onChange={(e) => onFieldChange('reasoning_effort', e.target.value)}>
             <option value="">默认 effort</option>
             <option value="low">low</option>

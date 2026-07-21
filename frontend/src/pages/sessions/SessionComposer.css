@@ -80,6 +80,32 @@
   font-weight: 690;
 }
 
+.session-composer-model-manual {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.session-composer-model-manual input {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 7px;
+  color: #9a3412;
+  font-size: 0.75rem;
+  height: 28px;
+  max-width: 150px;
+  outline: none;
+  padding: 0 7px;
+}
+
+[data-theme="dark"] .session-composer-model-manual input {
+  background: rgba(154, 52, 18, 0.22);
+  border-color: rgba(251, 146, 60, 0.5);
+  color: #fed7aa;
+}
+
 .session-composer-select.effort .session-composer-select-value {
   color: #6b7280;
 }
@@ -369,6 +395,10 @@
   }
 
   .session-composer-select.model {
+    margin-left: 0;
+  }
+
+  .session-composer-model-manual {
     margin-left: 0;
   }
 

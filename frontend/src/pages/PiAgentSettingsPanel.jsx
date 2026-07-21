@@ -32,6 +32,10 @@ function PiSettingsForm({ state, view }) {
       <AdvancedProviderGrid state={state} />
       <ProviderCredentialFields state={state} />
       <CodexOAuthPanel state={state} />
+      <div className="provider-recommended-actions">
+        <ConnectionTestAction state={state} />
+      </div>
+      <ConnectionResult state={state} />
       <SaveRow mode="connection" onSave={state.handleConnectionSave} saving={state.saving} />
       <ProviderSummary providers={state.providers} />
     </>
@@ -153,13 +157,7 @@ function RecommendedApiKeyField({ state }) {
 }
 
 function RecommendedModelField({ state }) {
-  return (
-    <Field label="Connection model">
-      <select className="form-control" value={state.form.modelId} onChange={(event) => state.updateField('modelId', event.target.value)}>
-        {state.modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
-      </select>
-    </Field>
-  );
+  return <RemoteModelField label="Connection model" state={state} />;
 }
 
 function ConnectionTestAction({ state }) {
@@ -245,7 +243,7 @@ function AdvancedProviderGrid({ state }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
       <TextField form={state.form} label="Model Provider" name="modelProvider" placeholder="openai / anthropic / local" updateField={state.updateField} />
-      <TextField form={state.form} label="Available Model" name="modelId" placeholder="gpt-5.4" updateField={state.updateField} />
+      <RemoteModelField label="Available Model" state={state} />
       <ApiTypeField form={state.form} updateField={state.updateField} />
     </div>
   );
@@ -261,17 +259,47 @@ function AgentSettingsGrid({ state }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
       <TextField form={state.form} label="Supervisor Display Name" name="agentName" updateField={state.updateField} />
       <Field label="Model Provider">
-        <select className="form-control" value={state.form.modelProvider} onChange={(event) => state.updateField('modelProvider', event.target.value)}>
+        <select className="form-control" value={state.form.modelProvider} onChange={(event) => state.selectModelProvider(event.target.value)}>
           {providerOptions.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
         </select>
       </Field>
-      <Field label="Model ID">
-        <select className="form-control" value={state.form.modelId} onChange={(event) => state.updateField('modelId', event.target.value)}>
-          {state.modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
-        </select>
-      </Field>
+      <RemoteModelField label="Model ID" state={state} />
       <ThinkingField form={state.form} updateField={state.updateField} />
     </div>
+  );
+}
+
+function RemoteModelField({ label, state }) {
+  const discovery = state.modelDiscovery.providerId === state.form.modelProvider ? state.modelDiscovery : null;
+  const failed = discovery?.result && !discovery.result.ok;
+  return (
+    <Field label={label}>
+      {failed ? (
+        <>
+          <input
+            className="form-control"
+            value={state.form.modelId}
+            onChange={(event) => state.updateField('modelId', event.target.value)}
+            placeholder="模型 API 失败，请手动填写 model ID"
+          />
+          <span style={{ color: 'var(--warning)', fontSize: '0.72rem', marginTop: '4px' }}>
+            远端模型列表不可用，已启用手填：{discovery.result.message || 'model API error'}
+          </span>
+        </>
+      ) : (
+        <>
+          <select
+            className="form-control"
+            disabled={!state.modelSelectAvailable || discovery?.busy}
+            value={state.form.modelId}
+            onChange={(event) => state.updateField('modelId', event.target.value)}
+          >
+            {state.modelOptions.map((model) => <option key={model} value={model}>{model}</option>)}
+          </select>
+          {discovery?.busy && <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginTop: '4px' }}>正在从远端 model API 读取模型…</span>}
+        </>
+      )}
+    </Field>
   );
 }
 
@@ -420,7 +448,7 @@ function SaveRow({ mode, onSave, saving }) {
       <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
         {connection
           ? '凭据和可用模型只写入现有 provider authority；不会改变 Supervisor 默认选择。'
-          : '只更新 Supervisor 行为与默认模型，不写 provider 凭据或连接参数。'}
+          : '更新 Supervisor 行为与默认模型；远端新模型会登记到现有 provider，但不会改写凭据。'}
       </span>
     </div>
   );
