@@ -176,6 +176,7 @@ export async function runCapacityBenchmark(input: {
   baseline?: CapacityReport;
   dbPath: string;
   label?: string;
+  readRSSBytes?: () => number;
   samples?: number;
   warmups?: number;
 }): Promise<CapacityReport> {
@@ -185,7 +186,8 @@ export async function runCapacityBenchmark(input: {
     throw new Error(`baseline schema must be ${CAPACITY_REPORT_SCHEMA}`);
   }
   const db = await openDatabase({ dbPath: input.dbPath, stateDir: dirname(input.dbPath) });
-  const startRSS = process.memoryUsage().rss;
+  const readRSSBytes = input.readRSSBytes ?? (() => process.memoryUsage().rss);
+  const startRSS = readRSSBytes();
   let peakRSS = startRSS;
   try {
     projectPendingEventSummaries(db);
@@ -215,7 +217,7 @@ export async function runCapacityBenchmark(input: {
     const latency: Record<string, LatencyResult> = {};
     for (const [name, run] of Object.entries(workloads)) {
       const values = measure(run, samples, warmups);
-      peakRSS = Math.max(peakRSS, process.memoryUsage().rss);
+      peakRSS = Math.max(peakRSS, readRSSBytes());
       const budget = CAPACITY_BUDGETS.latency_ms[name as keyof typeof CAPACITY_BUDGETS.latency_ms];
       latency[name] = {
         budget,

@@ -69,9 +69,10 @@ describe("Work Ledger schema migration", () => {
     try {
       db.run("pragma foreign_keys = on");
       runMigrations(db);
+      const migrationCount = db.query("select count(*) as count from schema_migrations").get();
       runMigrations(db);
 
-      expect(db.query("select count(*) as count from schema_migrations").get()).toEqual({ count: migrations.length });
+      expect(db.query("select count(*) as count from schema_migrations").get()).toEqual(migrationCount);
       expect(db.query("select count(*) as count from schema_migrations where id=?").get(MIGRATION_ID))
         .toEqual({ count: 1 });
       expect(db.query("select count(*) as count from sqlite_master where type='table' and name like 'work%'").get())

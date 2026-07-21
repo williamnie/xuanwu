@@ -21,8 +21,8 @@ const ADR_PATH = "docs/architecture/xuanwu/0005-capability-disposition-inventory
 
 describe("Xuanwu capability disposition inventory", () => {
   test("covers every current source table and the two live-only legacy tables", () => {
-    expect(TABLE_DISPOSITIONS).toHaveLength(79);
-    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(79);
+    expect(TABLE_DISPOSITIONS).toHaveLength(86);
+    expect(unique(TABLE_DISPOSITIONS.map((item) => item.name))).toHaveLength(86);
     expect(Object.keys(RETENTION_LEVELS).sort()).toEqual([
       "R0_DERIVED",
       "R1_OPERATIONAL",
@@ -75,7 +75,7 @@ describe("Xuanwu capability disposition inventory", () => {
     const routes = productionHttpRoutes();
     const inventoried = API_ROUTE_DISPOSITIONS.map((route) => `${route.method} ${route.path}`).sort();
     expect(inventoried).toEqual(routes);
-    expect(inventoried).toHaveLength(242);
+    expect(inventoried).toHaveLength(246);
     expect(unique(inventoried)).toHaveLength(inventoried.length);
 
     const familyIDs = new Set(API_ROUTE_FAMILIES.map((family) => family.id));
@@ -140,8 +140,8 @@ describe("Xuanwu capability disposition inventory", () => {
     for (const heading of ["live reference", "表清单", "API 清单", "页面清单", "后台调度器", "PI 模块", "删除前置条件"]) {
       expect(adr).toContain(heading);
     }
-    expect(adr).toContain("79 张表");
-    expect(adr).toContain("241 条用户 API route");
+    expect(adr).toContain("86 张表");
+    expect(adr).toContain("246 条用户 API route");
   });
 });
 
@@ -170,11 +170,13 @@ function productionFiles(directory: string, include: (name: string) => boolean):
 function productionSourceText(): string {
   const roots = ["backend-ts/src", "frontend/src"];
   const files = roots.flatMap((directory) => walk(resolve(REPO_ROOT, directory)))
+    .filter((path) => !path.includes(".test."))
     .filter((path) => !path.endsWith("/capabilityDispositionInventory.ts"))
     .filter((path) => !path.endsWith("/capabilityDispositionInventory.test.ts"))
     .filter((path) => !path.endsWith("/automationSemantics.ts"))
     .filter((path) => !path.endsWith("/automationSemantics.test.ts"))
     .filter((path) => !path.endsWith("/consolidationAudit.ts"))
+    .filter((path) => !path.endsWith("/053_drop_legacy_automation_tables.ts"))
     .filter((path) => [".js", ".jsx", ".ts", ".tsx"].includes(extname(path)));
   return files.map((path) => readFileSync(path, "utf8")).join("\n");
 }

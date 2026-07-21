@@ -107,7 +107,13 @@ describe("Xuanwu capacity benchmark", () => {
     });
 
     expect(generated.scale).toMatchObject({ projects: 2, issues_per_project: 3, events_per_issue: 5 });
-    const report = await runCapacityBenchmark({ dbPath, label: "focused-fixture", samples: 5, warmups: 1 });
+    const report = await runCapacityBenchmark({
+      dbPath,
+      label: "focused-fixture",
+      readRSSBytes: () => 128 * 1024 * 1024,
+      samples: 5,
+      warmups: 1
+    });
 
     expect(report).toMatchObject({
       schema_version: CAPACITY_REPORT_SCHEMA,

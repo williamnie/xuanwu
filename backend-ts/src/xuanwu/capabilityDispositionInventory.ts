@@ -116,6 +116,41 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 0, delete_preconditions: []
   },
   {
+    name: "event_summary_projection_compact", disposition: "keep", target: "Compact event summary projection",
+    source_of_truth: "event_summary_projection_compact; issue_events remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection_compat_modes", disposition: "keep", target: "Compact projection compatibility exceptions",
+    source_of_truth: "event_summary_projection_compat_modes; issue_events remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection_payloads", disposition: "keep", target: "Compact projection payload dictionary",
+    source_of_truth: "event_summary_projection_payloads; issue_events remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection_projects", disposition: "keep", target: "Compact projection project dictionary",
+    source_of_truth: "event_summary_projection_projects; projects remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection_runs", disposition: "keep", target: "Compact projection Run dictionary",
+    source_of_truth: "event_summary_projection_runs; issue_runs remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection_switch", disposition: "keep", target: "Compact projection read cutover state",
+    source_of_truth: "event_summary_projection_switch", retention: "R1_OPERATIONAL", runtime_origin: "source_schema",
+    live_rows: 1, delete_preconditions: []
+  },
+  {
+    name: "event_summary_projection_types", disposition: "keep", target: "Compact projection event-type dictionary",
+    source_of_truth: "event_summary_projection_types; issue_events remain authoritative", retention: "R0_DERIVED", runtime_origin: "source_schema",
+    live_rows: 0, delete_preconditions: []
+  },
+  {
     name: "external_events", disposition: "keep", target: "Intake Evidence",
     source_of_truth: "external_events", retention: "R3_AUDIT", runtime_origin: "source_schema",
     live_rows: 49, delete_preconditions: []
@@ -470,9 +505,11 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "GET", path: "/api/works/:id", family: "work-ledger" },
   { method: "GET", path: "/api/works/:id/relations", family: "work-ledger" },
   { method: "GET", path: "/api/works/:id/timeline", family: "work-ledger" },
+  { method: "GET", path: "/api/works/board", family: "work-ledger" },
   { method: "PATCH", path: "/api/works/:id", family: "work-ledger" },
   { method: "POST", path: "/api/works", family: "work-ledger" },
   { method: "POST", path: "/api/works/:id/actions/:action", family: "work-ledger" },
+  { method: "PUT", path: "/api/works/:id/readiness-requirements", family: "work-ledger" },
   { method: "GET", path: "/api/agent-profiles", family: "project-scope" },
   { method: "POST", path: "/api/agent-profiles", family: "project-scope" },
   { method: "DELETE", path: "/api/agent-profiles/:id", family: "project-scope" },
@@ -514,6 +551,8 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/issues/:id/cancel", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/comments", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/enqueue", family: "work-ledger" },
+  { method: "POST", path: "/api/issues/:id/evidence/command", family: "evidence-handoff" },
+  { method: "POST", path: "/api/issues/:id/evidence/readiness", family: "evidence-handoff" },
   { method: "GET", path: "/api/issues/:id/events", family: "work-ledger" },
   { method: "POST", path: "/api/issues/:id/retry", family: "work-ledger" },
   { method: "GET", path: "/api/issues/:id/runs", family: "work-ledger" },
