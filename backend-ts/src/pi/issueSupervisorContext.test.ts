@@ -305,6 +305,69 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("proactively watches a running session after fifteen minutes without updates", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-default-stale-session-"));
+      insertIssue(db, { id: 414, projectID: "runner", title: "Stale running issue", status: "in_progress", updatedAt: "2026-06-10T07:44:59Z" });
+      insertRun(db, { issueID: 414, id: "issue-414-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-414", turnID: "turn-414" });
+      insertSession(db, { issueID: 414, projectID: "runner", sessionID: "thread-414", status: "running", updatedAt: "2026-06-10T07:44:59Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 414, { now: NOW });
+
+      expect(context.session).toMatchObject({ status: "disconnected", stale_gap_seconds: 901 });
+      expect(context.candidates).toContainEqual(expect.objectContaining({
+        diagnosis_code: "session_no_recent_progress",
+        reason: "session has no recent updates"
+      }));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not resume an idle session after its run has already ended", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-ended-idle-session-"));
+      insertIssue(db, { id: 415, projectID: "runner", title: "Ended idle issue", status: "in_progress", updatedAt: "2026-06-10T07:30:00Z" });
+      insertRun(db, { issueID: 415, id: "issue-415-attempt-1", status: "failed", endedAt: "2026-06-10T07:40:00Z", sessionID: "thread-415", turnID: "turn-415" });
+      insertSession(db, { issueID: 415, projectID: "runner", sessionID: "thread-415", status: "idle", updatedAt: "2026-06-10T07:40:00Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 415, { now: NOW });
+
+      expect(context.candidates).not.toContainEqual(expect.objectContaining({
+        diagnosis_code: "session_no_recent_progress"
+      }));
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retries a failed executor attempt before treating test failure as user input", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-failed-attempt-"));
+      insertIssue(db, { id: 416, projectID: "runner", title: "Failed attempt", status: "failed", updatedAt: "2026-06-10T07:50:00Z" });
+      insertRun(db, { issueID: 416, id: "issue-416-attempt-1", status: "failed", endedAt: "2026-06-10T07:50:00Z", sessionID: "thread-416", turnID: "turn-416" });
+      insertSession(db, { issueID: 416, projectID: "runner", sessionID: "thread-416", status: "failed", updatedAt: "2026-06-10T07:50:00Z" });
+      insertEvent(db, { issueID: 416, type: "issue.log", payload: {
+        type: "error",
+        provider: "codex",
+        raw_payload: "focused test failed: expected status 200"
+      }, createdAt: "2026-06-10T07:49:59Z" });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 416, { now: NOW });
+
+      expect(context.provider_error).toMatchObject({ category: "business_failure" });
+      expect(context.candidates).toEqual([expect.objectContaining({
+        diagnosis_code: "scheduler_retryable_error",
+        reason: "executor attempt failed; retry autonomously before escalating"
+      })]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("surfaces deferred provider infra failures as PI recovery candidates", async () => {
     const db = await fixtureDb();
     try {

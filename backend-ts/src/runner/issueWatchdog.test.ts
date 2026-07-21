@@ -81,7 +81,7 @@ describe("issue watchdog queue readiness", () => {
     }
   });
 
-  test("escalates a runnable issue without runtime once and reactivates only after state changes", async () => {
+  test("retries a runnable issue three times before asking the user once", async () => {
     const db = await fixtureDatabase();
     const provider = new FixtureProvider();
     try {
@@ -94,19 +94,29 @@ describe("issue watchdog queue readiness", () => {
       await waitFor(() => provider.inputs.length === 1 && !isProjectLoopActive("demo"));
       resetClaimToSameTodoState(db, issueID, originalUpdatedAt);
 
-      const escalated = await watchdog(db, provider, new Date(NOW.getTime() + 61_000), 60_000);
+      const second = await watchdog(db, provider, new Date(NOW.getTime() + 61_000), 60_000);
+      expect(second).toMatchObject({ escalated: 0, kicked: 1 });
+      await waitFor(() => provider.inputs.length === 2 && !isProjectLoopActive("demo"));
+      resetClaimToSameTodoState(db, issueID, originalUpdatedAt);
+
+      const third = await watchdog(db, provider, new Date(NOW.getTime() + 2 * 61_000), 60_000);
+      expect(third).toMatchObject({ escalated: 0, kicked: 1 });
+      await waitFor(() => provider.inputs.length === 3 && !isProjectLoopActive("demo"));
+      resetClaimToSameTodoState(db, issueID, originalUpdatedAt);
+
+      const escalated = await watchdog(db, provider, new Date(NOW.getTime() + 3 * 61_000), 60_000);
       const duplicate = await watchdog(db, provider, new Date(NOW.getTime() + 5 * 60_000), 60_000);
       expect(escalated).toMatchObject({ attentioned: 1, escalated: 1, kicked: 0 });
       expect(duplicate).toMatchObject({ attentioned: 0, escalated: 0, kicked: 0 });
       expect(listNotifications(db, { projectID: "demo" })).toHaveLength(1);
       expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(1);
-      expect(eventTypes(db, issueID).filter((type) => type === "issue.watchdog_kicked")).toHaveLength(1);
+      expect(eventTypes(db, issueID).filter((type) => type === "issue.watchdog_kicked")).toHaveLength(3);
       expect(eventTypes(db, issueID).filter((type) => type === "issue.watchdog_needs_user")).toHaveLength(1);
 
       db.sqlite.run("update issues set updated_at=? where id=?", ["2026-07-19T01:00:00.000Z", issueID]);
       const reactivated = await watchdog(db, provider, new Date(NOW.getTime() + 6 * 60_000), 60_000);
       expect(reactivated.kicked).toBe(1);
-      await waitFor(() => provider.inputs.length === 2 && !isProjectLoopActive("demo"));
+      await waitFor(() => provider.inputs.length === 4 && !isProjectLoopActive("demo"));
     } finally {
       db.close();
     }
@@ -191,6 +201,33 @@ describe("issue watchdog queue readiness", () => {
       });
       expect(reactivated).toMatchObject({ attentioned: 1, kicked: 0, waiting: 1 });
       expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps a queued issue quiet while the same project already has active work", async () => {
+    const db = await fixtureDatabase();
+    const provider = new FixtureProvider();
+    setProjectLoopMaxParallelProjects(3);
+    try {
+      insertProject(db, "demo", provider.id);
+      const running = insertIssue(db, "running", "in_progress");
+      insertOpenRun(db, running, provider.id, STALE);
+      const queued = insertIssue(db, "queued", "todo");
+
+      for (let minute = 0; minute < 10; minute += 1) {
+        const result = await watchdog(db, provider, new Date(NOW.getTime() + minute * 60_000));
+        expect(result).toMatchObject({ escalated: 0, kicked: 0, skippedBusy: 1, waiting: 1 });
+      }
+
+      expect(provider.inputs).toEqual([]);
+      expect(listNotifications(db, { projectID: "demo" })).toEqual([]);
+      expect(listPiGuardianAlerts(db, { projectId: "demo", status: "open" })).toEqual([]);
+      expect(latestPayload(db, queued, "issue.watchdog_waiting")).toMatchObject({
+        not_runnable_reason: "project_serial_wait",
+        root_blocker: [expect.objectContaining({ issue_id: running })]
+      });
     } finally {
       db.close();
     }

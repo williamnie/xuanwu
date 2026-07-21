@@ -1,5 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { countActiveExecutorWork } from "../db/repositories/issueQueue.ts";
+import {
+  countActiveExecutorWork,
+  hasActiveExecutorWorkForProject
+} from "../db/repositories/issueQueue.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
   listPiGuardianAlerts,
@@ -35,6 +38,7 @@ export type IssueWatchdogInput = {
   database: RunnerDatabase;
   escalateAfterMs?: number;
   limit?: number;
+  maxKickAttempts?: number;
   now?: Date | string;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
   staleAfterMs?: number;
@@ -64,6 +68,7 @@ type StoredWatchdogState = { stateKey: string };
 
 const DEFAULT_ESCALATE_AFTER_MS = 2 * 60 * 1000;
 const DEFAULT_LIMIT = 20;
+const DEFAULT_MAX_KICK_ATTEMPTS = 3;
 const DEFAULT_STALE_AFTER_MS = 10 * 60 * 1000;
 const WATCHDOG_ALERT_PREFIX = "issue_watchdog_";
 
@@ -105,6 +110,17 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
   }
 
   for (const candidate of rows) {
+    if (hasActiveExecutorWorkForProject(input.database, candidate.project_id, now)) {
+      handleWaiting(input, candidate, summary, now, waitState(candidate, {
+        attention: false,
+        authority: "issues.status+issue_runs+project_execution_lock",
+        nextCheckAt: nextCheck(now, escalateAfterMs),
+        reason: "project_serial_wait",
+        rootBlocker: activeProjectBlockers(input.database, candidate.project_id)
+      }));
+      summary.skippedBusy += 1;
+      continue;
+    }
     const decision = projectLoopDecision({
       bus: input.bus,
       database: input.database,
@@ -155,6 +171,21 @@ function handleRunnable(
   const lastKick = lastWatchdogKickAt(input.database, row.id);
   if (lastKick && now.getTime() - Date.parse(lastKick) < escalateAfterMs) {
     summary.recentlyKicked += 1;
+    return;
+  }
+
+  const kickAttempts = watchdogKickAttempts(input.database, row.id, state.stateKey);
+  if (kickAttempts < positiveInteger(input.maxKickAttempts, DEFAULT_MAX_KICK_ATTEMPTS)) {
+    recordWatchdogEvent(input.database, row.id, "issue.watchdog_kicked", statePayload(state, {
+      attempt: kickAttempts + 1,
+      reason: "todo_without_session"
+    }), now);
+    startProjectLoop({
+      bus: input.bus,
+      database: input.database,
+      providers: input.providers
+    }, row.project_id);
+    summary.kicked += 1;
     return;
   }
 
@@ -359,6 +390,23 @@ function activeCapacityBlockers(db: RunnerDatabase): Array<Record<string, unknow
   `).all().map((row) => ({ issue_id: row.id, project_id: row.project_id, status: row.status }));
 }
 
+function activeProjectBlockers(db: RunnerDatabase, projectID: string): Array<Record<string, unknown>> {
+  const cwd = cleanString(getProject(db, projectID)?.cwd);
+  return db.sqlite.query<{ id: number; project_id: string; status: string }, [string, string, string]>(`
+    select distinct i.id, i.project_id, i.status
+    from issues i
+    join projects p on p.id=i.project_id
+    left join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
+    where (i.project_id=? or (?<>'' and trim(p.cwd)=?))
+      and (i.status='in_progress' or ir.id is not null)
+    order by i.id limit 10
+  `).all(projectID, cwd, cwd).map((row) => ({
+    issue_id: row.id,
+    project_id: row.project_id,
+    status: row.status
+  }));
+}
+
 function publishNeedsUser(
   input: IssueWatchdogInput,
   row: StaleTodoRow,
@@ -386,6 +434,14 @@ function lastWatchdogKickAt(db: RunnerDatabase, issueID: number): string {
     where issue_id=? and type='issue.watchdog_kicked'
     order by created_at desc, id desc limit 1
   `).get(issueID)?.created_at ?? "";
+}
+
+function watchdogKickAttempts(db: RunnerDatabase, issueID: number, stateKey: string): number {
+  return db.sqlite.query<{ count: number }, [number, string]>(`
+    select count(*) as count from issue_events
+    where issue_id=? and type='issue.watchdog_kicked'
+      and json_valid(payload) and json_extract(payload, '$.state_key')=?
+  `).get(issueID, stateKey)?.count ?? 0;
 }
 
 function recordWatchdogEvent(

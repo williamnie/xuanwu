@@ -90,6 +90,9 @@ export function classifyRecoveryDiagnosis(input: RecoveryDiagnosisInput): Recove
   if (UNSAFE_DIAGNOSIS.has(diagnosis)) return diagnosisClassification("unsafe", "urgent", diagnosis);
   if (EXHAUSTED_DIAGNOSIS.has(diagnosis)) return diagnosisClassification("exhausted", "actionable", diagnosis);
   if (NEEDS_CONTEXT_DIAGNOSIS.has(diagnosis)) return diagnosisClassification("needs_context", "actionable", diagnosis);
+  // 这是 Supervisor 在读取已结束的 executor attempt 后生成的受控诊断，
+  // 明确表示应先消耗自动恢复预算，不能再被原始 business_failure 分类覆盖。
+  if (diagnosis === "scheduler_retryable_error") return diagnosisClassification("transient", "watch", diagnosis);
   if (ACTIONABLE_PROVIDER_CATEGORIES.has(providerCategory)) {
     return classification("needs_context", "actionable", diagnosis, `provider category ${providerCategory} requires user context`, ["provider_error_category"]);
   }

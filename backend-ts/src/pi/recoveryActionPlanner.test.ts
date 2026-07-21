@@ -2,6 +2,26 @@ import { describe, expect, test } from "bun:test";
 import { supervisorRecoveryActionCandidates } from "./recoveryActionPlanner.ts";
 
 describe("supervisor recovery action planner", () => {
+  test("retries a failed executor attempt before escalating its business failure", () => {
+    expect(supervisorRecoveryActionCandidates({
+      eventID: "failed-attempt-1",
+      issueID: 700,
+      payload: {
+        allowed_actions: ["issue.retry", "needs_user.escalate"],
+        budget_remaining: 2,
+        diagnosis_code: "scheduler_retryable_error",
+        issue_status: "failed",
+        provider_error_category: "business_failure",
+        ready: true,
+        run_ended_at: "2026-06-10T07:50:00Z",
+        run_id: "issue-700-attempt-1",
+        signal_type: "supervisor.candidate",
+        supervisor_mode: "autonomous"
+      },
+      projectID: "demo"
+    })).toContainEqual(expect.objectContaining({ action_type: "issue.retry" }));
+  });
+
   test("plans resume follow-up with a concise continue prompt for idle sessions", () => {
     expect(supervisorRecoveryActionCandidates({
       eventID: "event-idle",

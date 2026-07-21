@@ -30,6 +30,7 @@ export type SupervisorCandidate = {
 type CandidateInput = {
   events: IssueEvent[];
   history: Record<string, unknown>;
+  issueStatus: string;
   latestRun: IssueRun | null;
   now: Date;
   policy?: { supervisor_cooldown_seconds?: number };
@@ -53,12 +54,12 @@ type SessionContextInput = {
   staleAfterSeconds: number;
 };
 
-const DEFAULT_STALE_SECONDS = 6 * 60 * 60;
+const DEFAULT_STALE_SECONDS = 15 * 60;
 const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "issue.retry", "issue.retry_after"]);
 
 export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const out: SupervisorCandidate[] = [];
-  const { providerError, session, history, now } = input;
+  const { providerError, session, history, latestRun, now } = input;
   const budgetCandidate = recoveryBudgetCandidate(history);
   if (budgetCandidate) {
     out.push(budgetCandidate);
@@ -77,14 +78,24 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   if (outageCandidate) return [outageCandidate];
   const diagnosis = providerError?.diagnosis_code;
   const stopped = stoppedSession(session);
+  const runOpen = latestRun?.status === "in_progress" && latestRun.ended_at === "";
+  const failedAttempt = input.issueStatus === "failed" && latestRun?.ended_at !== "";
+  if (failedAttempt && (!providerError || providerError.category === "business_failure" || providerError.category === "unknown")) {
+    out.push({
+      diagnosis_code: "scheduler_retryable_error",
+      evidence_refs: ["issue", "latest_run"],
+      reason: "executor attempt failed; retry autonomously before escalating"
+    });
+    return out;
+  }
   if (diagnosis) {
     out.push(providerErrorCandidate(input, providerError, diagnosis));
     return out;
   }
-  if (stopped && !blocksStoppedRecovery(providerError)) {
+  if (runOpen && stopped && !blocksStoppedRecovery(providerError)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session is idle while issue run remains open" });
   }
-  if (!diagnosis && !stopped && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
+  if (runOpen && !diagnosis && !stopped && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session has no recent updates" });
   }
   return out;

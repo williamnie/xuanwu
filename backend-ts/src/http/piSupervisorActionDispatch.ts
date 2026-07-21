@@ -62,7 +62,7 @@ async function resumeSessionFollowup(
   }
   assertFreshSupervisorState(context.database, issueID, providerID, sessionID, payload, [
     "expected_issue_updated_at", "expected_run_id", "expected_provider_turn_id", "expected_session_updated_at"
-  ]);
+  ], "resume_revalidate");
   const prepared = await prepareResumeFollowupAttempt(context.database, { action, issueID, payload, provider, providerID, sessionID });
   if (prepared.skip) {
     recordSupervisorResult(context.database, action, payload, prepared.result);
@@ -175,7 +175,7 @@ async function retryIssueNow(
   const issueID = positivePayloadID(payload, "issue_id");
   assertFreshSupervisorState(context.database, issueID, sessionProviderID(payload), "", payload, [
     "expected_issue_updated_at", "expected_run_id"
-  ]);
+  ], "retry_revalidate");
   const reason = cleanString(payload.reason) || cleanString(payload.diagnosis_code) || "supervisor retry";
   const attempt = prepareIssueRecoveryAttempt(context.database, action, payload, {
     actionType: "issue.retry",

@@ -170,7 +170,6 @@ describe("PI action dispatcher supervisor actions", () => {
         project_id: "demo",
         status: "approved"
       });
-
       await dispatchPiAction({ database: db, providers: { codex: provider } }, action);
 
       expect(provider.calls).toEqual([{ prompt: "Inspect current state and continue safely.", sessionId: "thread-305" }]);
@@ -205,7 +204,6 @@ describe("PI action dispatcher supervisor actions", () => {
         project_id: "demo",
         status: "approved"
       });
-
       await dispatchPiAction({ database: db, providers: { codex: provider } }, action);
 
       expect(provider.calls).toEqual([]);
@@ -240,6 +238,7 @@ describe("PI action dispatcher supervisor actions", () => {
         project_id: "demo",
         status: "approved"
       });
+      db.sqlite.run("update issues set updated_at=? where id=309", ["2026-06-10T07:02:00Z"]);
 
       await dispatchPiAction({ database: db, providers: { codex: provider } }, action);
 
@@ -436,7 +435,7 @@ describe("PI action dispatcher supervisor actions", () => {
     }
   });
 
-  test("resume follow-up refuses stale issue/run/session preconditions", async () => {
+  test("resume follow-up revalidates harmless timestamp drift before continuing", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();
     try {
@@ -460,8 +459,49 @@ describe("PI action dispatcher supervisor actions", () => {
         status: "approved"
       });
 
+      db.sqlite.run("update issues set updated_at=? where id=308", ["2026-06-10T07:02:00Z"]);
+      db.sqlite.run("update agent_sessions set updated_at=? where session_key=?", [
+        "2026-06-10T07:03:00Z", "codex:thread-308"
+      ]);
+
       await expect(dispatchPiAction({ database: db, providers: { codex: provider } }, action))
-        .rejects.toThrow("issue changed before PI action execution");
+        .resolves.toMatchObject({ turn_id: "turn-followup" });
+      expect(provider.calls).toEqual([{ prompt: "continue", sessionId: "thread-308" }]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("resume follow-up still refuses a changed run or provider turn", async () => {
+    const db = await fixtureDb();
+    const provider = new SupervisorProvider();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 310, projectID: "demo", sessionID: "thread-310", turnID: "turn-old" });
+      db.sqlite.run(`update issue_runs set provider_turn_id='turn-new' where issue_id=310`);
+      db.sqlite.run(`update agent_sessions set raw_ref=? where session_key='codex:thread-310'`, [
+        JSON.stringify({ provider_turn_id: "turn-new" })
+      ]);
+      const action = createPiAction(db, {
+        action_type: "session.resume_followup",
+        id: "changed-turn-resume-action",
+        issue_id: 310,
+        payload_json: JSON.stringify({
+          expected_issue_updated_at: "2026-06-10T07:00:00Z",
+          expected_provider_turn_id: "turn-old",
+          expected_run_id: "issue-310-attempt-1",
+          expected_session_updated_at: "2026-06-10T07:01:00Z",
+          issue_id: 310,
+          prompt: "continue",
+          provider: "codex",
+          provider_session_id: "thread-310"
+        }),
+        project_id: "demo",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db, providers: { codex: provider } }, action))
+        .resolves.toMatchObject({ skipped: true });
       expect(provider.calls).toEqual([]);
     } finally {
       db.close();

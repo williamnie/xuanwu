@@ -2,6 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { Issue } from "../db/repositories/issues.ts";
 import {
   createPiNotificationIntent,
+  getProjectPiPolicy,
   listPiRunGroupItems,
   readProjectPiPolicy,
   updatePiNotificationIntent,
@@ -31,7 +32,9 @@ export function coordinateIssueLifecycleNotification(
   const runGroupID = item?.run_group_id ?? "";
   const preference = resolveLifecyclePreference(db, input.event, input.issue, runGroupID);
   const quietUntil = lifecycleQuietUntil(db, input.issue.project_id, input.now ?? new Date(), input.event.severity, preference);
-  const decision = lifecycleDecision(input.issue.status, runGroupID, input.event.severity, preference, quietUntil);
+  const decision = autonomousFailureRecoveryPending(db, input.issue)
+    ? "suppress"
+    : lifecycleDecision(input.issue.status, runGroupID, input.event.severity, preference, quietUntil);
   const intent = createPiNotificationIntent(db, {
     conversation_id: input.event.conversation_id,
     decision,
@@ -55,6 +58,10 @@ export function coordinateIssueLifecycleNotification(
     target_thread_id: input.target?.threadID ?? ""
   });
   return { decision, intent, runGroupID };
+}
+
+function autonomousFailureRecoveryPending(db: RunnerDatabase, issue: Issue): boolean {
+  return issue.status === "failed" && getProjectPiPolicy(db, issue.project_id)?.supervisor_mode === "autonomous";
 }
 
 export function markLifecycleIntentSent(

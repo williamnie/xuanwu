@@ -8,7 +8,8 @@ import { type Issue } from "../db/repositories/issues.ts";
 import {
   createPiGuardianEvent,
   createPiNotificationPreference,
-  listPiNotificationIntents
+  listPiNotificationIntents,
+  upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
 import { coordinateIssueLifecycleNotification } from "./notificationCoordinator.ts";
 
@@ -22,6 +23,22 @@ afterEach(async () => {
 });
 
 describe("PI notification coordinator preference boundaries", () => {
+  test("suppresses raw failed lifecycle noise while autonomous recovery is pending", async () => {
+    const db = await fixtureDatabase();
+    try {
+      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "autonomous" });
+      const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Recover this first" });
+      const event = guardianEvent(db, issue, "event-failed-autonomous", { severity: "needs_user" });
+
+      const result = coordinateIssueLifecycleNotification(db, { event, issue });
+
+      expect(result).toMatchObject({ decision: "suppress" });
+      expect(result.intent).toMatchObject({ kind: "issue_failed", state: "suppressed" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("uses old preference for boundary event and new preference for later event", async () => {
     const db = await fixtureDatabase();
     try {

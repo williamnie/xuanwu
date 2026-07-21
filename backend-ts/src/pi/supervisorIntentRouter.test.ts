@@ -33,6 +33,16 @@ const FIXTURES = [
 ] as const;
 
 describe("Xuanwu Supervisor intent router", () => {
+  test("routes a compact Feishu retry command with a numeric issue target", () => {
+    const route = routeSupervisorIntent({ prompt: "retry 771", source: "feishu_runner_chat" });
+
+    expect(route).toMatchObject({
+      decision: "controlled_action",
+      primary_intent: "work_control",
+      write_policy: { allow_mutation: true }
+    });
+  });
+
   for (const [kind, prompt] of FIXTURES) {
     test(`routes ${kind}: ${prompt}`, () => {
       const route = routeSupervisorIntent({ prompt, source: "runner_chat" });

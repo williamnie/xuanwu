@@ -42,7 +42,7 @@ export type IssueSupervisorRecoveryContext = {
 };
 
 const DEFAULT_RECENT_EVENT_LIMIT = 25;
-const DEFAULT_STALE_SECONDS = 6 * 60 * 60;
+const DEFAULT_STALE_SECONDS = 15 * 60;
 
 export function buildIssueSupervisorRecoveryContext(
   db: RunnerDatabase,
@@ -78,6 +78,7 @@ export function buildIssueSupervisorRecoveryContext(
     candidates: candidates({
       events: currentRunEvents,
       history,
+      issueStatus: issue.status,
       latestRun,
       now,
       policy,

@@ -118,6 +118,36 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
+  test("plans an autonomous retry for a recent failed executor attempt", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-failed-retry-project-"));
+      upsertProjectPiPolicy(db, {
+        project_id: "demo",
+        supervisor_mode: "autonomous",
+        allowed_supervisor_actions_json: ["issue.retry", "needs_user.escalate"]
+      });
+      insertFailedIssue(db, 507, "demo");
+
+      const result = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW });
+      const queued = runGuardianDecisionOrchestratorOnce(db, { now: NOW });
+      const settled = runGuardianDecisionOrchestratorOnce(db, { now: new Date(NOW.getTime() + 31_000) });
+      const [action] = listPiActions(db, { issueId: 507 });
+
+      expect(result).toMatchObject({ scanned: 1, signaled: 1 });
+      expect(queued).toMatchObject({ created: 1, scanned: 1 });
+      expect(settled).toMatchObject({ leases_acquired: 1 });
+      expect(action).toMatchObject({ action_type: "issue.retry", gate_decision: "execute", status: "approved" });
+      expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
+        diagnosis_code: "scheduler_retryable_error",
+        expected_issue_status: "failed",
+        expected_run_id: "issue-507-attempt-1"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("off supervisor mode skips analysis and does not write signals", async () => {
     const db = await fixtureDb();
     try {
@@ -365,6 +395,27 @@ function insertRunningIssue(db: RunnerDatabase, input: {
     values (?, 'codex', ?, ?, ?, 'running', ?, '2026-06-10T07:00:00Z', ?)`,
   [`codex:${input.threadID}`, input.threadID, input.projectID, input.issueID,
     JSON.stringify({ provider_turn_id: input.turnID }), input.sessionUpdatedAt]);
+}
+
+function insertFailedIssue(db: RunnerDatabase, issueID: number, projectID: string): void {
+  db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, error, created_at, updated_at)
+    values (?, ?, 'Failed supervisor issue', 'failed', 1, 'focused tests failed', ?, ?)`,
+  [issueID, projectID, "2026-06-10T07:00:00Z", "2026-06-10T07:50:00Z"]);
+  db.sqlite.run(`insert into issue_runs
+    (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at, error)
+    values (?, ?, 1, 'failed', 'codex', ?, ?, '2026-06-10T07:00:00Z', '2026-06-10T07:50:00Z', 'focused tests failed')`,
+  [`issue-${issueID}-attempt-1`, issueID, `thread-${issueID}`, `turn-${issueID}`]);
+  db.sqlite.run(`insert into agent_sessions
+    (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+    values (?, 'codex', ?, ?, ?, 'failed', ?, '2026-06-10T07:00:00Z', '2026-06-10T07:50:00Z')`,
+  [`codex:thread-${issueID}`, `thread-${issueID}`, projectID, issueID,
+    JSON.stringify({ provider_turn_id: `turn-${issueID}` })]);
+  insertIssueEvent(db, issueID, {
+    provider: "codex",
+    raw_payload: "focused test failed: expected status 200",
+    status: "failed",
+    type: "error"
+  }, "2026-06-10T07:49:59Z");
 }
 
 function insertIssueEvent(

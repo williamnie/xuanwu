@@ -51,6 +51,7 @@ export function supervisorCandidateReady(
   if (candidate.diagnosis_code === "provider_retry_after_waiting") return false;
   if (candidate.diagnosis_code === "provider_retry_after_ready") return true;
   if (candidate.exhausted || isAutomaticRecoveryBlockedDiagnosis(candidate.diagnosis_code)) return true;
+  if (clean(context.issue.status) === "failed" && isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return true;
   if (candidate.diagnosis_code === "session_no_recent_progress" && stoppedContextSession(context)) return true;
   if (isTransientRecoveryDiagnosis(candidate.diagnosis_code)) return staleGapSeconds(context) >= staleAfterSeconds(options);
   return false;

@@ -149,12 +149,15 @@ function cooldownBlocksCandidate(
 
 function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
   const nowText = iso(now);
-  return db.sqlite.query<{ id: number }, [string]>(`
+  const recentFailedCutoff = iso(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  return db.sqlite.query<{ id: number }, [string, string]>(`
     select distinct i.id from issues i
     left join issue_runs ir on ir.issue_id=i.id
+    left join project_pi_policies policy on policy.project_id=i.project_id
     where i.status='in_progress' or ir.ended_at='' or (i.auto_retry_next_at<>'' and i.auto_retry_next_at<=?)
+      or (i.status='failed' and policy.supervisor_mode='autonomous' and i.updated_at>=?)
     order by i.updated_at asc, i.id asc limit ${boundedLimit(limit)}
-  `).all(nowText).map((row) => row.id);
+  `).all(nowText, recentFailedCutoff).map((row) => row.id);
 }
 function recordTarget(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
   const exhausted = target.candidates.find((candidate) => candidate.exhausted);

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
-import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat } from "../db/repositories/pi.ts";
+import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
@@ -278,6 +278,12 @@ describe("PI auto-manage scheduler", () => {
         runProjectCycle: runner.run.bind(runner),
         watchdogNow: NOW
       });
+      // 恢复动作规划后，heartbeat/audit 仍可能更新时间戳。此时应重读稳定的
+      // issue/run/session 身份，而不是把无害漂移当作过期 CAS 拒绝。
+      db.sqlite.run("update issues set updated_at=? where id=519", ["2026-06-22T08:40:10Z"]);
+      db.sqlite.run("update agent_sessions set updated_at=? where session_key='codex:thread-519'", [
+        "2026-06-22T08:40:11Z"
+      ]);
       db.sqlite.run("update pi_guardian_decisions set cooldown_until='' where project_id='demo'");
       const second = await runScheduleLayerCycle({
         database: db,
@@ -295,6 +301,45 @@ describe("PI auto-manage scheduler", () => {
         status: "completed"
       });
       expect(listIssueSupervisorEvents(db, { issueId: 519 }).map((event) => event.event_type)).toContain("result");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retries a failed autonomous issue without notifying the user first", async () => {
+    const db = await openFixtureDatabase();
+    const runner = new FakePiCycleRunner();
+    try {
+      insertProject(db, "demo", 0);
+      upsertProjectPiPolicy(db, {
+        project_id: "demo",
+        supervisor_mode: "autonomous",
+        allowed_supervisor_actions_json: ["issue.retry", "needs_user.escalate"]
+      });
+      insertFailedIssueRunSession(db, 520);
+
+      const first = await runScheduleLayerCycle({
+        database: db,
+        runProjectCycle: runner.run.bind(runner),
+        watchdogNow: NOW
+      });
+      db.sqlite.run("update issues set updated_at=? where id=520", ["2026-06-22T08:40:10Z"]);
+      db.sqlite.run("update pi_guardian_decisions set cooldown_until='' where project_id='demo'");
+      const second = await runScheduleLayerCycle({
+        database: db,
+        runProjectCycle: runner.run.bind(runner),
+        runSupervisor: false,
+        watchdogNow: new Date(NOW.getTime() + 31_000)
+      });
+
+      expect(first.supervisor).toMatchObject({ signaled: 1 });
+      expect(second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(listPiActions(db, { issueId: 520 })[0]).toMatchObject({
+        action_type: "issue.retry",
+        status: "completed"
+      });
+      expect(getIssue(db, 520)).toMatchObject({ status: "todo" });
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
     } finally {
       db.close();
     }
@@ -575,6 +620,27 @@ function insertIssueRunSession(db: DB, issueID: number): void {
     values (?, 'codex', ?, 'executor', 'demo', ?, 'idle', ?, ?, ?)`,
   [`codex:thread-${issueID}`, `thread-${issueID}`, issueID, JSON.stringify({ provider_turn_id: `turn-${issueID}` }),
     "2026-06-22T08:15:07Z", "2026-06-22T08:35:07Z"]);
+}
+
+function insertFailedIssueRunSession(db: DB, issueID: number): void {
+  db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, error, created_at, updated_at)
+    values (?, 'demo', 'Failed autonomous issue', 'failed', 1, 'focused tests failed', ?, ?)`,
+  [issueID, "2026-06-22T08:00:00Z", "2026-06-22T08:35:07Z"]);
+  db.sqlite.run(`insert into issue_runs
+    (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at, error)
+    values (?, ?, 1, 'failed', 'codex', ?, ?, ?, ?, 'focused tests failed')`,
+  [`issue-${issueID}-attempt-1`, issueID, `thread-${issueID}`, `turn-${issueID}`,
+    "2026-06-22T08:15:07Z", "2026-06-22T08:35:07Z"]);
+  db.sqlite.run(`insert into agent_sessions
+    (session_key, provider, provider_session_id, agent_role, project_id, issue_id, status, raw_ref, created_at, updated_at)
+    values (?, 'codex', ?, 'executor', 'demo', ?, 'failed', ?, ?, ?)`,
+  [`codex:thread-${issueID}`, `thread-${issueID}`, issueID,
+    JSON.stringify({ provider_turn_id: `turn-${issueID}` }), "2026-06-22T08:15:07Z", "2026-06-22T08:35:07Z"]);
+  db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)`, [
+    issueID,
+    JSON.stringify({ provider: "codex", raw_payload: "focused test failed", status: "failed", type: "error" }),
+    "2026-06-22T08:35:06Z"
+  ]);
 }
 
 class ResumeProvider implements ExecutorProvider {

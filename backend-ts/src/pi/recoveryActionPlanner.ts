@@ -126,6 +126,7 @@ function recoveryActionType(failureClass: RecoveryFailureClass, payload: Record<
   if (failureClass !== "transient") return "";
   if (shouldScheduleRetryAfter(payload)) return "issue.retry_after";
   if (clean(payload.retry_after_ready) === "true") return "issue.retry";
+  if (clean(payload.issue_status) === "failed" || clean(payload.run_ended_at) !== "") return "issue.retry";
   if (clean(payload.diagnosis_code) === "session_no_recent_progress" &&
     clean(payload.session_status).toLowerCase() === "disconnected") return "issue.retry";
   return clean(payload.provider_session_id) !== "" ? "session.resume_followup" : "issue.retry";

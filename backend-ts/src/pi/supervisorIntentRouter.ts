@@ -110,6 +110,7 @@ const SIGNALS: SignalDefinition[] = [
   { confidence: 0.48, id: "execute.ambiguous.en", kind: "execute", pattern: /\b(?:handle it|do it|take care of it|continue)\b/i },
   { confidence: 0.48, id: "execute.ambiguous.zh", kind: "execute", pattern: /(?:处理一下|搞一下|你看着办|继续吧|继续处理)/i },
   { confidence: 0.94, id: "work_control.lifecycle.en", kind: "work_control", pattern: /\b(?:start|run|resume|retry|cancel|pause|stop|interrupt|reopen|close|mark|enqueue)\b.{0,32}(?:\bwork\b|\brun\b|\bissue\b|#\d+)/i },
+  { confidence: 0.94, id: "work_control.numeric_target.en", kind: "work_control", pattern: /\b(?:start|run|resume|retry|cancel|pause|stop|interrupt|reopen|close|mark|enqueue)\s+#?\d+\b/i },
   { confidence: 0.94, id: "work_control.lifecycle.zh", kind: "work_control", pattern: /(?:开始|启动|恢复|继续|重试|取消|暂停|中断|终止|重新打开|关闭|标记|入队).{0,24}(?:Work|Run|issue|任务|#\d+)/i },
   { confidence: 0.94, id: "work_control.target_first.zh", kind: "work_control", pattern: /(?:Work|Run|issue|任务|#\d+).{0,16}(?:跑起来|启动|恢复|重试|取消|暂停|中断|终止)/i },
   { confidence: 0.94, id: "automation.recurring.en", kind: "automation", pattern: /\b(?:automate|automation|every (?:day|hour|week|time)|daily|hourly|weekly|recurring|automatically|cron|schedule|remind me|notify me when|monitor|watch .{0,32} notify)\b/i },

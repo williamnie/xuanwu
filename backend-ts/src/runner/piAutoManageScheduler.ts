@@ -170,7 +170,11 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
   const supervisor = input.runSupervisor === false
     ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
-    : await runPiIssueSupervisorSchedulerOnce({ database: input.database, providers: input.providers });
+    : await runPiIssueSupervisorSchedulerOnce({
+      database: input.database,
+      now: optionalDate(input.watchdogNow),
+      providers: input.providers
+    });
   // W3 target-only cutover: compatibility result fields stay stable for one
   // release, but legacy Cron/PI/delegation schedulers are no longer invoked.
   const cron = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
