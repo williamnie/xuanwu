@@ -120,7 +120,10 @@ describe("Evidence HTTP API", () => {
         `${BASE_URL}/api/evidence/${encodeURIComponent(passedBody.items[0].id)}`
       ));
 
-      expect(passed).toMatchObject({ status: "done", error: "" });
+      expect(passed).toMatchObject({
+        status: "pending_verification",
+        error: expect.stringContaining("persisted ready or delivered Handoff")
+      });
       expect(failed).toMatchObject({ status: "failed", error: expect.stringContaining("Verification failed") });
       expect(passedBody.items).toEqual([
         expect.objectContaining({ kind: "test", run_id: passedRunID, status: "passed" })
@@ -139,8 +142,8 @@ describe("Evidence HTTP API", () => {
         verifier_review_refs: [{
           finding_ids: expect.arrayContaining(["requirement:current-run-check"]),
           policy_ref: "verification-policy:agent-execution-contract@1",
-          recommended_next_action: { action: "complete_via_gate" },
-          verdict: "pass"
+          recommended_next_action: { action: "collect_missing_evidence" },
+          verdict: "inconclusive"
         }]
       });
       expect(db.sqlite.query<{ count: number }, [string]>(
@@ -242,7 +245,10 @@ describe("Evidence HTTP API", () => {
       expect(await replay.json()).toMatchObject({ replayed: true });
       expect(conflict.status).toBe(409);
       expect(crossRun.status).toBe(409);
-      expect(completed.status).toBe("done");
+      expect(completed).toMatchObject({
+        status: "pending_verification",
+        error: expect.stringContaining("persisted ready or delivered Handoff")
+      });
       expect(records.map((item) => item.evidence.status).sort()).toEqual(["failed", "passed"]);
 
       const lateIssueID = insertIssue(db, "Late verification", "pending_verification");
@@ -253,9 +259,9 @@ describe("Evidence HTTP API", () => {
         commandEvidenceBody(lateRunID, "delegated_executor", "late-after-disconnect", 0, new Date(observed).toISOString())
       );
       expect(await late.json()).toMatchObject({
-        gate: { decision: "passed", issue_status: "done", target_status: "done" }
+        gate: { decision: "pending", issue_status: "pending_verification", target_status: "pending_verification" }
       });
-      expect(getIssue(db, lateIssueID)?.status).toBe("done");
+      expect(getIssue(db, lateIssueID)?.status).toBe("pending_verification");
     } finally {
       db.close();
     }
@@ -334,10 +340,12 @@ async function fixture(): Promise<RunnerDatabase> {
   const root = await mkdtemp(join(tmpdir(), "codex-runner-evidence-api-"));
   tempRoots.push(root);
   const db = await openDatabase({ stateDir: join(root, "state") });
+  const project = join(root, "project");
+  mkdirSync(project, { recursive: true });
   db.sqlite.run(
     `insert into projects (id, name, cwd, provider, created_at, updated_at)
-     values ('demo', 'demo', '/tmp/demo', 'codex', ?, ?)`,
-    [timestamp(0), timestamp(0)]
+     values ('demo', 'demo', ?, 'codex', ?, ?)`,
+    [project, timestamp(0), timestamp(0)]
   );
   return db;
 }

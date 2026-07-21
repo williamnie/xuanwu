@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { getIssue } from "../../db/repositories/issues.ts";
 import { listStoredEvidence } from "../../db/repositories/evidence.ts";
+import { listStoredHandoffs } from "../../db/repositories/handoffs.ts";
 import { validateWorkflowVerificationPolicy } from "./policy.ts";
 import { parseStructuredVerifierReviewEventPayload } from "./verifierReview.ts";
 import {
@@ -45,6 +47,7 @@ describe("Evidence Policy completion gate", () => {
     const db = await fixture();
     try {
       const issueID = insertRunningIssue(db);
+      prepareDirtyRepository(db);
       insertTerminalInteraction(db, issueID, "command-pty", "process-pty");
       insertCommandEvent(db, issueID, "bun test src/domain/evidence/completionGate.test.ts", 0, {
         correlation: runtimeCorrelation(issueID, 1),
@@ -56,12 +59,23 @@ describe("Evidence Policy completion gate", () => {
       const records = listStoredEvidence(db, { issue_ids: [issueID], limit: 10 }).items;
 
       expect(result.issue.status).toBe("done");
-      expect(records).toHaveLength(1);
-      expect(records[0]?.evidence.decisive_output.facts).toMatchObject({
+      expect(records).toHaveLength(2);
+      const verification = records.find((item) => item.evidence.kind === "test")?.evidence;
+      expect(verification?.decisive_output.facts).toMatchObject({
         correlation_channel: "terminal_interaction",
         terminal_interaction_count: 1
       });
-      expect(JSON.stringify(records[0]?.evidence)).not.toContain("typed-but-not-proof");
+      expect(JSON.stringify(verification)).not.toContain("typed-but-not-proof");
+      expect(listStoredHandoffs(db, {
+        limit: 10,
+        work_id: `xw:work:issues:${issueID}`
+      }).items).toMatchObject([{
+        handoff: {
+          evidence_ids: expect.arrayContaining(records.map((item) => item.evidence.id)),
+          run_ids: [`xw:run:issue_runs:issue-${issueID}-attempt-1`],
+          status: "ready"
+        }
+      }]);
     } finally {
       db.close();
     }
@@ -118,6 +132,7 @@ describe("Evidence Policy completion gate", () => {
     const db = await fixture();
     try {
       const issueID = insertRunningIssue(db);
+      prepareDirtyRepository(db);
       insertCommandEvent(db, issueID, "bun test src/domain/evidence/completionGate.test.ts", 1);
 
       const result = await completeIssueFromRuntimeEvidence(db, issueID, { status: "done", error: "" }, {
@@ -143,6 +158,7 @@ describe("Evidence Policy completion gate", () => {
         recommended_next_action: { action: "fix_and_reverify" },
         gate_consistency: { expected_status: "failed", policy_decision: "failed" }
       });
+      expect(listStoredHandoffs(db, { limit: 10, work_id: `xw:work:issues:${issueID}` }).items).toHaveLength(0);
     } finally {
       db.close();
     }
@@ -152,6 +168,7 @@ describe("Evidence Policy completion gate", () => {
     const db = await fixture();
     try {
       const issueID = insertRunningIssue(db);
+      prepareDirtyRepository(db);
       insertCommandEvent(db, issueID, "bunx tsc -p tsconfig.json --noEmit", 1);
       insertCommandEvent(db, issueID, "bun test src/xuanwu/userFacingTerminology.test.ts && git diff --check", 0);
 
@@ -232,6 +249,20 @@ function insertRunningIssue(db: RunnerDatabase): number {
     [`issue-${issueID}-attempt-1`, issueID, 1, "in_progress", "codex", "2026-01-01T00:00:00Z"]
   );
   return issueID;
+}
+
+function prepareDirtyRepository(db: RunnerDatabase): void {
+  const repository = db.sqlite.query<{ cwd: string }, []>("select cwd from projects where id='demo'").get()?.cwd;
+  if (!repository) throw new Error("missing fixture project cwd");
+  mkdirSync(repository, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: repository });
+  writeFileSync(join(repository, "baseline.txt"), "baseline\n");
+  execFileSync("git", ["add", "baseline.txt"], { cwd: repository });
+  execFileSync("git", [
+    "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
+    "commit", "-qm", "baseline"
+  ], { cwd: repository });
+  writeFileSync(join(repository, "result.txt"), "actual delivery artifact\n");
 }
 
 function insertCommandEvent(

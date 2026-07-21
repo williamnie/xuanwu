@@ -61,12 +61,16 @@ next step，payload 以 allowlist 携带 Handoff/work ID、branch/commit/PR ref 
 
 ## 4. 兼容、迁移、回滚与删除门禁
 
-- **当前窗口：W0。** Legacy completion projection 与 Issue done gate 保持原行为；本 API 不把 P04.07 的
-  `legacy_incomplete` signal 冒充完整 Handoff。Fresh P05 producer 只写一个 append-only Handoff stream；没有 Handoff
-  table 双写，也没有两个 writer authority。
+- **当前窗口：W0。** 本 API 不把 P04.07 的 `legacy_incomplete` signal 冒充完整 Handoff。Fresh P05 producer 与普通
+  Issue completion producer 都只经 `recordHandoff()` 写同一个 append-only Handoff stream；没有 Handoff table 双写，
+  也没有两个 writer authority。新的 Issue `done` transition 必须读取已持久化的 `ready|delivered` Handoff；若只能
+  得到 verification Evidence、却没有确定性的交付 artifact/revision，则 fail closed 到 `pending_verification`。
 - **W1/W2：** 只有通过 plan G2 后才允许 W1 legacy primary + target shadow comparison，最多一个正式 release；
   W1+W2 总 dual mode 不超过两个正式 release。必须比较 stable ID、revision、mode/status、Work/Run/Evidence links、
-  action outcome、notification link 和 delivery status。G3/G4 未通过前不得让新 Handoff 反向决定 Work completion。
+  action outcome、notification link 和 delivery status。Handoff 只作为 Work acceptance 的必需审计输入，不成为新的
+  Work status authority；status 写入仍只由 `issues`/Work completion gate 执行。
+- **历史迁移：** 不为现有 `done` Issue 无条件合成或回填 Handoff。只有能从已存 Evidence 与 Git/provider facts
+  确定性重建的记录，才可由后续显式迁移处理；本变更不修改 live DB。
 - **回滚：** 注销 Handoff routes/page，停止 producer 调用 `recordHandoffDelivery()`，恢复原 completion/read surface；
   保留已写 `issue_events`、notifications、Git/provider artifacts、outbox 与 audit，不删除外部交付或伪造 Work 回滚。
 - **最终删除门禁：** 仅 P11.03/P11.06 + G7、P04/P05/P06 Golden Journey、clean baseline local handoff、通知深链、

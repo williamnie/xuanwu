@@ -3,6 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { recordEvidenceRecords } from "../db/repositories/evidence.ts";
+import { recordHandoff } from "../db/repositories/handoffs.ts";
+import type { EvidenceRecord } from "../domain/evidence/contracts.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -27,23 +30,26 @@ describe("Bun issue verification API", () => {
     try {
       insertProject(database, "demo");
       const issueId = insertIssue(database, { error: "bun test passed", status: "pending_verification" });
+      seedReadyHandoff(database, issueId);
       const response = await reviewIssue(database, issueId, { action: "accept", comment: "人工验收通过" });
       const body = await response.json() as Record<string, unknown>;
       const events = listEvents(database);
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({ id: issueId, status: "done", error: "" });
-      expect(events.map((event) => event.type)).toEqual([
+      expect(events.map((event) => event.type)).toEqual(expect.arrayContaining([
+        "handoff.prepared.v1",
         "issue.comment",
         "issue.verification_human_evidence.v1",
-        "issue.verification_reviewed",
         "evidence.recorded.v1",
         "issue.verification_gate_intent.v1",
+        "handoff.delivery_requested.v1",
         "issue.status_changed",
         "issue.verification_gate_outcome.v1",
-        "issue.verification_report"
-      ]);
-      expect(JSON.parse(events[2].payload)).toEqual({
+        "issue.verification_report",
+        "issue.verification_reviewed"
+      ]));
+      expect(JSON.parse(events.find((event) => event.type === "issue.verification_reviewed")!.payload)).toEqual({
         action: "accept",
         comment: "人工验收通过",
         status: "done"
@@ -147,6 +153,64 @@ function insertProject(db: RunnerDatabase, id: string): void {
      values (?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+function seedReadyHandoff(db: RunnerDatabase, issueID: number): void {
+  const runLocalID = `issue-${issueID}-attempt-1`;
+  const runID = `xw:run:issue_runs:${runLocalID}` as EvidenceRecord["run_id"];
+  const workID = `xw:work:issues:${issueID}` as EvidenceRecord["work_id"];
+  const at = "2026-01-01T00:01:00.000Z";
+  db.sqlite.run(
+    `insert into issue_runs (id, issue_id, attempt, status, started_at, ended_at)
+     values (?, ?, 1, 'done', ?, ?)`,
+    [runLocalID, issueID, "2026-01-01T00:00:00.000Z", at]
+  );
+  const evidence: EvidenceRecord = {
+    schema_version: 1,
+    id: `xw:evidence:git:manual-review-${issueID}`,
+    work_id: workID,
+    run_id: runID,
+    revision: 0,
+    kind: "git",
+    status: "passed",
+    created_at: at,
+    observed_at: at,
+    updated_at: at,
+    completed_at: at,
+    decisive_output: { summary: "fixture Git delivery", facts: {} },
+    artifact_refs: [{ kind: "diff", ref: `fixture:diff:${issueID}` }],
+    provenance: {
+      assertion_origin: "system_observation",
+      source_kind: "git_repository",
+      source_ref: "fixture:git",
+      audit_event_ref: `fixture:git:${issueID}`,
+      producer: { id: "issue-verification-test", kind: "runner" }
+    },
+    redaction: { status: "not_required", policy_ref: "fixture:redaction", redacted_paths: [] }
+  };
+  recordEvidenceRecords(db, issueID, [evidence], { recorded_at: at, source: "issue-verification-test" });
+  const revision = `git-snapshot-manifest:sha256:${"b".repeat(64)}`;
+  recordHandoff(db, issueID, {
+    schema_version: 1,
+    id: `xw:handoff:derived:manual-review-${issueID}`,
+    work_id: workID,
+    run_ids: [runID!],
+    evidence_ids: [evidence.id],
+    revision: 0,
+    status: "ready",
+    summary: "Fixture delivery ready for manual review",
+    created_at: at,
+    updated_at: at,
+    baseline_revision: "a".repeat(40),
+    final_revision: revision,
+    review_ref: evidence.id,
+    changed_files: ["fixture.ts"],
+    delivery: { mode: "local_changes", working_tree_ref: revision },
+    delivery_actions: [],
+    risks: [],
+    rollback: { availability: "not_required", destructive: false, refs: [evidence.id] },
+    review: { required: false, state: "not_requested", reviewer_refs: [] }
+  }, { recorded_at: at, source: "issue-verification-test" });
 }
 
 function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }> {

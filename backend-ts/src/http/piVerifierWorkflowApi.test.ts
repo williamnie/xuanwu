@@ -47,8 +47,15 @@ describe("PI verifier workflow API", () => {
       expect(provider.inputs[0]?.prompt).not.toContain(`codex-issue-runner issue accept --id ${parentID}`);
       expect(child?.workflow_snapshot_json).toContain('"output_schema":"xw.verifier-review.v1"');
       expect(review.status).toBe(200);
-      expect(await review.json()).toMatchObject({ id: parentID, status: "done" });
-      expect(getIssue(database, parentID)).toMatchObject({ status: "done", error: "" });
+      expect(await review.json()).toMatchObject({
+        id: parentID,
+        status: "pending_verification",
+        error: expect.stringContaining("persisted ready or delivered Handoff")
+      });
+      expect(getIssue(database, parentID)).toMatchObject({
+        status: "pending_verification",
+        error: expect.stringContaining("persisted ready or delivered Handoff")
+      });
     } finally {
       database.close();
     }

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, resolve, sep } from "node:path";
 import type { RunnerDatabase } from "../../db/database.ts";
 import {
   hydrateStoredIssueLogPayload,
@@ -9,10 +10,18 @@ import {
   type RuntimeEvidenceCorrelation
 } from "../../db/repositories/issueEvents.ts";
 import { listStoredEvidence, recordEvidenceRecords } from "../../db/repositories/evidence.ts";
+import {
+  listStoredHandoffs,
+  recordHandoff,
+  type StoredHandoffRecord
+} from "../../db/repositories/handoffs.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../../db/repositories/issues.ts";
+import { getProject } from "../../db/repositories/projects.ts";
 import { updateIssue, type UpdateIssueInput } from "../../db/repositories/issueUpdate.ts";
 import { makeDomainID, type DomainActor } from "../../xuanwu/coreDomainContracts.ts";
 import { makeRunAttemptID } from "../run/contracts.ts";
+import type { HandoffRecord } from "../handoff/contracts.ts";
+import { buildHandoffDiffSummary } from "../handoff/diffSummary.ts";
 import {
   evaluateWorkTransition,
   type WorkAcceptanceEvidence,
@@ -29,6 +38,10 @@ import {
   type CommandExecutionObservation
 } from "./commandCollector.ts";
 import { validateEvidence, type EvidenceArtifactRef, type EvidenceRecord } from "./contracts.ts";
+import {
+  FileSystemGitEvidenceArtifactStore,
+  createGitEvidenceCollector
+} from "./gitCollector.ts";
 import {
   evaluateWorkflowVerificationPolicy,
   type VerificationManualOverride,
@@ -80,6 +93,7 @@ export type IssueCompletionGateInput = {
   actor: DomainActor;
   correlation_id: string;
   evidence: readonly EvidenceRecord[];
+  handoff?: HandoffRecord;
   manual_override?: VerificationManualOverride;
   now: string;
   patch?: UpdateIssueInput;
@@ -192,10 +206,32 @@ export function applyIssueCompletionGate(
   }
 
   const policy = input.policy ?? ISSUE_WORK_VERIFICATION_POLICY;
-  const analysis = createIssueVerifierReview(current, { ...input, policy });
-  const evaluation = analysis.evaluation;
+  const verification = createIssueVerifierReview(current, { ...input, policy });
+  const verificationTarget = verifierGateStatusForPolicyDecision(verification.evaluation.decision);
+  const acceptanceHandoff = verificationTarget === "done"
+    ? acceptanceHandoffForCompletion(db, current, input)
+    : null;
+  const deliveryGapDetail = input.projection_errors?.find((error) => error.startsWith("Handoff gap:"))
+    ?.slice("Handoff gap:".length).trim();
+  const handoffGap = verificationTarget === "done" && !acceptanceHandoff
+    ? `Completion requires a persisted ready or delivered Handoff linked to the current Work and canonical Run${
+      deliveryGapDetail ? `: ${deliveryGapDetail}` : ""
+    }`
+    : "";
+  const evaluation = handoffGap === ""
+    ? verification.evaluation
+    : {
+      ...verification.evaluation,
+      decision: "pending" as const,
+      errors: [...verification.evaluation.errors, handoffGap],
+      satisfied: false
+    };
+  const analysis = createIssueVerifierReview(current, { ...input, policy, projection_errors: [
+    ...(input.projection_errors ?? []),
+    ...(handoffGap ? [handoffGap] : [])
+  ] }, evaluation);
   const targetStatus = verifierGateStatusForPolicyDecision(evaluation.decision);
-  const fingerprint = completionFingerprint(current, input, policy, evaluation);
+  const fingerprint = completionFingerprint(current, input, policy, evaluation, acceptanceHandoff);
   const replay = completionReplay(db, issueID, fingerprint, targetStatus);
   if (replay) return { evaluation, issue: replay, target_status: targetStatus, transition_path: [] };
 
@@ -223,6 +259,20 @@ export function applyIssueCompletionGate(
       work_id: issueAsWork(current).id
     });
 
+    if (input.handoff) {
+      recordHandoff(db, issueID, input.handoff, {
+        recorded_at: canonicalNow(input.now),
+        source: input.source
+      });
+    }
+
+    const persistedHandoff = targetStatus === "done"
+      ? persistAcceptanceHandoffEvidence(db, issueID, current, input, evaluation)
+      : null;
+    if (targetStatus === "done" && !persistedHandoff) {
+      throw new Error("completion gate refused done without a persisted ready or delivered Handoff");
+    }
+
     let issue = current;
     if (targetStatus === "done" && issue.status === "in_progress") {
       issue = transitionIssue(db, issue, "pending_verification", audit, undefined, {});
@@ -232,7 +282,7 @@ export function applyIssueCompletionGate(
     const patch = completionPatch(input.patch ?? {}, targetStatus, evaluation, issue.error);
     if (issue.status !== targetStatus) {
       const acceptance = targetStatus === "done"
-        ? workAcceptance(issueAsWork(issue), input.evidence, evaluation, fingerprint)
+        ? workAcceptance(issueAsWork(issue), input.evidence, evaluation, persistedHandoff!)
         : undefined;
       const before = issue.status;
       issue = transitionIssue(db, issue, targetStatus, audit, acceptance, patch);
@@ -253,6 +303,9 @@ export function applyIssueCompletionGate(
       policy_ref: evaluation.policy_ref,
       policy_snapshot: policySnapshot,
       projection_errors: [...(input.projection_errors ?? [])],
+      handoff_gap: handoffGap || null,
+      handoff_id: persistedHandoff?.handoff.id ?? null,
+      handoff_revision: persistedHandoff?.handoff.revision ?? null,
       source: input.source,
       target_status: targetStatus,
       transition_audit: audit,
@@ -273,10 +326,11 @@ export function applyIssueCompletionGate(
 
 export function createIssueVerifierReview(
   issue: Issue,
-  input: IssueVerifierReviewInput
+  input: IssueVerifierReviewInput,
+  evaluationOverride?: VerificationPolicyEvaluation
 ): IssueVerifierReviewResult {
   const policy = input.policy ?? ISSUE_WORK_VERIFICATION_POLICY;
-  const evaluation = evaluateCompletion(issue, { ...input, policy });
+  const evaluation = evaluationOverride ?? evaluateCompletion(issue, { ...input, policy });
   return {
     evaluation,
     review: buildStructuredVerifierReview({
@@ -299,16 +353,183 @@ export async function completeIssueFromRuntimeEvidence(
   const now = canonicalNow(options.now);
   const projection = await projectIssueRuntimeEvidence(db, issueID, now, { persist_artifacts: true });
   const evidence = currentRunEvidence(db, issueID, projection.run, projection.evidence);
+  const verification = createIssueVerifierReview(mustGetIssue(db, issueID), {
+    evidence,
+    now,
+    projection_errors: projection.errors,
+    run: projection.run
+  }).evaluation;
+  const delivery: CompletionHandoffPreparation = verification.decision === "failed" || verification.decision === "invalid"
+    ? { errors: [], evidence: [] }
+    : await prepareCompletionHandoff(db, issueID, projection.run, evidence, now);
   return applyIssueCompletionGate(db, issueID, {
     actor: options.actor ?? { id: "runner-completion-api", kind: "runner" },
     correlation_id: options.correlation_id ?? `issue-${issueID}-completion`,
-    evidence,
+    evidence: uniqueEvidence([...evidence, ...delivery.evidence]),
+    ...(delivery.handoff ? { handoff: delivery.handoff } : {}),
     now,
     patch,
-    projection_errors: projection.errors,
+    projection_errors: [...projection.errors, ...delivery.errors],
     run: projection.run,
     source: options.source ?? "issue-patch-api"
   });
+}
+
+type CompletionHandoffPreparation = {
+  errors: string[];
+  evidence: EvidenceRecord[];
+  handoff?: HandoffRecord;
+};
+
+async function prepareCompletionHandoff(
+  db: RunnerDatabase,
+  issueID: number,
+  run: IssueRun | undefined,
+  evidence: readonly EvidenceRecord[],
+  now: string
+): Promise<CompletionHandoffPreparation> {
+  if (!run) return { errors: ["Handoff gap: completion has no canonical Run"], evidence: [] };
+  const issue = mustGetIssue(db, issueID);
+  const project = getProject(db, issue.project_id);
+  if (!project) return { errors: ["Handoff gap: Issue project is unavailable"], evidence: [] };
+  const runID = makeDomainID("run", "issue_runs", run.id);
+  const workID = issueAsWork(issue).id;
+  const existing = listStoredHandoffs(db, {
+    limit: 100,
+    statuses: ["ready", "delivered"],
+    work_id: workID
+  }).items.find((item) => item.handoff.run_ids.includes(runID));
+  if (existing) return { errors: [], evidence: [] };
+  let gitEvidence = [...evidence].reverse().find((item) =>
+    item.kind === "git" && item.status === "passed" && item.run_id === runID && item.work_id === workID
+  );
+  const collected: EvidenceRecord[] = [];
+  try {
+    if (!gitEvidence) {
+      const collector = createGitEvidenceCollector({
+        artifact_store: new FileSystemGitEvidenceArtifactStore(dirname(db.path))
+      });
+      gitEvidence = await collector.collect({
+        context: {
+          attempt_id: makeRunAttemptID(runID, run.attempt),
+          audit_event_ref: `completion-handoff:${issueID}:${run.id}`,
+          collected_at: now,
+          evidence_id: makeDomainID("evidence", "git", `completion-${issueID}-${run.id}`),
+          producer: { id: "runner-completion-handoff", kind: "runner" },
+          run_id: runID,
+          source_ref: `project:${project.id}:git-worktree`,
+          work_id: workID
+        },
+        repository_path: project.cwd,
+        untracked_policy: "include_all"
+      });
+      collected.push(gitEvidence);
+    }
+    const handoff = completionHandoffFromGit(db, issue, run, [...evidence, ...collected], gitEvidence, now);
+    return { errors: [], evidence: collected, handoff };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return {
+      errors: [`Handoff gap: ${detail}`],
+      evidence: collected
+    };
+  }
+}
+
+function completionHandoffFromGit(
+  db: RunnerDatabase,
+  issue: Issue,
+  run: IssueRun,
+  evidence: readonly EvidenceRecord[],
+  gitEvidence: EvidenceRecord,
+  now: string
+): HandoffRecord {
+  const validation = validateEvidence(gitEvidence);
+  if (!validation.ok || gitEvidence.kind !== "git" || gitEvidence.status !== "passed") {
+    throw new Error("completion delivery requires valid passed Git Evidence");
+  }
+  const facts = gitEvidence.decisive_output.facts;
+  const baselineRevision = requiredDeliveryFact(facts.base_revision, "Git base_revision");
+  const headRevision = requiredDeliveryFact(facts.head_revision, "Git head_revision");
+  if (baselineRevision !== headRevision) {
+    throw new Error("Git Evidence base_revision must match the observed HEAD for local changes");
+  }
+  if (facts.working_tree_dirty !== true) {
+    throw new Error("Git Evidence does not contain a dirty working-tree delivery artifact");
+  }
+  if (facts.conflict_count !== 0) {
+    throw new Error("Git Evidence contains unresolved conflicts");
+  }
+  const artifact = gitSnapshotArtifact(db, gitEvidence);
+  const summary = buildHandoffDiffSummary({
+    git_evidence: gitEvidence,
+    ...(artifact ? { snapshot_artifact: artifact } : {})
+  });
+  if (summary.changed_files.length === 0) {
+    throw new Error("Git Evidence does not identify changed files for Handoff delivery");
+  }
+  const runID = makeDomainID("run", "issue_runs", run.id);
+  const workID = issueAsWork(issue).id;
+  const evidenceIDs = [...new Set(evidence
+    .filter((item) => item.status === "passed" && item.work_id === workID && item.run_id === runID)
+    .map((item) => item.id))].sort();
+  if (!evidenceIDs.includes(gitEvidence.id)) evidenceIDs.push(gitEvidence.id);
+  if (evidenceIDs.length > 256) {
+    throw new Error("current Run has more passed Evidence records than one Handoff can auditably link");
+  }
+  const finalRevision = `git-snapshot-manifest:sha256:${summary.snapshot_sha256}`;
+  const identity = createHash("sha256").update(stableJson({
+    final_revision: finalRevision,
+    run_id: runID,
+    work_id: workID
+  })).digest("hex").slice(0, 32);
+  return {
+    schema_version: 1,
+    id: makeDomainID("handoff", "derived", `issue-${issue.id}-${identity}`),
+    work_id: workID,
+    run_ids: [runID],
+    evidence_ids: evidenceIDs,
+    revision: 0,
+    status: "ready",
+    summary: summary.summary,
+    created_at: now,
+    updated_at: now,
+    baseline_revision: baselineRevision,
+    final_revision: finalRevision,
+    review_ref: gitEvidence.id,
+    changed_files: summary.changed_files,
+    delivery: { mode: "local_changes", working_tree_ref: finalRevision },
+    delivery_actions: [],
+    risks: summary.risk_hints,
+    rollback: {
+      availability: "not_required",
+      destructive: false,
+      refs: [gitEvidence.id]
+    },
+    review: { required: false, state: "not_requested", reviewer_refs: [] }
+  };
+}
+
+function gitSnapshotArtifact(
+  db: RunnerDatabase,
+  evidence: EvidenceRecord
+): { content: string; ref: string } | undefined {
+  if (evidence.decisive_output.facts.changed_paths_inline !== false) return undefined;
+  const artifact = evidence.artifact_refs.find((item) => item.sha256 && item.media_type === "application/json");
+  if (!artifact) throw new Error("Git Evidence snapshot artifact is missing");
+  const root = resolve(dirname(db.path));
+  const path = resolve(root, artifact.ref);
+  if (path === root || !path.startsWith(`${root}${sep}`)) {
+    throw new Error("Git Evidence snapshot artifact escapes the state directory");
+  }
+  return { content: readFileSync(path, "utf8"), ref: artifact.ref };
+}
+
+function requiredDeliveryFact(value: unknown, label: string): string {
+  if (typeof value !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value)) {
+    throw new Error(`${label} is missing a full Git object id`);
+  }
+  return value;
 }
 
 export async function captureRuntimeVerification(
@@ -620,15 +841,9 @@ function workAcceptance(
   work: WorkLedgerEntry,
   evidence: readonly EvidenceRecord[],
   evaluation: VerificationPolicyEvaluation,
-  fingerprint: string
+  handoff: StoredHandoffRecord
 ): WorkAcceptanceEvidence {
-  const selected = new Set<string>();
-  for (const group of evaluation.groups) {
-    for (const result of group.requirements) {
-      if ((result.status === "passed" || result.status === "skipped") && result.evidence_id) selected.add(result.evidence_id);
-    }
-  }
-  if (evaluation.override.applied && evaluation.override.evidence_id) selected.add(evaluation.override.evidence_id);
+  const selected = selectedAcceptanceEvidenceIDs(evaluation);
   const records = evidence.filter((record) => selected.has(record.id) && record.status === "passed");
   return {
     contract_version: work.acceptance.version,
@@ -639,11 +854,87 @@ function workAcceptance(
       work_id: record.work_id
     })),
     handoffs: [{
-      id: makeDomainID("handoff", "derived", `issue-${work.id.split(":").at(-1)}-${fingerprint.slice(0, 16)}`),
-      status: "ready",
-      work_id: work.id
+      id: handoff.handoff.id,
+      status: handoff.handoff.status === "delivered" ? "delivered" : "ready",
+      work_id: handoff.handoff.work_id
     }]
   };
+}
+
+function selectedAcceptanceEvidenceIDs(evaluation: VerificationPolicyEvaluation): Set<string> {
+  const selected = new Set<string>();
+  for (const group of evaluation.groups) {
+    for (const result of group.requirements) {
+      if ((result.status === "passed" || result.status === "skipped") && result.evidence_id) selected.add(result.evidence_id);
+    }
+  }
+  if (evaluation.override.applied && evaluation.override.evidence_id) selected.add(evaluation.override.evidence_id);
+  return selected;
+}
+
+function acceptanceHandoffForCompletion(
+  db: RunnerDatabase,
+  issue: Issue,
+  input: IssueCompletionGateInput
+): StoredHandoffRecord | HandoffRecord | null {
+  const runID = completionRunID(db, issue.id, input.run);
+  if (!runID) return null;
+  const workID = issueAsWork(issue).id;
+  const existing = listStoredHandoffs(db, {
+    limit: 100,
+    statuses: ["ready", "delivered"],
+    work_id: workID
+  }).items.find((item) => item.handoff.run_ids.includes(runID));
+  if (existing) return existing;
+  if (input.handoff?.work_id !== workID || !input.handoff.run_ids.includes(runID)) return null;
+  return input.handoff.status === "ready" || input.handoff.status === "delivered" ? input.handoff : null;
+}
+
+function persistAcceptanceHandoffEvidence(
+  db: RunnerDatabase,
+  issueID: number,
+  issue: Issue,
+  input: IssueCompletionGateInput,
+  evaluation: VerificationPolicyEvaluation
+): StoredHandoffRecord | null {
+  const candidate = acceptanceHandoffForCompletion(db, issue, input);
+  const current = candidate && "event_id" in candidate
+    ? candidate
+    : candidate ? listStoredHandoffs(db, {
+      limit: 100,
+      statuses: ["ready", "delivered"],
+      work_id: issueAsWork(issue).id
+    }).items.find((item) => item.handoff.id === candidate.id) ?? null : null;
+  if (!current) return null;
+  const selected = selectedAcceptanceEvidenceIDs(evaluation);
+  const missing = [...selected].filter((id) => !current.handoff.evidence_ids.includes(id as EvidenceRecord["id"]));
+  if (missing.length === 0) return current;
+  const revised: HandoffRecord = {
+    ...current.handoff,
+    evidence_ids: [...new Set([
+      ...current.handoff.evidence_ids,
+      ...missing as EvidenceRecord["id"][]
+    ])].sort(),
+    revision: current.handoff.revision + 1,
+    updated_at: latestTimestamp(current.handoff.updated_at, canonicalNow(input.now))
+  };
+  return recordHandoff(db, issueID, revised, {
+    recorded_at: canonicalNow(input.now),
+    source: `${input.source}:completion-acceptance`
+  }).record;
+}
+
+function completionRunID(
+  db: RunnerDatabase,
+  issueID: number,
+  run: Pick<IssueRun, "attempt" | "id"> | undefined
+): EvidenceRecord["run_id"] | undefined {
+  const selected = run ?? listIssueRuns(db, issueID).at(-1);
+  return selected ? makeDomainID("run", "issue_runs", selected.id) : undefined;
+}
+
+function latestTimestamp(left: string, right: string): string {
+  return left > right ? left : right;
 }
 
 function transitionAudit(
@@ -691,10 +982,16 @@ function completionFingerprint(
   issue: Issue,
   input: IssueCompletionGateInput,
   policy: WorkflowVerificationPolicy,
-  evaluation: VerificationPolicyEvaluation
+  evaluation: VerificationPolicyEvaluation,
+  handoff: StoredHandoffRecord | HandoffRecord | null
 ): string {
   return createHash("sha256").update(stableJson({
     evidence: input.evidence.map((item) => ({ id: item.id, revision: item.revision, status: item.status })),
+    handoff: handoff
+      ? ("event_id" in handoff
+        ? { id: handoff.handoff.id, revision: handoff.handoff.revision, status: handoff.handoff.status }
+        : { id: handoff.id, revision: handoff.revision, status: handoff.status })
+      : null,
     issue_id: issue.id,
     issue_status: issue.status,
     manual_override: input.manual_override ?? null,

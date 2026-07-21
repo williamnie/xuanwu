@@ -14,7 +14,11 @@
 2. 把当前 Run 内由 Runner 实际观察到的单条 `test|lint|build` command completion 交给 P04.02 command collector，生成 P04.01 `EvidenceRecord`；
 3. 由 P04.06 evaluator 执行 `verification-policy:agent-execution-contract@1`；
 4. `passed|overridden` 才沿 `in_progress -> pending_verification -> done` 完成；缺失 Evidence 保持/进入 `pending_verification`；决定性失败或 invalid policy 进入 `failed`，并由既有 Work Board/Attention/Guardian 视图解释为 needs-attention，不增加平行 `needs_attention` Work status；
-5. Work transition 继续消费当前 acceptance version、被 policy 选中的 passed Evidence，以及本次 legacy completion request 对应的 `ready` derived Handoff。P05 落地前不新建第二套 Handoff storage。
+5. Work transition 继续消费当前 acceptance version、被 policy 选中的 passed Evidence，以及已经通过
+   `recordHandoff()` 写入 `issue_events:handoff.*.v1` 的 `ready|delivered` Handoff。普通 Issue completion 会优先复用
+   当前 canonical Run 已有的合法 Handoff；否则仅在当前 Git working tree 可确定性采集到 baseline、changed files 与
+   content-addressed snapshot manifest 时生成并持久化 `local_changes` Handoff。缺少这些交付事实时保持
+   `pending_verification`，不得用 derived ID、changed files、commit 或 revision 占位。
 
 任意 issue comment、Agent summary、`issue.verification_report`、`VerificationEvidenceV0` 或只写了 `tests passed` 的 error 文本都不能满足 V1 policy。成功 Run 也不自动等于 Work `done`。
 
@@ -30,11 +34,13 @@ Runner completion adapter 只识别当前 Run 内、带真实 terminal `exitCode
 
 ## 3. 审计与幂等
 
-每次 completion mutation 在同一 SQLite transaction 内写入：
+每次可完成的 completion mutation 在同一 SQLite transaction 内写入：
 
 1. `issue.verification_gate_intent.v1`：actor、correlation、policy ref 与完整 snapshot、input Evidence ids、manual override ref、request fingerprint；
-2. authoritative Issue status change；
-3. `issue.verification_gate_outcome.v1`：完整 evaluator result、projection errors、target status 与实际 transition path。
+2. 新采集的 structured Evidence，以及需要创建或补齐 Evidence link 的 `handoff.*.v1`；
+3. authoritative Issue status change；
+4. `issue.verification_gate_outcome.v1`：完整 evaluator result、projection errors、Handoff ID/revision、Handoff gap、
+   target status 与实际 transition path。
 
 人工 accept 另写 `issue.verification_human_evidence.v1`，保存 human Evidence 与 audit binding。相同 fingerprint/target 的重放读取已有 outcome；状态写、PI run-group 同步和审计 outcome 不分裂成两个 authority。所有 permission/PI action gate 仍在外层生效，verification passed 不能授权外部写或 destructive action。
 
@@ -47,6 +53,8 @@ Runner completion adapter 只识别当前 Run 内、带真实 terminal `exitCode
 | W3 | structured-only completion consumer；legacy report/V0/raw event 按 retention/audit 保留，不再参与 gate |
 
 - **schema/public route：** 本期不新增 table、column、status 或 route；现有 Issue/verification route 调用同一 completion command，避免第二次状态写。
+- **历史数据：** 不对既有 `done` Issue 做无条件 Handoff 回填，也不从 Agent narrative 猜测 changed files/commit。
+  本门禁只约束新的 completion transition；历史修复必须另行证明可从既有 Evidence/Git facts 确定性重建。
 - **双写期限：** 本期没有 Evidence 双主；W1/W2 compatibility 总窗口最多两个正式 release，延期必须有 superseding ADR、owner 和退出日期。
 - **回滚：** 停用 completion consumer，恢复旧 Issue completion caller；保留 additive intent/outcome/human-evidence events，不能删除或把它们反向改写成 legacy report。回滚不迁移、不 drop table。
 - **最终删除门禁：** 仅 P11.03/P11.06 在 G7、P04.09 repository/API、Workflow Registry、Guardian/PI consumer 映射完成，legacy producer/consumer 连续一个正式 release 为零，override 抽审和 artifact restore 演练通过后，才能删除 W1 projection/V0 compatibility path。
@@ -57,6 +65,9 @@ Focused regression 必须至少证明：
 
 - 没有 trusted Evidence 的 runner `done` 请求进入 `pending_verification`；
 - 当前 Run 的 passed test Evidence 可完成，failed Evidence 进入 `failed`；
+- passed verification 但缺少真实 delivery artifact 时保持 `pending_verification`；成功 completion 的 Handoff 可由
+  `/api/handoffs` 读取并关联同一 Work、canonical Run、verification Evidence 与 Git Evidence；
+- completion replay 不重复写 Handoff，人工 accept 只有在已有合法 Handoff 时才可完成；
 - legacy verifier report/Agent narrative 不能关闭 Work；
 - manual accept 产生 `overridden` 和完整 override audit，reject/request-changes 保持旧行为；
 - PI state repair 不能用 legacy evidence_refs 绕过 gate。

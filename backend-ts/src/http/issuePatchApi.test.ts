@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -78,7 +80,8 @@ describe("Bun issue patch API", () => {
   test("allows runner completion after a trusted current-run test result", async () => {
     const database = await openFixtureDatabase();
     try {
-      insertProject(database, "demo");
+      const repository = dirtyRepository(database);
+      insertProject(database, "demo", repository);
       const issueId = insertIssue(database, "demo", "in_progress");
       insertOpenRun(database, issueId);
       insertCommandEvidenceEvent(database, issueId, "bun test src/http/issuePatchApi.test.ts", 0);
@@ -92,7 +95,9 @@ describe("Bun issue patch API", () => {
       expect(events.map((event) => event.type)).toEqual([
         "issue.log",
         "evidence.recorded.v1",
+        "evidence.recorded.v1",
         "issue.verification_gate_intent.v1",
+        "handoff.prepared.v1",
         "issue.status_changed",
         "issue.status_changed",
         "issue.verification_gate_outcome.v1",
@@ -100,12 +105,67 @@ describe("Bun issue patch API", () => {
       ]);
       expect(outcome).toMatchObject({
         evaluation: { decision: "passed", satisfied: true },
+        handoff_gap: null,
+        handoff_id: expect.stringMatching(/^xw:handoff:derived:/),
         target_status: "done",
         transition_path: ["in_progress->pending_verification", "pending_verification->done"]
       });
       expect(latestRun(database, issueId)).toMatchObject({
         status: "pending_verification",
         exit_reason: "explicit_status_update"
+      });
+
+      const handoffs = await createDefaultRouter({ database }).handle(new Request(
+        `${BASE_URL}/api/handoffs?work_id=xw%3Awork%3Aissues%3A${issueId}`
+      ));
+      expect(handoffs.status).toBe(200);
+      const handoffList = await handoffs.json() as { items: Array<{ id: string }> };
+      expect(handoffList.items).toHaveLength(1);
+      const detail = await createDefaultRouter({ database }).handle(new Request(
+        `${BASE_URL}/api/handoffs/${encodeURIComponent(handoffList.items[0]!.id)}`
+      ));
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({ handoff: {
+        evidence_ids: expect.arrayContaining([
+          expect.stringMatching(/^xw:evidence:issue_events:/),
+          expect.stringMatching(/^xw:evidence:git:/)
+        ]),
+        run_ids: [`xw:run:issue_runs:issue-${issueId}-attempt-1`],
+        status: "ready",
+        work_id: `xw:work:issues:${issueId}`
+      } });
+
+      const eventCount = events.length;
+      const replay = await patchIssue(database, issueId, { status: "done", error: "" });
+      expect(replay.status).toBe(200);
+      expect(listEvents(database)).toHaveLength(eventCount);
+    } finally {
+      database.close();
+    }
+  });
+
+  test("keeps a verified completion pending when no real delivery artifact can be produced", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const issueId = insertIssue(database, "demo", "in_progress");
+      insertOpenRun(database, issueId);
+      insertCommandEvidenceEvent(database, issueId, "bun test src/http/issuePatchApi.test.ts", 0);
+
+      const response = await patchIssue(database, issueId, { status: "done", error: "" });
+      const events = listEvents(database);
+      const outcome = JSON.parse(events.find((event) => event.type === "issue.verification_gate_outcome.v1")?.payload ?? "{}");
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        status: "pending_verification",
+        error: expect.stringContaining("persisted ready or delivered Handoff")
+      });
+      expect(events.some((event) => event.type.startsWith("handoff."))).toBe(false);
+      expect(outcome).toMatchObject({
+        evaluation: { decision: "pending", satisfied: false },
+        handoff_gap: expect.stringContaining("persisted ready or delivered Handoff"),
+        target_status: "pending_verification"
       });
     } finally {
       database.close();
@@ -252,12 +312,27 @@ function listEvents(db: RunnerDatabase): Array<{ payload: string; type: string }
   ).all();
 }
 
-function insertProject(db: RunnerDatabase, id: string): void {
+function insertProject(db: RunnerDatabase, id: string, cwd = join(dirname(db.path), `non-git-${id}`)): void {
+  mkdirSync(cwd, { recursive: true });
   db.sqlite.run(
     `insert into projects (id, name, cwd, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?)`,
-    [id, id, `/tmp/${id}`, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    [id, id, cwd, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
+}
+
+function dirtyRepository(db: RunnerDatabase): string {
+  const repository = join(dirname(db.path), "project");
+  mkdirSync(repository, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: repository });
+  writeFileSync(join(repository, "baseline.txt"), "baseline\n");
+  execFileSync("git", ["add", "baseline.txt"], { cwd: repository });
+  execFileSync("git", [
+    "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
+    "commit", "-qm", "baseline"
+  ], { cwd: repository });
+  writeFileSync(join(repository, "result.txt"), "actual delivery artifact\n");
+  return repository;
 }
 
 function insertIssue(db: RunnerDatabase, projectId: string, status = "triage"): number {

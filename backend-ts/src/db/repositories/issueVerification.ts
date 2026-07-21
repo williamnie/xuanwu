@@ -51,8 +51,7 @@ export function reviewIssueVerification(
         type: ISSUE_VERIFICATION_GATE_EVENT_TYPES.humanEvidence,
         payload: { action, audit_event_ref: auditEventRef, evidence: manual.evidence }
       });
-      recordVerificationReviewed(db, { ...eventBase, action, comment, status: patch.status });
-      return applyIssueCompletionGate(db, issue.id, {
+      const completed = applyIssueCompletionGate(db, issue.id, {
         actor: { id: "issue-verification-api", kind: "user" },
         correlation_id: auditEventRef,
         evidence: [manual.evidence],
@@ -61,6 +60,8 @@ export function reviewIssueVerification(
         patch,
         source: "issue-verification-api"
       }).issue;
+      recordVerificationReviewed(db, { ...eventBase, action, comment, status: completed.status });
+      return completed;
     }
     updateIssueReview(db, { issueID: issue.id, patch, timestamp });
     recordVerificationReviewed(db, { ...eventBase, action, comment, status: patch.status });
