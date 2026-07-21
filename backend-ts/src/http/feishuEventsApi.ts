@@ -93,7 +93,14 @@ async function handleFeishuEvent(request: Request, context: FeishuEventRoutesCon
   }
   const projectAction = normalizeFeishuProjectSelectionAction(parsed.body);
   if (projectAction) {
-    void context.agentBridge?.handleProjectSelectionAction(projectAction).catch(() => undefined);
+    void context.agentBridge?.handleProjectSelectionAction(projectAction).catch((error) => {
+      console.warn(JSON.stringify({
+        action: "feishu_project_selection_callback",
+        error: safeError(error),
+        ok: false,
+        selection_id: projectAction.selection_id
+      }));
+    });
     return projectSelectionCallbackAccepted();
   }
   return await acceptMessageEvent(parsed.body, context, rawRef, parsed.encrypted);

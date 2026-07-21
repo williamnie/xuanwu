@@ -40,6 +40,21 @@ describe("Feishu PI project context resolver", () => {
     });
   });
 
+  test("resolves a bare issue id when Chinese wording clearly marks it as an issue reference", () => {
+    const result = resolveFeishuProjectContext({
+      issues: [{ id: 762, project_id: "codex-issue-runner" }],
+      projects: PROJECTS,
+      text: "那就是762中的修复没修复好，内存仍然超了"
+    });
+
+    expect(result).toMatchObject({
+      projectId: "codex-issue-runner",
+      reason: "issue_ref_project",
+      source: "issue_ref",
+      status: "resolved"
+    });
+  });
+
   test("resolves a project from explicit project id or name text before mapping fallback", () => {
     const result = resolveFeishuProjectContext({
       mappings: [{ chatId: "oc_group", projectId: "demo" }],

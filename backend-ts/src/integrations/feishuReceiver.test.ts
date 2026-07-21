@@ -72,7 +72,7 @@ describe("Feishu WebSocket receiver", () => {
     database.close();
   });
 
-  test("dispatches project selection card actions from long connection callbacks", async () => {
+  test("dispatches flattened project selection actions from the long-connection SDK", async () => {
     const { database, factory, messages } = await receiverFixture();
     const actions: unknown[] = [];
     const manager = createFeishuReceiverManager({
@@ -177,7 +177,7 @@ function isCardAction(event: unknown): boolean {
   const header = root.header && typeof root.header === "object" && !Array.isArray(root.header)
     ? root.header as Record<string, unknown>
     : {};
-  return header.event_type === "card.action.trigger";
+  return header.event_type === "card.action.trigger" || root.event_type === "card.action.trigger";
 }
 
 function messageEvent(text: string): Record<string, unknown> {
@@ -199,28 +199,24 @@ function messageEvent(text: string): Record<string, unknown> {
 
 function projectSelectionActionEvent(): Record<string, unknown> {
   return {
-    event: {
-      action: {
-        value: {
-          action: "feishu_project_select",
-          project_id: "demo",
-          selection_id: "fps_ws_1"
-        }
-      },
-      context: {
-        open_chat_id: "oc_group",
-        open_message_id: "om_card_ws_1"
-      },
-      operator: {
-        operator_id: {
-          open_id: "ou_open_1",
-          user_id: "ou_user_1"
-        }
+    action: {
+      value: {
+        action: "feishu_project_select",
+        project_id: "demo",
+        selection_id: "fps_ws_1"
       }
     },
-    header: {
-      event_id: "evt_card_ws_1",
-      event_type: "card.action.trigger"
+    context: {
+      open_chat_id: "oc_group",
+      open_message_id: "om_card_ws_1"
+    },
+    event_id: "evt_card_ws_1",
+    event_type: "card.action.trigger",
+    operator: {
+      operator_id: {
+        open_id: "ou_open_1",
+        user_id: "ou_user_1"
+      }
     },
     schema: "2.0"
   };

@@ -25,6 +25,15 @@ export type FeishuConversationActiveProjectInput = {
   source: FeishuActiveProjectSource;
 };
 
+export type FeishuConversationAdoptionInput = {
+  activeConversationId: string;
+  activeProjectId?: string;
+  activeProjectSource?: string;
+  epoch?: number;
+  scopeKey: string;
+  startedAt?: string;
+};
+
 const COLUMNS = `scope_key, active_conversation_id, active_project_id,
   active_project_source, epoch, started_at, updated_at`;
 
@@ -62,6 +71,30 @@ export function bumpFeishuConversationEpoch(
     return requireSavedState(db, record.scope_key);
   });
   return write.immediate();
+}
+
+export function adoptFeishuConversationState(
+  db: RunnerDatabase,
+  input: FeishuConversationAdoptionInput,
+  timestamp = new Date()
+): FeishuConversationState {
+  const existing = getFeishuConversationState(db, input.scopeKey);
+  if (existing) return existing;
+  const iso = timestamp.toISOString();
+  const record: FeishuConversationState = {
+    active_conversation_id: requireString(input.activeConversationId, "active_conversation_id"),
+    active_project_id: cleanString(input.activeProjectId),
+    active_project_source: cleanString(input.activeProjectSource),
+    epoch: nonNegativeInteger(input.epoch),
+    scope_key: requireString(input.scopeKey, "scope_key"),
+    started_at: cleanString(input.startedAt) || iso,
+    updated_at: iso
+  };
+  db.sqlite.run(
+    `insert or ignore into feishu_conversation_state (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?)`,
+    insertValues(record)
+  );
+  return requireSavedState(db, record.scope_key);
 }
 
 export function setFeishuConversationActiveProject(
@@ -171,6 +204,10 @@ function cleanString(value: unknown): string {
 function integerValue(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${label} must be an integer`);
   return value;
+}
+
+function nonNegativeInteger(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 function validActiveProjectSource(value: unknown): FeishuActiveProjectSource {

@@ -52,6 +52,7 @@ type PiConversationContext = {
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 export type PiConversationPromptInput = {
+  channelContext?: string;
   clearProjectId?: boolean;
   conversationId?: string;
   intent?: string;
@@ -59,6 +60,7 @@ export type PiConversationPromptInput = {
   prompt: string;
   targetProjectId?: string;
   targetProjectSource?: string;
+  targetIssueId?: number;
   title?: string;
 };
 
@@ -149,12 +151,14 @@ function conversationInput(input: {
 async function sendPiConversationMessage(
   context: PiConversationContext,
   id: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  trusted: { channelContext?: string; targetIssueId?: number } = {}
 ) {
   const prompt = cleanString(body.prompt || body.message || body.content);
   if (prompt === "") throw new HttpError(400, "prompt is required");
   const intent = cleanString(body.intent);
   const targetProjectId = cleanString(body.target_project_id ?? body.targetProjectId);
+  const targetIssueId = positiveInteger(trusted.targetIssueId);
   const conversation = requireConversation(context.database, id);
   if (activePiRuns.has(conversation.id)) throw new HttpError(409, "PI conversation is already running");
   const titledConversation = ensureConversationTitle(context.database, conversation, prompt);
@@ -172,6 +176,7 @@ async function sendPiConversationMessage(
     conversationID: titledConversation.id,
     conversationProjectID: titledConversation.project_id,
     oneShotProjectID: targetProjectId,
+    oneShotIssueID: targetIssueId,
     oneShotSource: oneShotProjectSource(body.target_project_source ?? body.targetProjectSource, resolvedSource),
     prompt,
     source: resolvedSource
@@ -198,7 +203,8 @@ async function sendPiConversationMessage(
     intent,
     prompt,
     turnID,
-    resolvedSource
+    resolvedSource,
+    cleanString(trusted.channelContext)
   );
   const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
@@ -249,6 +255,9 @@ export async function runPiConversationPrompt(
     prompt: input.prompt,
     target_project_id: input.targetProjectId || projectID,
     target_project_source: input.targetProjectSource || (projectID === "" ? undefined : "request_project")
+  }, {
+    channelContext: input.channelContext,
+    targetIssueId: input.targetIssueId
   });
 }
 
@@ -303,6 +312,11 @@ function deriveConversationTitle(prompt: string): string {
 function truncateTitle(text: string): string {
   const limit = 48;
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+
+function positiveInteger(value: unknown): number {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
 async function interruptPiConversation(context: PiConversationContext, id: string) {
@@ -363,7 +377,8 @@ async function openConversationRuntime(
   intent = "",
   userPrompt = "",
   turnID = "",
-  source?: string
+  source?: string,
+  channelContext = ""
 ) {
   const { createPiRuntimeSession, PI_RUNNER_CHAT_ACTIONS } = await import("./piRuntime.ts");
   const project = conversation.project_id === "" || (
@@ -383,6 +398,7 @@ async function openConversationRuntime(
     authorization: conversationAuthorization(review, toolProject, intentRoute, supervisorContext, PI_RUNNER_CHAT_ACTIONS),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
+    channelContext,
     conversationID: conversation.id,
     onIssueEnqueued: (projectID) => startProjectLoop({
       bus: context.bus,

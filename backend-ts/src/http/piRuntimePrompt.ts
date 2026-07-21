@@ -22,6 +22,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     xuanwuSupervisorCompatibilityPrompt(),
     ...(input.supervisorIntentRoute ? [supervisorIntentRoutePrompt(input.supervisorIntentRoute)] : []),
     ...(input.supervisorContext ? [supervisorContextPrompt(input.supervisorContext)] : []),
+    ...(cleanString(input.channelContext) ? [cleanString(input.channelContext)] : []),
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
     "Use MCP only through the MCP registry/envelope tools; never install unknown MCP or connect unauthorized servers.",
     agentInstructionsSection(input.agent),

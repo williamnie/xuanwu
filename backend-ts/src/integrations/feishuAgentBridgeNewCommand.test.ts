@@ -43,8 +43,8 @@ describe("Feishu agent bridge /new command", () => {
     await bridge.handle(next);
 
     expect(calls).toEqual([
-      { conversationId: "feishu-chat-oc_group-20260613-n1", prompt: "重新开始" },
-      { conversationId: "feishu-chat-oc_group-20260613-n1", prompt: "继续" }
+      { conversationId: "feishu-chat-oc_group-n1", prompt: "重新开始" },
+      { conversationId: "feishu-chat-oc_group-n1", prompt: "继续" }
     ]);
     expect(sent).toHaveLength(2);
     database.close();
@@ -90,7 +90,7 @@ describe("Feishu agent bridge /new command", () => {
     await bridge.handle(normalizeEvent("/new 帮我修复登录 bug", "om_agent_new_task", config, database));
 
     expect(calls).toEqual([{
-      conversationId: "feishu-chat-oc_group-20260613-n1",
+      conversationId: "feishu-chat-oc_group-n1",
       projectId: "",
       prompt: "帮我修复登录 bug"
     }]);

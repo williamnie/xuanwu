@@ -116,12 +116,12 @@ function inputFixture(text: string) {
 
 function routeFixture() {
   return {
-    baseConversationId: "feishu-chat-oc_group-20260613",
-    conversationId: "feishu-chat-oc_group-20260613",
+    baseConversationId: "feishu-chat-oc_group",
+    conversationId: "feishu-chat-oc_group",
     epoch: 0,
     isNewCommand: false,
     prompt: "开始做吧",
-    scopeKey: "feishu-chat-oc_group-20260613"
+    scopeKey: "feishu-chat-oc_group"
   };
 }
 

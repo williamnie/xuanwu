@@ -64,7 +64,7 @@ describe("Feishu agent bridge project switch command", () => {
       "已识别 codex-issue-runner。IM 通道不会保存当前项目；请把项目名或 issue id 写在具体请求里。",
       "请选择本次操作的 Runner 项目：codex-issue-runner。也可以重新发送并在消息里带上项目名或 issue id。"
     ]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group")).toBeNull();
     database.close();
   });
 
@@ -95,7 +95,7 @@ describe("Feishu agent bridge project switch command", () => {
     expect(sent.map((item) => item.text)).toEqual([
       "没找到项目 missing-project，请换项目名或用项目列表选择。"
     ]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group")).toBeNull();
     database.close();
   });
 
@@ -127,7 +127,7 @@ describe("Feishu agent bridge project switch command", () => {
     expect(sent.map((item) => item.text)).toEqual([
       "找到多个项目：runner-api、runner-web。请说得更精确一点，后续 issue 会用卡片选择解决。"
     ]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group")).toBeNull();
     database.close();
   });
 
@@ -150,12 +150,12 @@ describe("Feishu agent bridge project switch command", () => {
     await bridge.handle(normalizeEvent("/new /p codex-issue-runner", "om_new_project_switch", config, database));
 
     expect(calls).toEqual([{
-      conversationId: "feishu-chat-oc_group-20260613-n1",
+      conversationId: "feishu-chat-oc_group-n1",
       projectId: "",
       prompt: "/p codex-issue-runner",
       targetProjectId: "codex-issue-runner"
     }]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613"))
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group"))
       .toMatchObject({ active_project_id: "", epoch: 1 });
     database.close();
   });

@@ -75,16 +75,20 @@ describe("Feishu project selection flow", () => {
     });
 
     expect(first).toEqual({ reason: "project_selection_continued", replied: true });
-    expect(duplicate).toEqual({ reason: "project_selection_already_consumed", replied: false });
+    expect(duplicate).toEqual({ reason: "project_selection_already_consumed", replied: true });
     expect(calls).toEqual([{
-      conversationId: "feishu-chat-oc_group-20260613",
+      conversationId: "feishu-chat-oc_group",
       projectId: "",
       prompt: "开始做吧",
       targetProjectId: "demo",
       targetProjectSource: "card_select"
     }]);
-    expect(sentTexts).toEqual(["已选择 demo，我会用它处理刚才这句。", "runner continued"]);
-    expect(getFeishuConversationState(database, "feishu-chat-oc_group-20260613")).toBeNull();
+    expect(sentTexts).toEqual([
+      "已选择 demo，我会用它处理刚才这句。",
+      "runner continued",
+      "这个项目选择已经用 demo 处理过了，不会重复执行。"
+    ]);
+    expect(getFeishuConversationState(database, "feishu-chat-oc_group")).toBeNull();
     database.close();
   });
 

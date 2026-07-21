@@ -1,7 +1,9 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
+  adoptFeishuConversationState,
   bumpFeishuConversationEpoch,
-  getFeishuConversationState
+  getFeishuConversationState,
+  type FeishuConversationState
 } from "../db/repositories/feishuConversationState.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
 
@@ -34,10 +36,13 @@ export function routeFeishuConversation(
   input: FeishuConversationRouteInput
 ): FeishuConversationRoute {
   const now = input.clock?.now() ?? new Date();
-  const scope = scopeRoute(input.event, now);
+  const scope = scopeRoute(input.event);
   const command = parseFeishuNewConversationCommand(input.prompt);
-  if (command.isNewCommand) return bumpedRoute(db, scope, command.prompt, now);
-  const state = getFeishuConversationState(db, scope.scopeKey);
+  if (command.isNewCommand) {
+    getFeishuConversationState(db, scope.scopeKey) ?? adoptLegacyChatRoute(db, scope, now);
+    return bumpedRoute(db, scope, command.prompt, now);
+  }
+  const state = getFeishuConversationState(db, scope.scopeKey) ?? adoptLegacyChatRoute(db, scope, now);
   return {
     baseConversationId: scope.baseConversationId,
     conversationId: state?.active_conversation_id ?? scope.baseConversationId,
@@ -68,16 +73,16 @@ function bumpedRoute(
   };
 }
 
-function scopeRoute(event: FeishuNormalizedMessageEvent, now: Date): ScopeRoute {
+function scopeRoute(event: FeishuNormalizedMessageEvent): ScopeRoute {
   const threadID = cleanString(event.thread_id) || cleanString(event.root_id);
   if (threadID !== "") return prefixedScope("feishu-thread", threadID);
   const chatID = cleanString(event.chat_id);
-  if (chatID !== "") return chatScope(chatID, now);
+  if (chatID !== "") return chatScope(chatID);
   return prefixedScope("feishu-message", event.message_id);
 }
 
-function chatScope(chatID: string, now: Date): ScopeRoute {
-  const base = `feishu-chat-${sanitizeId(chatID)}-${dayKey(now)}`;
+function chatScope(chatID: string): ScopeRoute {
+  const base = `feishu-chat-${sanitizeId(chatID)}`;
   return { baseConversationId: base, scopeKey: base };
 }
 
@@ -86,16 +91,72 @@ function prefixedScope(prefix: string, rawID: string): ScopeRoute {
   return { baseConversationId: base, scopeKey: base };
 }
 
-function dayKey(value: Date): string {
-  return `${value.getFullYear()}${pad(value.getMonth() + 1)}${pad(value.getDate())}`;
+function adoptLegacyChatRoute(
+  db: RunnerDatabase,
+  scope: ScopeRoute,
+  now: Date
+): FeishuConversationState | null {
+  if (!scope.baseConversationId.startsWith("feishu-chat-")) return null;
+  const legacy = latestLegacyChatConversation(db, scope.baseConversationId);
+  if (!legacy) return null;
+  return adoptFeishuConversationState(db, {
+    activeConversationId: legacy.conversationID,
+    activeProjectId: legacy.state?.active_project_id,
+    activeProjectSource: legacy.state?.active_project_source,
+    epoch: legacy.state?.epoch ?? legacy.epoch,
+    scopeKey: scope.scopeKey,
+    startedAt: legacy.state?.started_at ?? legacy.createdAt
+  }, now);
+}
+
+function latestLegacyChatConversation(
+  db: RunnerDatabase,
+  baseConversationID: string
+): { conversationID: string; createdAt: string; epoch: number; state: FeishuConversationState | null } | null {
+  const prefix = `${baseConversationID}-%`;
+  const candidates = db.sqlite.query<{ created_at: string; id: string; updated_at: string }, [string]>(
+    `select id, created_at, updated_at from pi_conversations
+     where id like ? order by updated_at desc, id desc limit 64`
+  ).all(prefix);
+  const pattern = new RegExp(`^${escapeRegExp(baseConversationID)}-(\\d{8})(?:-n(\\d+))?$`);
+  for (const candidate of candidates) {
+    const match = candidate.id.match(pattern);
+    if (!match) continue;
+    const state = db.sqlite.query<Record<string, unknown>, [string, string]>(
+      `select scope_key, active_conversation_id, active_project_id, active_project_source,
+              epoch, started_at, updated_at
+       from feishu_conversation_state
+       where scope_key=? or active_conversation_id=?
+       order by updated_at desc limit 1`
+    ).get(candidate.id, candidate.id);
+    return {
+      conversationID: candidate.id,
+      createdAt: candidate.created_at,
+      epoch: Number.parseInt(match[2] ?? "0", 10) || 0,
+      state: state ? legacyState(state) : null
+    };
+  }
+  return null;
+}
+
+function legacyState(row: Record<string, unknown>): FeishuConversationState {
+  return {
+    active_conversation_id: cleanString(row.active_conversation_id),
+    active_project_id: cleanString(row.active_project_id),
+    active_project_source: cleanString(row.active_project_source),
+    epoch: typeof row.epoch === "number" && Number.isInteger(row.epoch) ? row.epoch : 0,
+    scope_key: cleanString(row.scope_key),
+    started_at: cleanString(row.started_at),
+    updated_at: cleanString(row.updated_at)
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function sanitizeId(value: string): string {
   return cleanString(value).replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
 }
 
 function cleanString(value: unknown): string {

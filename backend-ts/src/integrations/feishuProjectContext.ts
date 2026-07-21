@@ -158,9 +158,16 @@ function projectTokens(project: FeishuProjectContextProject): string[] {
 
 function issueRefs(text: string): number[] {
   const refs: number[] = [];
-  for (const match of clean(text).matchAll(/#\s*(\d+)/g)) {
-    const id = Number.parseInt(match[1] ?? "", 10);
-    if (Number.isSafeInteger(id) && id > 0) refs.push(id);
+  for (const pattern of [
+    /#\s*(\d+)/g,
+    /\b(?:work|issue)\s*(?:#|id\s*[:=]?)?\s*(\d+)\b/gi,
+    /(?:工单|问题|任务)\s*[#号]?\s*(\d+)/g,
+    /(?:^|[^\d])(\d+)\s*(?:号|中|里|这个\s*issue)/gi
+  ]) {
+    for (const match of clean(text).matchAll(pattern)) {
+      const id = Number.parseInt(match[1] ?? "", 10);
+      if (Number.isSafeInteger(id) && id > 0) refs.push(id);
+    }
   }
   return [...new Set(refs)];
 }

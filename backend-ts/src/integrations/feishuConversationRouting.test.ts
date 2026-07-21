@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe("Feishu conversation routing", () => {
-  test("reuses the same daily conversation for ordinary chat messages on the same day", async () => {
+  test("reuses one stable conversation for ordinary chat messages", async () => {
     const db = await openFixtureDatabase();
     try {
       const first = routeFeishuConversation(db, {
@@ -30,8 +30,8 @@ describe("Feishu conversation routing", () => {
         prompt: "next"
       });
 
-      expect(first.conversationId).toBe("feishu-chat-oc_group-20260613");
-      expect(second.conversationId).toBe("feishu-chat-oc_group-20260613");
+      expect(first.conversationId).toBe("feishu-chat-oc_group");
+      expect(second.conversationId).toBe("feishu-chat-oc_group");
       expect(first.prompt).toBe("hi");
       expect(second.prompt).toBe("next");
     } finally {
@@ -39,7 +39,7 @@ describe("Feishu conversation routing", () => {
     }
   });
 
-  test("uses a new daily conversation when an ordinary chat crosses days", async () => {
+  test("keeps the stable conversation when an ordinary chat crosses days", async () => {
     const db = await openFixtureDatabase();
     try {
       const today = routeFeishuConversation(db, {
@@ -53,14 +53,14 @@ describe("Feishu conversation routing", () => {
         prompt: "tomorrow"
       });
 
-      expect(today.conversationId).toBe("feishu-chat-oc_group-20260613");
-      expect(tomorrow.conversationId).toBe("feishu-chat-oc_group-20260614");
+      expect(today.conversationId).toBe("feishu-chat-oc_group");
+      expect(tomorrow.conversationId).toBe("feishu-chat-oc_group");
     } finally {
       db.close();
     }
   });
 
-  test("prioritizes thread and root ids over chat daily routing", async () => {
+  test("prioritizes stable thread and root ids over chat routing", async () => {
     const db = await openFixtureDatabase();
     try {
       const threaded = routeFeishuConversation(db, {
@@ -90,8 +90,8 @@ describe("Feishu conversation routing", () => {
         prompt: "sanitize"
       });
 
-      expect(route.scopeKey).toBe("feishu-chat-oc-group-1-2-20260613");
-      expect(route.conversationId).toBe("feishu-chat-oc-group-1-2-20260613");
+      expect(route.scopeKey).toBe("feishu-chat-oc-group-1-2");
+      expect(route.conversationId).toBe("feishu-chat-oc-group-1-2");
     } finally {
       db.close();
     }
@@ -117,19 +117,51 @@ describe("Feishu conversation routing", () => {
       });
 
       expect(reset).toMatchObject({
-        conversationId: "feishu-chat-oc_group-20260613-n1",
+        conversationId: "feishu-chat-oc_group-n1",
         epoch: 1,
         isNewCommand: true,
         prompt: "继续新的上下文"
       });
-      expect(next.conversationId).toBe("feishu-chat-oc_group-20260613-n1");
+      expect(next.conversationId).toBe("feishu-chat-oc_group-n1");
       expect(next.prompt).toBe("下一句");
       expect(secondReset).toMatchObject({
-        conversationId: "feishu-chat-oc_group-20260613-n2",
+        conversationId: "feishu-chat-oc_group-n2",
         epoch: 2,
         isNewCommand: true,
         prompt: ""
       });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("adopts the newest legacy daily conversation without losing its reset epoch", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertConversation(db, "feishu-chat-oc_group-20260720-n2", "2026-07-20T09:00:00.000Z");
+      db.sqlite.run(
+        `insert into feishu_conversation_state
+           (scope_key, active_conversation_id, active_project_id, active_project_source,
+            epoch, started_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          "feishu-chat-oc_group-20260720",
+          "feishu-chat-oc_group-20260720-n2",
+          "demo",
+          "card_select",
+          2,
+          "2026-07-20T09:00:00.000Z",
+          "2026-07-20T09:00:00.000Z"
+        ]
+      );
+
+      const reset = routeFeishuConversation(db, {
+        clock: fixedClock("2026-07-21T01:01:00Z"),
+        event: eventFixture({ message_id: "om_reset_upgrade" }),
+        prompt: "/new"
+      });
+
+      expect(reset.conversationId).toBe("feishu-chat-oc_group-n3");
     } finally {
       db.close();
     }
@@ -194,4 +226,13 @@ function eventFixture(
     timestamp: "2026-06-13T00:00:00.000Z",
     ...overrides
   };
+}
+
+function insertConversation(db: RunnerDatabase, id: string, timestamp: string): void {
+  db.sqlite.run(
+    `insert into pi_conversations
+       (id, project_id, pi_agent_id, title, status, session_file, pi_session_id, created_at, updated_at)
+     values (?, '', 'default', '', 'active', '', '', ?, ?)`,
+    [id, timestamp, timestamp]
+  );
 }

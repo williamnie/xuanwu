@@ -26,6 +26,7 @@ export type RuntimeSessionInput = {
   agent: PiAgent;
   authorization?: PiGatePolicy;
   bus?: EventBus;
+  channelContext?: string;
   cliConnectorDirs?: string[];
   conversationID: string;
   delegationID?: string;
@@ -105,6 +106,8 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   installPiProviderSecretOverride(authStorage, paths.modelsPath, dirname(db.path), input.agent.model_provider);
   const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
   const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
+  const model = resolvePiModel(modelRegistry, input.agent);
+  settingsManager.applyOverrides({ compaction: piRuntimeCompactionSettings(model) });
   const sessionManager = input.sessionFile
     ? sdk.pi.SessionManager.open(input.sessionFile, context.sessionDir, context.cwd)
     : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });
@@ -143,7 +146,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       cwd: context.cwd,
       agentDir: paths.agentDir,
       authStorage,
-      model: resolvePiModel(modelRegistry, input.agent),
+      model,
       modelRegistry,
       resourceLoader,
       sessionManager,
@@ -170,6 +173,33 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     cleanupRuntimeProvider();
     throw error;
   }
+}
+
+export function piRuntimeCompactionSettings(model: { contextWindow: number } | undefined): {
+  enabled: true;
+  keepRecentTokens: number;
+  reserveTokens: number;
+} {
+  const contextWindow = positiveContextWindow(model?.contextWindow);
+  if (contextWindow === 0) return { enabled: true, keepRecentTokens: 20_000, reserveTokens: 16_384 };
+  const reserveTokens = Math.min(
+    Math.max(4_096, Math.floor(contextWindow * 0.4)),
+    Math.max(1_024, contextWindow - 1_024)
+  );
+  const available = Math.max(1_024, contextWindow - reserveTokens);
+  return {
+    enabled: true,
+    keepRecentTokens: Math.min(
+      20_000,
+      Math.max(512, Math.floor(available * 0.25)),
+      Math.max(256, available - 256)
+    ),
+    reserveTokens
+  };
+}
+
+function positiveContextWindow(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 export async function ensurePiSessionFile(session: {

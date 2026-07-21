@@ -63,7 +63,7 @@ describe("Feishu agent bridge notification preference command", () => {
     expect(result).toEqual({ reason: "notification_preference_saved", replied: true });
     expect(calls).toEqual([]);
     expect(preferences).toMatchObject([{
-      conversation_id: "feishu-chat-oc_group-20260618",
+      conversation_id: "feishu-chat-oc_group",
       effective_after_sequence: anchor.sequence_id,
       expires_at: "2026-06-18T02:00:00Z",
       mode: "quiet",

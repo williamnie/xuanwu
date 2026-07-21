@@ -8,6 +8,10 @@ import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { startServer } from "../http/server.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
+import {
+  buildFeishuConversationPromptContext,
+  resolveFeishuContinuationTarget
+} from "../integrations/feishuConversationContext.ts";
 import { createFeishuReceiverManager } from "../integrations/feishuReceiver.ts";
 import { ProcessGroupMemoryObserver, writeProcessGroupMemoryAlert } from "../observability/processGroupMemory.ts";
 import { createClaudeExecutorProvider } from "../providers/claude/provider.ts";
@@ -52,15 +56,18 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
     database,
     runConversation: async ({ conversationId, event, intent, projectId, prompt, targetProjectId, targetProjectSource }) => {
       const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
-      const oneShotTargetProjectId = targetProjectId || projectId;
+      const continuation = targetProjectId ? null : resolveFeishuContinuationTarget(database, { event, prompt });
+      const oneShotTargetProjectId = targetProjectId || continuation?.projectId || projectId;
       const result = await runPiConversationPrompt({ bus, database, providers }, {
+        channelContext: buildFeishuConversationPromptContext(database, { event }),
         clearProjectId: true,
         conversationId,
         intent,
         projectId: "",
         prompt,
+        targetIssueId: continuation?.issueId,
         targetProjectId: oneShotTargetProjectId,
-        targetProjectSource,
+        targetProjectSource: targetProjectSource || (continuation ? "latest_actionable_notification" : undefined),
         title: `Feishu · ${event.chat_id || event.message_id}`
       });
       return { conversationId: result.conversation_id, projectId: "", targetProjectId: oneShotTargetProjectId, text: result.text };

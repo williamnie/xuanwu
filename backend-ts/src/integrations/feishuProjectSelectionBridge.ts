@@ -66,10 +66,30 @@ export async function handleFeishuProjectSelectionAction(
     userOpenId: action.user_open_id
   });
   if (consumed.status !== "consumed" || !consumed.selection) {
-    return { reason: `project_selection_${consumed.status}`, replied: false };
+    const chatID = action.chat_id || consumed.selection?.chat_id || "";
+    if (chatID === "") return { reason: `project_selection_${consumed.status}`, replied: false };
+    await sendActionText(
+      options,
+      chatID,
+      selectionFailureText(consumed.status, consumed.selection?.selected_project_id),
+      `${action.selection_id}:${consumed.status}`
+    );
+    return { reason: `project_selection_${consumed.status}`, replied: true };
   }
   await sendActionText(options, action.chat_id, `已选择 ${action.project_id}，我会用它处理刚才这句。`, action.selection_id);
   return continuePendingPrompt(options, consumed.selection, action.project_id);
+}
+
+function selectionFailureText(status: string, selectedProjectID = ""): string {
+  if (status === "already_consumed") {
+    return selectedProjectID === ""
+      ? "这个项目选择已经处理过了，不会重复执行。"
+      : `这个项目选择已经用 ${selectedProjectID} 处理过了，不会重复执行。`;
+  }
+  if (status === "expired") return "这个项目选择已过期，请重新发送原请求。";
+  if (status === "source_mismatch") return "这个项目选择不属于当前会话或当前用户，请从原消息重新操作。";
+  if (status === "invalid_project") return "这个项目不在本次候选列表中，请重新发送请求并写明项目名或 issue id。";
+  return "没有找到这次项目选择，请重新发送原请求。";
 }
 
 function shouldAskProjectSelection(

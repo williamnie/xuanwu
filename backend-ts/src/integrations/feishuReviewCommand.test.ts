@@ -49,7 +49,7 @@ describe("Feishu /review command", () => {
     expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
-      conversationId: "feishu-chat-oc_group-20260614-n1",
+      conversationId: "feishu-chat-oc_group-n1",
       intent: "review",
       projectId: ""
     });

@@ -65,6 +65,29 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
     }
   });
 
+  test("resolves the Chinese bare issue phrasing used by IM replies to exact Work", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "runner-web", "Runner Web");
+      const issue = createIssue(db, { project_id: "runner-web", status: "todo", title: "Memory regression" });
+      const resolution = resolveSupervisorContext(db, {
+        prompt: `那就是${issue.id}中的修复没修复好，内存仍然超了`,
+        source: "feishu_runner_chat"
+      });
+
+      expect(resolution).toMatchObject({
+        status: "resolved",
+        target: {
+          issue_ids: [issue.id],
+          project_id: "runner-web",
+          work_ids: [`xw:work:issues:${issue.id}`]
+        }
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("fails closed when explicit text or Work refs span multiple projects", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -126,6 +149,40 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         status: "missing",
         target: { project_id: "" },
         provenance: { context_inheritance_allowed: false }
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("resolves a short IM continuation to the exact notified Work for one turn", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo", "Demo");
+      const issue = createIssue(db, { project_id: "demo", status: "todo", title: "Notified work" });
+
+      const resolution = resolveSupervisorContext(db, {
+        conversationID: "feishu-chat-oc_group",
+        oneShotIssueID: issue.id,
+        oneShotProjectID: "demo",
+        oneShotSource: "latest_actionable_notification",
+        prompt: "验收",
+        source: "feishu_runner_chat"
+      });
+
+      expect(resolution).toMatchObject({
+        reason: "single consistent direct target",
+        status: "resolved",
+        target: {
+          issue_ids: [issue.id],
+          project_id: "demo",
+          work_ids: [`xw:work:issues:${issue.id}`]
+        }
+      });
+      expect(resolution.candidates[0]?.sources).toContainEqual({
+        kind: "work_reference",
+        ref: `xw:work:issues:${issue.id}:latest_actionable_notification`,
+        score: 100
       });
     } finally {
       db.close();

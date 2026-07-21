@@ -43,18 +43,23 @@ export function buildFeishuProjectSelectionCard(input: FeishuProjectSelectionCar
 
 export function normalizeFeishuProjectSelectionAction(raw: unknown): FeishuProjectSelectionAction | null {
   const root = recordValue(raw);
-  if (cleanString(recordValue(root.header).event_type) !== "card.action.trigger") return null;
-  const event = recordValue(root.event);
+  const nested = recordValue(root.event);
+  const event = Object.keys(nested).length > 0 ? nested : root;
+  const eventType = cleanString(recordValue(root.header).event_type || root.event_type);
+  if (eventType !== "card.action.trigger") return null;
   const action = recordValue(event.action);
   const value = selectedValue(action);
   if (cleanString(value.action) !== ACTION_ID) return null;
   const context = recordValue(event.context);
-  const operatorID = recordValue(recordValue(event.operator).operator_id);
+  const operator = recordValue(event.operator);
+  const operatorID = Object.keys(recordValue(operator.operator_id)).length > 0
+    ? recordValue(operator.operator_id)
+    : operator;
   const selectionID = cleanString(value.selection_id);
   const projectID = cleanString(value.project_id);
   if (selectionID === "" || projectID === "") return null;
   return {
-    action_id: cleanString(recordValue(root.header).event_id),
+    action_id: cleanString(recordValue(root.header).event_id || root.event_id),
     chat_id: cleanString(context.open_chat_id || context.chat_id),
     message_id: cleanString(context.open_message_id || context.message_id),
     project_id: projectID,

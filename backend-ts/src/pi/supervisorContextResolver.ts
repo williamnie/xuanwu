@@ -76,6 +76,7 @@ export type SupervisorContextResolverInput = {
   conversationID?: string;
   conversationProjectID?: string;
   oneShotProjectID?: string;
+  oneShotIssueID?: number;
   oneShotSource?: string;
   prompt: string;
   source?: string;
@@ -104,6 +105,7 @@ export function resolveSupervisorContext(
   const candidates = new Map<string, MutableCandidate>();
 
   addReferencedWorks(db, candidates, projectMap, prompt);
+  addOneShotWork(db, candidates, projectMap, input.oneShotIssueID, input.oneShotSource || source);
   addProjectCandidate(candidates, projectMap, input.oneShotProjectID, {
     kind: "one_shot_target",
     ref: cleanString(input.oneShotSource) || source,
@@ -145,6 +147,24 @@ export function resolveSupervisorContext(
     throw new Error("Supervisor context resolution failed schema validation");
   }
   return resolution;
+}
+
+function addOneShotWork(
+  db: RunnerDatabase,
+  candidates: Map<string, MutableCandidate>,
+  projects: Map<string, Project>,
+  issueIDValue: unknown,
+  source: string
+): void {
+  const issueID = positiveInteger(issueIDValue);
+  if (issueID === 0) return;
+  const work = getIssueAsWork(db, issueID);
+  if (!work) return;
+  addProjectCandidate(candidates, projects, work.owner.project_id, {
+    kind: "work_reference",
+    ref: `${work.id}:${cleanString(source) || "one_shot"}`,
+    score: 100
+  }, work);
 }
 
 export function supervisorContextPrompt(resolution: SupervisorContextResolution | undefined): string {
@@ -350,7 +370,9 @@ function referencedIssueIDs(prompt: string): number[] {
   for (const pattern of [
     /xw:work:issues:([1-9]\d*)/gi,
     /#\s*([1-9]\d*)/g,
-    /\b(?:work|issue)\s*(?:#|id\s*[:=]?)?\s*([1-9]\d*)\b/gi
+    /\b(?:work|issue)\s*(?:#|id\s*[:=]?)?\s*([1-9]\d*)\b/gi,
+    /(?:工单|问题|任务)\s*[#号]?\s*([1-9]\d*)/g,
+    /(?:^|[^\d])([1-9]\d*)\s*(?:号|中|里|这个\s*issue)/gi
   ]) {
     for (const match of prompt.matchAll(pattern)) {
       const id = Number.parseInt(match[1] ?? "", 10);
@@ -381,4 +403,9 @@ function allowsConversationInheritance(source: string): boolean {
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function positiveInteger(value: unknown): number {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }

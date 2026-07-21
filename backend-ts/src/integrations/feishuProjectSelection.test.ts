@@ -47,4 +47,27 @@ describe("Feishu project selection card", () => {
       user_open_id: "ou_open_1"
     });
   });
+
+  test("normalizes the flattened v2 payload emitted by the Feishu SDK dispatcher", () => {
+    const action = normalizeFeishuProjectSelectionAction({
+      action: {
+        value: { action: "feishu_project_select", project_id: "demo", selection_id: "fps_flat_1" }
+      },
+      context: { open_chat_id: "oc_group", open_message_id: "om_card_flat" },
+      event_id: "evt_flat_1",
+      event_type: "card.action.trigger",
+      operator: { operator_id: { open_id: "ou_open_flat", user_id: "ou_user_flat" } },
+      schema: "2.0"
+    });
+
+    expect(action).toEqual({
+      action_id: "evt_flat_1",
+      chat_id: "oc_group",
+      message_id: "om_card_flat",
+      project_id: "demo",
+      selection_id: "fps_flat_1",
+      user_id: "ou_user_flat",
+      user_open_id: "ou_open_flat"
+    });
+  });
 });
