@@ -11,6 +11,7 @@ import {
   sentGuardianAlertRetryPatch,
   shouldAttemptGuardianAlertFeishu
 } from "../pi/guardianAlertRetryPolicy.ts";
+import { guardianAlertPresentation } from "../pi/guardianAlertPresentation.ts";
 import type { FeishuConnectorConfig } from "./feishu.ts";
 import {
   createFeishuMessageClient,
@@ -36,7 +37,9 @@ export async function sendDirectFeishuGuardianAlert(
   alert: PiGuardianAlert,
   options: PiGuardianDirectFeishuOptions
 ): Promise<void> {
-  if (!shouldAttemptGuardianAlertFeishu(alert, options.now ?? new Date())) return;
+  const now = options.now ?? new Date();
+  if (!guardianAlertPresentation(alert, now).requires_user) return;
+  if (!shouldAttemptGuardianAlertFeishu(alert, now)) return;
   const target = resolveTarget(db, alert, options.config);
   if (!target) return recordFailure(db, alert, "missing direct Feishu target", options.now);
   if (!targetAllowed(options.config, target)) {

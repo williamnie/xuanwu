@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 describe("PI Guardian direct Feishu alert target routing", () => {
-  test("routes system alert with empty project to default chat target", async () => {
+  test("keeps PI-handled system alerts in Guardian instead of routing them to the default chat", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender("om_default");
     try {
@@ -43,12 +43,46 @@ describe("PI Guardian direct Feishu alert target routing", () => {
         sender
       });
 
-      expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
+      expect(sender.calls).toHaveLength(0);
       expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
-        direct_feishu_message_id: "om_default",
-        direct_feishu_state: "sent",
+        direct_feishu_message_id: "",
+        direct_feishu_state: "not_attempted",
         status: "open",
         ui_visible: 1
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("routes an alert only after PI handling time is exhausted", async () => {
+    const db = await openFixtureDatabase();
+    const sender = new FakeGuardianSender("om_escalated");
+    try {
+      const inserted = upsertPiGuardianAlert(db, alertInput({
+        alert_type: "digest_flush_stalled",
+        id: "alert-escalated",
+        message: "digest coordinator remains stalled",
+        project_id: ""
+      }));
+      db.sqlite.run("update pi_guardian_alerts set created_at=? where id=?", [
+        "2026-06-23T00:00:00Z", inserted.id
+      ]);
+      const alert = getPiGuardianAlert(db, inserted.id)!;
+
+      await sendDirectFeishuGuardianAlert(db, alert, {
+        config: feishuConfig({
+          feishuAllowedChatIds: "oc_default",
+          feishuDefaultChatId: "oc_default"
+        }),
+        now: NOW,
+        sender
+      });
+
+      expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
+      expect(getPiGuardianAlert(db, alert.id)).toMatchObject({
+        direct_feishu_message_id: "om_escalated",
+        direct_feishu_state: "sent"
       });
     } finally {
       db.close();

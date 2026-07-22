@@ -49,7 +49,7 @@ describe("Guardian alert presentation", () => {
       status: "acked"
     }), NOW)).toMatchObject({
       handling: "pi_handling",
-      pi_can_handle: false,
+      pi_can_handle: true,
       requires_user: false,
       state_label: "已知晓 · 等待来源恢复"
     });

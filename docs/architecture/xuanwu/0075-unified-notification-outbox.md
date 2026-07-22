@@ -30,7 +30,9 @@ Agent 调用失败、返回无效结果，或错误压制 `requires_user` 事项
 
 Guardian 运行告警不再默认等同于“用户待办”。`guardianAlertPresentation.ts` 在读取时明确投影故障组件、范围、首次/最近发现时间、PI 已执行动作以及用户下一步，并把事件分为 `pi_handling`、`user_action_required` 和 `historical`：可自动恢复的告警只进入 Command Center 的紧凑运维摘要；仅审批、缺少输入、验收、连接/调度配置问题或已耗尽确定性恢复预算的事件进入用户 Attention。用户 acknowledge 后不再显示，snooze 在到期前不再显示；来源恢复时 `open`/`acked` 告警都自动归档，历史记录不会重新冒充当前故障。
 
-`guardianOperationsDailyReport.ts` 每个项目按既有通知偏好的 timezone 与 `daily_at`（默认 09:00）汇总过去 24 小时发现/恢复的告警、恢复会话和恢复 Issue 数量。日报仍调用 `routeNotification` 写入 `pi_notification_intents`，由既有 Agent communication gateway、draft/outbox 与 receipt 链路发送；`pi_reports(type='daily_operations_digest')` 只保存可审计报告快照和幂等日桶，不构成第二通知 authority。没有可用通知目标时不凭空创建旁路目标，也不会绕过既有偏好。
+`guardianOperationsDailyReport.ts` 仅在用户通过活动通知偏好显式设置 `digest_policy_json.operations_daily_report=true` 时，才按项目 timezone 与 `daily_at` 汇总过去 24 小时发现/恢复的告警、恢复会话和恢复 Issue 数量；历史 intent 的投递地址不能反向推断为日报订阅。日报调用 `routeNotification` 写入 `pi_notification_intents`，由既有 Agent communication gateway、draft/outbox 与 receipt 链路发送；`pi_reports(type='daily_operations_digest')` 只保存可审计报告快照和幂等日桶，不构成第二通知 authority。没有显式订阅或可用通知目标时不发送，也不会凭空创建旁路目标。
+
+Guardian 告警可以先写入 UI/Attention 供 PI 持续消化，但 direct Feishu 发送前必须复用 `guardianAlertPresentation(...).requires_user` 的确定性投影。短暂 scheduler、coordinator、digest、outbox、inbox 或 missed-digest 异常在恢复预算和等待窗口内只保留运行记录；只有缺少人工输入/配置、审批门禁、恢复预算耗尽，或异常持续达到升级阈值时才允许打扰用户。
 
 ## 兼容、回滚与删除门禁
 

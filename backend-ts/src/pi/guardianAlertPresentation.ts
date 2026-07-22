@@ -117,10 +117,9 @@ const ALERT_COPY: Record<string, AlertCopy> = {
   scheduler_stalled: {
     component: "Supervisor 调度器",
     description: "自动巡检心跳已超时，PI 可能无法继续执行自愈动作。",
-    piAction: "调度器自身不可用时 PI 无法可靠地自我恢复。",
+    piAction: "PI 会在后续巡检中确认调度器是否恢复；短暂心跳延迟只保留为运行记录。",
     title: "Supervisor 调度器已停止响应",
-    userAction: "检查 Core 服务和 scheduler 进程，恢复服务后刷新状态。",
-    userOwned: true
+    userAction: "若持续超过 30 分钟，请检查 Core 服务和 scheduler 进程，恢复服务后刷新状态。"
   }
 };
 

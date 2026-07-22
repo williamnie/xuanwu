@@ -22,8 +22,8 @@ afterEach(async () => {
   }
 });
 
-describe("PI auto-manage missed digest direct fallback", () => {
-  test("sends missed digest pending alert through direct Feishu when digest pipeline is unavailable", async () => {
+describe("PI auto-manage missed digest handling", () => {
+  test("keeps recoverable digest and outbox incidents inside PI", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender([
       { messageId: "om_current_outbox" },
@@ -44,17 +44,14 @@ describe("PI auto-manage missed digest direct fallback", () => {
         watchdogStaleAfterMs: 60_000
       });
       const alert = getPiGuardianAlert(db, result.missedIntentSweep.pendingAlertIds[0] ?? "");
-      const missedMessage = sender.calls.find((call) => call.text.includes("通知摘要待处理"));
 
       expect(result.missedIntentSweep).toMatchObject({ pending: 1, skipped: 1, summaries: 0, windows: 1 });
       expect(result.digestNotifications).toMatchObject({ queued: 0, scanned: 0 });
-      expect(missedMessage).toMatchObject({ receiveId: "oc_default", receiveIdType: "chat_id" });
-      expect(missedMessage?.text).toContain("请查看 Guardian");
-      expect(missedMessage?.text).not.toContain("digest_pipeline_unavailable");
+      expect(sender.calls).toHaveLength(0);
       expect(alert).toMatchObject({
-        direct_feishu_message_id: "om_missed_digest",
-        direct_feishu_state: "sent",
-        next_retry_at: "2026-06-19T00:25:00Z",
+        direct_feishu_message_id: "",
+        direct_feishu_state: "not_attempted",
+        next_retry_at: "",
         status: "open",
         ui_visible: 1
       });

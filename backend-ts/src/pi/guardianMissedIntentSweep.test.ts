@@ -111,7 +111,7 @@ describe("PI Guardian missed intent sweep", () => {
     }
   });
 
-  test("returns pending alert ids for direct Feishu fallback and respects retry gate", async () => {
+  test("keeps missed digest recovery inside PI instead of sending direct Feishu noise", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender([{ messageId: "om_missed_digest_1" }]);
     try {
@@ -131,15 +131,11 @@ describe("PI Guardian missed intent sweep", () => {
       const alert = getPiGuardianAlert(db, first.pendingAlertIds[0] ?? "");
 
       expect(first.pendingAlertIds).toHaveLength(1);
-      expect(sender.calls).toMatchObject([{ receiveId: "oc_default", receiveIdType: "chat_id" }]);
-      expect(sender.calls[0]?.text).toContain("通知摘要待处理");
-      expect(sender.calls[0]?.text).toContain("请查看 Guardian");
-      expect(sender.calls[0]?.text).not.toContain("missed_digest_pending");
-      expect(sender.calls[0]?.text).not.toContain("digest_pipeline_unavailable");
+      expect(sender.calls).toHaveLength(0);
       expect(alert).toMatchObject({
-        direct_feishu_message_id: "om_missed_digest_1",
-        direct_feishu_state: "sent",
-        next_retry_at: "2026-06-19T00:25:00Z",
+        direct_feishu_message_id: "",
+        direct_feishu_state: "not_attempted",
+        next_retry_at: "",
         retry_count: 0,
         status: "open",
         ui_visible: 1
@@ -156,13 +152,13 @@ describe("PI Guardian missed intent sweep", () => {
       });
 
       expect(repeat.pendingAlertIds).toEqual(first.pendingAlertIds);
-      expect(sender.calls).toHaveLength(1);
+      expect(sender.calls).toHaveLength(0);
     } finally {
       db.close();
     }
   });
 
-  test("records retry state when missed digest direct Feishu fallback fails", async () => {
+  test("does not consume direct Feishu retries for a PI-owned missed digest", async () => {
     const db = await openFixtureDatabase();
     const sender = new FakeGuardianSender([new Error("temporary Feishu outage")]);
     try {
@@ -181,15 +177,15 @@ describe("PI Guardian missed intent sweep", () => {
       });
       const alert = getPiGuardianAlert(db, result.pendingAlertIds[0] ?? "");
 
-      expect(sender.calls).toHaveLength(1);
+      expect(sender.calls).toHaveLength(0);
       expect(alert).toMatchObject({
-        direct_feishu_state: "retry",
-        next_retry_at: "2026-06-19T00:25:00Z",
-        retry_count: 1,
+        direct_feishu_error: "",
+        direct_feishu_state: "not_attempted",
+        next_retry_at: "",
+        retry_count: 0,
         status: "open",
         ui_visible: 1
       });
-      expect(alert?.direct_feishu_error).toContain("temporary Feishu outage");
     } finally {
       db.close();
     }

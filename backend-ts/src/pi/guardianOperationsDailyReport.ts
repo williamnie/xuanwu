@@ -9,6 +9,7 @@ import {
 import type { PiGuardianAlert } from "../db/repositories/pi/guardianAlerts.ts";
 import { routeNotification, type NotificationRoute } from "../notifications/unifiedNotificationPipeline.ts";
 import { guardianAlertPresentation } from "./guardianAlertPresentation.ts";
+import { resolvePiNotificationPreference } from "./notificationPreferenceResolver.ts";
 
 export type GuardianOperationsSummary = {
   active_pi_handling: number;
@@ -86,7 +87,7 @@ export function queueGuardianOperationsDailyReports(
   input: { now?: Date } = {}
 ): GuardianOperationsDailyReportResult {
   const now = input.now ?? new Date();
-  const routes = latestProjectRoutes(db);
+  const routes = latestProjectRoutes(db, now);
   const result: GuardianOperationsDailyReportResult = {
     generated: 0,
     queued: 0,
@@ -175,7 +176,7 @@ export function formatGuardianOperationsDailyReport(snapshot: GuardianOperations
   return lines.join("\n");
 }
 
-function latestProjectRoutes(db: RunnerDatabase): Array<{ route: NotificationRoute; row: RouteRow }> {
+function latestProjectRoutes(db: RunnerDatabase, now: Date): Array<{ route: NotificationRoute; row: RouteRow }> {
   const rows = db.sqlite.query<RouteRow, []>(`
     select project_id, preference_id, target_channel, target_chat_id,
       target_thread_id, target_message_id, updated_at
@@ -184,7 +185,11 @@ function latestProjectRoutes(db: RunnerDatabase): Array<{ route: NotificationRou
     order by updated_at desc, created_at desc, id desc limit 500
   `).all();
   const selected = new Map<string, RouteRow>();
-  for (const row of rows) if (!selected.has(row.project_id)) selected.set(row.project_id, row);
+  for (const row of rows) {
+    if (!selected.has(row.project_id) && operationsDailyReportEnabled(db, row, now)) {
+      selected.set(row.project_id, row);
+    }
+  }
   return [...selected.values()].map((row) => ({
     route: {
       channel: row.target_channel,
@@ -194,6 +199,16 @@ function latestProjectRoutes(db: RunnerDatabase): Array<{ route: NotificationRou
     },
     row
   }));
+}
+
+function operationsDailyReportEnabled(db: RunnerDatabase, row: RouteRow, now: Date): boolean {
+  if (row.preference_id === "") return false;
+  const resolved = resolvePiNotificationPreference(db, {
+    projectID: row.project_id,
+    referenceTime: now.toISOString()
+  });
+  return resolved.preferenceID === row.preference_id &&
+    resolved.effective.digest_policy.operations_daily_report === true;
 }
 
 function reportTime(db: RunnerDatabase, preferenceID: string): string {

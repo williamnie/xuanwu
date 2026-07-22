@@ -253,7 +253,7 @@ describe("Command Center aggregate API", () => {
         alert_type: "outbox_stalled", id: "guardian-auto", message: "outbox stalled: 1 stale item(s)", project_id: "demo"
       });
       upsertPiGuardianAlert(db, {
-        alert_type: "scheduler_stalled", id: "guardian-user", message: "scheduler stalled", project_id: "demo"
+        alert_type: "approval_fast_path_error", id: "guardian-user", message: "approval stalled", project_id: "demo"
       });
       upsertPiGuardianAlert(db, {
         alert_type: "coordinator_stalled", id: "guardian-acked", message: "coordinator stalled", project_id: "demo", status: "acked"
@@ -277,11 +277,11 @@ describe("Command Center aggregate API", () => {
       });
       expect(section.items).toMatchObject([{
         details: {
-          component: "Supervisor 调度器",
+          component: "审批解析器",
           handling: "user_action_required",
           location: "项目 demo",
           requires_user: true,
-          title: "Supervisor 调度器已停止响应"
+          title: "审批处理需要人工确认"
         },
         links: { self: "/api/pi/guardian/alerts/guardian-user" }
       }]);
