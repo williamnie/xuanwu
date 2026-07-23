@@ -112,6 +112,38 @@ describe("PI Guardian decision orchestrator rate limit and backpressure", () => 
     }
   });
 
+  test("keeps rate-limit evidence when more events merge into a deferred decision", async () => {
+    const db = await openFixtureDatabase();
+    const now = new Date();
+    try {
+      for (let index = 1; index <= 4; index++) {
+        signalEvent(db, { id: `merge-deferred-${index}`, issueID: 840 + index, severity: "watch" });
+      }
+      runGuardianDecisionOrchestratorOnce(db, { now });
+      const deferred = listPiGuardianDecisions(db, { projectId: "demo" })
+        .find((decision) => decision.state === "deferred");
+      expect(deferred).toBeDefined();
+      signalEvent(db, {
+        id: "merge-deferred-followup",
+        issueID: deferred!.issue_id,
+        severity: "watch"
+      });
+
+      const merged = runGuardianDecisionOrchestratorOnce(db, { now: new Date(now.getTime() + 1_000) });
+      const afterMerge = listPiGuardianDecisions(db, { projectId: "demo" })
+        .find((decision) => decision.id === deferred!.id);
+      const resumed = runGuardianDecisionOrchestratorOnce(db, { now: new Date(now.getTime() + 61_000) });
+
+      expect(merged).toMatchObject({ merged: 1 });
+      expect(rateLimitMeta(afterMerge!)).toMatchObject({ scope: "project" });
+      expect(resumed).toMatchObject({ rescheduled: 1 });
+      expect(listPiGuardianDecisions(db, { projectId: "demo" })
+        .find((decision) => decision.id === deferred!.id)).toMatchObject({ state: "proposed" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("defers run-group digest decisions within two minutes", async () => {
     const db = await openFixtureDatabase();
     const now = new Date();

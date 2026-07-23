@@ -8,6 +8,7 @@ import {
   type PiRecoveryAttemptStatus
 } from "../db/repositories/pi/recoveryAttempts.ts";
 import { readPiRecoveryBudget } from "../pi/recoveryBudget.ts";
+import { readProjectPiPolicy } from "../db/repositories/pi.ts";
 
 export function prepareIssueRecoveryAttempt(
   db: RunnerDatabase,
@@ -59,11 +60,14 @@ function assertRecoveryBudget(
   payload: Record<string, unknown>,
   input: { actionType: string; issueID: number }
 ): void {
+  const policy = readProjectPiPolicy(db, action.project_id);
   const budget = readPiRecoveryBudget(db, {
     actionType: input.actionType,
     issueID: input.issueID,
+    issueLimit: policy.supervisor_max_recoveries_per_issue,
     now: new Date(),
     projectID: action.project_id,
+    projectLimit: policy.supervisor_max_recoveries_per_project_per_hour,
     sessionID: sessionKey(payload, latestRun(db, input.issueID))
   });
   if (budget.status === "allow") return;

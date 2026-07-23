@@ -189,6 +189,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Create a high-risk pending proposal for a new issue; does not create the issue directly.",
       Type.Object({
         description: requiredText,
+        depends_on_issue_ids: Type.Optional(Type.Array(positiveID)),
         project_id: optionalString,
         rationale: optionalString,
         title: optionalString,

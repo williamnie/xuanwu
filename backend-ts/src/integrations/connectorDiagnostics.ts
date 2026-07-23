@@ -14,6 +14,7 @@ import {
 import { feishuChannelConnectorManifest } from "./feishuChannelConnector.ts";
 import { createDatabaseSecretService, type SecretService } from "../security/secrets/service.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import type { FeishuReceiverStatus } from "./feishuReceiver.ts";
 
 export const CONNECTOR_DIAGNOSTIC_SCHEMA = "xuanwu.connector-diagnostics.v1" as const;
 
@@ -40,6 +41,7 @@ type ConnectorFetch = (input: string | URL | Request, init?: RequestInit) => Pro
 type ConnectorDiagnosticsContext = {
   config: RunnerConfig;
   database: RunnerDatabase;
+  feishuReceiverStatus?: FeishuReceiverStatus;
   now?: () => Date;
   secrets?: SecretService;
   webhookSigningSecret?: string;
@@ -58,7 +60,7 @@ type StaticConnectorDefinition = {
 export function buildStaticConnectorDiagnostics(context: ConnectorDiagnosticsContext): Array<Record<string, unknown>> {
   const now = context.now?.() ?? new Date();
   const secrets = context.secrets ?? createDatabaseSecretService(context.database);
-  return staticDefinitions(context, secrets).map((definition) => publicDiagnostic(context.database, definition, now));
+  return staticDefinitions(context, secrets).map((definition) => publicDiagnostic(context, definition, now));
 }
 
 export function buildConnectorDiagnosticBundle(
@@ -198,12 +200,19 @@ function providerDefinition(
   };
 }
 
-function publicDiagnostic(database: RunnerDatabase, definition: StaticConnectorDefinition, now: Date): Record<string, unknown> {
-  const history = connectorTestHistory(database, definition.manifest.id, now);
-  const operation = latestOutboundState(database, definition.manifest.id, definition.source, now);
+function publicDiagnostic(
+  context: ConnectorDiagnosticsContext,
+  definition: StaticConnectorDefinition,
+  now: Date
+): Record<string, unknown> {
+  const history = connectorTestHistory(context.database, definition.manifest.id, now);
+  const operation = latestOutboundState(context.database, definition.manifest.id, definition.source, now);
   const revoked = definition.secret_refs.some((item) => item.required === true && item.status === "revoked");
-  const state = revoked ? "revoked" : healthState(definition.configured, history.test);
-  const lastSyncAt = lastSync(database, definition.manifest.id, definition.source);
+  const staticState = revoked ? "revoked" : healthState(definition.configured, history.test);
+  const receiver = definition.manifest.id === "feishu" ? context.feishuReceiverStatus : undefined;
+  const state = receiverHealthState(staticState, receiver);
+  const lastSyncAt = lastSync(context.database, definition.manifest.id, definition.source);
+  const runtimeChecked = Boolean(receiver && receiver.receive_mode === "websocket" && receiver.state !== "disabled");
   return {
     id: definition.manifest.id,
     label: definition.manifest.display_name,
@@ -218,16 +227,19 @@ function publicDiagnostic(database: RunnerDatabase, definition: StaticConnectorD
     permissions: definition.manifest.capabilities.map(permission),
     secret_refs: definition.secret_refs,
     health: {
-      checked: history.test !== null,
-      checked_at: history.test?.checked_at ?? "",
+      checked: runtimeChecked || history.test !== null,
+      checked_at: runtimeChecked ? now.toISOString() : history.test?.checked_at ?? "",
       state,
-      last_sync_at: latestTimestamp(lastSyncAt, operation.updated_at),
-      last_error: history.test?.error ?? operation.error,
+      last_sync_at: latestTimestamp(lastSyncAt, operation.updated_at, receiver?.last_event_at ?? ""),
+      last_error: receiver?.last_error
+        ? { code: "receiver_runtime_error", message: receiver.last_error }
+        : history.test?.error ?? operation.error,
       rate_limit: history.test?.rate_limit ?? operation.rate_limit,
       backoff: operation.blocked
         ? { attempt: operation.attempts, blocked: true, retry_at: operation.retry_at }
         : { attempt: history.attempts, blocked: history.blocked, retry_at: history.retry_at }
     },
+    ...(receiver ? { runtime: receiver } : {}),
     test_connection: { supported: definition.test_supported },
     revoke: { supported: definition.secret_refs.some((item) => item.revocable === true) },
     source_of_truth: definition.source_of_truth,
@@ -237,6 +249,17 @@ function publicDiagnostic(database: RunnerDatabase, definition: StaticConnectorD
       ...definition.secret_refs.filter((item) => item.required === true && item.configured !== true).map((item) => String(item.name ?? ""))
     ].filter(Boolean))]
   };
+}
+
+function receiverHealthState(
+  fallback: ConnectorDiagnosticState,
+  receiver: FeishuReceiverStatus | undefined
+): ConnectorDiagnosticState {
+  if (!receiver || receiver.receive_mode !== "websocket" || receiver.state === "disabled") return fallback;
+  if (receiver.connected && receiver.state === "connected") return "healthy";
+  if (receiver.state === "failed") return "failed";
+  if (receiver.state === "reconnecting") return "disconnected";
+  return "degraded";
 }
 
 function secretEntry(
@@ -447,10 +470,8 @@ function rateLimitSeconds(headers: Headers, now: Date): number {
   return Number.isFinite(resetSeconds) ? Math.max(1, Math.ceil(resetSeconds - now.getTime() / 1000)) : 0;
 }
 
-function latestTimestamp(left: string, right: string): string {
-  if (left === "") return right;
-  if (right === "") return left;
-  return Date.parse(left) >= Date.parse(right) ? left : right;
+function latestTimestamp(...values: string[]): string {
+  return values.filter((value) => value !== "").sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? "";
 }
 
 function text(value: unknown): string {

@@ -7,7 +7,8 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
 import { createPiAction } from "../db/repositories/pi/actions.ts";
 import type { DependencyRelation } from "../domain/work/contracts.ts";
-import { getIssueAsWork, issueIDToWorkID } from "../domain/work/issueAdapter.ts";
+import { readIssueDependency } from "../domain/work/issueDependency.ts";
+import { getIssueAsWork, issueIDToWorkID, workIDToIssueID } from "../domain/work/issueAdapter.ts";
 import { createDefaultRouter, createRequestHandler } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -22,6 +23,42 @@ afterEach(async () => {
 });
 
 describe("Work HTTP API", () => {
+  test("atomically materializes structured dependencies before a todo Work can be scheduled", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const upstream = createIssue(db, {
+        project_id: "demo",
+        status: "todo",
+        title: "Upstream"
+      });
+      const router = createDefaultRouter({ database: db });
+      const handle = createRequestHandler(router, AUTH_TOKEN);
+
+      const created = await handle(authenticatedJsonRequest("/api/works", "POST", {
+        audit: audit("dependent-work-create", "supervisor"),
+        depends_on_issue_ids: [upstream.id],
+        goal: "Wait for upstream delivery",
+        project_id: "demo",
+        status: "todo",
+        title: "Dependent Work",
+        type: "engineering_task"
+      }));
+      const workID = String(((await body(created)).work as Record<string, unknown>).id);
+      const issueID = workIDToIssueID(workID);
+
+      expect(created.status).toBe(201);
+      expect(readIssueDependency(db, issueID)).toMatchObject({
+        direct_dependencies: [{ issue_id: upstream.id }],
+        ready: false,
+        reason: "waiting_dependency"
+      });
+      expect(rowCount(db, "work_relations")).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("lists, filters, sorts and pages Issue-authoritative Work with detail relations", async () => {
     const db = await openFixtureDatabase();
     try {

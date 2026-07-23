@@ -34,6 +34,7 @@ export type IssueWorkPatch = Partial<Pick<WorkLedgerEntry, "goal" | "title">>;
 
 export type IssueWorkCreateCommand = {
   audit: WorkTransitionAudit;
+  depends_on_issue_ids?: number[];
   goal: string;
   project_id: string;
   source?: {
@@ -190,6 +191,7 @@ export function createIssueBackedWork(
     const replay = replayIssueWorkCreate(db, command.audit.event_id, fingerprint);
     if (replay) return replay;
     const issue = createIssue(db, {
+      depends_on_issue_ids: command.depends_on_issue_ids,
       description: command.goal,
       project_id: command.project_id,
       status: command.status,

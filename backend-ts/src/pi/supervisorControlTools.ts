@@ -74,6 +74,7 @@ export function createPiSupervisorControlTools(
     controlTool("work_create", "Work Create",
       "Create one Issue-backed engineering Work through the audited Work API. Requires an explicit idempotency key.",
       Type.Object({
+        depends_on_issue_ids: Type.Optional(Type.Array(Type.Integer({ minimum: 1 }))),
         goal: requiredText,
         idempotency_key: idempotencyKey,
         project_id: optionalString,
@@ -221,6 +222,7 @@ function createSupervisorControlActions(
 type WorkListInput = { limit?: number; project_id?: string; query?: string; statuses?: string[] };
 type WorkReadInput = { work_id: string };
 type WorkCreateInput = {
+  depends_on_issue_ids?: number[];
   goal: string; idempotency_key: string; project_id?: string; reason: string; status?: "triage" | "todo"; title: string;
 };
 type WorkUpdateInput = {
@@ -254,6 +256,9 @@ function workCreateAction(
 ) {
   const targetProject = requiredProjectID(input.project_id, project);
   const payload = {
+    ...(input.depends_on_issue_ids === undefined
+      ? {}
+      : { depends_on_issue_ids: input.depends_on_issue_ids }),
     goal: input.goal,
     project_id: targetProject,
     reason: input.reason,
@@ -269,6 +274,9 @@ function workCreateAction(
     target: targetProject,
     execute: async (eventID) => compactWorkMutation(await callDomain(router, "/api/works", {
       audit: domainAudit(context, eventID, input.reason),
+      ...(input.depends_on_issue_ids === undefined
+        ? {}
+        : { depends_on_issue_ids: input.depends_on_issue_ids }),
       goal: input.goal,
       project_id: targetProject,
       status: input.status ?? "triage",

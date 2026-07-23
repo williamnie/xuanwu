@@ -182,25 +182,40 @@ async function retryIssueNow(
     issueID,
     status: "executing"
   });
+  const before = issueRecoverySnapshot(context.database, issueID, payload);
   try {
     const issue = await retryIssueWithInterrupt(context.database, issueID, {}, { providers: context.providers });
+    const after = issueRecoverySnapshot(context.database, issueID, payload);
+    const progress = recoverySnapshotChanged(before, after);
     updatePiRecoveryAttemptStatus(context.database, attempt.id, {
-      after_snapshot_json: issueRecoverySnapshot(context.database, issueID, payload),
-      progress_detected: 1,
-      progress_reasons_json: ["issue_requeued"],
-      status: "progress"
+      after_snapshot_json: after,
+      progress_detected: progress ? 1 : 0,
+      progress_reasons_json: progress ? ["issue_requeued"] : [],
+      ignored_reasons_json: progress ? [] : ["retry_no_state_change"],
+      status: progress ? "progress" : "no_progress"
     });
     recordIssueEvent(context.database, issueID, "issue.supervisor_retry", {
       action_id: action.id,
       decision_id: cleanString(payload.decision_id),
       reason
     });
-    recordSupervisorResult(context.database, action, payload, { outcome: "queued", reason, status: issue.status });
+    recordSupervisorResult(context.database, action, payload, {
+      outcome: progress ? "queued" : "no_progress",
+      reason,
+      status: issue.status
+    });
     return issue;
   } catch (error) {
     updatePiRecoveryAttemptStatus(context.database, attempt.id, { error: safeError(error), status: "failed" });
     throw error;
   }
+}
+
+function recoverySnapshotChanged(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>
+): boolean {
+  return JSON.stringify(before) !== JSON.stringify(after);
 }
 
 function scheduleRetryAfter(

@@ -249,6 +249,47 @@ describe("Bun system status endpoints", () => {
     }
   });
 
+  test("uses the live Feishu websocket receiver as connector health authority", async () => {
+    const { config, database } = await openFixtureRuntime({
+      feishuAppId: "cli_app_id",
+      feishuAppSecret: "cli_app_secret"
+    });
+    try {
+      const router = createDefaultRouter();
+      registerSystemStatusRoute(router, {
+        authToken: "",
+        config,
+        database,
+        feishuReceiverStatus: () => ({
+          connected: true,
+          last_error: "",
+          last_event_at: "2026-07-23T12:00:00Z",
+          receive_mode: "websocket",
+          reconnect_attempts: 0,
+          state: "connected"
+        })
+      });
+
+      const response = await router.handle(new Request(`${BASE_URL}/api/system/status`));
+      const body = await response.json() as SystemStatusBody;
+      const feishu = body.connector_health.find((connector) => connector.id === "feishu");
+
+      expect(response.status).toBe(200);
+      expect(feishu).toMatchObject({
+        health: {
+          checked: true,
+          last_sync_at: "2026-07-23T12:00:00Z",
+          state: "healthy"
+        },
+        runtime: { connected: true, state: "connected" }
+      });
+      expect((body.health as { reasons?: Array<{ source_ref?: string }> }).reasons ?? [])
+        .not.toContainEqual(expect.objectContaining({ source_ref: "connector:feishu" }));
+    } finally {
+      database.close();
+    }
+  });
+
   test("reports runner counts from database state", async () => {
     const { config, database } = await openFixtureRuntime();
     try {

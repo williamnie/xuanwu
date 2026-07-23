@@ -83,11 +83,18 @@ function needsUserPreflight(
   const session = expectedSession(db, payload, run);
   if (!guardianAction(action, payload)) return { issue, run, session, skip: false };
   const changed = changedPrecondition(issue, run, session, payload);
-  if (changed !== "") return { reason: changed, skip: true };
-  if (recentSessionActivity(session?.updated_at, payload, new Date())) {
+  if (changed !== "" && !canRevalidateTerminalEscalation(issue, run)) {
+    return { reason: changed, skip: true };
+  }
+  if (run?.ended_at === "" && recentSessionActivity(session?.updated_at, payload, new Date())) {
     return { reason: "recent_session_activity", skip: true };
   }
   return { issue, run, session, skip: false };
+}
+
+function canRevalidateTerminalEscalation(issue: Issue, run: IssueRun | undefined): boolean {
+  if (issue.status === "done" || issue.status === "cancelled" || issue.status === "todo") return false;
+  return !run || run.ended_at !== "";
 }
 
 function guardianAction(action: PiAction, payload: Record<string, unknown>): boolean {

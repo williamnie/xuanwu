@@ -52,6 +52,7 @@ type IssueRunRow = {
   ended_at: unknown;
   error: unknown;
   exit_reason: unknown;
+  git_base_revision: unknown;
   id: unknown;
   issue_id: unknown;
   provider: unknown;
@@ -72,6 +73,7 @@ export type IssueRun = {
   codex_turn_id: string;
   ended_at: string;
   error: string;
+  git_base_revision: string;
   exit_reason: string;
   id: string;
   issue_id: number;
@@ -131,7 +133,8 @@ const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
 const ISSUE_RUN_COLUMNS = `ir.id, ir.issue_id, ir.attempt, ir.status, ir.provider,
   ir.provider_session_id, ir.provider_turn_id, ir.codex_thread_id, ir.codex_turn_id,
   ir.started_at, ir.ended_at, ir.exit_reason, ir.error, ir.agent_profile_id,
-  ir.capability_summary, ir.selection_reason, ir.runtime_metadata_json, ir.skill_intent_audit_json`;
+  ir.capability_summary, ir.selection_reason, ir.runtime_metadata_json, ir.skill_intent_audit_json,
+  ir.git_base_revision`;
 
 export function listIssues(db: RunnerDatabase, filter: IssueFilter = {}): Issue[] {
   const query = buildIssueListQuery(filter);
@@ -305,6 +308,7 @@ function mapIssueRunRow(row: IssueRunRow): IssueRun {
     ended_at: optionalString(row.ended_at),
     exit_reason: optionalString(row.exit_reason),
     error: optionalString(row.error),
+    git_base_revision: optionalString(row.git_base_revision),
     agent_profile_id: optionalString(row.agent_profile_id),
     capability_summary: optionalString(row.capability_summary),
     selection_reason: optionalString(row.selection_reason),

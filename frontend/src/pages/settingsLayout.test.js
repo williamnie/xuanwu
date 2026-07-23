@@ -96,6 +96,15 @@ test('advanced Runtime status exposes process-group memory freshness, roles, P95
   assert.match(settingsSource, /no auto-restart/);
 });
 
+test('advanced Runtime status distinguishes the project manager from the independent Guardian supervisor', () => {
+  assert.match(settingsSource, /PI project manager/);
+  assert.match(settingsSource, /Guardian supervisor/);
+  assert.match(settingsSource, /manager_active_projects/);
+  assert.match(settingsSource, /supervisor_active_projects/);
+  assert.match(settingsSource, /independent of project manager/);
+  assert.match(settingsSource, /does not decompose or replan Work/);
+});
+
 test('Xuanwu product sidebar removes the PI section and keeps internal config behind Settings', () => {
   const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
   const sidebarSource = readFileSync(new URL('../components/AppSidebar.jsx', import.meta.url), 'utf8');

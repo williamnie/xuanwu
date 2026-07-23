@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { retryIssue } from "../db/repositories/issueActions.ts";
 import { createPiAction } from "../db/repositories/pi.ts";
 import { listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import { dispatchPiAction } from "./piActionDispatch.ts";
@@ -67,6 +68,32 @@ describe("PI supervisor issue retry recovery attempts", () => {
         .rejects.toThrow("recovery budget is exhausted");
 
       expect(listPiRecoveryAttempts(db, { issueId: 310 })).toHaveLength(3);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("issue.retry records no_progress when an equivalent new Run request is already pending", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, 311);
+      db.sqlite.run("update issues set status='failed' where id=311");
+      db.sqlite.run(
+        "update issue_runs set status='failed', ended_at='2026-06-10T07:00:00Z' where issue_id=311"
+      );
+      retryIssue(db, 311);
+
+      const result = await dispatchPiAction({ database: db }, retryAction(db, 311, "retry-noop-action"));
+
+      expect(result).toMatchObject({ id: 311, status: "todo" });
+      expect(listPiRecoveryAttempts(db, { issueId: 311 })).toContainEqual(expect.objectContaining({
+        action_type: "issue.retry",
+        ignored_reasons_json: "[\"retry_no_state_change\"]",
+        progress_detected: 0,
+        progress_reasons_json: "[]",
+        status: "no_progress"
+      }));
     } finally {
       db.close();
     }

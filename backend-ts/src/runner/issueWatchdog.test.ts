@@ -319,6 +319,7 @@ function addDependency(db: RunnerDatabase, issueID: number, dependencyID: number
 function ensureWork(db: RunnerDatabase, issueID: number): void {
   const work = getIssueAsWork(db, issueID);
   if (!work) throw new Error(`missing fixture issue ${issueID}`);
+  if (db.sqlite.query("select id from works where id=?").get(work.id)) return;
   insertWorkRecord(db, work);
 }
 

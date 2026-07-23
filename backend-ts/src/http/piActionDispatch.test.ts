@@ -392,6 +392,48 @@ describe("PI action dispatcher supervisor actions", () => {
     }
   });
 
+  test("guardian needs_user revalidates stale snapshots and notifies when the current Run is terminal", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 424, projectID: "demo", sessionID: "thread-424", turnID: "turn-424" });
+      db.sqlite.run(
+        "update issues set status='failed', updated_at=? where id=?",
+        ["2026-06-10T07:05:00Z", 424]
+      );
+      db.sqlite.run(
+        "update issue_runs set status='failed', ended_at=? where issue_id=?",
+        ["2026-06-10T07:05:00Z", 424]
+      );
+      const action = createPiAction(db, {
+        action_type: "needs_user.escalate",
+        id: "needs-user-terminal-revalidated",
+        issue_id: 424,
+        payload_json: JSON.stringify({
+          diagnosis_code: "requires_human_decision",
+          expected_issue_status: "in_progress",
+          expected_issue_updated_at: "2026-06-10T07:00:00Z",
+          expected_run_id: "issue-424-attempt-1",
+          expected_run_status: "in_progress",
+          issue_id: 424,
+          message: "terminal escalation",
+          provider: "codex"
+        }),
+        project_id: "demo",
+        source: "pi_guardian_orchestrator",
+        status: "approved"
+      });
+
+      await expect(dispatchPiAction({ database: db }, action)).resolves.toMatchObject({
+        notification: expect.objectContaining({ issue_id: 424 })
+      });
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toHaveLength(1);
+      expect(listIssueEvents(db, 424).filter((item) => item.type === "issue.comment")).toHaveLength(1);
+    } finally {
+      db.close();
+    }
+  });
+
   test("guardian needs_user waits while the executor session is still active", async () => {
     const db = await fixtureDb();
     try {

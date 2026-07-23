@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { supervisorRecoveryActionCandidates } from "./recoveryActionPlanner.ts";
 
 describe("supervisor recovery action planner", () => {
-  test("retries a failed executor attempt before escalating its business failure", () => {
-    expect(supervisorRecoveryActionCandidates({
+  test("escalates a legacy generic scheduler failure instead of spending a blind retry", () => {
+    const candidates = supervisorRecoveryActionCandidates({
       eventID: "failed-attempt-1",
       issueID: 700,
       payload: {
@@ -19,7 +19,9 @@ describe("supervisor recovery action planner", () => {
         supervisor_mode: "autonomous"
       },
       projectID: "demo"
-    })).toContainEqual(expect.objectContaining({ action_type: "issue.retry" }));
+    });
+    expect(candidates).toContainEqual(expect.objectContaining({ action_type: "needs_user.escalate" }));
+    expect(candidates).not.toContainEqual(expect.objectContaining({ action_type: "issue.retry" }));
   });
 
   test("plans resume follow-up with a concise continue prompt for idle sessions", () => {

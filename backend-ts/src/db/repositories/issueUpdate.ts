@@ -150,6 +150,9 @@ function validateIssuePatch(
   if (Object.hasOwn(patch, "project_id")) {
     if (current.status !== "triage") throw new Error("只有 Triage 状态的 Issue 可以更换所属项目");
     if (issue.project_id === "" || !getProject(db, issue.project_id)) throw new ProjectNotFoundError();
+    if (issue.project_id !== current.project_id && issueHasStructuralRelations(db, current.id)) {
+      throw new Error("存在结构化依赖关系的 Issue 不能更换所属项目");
+    }
   }
   if (Object.hasOwn(patch, "status") && current.status === "in_progress" && issue.status === "todo") {
     throw new Error("运行中的 Issue 请使用 retry 操作，避免重复创建 Session");
@@ -159,6 +162,15 @@ function validateIssuePatch(
     throw new Error("issue_log_mode 只支持 normal 或 debug");
   }
   if (issue.title === "") throw new Error("issue 内容不能为空");
+}
+
+function issueHasStructuralRelations(db: RunnerDatabase, issueID: number): boolean {
+  const workID = `xw:work:issues:${issueID}`;
+  const row = db.sqlite.query<{ count: number }, [string, string]>(`
+    select count(*) as count from work_relations
+    where source_work_id=? or target_work_id=?
+  `).get(workID, workID);
+  return (row?.count ?? 0) > 0;
 }
 
 function issueToPatchShape(issue: Issue): NormalizedIssuePatch {

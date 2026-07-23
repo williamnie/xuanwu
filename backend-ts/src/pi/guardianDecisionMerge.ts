@@ -137,7 +137,10 @@ export function mergeEvidenceJson(
     source_event_sequence_id: Math.max(previous?.source_event_sequence_id ?? 0, candidate.source_event_sequence_id),
     window_ms: plan.window_ms
   };
-  return JSON.stringify([{ guardian_decision_merge: meta }]);
+  const preserved = existing
+    ? jsonArray(existing.evidence_json).filter((item) => !Object.hasOwn(item, "guardian_decision_merge"))
+    : [];
+  return JSON.stringify([...preserved, { guardian_decision_merge: meta }]);
 }
 
 export function guardianDecisionMergeMeta(decision: PiGuardianDecision): GuardianDecisionMergeMeta | null {

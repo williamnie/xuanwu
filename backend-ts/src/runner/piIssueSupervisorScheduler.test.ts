@@ -118,7 +118,7 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
-  test("plans an autonomous retry for a recent failed executor attempt", async () => {
+  test("plans a needs-user escalation for a deterministic failed executor attempt", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo", await tempRoot("supervisor-failed-retry-project-"));
@@ -137,9 +137,9 @@ describe("PI issue supervisor scheduler", () => {
       expect(result).toMatchObject({ scanned: 1, signaled: 1 });
       expect(queued).toMatchObject({ created: 1, scanned: 1 });
       expect(settled).toMatchObject({ leases_acquired: 1 });
-      expect(action).toMatchObject({ action_type: "issue.retry", gate_decision: "execute", status: "approved" });
+      expect(action).toMatchObject({ action_type: "needs_user.escalate", gate_decision: "execute", status: "approved" });
       expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
-        diagnosis_code: "scheduler_retryable_error",
+        diagnosis_code: "requires_human_decision",
         expected_issue_status: "failed",
         expected_run_id: "issue-507-attempt-1"
       });

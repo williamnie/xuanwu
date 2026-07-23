@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { createIssue } from "../db/repositories/issueCreate.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -144,6 +145,47 @@ describe("Bun issue patch API", () => {
     }
   });
 
+  test("creates a delivery Handoff from committed changes after the Run baseline when HEAD is clean", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const repository = cleanRepository(database);
+      insertProject(database, "demo", repository.path);
+      const issueId = insertIssue(database, "demo", "in_progress");
+      insertOpenRun(database, issueId);
+      database.sqlite.run(
+        "update issue_runs set git_base_revision=? where issue_id=?",
+        [repository.baseline, issueId]
+      );
+      writeFileSync(join(repository.path, "committed-result.txt"), "committed delivery artifact\n");
+      execFileSync("git", ["add", "committed-result.txt"], { cwd: repository.path });
+      execFileSync("git", [
+        "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
+        "commit", "-qm", "deliver result"
+      ], { cwd: repository.path });
+      insertCommandEvidenceEvent(database, issueId, "bun test src/http/issuePatchApi.test.ts", 0);
+
+      const response = await patchIssue(database, issueId, { status: "done", error: "" });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: issueId, status: "done", error: "" });
+      const handoffs = await createDefaultRouter({ database }).handle(new Request(
+        `${BASE_URL}/api/handoffs?issue_id=${issueId}`
+      ));
+      expect(handoffs.status).toBe(200);
+      const handoffList = await handoffs.json() as { items: Array<{ id: string }> };
+      expect(handoffList.items).toHaveLength(1);
+      const detail = await createDefaultRouter({ database }).handle(new Request(
+        `${BASE_URL}/api/handoffs/${encodeURIComponent(handoffList.items[0]!.id)}`
+      ));
+      expect(detail.status).toBe(200);
+      expect(await detail.json()).toMatchObject({
+        handoff: { baseline_revision: repository.baseline, status: "ready" }
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("keeps a verified completion pending when no real delivery artifact can be produced", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -243,6 +285,34 @@ describe("Bun issue patch API", () => {
     }
   });
 
+  test("rejects moving an issue while a structural dependency relation exists", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      insertProject(database, "target");
+      const upstream = createIssue(database, {
+        project_id: "demo",
+        status: "todo",
+        title: "upstream"
+      });
+      const downstream = createIssue(database, {
+        depends_on_issue_ids: [upstream.id],
+        project_id: "demo",
+        status: "triage",
+        title: "downstream"
+      });
+
+      const response = await patchIssue(database, downstream.id, { project_id: "target" });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        message: "存在结构化依赖关系的 Issue 不能更换所属项目"
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test("returns stable errors for invalid and missing issue patches", async () => {
     const database = await openFixtureDatabase();
     try {
@@ -324,7 +394,13 @@ function insertProject(db: RunnerDatabase, id: string, cwd = join(dirname(db.pat
 }
 
 function dirtyRepository(db: RunnerDatabase): string {
-  const repository = join(dirname(db.path), "project");
+  const repository = cleanRepository(db).path;
+  writeFileSync(join(repository, "result.txt"), "actual delivery artifact\n");
+  return repository;
+}
+
+function cleanRepository(db: RunnerDatabase): { baseline: string; path: string } {
+  const repository = join(dirname(db.path), `project-${crypto.randomUUID()}`);
   mkdirSync(repository, { recursive: true });
   execFileSync("git", ["init", "-q"], { cwd: repository });
   writeFileSync(join(repository, "baseline.txt"), "baseline\n");
@@ -333,8 +409,10 @@ function dirtyRepository(db: RunnerDatabase): string {
     "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
     "commit", "-qm", "baseline"
   ], { cwd: repository });
-  writeFileSync(join(repository, "result.txt"), "actual delivery artifact\n");
-  return repository;
+  return {
+    baseline: execFileSync("git", ["rev-parse", "HEAD"], { cwd: repository, encoding: "utf8" }).trim(),
+    path: repository
+  };
 }
 
 function insertIssue(db: RunnerDatabase, projectId: string, status = "triage"): number {

@@ -60,12 +60,16 @@ const RECOVERY_ACTIONS = new Set(["session.resume_followup", "session.steer", "i
 export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const out: SupervisorCandidate[] = [];
   const { providerError, session, history, latestRun, now } = input;
+  const runOpen = latestRun?.status === "in_progress" && latestRun.ended_at === "";
+  const stopped = stoppedSession(session);
+  const stale = staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS);
+  const freshActiveRun = runOpen && session !== null && activeStatus(session.status) && !stopped && !stale;
   const budgetCandidate = recoveryBudgetCandidate(history);
-  if (budgetCandidate) {
+  if (budgetCandidate && !freshActiveRun) {
     out.push(budgetCandidate);
     return out;
   }
-  if (Number(history.consecutive_no_progress) >= 2 || Number(history.budget_remaining) <= 0) {
+  if (!freshActiveRun && (Number(history.consecutive_no_progress) >= 2 || Number(history.budget_remaining) <= 0)) {
     out.push({
       diagnosis_code: "session_recovery_exhausted",
       evidence_refs: ["recovery_history"],
@@ -77,14 +81,16 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const outageCandidate = providerOutageCandidate(input);
   if (outageCandidate) return [outageCandidate];
   const diagnosis = providerError?.diagnosis_code;
-  const stopped = stoppedSession(session);
-  const runOpen = latestRun?.status === "in_progress" && latestRun.ended_at === "";
   const failedAttempt = input.issueStatus === "failed" && latestRun?.ended_at !== "";
-  if (failedAttempt && (!providerError || providerError.category === "business_failure" || providerError.category === "unknown")) {
+  if (failedAttempt && providerError?.diagnosis_code) {
+    out.push(providerErrorCandidate(input, providerError, providerError.diagnosis_code));
+    return out;
+  }
+  if (failedAttempt) {
     out.push({
-      diagnosis_code: "scheduler_retryable_error",
+      diagnosis_code: "requires_human_decision",
       evidence_refs: ["issue", "latest_run"],
-      reason: "executor attempt failed; retry autonomously before escalating"
+      reason: "executor attempt ended in a deterministic failure without an explicit transient provider diagnosis"
     });
     return out;
   }
@@ -95,7 +101,7 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   if (runOpen && stopped && !blocksStoppedRecovery(providerError)) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session is idle while issue run remains open" });
   }
-  if (runOpen && !diagnosis && !stopped && staleSession(session, now, input.staleAfterSeconds ?? DEFAULT_STALE_SECONDS)) {
+  if (runOpen && !diagnosis && !stopped && stale) {
     out.push({ diagnosis_code: "session_no_recent_progress", evidence_refs: ["session"], reason: "session has no recent updates" });
   }
   return out;

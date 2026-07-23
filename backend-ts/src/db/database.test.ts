@@ -149,6 +149,10 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "issues")).toContain("service_tier");
       expect(columnNames(connection, "issues")).toContain("required_skill_intents_json");
       expect(columnNames(connection, "issues")).toContain("required_mcp_capabilities_json");
+      expect(columnNames(connection, "issues")).toEqual(expect.arrayContaining([
+        "dependency_declaration_error",
+        "dependency_issue_ids_json"
+      ]));
       expect(columnNames(connection, "projects")).toContain("default_skill_policy_json");
       expect(columnNames(connection, "projects")).toContain("default_mcp_policy_json");
       expect(columnNames(connection, "pi_delegations")).toContain("allowed_skill_intents_json");
@@ -162,6 +166,7 @@ describe("Bun SQLite database connection", () => {
       expect(columnNames(connection, "pi_mcp_capabilities")).toEqual(expect.arrayContaining(["enabled", "permission", "read_only", "requires_confirmation", "risk_level"]));
       expect(columnNames(connection, "issue_runs")).toContain("provider_session_id");
       expect(columnNames(connection, "issue_runs")).toContain("runtime_metadata_json");
+      expect(columnNames(connection, "issue_runs")).toContain("git_base_revision");
       expect(generatedColumnNames(connection, "issue_runs")).toEqual(expect.arrayContaining([
         "run_id",
         "run_sequence",
@@ -241,7 +246,8 @@ describe("Bun SQLite database connection", () => {
         { id: "052_consolidate_pi_decision_layers" },
         { id: "054_compact_event_summary_projection" },
         { id: "055_collapse_pi_agents_to_supervisor" },
-        { id: "056_issue_log_mode" }
+        { id: "056_issue_log_mode" },
+        { id: "057_issue_dependency_and_run_git_baseline" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -869,7 +875,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 55 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 56 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

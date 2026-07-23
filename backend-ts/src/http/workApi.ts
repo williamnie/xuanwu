@@ -45,9 +45,9 @@ export const WORK_HTTP_COMPATIBILITY_POLICY = {
   final_removal_gate: "P11.05/P11.09-and-G7-and-zero-consumer-and-backup-restore-observation-window",
   read_authority: "issues",
   readiness_authority: "issues.status+work_relations+append-only-structured-Evidence-request-time-projection",
-  relation_authority: "pi-carrier-read-projection",
+  relation_authority: "work_relations-with-atomic-issue-create-materialization",
   rollback: "unregister-work-http-routes-without-data-migration",
-  structural_relation_write: "unavailable-before-G4",
+  structural_relation_write: "issue-create-depends_on",
   target_shadow: "disabled",
   write_authority: "issues-via-work-adapter"
 } as const;
@@ -87,7 +87,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   ));
   router.post("/api/works", async (request) => workResponse(async () => {
     const body = await objectBody(request);
-    assertKeys(body, ["audit", "goal", "project_id", "status", "title", "type"]);
+    assertKeys(body, ["audit", "depends_on_issue_ids", "goal", "project_id", "status", "title", "type"]);
     const projectID = requiredString(body.project_id, "project_id");
     if (!getProject(context.database, projectID)) throw workError(404, "project_not_found", "Project not found");
     const type = optionalString(body.type) || "engineering_task";
@@ -107,6 +107,7 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     }
     const result = createIssueBackedWork(context.database, {
       audit: auditInput(body.audit),
+      depends_on_issue_ids: positiveIssueIDArray(body.depends_on_issue_ids),
       goal: requiredString(body.goal, "goal"),
       project_id: projectID,
       status,
@@ -529,6 +530,16 @@ function optionalString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function positiveIssueIDArray(value: unknown): number[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) =>
+    typeof item !== "number" || !Number.isSafeInteger(item) || item <= 0
+  )) {
+    throw workError(400, "invalid_request", "depends_on_issue_ids must be a positive integer array");
+  }
+  return [...new Set(value as number[])].sort((left, right) => left - right);
+}
+
 function assertKeys(body: Record<string, unknown>, allowed: string[]): void {
   const unknown = Object.keys(body).filter((key) => !allowed.includes(key));
   if (unknown.length > 0) {
@@ -562,6 +573,12 @@ function workErrorResponse(error: unknown): Response {
   }
   if (error instanceof ProjectNotFoundError) {
     return json({ code: "project_not_found", message: "Project not found" }, { status: 404 });
+  }
+  if (error instanceof Error && (
+    error.message.startsWith("依赖 Issue #") ||
+    error.message.startsWith("depends_on_issue_ids")
+  )) {
+    return json({ code: "invalid_request", message: error.message }, { status: 400 });
   }
   if (error instanceof Error && error.message.includes("conflicts with another command")) {
     return json({

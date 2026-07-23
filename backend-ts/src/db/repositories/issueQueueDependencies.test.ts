@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../database.ts";
 import { getIssueAsWork, issueIDToWorkID } from "../../domain/work/issueAdapter.ts";
 import { readIssueDependency } from "../../domain/work/issueDependency.ts";
 import type { DependencyRelation } from "../../domain/work/contracts.ts";
+import { deleteIssue } from "./issueActions.ts";
 import { createIssue } from "./issueCreate.ts";
 import { claimNextIssue } from "./issueQueue.ts";
 import { getIssue, listIssueRuns } from "./issues.ts";
@@ -22,6 +23,113 @@ afterEach(async () => {
 });
 
 describe("issue queue Work dependency readiness", () => {
+  test("materializes Markdown and structured Issue dependencies atomically before queue claim", async () => {
+    const db = await fixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const upstream = createIssue(db, { project_id: "demo", status: "todo", title: "upstream" });
+      const markdown = createIssue(db, {
+        description: `## 依赖\n\n- Issue #${upstream.id}：必须先完成`,
+        project_id: "demo",
+        status: "todo",
+        title: "markdown downstream"
+      });
+      const structured = createIssue(db, {
+        depends_on_issue_ids: [upstream.id],
+        project_id: "demo",
+        status: "todo",
+        title: "structured downstream"
+      });
+
+      expect(readIssueDependency(db, markdown.id)).toMatchObject({
+        direct_dependencies: [{ issue_id: upstream.id }],
+        ready: false,
+        reason: "waiting_dependency"
+      });
+      expect(readIssueDependency(db, structured.id)).toMatchObject({
+        direct_dependencies: [{ issue_id: upstream.id }],
+        ready: false,
+        reason: "waiting_dependency"
+      });
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from work_relations where kind='depends_on'"
+      ).get()?.count).toBe(2);
+      expect(claimNextIssue(db, "demo")).toMatchObject({ id: upstream.id });
+      expectUntouched(db, markdown.id);
+      expectUntouched(db, structured.id);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("rejects unresolved declarations and fails closed when a declared relation is missing", async () => {
+    const db = await fixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      expect(() => createIssue(db, {
+        description: "## 依赖\n\n- 等后端任务完成",
+        project_id: "demo",
+        status: "todo",
+        title: "unparseable"
+      })).toThrow("没有可解析");
+      expect(() => createIssue(db, {
+        depends_on_issue_ids: [999999],
+        project_id: "demo",
+        status: "todo",
+        title: "missing"
+      })).toThrow("不存在");
+
+      const upstream = insertIssue(db, "upstream", "todo");
+      const downstream = insertIssue(db, "downstream", "todo", 100);
+      db.sqlite.run(
+        "update issues set dependency_issue_ids_json=? where id=?",
+        [JSON.stringify([upstream]), downstream]
+      );
+      expect(readIssueDependency(db, downstream)).toMatchObject({
+        ready: false,
+        reason: "missing_dependency",
+        root_blockers: [{ issue_id: upstream, status: "missing" }]
+      });
+      expect(claimNextIssue(db, "demo")).toMatchObject({ id: upstream });
+      expectUntouched(db, downstream);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("deleting an upstream Issue removes its structural edge and keeps downstream work fail-closed", async () => {
+    const db = await fixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const upstream = createIssue(db, {
+        project_id: "demo",
+        status: "cancelled",
+        title: "deletable upstream"
+      });
+      const downstream = createIssue(db, {
+        depends_on_issue_ids: [upstream.id],
+        project_id: "demo",
+        status: "todo",
+        title: "blocked downstream"
+      });
+
+      deleteIssue(db, upstream.id);
+
+      expect(db.sqlite.query("select id from works where id=?").get(issueIDToWorkID(upstream.id))).toBeNull();
+      expect(db.sqlite.query<{ count: number }, []>(
+        "select count(*) as count from work_relations where kind='depends_on'"
+      ).get()).toEqual({ count: 0 });
+      expect(readIssueDependency(db, downstream.id)).toMatchObject({
+        ready: false,
+        reason: "missing_dependency",
+        root_blockers: [{ issue_id: upstream.id, status: "missing" }]
+      });
+      expect(claimNextIssue(db, "demo")).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
   test("uses Issue status for every dependency state and only done is ready", async () => {
     const db = await fixtureDatabase();
     try {

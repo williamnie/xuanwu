@@ -54,6 +54,7 @@ import { dropLegacyAutomationTablesMigration } from "./053_drop_legacy_automatio
 import { compactEventSummaryProjectionMigration } from "./054_compact_event_summary_projection.ts";
 import { collapsePiAgentsToSupervisorMigration } from "./055_collapse_pi_agents_to_supervisor.ts";
 import { issueLogModeMigration } from "./056_issue_log_mode.ts";
+import { issueDependencyAndRunGitBaselineMigration } from "./057_issue_dependency_and_run_git_baseline.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -111,5 +112,6 @@ export const migrations = [
   dropLegacyAutomationTablesMigration,
   compactEventSummaryProjectionMigration,
   collapsePiAgentsToSupervisorMigration,
-  issueLogModeMigration
+  issueLogModeMigration,
+  issueDependencyAndRunGitBaselineMigration
 ];

@@ -20,10 +20,36 @@ export function createIssueRun(db: RunnerDatabase, issueID: number): IssueRun {
   const attempt = nextAttempt(db, issueID);
   const requested = pendingRunCreation(db, issueID, attempt);
   const id = `issue-${issueID}-attempt-${attempt}`;
-  db.sqlite.run(`insert into issue_runs (id, issue_id, attempt, status, provider, started_at)
-    values (?, ?, ?, ?, ?, ?)`, [id, issueID, attempt, "in_progress", "codex", issueTimestamp()]);
+  const gitBaseRevision = currentIssueProjectRevision(db, issueID);
+  db.sqlite.run(`insert into issue_runs (
+    id, issue_id, attempt, status, provider, git_base_revision, started_at
+  ) values (?, ?, ?, ?, ?, ?, ?)`, [
+    id, issueID, attempt, "in_progress", "codex", gitBaseRevision, issueTimestamp()
+  ]);
   if (requested) recordRunMaterialized(db, requested, id);
   return mustFindIssueRun(db, issueID, id);
+}
+
+function currentIssueProjectRevision(db: RunnerDatabase, issueID: number): string {
+  const cwd = db.sqlite.query<{ cwd: string }, [number]>(`
+    select projects.cwd from issues
+    join projects on projects.id=issues.project_id
+    where issues.id=?
+  `).get(issueID)?.cwd.trim() ?? "";
+  if (cwd === "") return "";
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+      cwd,
+      stderr: "ignore",
+      stdout: "pipe"
+    });
+    if (result.exitCode !== 0) return "";
+    const revision = result.stdout.toString().trim().toLowerCase();
+    return /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision) ? revision : "";
+  } catch {
+    return "";
+  }
 }
 
 export function ensureOpenIssueRun(db: RunnerDatabase, issueID: number): IssueRun {

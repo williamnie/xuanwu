@@ -73,6 +73,18 @@ describe("PI guardian system status", () => {
         failed_notification: 1,
         satisfied_pending_notification: 1
       });
+      expect(body.pi_guardian.runtime_modes).toMatchObject({
+        manager_active_projects: 0,
+        manager_disabled_projects: 1,
+        supervisor_active_projects: 1,
+        supervisor_independent_of_manager: true,
+        projects: [{
+          manager_active: false,
+          project_id: "demo",
+          supervisor_active: true,
+          supervisor_mode: "autonomous"
+        }]
+      });
     } finally {
       database.close();
     }
@@ -122,6 +134,7 @@ function watchIntent(watchID: string, error: string): Record<string, unknown> {
 type SystemStatusBody = {
   pi_guardian: {
     completion_watch: Record<string, number>;
+    runtime_modes: Record<string, unknown>;
     watchdog: { is_stale: boolean; last_seen: string; stale_after: string };
   };
 };

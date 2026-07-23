@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listPiActions, listPiGuardianDecisions, listPiGuardianEvents, pausePiHeartbeat, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
@@ -306,7 +307,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("retries a failed autonomous issue without notifying the user first", async () => {
+  test("escalates a deterministic failed autonomous issue instead of spending a blind retry", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     try {
@@ -335,11 +336,14 @@ describe("PI auto-manage scheduler", () => {
       expect(first.supervisor).toMatchObject({ signaled: 1 });
       expect(second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
       expect(listPiActions(db, { issueId: 520 })[0]).toMatchObject({
-        action_type: "issue.retry",
+        action_type: "needs_user.escalate",
         status: "completed"
       });
-      expect(getIssue(db, 520)).toMatchObject({ status: "todo" });
-      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
+      expect(getIssue(db, 520)).toMatchObject({ status: "failed" });
+      expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toMatchObject([
+        expect.objectContaining({ event: "pi.needs_user", issue_id: 520 })
+      ]);
+      expect(listPiRecoveryAttempts(db, { issueId: 520 })).toEqual([]);
     } finally {
       db.close();
     }

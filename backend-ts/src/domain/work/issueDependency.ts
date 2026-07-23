@@ -35,10 +35,19 @@ export type IssueDependencyDiagnostic = {
   waiting_reason: string;
 };
 
-type IssueRow = { id: number; project_id: string; status: string; title: string };
+type IssueRow = {
+  dependency_declaration_error: string;
+  dependency_issue_ids_json: string;
+  id: number;
+  project_id: string;
+  status: string;
+  title: string;
+};
 type RelationRow = { source_work_id: string; target_work_id: string };
 type DependencyGraph = {
   db: RunnerDatabase;
+  declarationErrorsBySource: Map<string, string>;
+  declaredTargetsBySource: Map<string, string[]>;
   issuesByWorkID: Map<string, IssueRow>;
   targetsBySource: Map<string, string[]>;
 };
@@ -48,7 +57,8 @@ export function readIssueDependency(
   issueID: number
 ): IssueDependencyDiagnostic | null {
   const issue = db.sqlite.query<IssueRow, [number]>(
-    "select id, project_id, status, title from issues where id=?"
+    `select id, project_id, status, title, dependency_issue_ids_json,
+      dependency_declaration_error from issues where id=?`
   ).get(issueID);
   if (!issue) return null;
   return readProjectIssueDependencies(db, issue.project_id).get(issueID) ?? null;
@@ -65,7 +75,8 @@ export function readProjectIssueDependencies(
   const cleanProjectID = projectID.trim();
   if (!cleanProjectID) return new Map();
   const issues = db.sqlite.query<IssueRow, [string]>(
-    "select id, project_id, status, title from issues where project_id=? order by id"
+    `select id, project_id, status, title, dependency_issue_ids_json,
+      dependency_declaration_error from issues where project_id=? order by id`
   ).all(cleanProjectID);
   const graph = dependencyGraph(db, cleanProjectID, issues);
   return new Map(issues.map((issue) => [issue.id, evaluateIssueDependency(graph, issue)]));
@@ -73,6 +84,13 @@ export function readProjectIssueDependencies(
 
 function dependencyGraph(db: RunnerDatabase, projectID: string, issues: IssueRow[]): DependencyGraph {
   const issuesByWorkID = new Map(issues.map((issue) => [issueIDToWorkID(issue.id), issue]));
+  const declaredTargetsBySource = new Map(issues.map((issue) => [
+    issueIDToWorkID(issue.id),
+    declaredDependencyIDs(issue.dependency_issue_ids_json).map(issueIDToWorkID)
+  ]));
+  const declarationErrorsBySource = new Map(issues
+    .filter((issue) => issue.dependency_declaration_error.trim() !== "")
+    .map((issue) => [issueIDToWorkID(issue.id), issue.dependency_declaration_error.trim()]));
   const rows = db.sqlite.query<RelationRow, [string]>(`
     select source_work_id, target_work_id from work_relations
     where project_id=? and kind='depends_on'
@@ -84,18 +102,26 @@ function dependencyGraph(db: RunnerDatabase, projectID: string, issues: IssueRow
     if (!targets.includes(row.target_work_id)) targets.push(row.target_work_id);
     targetsBySource.set(row.source_work_id, targets);
   }
-  return { db, issuesByWorkID, targetsBySource };
+  return { db, declarationErrorsBySource, declaredTargetsBySource, issuesByWorkID, targetsBySource };
 }
 
 function evaluateIssueDependency(graph: DependencyGraph, issue: IssueRow): IssueDependencyDiagnostic {
   const workID = issueIDToWorkID(issue.id);
-  const directWorkIDs = graph.targetsBySource.get(workID) ?? [];
+  const relationWorkIDs = graph.targetsBySource.get(workID) ?? [];
+  const declaredWorkIDs = graph.declaredTargetsBySource.get(workID) ?? [];
+  const directWorkIDs = [...new Set([...relationWorkIDs, ...declaredWorkIDs])];
   const directDependencies = directWorkIDs.map((id) => dependencyRef(graph, id));
   const cycleWorkIDs = findReachableCycle(graph, workID);
   const rootBlockers = cycleWorkIDs.length > 0
     ? uniqueRefs(cycleWorkIDs.map((id) => dependencyRef(graph, id)))
     : uniqueRefs(directWorkIDs.flatMap((id) => collectRootBlockers(graph, id, new Set([workID]))));
-  const dependencyStatus = dependencyReason(directDependencies, rootBlockers, cycleWorkIDs);
+  const missingRelations = declaredWorkIDs
+    .filter((id) => !relationWorkIDs.includes(id))
+    .map((id) => missingRelationRef(graph, id));
+  const declarationError = graph.declarationErrorsBySource.get(workID) ?? "";
+  const dependencyStatus = declarationError !== "" || missingRelations.length > 0
+    ? "missing_dependency"
+    : dependencyReason(directDependencies, rootBlockers, cycleWorkIDs);
   const readiness = directWorkIDs.length === 0
     ? readinessNotRequired(workID)
     : readIssueReadiness(graph.db, issue.id);
@@ -108,11 +134,33 @@ function evaluateIssueDependency(graph: DependencyGraph, issue: IssueRow): Issue
     ready: reason === "ready",
     readiness,
     reason,
-    root_blockers: rootBlockers,
+    root_blockers: uniqueRefs([...rootBlockers, ...missingRelations]),
     waiting_reason: reason === "waiting_readiness"
       ? readiness.next_step
-      : waitingReason(reason, directDependencies, rootBlockers, cycleWorkIDs)
+      : declarationError || waitingReason(
+        reason,
+        directDependencies,
+        uniqueRefs([...rootBlockers, ...missingRelations]),
+        cycleWorkIDs
+      )
   };
+}
+
+function declaredDependencyIDs(value: string): number[] {
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.filter((item): item is number =>
+      typeof item === "number" && Number.isSafeInteger(item) && item > 0
+    ))].sort((left, right) => left - right);
+  } catch {
+    return [];
+  }
+}
+
+function missingRelationRef(graph: DependencyGraph, workID: string): IssueDependencyRef {
+  const ref = dependencyRef(graph, workID);
+  return { ...ref, status: "missing" };
 }
 
 function collectRootBlockers(graph: DependencyGraph, workID: string, path: Set<string>): IssueDependencyRef[] {

@@ -86,6 +86,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
   const budget = readPiRecoveryBudget(db, {
     actionType: "session.resume_followup",
     issueID: issue.id,
+    issueLimit: policy.supervisor_max_recoveries_per_issue,
     now,
     projectID: issue.project_id,
     projectLimit: policy.supervisor_max_recoveries_per_project_per_hour,

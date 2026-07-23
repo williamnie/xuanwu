@@ -91,7 +91,10 @@ export function deleteIssue(db: RunnerDatabase, id: number): void {
   if (issue.status === "in_progress" || hasOpenIssueRun(db, issue.id)) {
     throw new Error("运行中的 issue 不能删除，请先取消执行");
   }
-  const result = db.sqlite.run("delete from issues where id=?", [issue.id]);
+  const result = db.transaction((issueID: number) => {
+    db.sqlite.run("delete from works where id=?", [`xw:work:issues:${issueID}`]);
+    return db.sqlite.run("delete from issues where id=?", [issueID]);
+  }).immediate(issue.id);
   if (result.changes === 0) throw new ProjectNotFoundError();
 }
 

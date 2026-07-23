@@ -3,8 +3,11 @@ import { getIssue, type Issue } from "./issues.ts";
 import { ProjectNotFoundError } from "./projects.ts";
 import { normalizeMcpCapabilityList } from "../../mcp/policy.ts";
 import { normalizeSkillIntentList } from "../../skills/intents.ts";
+import { normalizeIssueDependencyDeclaration } from "../../domain/work/issueDependencyDeclaration.ts";
 
-export type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>>;
+export type CreateIssueInput = Partial<Record<keyof NormalizedIssueWrite, unknown>> & {
+  depends_on_issue_ids?: unknown;
+};
 
 export type CreateIssueOptions = {
   createdEventPayload?: Record<string, unknown>;
@@ -13,6 +16,8 @@ export type CreateIssueOptions = {
 type NormalizedIssueWrite = {
   agent_profile_id: string;
   description: string;
+  dependency_declaration_error: string;
+  dependency_issue_ids: number[];
   issue_log_mode: "debug" | "normal";
   priority: number;
   project_id: string;
@@ -59,38 +64,57 @@ export function createIssue(
   const timestamp = issueTimestamp();
   const insertIssue = db.transaction((record: NormalizedIssueWrite) => {
     db.sqlite.run(`insert into issues
-      (project_id, title, description, status, priority, template_id,
+      (project_id, title, description, dependency_issue_ids_json, dependency_declaration_error,
+       status, priority, template_id,
        prompt_template, required_skill_intents_json, recommended_skill_intents_json,
        required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id,
        service_tier, source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json,
        issue_log_mode, created_at, updated_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [record.project_id, record.title, record.description, record.status, record.priority,
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [record.project_id, record.title, record.description, JSON.stringify(record.dependency_issue_ids),
+        record.dependency_declaration_error, record.status, record.priority,
         record.template_id, record.prompt_template, record.required_skill_intents,
         record.recommended_skill_intents, record.required_mcp_capabilities,
         record.recommended_mcp_capabilities, record.agent_profile_id, record.service_tier, record.source_session_id,
         record.source_turn_id, record.source_excerpt, record.workflow_snapshot_json,
         record.issue_log_mode, timestamp, timestamp]);
     const id = lastInsertID(db);
+    if (record.dependency_issue_ids.length > 0) {
+      ensureIssueWorkShadow(db, id);
+      for (const dependencyID of record.dependency_issue_ids) {
+        ensureIssueWorkShadow(db, dependencyID);
+        insertIssueDependency(db, record.project_id, id, dependencyID, timestamp);
+      }
+    }
     db.sqlite.run(
       `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
-      [id, "issue.created", createdEventPayload(options), timestamp]
+      [id, "issue.created", createdEventPayload(options, record.dependency_issue_ids), timestamp]
     );
     return id;
   });
   return mustGetIssue(db, insertIssue(issue));
 }
 
-function createdEventPayload(options: CreateIssueOptions): string {
-  return options.createdEventPayload === undefined
-    ? ""
-    : JSON.stringify(options.createdEventPayload);
+function createdEventPayload(options: CreateIssueOptions, dependencyIssueIDs: number[]): string {
+  if (options.createdEventPayload === undefined && dependencyIssueIDs.length === 0) return "";
+  return JSON.stringify({
+    ...(options.createdEventPayload ?? {}),
+    ...(dependencyIssueIDs.length > 0 ? { depends_on_issue_ids: dependencyIssueIDs } : {})
+  });
 }
 
 function validateIssueForCreate(db: RunnerDatabase, issue: NormalizedIssueWrite): void {
   if (!projectExists(db, issue.project_id)) throw new ProjectNotFoundError();
   if (!VALID_ISSUE_STATUSES.has(issue.status)) throw new Error("status 不合法");
   if (issue.title === "") throw new Error("issue 内容不能为空");
+  if (issue.dependency_declaration_error !== "") throw new Error(issue.dependency_declaration_error);
+  for (const dependencyID of issue.dependency_issue_ids) {
+    const dependency = getIssue(db, dependencyID);
+    if (!dependency) throw new Error(`依赖 Issue #${dependencyID} 不存在`);
+    if (dependency.project_id !== issue.project_id) {
+      throw new Error(`依赖 Issue #${dependencyID} 不属于项目 ${issue.project_id}`);
+    }
+  }
 }
 
 function projectExists(db: RunnerDatabase, id: string): boolean {
@@ -108,10 +132,13 @@ function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): No
     cleanString(input.template_id),
     cleanString(input.prompt_template)
   );
+  const dependency = normalizeIssueDependencyDeclaration(input.depends_on_issue_ids, description);
   return {
     project_id: cleanString(input.project_id),
     title,
     description,
+    dependency_declaration_error: dependency.error,
+    dependency_issue_ids: dependency.issue_ids,
     status: cleanString(input.status) || "triage",
     priority: integerInput(input.priority),
     template_id: template.id,
@@ -128,6 +155,67 @@ function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): No
     workflow_snapshot_json: cleanString(input.workflow_snapshot_json),
     issue_log_mode: normalizeIssueLogMode(input.issue_log_mode)
   };
+}
+
+function ensureIssueWorkShadow(db: RunnerDatabase, issueID: number): void {
+  db.sqlite.run(`
+    insert or ignore into works (
+      id, project_id, type, title, goal, status, acceptance_json, provenance_json,
+      workflow_ref, revision, created_at, updated_at
+    )
+    select
+      'xw:work:issues:' || id,
+      project_id,
+      'engineering_task',
+      title,
+      case when trim(description)<>'' then description else title end,
+      status,
+      '{"completion_rule":"all_required","criteria":[{"description":"Satisfy the authoritative Issue description and verification requirements.","id":"issue-delivery","required":true,"verification_policy_ref":"issue-work-verification:v1"}],"requires_handoff":true,"version":1}',
+      json_object(
+        'causes', json_array(),
+        'origin', json_object(
+          'authority', 'issues',
+          'completeness', 'legacy_incomplete',
+          'external_id', cast(id as text),
+          'kind', 'issue',
+          'missing_fields', json_array('actor','correlation_id'),
+          'occurred_at', created_at
+        )
+      ),
+      'issues:' || id || ':workflow:compatibility',
+      0,
+      created_at,
+      updated_at
+    from issues where id=?
+  `, [issueID]);
+}
+
+function insertIssueDependency(
+  db: RunnerDatabase,
+  projectID: string,
+  issueID: number,
+  dependencyID: number,
+  timestamp: string
+): void {
+  const relationID = `issue-dependency:${issueID}:${dependencyID}`;
+  db.sqlite.run(`
+    insert into work_relations (
+      relation_id, project_id, kind, source_work_id, target_work_id, actor_json,
+      reason, correlation_id, audit_event_ref, occurred_at, created_at, updated_at
+    ) values (?, ?, 'depends_on', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    relationID,
+    projectID,
+    `xw:work:issues:${issueID}`,
+    `xw:work:issues:${dependencyID}`,
+    '{"id":"issue-create","kind":"runner"}',
+    "Materialize dependency declared during Issue creation",
+    relationID,
+    `issue-created:${issueID}:${dependencyID}`,
+    timestamp,
+    timestamp,
+    timestamp
+  ]);
 }
 
 function normalizeIssueLogMode(value: unknown): "debug" | "normal" {

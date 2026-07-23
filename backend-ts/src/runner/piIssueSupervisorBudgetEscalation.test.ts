@@ -32,7 +32,7 @@ describe("PI issue supervisor budget exhausted escalation", () => {
         supervisor_mode: "autonomous"
       });
       insertRunningIssue(db, 505, "demo", "thread-505", "turn-505");
-      for (const index of [1, 2, 3]) recordBudgetAttempt(db, index);
+      for (const index of [1, 2]) recordBudgetAttempt(db, index);
 
       const result = await runPiIssueSupervisorSchedulerOnce({ database: db, now: NOW, staleAfterSeconds: 300 });
       const events = listIssueSupervisorEvents(db, { issueId: 505 });
@@ -49,14 +49,14 @@ describe("PI issue supervisor budget exhausted escalation", () => {
         issue_id: 505
       });
       expect(payload).toMatchObject({
-        attempts_24h: 3,
-        count: 3,
+        attempts_24h: 2,
+        count: 2,
         diagnosis_code: "recovery_budget_exhausted",
         issue_id: 505,
-        last_action_at: "2026-06-10T07:53:00Z",
+        last_action_at: "2026-06-10T07:52:00Z",
         last_action_status: "failed",
-        last_action_type: "session.resume_followup",
-        last_recovery_attempt_id: "budget-505-3",
+        last_action_type: "issue.retry",
+        last_recovery_attempt_id: "budget-505-2",
         outcome: "needs_user",
         report_status: "budget_exhausted",
         window: "24h",
@@ -75,7 +75,7 @@ describe("PI issue supervisor budget exhausted escalation", () => {
         gate_decision: "execute",
         status: "approved"
       });
-      expect(listPiRecoveryAttempts(db, { issueId: 505 })).toHaveLength(3);
+      expect(listPiRecoveryAttempts(db, { issueId: 505 })).toHaveLength(2);
 
       const second = await runPiIssueSupervisorSchedulerOnce({
         database: db,
@@ -110,15 +110,15 @@ function insertProject(db: RunnerDatabase, projectID: string, cwd: string): void
 
 function insertRunningIssue(db: RunnerDatabase, issueID: number, projectID: string, sessionID: string, turnID: string): void {
   db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
-    values (?, ?, 'Supervisor issue', 'in_progress', 1, ?, ?)`,
+    values (?, ?, 'Supervisor issue', 'failed', 1, ?, ?)`,
   [issueID, projectID, "2026-06-10T07:00:00Z", "2026-06-10T07:45:00Z"]);
   db.sqlite.run(`insert into issue_runs
     (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
-    values (?, ?, 1, 'in_progress', 'codex', ?, ?, '2026-06-10T07:00:00Z', '')`,
+    values (?, ?, 1, 'failed', 'codex', ?, ?, '2026-06-10T07:00:00Z', '2026-06-10T07:44:00Z')`,
   [`issue-${issueID}-attempt-1`, issueID, sessionID, turnID]);
   db.sqlite.run(`insert into agent_sessions
     (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
-    values (?, 'codex', ?, ?, ?, 'running', ?, '2026-06-10T07:00:00Z', '2026-06-10T07:45:00Z')`,
+    values (?, 'codex', ?, ?, ?, 'failed', ?, '2026-06-10T07:00:00Z', '2026-06-10T07:45:00Z')`,
   [`codex:${sessionID}`, sessionID, projectID, issueID, JSON.stringify({ provider_turn_id: turnID })]);
 }
 

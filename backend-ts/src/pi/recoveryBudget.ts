@@ -9,6 +9,7 @@ import {
 export type PiRecoveryBudgetInput = {
   actionType: string;
   issueID: number;
+  issueLimit?: number;
   now: Date;
   projectID: string;
   projectLimit?: number;
@@ -48,7 +49,7 @@ export type RecoveryBudgetCandidate = {
 };
 
 const BUDGET_STATUSES: PiRecoveryAttemptStatus[] = ["planned", "executing", "progress", "no_progress", "failed"];
-const DEFAULT_ISSUE_LIMIT = 3;
+const DEFAULT_ISSUE_LIMIT = 2;
 const DEFAULT_PROJECT_LIMIT = 10;
 const DEFAULT_SESSION_RESUME_LIMIT = 2;
 const HOUR_MS = 60 * 60 * 1_000;
@@ -146,11 +147,11 @@ function decision(
   }
 ): PiRecoveryBudgetDecision {
   const base = baseDecision(state);
-  if (state.issueAttempts >= state.issueLimit) {
-    return exhausted(base, "issue_budget_exhausted", "recovery_budget_exhausted", "budget_exhausted");
-  }
   if (isSessionResume(input.actionType) && state.sessionAttempts >= state.sessionLimit) {
     return exhausted(base, "session_resume_exhausted", "session_recovery_exhausted", "budget_exhausted");
+  }
+  if (state.issueAttempts >= state.issueLimit) {
+    return exhausted(base, "issue_budget_exhausted", "recovery_budget_exhausted", "budget_exhausted");
   }
   if (state.projectAttempts >= state.projectLimit) {
     return {
@@ -238,7 +239,7 @@ function normalizedLimits(input: PiRecoveryBudgetInput): {
   issueLimit: number; projectLimit: number; sessionLimit: number;
 } {
   return {
-    issueLimit: DEFAULT_ISSUE_LIMIT,
+    issueLimit: positiveInt(input.issueLimit, DEFAULT_ISSUE_LIMIT),
     projectLimit: positiveInt(input.projectLimit, DEFAULT_PROJECT_LIMIT),
     sessionLimit: positiveInt(input.sessionResumeLimit, DEFAULT_SESSION_RESUME_LIMIT)
   };

@@ -100,6 +100,7 @@ type IssueCommentInput = { body: string; issue_id: number };
 type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
   description: string;
+  depends_on_issue_ids?: number[];
   project_id?: string;
   rationale?: string;
   title?: string;
@@ -388,6 +389,9 @@ function issueCreateProposal(
       project_id: projectID,
       title: input.title ?? "",
       description,
+      ...(input.depends_on_issue_ids === undefined
+        ? {}
+        : { depends_on_issue_ids: input.depends_on_issue_ids }),
       required_skill_intents: parseSkillIntentList(input.required_skill_intents),
       recommended_skill_intents: parseSkillIntentList(input.recommended_skill_intents),
       required_mcp_capabilities: input.required_mcp_capabilities ?? [],

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +23,34 @@ afterEach(async () => {
 });
 
 describe("issue run repository", () => {
+  test("captures the project HEAD as the immutable delivery baseline when a Run starts", async () => {
+    const db = await openFixtureDatabase();
+    const repository = await mkdtemp(join(tmpdir(), "codex-runner-run-baseline-"));
+    tempRoots.push(repository);
+    try {
+      execFileSync("git", ["init", "-q"], { cwd: repository });
+      writeFileSync(join(repository, "README.md"), "baseline\n");
+      execFileSync("git", ["add", "README.md"], { cwd: repository });
+      execFileSync("git", [
+        "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
+        "commit", "-qm", "baseline"
+      ], { cwd: repository });
+      const revision = execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repository,
+        encoding: "utf8"
+      }).trim();
+      insertProject(db, "demo");
+      db.sqlite.run("update projects set cwd=? where id='demo'", [repository]);
+      const issueId = insertIssue(db, "demo");
+
+      const run = createIssueRun(db, issueId);
+
+      expect(run.git_base_revision).toBe(revision);
+    } finally {
+      db.close();
+    }
+  });
+
   test("creates attempts and updates only the open run runtime", async () => {
     const db = await openFixtureDatabase();
     try {

@@ -204,6 +204,8 @@ function RuntimeStatusBody({ status, loading }) {
     ['Codex server', `${status.codex?.server_mode || 'cli'} · ${status.codex?.command || 'missing'}`, status.codex?.command_ok],
     ['Auth enabled', status.config?.auth_enabled ? 'enabled' : 'disabled', !status.config?.auth_enabled],
     ['Runner loops', `${status.runner?.running_loops || 0} running / ${status.runner?.in_progress_issues || 0} in progress / max ${status.runner?.max_parallel_projects || 1}`, true],
+    ['PI project manager', managerModeSummary(status.pi_guardian?.runtime_modes), Number(status.pi_guardian?.runtime_modes?.manager_active_projects || 0) > 0],
+    ['Guardian supervisor', supervisorModeSummary(status.pi_guardian?.runtime_modes), Number(status.pi_guardian?.runtime_modes?.supervisor_active_projects || 0) > 0],
     ['Process-group memory', processGroupMemorySummary(status.process_group_memory), memoryBudgetOk(status.process_group_memory)],
   ];
   return (
@@ -224,6 +226,19 @@ function RuntimeStatusBody({ status, loading }) {
       <ProcessGroupMemoryStatus memory={status.process_group_memory} />
     </div>
   );
+}
+
+function managerModeSummary(modes) {
+  const active = Number(modes?.manager_active_projects || 0);
+  const disabled = Number(modes?.manager_disabled_projects || 0);
+  return active > 0
+    ? `${active} active / ${disabled} disabled`
+    : `disabled · Guardian does not decompose or replan Work`;
+}
+
+function supervisorModeSummary(modes) {
+  const active = Number(modes?.supervisor_active_projects || 0);
+  return `${active} active · independent of project manager`;
 }
 
 function ProcessGroupMemoryStatus({ memory }) {

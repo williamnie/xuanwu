@@ -394,6 +394,7 @@ async function prepareCompletionHandoff(
   if (!project) return { errors: ["Handoff gap: Issue project is unavailable"], evidence: [] };
   const runID = makeDomainID("run", "issue_runs", run.id);
   const workID = issueAsWork(issue).id;
+  const deliveryBaseRevision = issueDeliveryBaseRevision(db, issueID, project.cwd);
   const existing = listStoredHandoffs(db, {
     limit: 100,
     statuses: ["ready", "delivered"],
@@ -401,7 +402,8 @@ async function prepareCompletionHandoff(
   }).items.find((item) => item.handoff.run_ids.includes(runID));
   if (existing) return { errors: [], evidence: [] };
   let gitEvidence = [...evidence].reverse().find((item) =>
-    item.kind === "git" && item.status === "passed" && item.run_id === runID && item.work_id === workID
+    item.kind === "git" && item.status === "passed" && item.run_id === runID && item.work_id === workID &&
+    gitEvidenceCoversDelivery(item, deliveryBaseRevision)
   );
   const collected: EvidenceRecord[] = [];
   try {
@@ -410,6 +412,7 @@ async function prepareCompletionHandoff(
         artifact_store: new FileSystemGitEvidenceArtifactStore(dirname(db.path))
       });
       gitEvidence = await collector.collect({
+        ...(deliveryBaseRevision ? { base_revision: deliveryBaseRevision } : {}),
         context: {
           attempt_id: makeRunAttemptID(runID, run.attempt),
           audit_event_ref: `completion-handoff:${issueID}:${run.id}`,
@@ -451,11 +454,10 @@ function completionHandoffFromGit(
   const facts = gitEvidence.decisive_output.facts;
   const baselineRevision = requiredDeliveryFact(facts.base_revision, "Git base_revision");
   const headRevision = requiredDeliveryFact(facts.head_revision, "Git head_revision");
-  if (baselineRevision !== headRevision) {
-    throw new Error("Git Evidence base_revision must match the observed HEAD for local changes");
-  }
-  if (facts.working_tree_dirty !== true) {
-    throw new Error("Git Evidence does not contain a dirty working-tree delivery artifact");
+  const committedDelivery = facts.revision_changed_from_base === true && baselineRevision !== headRevision;
+  const workingTreeDelivery = facts.working_tree_dirty === true;
+  if (!committedDelivery && !workingTreeDelivery) {
+    throw new Error("Git Evidence does not contain a committed or dirty working-tree delivery artifact");
   }
   if (facts.conflict_count !== 0) {
     throw new Error("Git Evidence contains unresolved conflicts");
@@ -508,6 +510,41 @@ function completionHandoffFromGit(
     },
     review: { required: false, state: "not_requested", reviewer_refs: [] }
   };
+}
+
+function gitEvidenceCoversDelivery(evidence: EvidenceRecord, expectedBaseRevision: string): boolean {
+  const facts = evidence.decisive_output.facts;
+  const baseRevision = typeof facts.base_revision === "string" ? facts.base_revision.trim() : "";
+  if (expectedBaseRevision !== "" && baseRevision !== expectedBaseRevision) return false;
+  return facts.working_tree_dirty === true ||
+    (facts.revision_changed_from_base === true &&
+      typeof facts.head_revision === "string" &&
+      baseRevision !== facts.head_revision.trim());
+}
+
+function issueDeliveryBaseRevision(db: RunnerDatabase, issueID: number, cwd: string): string {
+  const runs = listIssueRuns(db, issueID);
+  const recorded = runs.find((item) => gitObjectID(item.git_base_revision))?.git_base_revision.trim().toLowerCase() ?? "";
+  if (recorded !== "") return recorded;
+  const startedAt = runs[0]?.started_at ?? "";
+  if (startedAt === "" || cwd.trim() === "") return "";
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["git", "rev-list", "-1", `--before=${startedAt}`, "HEAD"],
+      cwd,
+      stderr: "ignore",
+      stdout: "pipe"
+    });
+    if (result.exitCode !== 0) return "";
+    const revision = result.stdout.toString().trim().toLowerCase();
+    return gitObjectID(revision) ? revision : "";
+  } catch {
+    return "";
+  }
+}
+
+function gitObjectID(value: string): boolean {
+  return /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value.trim().toLowerCase());
 }
 
 function gitSnapshotArtifact(

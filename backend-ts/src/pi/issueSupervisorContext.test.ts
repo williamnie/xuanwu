@@ -171,8 +171,8 @@ describe("PI issue supervisor context builder", () => {
       expect(testContext.provider_error).toMatchObject({ category: "business_failure", diagnosis_code: "requires_human_decision" });
       expect(authContext.candidates).toEqual([expect.objectContaining({ diagnosis_code: "requires_human_decision" })]);
       expect(testContext.candidates).toEqual([expect.objectContaining({ diagnosis_code: "requires_human_decision" })]);
-      expect(authContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 3 });
-      expect(testContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 3 });
+      expect(authContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 2 });
+      expect(testContext.recovery_history).toMatchObject({ attempts_24h: 0, budget_remaining: 2 });
     } finally {
       db.close();
     }
@@ -232,7 +232,7 @@ describe("PI issue supervisor context builder", () => {
 
       expect(context.recovery_history).toMatchObject({
         attempts_24h: 0,
-        budget_remaining: 3,
+        budget_remaining: 2,
         consecutive_no_progress: 2,
         last_outcome: "no_progress"
       });
@@ -343,7 +343,7 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
-  test("retries a failed executor attempt before treating test failure as user input", async () => {
+  test("escalates a deterministic failed executor attempt instead of blindly retrying", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "runner", await tempRoot("runner-failed-attempt-"));
@@ -360,8 +360,7 @@ describe("PI issue supervisor context builder", () => {
 
       expect(context.provider_error).toMatchObject({ category: "business_failure" });
       expect(context.candidates).toEqual([expect.objectContaining({
-        diagnosis_code: "scheduler_retryable_error",
-        reason: "executor attempt failed; retry autonomously before escalating"
+        diagnosis_code: "requires_human_decision"
       })]);
     } finally {
       db.close();

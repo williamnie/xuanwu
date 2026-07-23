@@ -37,6 +37,7 @@ export function buildSystemStatus(context: SystemStatusContext): Record<string, 
   const connectorHealth = buildStaticConnectorDiagnostics({
     config: context.config,
     database: context.database,
+    feishuReceiverStatus: context.feishuReceiverStatus?.(),
     webhookSigningSecret: context.webhookSigningSecret
   });
   const eventProjection = eventProjectionStatus(context.database);
@@ -405,8 +406,13 @@ function systemHealth(status: {
   for (const connector of status.connector_health) {
     const health = object(connector.health);
     const state = String(health.state ?? connector.state ?? "");
-    if (state === "failed" || state === "degraded") {
-      reasons.push(healthReason("connector_unhealthy", state === "failed" ? "critical" : "warning", `connector:${String(connector.id ?? "unknown")}`, state));
+    if (["failed", "degraded", "disconnected", "rate_limited", "revoked"].includes(state)) {
+      reasons.push(healthReason(
+        "connector_unhealthy",
+        state === "failed" || state === "revoked" ? "critical" : "warning",
+        `connector:${String(connector.id ?? "unknown")}`,
+        state
+      ));
     }
   }
   if (status.event_projection.status === "lagging") {
