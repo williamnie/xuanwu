@@ -21,6 +21,8 @@ import {
   type SupervisorCandidate
 } from "./issueSupervisorContextSupport.ts";
 import { providerDeferredCount, providerDeferredWindowStart } from "./providerOutageDiagnosis.ts";
+import { listIssueEventsAsync } from "../db/asyncIssueEvents.ts";
+import type { IssueEvent } from "../db/repositories/issueEvents.ts";
 
 export type IssueSupervisorContextOptions = {
   now?: Date;
@@ -42,6 +44,7 @@ export type IssueSupervisorRecoveryContext = {
 };
 
 const DEFAULT_RECENT_EVENT_LIMIT = 25;
+const MAX_SUPERVISOR_EVENT_LIMIT = 500;
 const DEFAULT_STALE_SECONDS = 15 * 60;
 
 export function buildIssueSupervisorRecoveryContext(
@@ -49,13 +52,31 @@ export function buildIssueSupervisorRecoveryContext(
   issueID: number,
   options: IssueSupervisorContextOptions = {}
 ): IssueSupervisorRecoveryContext {
+  const events = listIssueEvents(db, issueID, supervisorEventOptions());
+  return buildIssueSupervisorRecoveryContextFromEvents(db, issueID, events, options);
+}
+
+export async function buildIssueSupervisorRecoveryContextAsync(
+  db: RunnerDatabase,
+  issueID: number,
+  options: IssueSupervisorContextOptions = {}
+): Promise<IssueSupervisorRecoveryContext> {
+  const events = await listIssueEventsAsync(db.path, issueID, supervisorEventOptions());
+  return buildIssueSupervisorRecoveryContextFromEvents(db, issueID, events, options);
+}
+
+function buildIssueSupervisorRecoveryContextFromEvents(
+  db: RunnerDatabase,
+  issueID: number,
+  events: IssueEvent[],
+  options: IssueSupervisorContextOptions
+): IssueSupervisorRecoveryContext {
   const now = options.now ?? new Date();
   const issue = mustIssue(db, issueID);
   const project = mustProject(db, issue.project_id);
   const runs = listIssueRuns(db, issue.id);
   const latestRun = runs.at(-1) ?? null;
   const session = resolveSession(db, issue, latestRun);
-  const events = listIssueEvents(db, issue.id);
   const currentRunEvents = eventsForLatestRun(events, latestRun?.started_at ?? "");
   const recentEvents = events.slice(-recentLimit(options)).map(summarizeIssueEvent);
   const providerError = latestProviderError(currentRunEvents, now);
@@ -101,6 +122,13 @@ export function buildIssueSupervisorRecoveryContext(
     session: sessionContext({ session, latestRun, now, staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS }),
     workspace_snapshot: workspaceSnapshot(project.cwd, recentEvents)
   };
+}
+
+function supervisorEventOptions() {
+  return {
+    hydrateArtifacts: false,
+    limit: MAX_SUPERVISOR_EVENT_LIMIT
+  } as const;
 }
 
 function eventsForLatestRun<T extends { created_at: string }>(events: T[], startedAt: string): T[] {

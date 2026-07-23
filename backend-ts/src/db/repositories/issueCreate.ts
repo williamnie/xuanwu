@@ -13,6 +13,7 @@ export type CreateIssueOptions = {
 type NormalizedIssueWrite = {
   agent_profile_id: string;
   description: string;
+  issue_log_mode: "debug" | "normal";
   priority: number;
   project_id: string;
   prompt_template: string;
@@ -61,13 +62,15 @@ export function createIssue(
       (project_id, title, description, status, priority, template_id,
        prompt_template, required_skill_intents_json, recommended_skill_intents_json,
        required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id,
-       service_tier, source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json, created_at, updated_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       service_tier, source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json,
+       issue_log_mode, created_at, updated_at)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [record.project_id, record.title, record.description, record.status, record.priority,
         record.template_id, record.prompt_template, record.required_skill_intents,
         record.recommended_skill_intents, record.required_mcp_capabilities,
         record.recommended_mcp_capabilities, record.agent_profile_id, record.service_tier, record.source_session_id,
-        record.source_turn_id, record.source_excerpt, record.workflow_snapshot_json, timestamp, timestamp]);
+        record.source_turn_id, record.source_excerpt, record.workflow_snapshot_json,
+        record.issue_log_mode, timestamp, timestamp]);
     const id = lastInsertID(db);
     db.sqlite.run(
       `insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)`,
@@ -122,8 +125,16 @@ function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): No
     source_session_id: normalizeSourceSessionID(input.source_session_id),
     source_turn_id: cleanString(input.source_turn_id),
     source_excerpt: cleanString(input.source_excerpt),
-    workflow_snapshot_json: cleanString(input.workflow_snapshot_json)
+    workflow_snapshot_json: cleanString(input.workflow_snapshot_json),
+    issue_log_mode: normalizeIssueLogMode(input.issue_log_mode)
   };
+}
+
+function normalizeIssueLogMode(value: unknown): "debug" | "normal" {
+  const mode = cleanString(value);
+  if (mode === "" || mode === "normal") return "normal";
+  if (mode === "debug") return "debug";
+  throw new Error("issue_log_mode 只支持 normal 或 debug");
 }
 
 function resolveIssueTemplateSnapshot(

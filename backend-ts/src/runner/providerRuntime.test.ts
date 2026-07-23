@@ -6,7 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 import { listStoredEvidence } from "../db/repositories/evidence.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { listIssueRuns } from "../db/repositories/issues.ts";
+import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { createIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
@@ -522,6 +522,41 @@ describe("executor provider runtime seam", () => {
     }
   });
 
+  test("normal mode keeps live hooks and terminal state without persisting stream deltas", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo");
+      const issueId = insertIssue(db, "demo", "normal");
+      const provider = new LongSessionProvider();
+      const runtimeEvents: ProviderEvent[] = [];
+      const liveEvents: unknown[] = [];
+
+      await runIssueWithProvider(provider, {
+        database: db,
+        issueId,
+        projectId: "demo",
+        cwd: "/tmp/project",
+        prompt: "normal logs",
+        bus: { publish: (event) => liveEvents.push(event) },
+        onRuntimeEvent: (event) => runtimeEvents.push(event)
+      });
+
+      const events = listIssueEvents(db, issueId);
+      expect(runtimeEvents).toHaveLength(514);
+      expect(events).toHaveLength(1);
+      expect(JSON.parse(events[0]?.payload ?? "{}")).toMatchObject({
+        raw_method: "turn/completed",
+        status: "completed"
+      });
+      expect(liveEvents).toHaveLength(1);
+      const session = getAgentSession(db, "codex:thread-long");
+      expect(session).toMatchObject({ status: "completed" });
+      expect(JSON.parse(session?.raw_ref ?? "{}")).toMatchObject({ provider_turn_id: "turn-long" });
+    } finally {
+      db.close();
+    }
+  });
+
   test("replays a long Session from aggregated logs with fewer rows and bytes", async () => {
     const db = await openFixtureDatabase();
     try {
@@ -567,6 +602,7 @@ describe("executor provider runtime seam", () => {
         raw_method: "turn/completed",
         status: "completed"
       });
+      expect(getIssue(db, issueId)?.issue_log_mode).toBe("normal");
       expect(storedBytes).toBeLessThan(baselineBytes * 0.35);
     } finally {
       db.close();
@@ -581,11 +617,15 @@ function insertProject(db: RunnerDatabase, id: string): void {
   );
 }
 
-function insertIssue(db: RunnerDatabase, projectId: string): number {
+function insertIssue(
+  db: RunnerDatabase,
+  projectId: string,
+  issueLogMode: "debug" | "normal" = "debug"
+): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?)`,
-    [projectId, "Runtime", "in_progress", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, status, issue_log_mode, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [projectId, "Runtime", "in_progress", issueLogMode, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");

@@ -1,6 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
-import { createIssueComment, listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, type Issue, type IssueRun } from "../db/repositories/issues.ts";
 import type { PiAction } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
@@ -189,7 +189,12 @@ function needsUserIssueError(payload: Record<string, unknown>): string {
 
 function hasNeedsUserComment(db: RunnerDatabase, issueID: number, actionID: string): boolean {
   const marker = `Action：${redactActionID(actionID)}`;
-  return listIssueEvents(db, issueID).some((event) => event.type === "issue.comment" && event.payload.includes(marker));
+  return db.sqlite.query<{ found: number }, [number, string]>(
+    `select 1 as found
+     from issue_events
+     where issue_id=? and type='issue.comment' and instr(payload, ?) > 0
+     limit 1`
+  ).get(issueID, marker)?.found === 1;
 }
 
 function positivePayloadID(payload: Record<string, unknown>, key: string): number {

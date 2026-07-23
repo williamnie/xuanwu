@@ -12,6 +12,74 @@ import {
 const session = { provider: "codex" as const, sessionId: "thread-long", turnId: "turn-long" };
 
 describe("issue.log persistence reduction", () => {
+  test("normal mode drops streaming protocol noise but keeps decisive events", () => {
+    const persisted: ProviderEvent[] = [];
+    const persistence = createIssueLogPersistence(
+      (event) => persisted.push(event),
+      { mode: "normal" }
+    );
+    persistence.push({
+      provider: "codex",
+      type: "text",
+      session,
+      text: "streaming",
+      raw: { method: "item/agentMessage/delta", payload: "streaming" }
+    });
+    persistence.push({
+      provider: "codex",
+      type: "raw",
+      session,
+      raw: { method: "turn/plan/updated", payload: "plan" }
+    });
+    persistence.push({
+      provider: "codex",
+      type: "raw",
+      session,
+      raw: {
+        method: "item/completed",
+        payload: JSON.stringify({ item: { id: "message-final", type: "agentMessage", text: "final" } })
+      }
+    });
+    persistence.push({
+      provider: "codex",
+      type: "done",
+      status: "completed",
+      session,
+      raw: { method: "turn/completed", payload: "completed" }
+    });
+    persistence.flush();
+
+    expect(persisted.map((event) => event.raw?.method)).toEqual(["item/completed", "turn/completed"]);
+    expect(persisted[0]).toMatchObject({ text: "final" });
+  });
+
+  test("normal mode stores verification results but skips ordinary successful command output", () => {
+    const persisted: ProviderEvent[] = [];
+    const persistence = createIssueLogPersistence(
+      (event) => persisted.push(event),
+      { mode: "normal" }
+    );
+    const commandCompleted = (id: string, command: string) => ({
+      provider: "codex" as const,
+      type: "tool",
+      session,
+      command,
+      status: "completed",
+      raw: {
+        method: "item/completed",
+        payload: JSON.stringify({
+          item: { command, exitCode: 0, id, status: "completed", type: "commandExecution" }
+        })
+      }
+    });
+    persistence.push(commandCompleted("ordinary", "git status"));
+    persistence.push(commandCompleted("verification", "bun test src/example.test.ts"));
+    persistence.flush();
+
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toMatchObject({ command: "bun test src/example.test.ts" });
+  });
+
   test("chunks Codex deltas, samples telemetry, and keeps terminal errors", () => {
     const input: ProviderEvent[] = [];
     const persisted: ProviderEvent[] = [];

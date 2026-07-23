@@ -2,7 +2,6 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { deleteIssue, enqueueIssue, type IssueActionOptions } from "../db/repositories/issueActions.ts";
 import {
   createIssueComment,
-  listIssueEvents,
   type ListIssueEventsOptions
 } from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
@@ -29,6 +28,7 @@ import {
 } from "../domain/work/issueDependency.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
+import { listIssueEventsAsync } from "../db/asyncIssueEvents.ts";
 
 export type IssueListFilter = {
   projectId: string;
@@ -62,7 +62,7 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       create: (body: Record<string, unknown>) => createIssueAndKickLoop(context, body),
       delete: (id: number) => deleteIssue(context.database, id),
       enqueue: (id: number, options: IssueActionOptions) => actionAndKickLoop(context, enqueueIssue, id, options),
-      events: (id: number, options: ListIssueEventsOptions) => listIssueEvents(context.database, id, options),
+      events: (id: number, options: ListIssueEventsOptions) => listIssueEventsForApi(context.database, id, options),
       list: (filter: IssueListFilter) => publicIssues(context, listIssues(context.database, filter)),
       read: (id: number) => readIssue(context, id),
       retry: (id: number, options: IssueActionOptions) => retryIssueAndKickLoop(context, id, options),
@@ -77,6 +77,15 @@ export function createReadApiDomainHandlers(context: ReadApiContext) {
       update: (id: string, body: Record<string, unknown>) => updateProject(context.database, id, body)
     }
   };
+}
+
+function listIssueEventsForApi(
+  db: RunnerDatabase,
+  id: number,
+  options: ListIssueEventsOptions
+) {
+  if (!getIssue(db, id)) throw new ProjectNotFoundError();
+  return listIssueEventsAsync(db.path, id, { ...options, hydrateArtifacts: false });
 }
 
 export type ReadApiDomainHandlers = ReturnType<typeof createReadApiDomainHandlers>;

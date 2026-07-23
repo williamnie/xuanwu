@@ -25,6 +25,7 @@ type NormalizedIssuePatch = {
   codex_turn_id: string;
   description: string;
   error: string;
+  issue_log_mode: "debug" | "normal";
   priority: number;
   project_id: string;
   recommended_mcp_capabilities: string;
@@ -51,6 +52,7 @@ const PATCH_FIELDS = [
   "recommended_mcp_capabilities",
   "service_tier",
   "error",
+  "issue_log_mode",
   "source_session_id",
   "source_turn_id",
   "source_excerpt",
@@ -77,13 +79,13 @@ export function updateIssue(db: RunnerDatabase, id: number, input: UpdateIssueIn
       required_mcp_capabilities_json=?, recommended_mcp_capabilities_json=?,
       agent_profile_id=?, service_tier=?, source_session_id=?, source_turn_id=?, source_excerpt=?,
       codex_thread_id=?, codex_turn_id=?, auto_retry_next_at=?, auto_retry_reason=?,
-      error=?, updated_at=? where id=?`,
+      error=?, issue_log_mode=?, updated_at=? where id=?`,
       [record.project_id, record.title, record.description, record.status, record.priority,
         record.required_skill_intents, record.recommended_skill_intents,
         record.required_mcp_capabilities, record.recommended_mcp_capabilities,
         record.agent_profile_id, record.service_tier, record.source_session_id, record.source_turn_id,
         record.source_excerpt, record.codex_thread_id, record.codex_turn_id,
-        record.auto_retry_next_at, record.auto_retry_reason, record.error,
+        record.auto_retry_next_at, record.auto_retry_reason, record.error, record.issue_log_mode,
         timestamp, current.id]);
     if (Object.hasOwn(patch, "status")) {
       closeOpenIssueRun(db, record, timestamp);
@@ -132,6 +134,8 @@ function normalizePatchField(field: keyof NormalizedIssuePatch, value: unknown):
       return normalizeMcpCapabilityList(value);
     case "source_session_id":
       return normalizeSourceSessionID(value);
+    case "issue_log_mode":
+      return normalizeIssueLogMode(value);
     default:
       return cleanString(value);
   }
@@ -151,6 +155,9 @@ function validateIssuePatch(
     throw new Error("运行中的 Issue 请使用 retry 操作，避免重复创建 Session");
   }
   if (!VALID_ISSUE_STATUSES.has(issue.status)) throw new Error("status 不合法");
+  if (issue.issue_log_mode !== "normal" && issue.issue_log_mode !== "debug") {
+    throw new Error("issue_log_mode 只支持 normal 或 debug");
+  }
   if (issue.title === "") throw new Error("issue 内容不能为空");
 }
 
@@ -168,6 +175,7 @@ function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
     recommended_mcp_capabilities: issue.recommended_mcp_capabilities,
     service_tier: issue.service_tier,
     error: issue.error,
+    issue_log_mode: issue.issue_log_mode,
     source_session_id: issue.source_session_id,
     source_turn_id: issue.source_turn_id,
     source_excerpt: issue.source_excerpt,
@@ -177,6 +185,12 @@ function issueToPatchShape(issue: Issue): NormalizedIssuePatch {
     auto_retry_next_at: issue.auto_retry_next_at,
     auto_retry_reason: issue.auto_retry_reason
   };
+}
+
+function normalizeIssueLogMode(value: unknown): "debug" | "normal" {
+  const mode = cleanString(value);
+  if (mode === "normal" || mode === "debug") return mode;
+  throw new Error("issue_log_mode 只支持 normal 或 debug");
 }
 
 function mustGetIssue(db: RunnerDatabase, id: number): Issue {

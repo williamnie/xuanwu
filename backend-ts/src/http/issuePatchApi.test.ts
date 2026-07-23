@@ -274,6 +274,7 @@ function fullPatchPayload(): Record<string, unknown> {
     source_turn_id: "turn-b",
     source_excerpt: "来源摘录",
     agent_profile_id: "Codex Pro!",
+    issue_log_mode: "debug",
     codex_thread_id: "thread-runtime",
     codex_turn_id: "turn-runtime"
   };
@@ -293,6 +294,7 @@ function expectedPatchedIssue(id: number): Record<string, unknown> {
     source_turn_id: "turn-b",
     source_excerpt: "来源摘录",
     agent_profile_id: "codex-pro",
+    issue_log_mode: "debug",
     codex_thread_id: "thread-runtime",
     codex_turn_id: "turn-runtime"
   };

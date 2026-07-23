@@ -97,9 +97,9 @@ function insertProject(db: RunnerDatabase, provider: string): void {
 
 function insertIssue(db: RunnerDatabase): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?)`,
-    ["demo", "Realtime log", "todo", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, status, issue_log_mode, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    ["demo", "Realtime log", "todo", "debug", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");

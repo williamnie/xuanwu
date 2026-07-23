@@ -72,7 +72,7 @@ function candidateIssues(db: RunnerDatabase, options: IssueStateManagerOptions):
 function diagnoseOne(db: RunnerDatabase, issue: Issue, options: IssueStateManagerOptions, now: Date): IssueStateDiagnostic[] {
   const runs = listIssueRuns(db, issue.id);
   const sessions = issueSessions(db, issue);
-  const events = listIssueEvents(db, issue.id);
+  const events = listIssueEvents(db, issue.id, { hydrateArtifacts: false, limit: 500 });
   const latestRun = runs.at(-1);
   if (issue.status === "todo" && todoNeedsRuntime(runs, sessions)) return [todoWithoutSession(db, issue, latestRun, sessions[0], now)];
   if (issue.status === "in_progress") return inProgressDiagnostics(issue, latestRun, sessions, events, options, now);

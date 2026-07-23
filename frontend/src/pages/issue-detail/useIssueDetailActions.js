@@ -77,6 +77,19 @@ export default function useIssueDetailActions({
     }
   };
 
+  const handleIssueLogModeChange = async (issueLogMode) => {
+    try {
+      const updated = await workApi.updateIssue(issueId, { issue_log_mode: issueLogMode });
+      updateDetailState(draft => {
+        draft.issue = updated;
+      });
+      message.success(issueLogMode === 'debug' ? '下次运行将记录完整调试日志' : '已恢复精简日志模式');
+      refreshData(['issues']);
+    } catch (err) {
+      message.error('更新日志模式失败: ' + err.message);
+    }
+  };
+
   const handleCancel = async () => {
     try {
       await workApi.cancelIssue(issueId);
@@ -211,6 +224,7 @@ export default function useIssueDetailActions({
     handleMoveToTodo,
     handleRetry,
     handleServiceTierChange,
+    handleIssueLogModeChange,
     handleCancel,
     handleDelete,
     handleMarkStatus,

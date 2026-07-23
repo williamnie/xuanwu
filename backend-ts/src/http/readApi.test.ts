@@ -648,6 +648,10 @@ describe("Bun projects/issues read API", () => {
         method: "POST",
         body: JSON.stringify({ project_id: "demo", required_mcp_capabilities: ["bad mcp"], title: "bad" })
       }));
+      const invalidLogMode = await router.handle(new Request(`${BASE_URL}/api/issues`, {
+        method: "POST",
+        body: JSON.stringify({ project_id: "demo", issue_log_mode: "verbose", title: "bad" })
+      }));
 
       expect(missingProject.status).toBe(404);
       expect(await missingProject.json()).toEqual({ message: "资源不存在" });
@@ -657,6 +661,8 @@ describe("Bun projects/issues read API", () => {
       expect(await invalidSkill.json()).toEqual({ message: "skill id 不合法: bad skill" });
       expect(invalidMcp.status).toBe(400);
       expect(await invalidMcp.json()).toEqual({ message: "MCP capability id 不合法: bad mcp" });
+      expect(invalidLogMode.status).toBe(400);
+      expect(await invalidLogMode.json()).toEqual({ message: "issue_log_mode 只支持 normal 或 debug" });
     } finally {
       database.close();
     }

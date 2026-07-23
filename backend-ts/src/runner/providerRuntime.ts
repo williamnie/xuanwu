@@ -6,6 +6,8 @@ import {
   type RuntimeEvidenceCorrelation
 } from "../db/repositories/issueEvents.ts";
 import { ensureOpenIssueRun, updateIssueRuntime } from "../db/repositories/issueRuns.ts";
+import { getIssue } from "../db/repositories/issues.ts";
+import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import { projectNormalizedRunEvent } from "../db/repositories/runAttemptEvents.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
@@ -24,7 +26,7 @@ import { makeRunAttemptID } from "../domain/run/contracts.ts";
 import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 import { syncProviderApprovalRequest } from "./providerApprovalRequests.ts";
 import { signalProviderTerminalEvent } from "./providerTerminalSignals.ts";
-import { createIssueLogPersistence } from "./issueLogPersistence.ts";
+import { createIssueLogPersistence, type IssueLogMode } from "./issueLogPersistence.ts";
 
 export type RunnerIssueExecutionInput = Omit<ProviderRunInput, "onEvent"> & {
   agentProfileId?: string;
@@ -73,6 +75,7 @@ export async function runIssueWithProvider(
     throw error;
   } finally {
     await eventSink.flush();
+    resetDebugIssueLogMode(input, eventSink.mode, providerID);
   }
   persistRuntimeResult(input, providerID, result, activeRunID);
   input.onRunComplete?.({
@@ -87,26 +90,86 @@ export async function runIssueWithProvider(
 
 function providerEventSink(input: RunnerIssueExecutionInput, activeRunID: string, activeAttempt: number) {
   const pendingEvidence = new Set<Promise<void>>();
+  const mode = issueLogMode(input);
   const persistence = createIssueLogPersistence((event) => {
     const pending = persistRuntimeEvent(input, event, activeRunID, activeAttempt);
     if (!pending) return;
     pendingEvidence.add(pending);
     void pending.finally(() => pendingEvidence.delete(pending));
-  });
+  }, { mode });
   let failure = false;
+  let sessionObserved = false;
   return {
     async flush() {
       persistence.flush();
       await Promise.all([...pendingEvidence]);
     },
+    mode,
     hasFailure: () => failure,
     push(event: ProviderEvent) {
       if (event.runEvent?.kind === "error") failure = true;
       input.onLog?.(event);
+      const persistSession = Boolean(event.session) &&
+        (!sessionObserved || eventSessionStatus(event) !== "");
+      processRuntimeEvent(input, event, activeRunID, persistSession);
+      if (event.session) sessionObserved = true;
       persistence.push(event);
       input.onRuntimeEvent?.(event);
     }
   };
+}
+
+function resetDebugIssueLogMode(
+  input: RunnerIssueExecutionInput,
+  mode: IssueLogMode,
+  provider: ExecutorProviderId
+): void {
+  if (!input.database || mode !== "debug") return;
+  try {
+    const timestamp = issueTimestamp();
+    input.database.sqlite.run(
+      "update issues set issue_log_mode='normal', updated_at=? where id=? and issue_log_mode='debug'",
+      [timestamp, input.issueId]
+    );
+  } catch (error) {
+    input.onLog?.({
+      error: redactSensitiveText(error instanceof Error ? error.message : String(error)),
+      provider,
+      raw: { method: "runtime/debug_log_mode_reset_error" },
+      status: "failed",
+      type: "error"
+    });
+  }
+}
+
+function issueLogMode(input: RunnerIssueExecutionInput): IssueLogMode {
+  if (!input.database) return "normal";
+  return getIssue(input.database, input.issueId)?.issue_log_mode ?? "normal";
+}
+
+function processRuntimeEvent(
+  input: RunnerIssueExecutionInput,
+  event: ProviderEvent,
+  activeRunID: string,
+  persistSession: boolean
+): void {
+  if (!input.database) return;
+  syncProviderApprovalRequest(input, event, activeRunID);
+  if (event.session && persistSession) {
+    persistRuntime({
+      db: input.database, input, provider: event.session.provider, session: event.session,
+      status: eventSessionStatus(event),
+      metadata: runtimeMetadata(input, { source: "provider_event" }),
+      issueRunId: activeRunID
+    });
+  }
+  signalProviderTerminalEvent({
+    activeRunID,
+    database: input.database,
+    event,
+    issueID: input.issueId,
+    projectID: input.projectId
+  });
 }
 
 function providerInput(input: RunnerIssueExecutionInput, onEvent: ProviderRunInput["onEvent"]): ProviderRunInput {
@@ -154,25 +217,8 @@ function persistRuntimeEvent(
     event,
     runtimeEvidenceCorrelation(event, activeRunID, activeAttempt)
   );
-  syncProviderApprovalRequest(input, event, activeRunID);
   publishIssueLog(input, event, persisted);
-  if (event.session) {
-    persistRuntime({
-      db: input.database, input, provider: event.session.provider, session: event.session,
-      status: eventSessionStatus(event),
-      metadata: runtimeMetadata(input, { source: "provider_event" }),
-      issueRunId: activeRunID
-    });
-  }
   projectNormalizedRunEvent(input.database, activeRunID, event.runEvent, persisted.id);
-  signalProviderTerminalEvent({
-    activeRunID,
-    database: input.database,
-    event,
-    issueEventID: persisted.id,
-    issueID: input.issueId,
-    projectID: input.projectId
-  });
   if (event.raw?.method !== "item/completed") return;
   const evidenceEvent = {
     ...persisted,

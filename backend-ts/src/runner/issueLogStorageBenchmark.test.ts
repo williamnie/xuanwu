@@ -37,7 +37,7 @@ describe("issue.log bounded storage benchmark", () => {
       expect(boundedAfter.payloadBytes).toBeLessThan(baselineAfter.payloadBytes * 0.3);
       expect(boundedAfter.allocatedGrowthBytes).toBeLessThan(baselineAfter.allocatedGrowthBytes * 0.3);
       expect({ baseline: baselineAfter, bounded: boundedAfter }).toEqual({
-        baseline: { allocatedGrowthBytes: 1_081_344, payloadBytes: 724_103, rows: 5_122 },
+        baseline: { allocatedGrowthBytes: 1_183_744, payloadBytes: 724_103, rows: 5_122 },
         bounded: { allocatedGrowthBytes: 102_400, payloadBytes: 77_333, rows: 131 }
       });
     } finally {

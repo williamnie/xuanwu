@@ -233,6 +233,7 @@ export default function IssueDetail({ issueId, navigateTo }) {
                 hasSupervisorHistory={hasSupervisorHistory}
                 hasCurrentSupervisorSignal={hasCurrentSupervisorSignal}
                 onServiceTierChange={actions.handleServiceTierChange}
+                onIssueLogModeChange={actions.handleIssueLogModeChange}
                 actionControls={(
                   <IssueManualControls issue={issue} onMarkStatus={actions.handleMarkStatus} />
                 )}

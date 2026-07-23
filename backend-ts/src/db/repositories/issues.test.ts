@@ -72,6 +72,7 @@ describe("issue read repository", () => {
         auto_retry_next_at: "",
         auto_retry_reason: "",
         error: "",
+        issue_log_mode: "normal",
         created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-01T00:00:00Z"
       });

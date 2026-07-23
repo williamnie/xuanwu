@@ -14,6 +14,7 @@ export default function IssueDetailEvidence({
   hasSupervisorHistory,
   hasCurrentSupervisorSignal,
   onServiceTierChange,
+  onIssueLogModeChange,
   actionControls,
   verificationEvidence,
 }) {
@@ -25,6 +26,7 @@ export default function IssueDetailEvidence({
         runtimeIdentity={runtimeIdentity}
         runtimeProvider={runtimeProvider}
         onServiceTierChange={onServiceTierChange}
+        onIssueLogModeChange={onIssueLogModeChange}
       />
 
       {actionControls}
@@ -44,7 +46,14 @@ export function CurrentSupervisorEvidence({ supervisor, visible }) {
   return visible ? <IssueSupervisorPanel supervisor={supervisor} /> : null;
 }
 
-function IssueMetadataPanel({ issue, profileSummary, runtimeIdentity, runtimeProvider, onServiceTierChange }) {
+function IssueMetadataPanel({
+  issue,
+  profileSummary,
+  runtimeIdentity,
+  runtimeProvider,
+  onServiceTierChange,
+  onIssueLogModeChange,
+}) {
   return (
     <section className="issue-advanced-card">
       <div className="issue-section-heading">
@@ -77,6 +86,19 @@ function IssueMetadataPanel({ issue, profileSummary, runtimeIdentity, runtimePro
           ))}
         </select>
         <small>当前：{serviceTierLabel(issue.service_tier)}。运行中修改不会影响本轮快照。</small>
+      </label>
+      <label className="issue-service-tier-field">
+        <span>日志模式</span>
+        <select
+          className="form-control"
+          value={issue.issue_log_mode || 'normal'}
+          onChange={(event) => onIssueLogModeChange(event.target.value)}
+          disabled={issue.status === 'in_progress'}
+        >
+          <option value="normal">Normal · 仅关键事件</option>
+          <option value="debug">Debug · 详细 provider 日志</option>
+        </select>
+        <small>Debug 只影响下次运行；默认 Normal，避免原始流式日志持续写入 SQLite。</small>
       </label>
     </section>
   );

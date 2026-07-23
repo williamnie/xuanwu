@@ -42,3 +42,11 @@ test('issue detail can change next-run speed and displays run snapshots', () => 
   assert.match(issueDetailRunsSource, /RunField label="Speed"/);
   assert.match(issueDetailRunsSource, /serviceTierRunLabel\(run\)/);
 });
+
+test('issue detail exposes one-run debug logging while normal remains the default', () => {
+  assert.match(issueDetailSource, /handleIssueLogModeChange/);
+  assert.match(issueDetailActionsSource, /issue_log_mode:\s*issueLogMode/);
+  assert.match(issueDetailEvidenceSource, /value=\{issue\.issue_log_mode \|\| 'normal'\}/);
+  assert.match(issueDetailEvidenceSource, /<option value="debug">/);
+  assert.match(stateGuardsSource, /'issue_log_mode'/);
+});

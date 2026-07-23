@@ -98,7 +98,10 @@ function runSummary(run: IssueRun) {
 }
 
 function recentIssueEvents(db: RunnerDatabase, issueID: number) {
-  return listIssueEvents(db, issueID).slice(-RECENT_EVENT_LIMIT).reverse().map((event) => ({
+  return listIssueEvents(db, issueID, {
+    hydrateArtifacts: false,
+    limit: RECENT_EVENT_LIMIT
+  }).reverse().map((event) => ({
     created_at: event.created_at,
     id: event.id,
     payload_preview: preview(event.payload),

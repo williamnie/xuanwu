@@ -24,6 +24,7 @@ type IssueRow = {
   description: unknown;
   error: unknown;
   id: unknown;
+  issue_log_mode: unknown;
   priority: unknown;
   project_id: unknown;
   prompt_template: unknown;
@@ -96,6 +97,7 @@ export type Issue = {
   description: string;
   error: string;
   id: number;
+  issue_log_mode: "debug" | "normal";
   latest_run?: IssueRun;
   priority: number;
   project_id: string;
@@ -120,6 +122,7 @@ const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
   required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id, source_session_id,
   source_turn_id, source_excerpt, codex_thread_id, codex_turn_id, service_tier,
   attempt_count,
+  issue_log_mode,
   (select count(*) from issue_events where issue_id=issues.id and type='issue.comment') as comment_count,
   workflow_snapshot_json, auto_retry_next_at, auto_retry_reason, error,
   created_at, updated_at`;
@@ -272,6 +275,7 @@ function mapIssueRow(row: IssueRow): Issue {
     codex_thread_id: optionalString(row.codex_thread_id),
     codex_turn_id: optionalString(row.codex_turn_id),
     attempt_count: integerValue(row.attempt_count, "issues.attempt_count"),
+    issue_log_mode: issueLogMode(row.issue_log_mode),
     comment_count: integerValue(row.comment_count, "issues.comment_count"),
     workflow_snapshot_json: optionalString(row.workflow_snapshot_json),
     auto_retry_next_at: optionalString(row.auto_retry_next_at),
@@ -280,6 +284,10 @@ function mapIssueRow(row: IssueRow): Issue {
     created_at: requiredString(row.created_at, "issues.created_at"),
     updated_at: requiredString(row.updated_at, "issues.updated_at")
   };
+}
+
+function issueLogMode(value: unknown): "debug" | "normal" {
+  return optionalString(value, "normal") === "debug" ? "debug" : "normal";
 }
 
 function mapIssueRunRow(row: IssueRunRow): IssueRun {

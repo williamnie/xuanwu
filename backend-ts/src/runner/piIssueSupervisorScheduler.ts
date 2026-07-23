@@ -6,7 +6,7 @@ import {
 } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
-  buildIssueSupervisorRecoveryContext,
+  buildIssueSupervisorRecoveryContextAsync,
   type IssueSupervisorRecoveryContext
 } from "../pi/issueSupervisorContext.ts";
 import { supervisorCandidateReady } from "../pi/issueSupervisorSignalCollector.ts";
@@ -49,7 +49,7 @@ export async function runPiIssueSupervisorSchedulerOnce(
   input: PiIssueSupervisorSchedulerInput
 ): Promise<PiIssueSupervisorSchedulerResult> {
   const now = input.now ?? new Date();
-  const targets = collectTargets(input.database, now, input);
+  const targets = await collectTargets(input.database, now, input);
   const result: PiIssueSupervisorSchedulerResult = {
     decisions: 0,
     failed: 0,
@@ -80,18 +80,18 @@ export async function runPiIssueSupervisorSchedulerOnce(
   }
   return result;
 }
-function collectTargets(
+async function collectTargets(
   db: RunnerDatabase,
   now: Date,
   options: Pick<PiIssueSupervisorSchedulerInput, "limit" | "staleAfterSeconds">
-): { ready: SupervisorTarget[]; scanned: number; signaled: number } {
+): Promise<{ ready: SupervisorTarget[]; scanned: number; signaled: number }> {
   const issueIDs = scanIssueIDs(db, now, options.limit ?? DEFAULT_LIMIT);
   const ready: SupervisorTarget[] = [];
   let signaled = 0;
   for (const issueID of issueIDs) {
     const issue = getIssue(db, issueID);
     if (!issue) continue;
-    let context = buildIssueSupervisorRecoveryContext(db, issueID, {
+    let context = await buildIssueSupervisorRecoveryContextAsync(db, issueID, {
       now,
       staleAfterSeconds: options.staleAfterSeconds
     });
@@ -104,7 +104,7 @@ function collectTargets(
       projectID: issue.project_id,
       staleAfterSeconds: options.staleAfterSeconds
     }) !== null) {
-      context = buildIssueSupervisorRecoveryContext(db, issueID, {
+      context = await buildIssueSupervisorRecoveryContextAsync(db, issueID, {
         now,
         staleAfterSeconds: options.staleAfterSeconds
       });

@@ -279,9 +279,9 @@ function insertProject(db: RunnerDatabase, id: string, cwd: string): void {
 
 function insertIssue(db: RunnerDatabase, projectId: string, status = "in_progress"): number {
   db.sqlite.run(
-    `insert into issues (project_id, title, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?)`,
-    [projectId, "Claude runtime", status, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into issues (project_id, title, status, issue_log_mode, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)`,
+    [projectId, "Claude runtime", status, "debug", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
   const row = db.sqlite.query<{ id: number }, []>("select last_insert_rowid() as id").get();
   if (!row) throw new Error("missing inserted issue id");

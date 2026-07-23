@@ -97,9 +97,11 @@ function hasFinalResult(events: IssueSupervisorEvent[], action: IssueSupervisorE
 }
 
 function issueEventsAfter(db: RunnerDatabase, issueID: number, createdAt: string) {
-  const baseline = Date.parse(createdAt);
-  return listIssueEvents(db, issueID)
-    .filter((event) => Date.parse(event.created_at) > baseline)
+  return listIssueEvents(db, issueID, {
+    createdAfter: createdAt,
+    hydrateArtifacts: false,
+    limit: 500
+  })
     .map((event) => ({ payload: event.payload, type: event.type }));
 }
 

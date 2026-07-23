@@ -65,7 +65,10 @@ function persistIssueRunAudit(db: RunnerDatabase, issueID: number, issueRunID: s
 }
 
 function usedSkillIntentsFromEvents(db: RunnerDatabase, issueID: number): string[] {
-  const text = listIssueEvents(db, issueID).map((event) => event.payload).join("\n");
+  const text = listIssueEvents(db, issueID, {
+    hydrateArtifacts: false,
+    limit: 500
+  }).map((event) => event.payload).join("\n");
   const explicit = [...text.matchAll(/(?:Using|used|use)\s+([a-z0-9_:-]+(?:[\/][a-z0-9_:-]+)?)\s+skill/gi)]
     .map((match) => match[1] ?? "");
   const tagged = [...text.matchAll(/skill(?:_intent)?[=:]+([a-z0-9_:-]+(?:[\/][a-z0-9_:-]+)?)/gi)]

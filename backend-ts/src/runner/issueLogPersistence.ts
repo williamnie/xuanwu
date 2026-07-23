@@ -1,4 +1,5 @@
 import type { ProviderEvent } from "../providers/types.ts";
+import { classifyVerificationCommand } from "../domain/evidence/completionGate.ts";
 
 export const ISSUE_LOG_CHUNK_EVENT_LIMIT = 64;
 export const ISSUE_LOG_CHUNK_TEXT_BYTES = 32 * 1024;
@@ -49,11 +50,17 @@ export type IssueLogPersistence = {
   push(event: ProviderEvent): void;
 };
 
+export type IssueLogMode = "debug" | "normal";
+
 /**
  * Reduces only the persisted issue.log projection. The original provider event still
  * flows through runtime hooks, approval handling, and terminal detection unchanged.
  */
-export function createIssueLogPersistence(write: EventWriter): IssueLogPersistence {
+export function createIssueLogPersistence(
+  write: EventWriter,
+  options: { mode?: IssueLogMode } = {}
+): IssueLogPersistence {
+  const mode = options.mode ?? "debug";
   let chunk: PendingChunk | undefined;
   let chunkTimer: ReturnType<typeof setTimeout> | undefined;
   let sampleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -133,6 +140,7 @@ export function createIssueLogPersistence(write: EventWriter): IssueLogPersisten
 
   return {
     push(sourceEvent) {
+      if (mode === "normal" && !normalModeEvent(sourceEvent)) return;
       sequence += 1;
       const sourceMethod = sourceEvent.raw?.method ?? "";
       const sourceItemType = lifecycleItemType(sourceEvent);
@@ -185,6 +193,40 @@ export function createIssueLogPersistence(write: EventWriter): IssueLogPersisten
       flushBudgetMarkers();
     }
   };
+}
+
+/**
+ * Normal mode stores only replay-independent operational evidence. Detailed
+ * provider protocol traffic remains available to live hooks but is persisted
+ * only when the Issue explicitly opts into debug mode.
+ */
+function normalModeEvent(event: ProviderEvent): boolean {
+  const method = event.raw?.method ?? "";
+  if (event.type === "error" || event.type === "done") return true;
+  if (event.runEvent?.cost) return true;
+  if (method === "item/completed") return normalCompletedItem(event);
+  if (method === "turn/completed" || method === "error" || method === "protocol/error") return true;
+  return method === "thread/status/changed" &&
+    ["error", "failed", "systemerror"].includes((event.status ?? "").trim().toLowerCase());
+}
+
+function normalCompletedItem(event: ProviderEvent): boolean {
+  const item = objectValue(rawObject(event.raw?.payload).item);
+  const itemType = stringValue(item.type);
+  if (itemType === "agentMessage") return true;
+  if (itemType !== "commandExecution") return false;
+  const command = event.command || commandText(item);
+  const status = stringValue(item.status).toLowerCase();
+  return status === "failed" || status === "error" ||
+    classifyVerificationCommand(command) !== undefined;
+}
+
+function commandText(item: Record<string, unknown>): string {
+  const direct = stringValue(item.command);
+  if (direct !== "") return direct;
+  const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
+  if (actions.length !== 1) return "";
+  return stringValue(objectValue(actions[0]).command);
 }
 
 function writeBoundedChunk(

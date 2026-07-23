@@ -35,7 +35,9 @@ type CreateIssueCommentInput = {
 export type ListIssueEventsOptions = {
   afterID?: number;
   beforeID?: number;
+  createdAfter?: string;
   excludeTypes?: string[];
+  hydrateArtifacts?: boolean;
   limit?: number;
   types?: string[];
 };
@@ -99,7 +101,7 @@ export function listIssueEvents(
   const query = issueEventListQuery(issueID, options);
   const rows = db.sqlite.query<IssueEventRow, Array<number | string>>(query.sql)
     .all(...query.args)
-    .map((row) => mapIssueEventRow(db, row, true));
+    .map((row) => mapIssueEventRow(db, row, options.hydrateArtifacts !== false));
   return query.reverseResult ? rows.reverse() : rows;
 }
 
@@ -350,6 +352,11 @@ function issueEventListQuery(
   if (options.afterID !== undefined) {
     clauses.push("id > ?");
     args.push(options.afterID);
+  }
+  const createdAfter = options.createdAfter?.trim();
+  if (createdAfter) {
+    clauses.push("created_at > ?");
+    args.push(createdAfter);
   }
 
   const limit = normalizedEventLimit(options.limit);

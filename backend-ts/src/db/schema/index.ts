@@ -53,6 +53,7 @@ import { consolidatePiDecisionLayersMigration } from "./052_consolidate_pi_decis
 import { dropLegacyAutomationTablesMigration } from "./053_drop_legacy_automation_tables.ts";
 import { compactEventSummaryProjectionMigration } from "./054_compact_event_summary_projection.ts";
 import { collapsePiAgentsToSupervisorMigration } from "./055_collapse_pi_agents_to_supervisor.ts";
+import { issueLogModeMigration } from "./056_issue_log_mode.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -109,5 +110,6 @@ export const migrations = [
   consolidatePiDecisionLayersMigration,
   dropLegacyAutomationTablesMigration,
   compactEventSummaryProjectionMigration,
-  collapsePiAgentsToSupervisorMigration
+  collapsePiAgentsToSupervisorMigration,
+  issueLogModeMigration
 ];

@@ -64,7 +64,7 @@ function registerIssueItemRoutes(router: Router, handlers: ReadApiDomainHandlers
     const body = await parseObjectBody(request);
     return writeResponse(() => handlers.issues.comment(issueID(request), body), 201);
   });
-  router.get("/api/issues/:id/events", (request) => writeResponse(() => (
+  router.get("/api/issues/:id/events", (request) => asyncWriteResponse(() => (
     readHandlers.issues.events(issueID(request), issueEventFilter(request))
   )));
   router.get("/api/issues/:id/runs", (request) => writeResponse(() => readHandlers.issues.runs(issueID(request))));

@@ -3,6 +3,40 @@ import { formatBunVersion } from "./buildInfo.ts";
 import { commandMode } from "./mainMode.ts";
 import { resolveServerRole } from "./serverRole.ts";
 
+if (Bun.argv[2] === "__issue-events-read-worker") {
+  const [, dbPath = "", issueIDText = "0", optionsText = "", parentPIDText = "0"] = Bun.argv.slice(2);
+  const parentPID = Number(parentPIDText);
+  const parentWatch = setInterval(() => {
+    if (!Number.isInteger(parentPID) || parentPID <= 1) return;
+    try { process.kill(parentPID, 0); } catch { process.exit(1); }
+  }, 1000);
+  try {
+    const [{ openDatabase }, { decodeIssueEventWorkerOptions }, { listIssueEvents }] = await Promise.all([
+      import("./db/database.ts"),
+      import("./db/asyncIssueEvents.ts"),
+      import("./db/repositories/issueEvents.ts")
+    ]);
+    const database = await openDatabase({ readonlyImportPath: dbPath });
+    let events: ReturnType<typeof listIssueEvents>;
+    try {
+      events = listIssueEvents(
+        database,
+        Number(issueIDText),
+        decodeIssueEventWorkerOptions(optionsText)
+      );
+    } finally {
+      database.close();
+    }
+    clearInterval(parentWatch);
+    process.stdout.write(JSON.stringify({ events, ok: true }));
+    process.exit(0);
+  } catch (error) {
+    clearInterval(parentWatch);
+    process.stderr.write(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
 if (Bun.argv[2] === "__usage-index-worker") {
   const [, root = "", indexPath = "", forceRebuild = "0", parentPIDText = "0"] = Bun.argv.slice(2);
   const parentPID = Number(parentPIDText);
