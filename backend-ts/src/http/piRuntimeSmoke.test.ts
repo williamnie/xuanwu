@@ -12,6 +12,7 @@ import { createPiDelegation, createPiMemoryItem, getPiMemoryItem, listPiActionEv
 import { EventBus } from "../events/bus.ts";
 import { HTTP_READONLY_PROVIDER_ID, URL_FETCH_TOOL_NAME } from "../pi/httpToolProvider.ts";
 import { createPiRuntimeSession } from "./piRuntime.ts";
+import { finalPiConversationSseData } from "./piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -49,7 +50,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
       expect(created.status).toBe(201);
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({
+      expect(await finalPiConversationSseData(message)).toMatchObject({
         conversation_id: "conv-auto-faux",
         status: "completed",
         text: "pi-smoke-response-ok"
@@ -98,7 +99,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
       expect(created.status).toBe(201);
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({
+      expect(await finalPiConversationSseData(message)).toMatchObject({
         conversation_id: "conv-smoke",
         status: "completed",
         text: "smoke done"

@@ -85,25 +85,30 @@ describe("Web Gateway", () => {
     expect([...new Uint8Array(await download.arrayBuffer())]).toEqual([0, 1, 2, 255]);
   });
 
-  test("streams SSE without buffering", async () => {
+  test("streams a POST SSE response beyond the bounded proxy timeout without buffering", async () => {
     const encoder = new TextEncoder();
-    const upstream = upstreamServer(() => new Response(new ReadableStream({
+    const upstream = upstreamServer((request) => new Response(new ReadableStream({
       async start(controller) {
-        controller.enqueue(encoder.encode(": heartbeat\n\n"));
+        expect(request.method).toBe("POST");
+        controller.enqueue(encoder.encode("event: accepted\ndata: {\"status\":\"accepted\"}\n\n"));
         await Bun.sleep(30);
-        controller.enqueue(encoder.encode("data: {\"ok\":true}\n\n"));
+        controller.enqueue(encoder.encode("event: completed\ndata: {\"status\":\"completed\"}\n\n"));
         controller.close();
       }
     }), { headers: { "content-type": "text/event-stream", "x-accel-buffering": "no" } }));
     const response = await createWebGatewayHandler(config(baseUrl(upstream), "", 10))(
-      new Request("http://runner.local/api/events")
+      new Request("http://runner.local/api/pi/conversations/conv/messages", {
+        body: JSON.stringify({ prompt: "slow turn" }),
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      })
     );
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     const reader = response.body?.getReader();
     const first = await reader?.read();
-    expect(new TextDecoder().decode(first?.value)).toBe(": heartbeat\n\n");
+    expect(new TextDecoder().decode(first?.value)).toContain("event: accepted");
     const second = await reader?.read();
-    expect(new TextDecoder().decode(second?.value)).toContain("data:");
+    expect(new TextDecoder().decode(second?.value)).toContain("event: completed");
   });
 
   test("bounds unavailable/timeout failures and recovers without restarting Web", async () => {

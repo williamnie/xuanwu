@@ -8,6 +8,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssues } from "../db/repositories/issues.ts";
 import { listPiActions, type PiAction } from "../db/repositories/pi.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
+import { finalPiConversationSseData } from "../http/piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "../http/server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -44,7 +45,7 @@ describe("PI read-only planner turn smoke", () => {
       const message = await post(fixture.router, "/api/pi/conversations/conv-planner-smoke/messages", {
         prompt: "帮我实现折叠面板功能"
       });
-      const body = await message.json() as Record<string, unknown>;
+      const body = await finalPiConversationSseData(message);
 
       expect(created.status).toBe(201);
       expect(message.status).toBe(201);

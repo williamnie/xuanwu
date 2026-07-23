@@ -13,6 +13,11 @@ import { getPiConversation, listPiActionEvents, listPiActions } from "../db/repo
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
 import { runPiConversationPrompt } from "./piConversationApi.ts";
+import {
+  finalPiConversationSseData,
+  parsePiConversationSse,
+  readPiConversationSse
+} from "./piConversationSse.testSupport.ts";
 import { createDefaultRouter } from "./server.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
 
@@ -33,11 +38,24 @@ afterEach(async () => {
 });
 
 describe("Bun PI conversation message API", () => {
-  test("sends PI messages and publishes conversation SSE events only", async () => {
+  test("streams accepted and ordered assistant deltas before PI completion", async () => {
     const database = await openFixtureDatabase();
-    const faux = registerFauxProvider({ api: "pi-test-faux-api", provider: "pi-test-faux" });
+    const faux = registerFauxProvider({
+      api: "pi-test-faux-api",
+      provider: "pi-test-faux",
+      tokenSize: { min: 1, max: 1 }
+    });
+    let releaseProvider = () => {};
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    let providerCompleted = false;
     try {
-      faux.setResponses([fauxAssistantMessage("pi reply")]);
+      faux.setResponses([async () => {
+        await providerGate;
+        providerCompleted = true;
+        return fauxAssistantMessage("pi reply");
+      }]);
       insertProject(database, "demo");
       insertFauxAgent(database);
       writeFauxModelsConfig(database);
@@ -52,10 +70,32 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/conv-msg/messages", {
         prompt: "hello"
       });
+      const reader = message.body?.getReader();
+      const first = await reader?.read();
+      const firstText = new TextDecoder().decode(first?.value);
 
       expect(created.status).toBe(201);
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({
+      expect(message.headers.get("content-type")).toContain("text/event-stream");
+      expect(firstText).toContain("event: accepted");
+      expect(firstText).not.toContain("event: completed");
+      expect(providerCompleted).toBe(false);
+
+      releaseProvider();
+      let remainingText = "";
+      while (reader) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        remainingText += new TextDecoder().decode(chunk.value);
+      }
+      const turnEvents = parsePiConversationSse(`${firstText}${remainingText}`);
+      const accepted = turnEvents.find((event) => event.event === "accepted");
+      const deltas = turnEvents.filter((event) => event.event === "assistant_text_delta");
+      const completed = turnEvents.find((event) => event.event === "completed");
+      expect(turnEvents.map((event) => event.event)).toContain("start");
+      expect(deltas.length).toBeGreaterThan(1);
+      expect(deltas.map((event) => event.data.delta).join("")).toBe("pi reply");
+      expect(completed?.data).toMatchObject({
         conversation_id: "conv-msg",
         pi_session_id: "conv-msg",
         status: "completed",
@@ -63,6 +103,8 @@ describe("Bun PI conversation message API", () => {
         text: "pi reply",
         message_count: 2
       });
+      expect(accepted?.data.turn_id).toBe(completed?.data.turn_id);
+      expect(turnEvents.every((event) => event.id === accepted?.data.turn_id)).toBe(true);
       const firstEvent = await events.next();
       events.close();
       expect(firstEvent).toMatchObject({
@@ -95,7 +137,8 @@ describe("Bun PI conversation message API", () => {
         prompt: "帮我看下 **Runner Markdown** 渲染"
       });
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({ conversation_id: "conv-title", title: "帮我看下 Runner Markdown 渲染" });
+      expect(await finalPiConversationSseData(message))
+        .toMatchObject({ conversation_id: "conv-title", title: "帮我看下 Runner Markdown 渲染" });
     } finally {
       faux.unregister();
       database.close();
@@ -126,6 +169,7 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/conv-intent-route/messages", {
         prompt: "处理一下"
       });
+      const result = await finalPiConversationSseData(message);
       const routeEvents = listPiActionEvents(database, {
         conversationId: "conv-intent-route",
         eventType: "supervisor_intent_routed"
@@ -144,7 +188,7 @@ describe("Bun PI conversation message API", () => {
       const createAction = listPiActions(database).find((action) => action.action_type === "issue.create");
 
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({
+      expect(result).toMatchObject({
         text: "请先确认是只调查，还是要执行变更。"
       });
       expect(listIssues(database, { projectId: "demo" })).toEqual([]);
@@ -194,7 +238,7 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/conv-image/messages", {
         prompt: "这张图有什么？\n\n![uploaded image](attachment://upload_pi_image)"
       });
-      const body = await message.json() as Record<string, unknown>;
+      const body = await finalPiConversationSseData(message);
 
       expect(message.status).toBe(201);
       expect(body.text).toBe(`images=1; mime=image/png; bytes=${PNG_FIXTURE.byteLength}`);
@@ -229,6 +273,7 @@ describe("Bun PI conversation message API", () => {
       });
 
       const message = await request(router, "/api/pi/conversations/conv-manual-trigger/messages", { prompt });
+      const result = await finalPiConversationSseData(message);
       const bundle = listContextBundles(database, "fixture-im", 1)[0];
       const runs = listIntakeRuns(database, { bundleId: bundle.id });
       const items = listAttentionInboxItems(database, { intakeRunId: runs[0].id });
@@ -236,7 +281,7 @@ describe("Bun PI conversation message API", () => {
       const payload = JSON.parse(proposal?.payload_json || "{}");
 
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({ text: "已形成 issue proposal。" });
+      expect(result).toMatchObject({ text: "已形成 issue proposal。" });
       expect(bundle).toMatchObject({ created_by: "user", source: "fixture-im", trigger: "manual" });
       expect(bundle.source_query).toMatchObject({
         attachment_kinds: ["image"],
@@ -288,11 +333,11 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/feishu-om-run/messages", {
         prompt: "@PI 帮我在 demo 修复登录 bug"
       });
-      await until(() => provider.calls.length > 0);
+      const result = await finalPiConversationSseData(message);
 
       const issues = listIssues(database, { projectId: "demo" });
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({
+      expect(result).toMatchObject({
         conversation_id: "feishu-om-run",
         status: "completed",
         text: "已创建 issue #1 并开始执行。"
@@ -334,11 +379,11 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/feishu-cross-issue/messages", {
         prompt: "开始 movo-mobile 的 #501"
       });
-      await until(() => provider.calls.length > 0);
+      const result = await finalPiConversationSseData(message);
 
       const actions = listPiActions(database);
       expect(message.status).toBe(201);
-      expect(await message.json()).toMatchObject({
+      expect(result).toMatchObject({
         conversation_id: "feishu-cross-issue",
         status: "completed",
         text: "已开始 movo-mobile 的 #501。"
@@ -531,9 +576,12 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/conv-provider-error/messages", {
         prompt: "hello"
       });
-      const body = await message.json() as Record<string, unknown>;
+      const events = await readPiConversationSse(message);
+      const failed = events.at(-1);
+      const body = failed?.data ?? {};
 
       expect(message.status).toBe(201);
+      expect(failed?.event).toBe("failed");
       expect(body.status).toBe("failed");
       expect(body.text).toContain("Runner 执行失败：fatal provider failure");
       expect(body.text).toContain("CODEX_API_KEY=[redacted]");
@@ -576,7 +624,65 @@ describe("Bun PI conversation message API", () => {
       expect(interrupt.status).toBe(200);
       expect(await interrupt.json()).toMatchObject({ interrupted: true, conversation_id: "conv-interrupt" });
       expect(result.status).toBe(201);
-      expect(await result.json()).toMatchObject({ conversation_id: "conv-interrupt", status: "failed", text: "" });
+      const turnEvents = await readPiConversationSse(result);
+      expect(turnEvents.at(-1)).toMatchObject({
+        event: "failed",
+        data: {
+          conversation_id: "conv-interrupt",
+          error: { code: "interrupted" },
+          status: "failed",
+          text: ""
+        }
+      });
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("client cancellation detaches the SSE response without aborting or duplicating the turn", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-cancel-faux-api", provider: "pi-cancel-faux" });
+    let releaseProvider = () => {};
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    try {
+      faux.setResponses([
+        async () => {
+          await providerGate;
+          return fauxAssistantMessage("persist after disconnect");
+        },
+        fauxAssistantMessage("next turn")
+      ]);
+      insertProject(database, "demo");
+      insertFauxAgent(database, "pi-cancel-faux");
+      writeFauxModelsConfig(database, "pi-cancel-faux");
+      const router = createDefaultRouter({ database });
+      await request(router, "/api/pi/conversations", {
+        id: "conv-cancel", project_id: "demo"
+      });
+
+      const disconnected = await request(router, "/api/pi/conversations/conv-cancel/messages", {
+        prompt: "keep running"
+      });
+      await until(() => faux.state.callCount > 0);
+      await disconnected.body?.cancel();
+      const conflict = await request(router, "/api/pi/conversations/conv-cancel/messages", {
+        prompt: "must not duplicate"
+      });
+      expect(conflict.status).toBe(409);
+
+      releaseProvider();
+      const next = await requestAfterActiveTurn(router, "/api/pi/conversations/conv-cancel/messages", {
+        prompt: "next"
+      });
+      expect(await finalPiConversationSseData(next)).toMatchObject({
+        conversation_id: "conv-cancel",
+        message_count: 4,
+        status: "completed",
+        text: "next turn"
+      });
     } finally {
       faux.unregister();
       database.close();
@@ -739,9 +845,25 @@ async function until(check: () => boolean): Promise<void> {
   throw new Error("condition timed out");
 }
 
-function imageSummary(context: { messages?: Array<{ content?: unknown[]; role?: string }> }): string {
-  const user = (context.messages ?? []).slice().reverse().find((message) => message.role === "user");
-  const images = (user?.content ?? []).filter(isImageContent);
+async function requestAfterActiveTurn(
+  router: ReturnType<typeof createDefaultRouter>,
+  path: string,
+  body: Record<string, unknown>
+): Promise<Response> {
+  for (let index = 0; index < 50; index += 1) {
+    const response = await request(router, path, body);
+    if (response.status !== 409) return response;
+    await Bun.sleep(10);
+  }
+  throw new Error("active PI turn did not clean up");
+}
+
+function imageSummary(context: unknown): string {
+  const value = context && typeof context === "object"
+    ? context as { messages?: Array<{ content?: string | unknown[]; role?: string }> }
+    : {};
+  const user = (value.messages ?? []).slice().reverse().find((message) => message.role === "user");
+  const images = (Array.isArray(user?.content) ? user.content : []).filter(isImageContent);
   const image = images[0];
   return `images=${images.length}; mime=${image?.mimeType ?? ""}; bytes=${image ? Buffer.from(image.data, "base64").byteLength : 0}`;
 }

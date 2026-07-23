@@ -2,12 +2,26 @@ import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { PiConversation } from "../db/repositories/pi.ts";
 import type { AppEvent, EventBus } from "../events/bus.ts";
 
+export type PiTurnSessionEvent = {
+  type: "assistant_text_delta";
+  delta: string;
+} | {
+  type: "start";
+};
+
 export function publishPiSessionEvent(
   bus: EventBus | undefined,
   conversation: PiConversation,
   event: AgentSessionEvent
 ): void {
   bus?.publish(piAppEvent(conversation, event));
+}
+
+export function piTurnSessionEvent(event: AgentSessionEvent): PiTurnSessionEvent | undefined {
+  if (event.type === "agent_start") return { type: "start" };
+  if (event.type !== "message_update" || event.message.role !== "assistant") return undefined;
+  if (event.assistantMessageEvent.type !== "text_delta") return undefined;
+  return { type: "assistant_text_delta", delta: event.assistantMessageEvent.delta };
 }
 
 function piAppEvent(conversation: PiConversation, event: AgentSessionEvent): AppEvent {
@@ -27,7 +41,11 @@ function piAppEvent(conversation: PiConversation, event: AgentSessionEvent): App
 function piEventStatus(event: AgentSessionEvent): string {
   if (event.type === "agent_start") return "running";
   if (event.type === "agent_end") return event.willRetry ? "retrying" : "completed";
-  if (event.type === "message_update" && event.message.errorMessage) return "failed";
+  if (
+    event.type === "message_update" &&
+    "errorMessage" in event.message &&
+    event.message.errorMessage
+  ) return "failed";
   return "";
 }
 

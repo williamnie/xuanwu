@@ -23,7 +23,7 @@ import { HttpError, json, parseJsonBody } from "./errors.ts";
 import { piConversationPromptImages } from "./piConversationImages.ts";
 import { piConversationDetail } from "./piConversationTranscript.ts";
 import type { PiRuntimeResult, PiRuntimeSession } from "./piRuntime.ts";
-import { publishPiSessionEvent } from "./piSessionEvents.ts";
+import { piTurnSessionEvent, publishPiSessionEvent, type PiTurnSessionEvent } from "./piSessionEvents.ts";
 import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actionGate.ts";
 import {
   recordSupervisorIntentRouteAudit,
@@ -65,7 +65,26 @@ export type PiConversationPromptInput = {
 };
 
 const PI_SESSION_PROVIDER = "pi-sdk";
+const PI_TURN_HEARTBEAT_MS = 15_000;
 const activePiRuns = new Map<string, PiRuntimeSession["session"]>();
+
+type PiConversationTurn = {
+  conversation: PiConversation;
+  prompt: string;
+  runtime: PiRuntimeSession;
+  turnID: string;
+};
+
+type PiConversationTurnResult = {
+  conversation_id: string;
+  message_count: number;
+  pi_session_id: string;
+  session_file: string;
+  status: "completed" | "failed";
+  text: string;
+  title: string;
+  turn_id: string;
+};
 
 export function registerPiConversationRoutes(router: Router, context: PiConversationContext): void {
   router.get("/api/pi/conversations", (request) => piConversationListResponse(context, request));
@@ -97,7 +116,14 @@ function piConversationResponse(context: PiConversationContext, request: Request
 async function piConversationMessageResponse(context: PiConversationContext, request: Request): Promise<Response> {
   const body = await parseObjectBody(request);
   const id = pathPart(request, "conversations");
-  return writeResponse(() => sendPiConversationMessage(context, id, body), 201);
+  try {
+    const turn = await preparePiConversationTurn(context, id, body);
+    return piConversationTurnStreamResponse(context, turn);
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    if (error instanceof Error) throw new HttpError(400, error.message);
+    throw error;
+  }
 }
 
 async function piConversationInterruptResponse(context: PiConversationContext, request: Request): Promise<Response> {
@@ -153,7 +179,17 @@ async function sendPiConversationMessage(
   id: string,
   body: Record<string, unknown>,
   trusted: { channelContext?: string; targetIssueId?: number } = {}
-) {
+): Promise<PiConversationTurnResult> {
+  const turn = await preparePiConversationTurn(context, id, body, trusted);
+  return executePiConversationTurn(context, turn);
+}
+
+async function preparePiConversationTurn(
+  context: PiConversationContext,
+  id: string,
+  body: Record<string, unknown>,
+  trusted: { channelContext?: string; targetIssueId?: number } = {}
+): Promise<PiConversationTurn> {
   const prompt = cleanString(body.prompt || body.message || body.content);
   if (prompt === "") throw new HttpError(400, "prompt is required");
   const intent = cleanString(body.intent);
@@ -206,29 +242,167 @@ async function sendPiConversationMessage(
     resolvedSource,
     cleanString(trusted.channelContext)
   );
-  const unsubscribe = runtime.session.subscribe((event) => publishPiSessionEvent(context.bus, conversation, event));
   activePiRuns.set(conversation.id, runtime.session);
+  return { conversation: titledConversation, prompt, runtime, turnID };
+}
+
+async function executePiConversationTurn(
+  context: PiConversationContext,
+  turn: PiConversationTurn,
+  onEvent?: (event: PiTurnSessionEvent) => void
+): Promise<PiConversationTurnResult> {
+  const { conversation, prompt, runtime } = turn;
+  let unsubscribe = () => {};
   try {
+    unsubscribe = runtime.session.subscribe((event) => {
+      publishPiSessionEvent(context.bus, conversation, event);
+      const streamEvent = piTurnSessionEvent(event);
+      if (streamEvent) onEvent?.(streamEvent);
+    });
     await runtime.session.prompt(prompt, {
       expandPromptTemplates: false,
       images: piConversationPromptImages(context.database, prompt),
       source: "rpc"
     });
-    persistPiSessionIndex(context.database, titledConversation);
-    return {
-      conversation_id: titledConversation.id,
-      pi_session_id: runtime.session.sessionId,
-      session_file: runtime.session.sessionFile ?? "",
-      status: runtime.session.state.errorMessage ? "failed" : "completed",
-      title: titledConversation.title,
-      text: piConversationResultText(runtime.session),
-      message_count: runtime.session.state.messages.length
-    };
+    return piConversationTurnResult(turn);
   } finally {
-    if (activePiRuns.get(conversation.id) === runtime.session) activePiRuns.delete(conversation.id);
-    unsubscribe();
-    runtime.dispose();
+    try {
+      persistPiSessionIndex(context.database, conversation);
+    } finally {
+      if (activePiRuns.get(conversation.id) === runtime.session) activePiRuns.delete(conversation.id);
+      try {
+        unsubscribe();
+      } finally {
+        runtime.dispose();
+      }
+    }
   }
+}
+
+function piConversationTurnResult(turn: PiConversationTurn): PiConversationTurnResult {
+  const { conversation, runtime, turnID } = turn;
+  return {
+    conversation_id: conversation.id,
+    pi_session_id: runtime.session.sessionId,
+    session_file: runtime.session.sessionFile ?? "",
+    status: runtime.session.state.errorMessage ? "failed" : "completed",
+    title: conversation.title,
+    text: piConversationResultText(runtime.session),
+    message_count: runtime.session.state.messages.length,
+    turn_id: turnID
+  };
+}
+
+function piConversationTurnStreamResponse(
+  context: PiConversationContext,
+  turn: PiConversationTurn
+): Response {
+  const encoder = new TextEncoder();
+  let connected = true;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let controller: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(streamController) {
+      controller = streamController;
+      enqueuePiTurnEvent("accepted", piTurnEventBase(turn, { status: "accepted" }));
+      heartbeat = setInterval(() => enqueueComment("heartbeat"), PI_TURN_HEARTBEAT_MS);
+      void executePiConversationTurn(context, turn, (event) => {
+        if (event.type === "start") {
+          enqueuePiTurnEvent("start", piTurnEventBase(turn, { status: "running" }));
+          return;
+        }
+        enqueuePiTurnEvent("assistant_text_delta", piTurnEventBase(turn, {
+          delta: event.delta,
+          text: event.delta
+        }));
+      }).then((result) => {
+        if (result.status === "completed") {
+          enqueuePiTurnEvent("completed", result);
+        } else {
+          enqueuePiTurnEvent("failed", {
+            ...result,
+            error: piConversationTurnError(turn.runtime.session)
+          });
+        }
+      }).catch((error) => {
+        enqueuePiTurnEvent("failed", {
+          ...piConversationTurnResult(turn),
+          error: {
+            code: "runtime_error",
+            message: redactSensitiveText(error instanceof Error ? error.message : String(error))
+          },
+          status: "failed"
+        });
+      }).finally(() => close());
+    },
+    cancel() {
+      connected = false;
+      clearHeartbeat();
+    }
+  });
+
+  function enqueuePiTurnEvent(event: string, data: Record<string, unknown>): void {
+    enqueue(`id: ${turn.turnID}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  }
+
+  function enqueueComment(comment: string): void {
+    enqueue(`: ${comment}\n\n`);
+  }
+
+  function enqueue(value: string): void {
+    if (!connected) return;
+    try {
+      controller.enqueue(encoder.encode(value));
+    } catch {
+      connected = false;
+      clearHeartbeat();
+    }
+  }
+
+  function close(): void {
+    clearHeartbeat();
+    if (!connected) return;
+    connected = false;
+    try {
+      controller.close();
+    } catch {
+      // The client may have disconnected after the final event was produced.
+    }
+  }
+
+  function clearHeartbeat(): void {
+    if (heartbeat) clearInterval(heartbeat);
+    heartbeat = undefined;
+  }
+
+  return new Response(stream, {
+    status: 201,
+    headers: {
+      "cache-control": "no-cache, no-transform",
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-accel-buffering": "no"
+    }
+  });
+}
+
+function piTurnEventBase(
+  turn: PiConversationTurn,
+  extra: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    conversation_id: turn.conversation.id,
+    pi_session_id: turn.runtime.session.sessionId,
+    turn_id: turn.turnID,
+    ...extra
+  };
+}
+
+function piConversationTurnError(session: AgentSession): { code: string; message: string } {
+  const message = session.state.errorMessage || lastAssistantErrorMessage(session);
+  return {
+    code: message === "Request was aborted" ? "interrupted" : "provider_error",
+    message: redactSensitiveText(message)
+  };
 }
 
 export async function runPiConversationPrompt(
