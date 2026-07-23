@@ -1,9 +1,19 @@
+import { useLayoutEffect, useRef } from 'react';
+import { scrollPromptSuggestionIntoView } from './promptEditorSuggestions';
+
 export default function PromptSuggestionMenu({ items, activeIndex, onPick }) {
+  const activeItemRef = useRef(null);
+
+  useLayoutEffect(() => {
+    scrollPromptSuggestionIntoView(activeItemRef.current);
+  }, [activeIndex, items]);
+
   return (
     <div className="prompt-suggestion-menu" role="listbox" aria-label="输入建议">
       {items.map((item, index) => (
         <button
           key={item.id || `${item.trigger}-${item.label}`}
+          ref={index === activeIndex ? activeItemRef : null}
           type="button"
           className={`prompt-suggestion-item ${index === activeIndex ? 'active' : ''}`}
           role="option"

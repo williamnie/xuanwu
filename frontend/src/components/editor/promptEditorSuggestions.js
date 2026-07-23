@@ -46,6 +46,12 @@ export function promptSuggestionKeyAction(event) {
   return '';
 }
 
+export function scrollPromptSuggestionIntoView(element) {
+  if (!element || typeof element.scrollIntoView !== 'function') return false;
+  element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  return true;
+}
+
 export function insertPromptSuggestion(editor, context, item) {
   const text = item?.insertText || '';
   if (!editor || !context || !text) return false;

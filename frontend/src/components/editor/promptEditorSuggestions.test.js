@@ -5,6 +5,7 @@ import {
   filterPromptSuggestionItems,
   nextPromptSuggestionIndex,
   promptSuggestionKeyAction,
+  scrollPromptSuggestionIntoView,
   samePromptSuggestionContext,
 } from './promptEditorSuggestions.js';
 
@@ -33,6 +34,19 @@ test('maps menu keyboard actions for selection and cancel', () => {
   assert.equal(promptSuggestionKeyAction({ key: 'Escape' }), 'close');
   assert.equal(promptSuggestionKeyAction({ key: 'Enter' }), 'pick');
   assert.equal(promptSuggestionKeyAction({ key: 'Enter', shiftKey: true }), '');
+});
+
+test('keeps the keyboard-selected suggestion visible in a scrollable menu', () => {
+  let options;
+  const element = {
+    scrollIntoView(nextOptions) {
+      options = nextOptions;
+    },
+  };
+
+  assert.equal(scrollPromptSuggestionIntoView(element), true);
+  assert.deepEqual(options, { block: 'nearest', inline: 'nearest' });
+  assert.equal(scrollPromptSuggestionIntoView(null), false);
 });
 
 test('compares active prompt suggestion context exactly', () => {
