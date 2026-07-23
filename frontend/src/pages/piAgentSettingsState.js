@@ -4,10 +4,7 @@ import { PRODUCT_TERMS } from '../brand';
 import { message } from '../store/toastStore';
 import { clearFirstDeliveryConnectionTest, recordFirstDeliveryConnectionTest } from '../utils/firstDeliveryConnection.js';
 
-export const DEFAULT_PI_AGENT_ID = 'runner-default';
-
 export const DEFAULT_PI_AGENT_FORM = {
-  agentId: DEFAULT_PI_AGENT_ID,
   agentName: PRODUCT_TERMS.supervisor,
   api: 'openai-responses',
   apiKey: '',
@@ -20,14 +17,6 @@ export const DEFAULT_PI_AGENT_FORM = {
   userAgent: ''
 };
 
-const LEGACY_PI_ASSISTANT_INSTRUCTIONS = new Set([
-  '你是玄武的 Supervisor runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀工程记忆。',
-  '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
-  '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
-  '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
-]);
-
-const LEGACY_PI_AGENT_NAMES = new Set(['PI Assistant', 'Runner Agent', 'Runner Brain']);
 const CONNECTION_FIELDS = new Set(['api', 'apiKey', 'baseUrl', 'modelId', 'modelProvider', 'userAgent']);
 
 export function usePiAgentSettingsState() {
@@ -61,7 +50,7 @@ export function usePiAgentSettingsState() {
     loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
   };
   const loadOAuthStatus = () => loadPiCodexOAuthStatus(setOauthStatus, setOauthBusy);
-  const loadPromptSummary = () => loadPiPromptSummary(DEFAULT_PI_AGENT_ID, setPromptSummary, setPromptSummaryLoading);
+  const loadPromptSummary = () => loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading);
   const updateField = (key, value) => {
     if (key === 'instructions') setPromptSummary(null);
     if (CONNECTION_FIELDS.has(key)) clearFirstDeliveryConnectionTest();
@@ -86,7 +75,7 @@ export function usePiAgentSettingsState() {
     void discoverPiModels(next, setModelDiscovery);
   };
   const handleConnectionSave = () => savePiConnectionSettings({ form, setForm, setProviders, setSaving });
-  const handleAgentSave = () => savePiAgentSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving });
+  const handleAgentSave = () => savePiSupervisorSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving });
   const selectModelProvider = (providerId) => selectConfiguredProvider(providerId, form, providers, providerCatalog.presets, setForm, setConnectionTest, setModelDiscovery);
   const testConnection = () => testPiConnection(form, setConnectionTest, setModelDiscovery);
   const startPiCodexOAuthLogin = () => startPiOAuthLogin(setForm, setOauthBusy, setOauthStatus);
@@ -104,13 +93,12 @@ export function usePiAgentSettingsState() {
 
 function loadPiSettings(setProviders, setProviderCatalog, setForm, setLoading, setPromptSummary, setModelDiscovery) {
   setLoading(true);
-  Promise.all([assistantApi.getPiAgents(), assistantApi.getPiProviderSettings(), assistantApi.getPiProviderCatalog()])
-    .then(([agentList, providerSettings, providerCatalog]) => {
-      const nextAgents = agentList || [];
+  Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings(), assistantApi.getPiProviderCatalog()])
+    .then(([supervisor, providerSettings, providerCatalog]) => {
       const nextProviders = providerSettings?.providers || [];
       setProviders(nextProviders);
       setProviderCatalog({ presets: providerCatalog?.presets || [] });
-      const nextForm = formFromState(nextAgents, nextProviders);
+      const nextForm = formFromState(supervisor, nextProviders);
       setForm(nextForm);
       setPromptSummary(null);
       void discoverPiModels(nextForm, setModelDiscovery);
@@ -220,12 +208,10 @@ function openOAuthUrl(url) {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-async function loadPiPromptSummary(agentId, setPromptSummary, setPromptSummaryLoading) {
-  const id = agentId.trim();
-  if (!id) return message.error('默认 Supervisor 尚不可用');
+async function loadPiPromptSummary(setPromptSummary, setPromptSummaryLoading) {
   setPromptSummaryLoading(true);
   try {
-    setPromptSummary(await assistantApi.getPiAgentRuntimePrompt(id));
+    setPromptSummary(await assistantApi.getPiSupervisorRuntimePrompt());
   } catch (err) {
     message.error(err.message || '读取生效 prompt 摘要失败');
   } finally {
@@ -248,12 +234,12 @@ async function savePiConnectionSettings({ form, setForm, setProviders, setSaving
   }
 }
 
-async function savePiAgentSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving }) {
+async function savePiSupervisorSettings({ form, providers, setForm, setPromptSummary, setProviders, setSaving }) {
   if (!isValidAgentForm(form)) return;
   setSaving(true);
   try {
     await ensureSelectedProviderModel(form, providers);
-    await saveAgent(agentPayload(form));
+    await saveSupervisor(supervisorPayload(form));
     message.success('Supervisor 行为设置已保存');
     setPromptSummary(null);
     await refreshAfterSave(setProviders, setForm);
@@ -272,16 +258,15 @@ async function ensureSelectedProviderModel(form, providers) {
   await assistantApi.updatePiProviderSettings(providerID, providerPayload(form));
 }
 
-async function saveAgent(payload) {
-  return await assistantApi.updatePiAgent(DEFAULT_PI_AGENT_ID, payload);
+async function saveSupervisor(payload) {
+  return await assistantApi.updatePiSupervisor(payload);
 }
 
 async function refreshAfterSave(setProviders, setForm) {
-  const [agentList, providerSettings] = await Promise.all([assistantApi.getPiAgents(), assistantApi.getPiProviderSettings()]);
-  const nextAgents = agentList || [];
+  const [supervisor, providerSettings] = await Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiProviderSettings()]);
   const nextProviders = providerSettings?.providers || [];
   setProviders(nextProviders);
-  setForm({ ...formFromState(nextAgents, nextProviders), apiKey: '' });
+  setForm({ ...formFromState(supervisor, nextProviders), apiKey: '' });
 }
 
 async function refreshProviderAfterSave(providerID, setProviders, setForm) {
@@ -322,9 +307,8 @@ function providerPayload(form) {
   };
 }
 
-function agentPayload(form) {
+function supervisorPayload(form) {
   return {
-    id: DEFAULT_PI_AGENT_ID,
     name: form.agentName.trim() || DEFAULT_PI_AGENT_FORM.agentName,
     model_provider: form.modelProvider.trim(),
     model_id: form.modelId.trim(),
@@ -334,22 +318,20 @@ function agentPayload(form) {
   };
 }
 
-function formFromState(agents, providers) {
-  const agent = defaultAgentFromList(agents);
-  if (!agent) return DEFAULT_PI_AGENT_FORM;
-  const provider = providers.find((item) => item.id === agent.model_provider);
+function formFromState(supervisor, providers) {
+  if (!supervisor) return DEFAULT_PI_AGENT_FORM;
+  const provider = providers.find((item) => item.id === supervisor.model_provider);
   return {
     ...DEFAULT_PI_AGENT_FORM,
-    agentId: agent.id,
-    agentName: normalizedAgentName(agent.name),
+    agentName: normalizedSupervisorName(supervisor.name),
     api: provider?.api || DEFAULT_PI_AGENT_FORM.api,
     apiKey: '',
     baseUrl: provider?.base_url || '',
-    enabled: agent.enabled === 1,
-    instructions: normalizedInstructions(agent.instructions),
-    modelId: agent.model_id || provider?.models?.[0] || DEFAULT_PI_AGENT_FORM.modelId,
-    modelProvider: agent.model_provider || DEFAULT_PI_AGENT_FORM.modelProvider,
-    thinkingLevel: agent.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel,
+    enabled: supervisor.enabled === 1,
+    instructions: normalizedInstructions(supervisor.instructions),
+    modelId: supervisor.model_id || provider?.models?.[0] || DEFAULT_PI_AGENT_FORM.modelId,
+    modelProvider: supervisor.model_provider || DEFAULT_PI_AGENT_FORM.modelProvider,
+    thinkingLevel: supervisor.thinking_level || DEFAULT_PI_AGENT_FORM.thinkingLevel,
     userAgent: provider?.user_agent || ''
   };
 }
@@ -381,24 +363,12 @@ function providerModelOptions(form, modelDiscovery) {
 
 function normalizedInstructions(instructions) {
   const value = String(instructions || '').trim();
-  if (!value || LEGACY_PI_ASSISTANT_INSTRUCTIONS.has(value)) {
-    return DEFAULT_PI_AGENT_FORM.instructions;
-  }
+  if (!value) return DEFAULT_PI_AGENT_FORM.instructions;
   return instructions;
 }
 
-function normalizedAgentName(name) {
+function normalizedSupervisorName(name) {
   const value = String(name || '').trim();
-  if (!value || LEGACY_PI_AGENT_NAMES.has(value)) {
-    return DEFAULT_PI_AGENT_FORM.agentName;
-  }
+  if (!value) return DEFAULT_PI_AGENT_FORM.agentName;
   return name;
-}
-
-function defaultAgentFromList(agents) {
-  if (!Array.isArray(agents)) return null;
-  return agents.find((item) => item.id === DEFAULT_PI_AGENT_ID)
-    || agents.find((item) => item.enabled === 1)
-    || agents[0]
-    || null;
 }

@@ -1,5 +1,4 @@
 import IssueTemplatesPanel from './IssueTemplatesPanel';
-import PiAgentSettingsPanel from './PiAgentSettingsPanel';
 import PiMemoryPanel from './PiMemoryPanel';
 import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
@@ -17,7 +16,6 @@ export default function SettingsTabContent({ activeTab, RuntimeStatusPanel, navi
   return (
     <>
       {activeTab === 'general' && <GeneralSettingsTab navigateTo={navigateTo} />}
-      {activeTab === 'models-agents' && <ModelsAgentsSettingsTab />}
       {activeTab === 'permissions' && <PermissionsSettingsTab navigateTo={navigateTo} />}
       {activeTab === 'notifications' && <NotificationsSettingsTab />}
     </>
@@ -37,10 +35,6 @@ function GeneralSettingsTab({ navigateTo }) {
       </button>
     </section>
   );
-}
-
-function ModelsAgentsSettingsTab() {
-  return <PiAgentSettingsPanel view="agent" />;
 }
 
 function PermissionsSettingsTab({ navigateTo }) {

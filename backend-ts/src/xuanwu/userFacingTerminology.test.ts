@@ -85,9 +85,9 @@ describe("Xuanwu user-facing terminology", () => {
     expect(violations).toEqual([]);
   });
 
-  test("preserves DB, API, CLI, default agent, and input alias compatibility identifiers", () => {
+  test("keeps canonical DB, singleton Supervisor API, CLI, runtime ID, and input alias identifiers", () => {
     expect(source("backend-ts/src/db/defaultPiAgent.ts")).toContain('DEFAULT_PI_AGENT_ID = "runner-default"');
-    expect(source("backend-ts/src/http/piApi.ts")).toContain('router.get("/api/pi/agents"');
+    expect(source("backend-ts/src/http/piApi.ts")).toContain('router.get("/api/pi/supervisor"');
     expect(source("backend-ts/src/db/schema/003_pi_runtime.ts")).toContain("create table if not exists pi_agents");
     expect(source("backend-ts/src/db/schema/003_pi_runtime.ts")).toContain("pi_agent_id text not null");
     expect(source("backend-ts/src/providers/codex/adapter.ts")).toContain('name: "codex-issue-runner"');

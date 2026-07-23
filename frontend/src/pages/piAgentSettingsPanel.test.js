@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const panelSource = readFileSync(new URL('./PiAgentSettingsPanel.jsx', import.meta.url), 'utf8');
+const panelStylesSource = readFileSync(new URL('./PiAgentSettingsPanel.css', import.meta.url), 'utf8');
 const stateSource = readFileSync(new URL('./piAgentSettingsState.js', import.meta.url), 'utf8');
 const assistantSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
 
@@ -12,8 +13,8 @@ test('PI Agent Settings exposes runtime prompt summary debug without secret echo
   assert.match(panelSource, /Custom instructions:/);
   assert.match(panelSource, /state\.loadPromptSummary/);
   assert.match(stateSource, /loadPiPromptSummary/);
-  assert.match(assistantSource, /getPiAgentRuntimePrompt:/);
-  assert.match(assistantSource, /\/api\/pi\/agents\/\$\{encodeURIComponent\(id\)\}\/runtime-prompt/);
+  assert.match(assistantSource, /getPiSupervisorRuntimePrompt:/);
+  assert.match(assistantSource, /\/api\/pi\/supervisor\/runtime-prompt/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
 });
 
@@ -35,6 +36,11 @@ test('PI Agent Settings exposes OpenAI Codex OAuth and user agent controls', () 
 });
 
 test('Connections provider view uses recommended cards, connection state, and discovered models', () => {
+  assert.match(panelSource, /import '\.\/PiAgentSettingsPanel\.css'/);
+  assert.match(panelStylesSource, /\.provider-preset-grid/);
+  assert.match(panelStylesSource, /\.provider-preset-card\.selected/);
+  assert.match(panelStylesSource, /\.provider-recommended-config/);
+  assert.match(panelStylesSource, /\.provider-advanced-disclosure/);
   assert.match(panelSource, /view === 'connection'/);
   assert.match(panelSource, /return <ProviderConnectionSettings state=\{state\} \/>/);
   assert.match(panelSource, /ProviderPresetCards/);
@@ -57,23 +63,23 @@ test('Connections provider view uses recommended cards, connection state, and di
   assert.match(panelSource, /disabled=\{!state\.modelSelectAvailable/);
   assert.doesNotMatch(panelSource, /window\.confirm|window\.alert/);
   const connectionSaveStart = stateSource.indexOf('async function savePiConnectionSettings');
-  const agentSaveStart = stateSource.indexOf('async function savePiAgentSettings');
+  const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
   const connectionSaveSource = stateSource.slice(connectionSaveStart, agentSaveStart);
   assert.match(connectionSaveSource, /updatePiProviderSettings/);
   assert.doesNotMatch(connectionSaveSource, /saveAgent\(/);
 });
 
-test('Models & Agents registers a newly discovered model without rewriting provider credentials', () => {
+test('Connections PI Agent registers a newly discovered model without rewriting provider credentials', () => {
   assert.match(panelSource, /view === 'agent'/);
-  assert.match(panelSource, /<AgentBehaviorSettings state=\{state\} \/>/);
+  assert.match(panelSource, /<SupervisorBehaviorSettings state=\{state\} \/>/);
   assert.match(panelSource, /provider 凭据和连接测试统一在 Connections 管理/);
   assert.match(panelSource, /state\.handleAgentSave/);
-  assert.match(stateSource, /savePiAgentSettings/);
-  const agentSaveStart = stateSource.indexOf('async function savePiAgentSettings');
-  const nextFunction = stateSource.indexOf('async function saveAgent', agentSaveStart);
+  assert.match(stateSource, /savePiSupervisorSettings/);
+  const agentSaveStart = stateSource.indexOf('async function savePiSupervisorSettings');
+  const nextFunction = stateSource.indexOf('async function saveSupervisor', agentSaveStart);
   const agentSaveSource = stateSource.slice(agentSaveStart, nextFunction);
   assert.match(agentSaveSource, /ensureSelectedProviderModel\(form, providers\)/);
-  assert.match(agentSaveSource, /saveAgent\(agentPayload\(form\)\)/);
+  assert.match(agentSaveSource, /saveSupervisor\(supervisorPayload\(form\)\)/);
   assert.match(stateSource, /configured\?\.models\?\.includes\(modelID\)/);
   assert.match(stateSource, /updatePiProviderSettings\(providerID, providerPayload\(form\)\)/);
   assert.match(panelSource, /不会改写凭据/);
@@ -98,17 +104,14 @@ test('Supervisor settings no longer expose multi-agent creation controls', () =>
   assert.doesNotMatch(panelSource, /Runner Agent Settings/);
   assert.doesNotMatch(stateSource, /assistantApi\.createPiAgent/);
   assert.doesNotMatch(assistantSource, /createPiAgent:/);
-  assert.match(stateSource, /assistantApi\.updatePiAgent\(DEFAULT_PI_AGENT_ID/);
+  assert.match(stateSource, /assistantApi\.updatePiSupervisor\(payload\)/);
+  assert.doesNotMatch(stateSource, /DEFAULT_PI_AGENT_ID|getPiAgents|updatePiAgent/);
 });
 
-test('Supervisor settings normalizes legacy default runtime instructions and names', () => {
-  assert.match(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS/);
-  assert.match(stateSource, /LEGACY_PI_AGENT_NAMES/);
-  assert.match(stateSource, /normalizedInstructions\(agent\.instructions\)/);
-  assert.match(stateSource, /玄武的 Supervisor runtime/);
+test('Supervisor settings relies on migrated canonical data instead of UI compatibility projections', () => {
+  assert.doesNotMatch(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS|LEGACY_PI_AGENT_NAMES/);
+  assert.match(stateSource, /normalizedInstructions\(supervisor\.instructions\)/);
   assert.match(stateSource, /Engineering Chief of Staff/);
   assert.match(stateSource, /Work，监督 Run，以 Evidence 判定完成/);
-  assert.match(stateSource, /全局 PI Assistant runtime/);
-  assert.match(stateSource, /LEGACY_PI_ASSISTANT_INSTRUCTIONS\.has\(value\)/);
-  assert.match(stateSource, /normalizedAgentName\(agent\.name\)/);
+  assert.match(stateSource, /normalizedSupervisorName\(supervisor\.name\)/);
 });

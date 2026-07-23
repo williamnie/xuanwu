@@ -5,11 +5,10 @@ import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
   createProjectPiSettings,
-  getPiAgent,
+  getPiSupervisor,
   getProjectPiSettings,
-  listPiAgents,
   listProjectPiSettings,
-  updatePiAgent,
+  updatePiSupervisor,
   updateProjectPiSettings,
   type ProjectPiSettings
 } from "../db/repositories/pi.ts";
@@ -53,14 +52,13 @@ type PiApiContext = {
 
 type SettingsPatch = Partial<Pick<ProjectPiSettings,
   "auto_enqueue" | "auto_manage" | "auto_triage" | "max_actions_per_cycle" |
-  "notify_on_needs_user" | "pi_agent_id"
+  "notify_on_needs_user"
 >>;
 
 export function registerPiRoutes(router: Router, context: PiApiContext): void {
-  router.get("/api/pi/agents", () => piAgentListResponse(context));
-  router.get("/api/pi/agents/:id", (request) => piAgentResponse(context, request));
-  router.get("/api/pi/agents/:id/runtime-prompt", (request) => piAgentPromptResponse(context, request));
-  router.patch("/api/pi/agents/:id", (request) => patchPiAgentResponse(context, request));
+  router.get("/api/pi/supervisor", () => piSupervisorResponse(context));
+  router.get("/api/pi/supervisor/runtime-prompt", () => piSupervisorPromptResponse(context));
+  router.patch("/api/pi/supervisor", (request) => patchPiSupervisorResponse(context, request));
   registerPiActionProposalRoutes(router, context);
   registerPiActivityRoutes(router, context);
   registerPiActionRoutes(router, context);
@@ -88,36 +86,31 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
 }
 
-function piAgentListResponse(context: PiApiContext): Response {
+function piSupervisorResponse(context: PiApiContext): Response {
   ensureDefaultPiAgent(context.database);
-  return json(listPiAgents(context.database));
+  return json(requirePiSupervisor(context.database));
 }
 
-function piAgentResponse(context: PiApiContext, request: Request): Response {
+function piSupervisorPromptResponse(context: PiApiContext): Response {
   ensureDefaultPiAgent(context.database);
-  const agent = getPiAgent(context.database, piAgentID(request));
-  if (!agent) throw new HttpError(404, "资源不存在");
-  return json(agent);
-}
-
-function piAgentPromptResponse(context: PiApiContext, request: Request): Response {
-  ensureDefaultPiAgent(context.database);
-  const agent = getPiAgent(context.database, piAgentID(request));
-  if (!agent) throw new HttpError(404, "资源不存在");
+  const agent = requirePiSupervisor(context.database);
   return json({
-    agent_id: agent.id,
-    agent_name: agent.name,
+    supervisor_name: agent.name,
     runtime_prompt_summary: piRuntimePromptSummary(agent)
   });
 }
 
-async function patchPiAgentResponse(context: PiApiContext, request: Request): Promise<Response> {
+async function patchPiSupervisorResponse(context: PiApiContext, request: Request): Promise<Response> {
   ensureDefaultPiAgent(context.database);
-  const id = piAgentID(request);
-  if (!getPiAgent(context.database, id)) throw new HttpError(404, "资源不存在");
   const body = normalizeAgentInput(await parseObjectBody(request));
-  if (inputDisablesAgent(body)) assertAgentCanBeDisabled(context.database, id);
-  return writeResponse(() => updatePiAgent(context.database, id, body));
+  if (inputDisablesAgent(body)) assertAgentCanBeDisabled(context.database, DEFAULT_PI_AGENT_ID);
+  return writeResponse(() => updatePiSupervisor(context.database, body));
+}
+
+function requirePiSupervisor(db: RunnerDatabase) {
+  const supervisor = getPiSupervisor(db);
+  if (!supervisor) throw new HttpError(500, "Supervisor 配置不可用");
+  return supervisor;
 }
 
 function projectPiSettingsResponse(context: PiApiContext, request: Request): Response {
@@ -132,7 +125,7 @@ async function patchProjectPiSettingsResponse(context: PiApiContext, request: Re
   const current = getProjectPiSettings(context.database, id);
   const patch = normalizeSettingsPatch(await parseObjectBody(request));
   const next = { ...defaultProjectPiSettings(context.database, id), ...current, ...patch };
-  assertSettingsCanUseAgent(context.database, next);
+  assertSettingsCanUseSupervisor(context.database, next);
   return writeResponse(() => current
     ? updateProjectPiSettings(context.database, id, patch)
     : createProjectPiSettings(context.database, { ...next, project_id: id }));
@@ -165,7 +158,6 @@ function normalizeAgentInput(input: Record<string, unknown>): Record<string, unk
 
 function normalizeSettingsPatch(input: Record<string, unknown>): SettingsPatch {
   const patch: SettingsPatch = {};
-  if (hasValue(input, "pi_agent_id")) patch.pi_agent_id = cleanString(input.pi_agent_id);
   for (const field of BOOLEAN_SETTINGS_FIELDS) {
     if (hasValue(input, field)) patch[field] = integerFlag(input[field]);
   }
@@ -175,22 +167,18 @@ function normalizeSettingsPatch(input: Record<string, unknown>): SettingsPatch {
   return patch;
 }
 
-function assertSettingsCanUseAgent(db: RunnerDatabase, settings: ProjectPiSettings): void {
-  if (settings.pi_agent_id === "") {
-    if (hasAutoSetting(settings)) throw new HttpError(400, "PI agent 不存在");
-    return;
-  }
-  const agent = getPiAgent(db, settings.pi_agent_id);
-  if (!agent) throw new HttpError(400, "PI agent 不存在");
-  if (hasAutoSetting(settings) && agent.enabled !== 1) {
-    throw new HttpError(400, "disabled PI agent cannot be used automatically");
+function assertSettingsCanUseSupervisor(db: RunnerDatabase, settings: ProjectPiSettings): void {
+  const supervisor = getPiSupervisor(db);
+  if (!supervisor) throw new HttpError(500, "Supervisor 配置不可用");
+  if (hasAutoSetting(settings) && supervisor.enabled !== 1) {
+    throw new HttpError(400, "disabled Supervisor cannot be used automatically");
   }
 }
 
 
 function assertAgentCanBeDisabled(db: RunnerDatabase, id: string): void {
   if (agentHasAutoSettings(db, id)) {
-    throw new HttpError(400, "enabled=false would disable an automatically managed PI agent");
+    throw new HttpError(400, "enabled=false would disable an automatically managed Supervisor");
   }
 }
 
@@ -229,10 +217,7 @@ async function parseObjectBody(request: Request): Promise<Record<string, unknown
 
 function defaultPiAgentID(db: RunnerDatabase): string {
   ensureDefaultPiAgent(db);
-  const agents = listPiAgents(db);
-  return agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)?.id
-    ?? agents.find((agent) => agent.enabled === 1)?.id
-    ?? "";
+  return getPiSupervisor(db)?.id ?? "";
 }
 
 function inputDisablesAgent(input: Record<string, unknown>): boolean {
@@ -245,10 +230,6 @@ function hasAutoSetting(settings: Pick<ProjectPiSettings, "auto_enqueue" | "auto
 
 function assertProjectExists(db: RunnerDatabase, id: string): void {
   if (!getProject(db, id)) throw new HttpError(404, "资源不存在");
-}
-
-function piAgentID(request: Request): string {
-  return pathPart(request, "agents");
 }
 
 function projectID(request: Request): string {

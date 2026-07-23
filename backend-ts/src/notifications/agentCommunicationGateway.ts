@@ -1,13 +1,11 @@
 import { createHash } from "node:crypto";
 import type { RunnerDatabase } from "../db/database.ts";
-import { DEFAULT_PI_AGENT_ID } from "../db/defaultPiAgent.ts";
 import { createExternalLink } from "../db/repositories/externalLinks.ts";
 import {
-  getPiAgent,
+  getPiSupervisor,
   getPiAction,
   getPiApprovalRequest,
   getPiNotificationIntent,
-  getProjectPiSettings,
   listPiNotificationIntents,
   markPiApprovalDelivered,
   updatePiNotificationIntent,
@@ -158,9 +156,8 @@ async function decideWithAgent(
 ): Promise<AgentCommunicationDecision> {
   const first = input.intents[0];
   if (!first) throw new Error("agent communication group is empty");
-  const configuredID = getProjectPiSettings(db, first.project_id)?.pi_agent_id || DEFAULT_PI_AGENT_ID;
-  const agent = getPiAgent(db, configuredID);
-  if (!agent || agent.enabled !== 1) throw new Error("configured Agent is unavailable");
+  const agent = getPiSupervisor(db);
+  if (!agent || agent.enabled !== 1) throw new Error("configured Supervisor is unavailable");
   const project = first.project_id === "" ? undefined : getProject(db, first.project_id) ?? undefined;
   const runtime = await createPiRuntimeSession(db, {
     agent,

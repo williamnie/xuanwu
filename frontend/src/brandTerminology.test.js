@@ -43,9 +43,9 @@ test('canonical product, Supervisor, and Runner terms stay fixed', () => {
 
   const contract = source('docs/architecture/xuanwu/0002-brand-terminology.md');
   assert.match(contract, /canonical 级别：本文件是玄武品牌术语的 source of truth/);
-  assert.match(contract, /双写：无/);
-  assert.match(contract, /双读：无/);
-  assert.match(contract, /最多保留本 ADR 生效后的两个正式 release/);
+  assert.match(contract, /双写\/双读：无/);
+  assert.match(contract, /055_collapse_pi_agents_to_supervisor/);
+  assert.match(contract, /前端 projection：无/);
 });
 
 test('live UI source does not expose legacy product identities', () => {
@@ -64,12 +64,12 @@ test('live UI source does not expose legacy product identities', () => {
   assert.deepEqual(violations, []);
 });
 
-test('CLI, API, and DB compatibility identifiers stay unchanged', () => {
+test('CLI, singleton Supervisor API, and DB identifiers stay canonical', () => {
   assert.match(source('backend-ts/src/db/defaultPiAgent.ts'), /DEFAULT_PI_AGENT_ID = "runner-default"/);
   assert.match(source('backend-ts/src/db/defaultPiAgent.ts'), /DEFAULT_PI_AGENT_NAME = "Xuanwu Supervisor"/);
   assert.match(source('backend-ts/src/db/schema/003_pi_runtime.ts'), /create table if not exists pi_agents/);
   assert.match(source('backend-ts/src/db/schema/003_pi_runtime.ts'), /pi_agent_id text not null/);
-  assert.match(source('backend-ts/src/http/piApi.ts'), /router\.get\("\/api\/pi\/agents"/);
+  assert.match(source('backend-ts/src/http/piApi.ts'), /router\.get\("\/api\/pi\/supervisor"/);
   assert.match(source('backend-ts/src/providers/codex/adapter.ts'), /name: "codex-issue-runner"/);
   assert.match(source('backend-ts/scripts/build-binary.sh'), /dist\/codex-issue-runner/);
 });

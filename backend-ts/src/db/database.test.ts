@@ -239,7 +239,8 @@ describe("Bun SQLite database connection", () => {
         { id: "050_automation_watches" },
         { id: "051_remove_production_fixtures" },
         { id: "052_consolidate_pi_decision_layers" },
-        { id: "054_compact_event_summary_projection" }
+        { id: "054_compact_event_summary_projection" },
+        { id: "055_collapse_pi_agents_to_supervisor" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
@@ -587,15 +588,26 @@ describe("Bun SQLite database connection", () => {
         "2026-01-01T00:00:00Z"
       ]
     );
+    first.sqlite.run(
+      `insert into project_pi_settings
+        (project_id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
+      ["legacy-project", "pi-default", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    );
+    first.sqlite.run(
+      `insert into pi_conversations
+        (id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
+      ["legacy-conversation", "pi-default", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    );
     first.close();
 
     const upgraded = await openDatabase({ stateDir });
 
     try {
-      expect(upgraded.sqlite.query("select id from pi_agents order by id").all()).toEqual([
-        { id: "pi-default" },
-        { id: "runner-default" }
-      ]);
+      expect(upgraded.sqlite.query("select id from pi_agents order by id").all()).toEqual([{ id: "runner-default" }]);
+      expect(upgraded.sqlite.query("select pi_agent_id from project_pi_settings where project_id='legacy-project'").get())
+        .toEqual({ pi_agent_id: "runner-default" });
+      expect(upgraded.sqlite.query("select pi_agent_id from pi_conversations where id='legacy-conversation'").get())
+        .toEqual({ pi_agent_id: "runner-default" });
       expect(upgraded.sqlite.query("select id, name, model_provider, model_id, thinking_level, instructions, enabled from pi_agents where id='runner-default'").get()).toEqual({
         id: "runner-default",
         name: "Legacy PI",
@@ -607,6 +619,52 @@ describe("Bun SQLite database connection", () => {
       });
     } finally {
       upgraded.close();
+    }
+  });
+
+  test("collapses legacy agent data when the singleton Supervisor migration is pending", async () => {
+    const root = await tempPath("codex-runner-bun-collapse-pi-agents-");
+    const stateDir = join(root, "state");
+    const first = await openDatabase({ stateDir });
+    first.close();
+
+    const raw = new Database(join(stateDir, "runner.db"));
+    try {
+      raw.run("delete from schema_migrations where id='055_collapse_pi_agents_to_supervisor'");
+      raw.run(
+        `update pi_agents set name='Runner Brain', instructions=? where id='runner-default'`,
+        ["你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。"]
+      );
+      raw.run(
+        `insert into pi_agents (id, name, created_at, updated_at) values (?, ?, ?, ?)`,
+        ["legacy-extra", "Legacy Extra", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+      raw.run(
+        `insert into project_pi_settings (project_id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
+        ["legacy-extra-project", "legacy-extra", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+      raw.run(
+        `insert into pi_conversations (id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
+        ["legacy-extra-conversation", "legacy-extra", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      );
+    } finally {
+      raw.close();
+    }
+
+    const migrated = await openDatabase({ stateDir });
+    try {
+      expect(migrated.sqlite.query("select count(*) as count from pi_agents").get()).toEqual({ count: 1 });
+      expect(migrated.sqlite.query("select id, name, instructions from pi_agents").get()).toEqual({
+        id: "runner-default",
+        name: "Xuanwu Supervisor",
+        instructions: "你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。"
+      });
+      expect(migrated.sqlite.query("select pi_agent_id from project_pi_settings where project_id='legacy-extra-project'").get())
+        .toEqual({ pi_agent_id: "runner-default" });
+      expect(migrated.sqlite.query("select pi_agent_id from pi_conversations where id='legacy-extra-conversation'").get())
+        .toEqual({ pi_agent_id: "runner-default" });
+    } finally {
+      migrated.close();
     }
   });
 
@@ -808,7 +866,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 53 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 54 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

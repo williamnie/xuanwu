@@ -27,7 +27,7 @@ const runtimeDiagnosticsSource = readFileSync(new URL('../utils/runtimeDiagnosti
 test('Settings renders behavior sections and gates internal panels behind Advanced', () => {
   assert.match(settingsSource, /initialTab = 'general'/);
   assert.match(settingsSource, /resolveSettingsRoute\(initialTab\)/);
-  for (const tab of ['general', 'models-agents', 'permissions', 'notifications']) {
+  for (const tab of ['general', 'permissions', 'notifications']) {
     assert.match(sectionsSource, new RegExp(`activeTab === '${tab}'`));
   }
   for (const tab of ['runtime', 'skills', 'memory', 'activity', 'policies']) {
@@ -55,11 +55,10 @@ test('Settings primary IA includes project settings without duplicating its sour
   assert.match(sectionsSource, /Per-project settings/);
   assert.match(sectionsSource, /navigateTo\?\.\('projects'\)/);
   assert.match(sectionsSource, /不会产生双写/);
-  assert.match(settingsNavigationSource, /Models & Agents/);
   assert.match(settingsNavigationSource, /Permissions/);
   assert.match(settingsNavigationSource, /Notifications/);
-  assert.match(sectionsSource, /<PiAgentSettingsPanel view="agent" \/>/);
-  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel view="advanced"/);
+  assert.doesNotMatch(settingsNavigationSource, /Models & Agents|models-agents/);
+  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel|ModelsAgentsSettingsTab/);
   assert.match(piAgentSource, /view === 'connection'/);
   assert.match(piAgentSource, /<ProviderCredentialFields state=\{state\} \/>/);
   assert.match(piAgentSource, /<ApiTypeField form=\{state\.form\} updateField=\{state\.updateField\} \/>/);
@@ -78,7 +77,7 @@ test('ordinary Settings route does not render raw runtime controls', () => {
   const primarySource = sectionsSource.slice(primaryStart, advancedStart);
   assert.doesNotMatch(primarySource, /Runtime API Type|User-Agent|Prompt 摘要|PiMcpManagementPanel|RuntimeStatusPanel/);
   assert.match(piAgentSource, /view = 'agent'/);
-  assert.match(piAgentSource, /return <AgentBehaviorSettings state=\{state\} \/>/);
+  assert.match(piAgentSource, /return <SupervisorBehaviorSettings state=\{state\} \/>/);
   assert.match(piAgentSource, /<AdvancedProviderGrid state=\{state\} \/>/);
   assert.match(piAgentSource, /<ProviderCredentialFields/);
   assert.doesNotMatch(sectionsSource, /ApiTypeField|ProviderCredentialFields/);
@@ -158,6 +157,7 @@ test('Connections owns provider, connector and MCP management without Settings d
   assert.match(connectionsSource, /FeishuSettingsPanel/);
   assert.match(connectionsSource, /PiMcpManagementPanel/);
   assert.doesNotMatch(sectionsSource, /ConnectorDiagnosticsPanel|FeishuSettingsPanel|PiMcpManagementPanel/);
+  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel/);
   assert.match(connectorsApiSource, /getPiConnectors:\s*\(\)\s*=>\s*request\('\/api\/pi\/connectors'\)/);
   assert.match(connectorsApiSource, /testPiConnector/);
   assert.match(connectorsApiSource, /revokePiConnectorSecret/);

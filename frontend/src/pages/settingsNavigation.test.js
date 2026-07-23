@@ -10,7 +10,6 @@ import {
 test('Settings exposes behavior tabs and keeps runtime details in Advanced', () => {
   assert.deepEqual(SETTINGS_PRIMARY_TABS.map(tab => tab.label), [
     'General',
-    'Models & Agents',
     'Permissions',
     'Notifications',
   ]);
@@ -24,7 +23,7 @@ test('Settings exposes behavior tabs and keeps runtime details in Advanced', () 
 });
 
 test('Settings migrates configuration tabs but excludes product work queues', () => {
-  assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'models-agents' });
+  assert.deepEqual(resolveSettingsRoute('assistant'), { tier: 'primary', tab: 'general' });
   assert.deepEqual(resolveSettingsRoute('runner-brain'), { tier: 'advanced', tab: 'runtime' });
   assert.deepEqual(resolveSettingsRoute('connections'), { tier: 'product', tab: 'connections' });
   assert.deepEqual(resolveSettingsRoute('connectors'), { tier: 'product', tab: 'connections' });

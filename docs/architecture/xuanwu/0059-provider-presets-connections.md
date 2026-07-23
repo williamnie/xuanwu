@@ -7,7 +7,7 @@
 
 ## 1. Connections 与 Advanced
 
-顶层 `Connections → AI Providers` 展示 OpenAI、Codex、Anthropic 推荐卡片、脱敏连接状态、API key/OAuth 入口、provider 可用模型和显式连接测试；保存只写 provider authority，不改变 Supervisor 默认选择。provider ID、base URL、API type 与 User-Agent 收进同页的“自定义 / 高级 Provider”折叠入口，不再作为独立页签。`Connections → PI Agent` 维护 Supervisor 名称、provider/model 默认选择、thinking、instructions 与 enabled；`Settings → Models & Agents` 暂保留同一组件的兼容入口，两处复用同一 agent writer，不产生第二份状态。选择远端发现但尚未登记的新模型时，只把该 model ID 登记到现有 provider 后再保存 agent，不改写 credential。
+顶层 `Connections → AI Providers` 展示 OpenAI、Codex、Anthropic 推荐卡片、脱敏连接状态、API key/OAuth 入口、provider 可用模型和显式连接测试；保存只写 provider authority，不改变 Supervisor 默认选择。provider ID、base URL、API type 与 User-Agent 收进同页的“自定义 / 高级 Provider”折叠入口，不再作为独立页签。`Connections → PI Agent` 是 Supervisor 名称、provider/model 默认选择、thinking、instructions 与 enabled 的唯一产品入口；Settings 不再重复挂载。选择远端发现但尚未登记的新模型时，只把该 model ID 登记到现有 provider 后再保存 Supervisor，不改写 credential。
 
 推荐卡片不持久化第二份配置。`GET /api/pi/provider-settings/catalog` 从版本化 preset 与 `pi-ai` 内置 model catalog 生成只读 projection；保存仍调用现有 provider settings 与 PI agent writer。OpenAI + `gpt-5.4` 保持当前默认选择，不在读取时后台改写已有 provider/model。
 
@@ -20,8 +20,8 @@ Codex OAuth 先验证 PI OAuth credential store，再通过当前 Codex provider
 ## 3. 审计、兼容与回滚
 
 - provider 保存记录 `provider_settings_updated`；连接测试记录 `provider_connection_tested`；OAuth 开始、完成、失败和退出分别记录 `provider_oauth_*` 到现有 `pi_action_events`。
-- 本变更没有 schema、provider adapter、共享状态机、双写或双读。运行时继续只读 `models.json`、`pi_agents` 与 PI `auth.json`；catalog 和连接测试结果只存在于请求/前端内存。
-- 旧 `/api/pi/provider-settings`、OAuth API 保持兼容；原独立 Custom Provider 页签折叠进 Connections AI Providers，PI Agent 页签与 Settings Models & Agents 复用既有 agent 表单和 writer，不迁移 provider、agent 或 OAuth 数据。
+- provider adapter 与共享状态机不双写或双读。运行时继续只读 `models.json`、单例 `pi_agents.runner-default` 与 PI `auth.json`；catalog 和连接测试结果只存在于请求/前端内存。
+- Supervisor 只暴露 `GET/PATCH /api/pi/supervisor` 与 `GET /api/pi/supervisor/runtime-prompt`。`055_collapse_pi_agents_to_supervisor` 将旧 agent 引用归一到 `runner-default` 并删除其余配置；前端不再保留 agent collection、ID 选择或旧默认文案 projection。
 - 删除旧 `advanced:model-runtime` 内容 carrier 后仍保留确定性 redirect；最终删除该兼容输入必须有一个正式 release 的 consumer-zero 证据、旧 deep-link 测试、P11.05 与 G7。
 
 ## 4. 验证门禁

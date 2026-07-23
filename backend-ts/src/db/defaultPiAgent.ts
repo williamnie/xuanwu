@@ -47,6 +47,32 @@ export function ensureDefaultPiAgent(db: PiAgentBootstrapDatabase): void {
       timestamp
     ]
   );
+  collapseLegacyPiAgents(db.sqlite);
+  normalizeLegacySupervisorDefaults(db.sqlite);
+}
+
+function collapseLegacyPiAgents(sqlite: SQLiteDatabase): void {
+  sqlite.run("update project_pi_settings set pi_agent_id=? where pi_agent_id<>?", [DEFAULT_PI_AGENT_ID, DEFAULT_PI_AGENT_ID]);
+  sqlite.run("update pi_conversations set pi_agent_id=? where pi_agent_id<>?", [DEFAULT_PI_AGENT_ID, DEFAULT_PI_AGENT_ID]);
+  sqlite.run("delete from pi_agents where id<>?", [DEFAULT_PI_AGENT_ID]);
+}
+
+function normalizeLegacySupervisorDefaults(sqlite: SQLiteDatabase): void {
+  sqlite.run(
+    `update pi_agents set name=?, updated_at=?
+      where id=? and name in ('PI Assistant', 'Runner Agent', 'Runner Brain')`,
+    [DEFAULT_PI_AGENT_NAME, new Date().toISOString(), DEFAULT_PI_AGENT_ID]
+  );
+  sqlite.run(
+    `update pi_agents set instructions=?, updated_at=?
+      where id=? and instructions in (
+        '你是玄武的 Supervisor runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀工程记忆。',
+        '你是全局 PI Assistant runtime，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+        '你是全局 Runner Agent，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。',
+        '你是全局 Runner Brain，负责观察所有项目、调度 sessions/issues、提出 action 建议并沉淀记忆。'
+      )`,
+    [DEFAULT_PI_AGENT_INSTRUCTIONS, new Date().toISOString(), DEFAULT_PI_AGENT_ID]
+  );
 }
 
 function hasRunnerDefault(sqlite: SQLiteDatabase): boolean {

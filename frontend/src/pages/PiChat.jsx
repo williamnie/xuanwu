@@ -61,7 +61,7 @@ function PiChatSidebar({ advanced, navigateTo, state }) {
         navigateTo={navigateTo}
         onRefresh={state.loadPiState}
       />
-      <AgentStatus advanced={advanced} agent={state.selectedAgent} />
+      <AgentStatus advanced={advanced} agent={state.supervisor} />
       <button className="btn btn-primary" onClick={state.handleCreateConversation} disabled={state.sending}>
         <MessageSquarePlus size={15} /> 新建 Chat
       </button>
@@ -89,7 +89,7 @@ function PiChatSidebarHeader({ loading, navigateTo, onRefresh }) {
         <button className="pi-chat-icon-button" onClick={onRefresh} disabled={loading} title="刷新 Chat">
           <RefreshCw size={15} className={loading ? 'spin-animation' : ''} />
         </button>
-        <button className="pi-chat-icon-button" onClick={() => navigateTo('settings')} title="打开 Settings">
+        <button className="pi-chat-icon-button" onClick={() => navigateTo('connections')} title="打开 Connections">
           <Settings2 size={15} />
         </button>
       </div>
@@ -243,7 +243,7 @@ function ChatThread({ advanced, navigateTo, state }) {
       <div className="pi-chat-thread" ref={scrollRef} onScroll={handleScroll}>
         <div className="pi-chat-thread-content" ref={contentRef}>
           {state.transcript.length === 0 ? (
-            <EmptyChat navigateTo={navigateTo} hasRuntime={state.agents.length > 0} />
+            <EmptyChat navigateTo={navigateTo} hasRuntime={Boolean(state.supervisor)} />
           ) : state.transcript.map((item) => (
             <ChatBubble advanced={advanced} key={item.id} conversation={state.selectedConversation} item={item} />
           ))}
@@ -285,7 +285,7 @@ function ChatComposer({ advanced, state }) {
         referenceDetails={buildPiChatReferenceDetails(state.references, state.projects)}
         onAttachReference={state.attachReference}
         onRemoveReference={state.removeReference}
-        runtimeControls={<PiChatComposerMeta advanced={advanced} agent={state.selectedAgent} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
+        runtimeControls={<PiChatComposerMeta advanced={advanced} agent={state.supervisor} project={state.selectedProject || projectFromPrompt(state.prompt, state.projects)} />}
         onStop={state.handleStop}
       />
     </div>
@@ -309,7 +309,7 @@ function AgentStatus({ advanced, agent }) {
         <AlertTriangle size={14} />
         <div>
           <strong>Xuanwu 还未连接</strong>
-          <span>请在 Settings 完成配置</span>
+          <span>请在 Connections 完成配置</span>
         </div>
       </div>
     );
@@ -319,7 +319,7 @@ function AgentStatus({ advanced, agent }) {
       {agent.enabled ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
       <div>
         <strong>{agent.enabled ? 'Xuanwu 已连接' : 'Xuanwu 暂不可用'}</strong>
-        <span>{advanced ? advancedAgentLabel(agent) : agent.enabled ? '可以开始对话' : '请在 Settings 检查配置'}</span>
+        <span>{advanced ? advancedAgentLabel(agent) : agent.enabled ? '可以开始对话' : '请在 Connections 检查配置'}</span>
       </div>
     </div>
   );
@@ -356,7 +356,7 @@ function ChatErrorState({ advanced, error, navigateTo, onAdvancedChange, onRetry
         >
           <SlidersHorizontal size={14} /> Advanced
         </button>
-        <button className="btn btn-secondary" onClick={() => navigateTo('settings')} type="button">打开 Settings</button>
+        <button className="btn btn-secondary" onClick={() => navigateTo('connections')} type="button">打开 Connections</button>
       </div>
     </div>
   );
@@ -367,8 +367,8 @@ function EmptyChat({ hasRuntime, navigateTo }) {
     <div className="pi-chat-empty">
       <Bot size={34} />
       <strong>{hasRuntime ? '开始新的 Chat' : 'Xuanwu 还未连接'}</strong>
-      <span>{hasRuntime ? '说明你的目标、约束和期望交付；进展、证据与 Work 会留在这里。' : '请在 Settings 完成 Xuanwu 配置后再开始对话。'}</span>
-      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('settings')}>打开 Settings</button>}
+      <span>{hasRuntime ? '说明你的目标、约束和期望交付；进展、证据与 Work 会留在这里。' : '请在 Connections 完成 Xuanwu 配置后再开始对话。'}</span>
+      {!hasRuntime && <button className="btn btn-secondary" onClick={() => navigateTo('connections')}>打开 Connections</button>}
     </div>
   );
 }

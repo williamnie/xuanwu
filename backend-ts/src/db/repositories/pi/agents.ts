@@ -1,16 +1,11 @@
 import type { RunnerDatabase } from "../../database.ts";
+import { DEFAULT_PI_AGENT_ID } from "../../defaultPiAgent.ts";
 import {
-  cleanString,
-  deleteByID,
   getByID,
-  integerInput,
   integerValue,
   jsonText,
-  listRows,
-  now,
   optionalString,
   requiredString,
-  requireCreateFields,
   updateByID,
   type PatchInput
 } from "./common.ts";
@@ -31,50 +26,23 @@ const UPDATE_COLUMNS = [
   "cwd_policy", "tools_json", "instructions", "enabled"
 ] as const;
 
-export function createPiAgent(db: RunnerDatabase, input: PiAgentInput): PiAgent {
-  const record = normalizeCreate(input);
-  requireCreateFields(record, ["id", "name"]);
-  const timestamp = now();
-  db.sqlite.run(`insert into ${TABLE} (${COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [record.id, record.name, record.provider, record.model_provider, record.model_id,
-      record.thinking_level, record.cwd_policy, record.tools_json, record.instructions,
-      record.enabled, timestamp, timestamp]);
-  return mustGetPiAgent(db, record.id);
-}
-
-export function updatePiAgent(db: RunnerDatabase, id: string, input: PiAgentInput): PiAgent {
-  updateByID<PiAgent>(db, TABLE, UPDATE_COLUMNS, id, normalizePatch(input));
-  return mustGetPiAgent(db, id);
-}
-
-export function listPiAgents(db: RunnerDatabase): PiAgent[] {
-  return listRows(db, TABLE, COLUMNS, mapPiAgent, { args: [], sql: " order by created_at asc, id asc" });
+export function updatePiSupervisor(db: RunnerDatabase, input: PiAgentInput): PiAgent {
+  updateByID<PiAgent>(db, TABLE, UPDATE_COLUMNS, DEFAULT_PI_AGENT_ID, normalizePatch(input));
+  return mustGetPiAgent(db, DEFAULT_PI_AGENT_ID);
 }
 
 export function getPiAgent(db: RunnerDatabase, id: string): PiAgent | null {
   return getByID(db, TABLE, COLUMNS, id, mapPiAgent);
 }
 
-export function deletePiAgent(db: RunnerDatabase, id: string): boolean {
-  return deleteByID(db, TABLE, id);
+export function getPiSupervisor(db: RunnerDatabase): PiAgent | null {
+  return getPiAgent(db, DEFAULT_PI_AGENT_ID);
 }
 
 function mustGetPiAgent(db: RunnerDatabase, id: string): PiAgent {
   const record = getPiAgent(db, id);
   if (!record) throw new Error("pi agent missing after write");
   return record;
-}
-
-function normalizeCreate(input: PiAgentInput): PiAgent {
-  return {
-    id: cleanString(input.id), name: cleanString(input.name),
-    provider: cleanString(input.provider) || "pi-sdk",
-    model_provider: cleanString(input.model_provider), model_id: cleanString(input.model_id),
-    thinking_level: cleanString(input.thinking_level) || "medium",
-    cwd_policy: cleanString(input.cwd_policy) || "project",
-    tools_json: jsonText(input.tools_json, "[]"), instructions: cleanString(input.instructions),
-    enabled: integerInput(input.enabled, 1), created_at: "", updated_at: ""
-  };
 }
 
 function normalizePatch(input: PiAgentInput): PiAgentInput {

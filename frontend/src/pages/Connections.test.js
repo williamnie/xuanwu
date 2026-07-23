@@ -24,8 +24,7 @@ test('Connections presents provider then PI Agent configuration and owns connect
   }
   assert.doesNotMatch(connectionsSource, /PiAgentSettingsPanel view="advanced"/);
   assert.doesNotMatch(sectionsSource, /ConnectorDiagnosticsPanel|FeishuSettingsPanel|PiMcpManagementPanel/);
-  assert.match(sectionsSource, /PiAgentSettingsPanel view="agent"/);
-  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel view="advanced"/);
+  assert.doesNotMatch(sectionsSource, /PiAgentSettingsPanel|ModelsAgentsSettingsTab/);
 });
 
 test('legacy Settings connection tabs redirect to the product page', () => {

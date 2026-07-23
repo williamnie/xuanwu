@@ -70,11 +70,11 @@ export const assistantApi = {
     return request(`/api/pi/attention-inbox/context-bundles${query}`);
   },
 
-  getPiAgents: () => request('/api/pi/agents'),
+  getPiSupervisor: () => request('/api/pi/supervisor'),
 
-  getPiAgentRuntimePrompt: (id) => request(`/api/pi/agents/${encodeURIComponent(id)}/runtime-prompt`),
+  getPiSupervisorRuntimePrompt: () => request('/api/pi/supervisor/runtime-prompt'),
 
-  updatePiAgent: (id, updates) => request(`/api/pi/agents/${encodeURIComponent(id)}`, {
+  updatePiSupervisor: (updates) => request('/api/pi/supervisor', {
     method: 'PATCH',
     body: JSON.stringify(updates),
   }),

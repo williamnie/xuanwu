@@ -144,10 +144,9 @@ API 清单以 **method + normalized path** 为逐项 identity。测试扫描 `ba
 <details><summary><code>assistant-runtime</code> 的逐项 routes</summary>
 
 ```text
-GET /api/pi/agents
-GET /api/pi/agents/:id
-PATCH /api/pi/agents/:id
-GET /api/pi/agents/:id/runtime-prompt
+GET /api/pi/supervisor
+PATCH /api/pi/supervisor
+GET /api/pi/supervisor/runtime-prompt
 GET /api/pi/conversations
 POST /api/pi/conversations
 GET /api/pi/conversations/:id

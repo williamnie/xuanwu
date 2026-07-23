@@ -7,13 +7,11 @@ import { getIssue, listIssues } from "./issues.ts";
 import {
   createPiAction,
   createPiActionEvent,
-  createPiAgent,
   createPiConversation,
   createPiDelegation,
   createPiMemoryItem,
   createProjectPiSettings,
   deletePiAction,
-  deletePiAgent,
   deletePiConversation,
   deletePiMemoryItem,
   deleteProjectPiSettings,
@@ -26,7 +24,6 @@ import {
   getProjectPiSettings,
   listPiActionEvents,
   listPiActions,
-  listPiAgents,
   listPiConversations,
   listPiDelegations,
   listPiMemoryItems,
@@ -34,7 +31,7 @@ import {
   pausePiDelegation,
   resumePiDelegation,
   updatePiAction,
-  updatePiAgent,
+  updatePiSupervisor,
   updatePiConversation,
   updatePiDelegation,
   updatePiMemoryItem,
@@ -58,31 +55,20 @@ afterEach(async () => {
 });
 
 describe("PI runtime repositories", () => {
-  test("performs CRUD for PI agents and project settings", async () => {
+  test("updates the singleton Supervisor and performs CRUD for project settings", async () => {
     const db = await openFixtureDatabase();
     try {
-      const agent = createPiAgent(db, { id: "agent-1", name: "Default PI" });
-      expect(agent).toMatchObject({
-        id: "agent-1",
-        name: "Default PI",
-        provider: "pi-sdk",
-        thinking_level: "medium",
-        tools_json: "[]",
-        enabled: 1
-      });
-
-      const updatedAgent = updatePiAgent(db, "agent-1", {
+      const updatedAgent = updatePiSupervisor(db, {
         model_id: "gpt-5.4",
         tools_json: "[\"read\"]",
         enabled: 0
       });
-      expect(updatedAgent).toMatchObject({ model_id: "gpt-5.4", tools_json: "[\"read\"]", enabled: 0 });
-      expect(listPiAgents(db).map((item) => item.id)).toEqual(["runner-default", "agent-1"]);
+      expect(updatedAgent).toMatchObject({ id: "runner-default", model_id: "gpt-5.4", tools_json: "[\"read\"]", enabled: 0 });
 
-      const settings = createProjectPiSettings(db, { project_id: "demo", pi_agent_id: "agent-1" });
+      const settings = createProjectPiSettings(db, { project_id: "demo", pi_agent_id: "runner-default" });
       expect(settings).toMatchObject({
         project_id: "demo",
-        pi_agent_id: "agent-1",
+        pi_agent_id: "runner-default",
         auto_manage: 0,
         notify_on_needs_user: 1,
         max_actions_per_cycle: 5
@@ -97,8 +83,6 @@ describe("PI runtime repositories", () => {
 
       expect(deleteProjectPiSettings(db, "demo")).toBe(true);
       expect(getProjectPiSettings(db, "demo")).toBeNull();
-      expect(deletePiAgent(db, "agent-1")).toBe(true);
-      expect(getPiAgent(db, "agent-1")).toBeNull();
       expect(getPiAgent(db, "runner-default")).not.toBeNull();
     } finally {
       db.close();
@@ -108,12 +92,10 @@ describe("PI runtime repositories", () => {
   test("performs CRUD for PI conversations, actions, and memory items", async () => {
     const db = await openFixtureDatabase();
     try {
-      createPiAgent(db, { id: "agent-1", name: "Default PI" });
-
       const conversation = createPiConversation(db, {
         id: "conv-1",
         project_id: "demo",
-        pi_agent_id: "agent-1",
+        pi_agent_id: "runner-default",
         title: "Plan"
       });
       expect(conversation).toMatchObject({ id: "conv-1", status: "active", title: "Plan" });

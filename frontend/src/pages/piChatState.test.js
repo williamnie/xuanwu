@@ -49,6 +49,8 @@ test('PI Assistant chat uses the default PI agent without exposing an agent sele
   assert.doesNotMatch(panelSource, /<select className="form-control" value=\{selected\}/);
   assert.doesNotMatch(panelSource, /Runner Agent/);
   assert.doesNotMatch(source, /pi_agent_id:\s*state\.selectedAgentId/);
+  assert.match(source, /assistantApi\.getPiSupervisor\(\)/);
+  assert.doesNotMatch(source, /getPiAgents|selectedAgentId|setSelectedAgentId/);
   assert.match(source, /assistantApi\.createPiConversation\(\{\s*project_id:/);
   assert.doesNotMatch(source, /ensureConversationInput/);
 });

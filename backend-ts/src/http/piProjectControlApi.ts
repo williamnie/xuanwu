@@ -1,13 +1,12 @@
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
+import { ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   createPiConversation,
   createProjectPiSettings,
-  getPiAgent,
+  getPiSupervisor,
   getProjectPiSettings,
-  listPiAgents,
   updateProjectPiSettings,
   type PiAgent,
   type PiConversation,
@@ -86,7 +85,7 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   const project = requireProject(context.database, input.projectId);
   const settings = readProjectPiSettings(context.database, project.id);
   const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
-  const agent = requireRunnableAgent(context.database, settings.pi_agent_id, "run manager cycle");
+  const agent = requireRunnableSupervisor(context.database, "run manager cycle");
   if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "Supervisor manager cycle is already running");
   activeProjectPiRuns.set(project.id, "pending");
   let state: Awaited<ReturnType<typeof createManagerCycleState>>;
@@ -165,9 +164,9 @@ function persistProjectPiAutoManage(
   const current = getProjectPiSettings(db, projectID);
   const nextAutoManage = action === "resume" ? 1 : 0;
   const next = { ...defaultProjectPiSettings(db, projectID), ...current, auto_manage: nextAutoManage };
-  if (action === "resume") requireRunnableAgent(db, next.pi_agent_id, "resume auto-manage");
+  if (action === "resume") requireRunnableSupervisor(db, "resume auto-manage");
   if (current) return updateProjectPiSettings(db, projectID, { auto_manage: nextAutoManage });
-  if (next.pi_agent_id === "") throw new HttpError(400, "PI agent 不存在");
+  if (next.pi_agent_id === "") throw new HttpError(500, "Supervisor 配置不可用");
   return createProjectPiSettings(db, { ...next, project_id: projectID });
 }
 
@@ -189,12 +188,12 @@ function defaultProjectPiSettings(db: RunnerDatabase, projectID: string): Projec
   };
 }
 
-function requireRunnableAgent(db: RunnerDatabase, id: string, action: string): PiAgent {
-  if (id === "") throw new HttpError(400, "PI agent 不存在");
-  const agent = getPiAgent(db, id);
-  if (!agent) throw new HttpError(400, "PI agent 不存在");
-  if (agent.enabled !== 1) throw new HttpError(400, `disabled PI agent cannot ${action}`);
-  return agent;
+function requireRunnableSupervisor(db: RunnerDatabase, action: string): PiAgent {
+  ensureDefaultPiAgent(db);
+  const supervisor = getPiSupervisor(db);
+  if (!supervisor) throw new HttpError(500, "Supervisor 配置不可用");
+  if (supervisor.enabled !== 1) throw new HttpError(400, `disabled Supervisor cannot ${action}`);
+  return supervisor;
 }
 
 function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation, project: Project): void {
@@ -282,10 +281,7 @@ function requireProject(db: RunnerDatabase, id: string): Project {
 
 function defaultPiAgentID(db: RunnerDatabase): string {
   ensureDefaultPiAgent(db);
-  const agents = listPiAgents(db);
-  return agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)?.id
-    ?? agents.find((agent) => agent.enabled === 1)?.id
-    ?? "";
+  return getPiSupervisor(db)?.id ?? "";
 }
 
 function projectID(request: Request): string {

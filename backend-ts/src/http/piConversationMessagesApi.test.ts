@@ -47,8 +47,7 @@ describe("Bun PI conversation message API", () => {
 
       const created = await request(router, "/api/pi/conversations", {
         id: "conv-msg",
-        project_id: "demo",
-        pi_agent_id: "pi-faux"
+        project_id: "demo"
       });
       const message = await request(router, "/api/pi/conversations/conv-msg/messages", {
         prompt: "hello"
@@ -90,7 +89,7 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-title-faux");
       const router = createDefaultRouter({ database });
       await request(router, "/api/pi/conversations", {
-        id: "conv-title", project_id: "demo", pi_agent_id: "pi-faux", title: "New conversation"
+        id: "conv-title", project_id: "demo", title: "New conversation"
       });
       const message = await request(router, "/api/pi/conversations/conv-title/messages", {
         prompt: "帮我看下 **Runner Markdown** 渲染"
@@ -121,7 +120,7 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-intent-route");
       const router = createDefaultRouter({ database });
       await request(router, "/api/pi/conversations", {
-        id: "conv-intent-route", project_id: "demo", pi_agent_id: "pi-faux"
+        id: "conv-intent-route", project_id: "demo"
       });
 
       const message = await request(router, "/api/pi/conversations/conv-intent-route/messages", {
@@ -189,7 +188,7 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-image-faux");
       const router = createDefaultRouter({ database });
       await request(router, "/api/pi/conversations", {
-        id: "conv-image", project_id: "demo", pi_agent_id: "pi-faux"
+        id: "conv-image", project_id: "demo"
       });
 
       const message = await request(router, "/api/pi/conversations/conv-image/messages", {
@@ -226,7 +225,7 @@ describe("Bun PI conversation message API", () => {
       seedManualContextEvents(database);
       const router = createDefaultRouter({ database });
       await request(router, "/api/pi/conversations", {
-        id: "conv-manual-trigger", project_id: "demo", pi_agent_id: "pi-faux"
+        id: "conv-manual-trigger", project_id: "demo"
       });
 
       const message = await request(router, "/api/pi/conversations/conv-manual-trigger/messages", { prompt });
@@ -283,7 +282,7 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-feishu-run-faux");
       const router = createDefaultRouter({ database, providers: { codex: provider } });
       await request(router, "/api/pi/conversations", {
-        id: "feishu-om-run", project_id: "demo", pi_agent_id: "pi-faux"
+        id: "feishu-om-run", project_id: "demo"
       });
 
       const message = await request(router, "/api/pi/conversations/feishu-om-run/messages", {
@@ -329,7 +328,7 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-feishu-cross-issue");
       const router = createDefaultRouter({ database, providers: { codex: provider } });
       await request(router, "/api/pi/conversations", {
-        id: "feishu-cross-issue", project_id: "codex-issue-runner", pi_agent_id: "pi-faux"
+        id: "feishu-cross-issue", project_id: "codex-issue-runner"
       });
 
       const message = await request(router, "/api/pi/conversations/feishu-cross-issue/messages", {
@@ -381,7 +380,7 @@ describe("Bun PI conversation message API", () => {
       insertFauxAgent(database, "pi-feishu-issue-run");
       writeFauxModelsConfig(database, "pi-feishu-issue-run");
       await request(createDefaultRouter({ database }), "/api/pi/conversations", {
-        id: "feishu-global-before-issue", pi_agent_id: "pi-faux", title: "Feishu"
+        id: "feishu-global-before-issue", title: "Feishu"
       });
 
       const result = await runPiConversationPrompt({ database, providers: { codex: provider } }, {
@@ -435,7 +434,6 @@ describe("Bun PI conversation message API", () => {
       writeFauxModelsConfig(database, "pi-feishu-target");
       await request(createDefaultRouter({ database }), "/api/pi/conversations", {
         id: "feishu-im-target-project",
-        pi_agent_id: "pi-faux",
         project_id: "codex-issue-runner",
         title: "Feishu"
       });
@@ -528,7 +526,6 @@ describe("Bun PI conversation message API", () => {
       await request(router, "/api/pi/conversations", {
         id: "conv-provider-error",
         project_id: "demo",
-        pi_agent_id: "pi-faux"
       });
 
       const message = await request(router, "/api/pi/conversations/conv-provider-error/messages", {
@@ -564,7 +561,6 @@ describe("Bun PI conversation message API", () => {
       await request(router, "/api/pi/conversations", {
         id: "conv-interrupt",
         project_id: "demo",
-        pi_agent_id: "pi-faux"
       });
 
       const running = request(router, "/api/pi/conversations/conv-interrupt/messages", {
@@ -603,9 +599,9 @@ function request(router: ReturnType<typeof createDefaultRouter>, path: string, b
 
 function insertFauxAgent(db: RunnerDatabase, provider = "pi-test-faux"): void {
   db.sqlite.run(
-    `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", provider, "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `update pi_agents set name=?, model_provider=?, model_id=?, thinking_level=?, enabled=?, updated_at=?
+      where id='runner-default'`,
+    ["Xuanwu Supervisor", provider, "faux-1", "off", 1, "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -703,7 +699,7 @@ function insertConversation(
     `insert into pi_conversations
       (id, project_id, pi_agent_id, title, status, session_file, pi_session_id, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [input.id, input.projectId, "pi-faux", "History", "active", input.sessionFile,
+    [input.id, input.projectId, "runner-default", "History", "active", input.sessionFile,
       input.id, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }

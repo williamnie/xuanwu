@@ -91,7 +91,7 @@ test('PI Assistant chat thread uses the compact session chat surface style', () 
 test('PI Assistant composer supports @project activation and Advanced runtime context', () => {
   assert.match(pageSource, /buildPiChatProjectSuggestions\(state\.projects\)/);
   assert.match(pageSource, /onAttachReference=\{state\.attachReference\}/);
-  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.selectedAgent\} project=\{state\.selectedProject \|\| projectFromPrompt\(state\.prompt, state\.projects\)\} \/>\}/);
+  assert.match(pageSource, /runtimeControls=\{<PiChatComposerMeta advanced=\{advanced\} agent=\{state\.supervisor\} project=\{state\.selectedProject \|\| projectFromPrompt\(state\.prompt, state\.projects\)\} \/>\}/);
   assert.match(pageSource, /@项目后描述目标、进展或期望交付/);
   assert.match(composerMetaSource, /\{advanced && \(/);
   assert.doesNotMatch(pageSource, /state\.messageSettings/);

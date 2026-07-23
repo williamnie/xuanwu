@@ -1,6 +1,5 @@
 export const SETTINGS_PRIMARY_TABS = Object.freeze([
   { id: 'general', label: 'General' },
-  { id: 'models-agents', label: 'Models & Agents' },
   { id: 'permissions', label: 'Permissions' },
   { id: 'notifications', label: 'Notifications' },
 ]);
@@ -14,7 +13,6 @@ export const SETTINGS_ADVANCED_TABS = Object.freeze([
 ]);
 
 const LEGACY_SETTINGS_ROUTES = Object.freeze({
-  assistant: { tier: 'primary', tab: 'models-agents' },
   'runner-brain': { tier: 'advanced', tab: 'runtime' },
   connections: { tier: 'product', tab: 'connections' },
   connectors: { tier: 'product', tab: 'connections' },

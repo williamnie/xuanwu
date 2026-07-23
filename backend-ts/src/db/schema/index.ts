@@ -52,6 +52,7 @@ import { removeProductionFixturesMigration } from "./051_remove_production_fixtu
 import { consolidatePiDecisionLayersMigration } from "./052_consolidate_pi_decision_layers.ts";
 import { dropLegacyAutomationTablesMigration } from "./053_drop_legacy_automation_tables.ts";
 import { compactEventSummaryProjectionMigration } from "./054_compact_event_summary_projection.ts";
+import { collapsePiAgentsToSupervisorMigration } from "./055_collapse_pi_agents_to_supervisor.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -107,5 +108,6 @@ export const migrations = [
   removeProductionFixturesMigration,
   consolidatePiDecisionLayersMigration,
   dropLegacyAutomationTablesMigration,
-  compactEventSummaryProjectionMigration
+  compactEventSummaryProjectionMigration,
+  collapsePiAgentsToSupervisorMigration
 ];

@@ -33,9 +33,9 @@
 
 ### 1.1 Settings 两层 IA
 
-Settings 普通层固定为 General、Models & Agents、Permissions、Notifications。Connections 将 AI Providers 与 PI Agent 按配置顺序相邻呈现；自定义 Provider 收进 AI Providers 的高级折叠入口。Connections PI Agent 与 Settings Models & Agents 复用同一组件和 agent writer，只写 Supervisor 行为与默认模型，不写 provider credential。外部 connector 与 MCP 的连接 writer 统一归属顶层 Connections。Runtime、Skills、Memory、Activity、Policies、诊断导出与 Restart 只能从显式 Advanced gate 进入。General 的项目设置入口跳转现有 Projects 编辑面，不复制项目表单或状态。
+Settings 普通层固定为 General、Permissions、Notifications。Connections 将 AI Providers 与 PI Agent 按配置顺序相邻呈现；自定义 Provider 收进 AI Providers 的高级折叠入口。`Connections → PI Agent` 是 Supervisor 行为与默认模型的唯一产品 writer，Settings 不再挂载重复入口。外部 connector 与 MCP 的连接 writer 同样归属顶层 Connections。Runtime、Skills、Memory、Activity、Policies、诊断导出与 Restart 只能从显式 Advanced gate 进入。General 的项目设置入口跳转现有 Projects 编辑面，不复制项目表单或状态。
 
-旧 tab 按确定性规则继续可读：`assistant → Models & Agents`、`runner-brain → Advanced / Runtime`、`connections|connectors|advanced:model-runtime → 顶层 Connections`、`skills → Advanced / Skills`、`approvals → Permissions`、`memory → Advanced / Memory`、`activity → Advanced / Activity`、`policies → Advanced / Policies`。新入口使用 canonical page/tab id；旧 id 只作为兼容输入。`mcp` 和 `model-runtime` 不再是 Settings tab，MCP 与自定义 provider 管理只在顶层 Connections 挂载。
+仍有真实消费者的旧 tab 按确定性规则继续可读：`runner-brain → Advanced / Runtime`、`connections|connectors|advanced:model-runtime → 顶层 Connections`、`skills → Advanced / Skills`、`approvals → Permissions`、`memory → Advanced / Memory`、`activity → Advanced / Activity`、`policies → Advanced / Policies`。已无消费者的 `assistant` / `models-agents` 不再保留 compatibility carrier。`mcp` 和 `model-runtime` 也不是 Settings tab，MCP、自定义 provider 与 Supervisor 配置只在顶层 Connections 挂载。
 
 ## 2. 旧 deep link 与隐藏兼容入口
 
@@ -48,7 +48,7 @@ Settings 普通层固定为 General、Models & Agents、Permissions、Notificati
 - 本变更没有 schema、API、状态机、双写或双读；SQLite、Work/Run/Handoff API、Cron 与 `/api/pi/*` 仍按各自现有迁移合同 authoritative。新 page id 只是前端内存路由 projection。
 - 兼容 page id 最多保留 W1/W2 两个正式 release window。删除必须满足 P11.05、一个正式 release 的 consumer-zero 证明、旧 deep-link 测试清单、retained compatibility artifact 和 G7；不能在普通 UI 清理中顺手删除。
 - 回滚只需恢复旧导航配置与默认 page id。没有数据回放、DB downgrade 或外部状态恢复动作。
-- Connections / Settings IA 不新增 schema、API、双写或双读：PI agent/provider API、integration settings、MCP API、runner settings 与 policy/runtime API 仍分别是唯一 source of truth。旧 Settings connection tab 只 redirect 到顶层 Connections，不能重新挂载 connection writer。旧 tab id 在 W1/W2 两个正式 release window 内保留读取兼容；删除旧 id 必须满足 P11.05、一个正式 release 的 consumer-zero 证明、旧 deep-link 测试清单、retained compatibility artifact 与 G7。
+- Connections / Settings IA 不产生双写或双读：Supervisor 使用单例 `/api/pi/supervisor` 与唯一 `runner-default` 配置；provider、integration、MCP、runner settings 与 policy/runtime API 仍分别是各自唯一 source of truth。旧 Settings connection tab 只 redirect 到顶层 Connections，不能重新挂载 writer。
 
 ## 4. 验证门禁
 

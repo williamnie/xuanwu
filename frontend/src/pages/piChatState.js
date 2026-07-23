@@ -3,7 +3,6 @@ import { assistantApi } from '../api/assistant.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from '../store/toastStore';
 import { clearPiLiveAssistant, setPiLiveConversation, usePiConversationEvents } from './piChatLiveBridge';
-import { DEFAULT_PI_AGENT_ID } from './piAgentSettingsState';
 import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
 
 const DEFAULT_TRANSCRIPT = [];
@@ -20,12 +19,11 @@ export function usePiChatState(initialConversationId = '') {
   } = state;
   const liveRefs = usePiConversationEvents(state, state.selectedConversationId);
   const loadPiState = usePiChatLoader({
-    setAgents: state.setAgents,
     setConversations: state.setConversations,
     setError: state.setError,
     setLoading: state.setLoading,
     setProjects: state.setProjects,
-    setSelectedAgentId: state.setSelectedAgentId
+    setSupervisor: state.setSupervisor
   });
   const createConversation = useCreatePiConversation(state);
   const sendMessage = useSendPiMessage(state, createConversation, loadPiState, liveRefs);
@@ -54,9 +52,8 @@ export function usePiChatState(initialConversationId = '') {
 }
 
 function usePiChatFields() {
-  const [agents, setAgents] = useState([]);
+  const [supervisor, setSupervisor] = useState(null);
   const [conversations, setConversations] = useState([]);
-  const [selectedAgentId, setSelectedAgentId] = useState('');
   const [selectedConversationId, setSelectedConversationId] = useState('');
   const [transcript, setTranscript] = useState(DEFAULT_TRANSCRIPT);
   const [prompt, setPrompt] = useState('');
@@ -67,7 +64,6 @@ function usePiChatFields() {
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState('');
-  const selectedAgent = useMemo(() => agents.find((agent) => agent.id === selectedAgentId), [agents, selectedAgentId]);
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
     [conversations, selectedConversationId]
@@ -98,9 +94,9 @@ function usePiChatFields() {
   const removeReference = useCallback((key) => {
     setReferences((current) => current.filter((item) => referenceKey(item) !== key));
   }, []);
-  return { agents, attachReference, error, filteredConversations: conversations, loading, projects, prompt, references, removeReference, runningConversationId,
-    selectConversation, selectedAgent, selectedAgentId, selectedConversation, selectedConversationId, selectedProject, sending, stopping,
-    setAgents, setConversations, setError, setLoading, setProjects, setPrompt, setReferences, setSelectedAgentId,
+  return { attachReference, error, filteredConversations: conversations, loading, projects, prompt, references, removeReference, runningConversationId,
+    selectConversation, selectedConversation, selectedConversationId, selectedProject, sending, stopping, supervisor,
+    setConversations, setError, setLoading, setProjects, setPrompt, setReferences, setSupervisor,
     setSelectedConversationId, setRunningConversationId, setSending, setStopping, setTranscript, transcript };
 }
 
@@ -125,32 +121,29 @@ function normalizeTranscriptItem(item) {
 
 function usePiChatLoader(setters) {
   const {
-    setAgents,
     setConversations,
     setError,
     setLoading,
     setProjects,
-    setSelectedAgentId
+    setSupervisor
   } = setters;
   return useCallback(() => {
     setLoading(true);
-    return Promise.all([assistantApi.getPiAgents(), assistantApi.getPiConversations(), projectsApi.getProjects()])
-      .then(([agentList, conversationList, projectList]) => {
-        setAgents(agentList || []);
+    return Promise.all([assistantApi.getPiSupervisor(), assistantApi.getPiConversations(), projectsApi.getProjects()])
+      .then(([supervisor, conversationList, projectList]) => {
+        setSupervisor(supervisor || null);
         setConversations(conversationList || []);
         setProjects(projectList || []);
         setError('');
-        setSelectedAgentId(defaultRuntimeAgent(agentList || [])?.id || '');
       })
       .catch((err) => setError(err.message || '读取 Chat 状态失败'))
       .finally(() => setLoading(false));
   }, [
-    setAgents,
     setConversations,
     setError,
     setLoading,
     setProjects,
-    setSelectedAgentId
+    setSupervisor
   ]);
 }
 
@@ -314,14 +307,6 @@ function normalizeReference(reference) {
 
 function transcriptMessage(role, text, meta = null) {
   return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, meta, role, text };
-}
-
-function defaultRuntimeAgent(agents) {
-  if (!Array.isArray(agents)) return null;
-  return agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)
-    || agents.find((agent) => agent.enabled === 1)
-    || agents[0]
-    || null;
 }
 
 export function shortId(value) {

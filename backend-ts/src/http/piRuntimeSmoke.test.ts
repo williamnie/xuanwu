@@ -41,8 +41,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
       const created = await post(router, "/api/pi/conversations", {
         id: "conv-auto-faux",
-        project_id: "demo",
-        pi_agent_id: "pi-faux"
+        project_id: "demo"
       });
       const message = await post(router, "/api/pi/conversations/conv-auto-faux/messages", {
         prompt: "Reply ok only"
@@ -91,8 +90,7 @@ describe("Bun PI runtime v1 smoke", () => {
 
       const created = await post(router, "/api/pi/conversations", {
         id: "conv-smoke",
-        project_id: "demo",
-        pi_agent_id: "pi-faux"
+        project_id: "demo"
       });
       const message = await post(router, "/api/pi/conversations/conv-smoke/messages", {
         prompt: "Create one action and one memory candidate"
@@ -402,9 +400,9 @@ function toolCallAuditPayloads(events: ReturnType<typeof listPiActionEvents>): A
 
 function insertFauxAgent(db: RunnerDatabase): void {
   db.sqlite.run(
-    `insert into pi_agents (id, name, model_provider, model_id, thinking_level, enabled, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    ["pi-faux", "PI Faux", "pi-smoke-faux", "faux-1", "off", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `update pi_agents set name=?, model_provider=?, model_id=?, thinking_level=?, enabled=?, updated_at=?
+      where id='runner-default'`,
+    ["Xuanwu Supervisor", "pi-smoke-faux", "faux-1", "off", 1, "2026-01-01T00:00:00Z"]
   );
 }
 
@@ -414,7 +412,7 @@ function agentRecord(patch: Partial<ReturnType<typeof agentRecordBase>> = {}) {
 
 function agentRecordBase() {
   return {
-    id: "pi-faux", name: "PI Faux", provider: "pi-sdk", model_provider: "pi-smoke-faux", model_id: "faux-1",
+    id: "runner-default", name: "Xuanwu Supervisor", provider: "pi-sdk", model_provider: "pi-smoke-faux", model_id: "faux-1",
     thinking_level: "off", cwd_policy: "project", tools_json: "[]", instructions: "", enabled: 1,
     created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z"
   };

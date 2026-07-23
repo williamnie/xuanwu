@@ -2,14 +2,14 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { PI_MANAGER_ROLE } from "../agents/roles.ts";
 import type { RunnerConfig } from "../config/env.ts";
 import type { RunnerDatabase } from "../db/database.ts";
-import { DEFAULT_PI_AGENT_ID, ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
+import { ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   createPiConversation,
   getPiAgent,
   getPiConversation,
-  listPiAgents,
+  getPiSupervisor,
   listPiConversations,
   updatePiConversation,
   type PiAgent,
@@ -111,7 +111,7 @@ async function createConversationWithRuntime(
 ): Promise<PiConversation> {
   const { createOrRestorePiRuntime } = await import("./piRuntime.ts");
   const project = optionalConversationProject(context.database, cleanString(body.project_id));
-  const agent = conversationAgent(context.database, cleanString(body.pi_agent_id));
+  const agent = conversationAgent(context.database);
   const id = cleanString(body.id) || crypto.randomUUID();
   const runtime = await createOrRestorePiRuntime(context.database, {
     agent,
@@ -470,14 +470,11 @@ function optionalConversationProject(db: RunnerDatabase, id: string): Project | 
   return project;
 }
 
-function conversationAgent(db: RunnerDatabase, id: string): PiAgent {
+function conversationAgent(db: RunnerDatabase): PiAgent {
   ensureDefaultPiAgent(db);
-  const agents = listPiAgents(db);
-  const agentID = id || agents.find((agent) => agent.id === DEFAULT_PI_AGENT_ID)?.id || "";
-  if (agentID === "") throw new HttpError(400, "PI agent 不存在");
-  const agent = getPiAgent(db, agentID);
-  if (!agent) throw new HttpError(400, "PI agent 不存在");
-  if (agent.enabled !== 1) throw new HttpError(400, "disabled PI agent cannot start conversation");
+  const agent = getPiSupervisor(db);
+  if (!agent) throw new HttpError(500, "Supervisor 配置不可用");
+  if (agent.enabled !== 1) throw new HttpError(400, "disabled Supervisor cannot start conversation");
   return agent;
 }
 
@@ -522,8 +519,8 @@ function requireConversationProject(db: RunnerDatabase, conversation: PiConversa
 
 function requireConversationAgent(db: RunnerDatabase, conversation: PiConversation): PiAgent {
   const agent = getPiAgent(db, conversation.pi_agent_id);
-  if (!agent) throw new HttpError(400, "PI agent 不存在");
-  if (agent.enabled !== 1) throw new HttpError(400, "disabled PI agent cannot start conversation");
+  if (!agent) throw new HttpError(400, "Conversation Supervisor 不存在");
+  if (agent.enabled !== 1) throw new HttpError(400, "disabled Supervisor cannot start conversation");
   return agent;
 }
 

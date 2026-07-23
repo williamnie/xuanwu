@@ -1,6 +1,8 @@
 import { Bot, CheckCircle2, CircleDashed, Eye, KeyRound, Loader2, PlugZap, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { PanelLoader } from '../components/TurtleLoader';
 import { usePiAgentSettingsState } from './piAgentSettingsState';
+import './PiAgentSettingsPanel.css';
 
 export default function PiAgentSettingsPanel({ view = 'agent' }) {
   const state = usePiAgentSettingsState();
@@ -19,11 +21,11 @@ export default function PiAgentSettingsPanel({ view = 'agent' }) {
 
 function PiSettingsForm({ state, view }) {
   if (view === 'connection') return <ProviderConnectionSettings state={state} />;
-  if (view === 'agent') return <AgentBehaviorSettings state={state} />;
-  return <AgentBehaviorSettings state={state} />;
+  if (view === 'agent') return <SupervisorBehaviorSettings state={state} />;
+  return <SupervisorBehaviorSettings state={state} />;
 }
 
-function AgentBehaviorSettings({ state }) {
+function SupervisorBehaviorSettings({ state }) {
   return (
     <>
       <div className="provider-advanced-heading">
@@ -33,12 +35,12 @@ function AgentBehaviorSettings({ state }) {
           <span>选择已经配置的 provider/model，并维护名称、thinking 与运行指令；连接凭据统一在 Connections 管理。</span>
         </div>
       </div>
-      <AgentSettingsGrid state={state} />
+      <SupervisorSettingsGrid state={state} />
       <Field label="Runtime Instructions">
         <textarea className="form-control" rows={4} value={state.form.instructions} onChange={(event) => state.updateField('instructions', event.target.value)} />
       </Field>
       <PromptSummaryDebug state={state} />
-      <AgentEnableField form={state.form} updateField={state.updateField} />
+      <SupervisorEnableField form={state.form} updateField={state.updateField} />
       <SaveRow mode="agent" onSave={state.handleAgentSave} saving={state.saving} />
     </>
   );
@@ -67,8 +69,14 @@ function ProviderConnectionSettings({ state }) {
 }
 
 function AdvancedProviderDisclosure({ state }) {
+  const [open, setOpen] = useState(!state.selectedPreset);
+
+  useEffect(() => {
+    setOpen(!state.selectedPreset);
+  }, [state.form.modelProvider, state.selectedPreset]);
+
   return (
-    <details className="provider-advanced-disclosure" defaultOpen={!state.selectedPreset}>
+    <details className="provider-advanced-disclosure" onToggle={(event) => setOpen(event.currentTarget.open)} open={open}>
       <summary>
         <SlidersHorizontal size={17} />
         <span>
@@ -130,7 +138,7 @@ function RecommendedProviderConfiguration({ state }) {
     <div className="provider-recommended-config">
       <div className="provider-config-heading">
         <div>
-          <span className="settings-entry-eyebrow">Selected connection</span>
+          <span className="provider-config-eyebrow">Selected connection</span>
           <h3>{preset.label}</h3>
           <p>{configured ? '凭据已安全配置；更新时不会回显旧密钥。' : preset.auth === 'oauth' ? '使用 OAuth 完成连接。' : '输入 API key 后可先测试连接再保存。'}</p>
         </div>
@@ -249,7 +257,7 @@ function AdvancedProviderGrid({ state }) {
   );
 }
 
-function AgentSettingsGrid({ state }) {
+function SupervisorSettingsGrid({ state }) {
   const providerOptions = [...new Set([
     state.form.modelProvider,
     ...state.providers.map((provider) => provider.id),
@@ -428,7 +436,7 @@ function PromptSummaryDebug({ state }) {
   );
 }
 
-function AgentEnableField({ form, updateField }) {
+function SupervisorEnableField({ form, updateField }) {
   return (
     <label style={{ display: 'flex', gap: '10px', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '0.86rem' }}>
       <input type="checkbox" checked={form.enabled} onChange={(event) => updateField('enabled', event.target.checked)} />
