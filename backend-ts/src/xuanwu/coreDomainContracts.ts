@@ -63,7 +63,7 @@ export const STATE_TRANSITIONS = {
     in_progress: ["todo", "pending_verification", "failed", "cancelled"],
     pending_verification: ["triage", "in_progress", "done", "failed", "cancelled"],
     done: [],
-    failed: ["triage", "todo", "cancelled"],
+    failed: ["triage", "todo", "pending_verification", "cancelled"],
     cancelled: []
   },
   run: {

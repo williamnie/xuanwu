@@ -53,6 +53,7 @@ const EXECUTABLE_ACTIONS = new Set([
   "agent.executor_assign",
   "agent.workflow_request",
   "issue.comment",
+  "issue.completion_reconcile",
   "issue.create",
   "issue.retry",
   "issue.retry_after",

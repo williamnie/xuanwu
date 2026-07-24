@@ -34,6 +34,7 @@ describe("PI runner action tools", () => {
     const issueList = toolByName(tools, "issue_list");
     const issueStatus = toolByName(tools, "issue_status_summary");
     const issueExecution = toolByName(tools, "issue_execution_status");
+    const completionReconcile = toolByName(tools, "issue_completion_reconcile");
     const watchCreate = toolByName(tools, "issue_completion_watch_create");
     const watchList = toolByName(tools, "issue_completion_watch_list");
     const watchCancel = toolByName(tools, "issue_completion_watch_cancel");
@@ -43,6 +44,8 @@ describe("PI runner action tools", () => {
     expect(validateArgs(issueRead, { id: 1 })).toEqual({ id: 1 });
     expect(validateArgs(issueStatus, { status: "todo" })).toEqual({ status: "todo" });
     expect(validateArgs(issueExecution, { id: 1 })).toEqual({ id: 1 });
+    expect(validateArgs(completionReconcile, { issue_id: 1, rationale: "补齐交付记录" }))
+      .toEqual({ issue_id: 1, rationale: "补齐交付记录" });
     expect(validateArgs(watchCreate, {
       issue_ids: [7, 8],
       note: "提醒我",
@@ -138,6 +141,10 @@ describe("PI runner action tools", () => {
       user_phrase: "把 #387-#388 都开始做"
     }, undefined, undefined, {} as never);
     await nextTriage.execute("tool-next-triage", { project_id: "demo" }, undefined, undefined, {} as never);
+    await completionReconcile.execute("tool-completion-reconcile", {
+      issue_id: 7,
+      rationale: "补齐交付记录"
+    }, undefined, undefined, {} as never);
     await diagnose.execute("tool-diagnose", { project_id: "demo" }, undefined, undefined, {} as never);
     await repair.execute("tool-repair", {
       diagnosis_code: "done_missing_verification_evidence",
@@ -165,6 +172,7 @@ describe("PI runner action tools", () => {
       ["cancelIssueCompletionWatch", { reason: "user_cancel", watch_id: "watch-1" }],
       ["enqueueBatchTriageIssues", { issue_ids: [387, 388], project_id: "demo", user_phrase: "把 #387-#388 都开始做" }],
       ["enqueueNextTriageIssue", { project_id: "demo" }],
+      ["reconcileIssueCompletion", { issue_id: 7, rationale: "补齐交付记录" }],
       ["diagnoseIssueState", { project_id: "demo" }],
       ["createIssueStateRepairProposal", { diagnosis_code: "done_missing_verification_evidence", issue_id: 1, operation: "patch_status" }],
       ["searchRepo", { query: "Accordion", max_results: 3 }],
@@ -1049,6 +1057,7 @@ function fakeActions(calls: Array<[string, unknown]>): PiRunnerActionLayer {
     createExecutorIssueProposal: record("createExecutorIssueProposal"),
     createIssueCompletionWatch: record("createIssueCompletionWatch"),
     createIssueProposal: record("createIssueProposal"),
+    reconcileIssueCompletion: record("reconcileIssueCompletion"),
     createIssueStateRepairProposal: record("createIssueStateRepairProposal"),
     createReportWorkflow: record("createReportWorkflow"),
     createReviewWorkflow: record("createReviewWorkflow"),

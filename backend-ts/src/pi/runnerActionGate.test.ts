@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getIssue } from "../db/repositories/issues.ts";
+import { getIssue, listIssues } from "../db/repositories/issues.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getPiAction, getPiIssueCompletionWatch, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
@@ -135,6 +135,47 @@ describe("PI runner action gate", () => {
         status: "completed"
       });
       expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo" });
+      expect(kicked).toEqual([fixture.project.id]);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  test("Runner Chat can create and start a verifier workflow without a hidden Guardian denial", async () => {
+    const fixture = await openFixture();
+    const kicked: string[] = [];
+    try {
+      const issueID = insertIssue(fixture.db, {
+        projectID: fixture.project.id,
+        status: "failed",
+        title: "Needs deterministic verification"
+      });
+      const actions = createPiRunnerActions(fixture.db, {
+        onIssueEnqueued: (projectID: string) => kicked.push(projectID),
+        source: "feishu_runner_chat"
+      });
+
+      const result = actions.createVerificationWorkflow({
+        instructions: "Verify the persisted runtime evidence.",
+        target_issue_id: issueID
+      }) as { action_id: string; decision: string; status: string };
+      const child = listIssues(fixture.db, { projectId: fixture.project.id })
+        .find((issue) => issue.id !== issueID);
+
+      expect(result).toMatchObject({ decision: "execute", status: "completed" });
+      expect(getPiAction(fixture.db, result.action_id)).toMatchObject({
+        action_type: "agent.workflow_request",
+        gate_decision: "execute",
+        issue_id: issueID,
+        project_id: fixture.project.id,
+        status: "completed"
+      });
+      expect(child).toMatchObject({
+        project_id: fixture.project.id,
+        status: "todo"
+      });
+      expect(child?.workflow_snapshot_json).toContain("\"agent_role\":\"verifier\"");
+      expect(child?.workflow_snapshot_json).toContain(`"parent_issue_id":${issueID}`);
       expect(kicked).toEqual([fixture.project.id]);
     } finally {
       await fixture.close();

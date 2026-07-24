@@ -38,4 +38,29 @@ describe("Codex event normalization", () => {
       }
     });
   });
+
+  test("normalizes a completed unified exec dynamic tool as a command event", () => {
+    const event = normalizeCodexEvent({
+      method: "item/completed",
+      params: {
+        threadId: "thread-dynamic",
+        turnId: "turn-dynamic",
+        item: {
+          type: "dynamicToolCall",
+          id: "dynamic-1",
+          tool: "exec",
+          status: "completed",
+          success: true,
+          arguments: 'const r = await tools.exec_command({"cmd":"node --test src/example.test.js","workdir":"/repo"}); text(r.output);',
+          contentItems: [{ type: "inputText", text: "Script completed\nOutput:\n1 pass" }]
+        }
+      }
+    });
+
+    expect(event).toMatchObject({
+      command: "node --test src/example.test.js",
+      status: "completed",
+      type: "tool"
+    });
+  });
 });

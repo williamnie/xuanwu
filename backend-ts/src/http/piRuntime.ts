@@ -48,7 +48,9 @@ export type RuntimeSessionInput = {
 
 export const PI_RUNNER_CHAT_ACTIONS = [
   ...PI_SAFE_ACTION_TYPES,
+  "agent.workflow_request",
   "issue.create",
+  "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
   "issue.state_repair",
@@ -59,7 +61,9 @@ export const PI_RUNNER_CHAT_ACTIONS = [
 ] as const;
 
 export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
+  "agent.workflow_request",
   "issue.create",
+  "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
   "issue.state_repair",

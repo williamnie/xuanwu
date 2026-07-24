@@ -20,6 +20,7 @@ function managerAuthorizedActions(projectID: string): PiGatePolicy["authorizedAc
   return [
     { action_type: "agent.profile_recommend", project_id: projectID },
     { action_type: "agent.workflow_request", project_id: projectID },
+    { action_type: "issue.completion_reconcile", project_id: projectID },
     { action_type: "issue.list", project_id: projectID }, { action_type: "issue.status_summary", project_id: projectID },
     { action_type: "issue.execution_status", project_id: projectID }, { action_type: "issue.read", project_id: projectID },
     { action_type: "issue.state_diagnose", project_id: projectID }, { action_type: "project.list" },

@@ -55,6 +55,7 @@ import {
   verifierReviewEventPayload,
   type StructuredVerifierReview
 } from "./verifierReview.ts";
+import { codexDynamicExecObservation } from "../../providers/codex/dynamicExec.ts";
 
 export const ISSUE_WORK_VERIFICATION_POLICY: WorkflowVerificationPolicy = {
   schema_version: 1,
@@ -90,6 +91,7 @@ export const ISSUE_VERIFICATION_GATE_EVENT_TYPES = {
 } as const;
 
 export type IssueCompletionGateInput = {
+  allow_failed_reconciliation?: boolean;
   actor: DomainActor;
   correlation_id: string;
   evidence: readonly EvidenceRecord[];
@@ -201,7 +203,8 @@ export function applyIssueCompletionGate(
       transition_path: []
     };
   }
-  if (current.status !== "in_progress" && current.status !== "pending_verification") {
+  const failedReconciliation = current.status === "failed" && input.allow_failed_reconciliation === true;
+  if (current.status !== "in_progress" && current.status !== "pending_verification" && !failedReconciliation) {
     throw new Error("completion gate requires an in_progress or pending_verification Issue");
   }
 
@@ -274,9 +277,9 @@ export function applyIssueCompletionGate(
     }
 
     let issue = current;
-    if (targetStatus === "done" && issue.status === "in_progress") {
+    if (targetStatus === "done" && issue.status !== "pending_verification") {
       issue = transitionIssue(db, issue, "pending_verification", audit, undefined, {});
-      transitionPath.push("in_progress->pending_verification");
+      transitionPath.push(`${current.status}->pending_verification`);
     }
 
     const patch = completionPatch(input.patch ?? {}, targetStatus, evaluation, issue.error);
@@ -375,10 +378,74 @@ export async function completeIssueFromRuntimeEvidence(
   });
 }
 
+/**
+ * 只修复“实现与验证已完成、但缺少正式 Handoff”的终态 Issue。
+ *
+ * 该入口不会重跑 executor，也不会把 Agent 叙述当作证明。它重新读取当前
+ * canonical Run 的持久化 Evidence，从 Git authority 推导可审计 Handoff，
+ * 然后通过同一 completion gate 完成 failed -> pending_verification -> done。
+ */
+export async function reconcileIssueCompletionFromRuntimeEvidence(
+  db: RunnerDatabase,
+  issueID: number,
+  options: { actor?: DomainActor; correlation_id?: string; now?: string; source?: string } = {}
+): Promise<IssueCompletionGateResult> {
+  const issue = mustGetIssue(db, issueID);
+  if (issue.status !== "failed" && issue.status !== "pending_verification") {
+    throw new Error("completion reconciliation requires a failed or pending_verification Issue");
+  }
+  const now = canonicalNow(options.now);
+  const projection = await projectIssueRuntimeEvidence(db, issueID, now, { persist_artifacts: true });
+  if (!projection.run || projection.run.ended_at === "") {
+    throw new Error("completion reconciliation requires an ended canonical Run");
+  }
+  const evidence = currentRunEvidence(db, issueID, projection.run, projection.evidence);
+  const verification = createIssueVerifierReview(issue, {
+    evidence,
+    now,
+    projection_errors: projection.errors,
+    run: projection.run
+  }).evaluation;
+  if (verification.decision !== "passed") {
+    throw new Error(
+      `completion reconciliation requires passed current-Run Evidence; verification is ${verification.decision}`
+    );
+  }
+  const delivery = await prepareCompletionHandoff(db, issueID, projection.run, evidence, now);
+  const runID = makeDomainID("run", "issue_runs", projection.run.id);
+  const workID = issueAsWork(issue).id;
+  const existingHandoff = listStoredHandoffs(db, {
+    limit: 100,
+    statuses: ["ready", "delivered"],
+    work_id: workID
+  }).items.some((item) => item.handoff.run_ids.includes(runID));
+  if (!delivery.handoff && !existingHandoff) {
+    const detail = delivery.errors[0]?.replace(/^Handoff gap:\s*/, "") || "no derivable delivery Handoff";
+    throw new Error(`completion reconciliation could not create Handoff: ${detail}`);
+  }
+  return applyIssueCompletionGate(db, issueID, {
+    allow_failed_reconciliation: true,
+    actor: options.actor ?? { id: "runner-completion-reconciliation", kind: "runner" },
+    correlation_id: options.correlation_id ?? `issue-${issueID}-completion-reconciliation`,
+    evidence: uniqueEvidence([...evidence, ...delivery.evidence]),
+    ...(delivery.handoff ? { handoff: delivery.handoff } : {}),
+    now,
+    patch: { status: "done" },
+    projection_errors: [...projection.errors, ...delivery.errors],
+    run: projection.run,
+    source: options.source ?? "issue-completion-reconciliation"
+  });
+}
+
 type CompletionHandoffPreparation = {
   errors: string[];
   evidence: EvidenceRecord[];
   handoff?: HandoffRecord;
+};
+
+type IssueDeliveryGitScope = {
+  base_revision: string;
+  pathspecs?: string[];
 };
 
 async function prepareCompletionHandoff(
@@ -394,7 +461,8 @@ async function prepareCompletionHandoff(
   if (!project) return { errors: ["Handoff gap: Issue project is unavailable"], evidence: [] };
   const runID = makeDomainID("run", "issue_runs", run.id);
   const workID = issueAsWork(issue).id;
-  const deliveryBaseRevision = issueDeliveryBaseRevision(db, issueID, project.cwd);
+  const deliveryScope = issueDeliveryGitScope(db, issueID, project.cwd);
+  const deliveryBaseRevision = deliveryScope.base_revision;
   const existing = listStoredHandoffs(db, {
     limit: 100,
     statuses: ["ready", "delivered"],
@@ -423,6 +491,7 @@ async function prepareCompletionHandoff(
           source_ref: `project:${project.id}:git-worktree`,
           work_id: workID
         },
+        ...(deliveryScope.pathspecs ? { pathspecs: deliveryScope.pathspecs } : {}),
         repository_path: project.cwd,
         untracked_policy: "include_all"
       });
@@ -522,25 +591,51 @@ function gitEvidenceCoversDelivery(evidence: EvidenceRecord, expectedBaseRevisio
       baseRevision !== facts.head_revision.trim());
 }
 
-function issueDeliveryBaseRevision(db: RunnerDatabase, issueID: number, cwd: string): string {
+function issueDeliveryGitScope(db: RunnerDatabase, issueID: number, cwd: string): IssueDeliveryGitScope {
   const runs = listIssueRuns(db, issueID);
   const recorded = runs.find((item) => gitObjectID(item.git_base_revision))?.git_base_revision.trim().toLowerCase() ?? "";
-  if (recorded !== "") return recorded;
+  if (recorded !== "") return { base_revision: recorded };
   const startedAt = runs[0]?.started_at ?? "";
-  if (startedAt === "" || cwd.trim() === "") return "";
+  if (startedAt === "" || cwd.trim() === "") return { base_revision: "" };
   try {
-    const result = Bun.spawnSync({
-      cmd: ["git", "rev-list", "-1", `--before=${startedAt}`, "HEAD"],
-      cwd,
-      stderr: "ignore",
-      stdout: "pipe"
-    });
-    if (result.exitCode !== 0) return "";
-    const revision = result.stdout.toString().trim().toLowerCase();
-    return gitObjectID(revision) ? revision : "";
+    const baselineRevision = revisionBefore(cwd, startedAt);
+    if (!gitObjectID(baselineRevision)) return { base_revision: "" };
+    const endedAt = [...runs].reverse().find((item) => item.ended_at.trim() !== "")?.ended_at.trim() ?? "";
+    const finalRevision = endedAt === "" ? "" : revisionBefore(cwd, endedAt);
+    const pathspecs = gitObjectID(finalRevision) && finalRevision !== baselineRevision
+      ? changedPathsBetween(cwd, baselineRevision, finalRevision)
+      : [];
+    return {
+      base_revision: baselineRevision,
+      ...(pathspecs.length > 0 ? { pathspecs } : {})
+    };
   } catch {
-    return "";
+    return { base_revision: "" };
   }
+}
+
+function revisionBefore(cwd: string, timestamp: string): string {
+  const result = Bun.spawnSync({
+    cmd: ["git", "rev-list", "-1", `--before=${timestamp}`, "HEAD"],
+    cwd,
+    stderr: "ignore",
+    stdout: "pipe"
+  });
+  return result.exitCode === 0 ? result.stdout.toString().trim().toLowerCase() : "";
+}
+
+function changedPathsBetween(cwd: string, baselineRevision: string, finalRevision: string): string[] {
+  const result = Bun.spawnSync({
+    cmd: [
+      "git", "diff", "--name-only", "--no-ext-diff", "--no-renames", "-z",
+      baselineRevision, finalRevision, "--"
+    ],
+    cwd,
+    stderr: "ignore",
+    stdout: "pipe"
+  });
+  if (result.exitCode !== 0) return [];
+  return [...new Set(result.stdout.toString().split("\0").filter((item) => item !== ""))].sort();
 }
 
 function gitObjectID(value: string): boolean {
@@ -815,7 +910,7 @@ export function classifyVerificationCommand(command: string): CommandEvidenceKin
 }
 
 function classifySingleVerificationCommand(value: string): CommandEvidenceKind | undefined {
-  const test = /(?:^|\s)(?:bun\s+test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|deno\s+test|cargo\s+test|go\s+test|flutter\s+test|pytest|python\d*\s+-m\s+pytest)(?:\s|$)/i;
+  const test = /(?:^|\s)(?:bun\s+test|node\s+--test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|deno\s+test|cargo\s+test|go\s+test|flutter\s+test|pytest|python\d*\s+-m\s+pytest)(?:\s|$)/i;
   const lint = /(?:^|\s)(?:bun\s+(?:run\s+)?lint|npm\s+(?:run\s+)?lint|pnpm\s+(?:run\s+)?lint|yarn\s+(?:run\s+)?lint|eslint|ruff\s+check|cargo\s+clippy|flutter\s+analyze|dart\s+analyze|tsc\b[^\n;&|]*--noEmit)(?:\s|$)/i;
   const build = /(?:^|\s)(?:bun\s+(?:run\s+)?build|npm\s+(?:run\s+)?build|pnpm\s+(?:run\s+)?build|yarn\s+(?:run\s+)?build|cargo\s+build|go\s+build|flutter\s+build|xcodebuild|tsc)(?:\s|$)/i;
   if (test.test(value)) return "test";
@@ -1084,10 +1179,13 @@ function parseIssueLog(row: IssueLogRow): ParsedIssueLog | undefined {
     : recordObject(event.raw_payload) ?? {};
   const itemValue = raw.item;
   const candidate = recordObject(itemValue);
-  const item = method === "item/completed" && candidate && candidate.type === "commandExecution" &&
+  const commandItem = method === "item/completed" && candidate && candidate.type === "commandExecution" &&
     (candidate.status === "completed" || candidate.status === "failed")
     ? candidate as StoredCommandItem
     : undefined;
+  const item = commandItem ?? (method === "item/completed" && candidate
+    ? codexDynamicExecObservation(candidate)
+    : undefined);
   const correlation = runtimeCorrelation(event.runtime_evidence_correlation);
   return { ...(correlation ? { correlation } : {}), ...(item ? { item } : {}), method, raw, row };
 }

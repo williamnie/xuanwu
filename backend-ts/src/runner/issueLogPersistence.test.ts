@@ -80,6 +80,36 @@ describe("issue.log persistence reduction", () => {
     expect(persisted[0]).toMatchObject({ command: "bun test src/example.test.ts" });
   });
 
+  test("normal mode stores unified exec verification results", () => {
+    const persisted: ProviderEvent[] = [];
+    const persistence = createIssueLogPersistence((event) => persisted.push(event), { mode: "normal" });
+    persistence.push({
+      provider: "codex",
+      type: "tool",
+      session,
+      command: "node --test src/example.test.js",
+      status: "completed",
+      raw: {
+        method: "item/completed",
+        payload: JSON.stringify({
+          item: {
+            arguments: 'const r = await tools.exec_command({"cmd":"node --test src/example.test.js","workdir":"/repo"}); text(r.output);',
+            contentItems: [{ type: "inputText", text: "Script completed\nOutput:\n1 pass" }],
+            id: "dynamic-verification",
+            status: "completed",
+            success: true,
+            tool: "exec",
+            type: "dynamicToolCall"
+          }
+        })
+      }
+    });
+    persistence.flush();
+
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toMatchObject({ command: "node --test src/example.test.js" });
+  });
+
   test("chunks Codex deltas, samples telemetry, and keeps terminal errors", () => {
     const input: ProviderEvent[] = [];
     const persisted: ProviderEvent[] = [];

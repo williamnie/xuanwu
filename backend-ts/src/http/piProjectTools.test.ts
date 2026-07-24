@@ -66,7 +66,7 @@ describe("PI project tools", () => {
         "agent_profile_recommend", "evidence_list", "evidence_read",
         "executor_issue_create_proposal", "executor_profile_assign_proposal",
         "find", "grep", "handoff_list", "handoff_read",
-        "issue_comment", "issue_completion_watch_cancel", "issue_completion_watch_create",
+        "issue_comment", "issue_completion_reconcile", "issue_completion_watch_cancel", "issue_completion_watch_create",
         "issue_completion_watch_list", "issue_create_proposal", "issue_enqueue_batch_triage",
         "issue_enqueue_next_triage", "issue_enqueue_proposal",
         "issue_execution_status", "issue_list", "issue_read", "issue_schedule_enqueue",

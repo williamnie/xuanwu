@@ -1,6 +1,7 @@
 import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent, providerEventSourceRef, providerRunCost, unknownRunEvent } from "../runEvents.ts";
 import type { NormalizedRunEvent, ProviderEvent, SessionRef } from "../types.ts";
+import { codexDynamicExecObservation } from "./dynamicExec.ts";
 
 export type CodexWireNotification = { method: string; params?: unknown };
 
@@ -183,7 +184,9 @@ function eventType(method: string, raw: Record<string, unknown>): ProviderEvent[
 function itemType(raw: Record<string, unknown>): ProviderEvent["type"] {
   const item = recordField(raw, "item");
   const kind = stringField(item, "type");
-  return kind === "commandExecution" || kind === "fileChange" ? "tool" : "raw";
+  return kind === "commandExecution" || kind === "fileChange" || codexDynamicExecObservation(item)
+    ? "tool"
+    : "raw";
 }
 
 function applyItemLifecycleFields(event: ProviderEvent, method: string, raw: Record<string, unknown>): void {
@@ -199,6 +202,13 @@ function applyItemLifecycleFields(event: ProviderEvent, method: string, raw: Rec
       event.status = stringField(item, "status");
       event.text = method === "item/completed" ? patchText(item) : "";
       return;
+    case "dynamicToolCall": {
+      const observation = codexDynamicExecObservation(item);
+      if (!observation) return;
+      event.command = observation.command;
+      event.status = observation.status;
+      return;
+    }
   }
 }
 

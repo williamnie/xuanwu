@@ -4,6 +4,7 @@ import { createIssueComment } from "../db/repositories/issueEvents.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPendingPiAction, executeSafePiAction, type PiActionContext } from "./actionEngine.ts";
+import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import {
   createAgentWorkflowProposal,
   createExecutorAssignmentProposal,
@@ -25,7 +26,10 @@ export type PiAgentOrchestrationActionLayer = {
   recommendExecutorProfile(input: AgentRecommendationInput): unknown;
 };
 
-type OrchestrationContext = PiActionContext & { project?: Project };
+type OrchestrationContext = PiActionContext & {
+  onIssueEnqueued?: (projectID: string) => void;
+  project?: Project;
+};
 
 export function createPiAgentOrchestrationActions(
   db: RunnerDatabase,
@@ -58,11 +62,23 @@ function assignExecutorProfileProposal(
 
 function createAgentWorkflowAction(db: RunnerDatabase, context: OrchestrationContext, input: AgentWorkflowInput) {
   const proposal = createAgentWorkflowProposal(db, context.project, input);
+  const actionType = "agent.workflow_request";
+  const payload = input.role === "verifier" || input.role === "reviewer"
+    ? { ...proposal.payload, status: "todo" }
+    : proposal.payload;
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueID: proposal.issueID,
+    projectID: proposal.projectID ?? ""
+  });
   return createPendingPiAction(
     db,
-    context,
-    { ...proposal, actionType: "agent.workflow_request", goalID: proposal.goalID },
-    () => createIssue(db, proposal.payload)
+    actionContext,
+    { ...proposal, actionType, goalID: proposal.goalID, payload },
+    () => {
+      const issue = createIssue(db, payload);
+      if (issue.status === "todo") context.onIssueEnqueued?.(issue.project_id);
+      return issue;
+    }
   );
 }
 

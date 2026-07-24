@@ -17,6 +17,11 @@ describe("PI action engine risk classifier", () => {
       requiresConfirmation: true,
       riskLevel: "medium"
     });
+    expect(classifyPiActionRisk("issue.completion_reconcile")).toEqual({
+      gate: "confirm",
+      requiresConfirmation: true,
+      riskLevel: "medium"
+    });
     expect(classifyPiActionRisk("session.steer")).toEqual({
       gate: "high",
       requiresConfirmation: true,
@@ -73,6 +78,21 @@ describe("PI action engine risk classifier", () => {
       decision: "execute",
       reason: expect.stringContaining("authorization envelope")
     });
+    const reconcileEnvelope = {
+      ...confirmEnvelope,
+      action_type: "issue.completion_reconcile",
+      payload: { issue_id: 7 }
+    } as const;
+    expect(gatePiActionEnvelope(reconcileEnvelope, {
+      authorizedActions: [{ action_type: "issue.completion_reconcile", issue_id: 7, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "execute" });
+    expect(gatePiActionEnvelope(reconcileEnvelope, {
+      authorizedActions: [{ action_type: "issue.completion_reconcile", issue_id: 8, project_id: "demo" }],
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    })).toMatchObject({ decision: "deny" });
     expect(gatePiActionEnvelope({ ...confirmEnvelope, action_type: "issue.comment", requires_confirmation: false, risk_level: "low" }, {
       authorizedActions: [{ action_type: "issue.comment", issue_id: 8, project_id: "demo" }],
       mode: "delegated",

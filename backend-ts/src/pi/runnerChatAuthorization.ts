@@ -2,7 +2,9 @@ import type { PiActionContext } from "./actionEngine.ts";
 import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "./supervisorControlContracts.ts";
 
 const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
+  "agent.workflow_request",
   "issue.create",
+  "issue.completion_reconcile",
   "issue.enqueue",
   "issue.schedule_enqueue",
   "issue.state_repair",

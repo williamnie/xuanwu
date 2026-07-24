@@ -17,6 +17,35 @@ afterEach(async () => {
 });
 
 describe("PI action engine Guardian action outlet", () => {
+  test("waits for delegated async mutations before returning their final action result", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      const result = await createPendingPiAction(db, {
+        authorization: {
+          authorizedActions: [{ action_type: "issue.comment", issue_id: 7, project_id: "demo" }],
+          mode: "delegated",
+          scope: { project_id: "demo" }
+        }
+      }, {
+        actionType: "issue.comment",
+        issueID: 7,
+        payload: { body: "async", issue_id: 7 },
+        projectID: "demo"
+      }, async () => {
+        await Promise.resolve();
+        return { persisted: true };
+      }) as Record<string, unknown>;
+
+      expect(result).toMatchObject({
+        decision: "execute",
+        result: { persisted: true },
+        status: "completed"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("deduplicates guardian actions by idempotency key and marks legacy bypass actions", async () => {
     const db = await openFixtureDatabase();
     try {

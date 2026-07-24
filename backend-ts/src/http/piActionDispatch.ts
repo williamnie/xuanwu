@@ -34,7 +34,10 @@ import {
   type IssueCompletionWatchCancelInput,
   type IssueCompletionWatchCreateInput
 } from "../pi/issueCompletionWatchActions.ts";
-import { completeIssueFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
+import {
+  completeIssueFromRuntimeEvidence,
+  reconcileIssueCompletionFromRuntimeEvidence
+} from "../domain/evidence/completionGate.ts";
 
 export type ProjectLoopStarter = (
   runtime: ProjectLoopRuntime,
@@ -88,6 +91,8 @@ export async function dispatchPiAction(
       return createIssueComment(context.database, positivePayloadID(payload, "issue_id"), payload);
     case "issue.state_repair":
       return applyIssueStateRepair(context.database, actionPayload(action, payload));
+    case "issue.completion_reconcile":
+      return await reconcileIssueCompletion(context, action, payload);
     case "agent.executor_assign":
       return await updateExecutorIssue(context.database, action, payload);
     case "agent.workflow_request":
@@ -104,6 +109,30 @@ export async function dispatchPiAction(
     default:
       throw new Error(`unsupported PI action type: ${action.action_type}`);
   }
+}
+
+async function reconcileIssueCompletion(
+  context: PiActionDispatchContext,
+  action: PiAction,
+  payload: Record<string, unknown>
+): Promise<unknown> {
+  const issueID = positivePayloadID(payload, "issue_id");
+  const result = await reconcileIssueCompletionFromRuntimeEvidence(context.database, issueID, {
+    actor: { id: `pi-action:${action.id}`, kind: "supervisor" },
+    correlation_id: action.idempotency_key || action.id,
+    source: "pi-action-completion-reconciliation"
+  });
+  if (result.issue.status === "done") startAutoRunProjectLoop(context, result.issue.project_id);
+  return {
+    issue: {
+      id: result.issue.id,
+      project_id: result.issue.project_id,
+      status: result.issue.status,
+      title: result.issue.title
+    },
+    target_status: result.target_status,
+    transition_path: result.transition_path
+  };
 }
 
 async function updateExecutorIssue(

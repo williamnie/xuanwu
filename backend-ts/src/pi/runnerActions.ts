@@ -49,6 +49,7 @@ import {
 } from "./manualTrigger.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
+import { reconcileIssueCompletionFromRuntimeEvidence } from "../domain/evidence/completionGate.ts";
 
 export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionLayer & PiRepoReadActionLayer & {
   commentIssue(input: IssueCommentInput): unknown;
@@ -66,6 +67,7 @@ export type PiRunnerActionLayer = PiMcpActionLayer & PiAgentOrchestrationActionL
   listIssueCompletionWatches(input: IssueCompletionWatchListInput): unknown;
   cancelIssueCompletionWatch(input: IssueCompletionWatchCancelInput): unknown;
   enqueueIssueProposal(input: IssueProposalInput): unknown;
+  reconcileIssueCompletion(input: IssueCompletionReconcileInput): unknown;
   issueExecutionStatus(input: IssueExecutionStatusInput): unknown;
   issueStatusSummary(input: IssueStatusSummaryInput): unknown;
   runManualContextIntake(input: ManualContextIntakeInput): unknown;
@@ -96,6 +98,7 @@ export type PiRunnerSourceTurn = {
 type IssueListInput = { limit?: number; project_id?: string; status?: string };
 type IssueReadInput = { id: number };
 type IssueExecutionStatusInput = { id: number };
+type IssueCompletionReconcileInput = { issue_id: number; rationale?: string };
 type IssueCommentInput = { body: string; issue_id: number };
 type IssueProposalInput = { issue_id: number; rationale?: string };
 type IssueCreateProposalInput = IssueProposalContextFields & {
@@ -163,6 +166,7 @@ export function createPiRunnerActions(
       const actionContext = actionContextForProposal(context, proposal);
       return createPendingPiAction(db, actionContext, proposal, () => enqueueIssueAndNotify(db, context, input.issue_id));
     },
+    reconcileIssueCompletion: (input) => reconcileIssueCompletion(db, context, input),
     enqueueBatchTriageIssues: (input) => createBatchTriageEnqueueAction(db, context, input),
     enqueueNextTriageIssue: (input) => createNextTriageEnqueueAction(db, context, input),
     createIssueCompletionWatch: (input) => createCompletionWatch(db, context, input),
@@ -277,6 +281,48 @@ function enqueueIssueAndNotify(db: RunnerDatabase, context: PiRunnerActionContex
   const issue = enqueueIssue(db, issueID);
   context.onIssueEnqueued?.(issue.project_id);
   return issue;
+}
+
+function reconcileIssueCompletion(
+  db: RunnerDatabase,
+  context: PiRunnerActionContext,
+  input: IssueCompletionReconcileInput
+) {
+  const issue = mustGetIssue(db, input.issue_id);
+  const actionType = "issue.completion_reconcile";
+  const actionContext = scopedRunnerChatActionContext(context, actionType, {
+    issueID: issue.id,
+    projectID: issue.project_id
+  });
+  return createPendingPiAction(db, actionContext, {
+    actionType,
+    issueID: issue.id,
+    payload: { issue_id: issue.id, rationale: cleanString(input.rationale) },
+    projectID: issue.project_id,
+    rationale: input.rationale
+  }, async () => {
+    const result = await reconcileIssueCompletionFromRuntimeEvidence(db, issue.id, {
+      actor: { id: "pi-completion-reconciliation", kind: "supervisor" },
+      source: "pi-issue-completion-reconciliation"
+    });
+    if (result.issue.status === "done") context.onIssueEnqueued?.(result.issue.project_id);
+    return completionReconciliationResult(result);
+  });
+}
+
+function completionReconciliationResult(
+  result: Awaited<ReturnType<typeof reconcileIssueCompletionFromRuntimeEvidence>>
+) {
+  return {
+    issue: {
+      id: result.issue.id,
+      project_id: result.issue.project_id,
+      status: result.issue.status,
+      title: result.issue.title
+    },
+    target_status: result.target_status,
+    transition_path: result.transition_path
+  };
 }
 
 

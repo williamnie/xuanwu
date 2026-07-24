@@ -66,7 +66,11 @@ export function createPendingPiAction(
 ) {
   const gated = createGatedPiAction(db, context, input);
   if (gated.decision.decision === "execute" && gated.action.status === "approved" && execute) {
-    executePiActionWithAudit(db, context, gated.action, execute);
+    const execution = executePiActionWithAudit(db, context, gated.action, execute);
+    if (isPromiseLike(execution)) {
+      return Promise.resolve(execution)
+        .then(() => actionResultFromRecord(requireStoredPiAction(db, gated.action.id)));
+    }
     return actionResultFromRecord(requireStoredPiAction(db, gated.action.id));
   }
   return actionResultFromRecord(gated.action);

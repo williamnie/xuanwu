@@ -1,5 +1,6 @@
 import type { ProviderEvent } from "../providers/types.ts";
 import { classifyVerificationCommand } from "../domain/evidence/completionGate.ts";
+import { codexDynamicExecObservation } from "../providers/codex/dynamicExec.ts";
 
 export const ISSUE_LOG_CHUNK_EVENT_LIMIT = 64;
 export const ISSUE_LOG_CHUNK_TEXT_BYTES = 32 * 1024;
@@ -214,10 +215,11 @@ function normalCompletedItem(event: ProviderEvent): boolean {
   const item = objectValue(rawObject(event.raw?.payload).item);
   const itemType = stringValue(item.type);
   if (itemType === "agentMessage") return true;
-  if (itemType !== "commandExecution") return false;
-  const command = event.command || commandText(item);
+  const dynamicExec = codexDynamicExecObservation(item);
+  if (itemType !== "commandExecution" && !dynamicExec) return false;
+  const command = event.command || dynamicExec?.command || commandText(item);
   const status = stringValue(item.status).toLowerCase();
-  return status === "failed" || status === "error" ||
+  return status === "failed" || status === "error" || dynamicExec?.status === "failed" ||
     classifyVerificationCommand(command) !== undefined;
 }
 
