@@ -18,6 +18,7 @@ type NightRunSummaryInput = {
   diagnostics: IssueStateDiagnostic[];
   failedIssues: Array<Record<string, unknown>>;
   heartbeatIDs: string[];
+  needsUserIssueIDs?: number[];
   projectLabel: string;
   source: string;
   window: { since: string; until: string };
@@ -36,11 +37,15 @@ function categorizeIssues(input: NightRunSummaryInput): NightRunIssueCategories 
   const completed = input.completedIssues.map(toIssueSummary).filter(isIssueSummary);
   const failed = input.failedIssues.map(toIssueSummary).filter(isIssueSummary);
   const severities = severitiesByIssue(input.diagnostics);
+  const needsUserIssueIDs = new Set(input.needsUserIssueIDs ?? []);
+  for (const [issueID, issueSeverities] of severities) {
+    if (issueSeverities.has("needs_user")) needsUserIssueIDs.add(issueID);
+  }
   return {
-    blocked: all.filter((issue) => severities.get(issue.id)?.has("blocked")),
+    blocked: all.filter((issue) => severities.get(issue.id)?.has("blocked") && !needsUserIssueIDs.has(issue.id)),
     completed,
     failed,
-    needs_user: all.filter((issue) => severities.get(issue.id)?.has("needs_user"))
+    needs_user: all.filter((issue) => needsUserIssueIDs.has(issue.id))
   };
 }
 

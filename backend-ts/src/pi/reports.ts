@@ -80,9 +80,12 @@ function assembleReport(db: RunnerDatabase, input: {
   const gapIDs = new Set(gaps.map((item) => item.issue_id));
   const completed = input.issues.filter((issue) => issue.status === "done" && !gapIDs.has(issue.id));
   const failed = input.issues.filter((issue) => issue.status === "failed");
-  const escalations = blockedEscalations(input.diagnostics);
   const providerHealth = summarizeProviderHealth(input.project, input.scope.providerStatuses);
   const supervisor = supervisorReportSummary(input.evidence.supervisor_events);
+  const needsUserIssueIDs = supervisor.needs_user_escalation_issues
+    .map((item) => Number(item.issue_id))
+    .filter((issueID) => Number.isSafeInteger(issueID) && issueID > 0);
+  const escalations = blockedEscalations(input.diagnostics, input.evidence.supervisor_events, needsUserIssueIDs);
   const warnings = reportWarnings(providerHealth, input.usage);
   const usageWarnings = warnings.filter((item) => item.source === "usage_cost").length;
   const issueSummaries = input.issues.map(issueReportSummary);
@@ -90,7 +93,14 @@ function assembleReport(db: RunnerDatabase, input: {
   const failedSummaries = failed.map(issueReportSummary);
   const issueIDs = input.issues.map((issue) => issue.id);
   const heartbeatIDs = input.evidence.heartbeat_runs.map((run) => run.id);
-  const nightSummary = nightRunSummary(input, issueSummaries, completedSummaries, failedSummaries, heartbeatIDs);
+  const nightSummary = nightRunSummary(
+    input,
+    issueSummaries,
+    completedSummaries,
+    failedSummaries,
+    heartbeatIDs,
+    needsUserIssueIDs
+  );
   const verifierReviews = latestVerifierReviews(db, input.issues);
   const verifierVerdicts = verifierReviewVerdicts(verifierReviews);
   return {
@@ -174,7 +184,8 @@ function nightRunSummary(
   issueSummaries: Array<Record<string, unknown>>,
   completedSummaries: Array<Record<string, unknown>>,
   failedSummaries: Array<Record<string, unknown>>,
-  heartbeatIDs: string[]
+  heartbeatIDs: string[],
+  needsUserIssueIDs: number[]
 ): ReturnType<typeof buildNightRunSummary> {
   return buildNightRunSummary({
     allIssues: issueSummaries,
@@ -183,6 +194,7 @@ function nightRunSummary(
     diagnostics: input.diagnostics,
     failedIssues: failedSummaries,
     heartbeatIDs,
+    needsUserIssueIDs,
     projectLabel: input.project?.name ?? "All projects",
     source: input.scope.source,
     window: input.window
@@ -218,8 +230,28 @@ function verificationGaps(diagnostics: IssueStateDiagnostic[]): Array<Record<str
     }));
 }
 
-function blockedEscalations(diagnostics: IssueStateDiagnostic[]): Array<Record<string, unknown>> {
-  return diagnostics.filter((item) => item.severity === "blocked" || item.severity === "needs_user")
+function blockedEscalations(
+  diagnostics: IssueStateDiagnostic[],
+  supervisorEvents: IssueSupervisorEvent[],
+  needsUserIssueIDs: number[]
+): Array<Record<string, unknown>> {
+  const structuredNeedsUser = new Set(needsUserIssueIDs);
+  const supervisorEscalations = supervisorEvents
+    .filter((event) => structuredNeedsUser.has(event.issue_id) && supervisorEventNeedsUser(event))
+    .filter((event, index, events) => events.findLastIndex((candidate) => candidate.issue_id === event.issue_id) === index)
+    .map((event) => {
+      const diagnostic = diagnostics.find((item) => item.issue_id === event.issue_id);
+      return {
+        code: event.diagnosis_code || "supervisor_needs_user",
+        evidence_refs: [`pi_issue_supervisor_event:${event.id}`],
+        issue_id: event.issue_id,
+        notification_event: "pi.needs_user",
+        status: diagnostic?.status ?? "failed",
+        title: safeText(diagnostic?.title)
+      };
+    });
+  const diagnosticEscalations = diagnostics
+    .filter((item) => (item.severity === "blocked" || item.severity === "needs_user") && !structuredNeedsUser.has(item.issue_id))
     .map((item) => ({
       code: item.code,
       evidence_refs: item.evidence.map((evidence) => evidence.ref),
@@ -228,6 +260,11 @@ function blockedEscalations(diagnostics: IssueStateDiagnostic[]): Array<Record<s
       status: item.status,
       title: safeText(item.title)
     }));
+  return [...supervisorEscalations, ...diagnosticEscalations];
+}
+
+function supervisorEventNeedsUser(event: IssueSupervisorEvent): boolean {
+  return event.action_type === "needs_user.escalate" || event.decision === "needs_user" || event.decision === "blocked";
 }
 
 function relatedEvidence(
