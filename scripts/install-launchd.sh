@@ -138,6 +138,59 @@ wait_for_health() {
   return 1
 }
 
+launchd_service_pid() {
+  launchctl print "$DOMAIN/$1" 2>/dev/null |
+    awk '/^[[:space:]]*pid =/ { print $3; exit }'
+}
+
+wait_for_service_unloaded() {
+  local label="$1"
+  for _ in {1..60}; do
+    if ! launchctl print "$DOMAIN/$label" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "[launchd] timed out waiting for $label to unload" >&2
+  return 1
+}
+
+wait_for_process_exit() {
+  local pid="${1:-}" label="$2"
+  [ -n "$pid" ] || return 0
+  for _ in {1..60}; do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "[launchd] timed out waiting for old $label process $pid to exit" >&2
+  return 1
+}
+
+bootstrap_service() {
+  local label="$1" plist="$2" attempt output status
+  for attempt in {1..20}; do
+    if output="$(launchctl bootstrap "$DOMAIN" "$plist" 2>&1)"; then
+      return 0
+    else
+      status=$?
+    fi
+    # A transient launchd reply can race with successful registration.
+    if launchctl print "$DOMAIN/$label" >/dev/null 2>&1; then
+      echo "[launchd] $label registered despite bootstrap status $status"
+      return 0
+    fi
+    if [ "$attempt" -lt 20 ]; then
+      echo "[launchd] bootstrap $label retry $attempt/20 after status $status" >&2
+      sleep 0.25
+      continue
+    fi
+    printf '%s\n' "$output" >&2
+    return "$status"
+  done
+}
+
 if [ -z "$CODEX_CMD" ]; then
   echo "[launchd] codex command not found; set CODEX_RUNNER_CODEX_CMD=/absolute/path/to/codex" >&2
   exit 1
@@ -261,12 +314,21 @@ PLIST
 
 plutil -lint "$WEB_PLIST" >/dev/null
 plutil -lint "$CORE_PLIST" >/dev/null
+old_legacy_pid="$(launchd_service_pid "$LABEL" || true)"
+old_web_pid="$(launchd_service_pid "$WEB_LABEL" || true)"
+old_core_pid="$(launchd_service_pid "$CORE_LABEL" || true)"
 launchctl bootout "$DOMAIN/$LABEL" >/dev/null 2>&1 || launchctl bootout "$DOMAIN" "$LEGACY_PLIST" >/dev/null 2>&1 || true
 rm -f "$LEGACY_PLIST"
 launchctl bootout "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
 launchctl bootout "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
-launchctl bootstrap "$DOMAIN" "$CORE_PLIST"
-launchctl bootstrap "$DOMAIN" "$WEB_PLIST"
+wait_for_service_unloaded "$LABEL"
+wait_for_service_unloaded "$WEB_LABEL"
+wait_for_service_unloaded "$CORE_LABEL"
+wait_for_process_exit "$old_legacy_pid" "$LABEL"
+wait_for_process_exit "$old_web_pid" "$WEB_LABEL"
+wait_for_process_exit "$old_core_pid" "$CORE_LABEL"
+bootstrap_service "$CORE_LABEL" "$CORE_PLIST"
+bootstrap_service "$WEB_LABEL" "$WEB_PLIST"
 launchctl enable "$DOMAIN/$CORE_LABEL" >/dev/null 2>&1 || true
 launchctl enable "$DOMAIN/$WEB_LABEL" >/dev/null 2>&1 || true
 launchctl kickstart -k "$DOMAIN/$CORE_LABEL"

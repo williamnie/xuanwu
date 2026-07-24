@@ -45,6 +45,22 @@ test('launchd deployment preserves rollback inputs before atomic replacement', (
   assert.match(source, /backup_current_runtime\s*\nstage_launchd_binary/);
 });
 
+test('launchd deployment waits for old split services before bounded bootstrap retries', () => {
+  assert.match(source, /launchd_service_pid\(\)/);
+  assert.match(source, /wait_for_service_unloaded\(\)/);
+  assert.match(source, /wait_for_process_exit\(\)/);
+  assert.match(source, /bootstrap_service\(\)/);
+  assert.match(source, /for attempt in \{1\.\.20\}/);
+  assert.match(source, /old_core_pid="\$\(launchd_service_pid "\$CORE_LABEL" \|\| true\)"/);
+  assert.match(source, /wait_for_process_exit "\$old_core_pid" "\$CORE_LABEL"/);
+  assert.match(source, /bootstrap_service "\$CORE_LABEL" "\$CORE_PLIST"/);
+  assert.ok(
+    source.indexOf('wait_for_process_exit "$old_core_pid" "$CORE_LABEL"') <
+      source.indexOf('bootstrap_service "$CORE_LABEL" "$CORE_PLIST"'),
+    'Core bootstrap must happen only after the previous Core PID exits'
+  );
+});
+
 test('redeploy snapshots and quick-checks the live DB before replacing runtime', () => {
   assert.match(redeploy, /source\.backup\(target\)/);
   assert.match(redeploy, /pragma quick_check/);
