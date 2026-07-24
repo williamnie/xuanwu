@@ -44,6 +44,14 @@ test('PI Assistant chat tracks selected conversation and updates title from mess
   assert.doesNotMatch(source, /new Date\(\)\.toLocaleString/);
 });
 
+test('PI Assistant chat owns the current POST SSE Turn instead of subscribing to global events', () => {
+  assert.match(source, /createPiChatTurnManager\(\)/);
+  assert.match(source, /signal:\s*turn\.controller\.signal/);
+  assert.match(source, /onEvent:\s*\(streamEvent\) => applyPiTurnEvent/);
+  assert.match(source, /turnManager\.cancel\('conversation_switch'\)/);
+  assert.doesNotMatch(source, /usePiConversationEvents|setPiLiveConversation|clearPiLiveAssistant/);
+});
+
 test('PI Assistant chat uses the default PI agent without exposing an agent selector', () => {
   assert.doesNotMatch(panelSource, /function AgentSelect/);
   assert.doesNotMatch(panelSource, /<select className="form-control" value=\{selected\}/);

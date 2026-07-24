@@ -1,4 +1,5 @@
 import { request } from './base.js';
+import { streamPiConversationMessage } from './piConversationStream.js';
 
 export const assistantApi = {
   getPiSkills: () => request('/api/pi/skills'),
@@ -125,10 +126,7 @@ export const assistantApi = {
 
   getPiConversation: (id) => request(`/api/pi/conversations/${encodeURIComponent(id)}`),
 
-  sendPiConversationMessage: (id, message) => request(`/api/pi/conversations/${encodeURIComponent(id)}/messages`, {
-    method: 'POST',
-    body: JSON.stringify(typeof message === 'string' ? { prompt: message } : message),
-  }),
+  sendPiConversationMessage: (id, message, options) => streamPiConversationMessage(id, message, options),
 
   interruptPiConversation: (id) => request(`/api/pi/conversations/${encodeURIComponent(id)}/interrupt`, {
     method: 'POST',

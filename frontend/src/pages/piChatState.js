@@ -1,9 +1,10 @@
 import { projectsApi } from '../api/projects.js';
 import { assistantApi } from '../api/assistant.js';
+import { PiConversationStreamError } from '../api/piConversationStream.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from '../store/toastStore';
-import { clearPiLiveAssistant, setPiLiveConversation, usePiConversationEvents } from './piChatLiveBridge';
 import { cleanProjectText, projectFromPrompt, promptWithProjectContext, referenceKey } from './piChatProjectContext';
+import { appendPiTurnDelta, createPiChatTurnManager, hydrateCompletedPiTurn } from './piChatTurn';
 
 const DEFAULT_TRANSCRIPT = [];
 const STOP_RETRY_COUNT = 4;
@@ -12,12 +13,11 @@ const STOP_RETRY_DELAY_MS = 160;
 export function usePiChatState(initialConversationId = '') {
   const state = usePiChatFields();
   const initialSelectionRef = useRef('');
+  const turnManager = useMemo(() => createPiChatTurnManager(), []);
   const {
     conversations,
     loading,
-    selectConversation,
   } = state;
-  const liveRefs = usePiConversationEvents(state, state.selectedConversationId);
   const loadPiState = usePiChatLoader({
     setConversations: state.setConversations,
     setError: state.setError,
@@ -26,12 +26,20 @@ export function usePiChatState(initialConversationId = '') {
     setSupervisor: state.setSupervisor
   });
   const createConversation = useCreatePiConversation(state);
-  const sendMessage = useSendPiMessage(state, createConversation, loadPiState, liveRefs);
-  const stopMessage = useStopPiMessage(state);
+  const sendMessage = useSendPiMessage(state, createConversation, loadPiState, turnManager);
+  const stopMessage = useStopPiMessage(state, turnManager);
+  const selectConversation = useCallback((id) => {
+    if (turnManager.cancel('conversation_switch')) clearPiTurnState(state);
+    return state.selectConversation(id);
+  }, [state, turnManager]);
 
   useEffect(() => {
     loadPiState();
   }, [loadPiState]);
+
+  useEffect(() => () => {
+    turnManager.cancel('unmount');
+  }, [turnManager]);
 
   useEffect(() => {
     if (!initialConversationId || initialSelectionRef.current === initialConversationId || loading) return;
@@ -43,7 +51,7 @@ export function usePiChatState(initialConversationId = '') {
   return {
     ...state,
     conversations: state.filteredConversations,
-    handleConversationChange: state.selectConversation,
+    handleConversationChange: selectConversation,
     handleCreateConversation: () => createConversation('New conversation', { notify: true }),
     handleSend: sendMessage,
     handleStop: stopMessage,
@@ -170,7 +178,7 @@ function useCreatePiConversation(state) {
   }, [state]);
 }
 
-function useSendPiMessage(state, createConversation, loadPiState, liveRefs) {
+function useSendPiMessage(state, createConversation, loadPiState, turnManager) {
   return useCallback(async (event) => {
     event.preventDefault();
     const text = state.prompt.trim();
@@ -181,11 +189,11 @@ function useSendPiMessage(state, createConversation, loadPiState, liveRefs) {
       ? await createConversation('New conversation', { project: targetProject })
       : state.selectedConversationId || await createConversation('New conversation', { project: targetProject });
     if (!conversationId) return;
-    await sendPromptToPi(state, conversationId, text, loadPiState, targetProject, liveRefs);
-  }, [createConversation, liveRefs, loadPiState, state]);
+    await sendPromptToPi(state, conversationId, text, loadPiState, targetProject, turnManager);
+  }, [createConversation, loadPiState, state, turnManager]);
 }
 
-function useStopPiMessage(state) {
+function useStopPiMessage(state, turnManager) {
   return useCallback(async () => {
     const conversationId = state.runningConversationId;
     if (!state.sending || !conversationId || state.stopping) return;
@@ -193,6 +201,8 @@ function useStopPiMessage(state) {
     try {
       const result = await interruptActivePiConversation(conversationId);
       if (result?.interrupted) {
+        turnManager.cancel('stop');
+        clearPiTurnState(state);
         message.success('已请求停止 Xuanwu');
         return;
       }
@@ -202,29 +212,70 @@ function useStopPiMessage(state) {
       state.setStopping(false);
       message.error('停止 Xuanwu 失败，请重试');
     }
-  }, [state]);
+  }, [state, turnManager]);
 }
 
-async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject = null, liveRefs = null) {
-  setPiLiveConversation(liveRefs, conversationId);
+async function sendPromptToPi(state, conversationId, text, loadPiState, targetProject, turnManager) {
+  const turn = turnManager.begin(conversationId);
   state.setTranscript((items) => [...items, transcriptMessage('user', text)]);
   state.setPrompt('');
   state.setRunningConversationId(conversationId);
   state.setSending(true);
   try {
-    const result = await assistantApi.sendPiConversationMessage(conversationId, { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) });
+    const result = await assistantApi.sendPiConversationMessage(
+      conversationId,
+      { prompt: promptWithProjectContext(text, targetProject || state.selectedProject) },
+      {
+        signal: turn.controller.signal,
+        onEvent: (streamEvent) => applyPiTurnEvent(state, turnManager, turn, streamEvent),
+      },
+    );
+    if (!turnManager.isCurrent(turn) || result?.status === 'aborted') return;
     applyConversationTitle(state, conversationId, result?.title);
+    await hydrateConversationTranscript(
+      state,
+      conversationId,
+      result,
+      () => turnManager.isCurrent(turn),
+    );
+    if (!turnManager.isCurrent(turn)) return;
     await loadPiState();
-    await hydrateConversationTranscript(state, conversationId, result);
   } catch (err) {
-    state.setTranscript((items) => [...items, transcriptMessage('error', err.message || '发送失败')]);
-    message.error('发送给 Xuanwu 失败，请重试');
+    if (!turnManager.isCurrent(turn)) return;
+    const detail = piTurnErrorMessage(err);
+    state.setTranscript((items) => [...items, transcriptMessage('error', detail, {
+      background_running: Boolean(err?.backgroundRunning),
+      recoverable: true,
+      turn_id: err?.turnId || '',
+    })]);
+    message.error(detail);
   } finally {
-    clearPiLiveAssistant(liveRefs);
-    state.setRunningConversationId('');
-    state.setSending(false);
-    state.setStopping(false);
+    if (turnManager.finish(turn)) clearPiTurnState(state);
   }
+}
+
+function applyPiTurnEvent(state, turnManager, turn, streamEvent) {
+  if (!turnManager.isCurrent(turn)) return;
+  const { data, event, turnId } = streamEvent;
+  if (event === 'accepted' || event === 'start') {
+    state.setSending(true);
+    return;
+  }
+  if (event === 'assistant_text_delta') {
+    state.setTranscript((items) => appendPiTurnDelta(items, turnId, data.delta ?? data.text, turn.conversationId));
+  }
+}
+
+function clearPiTurnState(state) {
+  state.setRunningConversationId('');
+  state.setSending(false);
+  state.setStopping(false);
+}
+
+function piTurnErrorMessage(error) {
+  if (error instanceof PiConversationStreamError) return error.message;
+  if (error?.name === 'AbortError') return '消息流已关闭';
+  return error?.message || '发送失败，请重试';
 }
 
 async function interruptActivePiConversation(conversationId) {
@@ -241,12 +292,19 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function hydrateConversationTranscript(state, conversationId, fallbackResult = null) {
+async function hydrateConversationTranscript(state, conversationId, fallbackResult = null, shouldApply = () => true) {
   try {
-    const detail = await assistantApi.getPiConversation(conversationId);
-    state.setTranscript(conversationTranscript(detail));
-    state.setError('');
+    await hydrateCompletedPiTurn({
+      conversationId,
+      getConversation: assistantApi.getPiConversation,
+      isCurrent: shouldApply,
+      onHydrated(detail) {
+        state.setTranscript(conversationTranscript(detail));
+        state.setError('');
+      },
+    });
   } catch {
+    if (!shouldApply()) return;
     const text = runnerReplyText(fallbackResult);
     if (text) state.setTranscript((items) => [...items, transcriptMessage('assistant', text, fallbackResult)]);
   }

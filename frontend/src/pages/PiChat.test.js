@@ -105,7 +105,7 @@ test('PI Assistant composer exposes an active stop control while sending', () =>
   assert.match(pageSource, /interruptState=\{messageRunning \? piChatInterruptState\(state, selectedId\) : null\}/);
   assert.match(pageSource, /onStop=\{state\.handleStop\}/);
   assert.match(pageSource, /function piChatInterruptState/);
-  assert.match(stateSource, /function useStopPiMessage\(state\)/);
+  assert.match(stateSource, /function useStopPiMessage\(state, turnManager\)/);
   assert.match(stateSource, /assistantApi\.interruptPiConversation\(conversationId\)/);
 });
 

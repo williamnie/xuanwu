@@ -18,6 +18,13 @@ test('api client exposes PI conversation interrupt endpoint', () => {
   assert.ok(assistantSource.includes('`/api/pi/conversations/${encodeURIComponent(id)}/interrupt`'));
 });
 
+test('api client sends PI messages through the dedicated POST SSE consumer', () => {
+  assert.match(
+    assistantSource,
+    /sendPiConversationMessage:\s*\(id, message, options\) => streamPiConversationMessage\(id, message, options\)/,
+  );
+});
+
 test('api client exposes global and issue-scoped event summary queries', () => {
   assert.match(eventsSource, /getEventSummaries:/);
   assert.match(eventsSource, /`\/api\/event-summaries\$\{query\}`/);
