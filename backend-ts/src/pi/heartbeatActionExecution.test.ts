@@ -17,8 +17,8 @@ afterEach(async () => {
   }
 });
 
-describe("PI heartbeat action execution", () => {
-  test("attended heartbeat writes Guardian signal instead of pending approval", async () => {
+describe("PI heartbeat decision boundary", () => {
+  test("attended heartbeat collects state without manufacturing an action", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
@@ -26,12 +26,8 @@ describe("PI heartbeat action execution", () => {
 
       const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
-      expect(result).toMatchObject({ actions_proposed: 1, executed_actions: [], status: "completed" });
-      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
-        event_type: "guardian.heartbeat.action_candidate",
-        issue_id: issueID,
-        source: "heartbeat"
-      }));
+      expect(result).toMatchObject({ actions_proposed: 0, executed_actions: [], status: "completed" });
+      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toEqual([]);
       expect(rowCount(db, "pi_actions")).toBe(0);
       expect(statusOfIssue(db, issueID)).toBe("todo");
     } finally {
@@ -39,7 +35,7 @@ describe("PI heartbeat action execution", () => {
     }
   });
 
-  test("delegated heartbeat still writes only Guardian signal and audit", async () => {
+  test("delegation authorization does not make heartbeat choose an action", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
@@ -57,14 +53,14 @@ describe("PI heartbeat action execution", () => {
       const run = result.runs[0];
 
       expect(run?.executed_actions).toEqual([]);
-      expect(run).toMatchObject({ actions_proposed: 1, status: "completed" });
+      expect(run).toMatchObject({ actions_proposed: 0, status: "completed" });
       expect(run?.policy.authorization_summary).toMatchObject({
         allowed_mcp_capabilities: ["docs:resource:runbook"],
         allowed_skill_intents: ["codex-issue-runner"]
       });
       expect(rowCount(db, "pi_actions")).toBe(0);
       const audit = listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).find((event) => event.event_type === "audit");
-      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({ actions_executed: 0, actions_proposed: 1 });
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({ actions_executed: 0, actions_proposed: 0 });
       expect(listIssueEvents(db, issueID).map((event) => event.type)).toEqual([]);
       expect(statusOfIssue(db, issueID)).toBe("todo");
     } finally {
@@ -90,7 +86,7 @@ describe("PI heartbeat action execution", () => {
       expect(run).toMatchObject({ status: "completed", error: "" });
       expect(rowCount(db, "pi_actions")).toBe(0);
       expect(listPiHeartbeatEvents(db, { heartbeatId: run?.heartbeat_id }).map((event) => event.event_type)).toEqual([
-        "collect_signals", "evaluate_policies", "plan_actions", "authorization_gate", "guardian_signal", "audit", "schedule_next_tick"
+        "collect_signals", "evaluate_policies", "delegate_decision", "authorization_gate", "audit", "schedule_next_tick"
       ]);
     } finally {
       db.close();

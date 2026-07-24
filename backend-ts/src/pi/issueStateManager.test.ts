@@ -44,6 +44,7 @@ describe("Issue State Manager diagnosis", () => {
       insertSession(fixture.db, ended, { sessionID: "thread-ended", status: "completed", updatedAt: "2026-01-01T00:21:00Z" });
       const retry = insertIssue(fixture.db, {
         attemptCount: 1,
+        autoRetryNextAt: "2026-01-02T02:00:00Z",
         error: "stream disconnected before completion",
         status: "failed",
         title: "Retryable failure",
@@ -128,6 +129,7 @@ describe("Issue State Manager diagnosis", () => {
       });
       const maxed = insertIssue(fixture.db, {
         attemptCount: 3,
+        autoRetryNextAt: "2026-01-01T00:30:00Z",
         error: "transport error",
         status: "failed",
         title: "Maxed retry",
@@ -159,7 +161,7 @@ describe("Issue State Manager diagnosis", () => {
 
       expect(byIssue.get(cooling)).toMatchObject({ code: "failed_retry_cooling_down", recommended_actions: [] });
       expect(byIssue.get(maxed)).toMatchObject({ code: "failed_retry_exhausted", severity: "needs_user" });
-      expect(byIssue.get(user)).toMatchObject({ code: "needs_user_escalation", severity: "needs_user" });
+      expect(byIssue.get(user)).toMatchObject({ code: "blocked_escalation", severity: "blocked" });
       expect(byIssue.has(done)).toBe(false);
       expect(result.batch_targets).toEqual([expect.objectContaining({
         deadline_at: "2026-01-01T23:59:59Z",
@@ -183,6 +185,7 @@ describe("Issue State Manager PI actions", () => {
       const result = createPiRunnerActions(fixture.db, { project: fixture.project }).createIssueStateRepairProposal({
         diagnosis_code: "done_missing_verification_evidence",
         issue_id: issueID,
+        operation: "patch_status",
         rationale: "needs proof"
       }) as { action_id: string; status: string };
 
@@ -203,6 +206,7 @@ describe("Issue State Manager PI actions", () => {
     try {
       const issueID = insertIssue(fixture.db, {
         attemptCount: 1,
+        autoRetryNextAt: "2026-01-01T00:00:00Z",
         error: "network error",
         status: "failed",
         title: "Retry now",
@@ -216,7 +220,11 @@ describe("Issue State Manager PI actions", () => {
           scope: { project_id: fixture.project.id }
         },
         project: fixture.project
-      }).createIssueStateRepairProposal({ issue_id: issueID }) as { decision: string; status: string };
+      }).createIssueStateRepairProposal({
+        diagnosis_code: "failed_retry_ready",
+        issue_id: issueID,
+        operation: "retry"
+      }) as { decision: string; status: string };
 
       expect(result).toMatchObject({ decision: "execute", status: "completed" });
       expect(getIssue(fixture.db, issueID)).toMatchObject({ status: "todo", auto_retry_next_at: "", error: "" });

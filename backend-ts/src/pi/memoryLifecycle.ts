@@ -154,9 +154,15 @@ function groupKey(item: PiMemoryItem): string {
 }
 
 function policyOrPermissionLike(item: PiMemoryItem): boolean {
-  const text = `${item.kind} ${item.content} ${item.memory_type}`.toLowerCase();
-  return /policy|permission|approval|source policy|workflow|project|repo|repository/.test(text) ||
-    /策略|权限|授权|审批|工作流|仓库|项目/.test(text);
+  return [
+    "approval",
+    "permission",
+    "policy",
+    "project_policy",
+    "repository_policy",
+    "source_policy",
+    "workflow_policy"
+  ].includes(item.kind.trim().toLowerCase());
 }
 
 function candidateExpired(item: PiMemoryItem, now: Date, maxAgeDays: number): boolean {

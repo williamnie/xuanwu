@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { validateToolArguments } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
-import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { listIssueEvents, recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import { createProject, type Project } from "../db/repositories/projects.ts";
@@ -191,6 +191,39 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
     }
   });
 
+  test("authorizes the exact PI-selected medium-risk action in Runner chat without phrase routing", async () => {
+    const fixture = await openFixture();
+    try {
+      const issue = createIssue(fixture.db, {
+        project_id: fixture.project.id,
+        status: "triage",
+        title: "PI-selected enqueue"
+      });
+      const work = getIssueAsWork(fixture.db, issue.id)!;
+      const tools = createPiSupervisorControlTools(fixture.db, fixture.project, {
+        conversationID: "conv-pi-selected",
+        source: "runner_chat"
+      });
+
+      const result = await runTool(tools, "work_control", {
+        action: "enqueue",
+        expected_revision: work.revision,
+        idempotency_key: "pi-selected-enqueue",
+        reason: "PI selected the concrete action and target from conversation",
+        work_id: work.id
+      });
+
+      expect(result.details).toMatchObject({
+        action_type: "work.enqueue",
+        decision: "execute",
+        status: "completed"
+      });
+      expect(getIssue(fixture.db, issue.id)?.status).toBe("todo");
+    } finally {
+      fixture.db.close();
+    }
+  });
+
   test("keeps destructive Work cancellation pending even with delegated mutation authorization", async () => {
     const fixture = await openFixture();
     try {
@@ -359,6 +392,48 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
       expect(listPiActionEvents(fixture.db, { actionId: action.id }).map((event) => event.event_type)).toEqual([
         "candidate", "gate_decision", "execution_started", "execution_result"
       ]);
+    } finally {
+      fixture.db.close();
+    }
+  });
+
+  test("denies retry when implementation is complete and only persisted Handoff is missing", async () => {
+    const fixture = await openFixture();
+    try {
+      const issue = createIssue(fixture.db, {
+        project_id: fixture.project.id,
+        status: "failed",
+        title: "Do not rerun completed implementation"
+      });
+      const runID = insertRun(fixture.db, issue.id, "pending_verification");
+      recordIssueEvent(fixture.db, issue.id, "issue.verification_gate_outcome.v1", {
+        evidence_ids: ["xw:evidence:git:1"],
+        handoff_gap: "persisted Handoff missing",
+        target_status: "pending_verification"
+      });
+      const tools = createPiSupervisorControlTools(fixture.db, fixture.project, {
+        conversationID: "conv-handoff-gap",
+        source: "runner_chat"
+      });
+
+      const result = await runTool(tools, "run_control", {
+        action: "retry",
+        expected_revision: 0,
+        idempotency_key: "must-not-retry-completed-run",
+        reason: "user asked to retry",
+        run_id: runID
+      });
+
+      expect(result.details).toMatchObject({
+        action_type: "run.retry",
+        decision: "deny",
+        gate_reason: expect.stringContaining("only the persisted Handoff is missing"),
+        status: "denied"
+      });
+      expect(getIssue(fixture.db, issue.id)?.status).toBe("failed");
+      expect(listPiActionEvents(fixture.db, {
+        actionId: listPiActions(fixture.db)[0]!.id
+      }).map((event) => event.event_type)).toEqual(["candidate", "gate_decision"]);
     } finally {
       fixture.db.close();
     }

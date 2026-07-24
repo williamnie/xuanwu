@@ -8,10 +8,7 @@ import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { startServer } from "../http/server.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
-import {
-  buildFeishuConversationPromptContext,
-  resolveFeishuContinuationTarget
-} from "../integrations/feishuConversationContext.ts";
+import { buildFeishuConversationPromptContext } from "../integrations/feishuConversationContext.ts";
 import { createFeishuReceiverManager } from "../integrations/feishuReceiver.ts";
 import {
   ProcessGroupMemoryObserver,
@@ -59,20 +56,17 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   const feishuBridge = createFeishuAgentBridge({
     config: () => config.integrations.feishu,
     database,
-    runConversation: async ({ conversationId, event, intent, projectId, prompt, targetProjectId, targetProjectSource }) => {
+    runConversation: async ({ conversationId, event, projectId, prompt, targetProjectId, targetProjectSource }) => {
       const { runPiConversationPrompt } = await import("../http/piConversationApi.ts");
-      const continuation = targetProjectId ? null : resolveFeishuContinuationTarget(database, { event, prompt });
-      const oneShotTargetProjectId = targetProjectId || continuation?.projectId || projectId;
+      const oneShotTargetProjectId = targetProjectId || projectId;
       const result = await runPiConversationPrompt({ bus, database, providers }, {
         channelContext: buildFeishuConversationPromptContext(database, { event }),
         clearProjectId: true,
         conversationId,
-        intent,
         projectId: "",
         prompt,
-        targetIssueId: continuation?.issueId,
         targetProjectId: oneShotTargetProjectId,
-        targetProjectSource: targetProjectSource || (continuation ? "latest_actionable_notification" : undefined),
+        targetProjectSource,
         title: `Feishu · ${event.chat_id || event.message_id}`
       });
       return { conversationId: result.conversation_id, projectId: "", targetProjectId: oneShotTargetProjectId, text: result.text };

@@ -26,12 +26,6 @@ import type { PiRuntimeResult, PiRuntimeSession } from "./piRuntime.ts";
 import { piTurnSessionEvent, publishPiSessionEvent, type PiTurnSessionEvent } from "./piSessionEvents.ts";
 import { PI_READ_ONLY_ACTION_TYPES } from "../pi/actionGate.ts";
 import {
-  recordSupervisorIntentRouteAudit,
-  routeSupervisorIntent,
-  supervisorIntentRouteAllowsMutation,
-  type SupervisorIntentRoute
-} from "../pi/supervisorIntentRouter.ts";
-import {
   recordSupervisorContextResolutionAudit,
   resolveSupervisorContext,
   type SupervisorContextResolution
@@ -202,11 +196,6 @@ async function preparePiConversationTurn(
   const source = review ? reviewConversationSource(titledConversation) : runnerChatSource(titledConversation);
   const resolvedSource = source ?? (review ? "runner_review" : "runner_chat");
   const turnID = crypto.randomUUID();
-  const intentRoute = routeSupervisorIntent({
-    intentHint: intent,
-    prompt,
-    source: resolvedSource
-  });
   if (targetProjectId !== "") optionalConversationProject(context.database, targetProjectId);
   const supervisorContext = resolveSupervisorContext(context.database, {
     conversationID: titledConversation.id,
@@ -217,11 +206,6 @@ async function preparePiConversationTurn(
     prompt,
     source: resolvedSource
   });
-  recordSupervisorIntentRouteAudit(context.database, {
-    conversationID: titledConversation.id,
-    projectID: supervisorContext.target.project_id,
-    turnID
-  }, intentRoute);
   recordSupervisorContextResolutionAudit(context.database, {
     conversationID: titledConversation.id,
     turnID
@@ -234,7 +218,6 @@ async function preparePiConversationTurn(
   const runtime = await openConversationRuntime(
     context,
     titledConversation,
-    intentRoute,
     supervisorContext,
     intent,
     prompt,
@@ -546,7 +529,6 @@ function clearPiSessionProjectIndex(db: RunnerDatabase, providerSessionID: strin
 async function openConversationRuntime(
   context: PiConversationContext,
   conversation: PiConversation,
-  intentRoute: SupervisorIntentRoute,
   supervisorContext: SupervisorContextResolution,
   intent = "",
   userPrompt = "",
@@ -569,7 +551,7 @@ async function openConversationRuntime(
   const review = isReviewConversationIntent(intent);
   return createPiRuntimeSession(context.database, {
     agent,
-    authorization: conversationAuthorization(review, toolProject, intentRoute, supervisorContext, PI_RUNNER_CHAT_ACTIONS),
+    authorization: conversationAuthorization(review, toolProject, supervisorContext, PI_RUNNER_CHAT_ACTIONS),
     bus: context.bus,
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs,
     channelContext,
@@ -586,32 +568,26 @@ async function openConversationRuntime(
     source,
     sourceTurn: { id: turnID, source, userPrompt },
     supervisorContext,
-    supervisorIntentRoute: intentRoute
   });
 }
 
 function conversationAuthorization(
   review: boolean,
   project: Project | undefined,
-  intentRoute: SupervisorIntentRoute,
   supervisorContext: SupervisorContextResolution,
   runnerChatActions: readonly string[]
 ) {
   if (review) return reviewConversationAuthorization();
-  if (project) return runnerChatAuthorization(project, intentRoute, runnerChatActions);
+  if (project) return runnerChatAuthorization(project, runnerChatActions);
   if (supervisorContext.status === "ambiguous") return readOnlyConversationAuthorization();
-  if (!supervisorIntentRouteAllowsMutation(intentRoute)) return readOnlyConversationAuthorization();
   return undefined;
 }
 
 function runnerChatAuthorization(
   project: Project,
-  intentRoute: SupervisorIntentRoute,
   runnerChatActions: readonly string[]
 ) {
-  const actions = supervisorIntentRouteAllowsMutation(intentRoute)
-    ? [...runnerChatActions]
-    : [...PI_READ_ONLY_ACTION_TYPES];
+  const actions = [...runnerChatActions];
   return {
     allowedActions: actions,
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed,

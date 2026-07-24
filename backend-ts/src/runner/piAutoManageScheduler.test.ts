@@ -9,6 +9,7 @@ import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listP
 import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 import { runProjectLoopOnce } from "./projectLoop.ts";
@@ -277,25 +278,16 @@ describe("PI auto-manage scheduler", () => {
         database: db,
         providers: { codex: provider },
         runProjectCycle: runner.run.bind(runner),
+        runSupervisorDecision: async () => ({
+          decision: resumeDecision(),
+          raw_text: JSON.stringify(resumeDecision()),
+          valid: true
+        }),
         watchdogNow: NOW
       });
-      // 恢复动作规划后，heartbeat/audit 仍可能更新时间戳。此时应重读稳定的
-      // issue/run/session 身份，而不是把无害漂移当作过期 CAS 拒绝。
-      db.sqlite.run("update issues set updated_at=? where id=519", ["2026-06-22T08:40:10Z"]);
-      db.sqlite.run("update agent_sessions set updated_at=? where session_key='codex:thread-519'", [
-        "2026-06-22T08:40:11Z"
-      ]);
-      db.sqlite.run("update pi_guardian_decisions set cooldown_until='' where project_id='demo'");
-      const second = await runScheduleLayerCycle({
-        database: db,
-        providers: { codex: provider },
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false,
-        watchdogNow: new Date(NOW.getTime() + 31_000)
-      });
 
-      expect(first.supervisor).toMatchObject({ signaled: 1 });
-      expect(second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(first.supervisor).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(first.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
       expect(provider.calls).toEqual([{ prompt: expect.stringContaining("继续"), sessionId: "thread-519" }]);
       expect(listPiActions(db, { issueId: 519 })[0]).toMatchObject({
         action_type: "session.resume_followup",
@@ -322,19 +314,16 @@ describe("PI auto-manage scheduler", () => {
       const first = await runScheduleLayerCycle({
         database: db,
         runProjectCycle: runner.run.bind(runner),
+        runSupervisorDecision: async () => ({
+          decision: needsUserDecision(),
+          raw_text: JSON.stringify(needsUserDecision()),
+          valid: true
+        }),
         watchdogNow: NOW
       });
-      db.sqlite.run("update issues set updated_at=? where id=520", ["2026-06-22T08:40:10Z"]);
-      db.sqlite.run("update pi_guardian_decisions set cooldown_until='' where project_id='demo'");
-      const second = await runScheduleLayerCycle({
-        database: db,
-        runProjectCycle: runner.run.bind(runner),
-        runSupervisor: false,
-        watchdogNow: new Date(NOW.getTime() + 31_000)
-      });
 
-      expect(first.supervisor).toMatchObject({ signaled: 1 });
-      expect(second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(first.supervisor).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(first.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
       expect(listPiActions(db, { issueId: 520 })[0]).toMatchObject({
         action_type: "needs_user.escalate",
         status: "completed"
@@ -450,7 +439,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("recovers a deferred provider initialize outage without claiming later todos", async () => {
+  test("alerts on a deferred provider initialize outage without a hardcoded recovery", async () => {
     const db = await openFixtureDatabase();
     const provider = new InitializeTimeoutProvider();
     const runner = new FakePiCycleRunner();
@@ -469,11 +458,12 @@ describe("PI auto-manage scheduler", () => {
 
       expect(result.first.supervisor).toMatchObject({ scanned: 1, signaled: 0 });
       expect(result.first.guardianDecisions).toMatchObject({ created: 1 });
-      expect(result.second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
+      expect(result.second.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
       expect(runner.calls).toEqual([]);
       expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
 
-      expectProviderOutageRecovery(db, 701);
+      expect(listPiActions(db, { issueId: 701 })).toEqual([]);
+      expect(getIssue(db, 701)).toMatchObject({ status: "in_progress" });
     } finally {
       db.close();
     }
@@ -572,6 +562,32 @@ function insertSettings(db: DB, projectID: string, autoManage: number, maxAction
 
 const NOW = new Date("2026-06-22T08:40:00Z");
 
+function resumeDecision(): PiSupervisorDecisionJson {
+  return {
+    confidence: "high",
+    decision: "resume_session",
+    evidence_refs: ["latest_run", "session"],
+    expected_outcome: "the existing provider session continues",
+    fallback_if_no_progress: "needs_user",
+    rationale: "PI verified that the existing session can safely resume",
+    recovery_message: "检查当前状态后继续未完成工作。",
+    risk_level: "medium"
+  };
+}
+
+function needsUserDecision(): PiSupervisorDecisionJson {
+  return {
+    confidence: "high",
+    decision: "needs_user",
+    evidence_refs: ["latest_run", "provider_error"],
+    expected_outcome: "a human reviews the deterministic executor failure",
+    fallback_if_no_progress: "blocked",
+    rationale: "the executor failure requires a human decision",
+    recovery_message: "执行失败需要人工确认，未自动重试。",
+    risk_level: "medium"
+  };
+}
+
 async function runOutageScheduleClosure(db: DB, runner: FakePiCycleRunner) {
   const first = await runScheduleLayerCycle({
     database: db,
@@ -595,21 +611,6 @@ function expectDeferredOutageClaim(db: DB, provider: InitializeTimeoutProvider):
   expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
   expect(listIssueRuns(db, 702)).toEqual([]);
   expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.provider_deferred");
-}
-
-function expectProviderOutageRecovery(db: DB, issueID: number): void {
-  const action = firstProviderOutageAction(db, issueID);
-  expect(action).toMatchObject({ action_type: "issue.retry", gate_decision: "execute", status: "completed" });
-  expect(JSON.parse(action?.payload_json ?? "{}")).toMatchObject({
-    diagnosis_code: "provider_transient_network_error"
-  });
-  expect(getIssue(db, issueID)).toMatchObject({ status: "todo" });
-  expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toEqual([]);
-}
-
-function firstProviderOutageAction(db: DB, issueID: number) {
-  const [action] = listPiActions(db, { issueId: issueID });
-  return action;
 }
 
 function insertIssueRunSession(db: DB, issueID: number): void {

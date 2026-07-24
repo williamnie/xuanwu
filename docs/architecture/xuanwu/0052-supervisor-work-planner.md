@@ -1,6 +1,8 @@
 # ADR-XW-0052：Supervisor Planner 与 bounded Work 分解
 
-- 状态：Accepted
+> **状态：Superseded by ADR-XW-0085。** 硬编码自然语言 work planner 已从运行链和源码删除；Work 分解现在由 PI 通过已注册工具提出，确定性层只校验具体工具参数和写入前置条件。
+
+- 状态：Superseded
 - 日期：2026-07-17
 - 路线 issue：XW P06.05 / Runner #684
 - 硬依赖：XW P06.03 / #682、P06.04 / #683、P02.03 / #649（均为 `done`）

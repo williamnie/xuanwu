@@ -14,7 +14,6 @@ import {
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
-import { publishNeedsUserFindingNotifications } from "../notifications/piNotifier.ts";
 import { createProjectStatusSnapshot } from "../pi/projectSnapshot.ts";
 import { diagnoseIssueState } from "../pi/issueStateManager.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
@@ -145,13 +144,7 @@ async function executeManagerCycle(
   });
   await ensurePiSessionFile(state.runtime.session);
   persistPiSessionIndex(context.database, state.conversation, project);
-  const notifications = publishNeedsUserFindingNotifications({
-    bus: context.bus,
-    database: context.database,
-    findings: snapshot.findings,
-    notifyOnNeedsUser: settings.notify_on_needs_user !== 0,
-    project
-  });
+  const notifications: never[] = [];
   return managerCycleResult(state.conversation, state.runtime.session, settings, snapshot, issueState, notifications);
 }
 
@@ -242,13 +235,9 @@ function managerCycleResult(
   settings: ProjectPiSettings,
   snapshot: ReturnType<typeof createProjectStatusSnapshot>,
   issueState: ReturnType<typeof diagnoseIssueState>,
-  notifications: ReturnType<typeof publishNeedsUserFindingNotifications>
+  notifications: readonly never[]
 ) {
   return {
-    action_candidates: [
-      ...snapshot.findings.flatMap((finding) => finding.action_candidate ? [finding.action_candidate] : []),
-      ...issueState.diagnostics.flatMap((item) => item.recommended_actions)
-    ],
     auto_manage: settings.auto_manage,
     conversation_id: conversation.id,
     message_count: session.state.messages.length,

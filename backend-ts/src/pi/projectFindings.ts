@@ -2,12 +2,6 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import { defaultFindingCategory, defaultFindingReason, evaluateProjectFailedRetryPolicy, type FailedRetryDecision } from "./failedRetryPolicy.ts";
 import { matchFailurePattern } from "./failurePatterns.ts";
-import {
-  retryFindingCandidate,
-  staleSessionSteerCandidate,
-  verifierWorkflowCandidate,
-  type ProjectFindingActionCandidate
-} from "./projectFindingActions.ts";
 
 export type ProjectFindingCategory = "blocked" | "needs_user" | "transient" | "verification_needed";
 
@@ -17,7 +11,6 @@ export type ProjectFindingNotification = {
 };
 
 export type ProjectFinding = {
-  action_candidate?: ProjectFindingActionCandidate;
   category: ProjectFindingCategory;
   issue_id: number;
   message: string;
@@ -93,7 +86,6 @@ function mapIssueFinding(
   const message = issueMessage(status, issueID, detail, pattern?.recommendation);
   const reason = pattern ? "failure_pattern" : policy?.reason ?? defaultFindingReason(status, category);
   return {
-    action_candidate: issueActionCandidate(row, category, policy?.retry_candidate),
     category,
     issue_id: issueID,
     message,
@@ -138,7 +130,6 @@ function mapStaleFinding(row: StaleIssueRow, now: Date): ProjectFinding {
   const inactivity = formatDuration(now.getTime() - parseTimestamp(activity));
   const message = `Issue #${issueID} appears stale: inactive for ${inactivity} without run/session activity`;
   return {
-    action_candidate: staleActionCandidate(row, issueID),
     category: "needs_user",
     issue_id: issueID,
     message,
@@ -197,17 +188,6 @@ function issueFindingCategory(row: IssueFindingRow): ProjectFindingCategory {
   });
 }
 
-function issueActionCandidate(
-  row: IssueFindingRow,
-  category: ProjectFindingCategory,
-  retryCandidate = category === "transient"
-): ProjectFindingActionCandidate | undefined {
-  if (category === "verification_needed") return verifierWorkflowCandidate(integerValue(row.id));
-  if (category !== "transient" || !retryCandidate) return undefined;
-  const issueID = integerValue(row.id);
-  return retryFindingCandidate(issueID, redactFindingText(optionalString(row.auto_retry_reason)));
-}
-
 function retryDecision(
   db: RunnerDatabase,
   projectID: string,
@@ -239,12 +219,6 @@ function issueNotification(
   if (category === "needs_user") return { type: "pi.needs_user", message };
   if (category === "blocked") return { type: "pi.project_blocked", message };
   return undefined;
-}
-
-function staleActionCandidate(row: StaleIssueRow, issueID: number): ProjectFindingActionCandidate | undefined {
-  const sessionKey = optionalString(row.session_key);
-  if (sessionKey === "") return undefined;
-  return staleSessionSteerCandidate(issueID, sessionKey);
 }
 
 function isStale(row: StaleIssueRow, cutoff: Date): boolean {

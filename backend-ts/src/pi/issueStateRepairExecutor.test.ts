@@ -25,15 +25,23 @@ describe("Issue state repair executor", () => {
       const commented = insertIssue(db, "in_progress", "Stale");
       const queued = insertIssue(db, "todo", "Queue me");
       const retried = insertIssue(db, "failed", "Retry me", "network error");
+      db.sqlite.run("update issues set auto_retry_next_at=? where id=?", ["2026-01-01T00:00:00Z", retried]);
       const moved = insertIssue(db, "done", "Weak done");
       const running = insertIssue(db, "in_progress", "Other running");
       insertOpenRun(db, running);
 
-      applyIssueStateRepair(db, recommendedRepairPayload(db, commented, { diagnosisCode: "stale_in_progress" }));
-      applyIssueStateRepair(db, recommendedRepairPayload(db, queued, { diagnosisCode: "todo_without_session" }));
-      applyIssueStateRepair(db, recommendedRepairPayload(db, retried, { diagnosisCode: "failed_retry_ready" }));
+      applyIssueStateRepair(db, recommendedRepairPayload(db, commented, {
+        diagnosisCode: "stale_in_progress", operation: "comment"
+      }));
+      applyIssueStateRepair(db, recommendedRepairPayload(db, queued, {
+        diagnosisCode: "todo_without_session", operation: "enqueue"
+      }));
+      applyIssueStateRepair(db, recommendedRepairPayload(db, retried, {
+        diagnosisCode: "failed_retry_ready", operation: "retry"
+      }));
       const result = applyIssueStateRepair(db, recommendedRepairPayload(db, moved, {
-        diagnosisCode: "done_missing_verification_evidence"
+        diagnosisCode: "done_missing_verification_evidence",
+        operation: "patch_status"
       }));
 
       expect(result).toMatchObject({ status: "pending_verification" });
@@ -58,7 +66,8 @@ describe("Issue state repair executor", () => {
     try {
       const issueID = insertIssue(db, "done", "Weak done");
       const payload = recommendedRepairPayload(db, issueID, {
-        diagnosisCode: "done_missing_verification_evidence"
+        diagnosisCode: "done_missing_verification_evidence",
+        operation: "patch_status"
       });
       updateIssue(db, issueID, { status: "triage" });
 
@@ -77,7 +86,8 @@ describe("Issue state repair executor", () => {
     try {
       const issueID = insertIssue(db, "done", "Weak done");
       const payload = recommendedRepairPayload(db, issueID, {
-        diagnosisCode: "done_missing_verification_evidence"
+        diagnosisCode: "done_missing_verification_evidence",
+        operation: "patch_status"
       });
 
       applyIssueStateRepair(db, payload);
@@ -117,7 +127,8 @@ describe("Issue state repair executor", () => {
         [issueID, "issue.verification_report", JSON.stringify({ recommendation: "accept", summary: "tests passed" }), "2026-01-01T00:01:00Z"]
       );
       const payload = recommendedRepairPayload(db, issueID, {
-        diagnosisCode: "pending_verification_has_evidence"
+        diagnosisCode: "pending_verification_has_evidence",
+        operation: "patch_status"
       });
 
       const result = applyIssueStateRepair(db, payload);

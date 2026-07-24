@@ -10,7 +10,7 @@ import {
 } from "../db/repositories/externalEvents.ts";
 import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
-import { getPiAction, listPiActions } from "../db/repositories/pi.ts";
+import { listPiActions } from "../db/repositories/pi.ts";
 import { runManualContextIntake } from "./manualTrigger.ts";
 
 const tempRoots: string[] = [];
@@ -43,7 +43,7 @@ describe("manual context intake trigger", () => {
     }
   });
 
-  test("creates ask_user proposal instead of assuming project when target is unclear", async () => {
+  test("returns context to PI without guessing project, intent, or action", async () => {
     const db = await openFixtureDatabase();
     try {
       event(db, "fixture-im", "m1", "登录页 500 了");
@@ -55,14 +55,14 @@ describe("manual context intake trigger", () => {
         source: "fixture-im",
         user_prompt: "看看刚刚群里的截图和消息，是个 bug，创建 issue"
       });
-      const action = getPiAction(db, result.proposal_actions?.[0]?.id ?? "");
-      const payload = JSON.parse(action?.payload_json || "{}");
-
-      expect(result).toMatchObject({ status: "succeeded" });
-      expect(result.inbox_items?.[0]).toMatchObject({ primary_intent: "other" });
-      expect(payload.action_proposals).toEqual([
-        expect.objectContaining({ requires_approval: false, type: "ask_user" })
-      ]);
+      expect(result).toMatchObject({
+        reason: "manual_context_bundle_ready",
+        status: "succeeded",
+        text: expect.stringContaining("请由 PI")
+      });
+      expect(listIntakeRuns(db)).toEqual([]);
+      expect(listAttentionInboxItems(db)).toEqual([]);
+      expect(listPiActions(db)).toEqual([]);
     } finally {
       db.close();
     }
@@ -100,10 +100,9 @@ describe("manual context intake trigger", () => {
           tool_name: "pull-events"
         })
       });
-      expect(first.inbox_items).toMatchObject([{ primary_intent: "bug_report" }]);
-      expect(listAttentionInboxItems(db, { source: "fixture-im" }))
-        .toMatchObject([{ primary_intent: "bug_report", status: "proposal_created" }]);
-      expect(first.proposal_actions).toMatchObject([{ action_type: "attention_inbox.domain_skill", status: "proposal" }]);
+      expect(listAttentionInboxItems(db, { source: "fixture-im" })).toEqual([]);
+      expect(listIntakeRuns(db)).toEqual([]);
+      expect(listPiActions(db)).toEqual([]);
       expect(listExternalEvents(db, { source: "fixture-im" })).toHaveLength(2);
       expect(second).toMatchObject({ status: "succeeded" });
       expect(manualPipelineCounts(db)).toEqual(firstCounts);

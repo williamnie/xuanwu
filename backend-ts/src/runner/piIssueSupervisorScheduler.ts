@@ -2,8 +2,10 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import {
   createIssueSupervisorEvent,
+  getPiSupervisor,
   listIssueSupervisorEvents
 } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
   buildIssueSupervisorRecoveryContextAsync,
@@ -11,11 +13,12 @@ import {
 } from "../pi/issueSupervisorContext.ts";
 import { supervisorCandidateReady } from "../pi/issueSupervisorSignalCollector.ts";
 import { isTransientRecoveryDiagnosis } from "../pi/recoveryDiagnosis.ts";
-import type { PiSupervisorDecisionRuntimeResult } from "../pi/issueSupervisorDecision.ts";
 import {
-  guardianSignalsFromSupervisorCandidates,
-  writeGuardianSignals
-} from "../pi/guardianSignals.ts";
+  runPiSupervisorDecision,
+  type PiSupervisorDecisionRuntimeResult
+} from "../pi/issueSupervisorDecision.ts";
+import { applyIssueSupervisorDecisionActions } from "../pi/issueSupervisorActions.ts";
+import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
 import { iso } from "../pi/heartbeatOrchestratorSupport.ts";
 import { recordBudgetExhaustedEscalation } from "./piIssueSupervisorBudgetEscalation.ts";
 import {
@@ -69,11 +72,24 @@ export async function runPiIssueSupervisorSchedulerOnce(
         result.skipped += 1;
         continue;
       }
-      recordTarget(input.database, target, now);
-      result.skipped += 1;
+      if (recordTarget(input.database, target, now)) {
+        result.skipped += 1;
+        continue;
+      }
+      const decision = await decideTarget(input, target, now);
+      if (!decision.valid) result.failed += 1;
+      await applyIssueSupervisorDecisionActions({
+        context: target.context,
+        database: input.database,
+        decision: decision.decision,
+        now,
+        providers: input.providers,
+        recordDecision: Boolean(input.runDecision)
+      });
+      result.decisions += 1;
     } catch (error) {
       result.failed += 1;
-      recordFailure(input.database, target, error);
+      recordFailure(input.database, target, error, now);
     } finally {
       activeSupervisorIssues.delete(key);
     }
@@ -159,13 +175,14 @@ function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
     order by i.updated_at asc, i.id asc limit ${boundedLimit(limit)}
   `).all(nowText, recentFailedCutoff).map((row) => row.id);
 }
-function recordTarget(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
+function recordTarget(db: RunnerDatabase, target: SupervisorTarget, now: Date): boolean {
   const exhausted = target.candidates.find((candidate) => candidate.exhausted);
   if (exhausted) {
     recordBudgetExhaustedEscalation(db, { ...target, candidate: exhausted }, now);
-    return;
+    return true;
   }
   recordSignal(db, target, now);
+  return false;
 }
 
 function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): void {
@@ -183,47 +200,38 @@ function recordSignal(db: RunnerDatabase, target: SupervisorTarget, now: Date): 
     retry_after_at: clean(candidate?.wait_until),
     run_id: clean(target.context.latest_run?.id)
   });
-  writeGuardianSignals(db, guardianSignalsFromSupervisorCandidates(
-    target.candidates.map((item) => ({
-      allowed_actions: stringArray(target.context.policy.allowed_actions),
-      budget_remaining: numberValue(target.context.recovery_history.budget_remaining),
-      cooldown_until: cooldownUntil(target.context, now),
-      diagnosis_code: clean(item.diagnosis_code),
-      evidence_refs: item.evidence_refs ?? [],
-      issue_status: clean(target.context.issue.status),
-      issue_updated_at: clean(target.context.issue.updated_at),
-      issue_id: target.issueID,
-      project_id: target.projectID,
-      project_budget_remaining: numberValue(target.context.policy.project_budget_remaining),
-      provider: clean(target.context.session.provider) || clean(target.context.provider_error?.provider),
-      provider_error_category: clean(target.context.provider_error?.category),
-      provider_session_id: clean(target.context.session.provider_session_id),
-      provider_turn_id: clean(target.context.session.provider_turn_id),
-      ready: true,
-      reason: item.reason,
-      run_ended_at: clean(target.context.latest_run?.ended_at),
-      run_id: clean(target.context.latest_run?.id),
-      run_status: clean(target.context.latest_run?.status),
-      session_status: clean(target.context.session.raw_status),
-      session_turn_id: clean(target.context.session.provider_turn_id),
-      session_updated_at: clean(target.context.session.updated_at),
-      stale_gap_seconds: numberValue(target.context.session.stale_gap_seconds),
-      supervisor_mode: clean(target.context.policy.mode),
-      wait_until: clean(item.wait_until),
-      ...retryAfterPayload(item, now)
-    })),
-    { heartbeatID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`, now, projectID: target.projectID }
-  ));
 }
 
-function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown): void {
+async function decideTarget(
+  input: PiIssueSupervisorSchedulerInput,
+  target: SupervisorTarget,
+  now: Date
+): Promise<PiSupervisorDecisionRuntimeResult> {
+  if (input.runDecision) return input.runDecision(target.context);
+  const agent = getPiSupervisor(input.database);
+  if (!agent || agent.enabled !== 1) throw new Error("PI Supervisor Agent is missing or disabled");
+  const project = getProject(input.database, target.projectID);
+  if (!project) throw new Error(`PI Supervisor project is unavailable: ${target.projectID}`);
+  return runPiSupervisorDecision({
+    agent,
+    context: target.context,
+    database: input.database,
+    now,
+    project
+  });
+}
+
+function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown, now: Date): void {
+  const message = `PI Supervisor unavailable for issue #${target.issueID}: ${safeError(error)}`;
   createIssueSupervisorEvent(db, {
+    decision: "needs_user",
     diagnosis_code: primaryDiagnosis(target.context),
-    event_type: "signal_failed",
+    event_type: "decision_failed",
     issue_id: target.issueID,
     payload_json: {
       error: safeError(error),
-      supervisor_agent: { runnable: false, source: "guardian_signal_only" }
+      recovery_message: message,
+      supervisor_agent: { runnable: false, source: "pi_supervisor_runtime" }
     },
     project_id: target.projectID,
     provider: clean(target.context.session.provider) || clean(target.context.provider_error?.provider),
@@ -231,6 +239,21 @@ function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unkn
     provider_session_id: clean(target.context.session.provider_session_id),
     provider_turn_id: clean(target.context.session.provider_turn_id),
     run_id: clean(target.context.latest_run?.id)
+  });
+  ingestPiGuardianEvent(db, {
+    eventType: "guardian.pi_supervisor.unavailable",
+    idempotencyKey: `pi-supervisor-unavailable:${target.projectID}:${target.issueID}:${primaryDiagnosis(target.context)}`,
+    issueID: target.issueID,
+    normalizedPayload: {
+      diagnosis_code: "pi_supervisor_unavailable",
+      message,
+      requires_user: true
+    },
+    projectID: target.projectID,
+    severity: "actionable",
+    source: "pi_supervisor",
+    sourceEventID: `supervisor:${target.projectID}:${target.issueID}:${iso(now)}`,
+    status: "pending"
   });
 }
 function recentDecisionExists(
@@ -284,25 +307,10 @@ function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0;
 }
 
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
-}
-
 function cooldownUntil(context: IssueSupervisorRecoveryContext, now: Date): string {
   const last = Date.parse(clean(context.recovery_history.last_action_at));
   const seconds = numberValue(context.policy.cooldown_seconds);
   if (!Number.isFinite(last) || seconds <= 0) return "";
   const until = new Date(last + seconds * 1_000);
   return until.getTime() > now.getTime() ? iso(until) : "";
-}
-
-function retryAfterPayload(
-  candidate: IssueSupervisorRecoveryContext["candidates"][number],
-  now: Date
-): Record<string, string> {
-  const waitUntil = Date.parse(clean(candidate.wait_until));
-  return clean(candidate.source_event_type) === "issue.retry_after_scheduled" ||
-    (Number.isFinite(waitUntil) && waitUntil <= now.getTime())
-    ? { retry_after_ready: "true" }
-    : {};
 }

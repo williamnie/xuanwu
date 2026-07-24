@@ -50,10 +50,7 @@ describe("PI failed/pending/hold scanner", () => {
       ]);
       expect(findings[0]?.message).toContain("provider failed");
       expect(findings[1]?.message).toContain("waiting for user acceptance");
-      expect(findings[1]?.action_candidate).toMatchObject({
-        action_type: "agent.workflow_request",
-        payload: { role: "verifier", target_issue_id: pending }
-      });
+      expect(findings[1]).not.toHaveProperty("action_candidate");
       expect(findings[2]?.message).toContain("dirty worktree");
       const json = JSON.stringify(findings);
       expect(json).toContain("[redacted]");
@@ -103,7 +100,6 @@ describe("PI failed/pending/hold scanner", () => {
       });
 
       expect(findings).toContainEqual(expect.objectContaining({
-        action_candidate: expect.objectContaining({ action_type: "session.steer_proposal" }),
         category: "needs_user",
         issue_id: stale,
         reason: "stale_issue",
@@ -148,7 +144,7 @@ describe("PI failed/pending/hold scanner", () => {
     }
   });
 
-  test("classifies transient, needs-user, blocked, and verification-needed findings", async () => {
+  test("uses structured retry state instead of wording to classify findings", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -188,12 +184,12 @@ describe("PI failed/pending/hold scanner", () => {
       const categories = new Map(findings.map((finding) => [finding.issue_id, finding.category]));
 
       expect(categories.get(transient)).toBe("transient");
-      expect(categories.get(transientFailed)).toBe("transient");
-      expect(categories.get(needsUser)).toBe("needs_user");
+      expect(categories.get(transientFailed)).toBe("blocked");
+      expect(categories.get(needsUser)).toBe("blocked");
       expect(categories.get(blocked)).toBe("blocked");
       expect(categories.get(pending)).toBe("verification_needed");
       expect(findings.find((finding) => finding.issue_id === needsUser)?.notification).toMatchObject({
-        type: "pi.needs_user"
+        type: "pi.project_blocked"
       });
       expect(findings.find((finding) => finding.issue_id === needsUser)?.message).toContain("approval denied");
     } finally {

@@ -8,10 +8,7 @@ import { createIssue } from "../db/repositories/issueCreate.ts";
 import { approveImReplyDraft, createImReplyDraft } from "../db/repositories/imReplyOutbox.ts";
 import { markSyncOutboxSent } from "../db/repositories/imReplyOutboxDispatch.ts";
 import type { FeishuNormalizedMessageEvent } from "./feishu.ts";
-import {
-  buildFeishuConversationPromptContext,
-  resolveFeishuContinuationTarget
-} from "./feishuConversationContext.ts";
+import { buildFeishuConversationPromptContext } from "./feishuConversationContext.ts";
 
 const tempRoots: string[] = [];
 
@@ -37,7 +34,6 @@ describe("Feishu bounded conversation projection", () => {
 
       expect(context).toContain("inbound");
       expect(context).toContain("outbound issue=#" + issue.id);
-      expect(context).toContain("active_reply_target issue=#" + issue.id + " project=demo");
       expect(context).toContain("之前说的是 #" + issue.id);
       expect(context).not.toContain("message=om_current");
       expect(context).not.toContain("secret-value");
@@ -46,7 +42,7 @@ describe("Feishu bounded conversation projection", () => {
     }
   });
 
-  test("maps only a short continuation to the latest same-chat sent notification", async () => {
+  test("keeps prior notification context without classifying the current message", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo", "Demo");
@@ -54,14 +50,26 @@ describe("Feishu bounded conversation projection", () => {
       saveSentNotification(db, issue.id, "issue #" + issue.id + " 待验收", "2026-07-21T03:00:00.000Z");
       const event = eventFixture({ text: "验收" });
 
-      expect(resolveFeishuContinuationTarget(db, { event, prompt: "验收" })).toMatchObject({
-        issueId: issue.id,
-        projectId: "demo"
-      });
-      expect(resolveFeishuContinuationTarget(db, {
-        event,
-        prompt: "验收另一个项目的任务"
-      })).toBeNull();
+      const context = buildFeishuConversationPromptContext(db, { event });
+      expect(context).toContain(`outbound issue=#${issue.id}`);
+      expect(context).toContain("待验收");
+      expect(context).not.toContain("active_reply_target");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("keeps the previous inbound target visible for PI to interpret a follow-up", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, "demo", "Demo");
+      const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Retry exact work" });
+      saveInbound(db, "om_previous", `需要补充什么上下文？如何重试${issue.id}呢`, "2026-07-21T03:59:00.000Z");
+      const current = eventFixture({ text: "重试吧" });
+
+      const context = buildFeishuConversationPromptContext(db, { event: current });
+      expect(context).toContain(`如何重试${issue.id}呢`);
+      expect(context).not.toContain("active_reply_target");
     } finally {
       db.close();
     }

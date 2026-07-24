@@ -20,19 +20,18 @@ Work/Run/Handoff 状态机或 provider adapter。P06.12 runtime 尚未接管 sta
 
 ## 2. Repair：诊断、预算、恢复和 handoff/replan
 
-Repair 直接复用 `backend-ts/src/pi/recoveryDiagnosis.ts`、`recoveryBudget.ts` 和
-`recoveryActionPlanner.ts`：
+Repair 直接复用 `backend-ts/src/pi/recoveryDiagnosis.ts`、`recoveryBudget.ts`，并消费 PI 已选择的
+`action_candidate`：
 
 1. trusted P04 Evidence 必须证明 deterministic `diagnosis_code`；Agent/LLM prose 不能自行把 permanent failure 改成
    transient。
-2. `PiRecoveryBudgetDecision` 是 recovery budget source of truth。`allow` 时 transient failure 只能产生一个既有
-   `issue.retry | issue.retry_after | session.resume_followup` candidate；不允许跳过恢复直接升级。
+2. `PiRecoveryBudgetDecision` 是 recovery budget source of truth。`allow` 时 PI 可选择
+   `issue.retry | issue.retry_after | session.resume_followup`，但候选必须携带与该动作完全匹配的 gate authorization；确定性代码不从错误文本替 PI 选择动作。
 3. permanent failure（现有 `needs_context | unsafe` 等 deterministic 分类）以及 issue/session/project budget exhaustion
    必须停止自动恢复，产生 `needs_user.escalate` 与 audited `handoff-replan`。
 4. transient recovery 完成必须有独立 action outcome audit 和 fresh、trusted、passed Evidence，且
    `decisive_output.facts.outcome=passed`；诊断 Evidence 不得复用为恢复验证。
-5. action candidate 的 `authorizedActions` 必须包含当前 action；LLM 输出、manifest 文本或 projection 都不能替代
-   Guardian/action gate。
+5. action candidate 的 `authorizedActions` 必须包含 PI 当前选择的 exact action；LLM 输出、manifest 文本或 projection 都不能替代 Guardian/action gate，也不存在“取第一个推荐动作”的 fallback。
 
 `xw.repair-workflow-projection.v1` 仅引用 diagnosis Evidence、budget snapshot、existing recovery candidate、action audit 和
 handoff/replan ref。真正 Attempt、recovery attempt、Work/Run 状态仍写现有 repository；投影不得重置预算或覆盖旧失败。
@@ -89,7 +88,6 @@ bun test src/workflows/repairReview.test.ts \
   src/workflows/registry.test.ts \
   src/pi/recoveryDiagnosis.test.ts \
   src/pi/recoveryBudget.test.ts \
-  src/pi/recoveryActionPlanner.test.ts \
   src/domain/handoff/reviewerLoop.test.ts \
   src/domain/evidence/verifierReview.test.ts
 ```

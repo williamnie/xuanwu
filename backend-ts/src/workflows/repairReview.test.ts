@@ -128,7 +128,7 @@ describe("Repair and Review Workflows", () => {
       allowed_actions: ["needs_user.escalate"],
       diagnosis_code: "provider_timeout",
       provider_session_id: "codex:thread-689"
-    })).toThrow("Repair action session.resume_followup is not authorized by the deterministic gate policy");
+    })).toThrow("PI-selected Repair action session.resume_followup is outside the workflow action scope");
 
     const forged = structuredClone(plan);
     (forged.action_candidate.gate_policy as Record<string, unknown>).authorizedActions = [];
@@ -143,7 +143,7 @@ describe("Repair and Review Workflows", () => {
   test("stops permanent failure and budget exhaustion at audited handoff/replan", () => {
     const permanentEvidence = evidence("repair-permanent-diagnosis", { diagnosis_code: "auth_required" });
     const permanent = planRepairWorkflow({
-      ...repairInput(permanentEvidence, allowBudget()),
+      ...repairInput(permanentEvidence, allowBudget(), "needs_user.escalate"),
       diagnosis_code: "auth_required"
     });
     expect(permanent).toMatchObject({
@@ -161,7 +161,7 @@ describe("Repair and Review Workflows", () => {
 
     const exhaustedEvidence = evidence("repair-budget-diagnosis", { diagnosis_code: "provider_timeout" });
     const exhausted = planRepairWorkflow({
-      ...repairInput(exhaustedEvidence, exhaustedBudget()),
+      ...repairInput(exhaustedEvidence, exhaustedBudget(), "needs_user.escalate"),
       diagnosis_code: "provider_timeout"
     });
     expect(exhausted).toMatchObject({
@@ -252,8 +252,24 @@ function workflowRegistry() {
   });
 }
 
-function repairInput(diagnosisEvidence: EvidenceRecord, budget: PiRecoveryBudgetDecision) {
+function repairInput(
+  diagnosisEvidence: EvidenceRecord,
+  budget: PiRecoveryBudgetDecision,
+  actionType: typeof REPAIR_RECOVERY_ACTIONS[number] = "session.resume_followup"
+) {
   return {
+    action_candidate: {
+      action_type: actionType,
+      gate_policy: {
+        authorizedActions: [{
+          action_type: actionType,
+          issue_id: 689,
+          project_id: "codex-issue-runner"
+        }]
+      },
+      payload: { issue_id: 689 },
+      rationale: "PI selected this concrete Repair action"
+    },
     allowed_actions: [...REPAIR_RECOVERY_ACTIONS],
     budget,
     diagnosis_evidence: [diagnosisEvidence],

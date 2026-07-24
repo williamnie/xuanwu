@@ -19,7 +19,7 @@
 4. Runner 当前页面绑定的 `pi_conversations.project_id`；
 5. 同一个 Runner conversation 最近的 authoritative `pi_actions` 关系。
 
-输出固定包含 `resolved | ambiguous | missing`、排序后的项目候选、逐候选分数、来源 ref、关联 Work、输入摘要、跨渠道继承策略和必要时的一次澄清问题。Supervisor Prompt 只消费这份紧凑投影；LLM 不负责重算候选、选择歧义 winner 或持久化项目。
+输出固定包含 `resolved | ambiguous | missing`、排序后的项目候选、逐候选分数、来源 ref、关联 Work、输入摘要、会话继承策略和必要时的一次澄清问题。它只解析实体与已有绑定，不判断用户要 answer、retry、review 还是执行。Supervisor Prompt 消费这份紧凑投影和完整会话；LLM 不负责伪造实体、选择歧义 winner 或持久化项目。
 
 ## 2. Candidate scoring 与冲突
 
@@ -39,8 +39,8 @@
 
 - one-shot target 只作用于当前 turn 的 `toolProject`、授权 scope 和 Prompt；不更新 `pi_conversations.project_id`，也不写新的 context state。
 - Runner 页面上的 conversation project 可作为当前页上下文，后续不需要用户每次 `@项目`。
-- `runner_chat` / `runner_review` 才允许读取当前页和同 conversation action history。
-- Feishu 等跨渠道 source 不继承 `pi_conversations.project_id` 或其他渠道历史；每条消息只能使用本 turn 的显式 Work/项目或 one-shot source target。
+- `runner_chat` / `runner_review` / `feishu_runner_chat` 都可读取同一个稳定 conversation 的项目绑定与 action history；transport 不应把“重试吧”“retry”等后续回复截断成新的无上下文请求。
+- 不同 conversation 之间仍不继承项目或 action history。Feishu chat/user mapping 只是当前消息的 one-shot entity target，不执行自然语言命令。
 - Feishu chat/user mapping 只在当前消息的 chat/sender 精确匹配时形成 `mapping_default` one-shot target；不同 chat/sender 不命中，多个 mapping 冲突返回歧义。旧 `activeProject` 不恢复为隐式 IM context。
 
 这使“来源映射可用”和“跨渠道不错误继承项目”同时成立。项目选择卡片也只恢复原始 pending prompt 一次，不把选择保存成后续默认项目。
@@ -51,11 +51,11 @@
 
 - `event_type=supervisor_context_resolved`；
 - `actor=supervisor_context_resolver`；
-- `action_id=context-resolution:<turn-id>`，与同 turn intent route 对齐；
+- `action_id=context-resolution:<turn-id>`，与同 turn、工具调用和审计 correlation 对齐；
 - `decision=resolved|ambiguous|missing`；
 - payload 保存 schema resolution、candidate scores、source refs、16 字符输入 digest 和字符数，不保存 prompt 原文。
 
-`resolved` 只收窄 `toolProject` 与 project authorization scope，不授予写权限。实际读写仍经过 P06.03 intent route、tool registry、Action Gate、approval 和 P02.06 Work/Issue authority。
+`resolved` 只收窄 `toolProject` 与 project authorization scope，不授予写权限。实际读写仍经过 tool registry、精确参数/状态前置条件、Action Gate、approval 和 P02.06 Work/Issue authority。
 
 `ambiguous` 必须把 runtime authorization 缩到 read-only，并要求一次项目澄清；即使 LLM 猜测项目，也不能在歧义 turn 创建或控制 Work。`missing` 不等于所有意图都需项目：问候、能力问答和全局 memory 等仍按 intent/tool gate 判断，项目型请求由 Supervisor 追问一次。
 
@@ -77,4 +77,4 @@ bun test src/http/piConversationMessagesApi.test.ts
 bun test src/integrations/feishuProjectContext.test.ts src/integrations/feishuAgentBridge.test.ts
 ```
 
-Fixtures 必须覆盖：多项目文本、多 Work 跨项目冲突、显式 Work 覆盖当前页、one-shot 后下一 turn 不继承、同 Runner conversation history、Feishu 不继承本地/旧 conversation project、source mapping 精确匹配与冲突，以及 audit/prompt 不保存原始输入。
+Fixtures 必须覆盖：多项目文本、多 Work 跨项目冲突、显式 Work 覆盖当前页、one-shot 不重绑 conversation、同一稳定 conversation 的后续短回复与 action history、不同 conversation 隔离、source mapping 精确匹配与冲突，以及 audit/prompt 不保存原始输入。

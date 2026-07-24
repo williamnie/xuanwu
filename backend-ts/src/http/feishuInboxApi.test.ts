@@ -31,9 +31,9 @@ describe("Feishu external event inbox", () => {
       expect(inboxBody).toMatchObject({ ok: true, normalized_summary: { project_id: "" } });
 
       const inboxEvent = await getExternalEvent(handle, eventID);
-      expect(inboxEvent).toMatchObject({ project_id: "", source: "feishu", status: "needs_project" });
+      expect(inboxEvent).toMatchObject({ project_id: "", source: "feishu", status: "inbox_only" });
       expect(inboxEvent.summary).toMatchObject({
-        attention_decision: { decision: "ask_clarification", should_create_issue_proposal: false }
+        attention_decision: { decision: "inbox_only", should_create_issue_proposal: false }
       });
 
       const proposal = await createIssueFromExternalEvent(handle, eventID, { project_id: "demo" });
@@ -92,14 +92,14 @@ describe("Feishu external event inbox", () => {
         normalized_message: { text: "@PI implement it" },
         project_id: "",
         source: "feishu",
-        status: "needs_project"
+        status: "inbox_only"
       });
       expect(events[0].raw_payload_ref).toMatch(/^sha256:/);
       expect(events[0].summary).toMatchObject({
         attention_decision: {
-          decision: "ask_clarification",
+          decision: "inbox_only",
           project_id: "",
-          reason: "needs_project"
+          reason: "trusted_message_forwarded_to_pi"
         },
         chat_id: "oc_group",
         message_id: "om_message_1",
@@ -122,12 +122,12 @@ describe("Feishu external event inbox", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         project_id: "",
-        status: "needs_project",
+        status: "inbox_only",
         summary: {
           attention_decision: {
-            decision: "ask_clarification",
-            needs_project: true,
-            reason: "needs_project"
+            decision: "inbox_only",
+            needs_project: false,
+            reason: "trusted_message_forwarded_to_pi"
           }
         }
       });
@@ -150,7 +150,7 @@ describe("Feishu external event inbox", () => {
         summary: {
           attention_decision: {
             decision: "ignore",
-            reason: "no_attention_signal",
+            reason: "no_trusted_attention",
             should_create_issue_proposal: false
           }
         }

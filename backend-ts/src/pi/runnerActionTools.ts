@@ -73,7 +73,7 @@ export function createPiRunnerActionTools(actions: PiRunnerActionLayer): ToolDef
 function manualContextTools(actions: PiRunnerActionLayer): ToolDefinition[] {
   return [
     actionTool("manual_context_intake", "Manual Context Intake",
-      "Fetch recent source context for a user-requested manual trigger, build a context bundle, run intake, and create proposal-only domain output.",
+      "Fetch recent source context and build a bounded context bundle. This tool does not classify intent or create proposals; PI must inspect the returned bundle and choose any follow-up tool.",
       Type.Object({
         attachment_kinds: Type.Optional(Type.Array(requiredText)),
         cursor: optionalString,
@@ -181,7 +181,7 @@ function issueActionTools(actions: PiRunnerActionLayer): ToolDefinition[] {
       "Return compact issue counts by status. Use this for questions like how many issues are unfinished.",
       Type.Object({ project_id: optionalString, status: optionalString }, objectOptions), actions.issueStatusSummary),
     actionTool("issue_execution_status", "Issue Execution Status",
-      "Return compact run/progress status for one issue without full description or raw logs.",
+      "Return compact run/progress and deterministic completion-readiness status for one issue without raw logs. Check completion.retry_recommended before proposing retry.",
       Type.Object({ id: positiveID }, objectOptions), actions.issueExecutionStatus),
     actionTool("issue_read", "Issue Read", "Read one runner issue through the action layer.",
       Type.Object({ id: positiveID }, objectOptions), actions.readIssue),
@@ -282,9 +282,15 @@ function issueStateRepairTool(actions: PiRunnerActionLayer): ToolDefinition {
   return actionTool("issue_state_repair_proposal", "Issue State Repair Proposal",
     "Create a deterministic issue state repair proposal from issue_state_diagnose output; delegated Runner issue-manager mode can auto-execute authorized repairs.",
     Type.Object({
-      diagnosis_code: optionalString,
+      diagnosis_code: requiredText,
       issue_id: positiveID,
-      operation: optionalString,
+      operation: Type.Union([
+        Type.Literal("comment"),
+        Type.Literal("enqueue"),
+        Type.Literal("move_status"),
+        Type.Literal("patch_status"),
+        Type.Literal("retry")
+      ]),
       rationale: optionalString
     }, objectOptions), actions.createIssueStateRepairProposal);
 }

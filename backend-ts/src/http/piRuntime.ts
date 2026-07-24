@@ -13,8 +13,11 @@ import { loadSmokeRuntime, resolveDefaultRepoRoot, type SmokeRuntime } from "../
 import { installPiSdkToolAudit } from "./piSdkToolAudit.ts";
 import { createPiRuntimeResourceLoader } from "./piRuntimeResources.ts";
 import { buildPiRuntimeSystemPrompt } from "./piRuntimePrompt.ts";
-import { createPiRuntimeToolKit, recordPiRuntimeToolRegistryAudit } from "../pi/piRuntimeTools.ts";
-import type { SupervisorIntentRoute } from "../pi/supervisorIntentRouter.ts";
+import {
+  createPiRuntimeToolKit,
+  recordPiRuntimeToolRegistryAudit,
+  unavailablePiRuntimeToolRegistryAudit
+} from "../pi/piRuntimeTools.ts";
 import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "../pi/supervisorControlContracts.ts";
@@ -40,7 +43,6 @@ export type RuntimeSessionInput = {
   source?: string;
   sourceTurn?: { id?: string; source?: string; userPrompt?: string };
   supervisorContext?: SupervisorContextResolution;
-  supervisorIntentRoute?: SupervisorIntentRoute;
   toolProject?: Project;
 };
 
@@ -52,6 +54,7 @@ export const PI_RUNNER_CHAT_ACTIONS = [
   "issue.state_repair",
   "issue_completion_watch.create",
   "issue_completion_watch.cancel",
+  "notification.preference.update",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 
@@ -62,6 +65,7 @@ export const PI_RUNNER_CHAT_MUTATION_ACTIONS = [
   "issue.state_repair",
   "issue_completion_watch.create",
   "issue_completion_watch.cancel",
+  "notification.preference.update",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ] as const;
 
@@ -126,14 +130,22 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
     source: input.source,
     sourceTurn: input.sourceTurn
   };
-  const runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext);
-  recordPiRuntimeToolRegistryAudit(db, {
+  const toolAuditInput = {
     conversationID: input.conversationID,
     delegationID: input.delegationID,
     heartbeatID: input.heartbeatID,
     issueID: input.issueID,
     projectID: toolProject?.id ?? input.project?.id
-  }, runtimeTools.audit);
+  };
+  let runtimeTools: ReturnType<typeof createPiRuntimeToolKit>;
+  try {
+    runtimeTools = createPiRuntimeToolKit(db, toolProject, toolContext);
+    recordPiRuntimeToolRegistryAudit(db, toolAuditInput, runtimeTools.audit);
+  } catch (error) {
+    recordPiRuntimeToolRegistryAudit(db, toolAuditInput, unavailablePiRuntimeToolRegistryAudit(error));
+    cleanupRuntimeProvider();
+    throw new Error(`PI runtime tool registry unavailable: ${runtimeError(error)}`, { cause: error });
+  }
   try {
     const resourceLoader = await createPiRuntimeResourceLoader(sdk, db, input, {
       agentDir: paths.agentDir,
@@ -164,8 +176,7 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
       issueID: input.issueID,
       projectID: toolProject?.id ?? input.project?.id,
       readOnlyToolNames: runtimeTools.readOnlyToolNames,
-      source: input.source,
-      supervisorIntentRoute: input.supervisorIntentRoute
+      source: input.source
     });
     if (input.agent.name !== "") session.setSessionName(input.agent.name);
     return { session, dispose: () => disposePiRuntimeSession(session, cleanupRuntimeProvider, cleanupSdkAudit) };
@@ -275,9 +286,13 @@ function noopRuntimeCleanup(): void {}
 type PiModelRegistry = { find(provider: string, modelID: string): Model<any> | undefined };
 
 function resolvePiModel(modelRegistry: PiModelRegistry, agent: PiAgent) {
-  if (agent.model_provider === "" || agent.model_id === "") return undefined;
+  if (agent.model_provider === "" || agent.model_id === "") {
+    throw new Error(`PI agent ${agent.id} has no configured model provider/model`);
+  }
   const model = modelRegistry.find(agent.model_provider, agent.model_id);
-  if (!model) return undefined;
+  if (!model) {
+    throw new Error(`PI agent ${agent.id} model is unavailable: ${agent.model_provider}/${agent.model_id}`);
+  }
   return withBuiltInModelMetadata(model, agent);
 }
 
@@ -326,4 +341,8 @@ function isThinkingLevel(value: string): value is ThinkingLevel {
 
 function isFileExistsError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
+}
+
+function runtimeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

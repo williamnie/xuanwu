@@ -3,14 +3,7 @@
     {
       "golden": {
         "max_estimated_cost_usd": 0.01,
-        "max_total_tokens": 600,
-        "route": {
-          "decision": "answer",
-          "intents": [
-            "answer"
-          ],
-          "primary_intent": "answer"
-        }
+        "max_total_tokens": 600
       },
       "id": "intent-answer",
       "input": {
@@ -39,7 +32,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
         "token_cost"
       ],
       "tags": [
@@ -51,22 +43,6 @@
       "golden": {
         "max_estimated_cost_usd": 0.01,
         "max_total_tokens": 600,
-        "route": {
-          "decision": "read_only",
-          "intents": [
-            "investigate",
-            "query"
-          ],
-          "primary_intent": "investigate"
-        },
-        "plan": {
-          "mode": "read_only",
-          "status": "ready",
-          "work_count": 0,
-          "workflow_purposes": [
-            "investigate"
-          ]
-        },
         "selected_tools": [
           "work_read",
           "run_read",
@@ -108,8 +84,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
-        "work_plan",
         "tool_selection",
         "token_cost"
       ],
@@ -123,21 +97,6 @@
       "golden": {
         "max_estimated_cost_usd": 0.01,
         "max_total_tokens": 600,
-        "route": {
-          "decision": "controlled_action",
-          "intents": [
-            "execute"
-          ],
-          "primary_intent": "execute"
-        },
-        "plan": {
-          "mode": "work_plan",
-          "status": "ready",
-          "work_count": 1,
-          "workflow_purposes": [
-            "implement"
-          ]
-        },
         "selected_tools": [
           "work_read",
           "work_update",
@@ -179,8 +138,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
-        "work_plan",
         "tool_selection",
         "token_cost"
       ],
@@ -194,23 +151,6 @@
       "golden": {
         "max_estimated_cost_usd": 0.01,
         "max_total_tokens": 600,
-        "route": {
-          "decision": "controlled_action",
-          "intents": [
-            "execute",
-            "release"
-          ],
-          "primary_intent": "execute"
-        },
-        "plan": {
-          "mode": "work_plan",
-          "status": "ready",
-          "work_count": 3,
-          "workflow_purposes": [
-            "implement",
-            "release"
-          ]
-        },
         "selected_tools": [
           "work_read",
           "evidence_list",
@@ -252,8 +192,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
-        "work_plan",
         "tool_selection",
         "token_cost"
       ],
@@ -267,13 +205,6 @@
       "golden": {
         "max_estimated_cost_usd": 0.01,
         "max_total_tokens": 600,
-        "route": {
-          "decision": "controlled_action",
-          "intents": [
-            "work_control"
-          ],
-          "primary_intent": "work_control"
-        },
         "selected_tools": [
           "work_read",
           "run_read",
@@ -315,7 +246,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
         "tool_selection",
         "token_cost"
       ],
@@ -328,21 +258,6 @@
       "golden": {
         "max_estimated_cost_usd": 0.01,
         "max_total_tokens": 600,
-        "route": {
-          "decision": "controlled_action",
-          "intents": [
-            "automation"
-          ],
-          "primary_intent": "automation"
-        },
-        "plan": {
-          "mode": "work_plan",
-          "status": "ready",
-          "work_count": 1,
-          "workflow_purposes": [
-            "implement"
-          ]
-        },
         "selected_tools": [
           "run_list",
           "work_create"
@@ -381,8 +296,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
-        "work_plan",
         "tool_selection",
         "token_cost"
       ],
@@ -395,14 +308,7 @@
     {
       "golden": {
         "max_estimated_cost_usd": 0.01,
-        "max_total_tokens": 600,
-        "route": {
-          "decision": "controlled_action",
-          "intents": [
-            "approval"
-          ],
-          "primary_intent": "approval"
-        }
+        "max_total_tokens": 600
       },
       "id": "intent-approval",
       "input": {
@@ -431,7 +337,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
         "token_cost"
       ],
       "tags": [
@@ -443,13 +348,6 @@
       "golden": {
         "max_estimated_cost_usd": 0.01,
         "max_total_tokens": 600,
-        "route": {
-          "decision": "read_only",
-          "intents": [
-            "query"
-          ],
-          "primary_intent": "query"
-        },
         "selected_tools": [
           "work_list"
         ]
@@ -485,7 +383,6 @@
         }
       },
       "required_scorers": [
-        "intent_route",
         "tool_selection",
         "token_cost"
       ],

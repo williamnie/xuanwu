@@ -133,7 +133,10 @@ describe("native Automation scheduler composition", () => {
       }).items[0]?.evidence.decisive_output.facts.execution_context_json));
       expect(context).toMatchObject({
         budget: { consumed: 0, limit: 5 },
-        items: [{ kind: "supervisor_commitment" }],
+        items: [
+          { kind: "issue_signal", payload: { status: "in_progress" } },
+          { kind: "supervisor_commitment" }
+        ],
         schema_version: "xw.standing-order-context.v1",
         scope: { kind: "project", project_id: "demo" }
       });
@@ -209,7 +212,7 @@ describe("native Automation scheduler composition", () => {
       expect(db.sqlite.query<{ detail: string; event_type: string }, [string]>(`
         select event_type, detail from automation_run_events where run_id=? order by rowid desc limit 1
       `).get(run.run_id)).toMatchObject({
-        detail: "standing order no-op: no changed heartbeat action or active Supervisor commitment",
+        detail: "standing order no-op: no changed issue signal or active Supervisor commitment",
         event_type: "automation.run_skipped.v1"
       });
     } finally {

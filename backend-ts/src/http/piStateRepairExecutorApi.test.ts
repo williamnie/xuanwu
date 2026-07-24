@@ -30,7 +30,8 @@ describe("PI state repair executor API", () => {
         id: "repair-move",
         issue_id: issueID,
         payload_json: JSON.stringify(recommendedRepairPayload(db, issueID, {
-          diagnosisCode: "done_missing_verification_evidence"
+          diagnosisCode: "done_missing_verification_evidence",
+          operation: "patch_status"
         })),
         project_id: "demo",
         status: "approved"

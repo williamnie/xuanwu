@@ -70,11 +70,7 @@ describe("PI issue supervisor budget exhausted escalation", () => {
 
       runGuardianDecisionOrchestratorOnce(db, { now: NOW });
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-10T08:00:31Z") });
-      expect(listPiActions(db, { issueId: 505 })[0]).toMatchObject({
-        action_type: "needs_user.escalate",
-        gate_decision: "execute",
-        status: "approved"
-      });
+      expect(listPiActions(db, { issueId: 505 })).toEqual([]);
       expect(listPiRecoveryAttempts(db, { issueId: 505 })).toHaveLength(2);
 
       const second = await runPiIssueSupervisorSchedulerOnce({

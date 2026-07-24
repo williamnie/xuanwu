@@ -115,7 +115,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
     }
   });
 
-  test("uses one-shot source targets for one turn without rebinding later cross-channel turns", async () => {
+  test("uses one-shot source targets and keeps the same IM conversation context available to PI", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo", "Demo");
@@ -137,7 +137,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
       expect(selected).toMatchObject({
         status: "resolved",
         target: { project_id: "demo" },
-        provenance: { context_inheritance_allowed: false, source: "feishu_runner_chat" }
+        provenance: { context_inheritance_allowed: true, source: "feishu_runner_chat" }
       });
       expect(selected.candidates[0]?.sources).toContainEqual({
         kind: "one_shot_target",
@@ -145,10 +145,10 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         score: 96
       });
       expect(later).toMatchObject({
-        reason: "no deterministic project or Work context",
-        status: "missing",
-        target: { project_id: "" },
-        provenance: { context_inheritance_allowed: false }
+        reason: "highest deterministic context score",
+        status: "resolved",
+        target: { project_id: "demo" },
+        provenance: { context_inheritance_allowed: true }
       });
     } finally {
       db.close();
@@ -189,7 +189,7 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
     }
   });
 
-  test("uses the latest same-channel conversation action as explainable Work history", async () => {
+  test("uses the latest stable-conversation action as explainable Work history across transports", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo", "Demo");
@@ -228,7 +228,15 @@ describe("Xuanwu Supervisor project, Work and conversation context resolver", ()
         ref: "pi_actions:history-action",
         score: 55
       }]);
-      expect(crossChannel.status).toBe("missing");
+      expect(crossChannel).toMatchObject({
+        reason: "highest deterministic context score",
+        status: "resolved",
+        target: {
+          issue_ids: [issue.id],
+          project_id: "demo",
+          work_ids: [`xw:work:issues:${issue.id}`]
+        }
+      });
     } finally {
       db.close();
     }

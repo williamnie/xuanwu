@@ -34,6 +34,7 @@ const READ_TOOL_NAMES = new Set<string>([
   "mcp_resource_list",
   "mcp_resource_read",
   "memory_search",
+  "notification_preference_read",
   ...SUPERVISOR_CONTROL_READ_TOOL_NAMES
 ]);
 const DANGEROUS_TOOL_NAMES = new Set<string>(SUPERVISOR_CONTROL_DANGEROUS_TOOL_NAMES);

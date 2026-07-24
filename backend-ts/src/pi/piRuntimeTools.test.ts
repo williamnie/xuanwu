@@ -56,20 +56,11 @@ describe("PI runtime tool registry adapter", () => {
     }
   });
 
-  test("falls back to legacy hardcoded tools when registry loading fails", async () => {
+  test("fails visibly instead of installing hardcoded tools when registry loading fails", async () => {
     const db = await openFixture();
     db.close();
 
-    const kit = createPiRuntimeToolKit(db);
-
-    expect(kit.source).toBe("fallback");
-    expect(kit.tools).toEqual([...PI_ALLOWED_TOOLS]);
-    expect(kit.customTools.map((tool) => tool.name).sort())
-      .toEqual(createPiProjectTools(db).map((tool) => tool.name).sort());
-    expect(kit.audit.registry_error).toEqual(expect.any(String));
-    expect(kit.audit.provider_ids).toEqual(["hardcoded-pi-runtime"]);
-    expect(kit.readOnlyToolNames).toContain("issue_list");
-    expect(kit.readOnlyToolNames).not.toContain("issue_create_proposal");
+    expect(() => createPiRuntimeToolKit(db)).toThrow();
   });
 });
 

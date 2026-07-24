@@ -294,14 +294,14 @@ node --test frontend/src/pages/sessions/projectOrder.test.js frontend/src/pages/
 
 ### 自动化验收步骤
 
-1. 发送合法 `/issue`/approval event，断言身份、project mapping、proposal/gate/audit 和本地 Work 关联。
+1. 发送合法自然语言请求/approval event，断言原始请求进入 PI、身份、project mapping、exact tool gate/audit 和本地 Work 关联。
 2. 原样重放 event，断言 Work、provider resolve 和 reply 各最多一次。
 3. 注入无效身份、歧义 mapping 与扩大 approval scope，断言零副作用和明确 Attention。
 
 当前可执行基线：
 
 ```bash
-bun test backend-ts/src/integrations/feishuAgentBridgeIssueCommand.test.ts backend-ts/src/integrations/feishuApprovalRequests.test.ts backend-ts/src/http/piActionsAuditApi.test.ts
+bun test backend-ts/src/integrations/feishuAgentBridgePiFirst.test.ts backend-ts/src/integrations/feishuApprovalRequests.test.ts backend-ts/src/http/piActionsAuditApi.test.ts
 node --test frontend/src/pages/command-center/attentionModel.test.js
 ```
 

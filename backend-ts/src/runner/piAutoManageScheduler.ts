@@ -36,7 +36,10 @@ import {
   queueGuardianOperationsDailyReports,
   type GuardianOperationsDailyReportResult
 } from "../pi/guardianOperationsDailyReport.ts";
-import { runPiIssueSupervisorSchedulerOnce } from "./piIssueSupervisorScheduler.ts";
+import {
+  runPiIssueSupervisorSchedulerOnce,
+  type PiIssueSupervisorSchedulerInput
+} from "./piIssueSupervisorScheduler.ts";
 import {
   runDueAutomations,
   type AutomationExecutor,
@@ -88,6 +91,7 @@ export type PiAutoManageCycleInput = {
   runAutomationCore?: AutomationExecutor;
   runProjectCycle: PiAutoManageProjectCycle;
   runSupervisor?: boolean;
+  runSupervisorDecision?: PiIssueSupervisorSchedulerInput["runDecision"];
   watchdogNow?: Date | string;
   watchdogStaleAfterMs?: number;
 };
@@ -178,7 +182,8 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     : await runPiIssueSupervisorSchedulerOnce({
       database: input.database,
       now: optionalDate(input.watchdogNow),
-      providers: input.providers
+      providers: input.providers,
+      runDecision: input.runSupervisorDecision
     });
   // W3 target-only cutover: compatibility result fields stay stable for one
   // release, but legacy Cron/PI/delegation schedulers are no longer invoked.

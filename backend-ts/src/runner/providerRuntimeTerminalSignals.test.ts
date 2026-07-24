@@ -51,11 +51,7 @@ describe("provider runtime terminal PI signals", () => {
       const now = new Date("2026-06-22T15:40:40Z");
       runGuardianDecisionOrchestratorOnce(db, { now });
       runGuardianDecisionOrchestratorOnce(db, { now: new Date(now.getTime() + 31_000) });
-      expect(listPiActions(db, { issueId: 527 })[0]).toMatchObject({
-        action_type: "session.resume_followup",
-        gate_decision: "execute",
-        status: "approved"
-      });
+      expect(listPiActions(db, { issueId: 527 })).toEqual([]);
     } finally {
       db.close();
     }

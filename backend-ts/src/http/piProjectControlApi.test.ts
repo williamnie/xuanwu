@@ -83,7 +83,7 @@ describe("Bun project PI control API", () => {
     }
   });
 
-  test("run-once emits needs-user notifications and returns summary/action candidates", async () => {
+  test("run-once returns observations without manufacturing notifications or action candidates", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-summary-api", provider: "pi-control-summary" });
     const bus = new EventBus();
@@ -105,24 +105,17 @@ describe("Bun project PI control API", () => {
         status: "todo",
         title: "Retry candidate"
       });
-      const events = bus.subscribe();
       const router = createDefaultRouter({ bus, database });
 
       const response = await post(router, "/api/projects/demo/pi/run-once");
-      const event = await nextEvent(events, "pi.needs_user");
-      events.close();
       const body = await response.json() as Record<string, unknown>;
       const notifications = body.notifications as Array<Record<string, unknown>>;
-      const actionCandidates = body.action_candidates as Array<Record<string, unknown>>;
       const json = JSON.stringify(body);
 
       expect(response.status).toBe(201);
       expect(String(body.status_summary)).toContain("findings=2");
-      expect(notifications).toHaveLength(1);
-      expect(notifications[0]).toMatchObject({ event: "pi.needs_user", issue_id: 1 });
-      expect(event).toMatchObject({ type: "pi.needs_user", issueId: 1, projectId: "demo" });
-      expect(actionCandidates).toContainEqual(expect.objectContaining({ action_type: "issue.retry_proposal", payload: { issue_id: 2 } }));
-      expect(actionCandidates).toContainEqual(expect.objectContaining({ action_type: "issue.state_repair", issue_id: 1 }));
+      expect(notifications).toEqual([]);
+      expect(body).not.toHaveProperty("action_candidates");
       expect(json).toContain("[redacted]");
       expect(json).toContain("[redacted-path]");
       expect(json).not.toContain("fixture-secret");

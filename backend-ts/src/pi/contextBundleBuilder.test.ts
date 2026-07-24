@@ -81,7 +81,7 @@ describe("context bundle builder", () => {
     }
   });
 
-  test("maps manual recent screenshot request to source query bundle request", () => {
+  test("does not infer source-query filters from natural-language wording", () => {
     const request = buildManualContextBundleRequest("看刚刚群里的截图和消息", {
       now: new Date("2026-07-06T01:10:00Z"),
       source: "fixture-im"
@@ -89,11 +89,9 @@ describe("context bundle builder", () => {
 
     expect(request).toEqual({
       created_by: "user",
-      reason: "manual_recent_attachment_context",
+      reason: "manual_recent_context",
       source: "fixture-im",
       source_query: {
-        attachment_kinds: ["image"],
-        channel_hint: "group",
         include_messages: true,
         limit: 50,
         since: "2026-07-06T00:55:00.000Z"

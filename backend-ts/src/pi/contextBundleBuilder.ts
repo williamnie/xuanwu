@@ -127,7 +127,7 @@ function evidenceContext(
 }
 
 function manualSourceQuery(
-  command: string,
+  _command: string,
   now: Date,
   lookbackMinutes: number,
   options: ManualContextBundleRequestOptions
@@ -137,18 +137,14 @@ function manualSourceQuery(
     limit: positiveInteger(options.limit, DEFAULT_MANUAL_LIMIT),
     since: new Date(now.getTime() - lookbackMinutes * 60 * 1000).toISOString()
   };
-  addManualHints(query, command, options);
+  addManualHints(query, options);
   return query;
 }
 
 function addManualHints(
   query: ContextBundleSourceQuery,
-  command: string,
   options: ManualContextBundleRequestOptions
 ): void {
-  const text = command.trim();
-  if (/群|group/i.test(text)) query.channel_hint = "group";
-  if (/截图|图片|图像|image|screenshot/i.test(text)) query.attachment_kinds = ["image"];
   const threadKeyValue = cleanString(options.threadKey);
   if (threadKeyValue !== "") query.thread_key = threadKeyValue;
 }

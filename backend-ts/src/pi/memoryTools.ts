@@ -31,6 +31,7 @@ const memorySearchParams = Type.Object({
 }, objectOptions);
 
 const memoryWriteCandidateParams = Type.Object({
+  activate: Type.Optional(Type.Boolean()),
   confidence: optionalString,
   content: requiredText,
   kind: requiredText,
@@ -49,7 +50,7 @@ export function createPiMemoryTools(db: RunnerDatabase, context: MemoryContext =
         execute: () => searchMemory(db, context, params)
       })),
     memoryTool("memory_write_candidate", "Memory Write Candidate",
-      "Write a Supervisor memory candidate; explicit low-risk user preferences from normal chat may be enabled immediately, while other observations stay disabled for review.",
+      "Write structured Supervisor memory. Entries stay disabled candidates unless PI explicitly requests activate=true with user_authorized=true for a low-risk preference in direct chat; content wording is never regex-classified.",
       memoryWriteCandidateParams, (params) => executeSafePiAction(db, { ...context, source: context.source || "pi_memory_tool" }, {
         actionType: "memory.write_candidate",
         payload: params,
@@ -79,7 +80,7 @@ function writeMemoryCandidate(
   const rejected = memoryRejectedResult(input.content);
   if (rejected) return rejected;
   const scope = memoryWriteScope(context, input);
-  const disabled = autoEnableExplicitUserPreference(context, input, scope) ? 0 : 1;
+  const disabled = activateAuthorizedPreference(context, input, scope) ? 0 : 1;
   const item = createPiMemoryItem(db, {
     id: crypto.randomUUID(),
     scope,
@@ -98,13 +99,10 @@ function writeMemoryCandidate(
 function memoryWriteScope(context: MemoryContext, input: Static<typeof memoryWriteCandidateParams>): string {
   const requested = cleanString(input.scope);
   if (requested !== "") return requested;
-  const content = cleanString(input.content);
-  if (normalChatSource(context.source) && lowRiskPreferenceKind(input.kind) &&
-    explicitNamingPreference(content) && !unsafeAutoEnableContent(content)) return "global";
   return "project";
 }
 
-function autoEnableExplicitUserPreference(
+function activateAuthorizedPreference(
   context: MemoryContext,
   input: Static<typeof memoryWriteCandidateParams>,
   scope: string
@@ -113,14 +111,7 @@ function autoEnableExplicitUserPreference(
   if (!normalChatSource(context.source)) return false;
   if (!["global", "conversation"].includes(scope)) return false;
   if (!lowRiskPreferenceKind(input.kind)) return false;
-  if (!explicitAuthorization(input)) return false;
-  const content = cleanString(input.content);
-  return explicitNamingPreference(content) && !unsafeAutoEnableContent(content);
-}
-
-function explicitAuthorization(input: Static<typeof memoryWriteCandidateParams>): boolean {
-  const confidence = cleanString(input.confidence).toLowerCase();
-  return input.user_authorized === true || confidence === "" || confidence === "medium" || confidence === "high";
+  return input.activate === true && input.user_authorized === true;
 }
 
 function normalChatSource(source: unknown): boolean {
@@ -130,35 +121,6 @@ function normalChatSource(source: unknown): boolean {
 
 function lowRiskPreferenceKind(kind: string): boolean {
   return ["preference", "user_preference", "personal_preference"].includes(cleanString(kind).toLowerCase());
-}
-
-function explicitNamingPreference(content: string): boolean {
-  const text = content.toLowerCase();
-  return /把我叫|叫我|叫他|叫她|称呼我|称呼用户为|称呼助手为|请叫我|以后叫我|你叫|助手叫|助理叫|你的名字是|call me|call the user|address me as|refer to me as|assistant name|assistant should be called|your name is/.test(text);
-}
-
-function projectOrPolicyLike(content: string): boolean {
-  const text = content.toLowerCase();
-  return /项目|团队|策略|规范|工作流|仓库|提交|部署|审批|授权|project|team|policy|workflow|repo|repository|commit|deploy|approval/.test(text);
-}
-
-function unsafeAutoEnableContent(content: string): boolean {
-  return containsSensitiveMemoryContent(content) || absolutePathLike(content) || stackLineLike(content) ||
-    inferredOrUncertain(content) || projectOrPolicyLike(content);
-}
-
-function absolutePathLike(content: string): boolean {
-  return /(?:\/(?:Users|home|private|var|tmp)\/[^\s"'`,;)]*)/.test(content);
-}
-
-function stackLineLike(content: string): boolean {
-  return content.split(/\r?\n/).some((line) =>
-    /^\s*at\s+.*(?::\d+:\d+|\(.+:\d+:\d+\))/.test(line) || line.includes("node:internal"));
-}
-
-function inferredOrUncertain(content: string): boolean {
-  const text = content.toLowerCase();
-  return /可能|也许|大概|似乎|推断|猜测|不确定|maybe|might|probably|seems|guess|infer/.test(text);
 }
 
 function memoryTool<TParams extends TSchema>(

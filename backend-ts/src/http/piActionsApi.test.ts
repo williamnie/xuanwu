@@ -200,15 +200,19 @@ describe("Bun PI actions API", () => {
     try {
       insertProject(database, "demo");
       const project = mustGetProject(database, "demo");
-      const issueID = insertIssue(database, project.id, { error: "network error", status: "failed" });
+      const issueID = insertIssue(database, project.id, { status: "done" });
       const action = createPiRunnerActions(database, { project })
-        .createIssueStateRepairProposal({ issue_id: issueID }) as { action_id: string };
+        .createIssueStateRepairProposal({
+          diagnosis_code: "done_missing_verification_evidence",
+          issue_id: issueID,
+          operation: "patch_status"
+        }) as { action_id: string };
 
       const response = await postAction(createDefaultRouter({ database }), action.action_id, "approve");
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ id: action.action_id, status: "completed" });
-      expect(getIssue(database, issueID)).toMatchObject({ status: "todo", error: "" });
+      expect(getIssue(database, issueID)).toMatchObject({ status: "pending_verification", error: "" });
       expect(listEvents(database).map((event) => event.type)).toEqual([
         "issue.status_changed",
         "issue.state_manager_repair"

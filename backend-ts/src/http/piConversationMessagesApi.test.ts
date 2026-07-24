@@ -8,7 +8,6 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listContextBundles } from "../db/repositories/contextBundles.ts";
 import { createExternalEvent } from "../db/repositories/externalEvents.ts";
 import { listIssues } from "../db/repositories/issues.ts";
-import { listAttentionInboxItems, listIntakeRuns } from "../db/repositories/intakeRuns.ts";
 import { getPiConversation, listPiActionEvents, listPiActions } from "../db/repositories/pi.ts";
 import type { ExecutorProvider, ProviderRunInput } from "../providers/types.ts";
 import { EventBus } from "../events/bus.ts";
@@ -145,18 +144,18 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
-  test("audits intent routing and denies low-confidence write tools", async () => {
+  test("lets PI choose a concrete tool without a pre-LLM intent route", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-intent-route-api", provider: "pi-intent-route" });
     try {
       faux.setResponses([
         fauxAssistantMessage([
           fauxToolCall("issue_create_proposal", {
-            description: "ambiguous request must not create Work",
-            title: "Should not exist"
+            description: "PI chose a concrete issue after reading the conversation",
+            title: "PI-created issue"
           }, { id: "ambiguous-create" })
         ], { stopReason: "toolUse" }),
-        fauxAssistantMessage("请先确认是只调查，还是要执行变更。")
+        fauxAssistantMessage("已创建 issue。")
       ]);
       insertProject(database, "demo");
       insertFauxAgent(database, "pi-intent-route");
@@ -178,29 +177,19 @@ describe("Bun PI conversation message API", () => {
         conversationId: "conv-intent-route",
         eventType: "supervisor_context_resolved"
       });
-      const route = JSON.parse(routeEvents[0]?.payload_json || "{}") as Record<string, unknown>;
       const contextResolution = JSON.parse(contextEvents[0]?.payload_json || "{}") as Record<string, unknown>;
-      const toolAudits = listPiActionEvents(database, {
-        conversationId: "conv-intent-route",
-        eventType: "tool_call_audit"
-      });
-      const deniedTool = JSON.parse(toolAudits[0]?.payload_json || "{}") as Record<string, unknown>;
       const createAction = listPiActions(database).find((action) => action.action_type === "issue.create");
 
       expect(message.status).toBe(201);
       expect(result).toMatchObject({
-        text: "请先确认是只调查，还是要执行变更。"
+        text: "已创建 issue。"
       });
-      expect(listIssues(database, { projectId: "demo" })).toEqual([]);
-      expect(createAction).toBeUndefined();
-      expect(routeEvents).toHaveLength(1);
+      expect(listIssues(database, { projectId: "demo" })).toContainEqual(expect.objectContaining({
+        title: "PI-created issue"
+      }));
+      expect(createAction).toMatchObject({ gate_decision: "execute", status: "completed" });
+      expect(routeEvents).toEqual([]);
       expect(contextEvents).toHaveLength(1);
-      expect(route).toMatchObject({
-        decision: "ask_one_question",
-        primary_intent: "execute",
-        write_policy: { allow_mutation: false }
-      });
-      expect(routeEvents[0]?.payload_json).not.toContain("处理一下");
       expect(contextResolution).toMatchObject({
         status: "resolved",
         target: { project_id: "demo", work_ids: [] },
@@ -210,11 +199,6 @@ describe("Bun PI conversation message API", () => {
         })]
       });
       expect(contextEvents[0]?.payload_json).not.toContain("处理一下");
-      expect(deniedTool).toMatchObject({
-        error: { type: "intent_route_denied" },
-        status: "denied",
-        tool: "issue_create_proposal"
-      });
     } finally {
       faux.unregister();
       database.close();
@@ -248,7 +232,7 @@ describe("Bun PI conversation message API", () => {
     }
   });
 
-  test("manual context trigger builds bundle, intake run, and proposal from PI chat", async () => {
+  test("manual context tool returns a bundle for PI to interpret without hardcoded proposals", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-manual-trigger-api", provider: "pi-manual-trigger" });
     try {
@@ -261,7 +245,7 @@ describe("Bun PI conversation message API", () => {
             source: "fixture-im"
           }, { id: "manual-context" })
         ], { stopReason: "toolUse" }),
-        fauxAssistantMessage("已形成 issue proposal。")
+        fauxAssistantMessage("我已读取上下文；下一步由我根据 bundle 决定。")
       ]);
       insertProject(database, "demo");
       insertFauxAgent(database, "pi-manual-trigger");
@@ -275,13 +259,10 @@ describe("Bun PI conversation message API", () => {
       const message = await request(router, "/api/pi/conversations/conv-manual-trigger/messages", { prompt });
       const result = await finalPiConversationSseData(message);
       const bundle = listContextBundles(database, "fixture-im", 1)[0];
-      const runs = listIntakeRuns(database, { bundleId: bundle.id });
-      const items = listAttentionInboxItems(database, { intakeRunId: runs[0].id });
       const proposal = listPiActions(database).find((action) => action.action_type === "attention_inbox.domain_skill");
-      const payload = JSON.parse(proposal?.payload_json || "{}");
 
       expect(message.status).toBe(201);
-      expect(result).toMatchObject({ text: "已形成 issue proposal。" });
+      expect(result).toMatchObject({ text: "我已读取上下文；下一步由我根据 bundle 决定。" });
       expect(bundle).toMatchObject({ created_by: "user", source: "fixture-im", trigger: "manual" });
       expect(bundle.source_query).toMatchObject({
         attachment_kinds: ["image"],
@@ -291,12 +272,7 @@ describe("Bun PI conversation message API", () => {
           user_prompt: prompt
         }
       });
-      expect(runs).toMatchObject([{ status: "succeeded" }]);
-      expect(items).toMatchObject([{ primary_intent: "bug_report", status: "proposal_created" }]);
-      expect(proposal).toMatchObject({ status: "proposal" });
-      expect(payload.action_proposals).toEqual([
-        expect.objectContaining({ requires_approval: true, type: "issue.create" })
-      ]);
+      expect(proposal).toBeUndefined();
       expect(listIssues(database, { projectId: "demo" })).toEqual([]);
     } finally {
       faux.unregister();
@@ -454,6 +430,53 @@ describe("Bun PI conversation message API", () => {
         { id: 386, project_id: "demo", status: "in_progress" }
       ]);
       expect(provider.calls).toMatchObject([{ issueId: 386, projectId: "demo" }]);
+    } finally {
+      faux.unregister();
+      database.close();
+    }
+  });
+
+  test("Feishu short retry reaches PI with its trusted Issue context and no intent router", async () => {
+    const database = await openFixtureDatabase();
+    const faux = registerFauxProvider({ api: "pi-feishu-retry-context-api", provider: "pi-feishu-retry-context" });
+    try {
+      faux.setResponses([
+        fauxAssistantMessage("我会先核对该 Work 的完成态，再决定是否需要重试。")
+      ]);
+      insertProject(database, "demo");
+      insertIssue(database, { id: 774, projectID: "demo", title: "Retry context issue" });
+      insertFauxAgent(database, "pi-feishu-retry-context");
+      writeFauxModelsConfig(database, "pi-feishu-retry-context");
+
+      const result = await runPiConversationPrompt({ database }, {
+        conversationId: "feishu-retry-context",
+        prompt: "重试吧",
+        targetIssueId: 774,
+        targetProjectId: "demo",
+        title: "Feishu"
+      });
+      const routeEvents = listPiActionEvents(database, {
+        conversationId: "feishu-retry-context",
+        eventType: "supervisor_intent_routed"
+      });
+      const contextEvents = listPiActionEvents(database, {
+        conversationId: "feishu-retry-context",
+        eventType: "supervisor_context_resolved"
+      });
+      const context = JSON.parse(contextEvents[0]?.payload_json || "{}") as Record<string, unknown>;
+
+      expect(result).toMatchObject({
+        conversation_id: "feishu-retry-context",
+        text: "我会先核对该 Work 的完成态，再决定是否需要重试。"
+      });
+      expect(routeEvents).toEqual([]);
+      expect(context).toMatchObject({
+        status: "resolved",
+        target: { project_id: "demo", work_ids: ["xw:work:issues:774"] }
+      });
+      expect(listIssues(database, { projectId: "demo" })).toMatchObject([
+        { id: 774, status: "triage" }
+      ]);
     } finally {
       faux.unregister();
       database.close();

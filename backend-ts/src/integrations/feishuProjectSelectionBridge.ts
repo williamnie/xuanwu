@@ -1,10 +1,8 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import {
   consumeFeishuPendingProjectSelection,
-  createFeishuPendingProjectSelection,
   type FeishuPendingProjectSelection
 } from "../db/repositories/feishuProjectSelection.ts";
-import { listProjects } from "../db/repositories/projects.ts";
 import { redactSensitiveText } from "../util/redact.ts";
 import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feishu.ts";
 import {
@@ -12,17 +10,12 @@ import {
   type FeishuMessageClient
 } from "./feishuClient.ts";
 import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
-import type { FeishuConversationClock, FeishuConversationRoute } from "./feishuConversationRouting.ts";
-import type { FeishuProjectContextResult } from "./feishuProjectContext.ts";
+import type { FeishuConversationClock } from "./feishuConversationRouting.ts";
 import type {
-  FeishuBridgeHandleInput,
   FeishuBridgeHandleResult,
   FeishuConversationRunner
 } from "./feishuAgentBridge.ts";
-import {
-  buildFeishuProjectSelectionCard,
-  type FeishuProjectSelectionAction
-} from "./feishuProjectSelection.ts";
+import type { FeishuProjectSelectionAction } from "./feishuProjectSelection.ts";
 
 export type FeishuProjectSelectionBridgeOptions = {
   clock?: FeishuConversationClock;
@@ -31,26 +24,6 @@ export type FeishuProjectSelectionBridgeOptions = {
   runConversation?: FeishuConversationRunner;
   sender?: FeishuMessageClient;
 };
-export type FeishuProjectSelectionSendResult = FeishuBridgeHandleResult & { messageId: string };
-
-const PROJECT_SELECTION_TTL_MS = 30 * 60 * 1000;
-const MAX_CANDIDATES = 8;
-
-export async function maybeSendFeishuProjectSelection(
-  options: FeishuProjectSelectionBridgeOptions,
-  input: FeishuBridgeHandleInput,
-  route: FeishuConversationRoute,
-  context: FeishuProjectContextResult,
-  decision: string
-): Promise<FeishuProjectSelectionSendResult | null> {
-  if (!shouldAskProjectSelection(options, context, decision, input.event.text)) return null;
-  const candidates = selectionCandidates(options.database, context);
-  if (candidates.length === 0) return null;
-  const now = options.clock?.now() ?? new Date();
-  const selection = savePendingSelection(options, input, route, candidates, now);
-  const messageId = await sendSelectionPrompt(options, input.event.chat_id, selection, candidates);
-  return { messageId, reason: "project_selection_sent", replied: true };
-}
 
 export async function handleFeishuProjectSelectionAction(
   options: FeishuProjectSelectionBridgeOptions,
@@ -92,89 +65,6 @@ function selectionFailureText(status: string, selectedProjectID = ""): string {
   return "没有找到这次项目选择，请重新发送原请求。";
 }
 
-function shouldAskProjectSelection(
-  options: FeishuProjectSelectionBridgeOptions,
-  context: FeishuProjectContextResult,
-  decision: string,
-  prompt: string
-): boolean {
-  if (!options.runConversation || context.status === "resolved") return false;
-  if (decision === "ask_clarification" || decision === "propose_issue") return true;
-  return decision === "inbox_only" && isContinuationPrompt(prompt);
-}
-
-function isContinuationPrompt(prompt: string): boolean {
-  return /^(开始|开始做|开始吧|开始做吧|继续|继续做|接着|接着做|下一个|跑起来)$/i.test(cleanString(prompt)) ||
-    /#\s*\d+\s*[-~～—–]\s*#?\s*\d+|所有|全部|剩下都|剩余都|这个系列|这一系列|这组都|这一组都/i.test(cleanString(prompt));
-}
-
-function selectionCandidates(
-  db: RunnerDatabase,
-  context: FeishuProjectContextResult
-): Array<{ id: string; name: string }> {
-  const projects = listProjects(db).map((project) => ({ id: project.id, name: project.name }));
-  if (context.candidates.length === 0) return projects.slice(0, MAX_CANDIDATES);
-  const allowed = new Set(context.candidates);
-  return projects.filter((project) => allowed.has(project.id)).slice(0, MAX_CANDIDATES);
-}
-
-function savePendingSelection(
-  options: FeishuProjectSelectionBridgeOptions,
-  input: FeishuBridgeHandleInput,
-  route: FeishuConversationRoute,
-  candidates: Array<{ id: string }>,
-  now: Date
-): FeishuPendingProjectSelection {
-  return createFeishuPendingProjectSelection(options.database, {
-    candidates: candidates.map((project) => project.id),
-    chatId: input.event.chat_id,
-    conversationId: route.conversationId,
-    expiresAt: new Date(now.getTime() + PROJECT_SELECTION_TTL_MS).toISOString(),
-    originalPrompt: route.prompt || input.event.text || "[Feishu attachment message]",
-    scopeKey: route.scopeKey,
-    selectionId: crypto.randomUUID(),
-    sourceMessageId: input.event.message_id,
-    userId: input.event.sender.id,
-    userOpenId: input.event.sender.open_id
-  }, now);
-}
-
-async function sendSelectionPrompt(
-  options: FeishuProjectSelectionBridgeOptions,
-  chatId: string,
-  selection: FeishuPendingProjectSelection,
-  candidates: Array<{ id: string; name: string }>
-): Promise<string> {
-  const sender = messageSender(options);
-  const auditRef = `feishu-project-selection:${selection.selection_id}`;
-  let operation: "card.send" | "message.reply" = "message.reply";
-  let payload: Record<string, unknown>;
-  if (sender.sendInteractiveCard) {
-    const card = buildFeishuProjectSelectionCard({
-      candidates,
-      originalPrompt: selection.original_prompt,
-      selectionId: selection.selection_id
-    });
-    operation = "card.send";
-    payload = { card };
-  } else {
-    payload = { text: fallbackSelectionText(candidates) };
-  }
-  const receipt = await createFeishuChannelConnector({ config: options.config, sender }).deliver!(createFeishuOutboundEnvelope({
-    actionGateRef: `${auditRef}:pending`,
-    actionID: `${auditRef}:prompt`,
-    authority: "deterministic_policy",
-    correlationID: selection.conversation_id,
-    eventRef: auditRef,
-    idempotencyKey: `${auditRef}:prompt`,
-    occurredAt: selection.created_at,
-    operation,
-    payload,
-    receiveID: chatId,
-    receiveIDType: "chat_id"
-  }));
-  return receipt.provider_request_ref;
-}
 
 async function continuePendingPrompt(
   options: FeishuProjectSelectionBridgeOptions,
@@ -255,11 +145,6 @@ function pendingEvent(selection: FeishuPendingProjectSelection): FeishuNormalize
     thread_id: "",
     timestamp: selection.created_at
   };
-}
-
-function fallbackSelectionText(candidates: Array<{ id: string }>): string {
-  const ids = candidates.map((project) => project.id).join("、");
-  return `请选择本次操作的 Runner 项目：${ids}。也可以重新发送并在消息里带上项目名或 issue id。`;
 }
 
 function messageSender(options: FeishuProjectSelectionBridgeOptions): FeishuMessageClient {

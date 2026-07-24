@@ -4,9 +4,6 @@ import { resolve } from "node:path";
 import { listBrowserAssistantTools } from "../pi/browserToolProvider.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import { listHttpAssistantTools } from "../pi/httpToolProvider.ts";
-import { routeSupervisorIntent } from "../pi/supervisorIntentRouter.ts";
-import { planSupervisorWork } from "../pi/supervisorWorkPlanner.ts";
-import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
 import {
   evaluateWorkflowVerificationPolicy,
   validateWorkflowVerificationPolicy
@@ -34,37 +31,18 @@ type InvestigateFixture = {
 };
 
 describe("Investigate Workflow", () => {
-  test("registers the canonical manifest and lets Supervisor select the exact read-only revision", () => {
+  test("registers and resolves the exact canonical read-only revision", () => {
     const fixtureManifest = JSON.parse(readFileSync(resolve(FIXTURES, "investigate-workflow-v1.json"), "utf8"));
     expect(fixtureManifest).toEqual(INVESTIGATE_WORKFLOW_MANIFEST);
     expect(validateWorkflowManifest(INVESTIGATE_WORKFLOW_MANIFEST)).toEqual({ issues: [], ok: true });
     expect(validateWorkflowVerificationPolicy(INVESTIGATE_VERIFICATION_POLICY)).toEqual({ errors: [], ok: true });
 
-    const route = routeSupervisorIntent({
-      prompt: "调查 Work #42 为什么失败，只读分析，不要修改状态",
-      source: "runner_chat"
-    });
     const registry = investigateRegistry();
-    const plan = planSupervisorWork({
-      context: resolvedContext(route.input_audit.input_digest),
-      goal: "调查 Work #42 为什么失败，只读分析，不要修改状态",
-      intent_route: route,
-      source: "runner_chat",
-      workflow_refs: { investigate: INVESTIGATE_WORKFLOW_REF },
-      workflow_registry: registry
-    });
 
     expect(registry.diagnostics).toEqual([]);
-    expect(plan).toMatchObject({
-      materialization: { mode: "none", state_writes: "not_executed" },
-      mode: "read_only",
-      status: "ready",
-      workflow_selections: [{
-        manifest_ref: INVESTIGATE_WORKFLOW_REF,
-        purpose: "investigate",
-        status: "selected"
-      }],
-      works: []
+    expect(registry.resolve(INVESTIGATE_WORKFLOW_REF)).toMatchObject({
+      ok: true,
+      resolution: { manifest: { id: "workflow:investigate", revision: 1 } }
     });
   });
 
@@ -171,29 +149,6 @@ function investigateTools() {
     ...listHttpAssistantTools(),
     ...listBrowserAssistantTools()
   ];
-}
-
-function resolvedContext(inputDigest: string): SupervisorContextResolution {
-  return {
-    candidates: [{
-      project_id: "fixture-project",
-      score: 100,
-      sources: [{ kind: "explicit_project", ref: "projects:fixture-project", score: 100 }],
-      work_ids: []
-    }],
-    clarification: { reason: "one project target is proven", required: false },
-    input_audit: { char_count: 1, input_digest: inputDigest },
-    provenance: {
-      context_inheritance_allowed: true,
-      conversation_id: "conv-investigate",
-      resolver: "deterministic_supervisor_context",
-      source: "runner_chat"
-    },
-    reason: "explicit project target",
-    schema_version: "xw.supervisor-context-resolution.v1",
-    status: "resolved",
-    target: { issue_ids: [], project_id: "fixture-project", work_ids: [] }
-  };
 }
 
 function investigateFixtures(): InvestigateFixture[] {

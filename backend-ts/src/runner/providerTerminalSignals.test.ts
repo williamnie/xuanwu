@@ -55,7 +55,7 @@ describe("provider terminal PI signals", () => {
     }
   });
 
-  test("feeds scheduler Guardian recovery actions from backfilled provider errors", async () => {
+  test("keeps backfilled provider errors alert-only until PI chooses a concrete action", async () => {
     const db = await openFixtureDatabase();
     const provider = new ResumeProvider();
     try {
@@ -80,12 +80,9 @@ describe("provider terminal PI signals", () => {
 
       expect(first.providerTerminalSignals).toMatchObject({ scanned: 1, signaled: 1 });
       expect(second.providerTerminalSignals).toMatchObject({ scanned: 1, signaled: 0 });
-      expect(second.guardianActionDispatch).toMatchObject({ completed: 1, failed: 0, scanned: 1 });
-      expect(provider.calls).toEqual([{ prompt: expect.stringContaining("继续"), sessionId: "thread-525" }]);
-      expect(listPiActions(db, { issueId: 525 })[0]).toMatchObject({
-        action_type: "session.resume_followup",
-        status: "completed"
-      });
+      expect(second.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
+      expect(provider.calls).toEqual([]);
+      expect(listPiActions(db, { issueId: 525 })).toEqual([]);
     } finally {
       db.close();
     }

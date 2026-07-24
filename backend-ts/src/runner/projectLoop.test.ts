@@ -163,6 +163,35 @@ describe("Bun project loop claim execution", () => {
     }
   });
 
+  test("gives the Agent a general issue-over-template precedence rule without classifying wording", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new FakeExecutionProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      insertIssue(db, {
+        description: "Implement the focused fix. 不要 commit、push 或 deploy。",
+        projectId: "demo",
+        promptTemplate: [
+          "{{issue.description}}",
+          "",
+          "要求：",
+          "1. 提交 git commit。"
+        ].join("\n"),
+        title: "conflicting delivery instructions"
+      });
+
+      await runProjectLoopOnce({ database: db, projectId: "demo", providers: { [provider.id]: provider } });
+
+      const prompt = provider.inputs[0]?.prompt ?? "";
+      expect(prompt).toContain("1. 提交 git commit。");
+      expect(prompt).toContain("## Instruction source precedence");
+      expect(prompt).toContain("Issue-specific description wins");
+      expect(prompt).toContain("Do not use keyword matching");
+    } finally {
+      db.close();
+    }
+  });
+
   test("does not duplicate existing goal contract headings", async () => {
     const db = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
@@ -732,6 +761,7 @@ type IssueFixture = {
   description?: string;
   priority?: number;
   projectId: string;
+  promptTemplate?: string;
   recommendedSkillIntents?: string[];
   requiredSkillIntents?: string[];
   status?: string;
@@ -754,11 +784,11 @@ function insertIssue(db: RunnerDatabase, issue: IssueFixture): number {
   const priority = issue.priority ?? 0;
   const createdAt = issue.createdAt ?? "2026-01-01T00:00:00Z";
   db.sqlite.run(
-    `insert into issues (project_id, title, description, status, priority, agent_profile_id, service_tier,
+    `insert into issues (project_id, title, description, prompt_template, status, priority, agent_profile_id, service_tier,
       required_skill_intents_json, recommended_skill_intents_json, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      issue.projectId, issue.title, issue.description ?? "", status, priority,
+      issue.projectId, issue.title, issue.description ?? "", issue.promptTemplate ?? "", status, priority,
       issue.agentProfileId ?? "", issue.serviceTier ?? "", JSON.stringify(issue.requiredSkillIntents ?? []),
       JSON.stringify(issue.recommendedSkillIntents ?? []), createdAt, createdAt
     ]

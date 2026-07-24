@@ -6,30 +6,22 @@ import type { FeishuConnectorConfig, FeishuNormalizedMessageEvent } from "./feis
 import { createFeishuMessageClient, type FeishuMessageClient, type FeishuTextMessageResult } from "./feishuClient.ts";
 import { createFeishuChannelConnector, createFeishuOutboundEnvelope } from "./feishuChannelConnector.ts";
 import {
-  parseFeishuNewConversationCommand,
   routeFeishuConversation,
   type FeishuConversationClock,
   type FeishuConversationRoute
 } from "./feishuConversationRouting.ts";
 import {
   handleFeishuProjectSelectionAction,
-  maybeSendFeishuProjectSelection,
   type FeishuProjectSelectionAction
 } from "./feishuProjectSelectionBridge.ts";
-import { buildFeishuIssueCommandPrompt, parseFeishuIssueCommand } from "./feishuIssueCommand.ts";
-import { applyFeishuMemoryCommand } from "./feishuMemoryCommands.ts";
 import { appendFeishuMemoryCandidateNotice, snapshotFeishuMemoryCandidates } from "./feishuMemoryCandidateNotice.ts";
-import { applyFeishuProjectSwitchCommand } from "./feishuProjectSwitch.ts";
-import { applyFeishuCompletionWatchCommand } from "./feishuCompletionWatchCommand.ts";
-import { applyFeishuNotificationPreferenceCommand } from "./feishuNotificationPreferenceBridge.ts";
-import { buildFeishuReviewCommandPrompt, normalizeFeishuReviewReply, parseFeishuReviewCommand } from "./feishuReviewCommand.ts";
 import type { FeishuIngestResult } from "./feishuIngest.ts";
+import { ingestPiGuardianEvent } from "../pi/guardianEventIngest.ts";
 
 export type FeishuConversationRunner = (input: FeishuRunnerInput) => Promise<FeishuRunnerResult>;
 export type FeishuRunnerInput = {
   conversationId: string;
   event: FeishuNormalizedMessageEvent;
-  intent?: string;
   prompt: string;
   projectId: string;
   targetProjectId?: string;
@@ -48,17 +40,13 @@ type FeishuAgentBridgeOptions = {
   runConversation?: FeishuConversationRunner;
   sender?: FeishuMessageClient;
 };
-type DirectReply = { reason: string; text: string };
 export type FeishuBridgeHandleInput = { event: FeishuNormalizedMessageEvent; ingest: FeishuIngestResult };
 export type FeishuBridgeHandleResult = { reason: string; replied: boolean };
 
 const REPLY_LINK_TYPE = "feishu_agent_reply", REPLY_RELATIONSHIP = "agent_reply";
 const ACK_LINK_TYPE = "feishu_ack_reaction", ACK_RELATIONSHIP = "ack_reaction";
 const ACK_REACTION_EMOJI_TYPE = "OK";
-const CHAT_ACK_TEXT = "我在。你可以像平时聊天一样描述想让我做的事，例如“在 codex-issue-runner 里帮我修复登录报错”。";
 const NEW_CONVERSATION_ACK_TEXT = "已开启新的 Supervisor 上下文。你可以继续发下一条消息。";
-const PROJECT_CLARIFICATION_TEXT = "我收到任务了，但还不知道要交给哪个 Runner 项目。请在消息里带上项目名或 issue id 后再发。";
-const ISSUE_PROJECT_CLARIFICATION_TEXT = "这是哪个项目？你可以直接回复项目名，或把项目名带在任务里。";
 
 export function createFeishuAgentBridge(options: FeishuAgentBridgeOptions) {
   const inFlightReplies = new Set<string>();
@@ -94,89 +82,10 @@ async function handleFeishuAgentMessageOnce(
   await sendAckReaction(options, input);
   const route = conversationRoute(options, input);
   const projectContext = projectContextForRoute(options, input, route);
-  const handled = await handledReply(options, input, route, projectContext);
-  if (handled) return handled;
   const runner = await runnerReply(options, input, route, projectContext);
   const text = cleanString(runner.text);
   if (text === "") return { reason: "empty_agent_reply", replied: false };
   return sendReply(options, input, text, runner, "agent_reply_sent");
-}
-
-async function handledReply(
-  options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput,
-  route: FeishuConversationRoute,
-  projectContext: FeishuProjectContextResult
-): Promise<FeishuBridgeHandleResult | null> {
-  const memoryCommand = applyFeishuMemoryCommand(options.database, {
-    conversationId: route.conversationId,
-    projectId: resolvedProjectId(projectContext),
-    text: input.event.text
-  });
-  if (memoryCommand.handled) return sendReply(options, input, memoryCommand.text, {
-    conversationId: route.conversationId, projectId: resolvedProjectId(projectContext), text: memoryCommand.text
-  }, memoryCommand.reason);
-  return handledNonMemoryReply(options, input, route, projectContext);
-}
-
-async function handledNonMemoryReply(
-  options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput,
-  route: FeishuConversationRoute,
-  projectContext: FeishuProjectContextResult
-): Promise<FeishuBridgeHandleResult | null> {
-  const notificationPreference = applyFeishuNotificationPreferenceCommand(options.database, {
-    conversationId: route.conversationId,
-    event: input.event,
-    ingest: input.ingest,
-    now: options.clock?.now(),
-    projectId: resolvedProjectId(projectContext),
-    text: input.event.text
-  });
-  if (notificationPreference.handled) return sendReply(options, input, notificationPreference.text, {
-    conversationId: route.conversationId, projectId: resolvedProjectId(projectContext), text: notificationPreference.text
-  }, notificationPreference.reason);
-  const projectSwitch = applyFeishuProjectSwitchCommand(options.database, {
-    route,
-    timestamp: options.clock?.now(),
-    text: input.event.text
-  });
-  if (projectSwitch.status !== "none") return sendReply(options, input, projectSwitch.text, {
-    conversationId: route.conversationId, projectId: projectSwitch.projectId, text: projectSwitch.text
-  }, projectSwitch.reason);
-  const completionWatch = applyFeishuCompletionWatchCommand(options.database, {
-    event: input.event,
-    projectContext,
-    route,
-    sourceEventId: String(input.ingest.event_id || input.event.dedupe_key),
-    text: route.prompt || input.event.text
-  });
-  if (completionWatch.handled) return sendReply(options, input, completionWatch.text, {
-    conversationId: route.conversationId, projectId: completionWatch.projectId, text: completionWatch.text
-  }, completionWatch.reason);
-  const issueClarification = issueCommandClarification(input, route, projectContext);
-  if (issueClarification) return sendReply(options, input, issueClarification.text, {
-    conversationId: route.conversationId, projectId: "", text: issueClarification.text
-  }, issueClarification.reason);
-  return handledSelectionOrDirectReply(options, input, route, projectContext);
-}
-
-async function handledSelectionOrDirectReply(
-  options: FeishuAgentBridgeOptions,
-  input: FeishuBridgeHandleInput,
-  route: FeishuConversationRoute,
-  projectContext: FeishuProjectContextResult
-): Promise<FeishuBridgeHandleResult | null> {
-  const selection = await maybeSendFeishuProjectSelection(options, input, route, projectContext, attentionDecision(input.ingest));
-  if (selection) {
-    recordReplyLink(options.database, input, { conversationId: route.conversationId, projectId: "", text: "project selection requested" }, { messageId: selection.messageId });
-    return { reason: selection.reason, replied: selection.replied };
-  }
-  const direct = directReply(input, options, projectContext);
-  if (!direct) return null;
-  return sendReply(options, input, direct.text, {
-    conversationId: route.conversationId, projectId: resolvedProjectId(projectContext), text: direct.text
-  }, direct.reason);
 }
 
 async function sendReply(
@@ -217,38 +126,51 @@ async function runnerReply(
   projectContext: FeishuProjectContextResult
 ): Promise<FeishuRunnerResult> {
   try {
-    if (!options.runConversation) return { text: "" };
+    if (!options.runConversation) {
+      throw new Error("Xuanwu Supervisor conversation provider is unavailable");
+    }
     const targetProjectId = resolvedProjectId(projectContext);
     if (route.isNewCommand && route.prompt === "") {
       return { conversationId: route.conversationId, projectId: "", targetProjectId, text: NEW_CONVERSATION_ACK_TEXT };
     }
-    const command = parseFeishuIssueCommand(route.prompt || input.event.text);
-    const review = parseFeishuReviewCommand(route.prompt || input.event.text);
-    const normalChat = !command && !review;
-    const memoryBefore = normalChat ? snapshotFeishuMemoryCandidates(options.database, {
+    const memoryBefore = snapshotFeishuMemoryCandidates(options.database, {
       conversationId: route.conversationId,
       projectId: targetProjectId
-    }) : [];
-    const prompt = review
-      ? buildFeishuReviewCommandPrompt(options.database, { conversationId: route.conversationId, projectId: targetProjectId })
-      : command ? buildFeishuIssueCommandPrompt(command) : route.prompt || input.event.text || "[Feishu attachment message]";
+    });
+    const prompt = route.prompt || input.event.text || "[Feishu attachment message]";
     const result = await options.runConversation({
       conversationId: route.conversationId,
       event: input.event,
-      intent: review ? "review" : undefined,
       projectId: "",
       targetProjectId,
       targetProjectSource: projectContext.source,
       prompt
     });
-    const text = review ? normalizeFeishuReviewReply(result.text) : normalChat ? appendFeishuMemoryCandidateNotice(
+    const text = appendFeishuMemoryCandidateNotice(
       options.database, { conversationId: route.conversationId, projectId: targetProjectId }, result.text, memoryBefore
-    ) : result.text;
+    );
     return { ...result, projectId: "", targetProjectId, text };
   } catch (error) {
+    const message = safeError(error);
+    ingestPiGuardianEvent(options.database, {
+      eventType: "guardian.pi_supervisor.unavailable",
+      idempotencyKey: `guardian.pi_supervisor.unavailable:feishu:${input.event.message_id}`,
+      normalizedPayload: {
+        channel: "feishu",
+        conversation_id: route.conversationId,
+        error: message,
+        source_message_id: input.event.message_id
+      },
+      projectID: resolvedProjectId(projectContext),
+      severity: "urgent",
+      source: "supervisor",
+      sourceEventID: input.ingest.event_id > 0
+        ? `external_events:${input.ingest.event_id}`
+        : input.event.dedupe_key
+    });
     return {
       conversationId: fallbackConversationID(input.event),
-      text: `我尝试交给 Runner 时出错了：${safeError(error)}。你可以稍后重试，或补充项目名和目标再发我一次。`
+      text: `我尝试交给 Runner 时出错了：${message}。你可以稍后重试，或补充项目名和目标再发我一次。`
     };
   }
 }
@@ -301,43 +223,7 @@ function replyPolicy(input: FeishuBridgeHandleInput): string {
   const decision = attentionDecision(input.ingest);
   if (input.event.chat_id === "") return "missing_chat_id";
   if (decision === "ignore") return "ignored_by_attention";
-  if (decision === "blocked_by_policy") return "blocked_by_policy";
   return "";
-}
-
-function directReply(
-  input: FeishuBridgeHandleInput,
-  options: FeishuAgentBridgeOptions,
-  projectContext: FeishuProjectContextResult
-): DirectReply | null {
-  const decision = attentionDecision(input.ingest);
-  if (decision === "inbox_only" && !options.runConversation) {
-    return { reason: "chat_ack_sent", text: CHAT_ACK_TEXT };
-  }
-  if (needsProjectClarification(decision, projectContext) && !isNewPromptWithContent(input.event.text)) {
-    return { reason: "project_clarification_sent", text: PROJECT_CLARIFICATION_TEXT };
-  }
-  return null;
-}
-
-function needsProjectClarification(decision: string, context: FeishuProjectContextResult): boolean {
-  if (context.status === "resolved") return false;
-  return decision === "ask_clarification" || decision === "propose_issue";
-}
-
-function issueCommandClarification(
-  input: FeishuBridgeHandleInput,
-  route: FeishuConversationRoute,
-  projectContext: FeishuProjectContextResult
-): DirectReply | null {
-  if (!parseFeishuIssueCommand(route.prompt || input.event.text)) return null;
-  if (projectContext.status === "resolved") return null;
-  return { reason: "project_clarification_sent", text: ISSUE_PROJECT_CLARIFICATION_TEXT };
-}
-
-function isNewPromptWithContent(prompt: string): boolean {
-  const command = parseFeishuNewConversationCommand(prompt);
-  return command.isNewCommand && command.prompt !== "";
 }
 
 function conversationRoute(

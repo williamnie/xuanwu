@@ -10,9 +10,6 @@ import {
   type LocalGitHandoffAuditEvent
 } from "../domain/handoff/localBranchCommit.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
-import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
-import { routeSupervisorIntent } from "../pi/supervisorIntentRouter.ts";
-import { planSupervisorWork } from "../pi/supervisorWorkPlanner.ts";
 import {
   validateWorkflowVerificationPolicy
 } from "../domain/evidence/policy.ts";
@@ -48,7 +45,7 @@ afterEach(() => {
 });
 
 describe("Implement Workflow", () => {
-  test("registers the canonical manifest and lets Supervisor select the exact Implement revision", () => {
+  test("registers and resolves the exact canonical Implement revision", () => {
     const fixtureManifest = JSON.parse(readFileSync(resolve(FIXTURES, "implement-workflow-v1.json"), "utf8"));
     expect(fixtureManifest).toEqual(IMPLEMENT_WORKFLOW_MANIFEST);
     expect(validateWorkflowManifest(IMPLEMENT_WORKFLOW_MANIFEST)).toEqual({ issues: [], ok: true });
@@ -58,32 +55,13 @@ describe("Implement Workflow", () => {
       IMPLEMENT_VERIFICATION_POLICY
     ]) expect(validateWorkflowVerificationPolicy(policy)).toEqual({ errors: [], ok: true });
 
-    const route = routeSupervisorIntent({
-      prompt: "修改 fixture 功能，跑定向验证和回归后创建本地提交交接",
-      source: "runner_chat"
-    });
     const registry = implementRegistry();
-    const plan = planSupervisorWork({
-      context: resolvedContext(route.input_audit.input_digest),
-      goal: "修改 fixture 功能，跑定向验证和回归后创建本地提交交接",
-      intent_route: route,
-      source: "runner_chat",
-      workflow_refs: { implement: IMPLEMENT_WORKFLOW_REF },
-      workflow_registry: registry
-    });
 
     expect(registry.diagnostics).toEqual([]);
-    expect(plan).toMatchObject({
-      materialization: { mode: "proposal_only", state_writes: "not_executed" },
-      mode: "work_plan",
-      status: "ready",
-      workflow_selections: [{
-        manifest_ref: IMPLEMENT_WORKFLOW_REF,
-        purpose: "implement",
-        status: "selected"
-      }]
+    expect(registry.resolve(IMPLEMENT_WORKFLOW_REF)).toMatchObject({
+      ok: true,
+      resolution: { manifest: { id: "workflow:implement", revision: 1 } }
     });
-    expect(plan.works.length).toBeGreaterThan(0);
   });
 
   test("freezes stage permissions and fails closed when the commit action is unavailable", () => {
@@ -346,29 +324,6 @@ function implementRegistry() {
     tools: listBuiltinAssistantTools(),
     verification_policies: contributions.verification_policies
   });
-}
-
-function resolvedContext(inputDigest: string): SupervisorContextResolution {
-  return {
-    candidates: [{
-      project_id: "fixture-project",
-      score: 100,
-      sources: [{ kind: "explicit_project", ref: "projects:fixture-project", score: 100 }],
-      work_ids: []
-    }],
-    clarification: { reason: "one project target is proven", required: false },
-    input_audit: { char_count: 1, input_digest: inputDigest },
-    provenance: {
-      context_inheritance_allowed: true,
-      conversation_id: "conv-implement",
-      resolver: "deterministic_supervisor_context",
-      source: "runner_chat"
-    },
-    reason: "explicit project target",
-    schema_version: "xw.supervisor-context-resolution.v1",
-    status: "resolved",
-    target: { issue_ids: [], project_id: "fixture-project", work_ids: [] }
-  };
 }
 
 function implementFixtures(): ImplementFixture[] {

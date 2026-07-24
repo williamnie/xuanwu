@@ -99,7 +99,7 @@ describe("PI Guardian decision action outlet", () => {
         provider_turn_id: "turn-old",
         reason: "provider timed out after stream stall",
         supervisor_mode: "autonomous"
-      }, 601);
+      }, 601, "session.resume_followup");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:00:00Z") });
       const settled = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:00:31Z") });
@@ -136,7 +136,7 @@ describe("PI Guardian decision action outlet", () => {
         reason: "codex app-server request timed out after 90000ms: thread/start",
         session_status: "unknown",
         supervisor_mode: "autonomous"
-      }, 670);
+      }, 670, "issue.retry");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:31Z") });
@@ -166,7 +166,7 @@ describe("PI Guardian decision action outlet", () => {
         diagnosis_code: "missing_user_input",
         reason: "agent needs the missing production tenant name",
         supervisor_mode: "autonomous"
-      }, 602);
+      }, 602, "needs_user.escalate");
 
       const queued = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
       const summary = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:31Z") });
@@ -200,7 +200,7 @@ describe("PI Guardian decision action outlet", () => {
         provider: "claude",
         reason: "latest provider error has no recoverable provider session",
         supervisor_mode: "autonomous"
-      }, 605);
+      }, 605, "needs_user.escalate");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:31Z") });
@@ -231,7 +231,7 @@ describe("PI Guardian decision action outlet", () => {
         provider_turn_id: "turn-old",
         reason: "provider timed out",
         supervisor_mode: "autonomous"
-      }, 603);
+      }, 603, "session.resume_followup");
       supervisorCandidateEvent(db, "supervisor-cooldown", {
         allowed_actions: ["session.resume_followup"],
         budget_remaining: 1,
@@ -242,7 +242,7 @@ describe("PI Guardian decision action outlet", () => {
         provider_turn_id: "turn-old",
         reason: "provider timed out",
         supervisor_mode: "autonomous"
-      }, 604);
+      }, 604, "session.resume_followup");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:31Z") });
@@ -297,8 +297,51 @@ function supervisorCandidateEvent(
   db: RunnerDatabase,
   id: string,
   payload: Record<string, unknown>,
-  issueID: number
+  issueID: number,
+  actionType: string
 ): void {
+  const selectedAction = {
+    action_type: actionType,
+    gate_policy: {
+      allowed_actions: [actionType],
+      authorizedActions: [{
+        action_type: actionType,
+        issue_id: issueID,
+        project_id: "demo"
+      }],
+      budget_remaining: payload.budget_remaining,
+      cooldown_until: payload.cooldown_until,
+      mode: "delegated",
+      scope: { project_id: "demo" }
+    },
+    issue_id: issueID,
+    payload: {
+      decision_id: `pi:${id}`,
+      diagnosis_code: payload.diagnosis_code,
+      expected_issue_status: "in_progress",
+      expected_issue_updated_at: "2026-06-18T00:00:00Z",
+      expected_provider_session_id: payload.provider_session_id,
+      expected_provider_turn_id: payload.provider_turn_id,
+      expected_run_id: `issue-${issueID}-attempt-1`,
+      expected_run_status: "in_progress",
+      expected_session_status: "running",
+      expected_session_updated_at: "2026-06-18T00:00:00Z",
+      issue_id: issueID,
+      message: actionType === "needs_user.escalate"
+        ? needsUserFixtureMessage(issueID, payload)
+        : undefined,
+      provider: payload.provider,
+      provider_session_id: payload.provider_session_id,
+      provider_turn_id: payload.provider_turn_id,
+      prompt: actionType === "session.resume_followup"
+        ? `Continue after PI decision: ${String(payload.reason ?? "")}`
+        : undefined,
+      reason: payload.reason
+    },
+    project_id: "demo",
+    rationale: payload.reason,
+    risk_level: "medium"
+  };
   createPiGuardianEvent(db, {
     event_type: "guardian.supervisor.candidate",
     id,
@@ -314,7 +357,8 @@ function supervisorCandidateEvent(
       session_status: "running",
       session_updated_at: "2026-06-18T00:00:00Z",
       signal_type: "supervisor.candidate",
-      ...payload
+      ...payload,
+      actions: [selectedAction]
     },
     project_id: "demo",
     severity: "watch",
@@ -322,6 +366,14 @@ function supervisorCandidateEvent(
     source_event_id: id,
     status: "pending"
   });
+}
+
+function needsUserFixtureMessage(issueID: number, payload: Record<string, unknown>): string {
+  if (payload.diagnosis_code !== "provider_runtime_unavailable") return String(payload.reason ?? "");
+  return "Supervisor 判断 executor provider 当前不可用，无法继续自动恢复。" +
+    `provider：${String(payload.provider ?? "unknown")}；issue id：${issueID}；` +
+    `诊断码：provider_runtime_unavailable；错误摘要：${String(payload.reason ?? "")}。` +
+    "请检查/重启 Codex app-server 或 Claude Code provider 后再 retry。";
 }
 
 function mergeMeta(decision: PiGuardianDecision): Record<string, unknown> {

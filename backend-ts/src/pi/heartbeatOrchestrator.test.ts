@@ -29,17 +29,14 @@ describe("PI heartbeat orchestrator", () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
-      const issueID = insertIssue(db, "project-a", "failed", "network error: unexpected eof");
+      insertIssue(db, "project-a", "failed", "network error: unexpected eof");
 
       const result = await runPiHeartbeatOnce({ database: db, now: NOW, projectID: "project-a" });
 
       expect(result).toMatchObject({ project_id: "project-a", status: "completed" });
       expect(result.signals.issues.status_counts.failed).toBe(1);
-      expect(result.action_candidates).toContainEqual(expect.objectContaining({
-        action_type: "issue.retry_proposal",
-        issue_id: issueID
-      }));
-      expect(result.actions_proposed).toBe(1);
+      expect(result.action_candidates).toEqual([]);
+      expect(result.actions_proposed).toBe(0);
       expect(result.next_tick_at).toBe("2026-06-02T10:01:00Z");
 
       const stored = db.sqlite.query<{ status: string; result_json: string }, []>(
@@ -51,9 +48,8 @@ describe("PI heartbeat orchestrator", () => {
       expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type)).toEqual([
         "collect_signals",
         "evaluate_policies",
-        "plan_actions",
+        "delegate_decision",
         "authorization_gate",
-        "guardian_signal",
         "audit",
         "schedule_next_tick"
       ]);
@@ -92,27 +88,19 @@ describe("PI heartbeat orchestrator", () => {
     }
   });
 
-  test("scans active delegations and generates delegated candidates", async () => {
+  test("scans active delegations without inventing delegated action candidates", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
-      const issueID = insertIssue(db, "project-a", "failed", "connection reset by peer");
+      insertIssue(db, "project-a", "failed", "connection reset by peer");
       insertDelegation(db, "delegation-a", "project-a");
 
       const result = await runDelegationHeartbeatsOnce({ database: db, now: NOW });
 
       expect(result).toMatchObject({ scanned: 1, started: 1, skipped: 0 });
       expect(result.runs[0]).toMatchObject({ delegation_id: "delegation-a", project_id: "project-a", status: "completed" });
-      expect(result.runs[0]?.action_candidates).toContainEqual(expect.objectContaining({
-        action_type: "issue.retry_proposal",
-        issue_id: issueID
-      }));
-
-      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
-        event_type: "guardian.heartbeat.action_candidate",
-        issue_id: issueID,
-        source: "heartbeat"
-      }));
+      expect(result.runs[0]?.action_candidates).toEqual([]);
+      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toEqual([]);
       expect(rowCount(db, "pi_actions")).toBe(0);
     } finally {
       db.close();
@@ -138,7 +126,7 @@ describe("PI heartbeat orchestrator", () => {
     }
   });
 
-  test("respects executor serialization while still proposing supervisor decisions for stale active work", async () => {
+  test("records stale active work for PI without creating a hardcoded supervisor action", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "project-a");
@@ -161,9 +149,11 @@ describe("PI heartbeat orchestrator", () => {
         issue_id: runningIssue,
         ready: true
       }));
-      expect(result.action_candidates).toContainEqual(expect.objectContaining({
-        action_type: "issue.supervisor_decision",
-        issue_id: runningIssue
+      expect(result.action_candidates).toEqual([]);
+      expect(listPiGuardianEvents(db, { projectId: "project-a" })).toContainEqual(expect.objectContaining({
+        event_type: "guardian.supervisor.candidate",
+        issue_id: runningIssue,
+        source: "supervisor"
       }));
       expect(listPiHeartbeatEvents(db, { heartbeatId: result.heartbeat_id }).map((event) => event.event_type))
         .toContain("supervisor_signal");

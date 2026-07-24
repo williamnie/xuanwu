@@ -2,6 +2,7 @@ import { Type, type Static, type TSchema } from "@earendil-works/pi-ai";
 import type { AgentToolResult, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { formatModelVisibleToolOutput } from "../security/promptInjectionDefense.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
 import { getPiActionByIdempotencyKey, type PiAction } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { workIDToIssueID } from "../domain/work/issueAdapter.ts";
@@ -15,7 +16,9 @@ import { registerEvidenceRoutes, EVIDENCE_HTTP_COMPATIBILITY_POLICY } from "../h
 import { registerHandoffRoutes, HANDOFF_HTTP_COMPATIBILITY_POLICY } from "../http/handoffApi.ts";
 import { createRouter, type Router } from "../http/router.ts";
 import { executeSafePiAction } from "./actionEngine.ts";
+import { createIssueCompletionProjection } from "./issueToolViews.ts";
 import type { PiRunnerActionContext } from "./runnerActions.ts";
+import { scopedRunnerChatActionContext } from "./runnerChatAuthorization.ts";
 import {
   SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES,
   SUPERVISOR_CONTROL_READ_ACTION_TYPES,
@@ -329,6 +332,7 @@ function workControlAction(
   const targetProject = targetProjectID(db, input.work_id, project);
   const issueID = workIDToIssueID(input.work_id);
   const actionType = `work.${input.action}` as MutationActionType;
+  const preconditionFailure = retryPreconditionFailure(db, issueID, actionType);
   const payload = {
     action: input.action,
     expected_revision: input.expected_revision,
@@ -341,6 +345,7 @@ function workControlAction(
     issueID,
     payload,
     projectID: targetProject,
+    preconditionFailure,
     reason: input.reason,
     target: input.work_id,
     execute: async (eventID) => compactWorkMutation(await callDomain(
@@ -363,6 +368,7 @@ function runControlAction(
   const targetProject = runProjectID(db, input.run_id, project);
   const issueID = workIDToIssueID(requiredString(run.work_id, "Run work_id"));
   const actionType = `run.${input.action}` as MutationActionType;
+  const preconditionFailure = retryPreconditionFailure(db, issueID, actionType);
   const payload = cleanObject({
     action: input.action,
     expected_attempt_revision: input.expected_attempt_revision,
@@ -377,6 +383,7 @@ function runControlAction(
     issueID,
     payload,
     projectID: targetProject,
+    preconditionFailure,
     reason: input.reason,
     target: input.run_id,
     execute: async (eventID) => compactRunMutation(await callDomain(
@@ -418,6 +425,7 @@ async function mutationAction(
     idempotencyKey: string;
     issueID?: number;
     payload: Record<string, unknown>;
+    preconditionFailure?: string;
     projectID: string;
     reason: string;
     target: string;
@@ -425,13 +433,18 @@ async function mutationAction(
 ) {
   const key = scopedIdempotencyKey(input.actionType, input.projectID, input.target, input.idempotencyKey);
   assertIdempotencyCompatible(db, key, input.actionType, input.projectID, input.issueID ?? 0, input.payload);
-  await executeSafePiAction(db, context, {
+  const actionContext = scopedRunnerChatActionContext(context, input.actionType, {
+    issueID: input.issueID,
+    projectID: input.projectID
+  });
+  await executeSafePiAction(db, actionContext, {
     actionType: input.actionType,
     idempotencyKey: key,
     issueID: input.issueID,
     payload: input.payload,
     projectID: input.projectID,
     rationale: input.reason,
+    preconditionFailure: input.preconditionFailure,
     execute: () => input.execute(key)
   });
   const action = getPiActionByIdempotencyKey(db, key);
@@ -738,6 +751,7 @@ function compactActionRecord(action: PiAction): Record<string, unknown> {
     action_id: action.id,
     action_type: action.action_type,
     decision: action.gate_decision,
+    gate_reason: action.gate_reason,
     idempotency_key: action.idempotency_key,
     issue_id: action.issue_id || undefined,
     project_id: action.project_id,
@@ -746,6 +760,20 @@ function compactActionRecord(action: PiAction): Record<string, unknown> {
     risk_level: action.risk_level,
     status: action.status
   }));
+}
+
+function retryPreconditionFailure(
+  db: RunnerDatabase,
+  issueID: number,
+  actionType: MutationActionType
+): string | undefined {
+  if (actionType !== "work.retry" && actionType !== "run.retry") return undefined;
+  const issue = getIssue(db, issueID);
+  if (!issue) return undefined;
+  const completion = createIssueCompletionProjection(db, issue, listIssueRuns(db, issue.id).at(-1));
+  return completion.state === "implementation_complete_handoff_missing"
+    ? "implementation is complete and only the persisted Handoff is missing; reconcile Handoff/Evidence instead of retrying the executor"
+    : undefined;
 }
 
 function withBudget(authority: string, value: Record<string, unknown>): Record<string, unknown> {

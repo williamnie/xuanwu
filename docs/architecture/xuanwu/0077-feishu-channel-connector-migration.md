@@ -40,10 +40,10 @@ bun test src/integrations/feishuChannelConnector.test.ts \
   src/integrations/feishuCallback.test.ts \
   src/integrations/feishuReceiver.test.ts \
   src/integrations/feishuAgentBridge.test.ts \
-  src/integrations/feishuProjectSelectionBridge.test.ts \
+  src/integrations/feishuAgentBridgePiFirst.test.ts \
   src/integrations/feishuGuardianAlerts.test.ts \
   src/integrations/feishuApprovalNotifications.test.ts \
-  src/integrations/feishuCompletionWatchNotifications.test.ts
+  src/integrations/feishuLifecycleNotificationPreferences.test.ts
 ```
 
 覆盖 fixture inbound→external event→conversation route、重复消息、project hint、manifest conformance、text/card/reaction、LLM authority fail-closed、target permission、旧 env config，以及现有 callback 签名、receiver、聊天、Watch、Notification/approval 回归。

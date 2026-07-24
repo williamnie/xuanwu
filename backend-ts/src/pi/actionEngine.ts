@@ -33,6 +33,7 @@ export type PiActionRequest = {
   payload: Record<string, unknown>;
   projectID?: string;
   rationale?: string;
+  preconditionFailure?: string;
   riskOverride?: { requiresConfirmation?: boolean; riskLevel?: PiActionEnvelope["risk_level"] };
 };
 
@@ -80,7 +81,10 @@ function createGatedPiAction(
   const candidate = createPiActionRecord(db, context, input, envelope);
   if (isReplay(candidate)) return replayGateResult(candidate);
   recordPiActionAuditEvent(db, candidate, "candidate", { actor: "pi", payload: envelope });
-  const decision = gatePiActionEnvelope(envelope, input.authorization ?? context.authorization);
+  const preconditionFailure = cleanString(input.preconditionFailure);
+  const decision = preconditionFailure === ""
+    ? gatePiActionEnvelope(envelope, input.authorization ?? context.authorization)
+    : { decision: "deny" as const, reason: `action precondition failed: ${preconditionFailure}` };
   return { action: persistGateDecision(db, context, candidate, decision), decision };
 }
 

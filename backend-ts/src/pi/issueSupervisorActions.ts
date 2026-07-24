@@ -137,9 +137,12 @@ async function executeIfApproved(
 }
 
 function supervisorGatePolicy(input: IssueSupervisorActionInput): PiGatePolicy {
-  const allowed = stringArray(input.context.policy.allowed_actions);
+  const configured = stringArray(input.context.policy.allowed_actions);
+  const allowed = [...new Set([...configured, "issue.supervisor_decision"])];
   const autonomous = clean(input.context.policy.mode) === "autonomous";
-  const allowedActions = autonomous && allowed.length === 0 ? ["__no_supervisor_actions_allowed__"] : allowed;
+  const allowedActions = autonomous && configured.length === 0
+    ? ["issue.supervisor_decision"]
+    : allowed;
   return compact({
     allowed_actions: allowedActions,
     authorizedActions: allowed.map((action_type) => ({ action_type, issue_id: issueID(input.context), project_id: projectID(input.context) })),

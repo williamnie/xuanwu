@@ -16,22 +16,23 @@ afterEach(async () => {
 });
 
 describe("PI failed retry policy findings", () => {
-  test("applies retry eligibility, cooldown, max attempts, and needs-user escalation", async () => {
+  test("applies retry policy only after structured retry state is present", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
       insertProjectRetryPolicy(db, { enabled: true, max_attempts: 2, backoff_minutes: [30] });
-      const ready = insertIssue(db, { attemptCount: 1, error: "network error", title: "Ready", updatedAt: "2026-01-01T00:00:00Z" });
-      const cooling = insertIssue(db, { attemptCount: 1, error: "network error", title: "Cooling", updatedAt: "2026-01-01T00:45:00Z" });
-      const maxed = insertIssue(db, { attemptCount: 2, error: "unexpected eof", title: "Maxed", updatedAt: "2026-01-01T00:00:00Z" });
+      const ready = insertIssue(db, { attemptCount: 1, autoRetryNextAt: "2026-01-01T00:30:00Z", error: "network error", title: "Ready", updatedAt: "2026-01-01T00:00:00Z" });
+      const cooling = insertIssue(db, { attemptCount: 1, autoRetryNextAt: "2026-01-01T01:15:00Z", error: "network error", title: "Cooling", updatedAt: "2026-01-01T00:45:00Z" });
+      const maxed = insertIssue(db, { attemptCount: 2, autoRetryNextAt: "2026-01-01T00:30:00Z", error: "unexpected eof", title: "Maxed", updatedAt: "2026-01-01T00:00:00Z" });
       const needsUser = insertIssue(db, { attemptCount: 1, autoRetryNextAt: "2026-01-01T00:10:00Z", error: "approval denied; waiting for user input", title: "Needs user", updatedAt: "2026-01-01T00:00:00Z" });
 
       const byIssue = new Map(scanProjectFindings(db, "demo", { now: NOW }).map((finding) => [finding.issue_id, finding]));
 
-      expect(byIssue.get(ready)).toMatchObject({ action_candidate: expect.objectContaining({ action_type: "issue.retry_proposal" }), category: "transient", reason: "failed_retry_ready" });
-      expect(byIssue.get(cooling)).toMatchObject({ action_candidate: undefined, category: "transient", reason: "failed_retry_cooling_down" });
-      expect(byIssue.get(maxed)).toMatchObject({ action_candidate: undefined, category: "needs_user", reason: "failed_retry_exhausted" });
-      expect(byIssue.get(needsUser)).toMatchObject({ action_candidate: undefined, category: "needs_user", reason: "needs_user" });
+      expect(byIssue.get(ready)).toMatchObject({ category: "transient", reason: "failed_retry_ready" });
+      expect(byIssue.get(cooling)).toMatchObject({ category: "transient", reason: "failed_retry_cooling_down" });
+      expect(byIssue.get(maxed)).toMatchObject({ category: "needs_user", reason: "failed_retry_exhausted" });
+      expect(byIssue.get(needsUser)).toMatchObject({ category: "transient", reason: "failed_retry_ready" });
+      expect([...byIssue.values()].every((finding) => !("action_candidate" in finding))).toBe(true);
     } finally {
       db.close();
     }

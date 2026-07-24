@@ -7,10 +7,6 @@ import { gatePiActionEnvelope, type PiGatePolicy } from "../pi/actionGate.ts";
 import { normalizePiActionEnvelope } from "../pi/actionEnvelope.ts";
 import { publishPiActionEvent, recordPiActionAuditEvent } from "../pi/actionEngine.ts";
 import { recordToolCallAuditEvent, type ToolCallAuditContext } from "../pi/toolCallAudit.ts";
-import {
-  supervisorIntentRouteAllowsMutation,
-  type SupervisorIntentRoute
-} from "../pi/supervisorIntentRouter.ts";
 
 type SdkAuditContext = {
   authorization?: PiGatePolicy;
@@ -22,7 +18,6 @@ type SdkAuditContext = {
   projectID?: string;
   readOnlyToolNames?: string[];
   source?: string;
-  supervisorIntentRoute?: SupervisorIntentRoute;
 };
 
 const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "find", "ls"]);
@@ -40,14 +35,6 @@ export function installPiSdkToolAudit(
   const previousAfter = session.agent.afterToolCall;
   const beforeHook = async (hook: BeforeToolCallContext, signal?: AbortSignal) => {
     startToolAudit(toolAudits, hook);
-    if (blockedByIntentRoute(hook, context)) {
-      const reason = "Supervisor intent route allows read-only tools only";
-      finishToolAudit(db, context, toolAudits, hook.toolCall.id, {
-        error: { message: reason, type: "intent_route_denied" },
-        status: "denied"
-      });
-      return { block: true, reason };
-    }
     const started = startSdkAction(db, context, hook);
     if (started && started.gate_decision !== "execute") {
       finishToolAudit(db, context, toolAudits, hook.toolCall.id, {
@@ -99,12 +86,6 @@ export function installPiSdkToolAudit(
     if (session.agent.beforeToolCall === beforeHook) session.agent.beforeToolCall = previousBefore;
     if (session.agent.afterToolCall === afterHook) session.agent.afterToolCall = previousAfter;
   };
-}
-
-function blockedByIntentRoute(hook: BeforeToolCallContext, context: SdkAuditContext): boolean {
-  const route = context.supervisorIntentRoute;
-  if (!route || route.input_audit.intent_hint === "review" || supervisorIntentRouteAllowsMutation(route)) return false;
-  return !(context.readOnlyToolNames ?? []).includes(cleanString(hook.toolCall.name));
 }
 
 function startToolAudit(active: Map<string, ActiveToolAudit>, hook: BeforeToolCallContext): ActiveToolAudit {

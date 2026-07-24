@@ -61,7 +61,7 @@ Manifest V1 目前只能选择既有 delivery mode，因此沿用 `local_changes
 
 ```bash
 cd backend-ts
-bun test src/workflows/investigate.test.ts src/workflows/registry.test.ts src/pi/supervisorWorkPlanner.test.ts src/domain/evidence/policy.test.ts src/domain/evidence/commandCollector.test.ts
+bun test src/workflows/investigate.test.ts src/workflows/registry.test.ts src/domain/evidence/policy.test.ts src/domain/evidence/commandCollector.test.ts
 ```
 
-验证覆盖 exact Registry/Planner 选择、四阶段顺序、真实 tool catalog 的只读权限、write-permission fail closed、三类报告/Evidence fixtures、非空写集合拒绝，以及 authority/迁移/回滚/删除门禁。
+验证覆盖 exact Registry、四阶段顺序、真实 tool catalog 的只读权限、write-permission fail closed、三类报告/Evidence fixtures、非空写集合拒绝，以及 authority/迁移/回滚/删除门禁。Workflow 是否适用于用户当前请求由 PI 判断，Registry 只校验 PI 选择的 exact ref。

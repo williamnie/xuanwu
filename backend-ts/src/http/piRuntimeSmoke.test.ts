@@ -32,6 +32,32 @@ afterEach(async () => {
 });
 
 describe("Bun PI runtime v1 smoke", () => {
+  test("fails visibly when the PI Agent has no configured model", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      await expect(createPiRuntimeSession(database, {
+        agent: agentRecord({ model_id: "", model_provider: "" }),
+        conversationID: "conv-model-missing",
+        project: projectRecord("demo")
+      })).rejects.toThrow("has no configured model provider/model");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("fails visibly when the configured PI model is unavailable", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      await expect(createPiRuntimeSession(database, {
+        agent: agentRecord({ model_id: "missing-model", model_provider: "missing-provider" }),
+        conversationID: "conv-model-unavailable",
+        project: projectRecord("demo")
+      })).rejects.toThrow("model is unavailable: missing-provider/missing-model");
+    } finally {
+      database.close();
+    }
+  });
+
   test("auto-registers local faux provider for preview smoke agent", async () => {
     const database = await openFixtureDatabase();
     try {

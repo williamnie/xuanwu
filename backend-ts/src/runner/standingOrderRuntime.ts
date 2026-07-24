@@ -8,7 +8,6 @@ import {
 import type { AutomationDefinition, VersionedAutomationTrigger } from "../domain/automation/contracts.ts";
 import { getIssueAsWork } from "../domain/work/issueAdapter.ts";
 import { collectProjectHeartbeatSignals } from "../pi/heartbeatSignals.ts";
-import { planHeartbeatActions } from "../pi/heartbeatPlanner.ts";
 import { listSupervisorCommitments } from "../pi/supervisorCommitments.ts";
 import { quietHoursResumeAt } from "../schedule/cronSchedule.ts";
 import type {
@@ -20,7 +19,7 @@ const DEFAULT_PROJECT_BUDGET = 5;
 const CONTEXT_SCHEMA = "xw.standing-order-context.v1";
 
 type StandingOrderContextItem = {
-  kind: "heartbeat_action" | "supervisor_commitment";
+  kind: "issue_signal" | "supervisor_commitment";
   payload: Record<string, unknown>;
   ref: string;
   updated_at: string;
@@ -31,7 +30,7 @@ export type StandingOrderContext = {
   budget: { consumed: number; limit: number };
   heartbeat_summary: {
     active_commitments: number;
-    action_candidates: number;
+    issue_signals: number;
     issue_total: number;
     open_issue_runs: number;
   };
@@ -85,7 +84,7 @@ export function prepareStandingOrderExecution(
     limit: budget
   });
   if (context.items.length === 0) {
-    return skipped("standing order no-op: no changed heartbeat action or active Supervisor commitment");
+    return skipped("standing order no-op: no changed issue signal or active Supervisor commitment");
   }
   return { context };
 }
@@ -100,24 +99,21 @@ function selectContext(
   budget = { consumed: consumedProjectBudget(db, projectID, now), limit: projectBudget(db, projectID) }
 ): StandingOrderContext {
   const signals = collectProjectHeartbeatSignals(db, projectID, now);
-  const candidates = planHeartbeatActions(signals, { now, projectID }).filter((candidate) => {
-    const work = getIssueAsWork(db, candidate.issue_id ?? 0);
-    return work?.provenance.origin.authority !== "automation_definitions";
-  });
+  const issueSignals = changedIssueSignals(db, signals);
   const commitments = listSupervisorCommitments(db, { limit: 40, projectID, statuses: ["active"] });
   const processed = resumeExisting ? new Map<string, string>() : processedContextVersions(db, automation.id);
   const items = [
-    ...candidates.map((candidate): StandingOrderContextItem => {
-      const issue = getIssue(db, candidate.issue_id ?? 0);
+    ...issueSignals.map((signal): StandingOrderContextItem => {
+      const issue = getIssue(db, signal.issue_id);
       return {
-        kind: "heartbeat_action",
+        kind: "issue_signal",
         payload: {
-          action_type: candidate.action_type,
-          issue_id: candidate.issue_id ?? 0,
-          rationale: candidate.rationale,
-          risk_level: candidate.risk_level
+          diagnosis_code: signal.diagnosis_code,
+          issue_id: signal.issue_id,
+          reason: signal.reason,
+          status: signal.status
         },
-        ref: `heartbeat-action:${candidate.action_type}:${candidate.issue_id ?? 0}`,
+        ref: `issue-signal:${signal.issue_id}`,
         updated_at: issue?.updated_at ?? now.toISOString()
       };
     }),
@@ -149,7 +145,7 @@ function selectContext(
     budget,
     heartbeat_summary: {
       active_commitments: commitments.length,
-      action_candidates: candidates.length,
+      issue_signals: issueSignals.length,
       issue_total: signals.issues.total,
       open_issue_runs: signals.issue_runs.open
     },
@@ -160,6 +156,30 @@ function selectContext(
     selected_at: now.toISOString(),
     trigger: { poll_interval_seconds: trigger.config.poll_interval_seconds, type: "continuous" }
   };
+}
+
+function changedIssueSignals(
+  db: RunnerDatabase,
+  signals: ReturnType<typeof collectProjectHeartbeatSignals>
+): Array<{
+  diagnosis_code: string;
+  issue_id: number;
+  reason: string;
+  status: string;
+}> {
+  const findings = new Map((signals.project?.findings ?? []).map((finding) => [finding.issue_id, finding]));
+  return (signals.project?.latest_issues ?? [])
+    .filter((issue) => issue.id > 0 && !["done", "cancelled"].includes(issue.status))
+    .filter((issue) => getIssueAsWork(db, issue.id)?.provenance.origin.authority !== "automation_definitions")
+    .map((issue) => {
+      const finding = findings.get(issue.id);
+      return {
+        diagnosis_code: finding?.reason ?? "",
+        issue_id: issue.id,
+        reason: finding?.message ?? "",
+        status: issue.status
+      };
+    });
 }
 
 function projectBudget(db: RunnerDatabase, projectID: string): number {

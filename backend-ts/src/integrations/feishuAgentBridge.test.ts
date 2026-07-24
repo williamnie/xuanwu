@@ -143,7 +143,7 @@ describe("Feishu agent bridge", () => {
     database.close();
   });
 
-  test("asks for a one-shot project target instead of assuming codex-issue-runner from generic issue wording", async () => {
+  test("passes ambiguous multi-project wording to PI without a pre-LLM project card", async () => {
     const database = await openFixtureDatabase();
     insertProject(database, "codex-issue-runner", "Codex Issue Runner");
     insertProject(database, "movo-mobile", "movo-mobile");
@@ -162,7 +162,7 @@ describe("Feishu agent bridge", () => {
       database,
       runConversation: async ({ projectId, prompt }) => {
         calls.push({ projectId, prompt });
-        return { text: "should not run before one-shot target selection" };
+        return { text: "PI will resolve the target or ask one question" };
       },
       sender: { sendTextMessage: async (input) => {
         sent.push(input);
@@ -172,12 +172,10 @@ describe("Feishu agent bridge", () => {
 
     const result = await bridge.handle({ event, ingest });
 
-    expect(result).toEqual({ reason: "project_selection_sent", replied: true });
-    expect(calls).toEqual([]);
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(calls).toEqual([{ projectId: "", prompt: "开始所有issue" }]);
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.text).toContain("请选择本次操作的 Runner 项目");
-    expect(sent[0]?.text).toContain("codex-issue-runner");
-    expect(sent[0]?.text).toContain("movo-mobile");
+    expect(sent[0]?.text).toBe("PI will resolve the target or ask one question");
     database.close();
   });
 
@@ -255,7 +253,7 @@ describe("Feishu agent bridge", () => {
     database.close();
   });
 
-  test("handles /memory command directly without starting Runner agent", async () => {
+  test("passes /memory to PI instead of executing a bridge command parser", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
     const prompts: string[] = [];
@@ -284,7 +282,7 @@ describe("Feishu agent bridge", () => {
       database,
       runConversation: async ({ prompt }) => {
         prompts.push(prompt);
-        return { text: "should not run" };
+        return { text: "PI memory reply" };
       },
       sender: { sendTextMessage: async (input) => {
         sent.push(input);
@@ -292,15 +290,14 @@ describe("Feishu agent bridge", () => {
       } }
     });
     const result = await bridge.handle({ event, ingest });
-    expect(result).toEqual({ reason: "memory_candidates_listed", replied: true });
-    expect(prompts).toEqual([]);
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(prompts).toEqual(["/memory"]);
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.text).toContain("待审核记忆");
-    expect(sent[0]?.text).toContain("12345678");
+    expect(sent[0]?.text).toBe("PI memory reply");
     database.close();
   });
 
-  test("asks for project mapping instead of starting Runner agent for task messages without a project", async () => {
+  test("passes task wording without a project to PI for autonomous clarification", async () => {
     const database = await openFixtureDatabase();
     const sent: FeishuTextMessageInput[] = [];
     const prompts: string[] = [];
@@ -317,7 +314,7 @@ describe("Feishu agent bridge", () => {
       database,
       runConversation: async ({ prompt }) => {
         prompts.push(prompt);
-        return { text: "should not run" };
+        return { text: "PI asks only if its tools cannot resolve the target" };
       },
       sender: { sendTextMessage: async (input) => {
         sent.push(input);
@@ -327,12 +324,12 @@ describe("Feishu agent bridge", () => {
 
     const result = await bridge.handle({ event, ingest });
 
-    expect(result).toEqual({ reason: "project_clarification_sent", replied: true });
-    expect(prompts).toEqual([]);
+    expect(result).toEqual({ reason: "agent_reply_sent", replied: true });
+    expect(prompts).toEqual(["@PI 帮我修复登录 bug"]);
     expect(sent).toEqual([{
       receiveId: "oc_group",
       receiveIdType: "chat_id",
-      text: "我收到任务了，但还不知道要交给哪个 Runner 项目。请在消息里带上项目名或 issue id 后再发。"
+      text: "PI asks only if its tools cannot resolve the target"
     }]);
     database.close();
   });

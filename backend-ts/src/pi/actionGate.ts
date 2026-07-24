@@ -88,6 +88,7 @@ export const PI_SAFE_ACTION_TYPES = [
   "issue.supervisor_decision", "project.list", "project.status",
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary", "memory.search", "memory.write_candidate",
+  "notification.preference.read",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend", "skill.intent_audit",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",
@@ -101,6 +102,7 @@ export const PI_READ_ONLY_ACTION_TYPES = [
   "repo.read_excerpt", "repo.search", "repo.tree",
   "session.list", "session.read_summary",
   "memory.search",
+  "notification.preference.read",
   "sdk.read", "sdk.grep", "sdk.find", "sdk.ls",
   "skill.list", "skill.read", "skill.recommend",
   "mcp.registry.list", "mcp.capability.read", "mcp.requirement.recommend", "mcp.resource.list", "mcp.resource.read",
@@ -111,6 +113,7 @@ const SUPERVISOR_HIGH_RISK_ACTIONS = new Set<string>(SUPERVISOR_CONTROL_HIGH_RIS
 const CONFIRM_ACTIONS = new Set([
   "agent.executor_assign", "agent.workflow_request", "issue.create", "issue.enqueue", "issue.schedule_enqueue",
   "issue_completion_watch.create", "issue_completion_watch.cancel",
+  "notification.preference.update",
   "issue.retry", "issue.state_repair", "needs_user.escalate",
   "session.resume_followup",
   ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES.filter((action) => !SUPERVISOR_HIGH_RISK_ACTIONS.has(action))

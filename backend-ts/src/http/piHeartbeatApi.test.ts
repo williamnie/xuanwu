@@ -27,7 +27,12 @@ describe("PI heartbeat API", () => {
       const run = await request(router, "/api/projects/demo/pi/heartbeat/run-once", "POST", {});
       expect(run.status).toBe(201);
       const result = await run.json() as Record<string, unknown>;
-      expect(result).toMatchObject({ project_id: "demo", status: "completed", actions_proposed: 1 });
+      expect(result).toMatchObject({
+        action_candidates: [],
+        actions_proposed: 0,
+        project_id: "demo",
+        status: "completed"
+      });
 
       const diagnostics = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi/heartbeat/diagnostics`));
       expect(diagnostics.status).toBe(200);

@@ -108,6 +108,34 @@ describe("PI memory tools", () => {
     }
   });
 
+  test("activates only an explicitly authorized structured preference without inspecting wording", async () => {
+    const fixture = await openFixture();
+    try {
+      const writeCandidate = toolByName(createPiMemoryTools(fixture.db, {
+        conversationID: "conv-authorized",
+        projectID: "demo",
+        source: "runner_chat"
+      }), "memory_write_candidate");
+
+      const result = await writeCandidate.execute("tool-authorized", {
+        activate: true,
+        content: "Zed",
+        kind: "preference",
+        scope: "global",
+        user_authorized: true
+      }, undefined, undefined, {} as never);
+
+      expect(result.details).toMatchObject({
+        content: "Zed",
+        disabled: 0,
+        kind: "preference",
+        scope: "global"
+      });
+    } finally {
+      await fixture.close();
+    }
+  });
+
   test("retrieves project policy memory with correct project/global scope and redaction", async () => {
     const fixture = await openFixture();
     try {

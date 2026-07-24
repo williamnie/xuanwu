@@ -6,14 +6,11 @@ import { listBrowserAssistantTools } from "../pi/browserToolProvider.ts";
 import { listBuiltinAssistantTools } from "../pi/builtinToolRegistry.ts";
 import { listHttpAssistantTools } from "../pi/httpToolProvider.ts";
 import { supervisorReportSummary } from "../pi/reportSupervisorSummary.ts";
-import type { SupervisorContextResolution } from "../pi/supervisorContextResolver.ts";
 import { SUPERVISOR_CONTROL_TOOL_NAMES } from "../pi/supervisorControlContracts.ts";
-import { routeSupervisorIntent } from "../pi/supervisorIntentRouter.ts";
-import { planSupervisorWork } from "../pi/supervisorWorkPlanner.ts";
-import { implementWorkflowRegistryContributions, IMPLEMENT_WORKFLOW_REF } from "../workflows/implement.ts";
-import { investigateWorkflowRegistryContributions, INVESTIGATE_WORKFLOW_REF } from "../workflows/investigate.ts";
+import { implementWorkflowRegistryContributions } from "../workflows/implement.ts";
+import { investigateWorkflowRegistryContributions } from "../workflows/investigate.ts";
 import { createWorkflowRegistry } from "../workflows/registry.ts";
-import { longRunningWorkflowRegistryContributions, RELEASE_WORKFLOW_REF } from "../workflows/releaseResearchMigrate.ts";
+import { longRunningWorkflowRegistryContributions } from "../workflows/releaseResearchMigrate.ts";
 import type {
   SupervisorWorkflowEvalCase,
   SupervisorWorkflowEvalScorer,
@@ -175,25 +172,10 @@ function evaluateCase(
   suite: SupervisorWorkflowEvalSuite,
   fixture: SupervisorWorkflowEvalCase,
   variant: SupervisorWorkflowModelVariant,
-  registry: ReturnType<typeof workflowRegistry>
+  _registry: ReturnType<typeof workflowRegistry>
 ): SupervisorWorkflowCaseResult {
   const observation = fixture.observations[variant.id]!;
-  const route = fixture.required_scorers.includes("intent_route") || fixture.required_scorers.includes("work_plan")
-    ? routeSupervisorIntent({ prompt: fixture.input.prompt, source: fixture.input.source }) : undefined;
-  const plan = fixture.required_scorers.includes("work_plan") && route
-    ? planSupervisorWork({
-      context: resolvedContext(fixture.input.project_id, route.input_audit.input_digest),
-      goal: fixture.input.prompt,
-      intent_route: route,
-      source: fixture.input.source,
-      workflow_refs: {
-        implement: IMPLEMENT_WORKFLOW_REF,
-        investigate: INVESTIGATE_WORKFLOW_REF,
-        release: RELEASE_WORKFLOW_REF
-      },
-      workflow_registry: registry
-    }) : undefined;
-  const scorers = fixture.required_scorers.map((scorer) => scoreFixture(scorer, suite, fixture, observation, route, plan));
+  const scorers = fixture.required_scorers.map((scorer) => scoreFixture(scorer, suite, fixture, observation));
   return {
     case_id: fixture.id,
     passed: scorers.every((scorer) => scorer.passed),
@@ -207,27 +189,8 @@ function scoreFixture(
   scorer: SupervisorWorkflowEvalScorer,
   suite: SupervisorWorkflowEvalSuite,
   fixture: SupervisorWorkflowEvalCase,
-  observation: SupervisorWorkflowEvalCase["observations"][string],
-  route: ReturnType<typeof routeSupervisorIntent> | undefined,
-  plan: ReturnType<typeof planSupervisorWork> | undefined
+  observation: SupervisorWorkflowEvalCase["observations"][string]
 ): SupervisorWorkflowScorerResult {
-  if (scorer === "intent_route") {
-    const actual = route && {
-      decision: route.decision,
-      intents: route.intents.map((intent) => intent.kind),
-      primary_intent: route.primary_intent
-    };
-    return exactResult(scorer, fixture.golden.route, actual, "canonical intent route differs from golden output");
-  }
-  if (scorer === "work_plan") {
-    const actual = plan && {
-      mode: plan.mode,
-      status: plan.status,
-      work_count: plan.works.length,
-      workflow_purposes: plan.workflow_selections.map((selection) => selection.purpose)
-    };
-    return exactResult(scorer, fixture.golden.plan, actual, "canonical Work plan differs from golden output");
-  }
   if (scorer === "tool_selection") {
     const unknown = observation.selected_tools.filter((tool) => !CONTROL_TOOL_NAMES.has(tool));
     const exact = equal(fixture.golden.selected_tools, observation.selected_tools);
@@ -365,29 +328,6 @@ function workflowRegistry() {
     throw new Error(`evaluation Workflow Registry is not ready: ${registry.diagnostics.map((item) => item.code).join(", ")}`);
   }
   return registry;
-}
-
-function resolvedContext(projectID: string, inputDigest: string): SupervisorContextResolution {
-  return {
-    candidates: [{
-      project_id: projectID,
-      score: 100,
-      sources: [{ kind: "explicit_project", ref: `projects:${projectID}`, score: 100 }],
-      work_ids: []
-    }],
-    clarification: { reason: "fixture project target is explicit", required: false },
-    input_audit: { char_count: 1, input_digest: inputDigest },
-    provenance: {
-      context_inheritance_allowed: true,
-      conversation_id: "eval-conversation",
-      resolver: "deterministic_supervisor_context",
-      source: "eval_fixture"
-    },
-    reason: "fixture project target is explicit",
-    schema_version: "xw.supervisor-context-resolution.v1",
-    status: "resolved",
-    target: { issue_ids: [], project_id: projectID, work_ids: [] }
-  };
 }
 
 function exactResult(

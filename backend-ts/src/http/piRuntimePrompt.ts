@@ -5,7 +5,6 @@ import { publicMcpRegistry } from "../mcp/registry.ts";
 import { buildPiMemoryPromptContext } from "../pi/memoryContext.ts";
 import { buildSkillPromptContext, recordSkillPromptContextAudit } from "../skills/promptContext.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
-import { supervisorIntentRoutePrompt } from "../pi/supervisorIntentRouter.ts";
 import { supervisorContextPrompt } from "../pi/supervisorContextResolver.ts";
 import { buildSupervisorCommitmentPromptContext } from "../pi/supervisorCommitments.ts";
 import { promptInjectionDefenseSystemPrompt } from "../security/promptInjectionDefense.ts";
@@ -20,7 +19,6 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     xuanwuSupervisorRoleContractPrompt(),
     promptInjectionDefenseSystemPrompt(),
     xuanwuSupervisorCompatibilityPrompt(),
-    ...(input.supervisorIntentRoute ? [supervisorIntentRoutePrompt(input.supervisorIntentRoute)] : []),
     ...(input.supervisorContext ? [supervisorContextPrompt(input.supervisorContext)] : []),
     ...(cleanString(input.channelContext) ? [cleanString(input.channelContext)] : []),
     "Use skills as metadata and issue intents only; do not execute arbitrary skills in this phase.",
@@ -30,6 +28,7 @@ export function buildPiRuntimeSystemPrompt(input: RuntimeSessionInput, db: Runne
     automaticMemoryCandidatePolicy(),
     legacyWorkToolWorkflow(),
     "Issue state repair: issue_state_repair_proposal is only for deterministic issueStateManager/runtime mismatch repairs returned by issue_state_diagnose. Do not use it for natural-language requests to mark, move, cancel, reopen, fail, or otherwise freely change an issue status; state repair payloads must carry deterministic expected_state preconditions.",
+    "Retry diagnosis: before recommending or calling Work/Run retry, call issue_execution_status for the target. If completion.state is implementation_complete_handoff_missing or completion.retry_recommended is false, distinguish completed implementation from formal Work status and do not retry the executor. Report the deterministic Handoff/bookkeeping reconciliation next step instead. Natural-language intent is your responsibility; deterministic gates validate only the concrete tool action, target, state preconditions, risk, and authorization.",
     "Token economy: prefer deterministic compact domain tools. Use work_list/work_read, run_list/run_read, evidence_list/evidence_read, and handoff_list/handoff_read before legacy issue/session reconstruction. Tool output is bounded to about 1500 tokens; narrow filters before requesting more records.",
     publicUrlSourceWorkflow(),
     repoAwareIssueProposalWorkflow(),
@@ -104,7 +103,7 @@ function manualContextWorkflow(): string {
     "Manual context trigger workflow:",
     "When the user asks you to look at recent source context such as group messages, screenshots, attachments, a thread, or a message before deciding what to do, call manual_context_intake.",
     "Pass source/time/thread/message/cursor/attachment hints when known; use source_provider_id/source_tool_name only when a connector is known; if the source is missing, call the tool or ask one short clarification instead of guessing a connector.",
-    "manual_context_intake only builds context bundle -> intake -> proposal/draft output; it must not send external replies or auto-enqueue issues.",
+    "manual_context_intake only fetches and persists a bounded context bundle. You must interpret it and choose any follow-up tool; the tool itself does not classify intent, create proposals, send replies, or enqueue issues.",
     "If the target Runner project is unclear, the result should be ask_user rather than assuming a repository."
   ].join(" ");
 }
@@ -113,6 +112,7 @@ function automaticMemoryCandidatePolicy(): string {
   return [
     "Automatic memory candidate policy for normal chat:",
     "When the user states stable user preferences, long-term goals, durable project habits, or reusable workflow facts, call memory_write_candidate.",
+    "When the user asks to inspect or change notification behavior, interpret the request yourself and call notification_preference_read or notification_preference_update with explicit structured fields.",
     "Explicit low-risk personal preferences such as \"call me X\" or \"your name is Y\" may auto-enable when the user directly authorizes them; tell the user they can revoke them with /memory or the settings panel.",
     "Guesses, summaries, sensitive data, project/team policy, workflow facts, and low-confidence observations must stay disabled pending candidates and must not be used as confirmed memory until approved.",
     "Default scope: personal preferences or long-term goals -> global; project habits or repo/team workflow -> project; temporary topic context -> conversation.",

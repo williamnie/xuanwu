@@ -18,8 +18,11 @@ describe("PI memory auto-enable policy", () => {
       }), "memory_write_candidate");
 
       const result = await writeCandidate.execute("tool-name-pref", {
+        activate: true,
         kind: "user_preference",
-        content: "用户明确要求：把我叫小北，你叫石头。"
+        content: "用户明确要求：把我叫小北，你叫石头。",
+        scope: "global",
+        user_authorized: true
       }, undefined, undefined, {} as never);
 
       expect(result.details).toMatchObject({
@@ -51,8 +54,11 @@ describe("PI memory auto-enable policy", () => {
       }), "memory_write_candidate");
 
       const result = await writeCandidate.execute("tool-runner-name-pref", {
+        activate: true,
         kind: "user_preference",
-        content: "Call the user 小北 and call the assistant 石头."
+        content: "Call the user 小北 and call the assistant 石头.",
+        scope: "global",
+        user_authorized: true
       }, undefined, undefined, {} as never);
 
       expect(result.details).toMatchObject({ disabled: 0, scope: "global" });

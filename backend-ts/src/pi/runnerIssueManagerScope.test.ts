@@ -61,10 +61,11 @@ describe("PI runner issue-manager scope", () => {
       });
 
       expect(() => actions.createIssueStateRepairProposal({
+        diagnosis_code: "user_requested_status_change",
         issue_id: issueID,
         operation: "move_status",
         rationale: "用户要求标记完成"
-      })).toThrow(/repair recommendation|deterministic/i);
+      })).toThrow(/diagnosis .* is not current/i);
 
       expect(getIssue(fixture.db, issueID)).toMatchObject({ project_id: "other", status: "triage" });
       expect(listPiActions(fixture.db, { status: "completed" })).not.toContainEqual(expect.objectContaining({
@@ -94,6 +95,7 @@ describe("PI runner issue-manager scope", () => {
       const repair = actions.createIssueStateRepairProposal({
         diagnosis_code: "done_missing_verification_evidence",
         issue_id: weakDone,
+        operation: "patch_status",
         rationale: "回到验证"
       }) as { decision: string; status: string };
 

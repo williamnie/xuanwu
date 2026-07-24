@@ -340,7 +340,7 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("records invalid JSON as internal audit without creating needs_user fallback", async () => {
+  test("turns invalid JSON into a visible needs_user alarm", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-invalid-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -355,14 +355,17 @@ describe("PI supervisor decision runtime", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("noop");
+      expect(result.decision).toMatchObject({
+        decision: "needs_user",
+        recovery_message: expect.stringContaining("Agent/model/provider")
+      });
       expect(result.error).toContain("invalid supervisor decision JSON");
       const events = fixture.db.sqlite.query<{ event_type: string; payload_json: string }, []>(
         "select event_type, payload_json from issue_supervisor_events order by id asc"
       ).all();
       expect(events).toMatchObject([{ event_type: "decision_failed" }]);
       expect(JSON.parse(events[0]?.payload_json ?? "{}")).toMatchObject({
-        fallback_decision: "noop",
+        fallback_decision: "needs_user",
         valid: false
       });
     } finally {
@@ -371,7 +374,7 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("records schema mismatch diagnostic without pending action", async () => {
+  test("records schema mismatch diagnostic as a visible needs_user alarm", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-schema-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -398,9 +401,9 @@ describe("PI supervisor decision runtime", () => {
       ).all();
       const payload = JSON.parse(events[0]?.payload_json ?? "{}");
 
-      expect(result).toMatchObject({ valid: false, decision: { decision: "noop" } });
+      expect(result).toMatchObject({ valid: false, decision: { decision: "needs_user" } });
       expect(listPiActions(fixture.db, { status: "pending" })).toEqual([]);
-      expect(payload).toMatchObject({ fallback_decision: "noop", raw_text_truncated: true, valid: false });
+      expect(payload).toMatchObject({ fallback_decision: "needs_user", raw_text_truncated: true, valid: false });
       expect(payload.error_summary).toContain("schema validation");
       expect(String(payload.raw_text).length).toBeLessThanOrEqual(2_000);
     } finally {

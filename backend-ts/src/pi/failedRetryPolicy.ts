@@ -47,8 +47,8 @@ export function evaluateProjectFailedRetryPolicy(input: ProjectRetryInput): Fail
 
 export function defaultFindingCategory(input: FindingCategoryInput): FailedRetryCategory {
   if (input.status === "pending_verification") return "verification_needed";
-  if (isNeedsUserText(input.detail)) return "needs_user";
-  if (input.autoRetryNextAt !== "" || isTransientText(input.detail)) return "transient";
+  if (input.autoRetryNextAt !== "") return "transient";
+  void input.detail;
   return "blocked";
 }
 
@@ -103,25 +103,4 @@ function iso(date: Date): string {
 
 function safeIso(timestamp: number): string {
   return Number.isFinite(timestamp) ? iso(new Date(timestamp)) : "";
-}
-
-function isNeedsUserText(value: string): boolean {
-  const lower = value.toLowerCase();
-  return [
-    "needs user", "need user", "user input", "human", "manual", "approval denied",
-    "requires confirmation", "waiting for user", "blocked by user"
-  ].some((token) => lower.includes(token));
-}
-
-function isTransientText(value: string): boolean {
-  const lower = value.toLowerCase().trim();
-  if (lower === "") return false;
-  if (["permission denied", "approval denied", "runner paused", "usage limit",
-    "authentication failed", "api returned 401", "api returned 429", "verification failed",
-    "test failed", "tests failed", "exit status", "command timed out"
-  ].some((token) => lower.includes(token))) return false;
-  return lower === "eof" || ["stream disconnected before completion", "transport error",
-    "network error", "error decoding response body", "connection reset", "unexpected eof",
-    ": eof", " eof", "timeout", "timed out", "deadline exceeded"
-  ].some((token) => lower.includes(token));
 }

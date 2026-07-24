@@ -5,9 +5,6 @@ import {
   type WorkID
 } from "../domain/evidence/contracts.ts";
 import type { WorkflowVerificationPolicy } from "../domain/evidence/policy.ts";
-import {
-  supervisorRecoveryActionCandidates
-} from "../pi/recoveryActionPlanner.ts";
 import type { PiRecoveryBudgetDecision } from "../pi/recoveryBudget.ts";
 import {
   classifyRecoveryDiagnosis,
@@ -142,6 +139,7 @@ export const REPAIR_WORKFLOW_MANIFEST: WorkflowManifest = {
 export const REPAIR_WORKFLOW_REF = workflowManifestRef(REPAIR_WORKFLOW_MANIFEST);
 
 export type RepairWorkflowPlanInput = {
+  action_candidate: Record<string, unknown>;
   allowed_actions: readonly RepairRecoveryAction[];
   budget: PiRecoveryBudgetDecision;
   diagnosis_code: string;
@@ -230,31 +228,16 @@ export function planRepairWorkflow(input: RepairWorkflowPlanInput): RepairWorkfl
     ? "budget_exhausted"
     : observedDiagnosis.failure_class === "transient" ? "transient" : "permanent";
   const mode = failureClass === "transient" ? "continue" : "replan";
-  const candidates = supervisorRecoveryActionCandidates({
-    eventID: input.event_id,
-    issueID: input.issue_id,
-    projectID: input.project_id,
-    payload: {
-      allowed_actions: [...input.allowed_actions],
-      budget_remaining: input.budget.issue_budget_remaining,
-      diagnosis_code: effectiveDiagnosisCode,
-      provider: input.provider ?? "",
-      provider_error_category: input.provider_error_category ?? "",
-      provider_session_id: input.provider_session_id ?? "",
-      provider_turn_id: input.provider_turn_id ?? "",
-      ready: true,
-      signal_type: "supervisor.candidate",
-      supervisor_mode: "assisted"
-    }
-  });
-  if (candidates.length !== 1) throw new Error("Repair recovery planner did not produce exactly one action candidate");
-  const candidate = candidates[0]!;
+  const candidate = structuredClone(input.action_candidate);
   const actionType = clean(candidate.action_type) as RepairRecoveryAction;
   if (!REPAIR_RECOVERY_ACTIONS.includes(actionType)) {
-    throw new Error(`Repair recovery planner returned unsupported action ${actionType}`);
+    throw new Error(`PI selected unsupported Repair action ${actionType}`);
+  }
+  if (!input.allowed_actions.includes(actionType)) {
+    throw new Error(`PI-selected Repair action ${actionType} is outside the workflow action scope`);
   }
   if (!authorizedAction(candidate, actionType)) {
-    throw new Error(`Repair action ${actionType} is not authorized by the deterministic gate policy`);
+    throw new Error(`PI-selected Repair action ${actionType} is not authorized by the deterministic gate policy`);
   }
   if (failureClass === "transient" && actionType === "needs_user.escalate") {
     throw new Error("transient Repair cannot skip recovery and escalate while budget remains");

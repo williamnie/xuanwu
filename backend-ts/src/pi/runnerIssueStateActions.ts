@@ -2,7 +2,12 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import { ProjectNotFoundError } from "../db/repositories/projects.ts";
 import { createPendingPiAction, executeSafePiAction } from "./actionEngine.ts";
-import { applyIssueStateRepair, diagnoseIssueState, recommendedRepairPayload } from "./issueStateManager.ts";
+import {
+  applyIssueStateRepair,
+  diagnoseIssueState,
+  recommendedRepairPayload,
+  type IssueStateRepairOperation
+} from "./issueStateManager.ts";
 import type { PiRunnerActionContext } from "./runnerActions.ts";
 
 type ProposalInput = {
@@ -17,7 +22,7 @@ export type IssueStateDiagnosisInput = {
   deadline_at?: string; project_id?: string; target_issue_ids?: number[]; target_label?: string; target_status?: string;
 };
 export type IssueStateRepairProposalInput = {
-  diagnosis_code?: string; issue_id: number; operation?: string; rationale?: string;
+  diagnosis_code: string; issue_id: number; operation: IssueStateRepairOperation; rationale?: string;
 };
 
 export function safeIssueStateDiagnosis(

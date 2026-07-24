@@ -2,7 +2,7 @@ export type PiAttentionDecisionValue =
   "ignore" | "inbox_only" | "propose_issue" | "ask_clarification" | "blocked_by_policy";
 
 export type PiAttentionEvidence = {
-  kind: "keyword" | "mention" | "policy" | "project";
+  kind: "mention" | "policy";
   reason: string;
   value: string;
 };
@@ -12,7 +12,7 @@ export type PiAttentionDecision = {
   evidence: PiAttentionEvidence[];
   needs_project: boolean;
   project_id: string;
-  project_source: "chat_mapping" | "explicit_project" | "none" | "user_mapping";
+  project_source: "none";
   reason: string;
   should_create_issue_proposal: boolean;
   signals: string[];
@@ -41,141 +41,45 @@ export type PiAttentionInput = {
   projects?: PiAttentionProject[];
 };
 
-type SignalMatch = { evidence: PiAttentionEvidence[]; signals: string[] };
-type ProjectMatch = { evidence?: PiAttentionEvidence; projectId: string; source: PiAttentionDecision["project_source"] };
-
-const REQUEST_KEYWORDS = [
-  { signal: "request_keyword", value: "帮我" },
-  { signal: "fix_keyword", value: "修复" },
-  { signal: "fix_keyword", value: "fix" },
-  { signal: "feature_keyword", value: "实现" },
-  { signal: "feature_keyword", value: "implement" },
-  { signal: "bug_keyword", value: "报错" },
-  { signal: "bug_keyword", value: "error" },
-  { signal: "bug_keyword", value: "bug" },
-  { signal: "screenshot_keyword", value: "截图" },
-  { signal: "screenshot_keyword", value: "screenshot" },
-  { signal: "log_keyword", value: "日志" },
-  { signal: "log_keyword", value: "log" }
-] as const;
 const BOT_MENTION_PATTERN = /(?:^|@|\s)(?:pi|bot|机器人)(?:\b|\s|$)/i;
-const NON_TASK_QUESTIONS = [
-  /能\s*帮\s*我\s*做\s*什么/,
-  /可以\s*帮\s*我\s*做\s*什么/,
-  /能\s*做\s*什么/,
-  /可以\s*做\s*什么/,
-  /你\s*是谁/,
-  /怎么\s*用/
-] as const;
-const ISSUE_COMMAND_PATTERN = /^\/issue(?:\s|$)/i;
 
+/**
+ * This boundary decides only whether an authenticated channel message may reach PI.
+ * It deliberately does not classify task intent, infer a project, or select an action.
+ */
 export function decidePiAttention(input: PiAttentionInput): PiAttentionDecision {
   const message = normalizeMessage(input.message);
-  const attention = attentionSignals(message, input.policy);
-  const task = taskSignals(message);
-  const project = resolveProject(message, input.policy, input.projects ?? []);
-  const evidence = [...attention.evidence, ...task.evidence, ...(project.evidence ? [project.evidence] : [])];
-  const signals = unique([...attention.signals, ...task.signals]);
-  return decisionFor({ attention, evidence, project, signals, task });
-}
-
-function decisionFor(input: {
-  attention: SignalMatch;
-  evidence: PiAttentionEvidence[];
-  project: ProjectMatch;
-  signals: string[];
-  task: SignalMatch;
-}): PiAttentionDecision {
-  if (input.task.signals.length > 0 && input.attention.signals.length === 0) {
-    return result("blocked_by_policy", "task_signal_without_trusted_attention", input, false);
-  }
-  if (input.task.signals.length === 0 && input.attention.signals.length === 0) {
-    return result("ignore", "no_attention_signal", {
-      ...input,
-      evidence: [{ kind: "policy", reason: "no_attention_signal", value: "message_ignored" }],
-      signals: []
-    }, false);
-  }
-  if (input.task.signals.length === 0) {
-    return result("inbox_only", "trusted_source_without_task_signal", input, false);
-  }
-  if (input.project.projectId === "") {
-    return result("ask_clarification", "needs_project", input, true);
-  }
-  return result("propose_issue", "task_signal_with_project", input, false);
-}
-
-function result(
-  decision: PiAttentionDecisionValue,
-  reason: string,
-  input: { evidence: PiAttentionEvidence[]; project: ProjectMatch; signals: string[] },
-  needsProject: boolean
-): PiAttentionDecision {
-  return {
-    decision,
-    evidence: input.evidence,
-    needs_project: needsProject,
-    project_id: input.project.projectId,
-    project_source: input.project.source,
-    reason,
-    should_create_issue_proposal: decision === "propose_issue",
-    signals: input.signals
-  };
-}
-
-function attentionSignals(message: Required<PiAttentionMessage>, policy: PiAttentionPolicy = {}): SignalMatch {
-  const matches: SignalMatch = { evidence: [], signals: [] };
+  const evidence: PiAttentionEvidence[] = [];
+  const signals: string[] = [];
   if (botMentioned(message)) {
-    addSignal(matches, "bot_mentioned", "mention", "bot_mentioned", mentionValue(message));
+    signals.push("bot_mentioned");
+    evidence.push({ kind: "mention", reason: "bot_mentioned", value: mentionValue(message) });
   }
-  if (includesClean(policy.allowedChatIds, message.chat_id)) {
-    addSignal(matches, "allowed_chat", "policy", "allowed_chat", message.chat_id);
+  if (includesClean(input.policy?.allowedChatIds, message.chat_id)) {
+    signals.push("allowed_chat");
+    evidence.push({ kind: "policy", reason: "allowed_chat", value: message.chat_id });
   }
-  if (matchesAllowedUser(policy.allowedUserIds, message)) {
-    addSignal(matches, "allowed_user", "policy", "allowed_user", message.sender_id || message.sender_open_id);
+  if (matchesAllowedUser(input.policy?.allowedUserIds, message)) {
+    signals.push("allowed_user");
+    evidence.push({
+      kind: "policy",
+      reason: "allowed_user",
+      value: message.sender_id || message.sender_open_id
+    });
   }
-  return matches;
-}
-
-function taskSignals(message: Required<PiAttentionMessage>): SignalMatch {
-  const matches: SignalMatch = { evidence: [], signals: [] };
-  const text = lower(message.text);
-  if (isConversationalQuestion(text)) return matches;
-  if (isIssueCommand(message.text)) {
-    addSignal(matches, "slash_issue_command", "keyword", "slash_issue_command", "/issue");
-  }
-  for (const keyword of REQUEST_KEYWORDS) {
-    if (text.includes(lower(keyword.value))) {
-      addSignal(matches, keyword.signal, "keyword", keyword.signal, keyword.value);
-    }
-  }
-  if (message.attachments.length > 0) {
-    addSignal(matches, "attachment_signal", "keyword", "attachment_metadata", String(message.attachments.length));
-  }
-  return matches;
-}
-
-function isConversationalQuestion(text: string): boolean {
-  return NON_TASK_QUESTIONS.some((pattern) => pattern.test(text));
-}
-
-function isIssueCommand(text: string): boolean {
-  return ISSUE_COMMAND_PATTERN.test(clean(text));
-}
-
-function resolveProject(
-  message: Required<PiAttentionMessage>,
-  policy: PiAttentionPolicy = {},
-  projects: PiAttentionProject[]
-): ProjectMatch {
-  void policy;
-  const explicit = projects.find((project) => projectMentioned(message.text, project));
-  return explicit ? projectMatch(explicit.id, "explicit_project") : { projectId: "", source: "none" };
-}
-
-function projectMatch(projectId: string, source: ProjectMatch["source"]): ProjectMatch {
-  const id = clean(projectId);
-  return { evidence: { kind: "project", reason: source, value: id }, projectId: id, source };
+  const trusted = signals.length > 0;
+  return {
+    decision: trusted ? "inbox_only" : "ignore",
+    evidence: trusted
+      ? evidence
+      : [{ kind: "policy", reason: "no_trusted_attention", value: "message_ignored" }],
+    needs_project: false,
+    project_id: "",
+    project_source: "none",
+    reason: trusted ? "trusted_message_forwarded_to_pi" : "no_trusted_attention",
+    should_create_issue_proposal: false,
+    signals: [...new Set(signals)]
+  };
 }
 
 function normalizeMessage(message: PiAttentionMessage): Required<PiAttentionMessage> {
@@ -190,24 +94,8 @@ function normalizeMessage(message: PiAttentionMessage): Required<PiAttentionMess
   };
 }
 
-function addSignal(
-  matches: SignalMatch,
-  signal: string,
-  kind: PiAttentionEvidence["kind"],
-  reason: string,
-  value: string
-): void {
-  if (!matches.signals.includes(signal)) matches.signals.push(signal);
-  matches.evidence.push({ kind, reason, value });
-}
-
 function matchesAllowedUser(allowed: string[] | undefined, message: Required<PiAttentionMessage>): boolean {
   return includesClean(allowed, message.sender_id) || includesClean(allowed, message.sender_open_id);
-}
-
-function projectMentioned(text: string, project: PiAttentionProject): boolean {
-  const body = lower(text);
-  return [project.id, project.name].map(lower).filter(Boolean).some((value) => body.includes(value));
 }
 
 function mentionValue(message: Required<PiAttentionMessage>): string {
@@ -222,14 +110,6 @@ function botMentioned(message: Required<PiAttentionMessage>): boolean {
 function includesClean(values: string[] | undefined, value: string): boolean {
   const needle = clean(value);
   return needle !== "" && Array.isArray(values) && values.map(clean).includes(needle);
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function lower(value: unknown): string {
-  return clean(value).toLowerCase();
 }
 
 function clean(value: unknown): string {

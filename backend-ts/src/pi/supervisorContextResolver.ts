@@ -398,7 +398,7 @@ function normalizeForMatch(value: unknown): string {
 }
 
 function allowsConversationInheritance(source: string): boolean {
-  return source === "runner_chat" || source === "runner_review";
+  return source === "runner_chat" || source === "runner_review" || source === "feishu_runner_chat";
 }
 
 function cleanString(value: unknown): string {

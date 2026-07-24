@@ -498,10 +498,8 @@ backend-ts/src/pi/automationRunner.ts
 backend-ts/src/pi/heartbeatActionExecution.ts
 backend-ts/src/pi/heartbeatOrchestrator.ts
 backend-ts/src/pi/heartbeatOrchestratorSupport.ts
-backend-ts/src/pi/heartbeatPlanner.ts
 backend-ts/src/pi/heartbeatSignals.ts
 backend-ts/src/pi/heartbeatTypes.ts
-backend-ts/src/pi/heartbeatVerificationPlanner.ts
 backend-ts/src/pi/issueCompletionWatchActions.ts
 backend-ts/src/pi/issueCompletionWatchEvaluator.ts
 backend-ts/src/pi/manualTrigger.ts
@@ -549,7 +547,6 @@ backend-ts/src/pi/toolRegistrySnapshot.ts
 backend-ts/src/pi/attentionRouter.ts
 backend-ts/src/pi/digestFlushScheduler.ts
 backend-ts/src/pi/digestFormatter.ts
-backend-ts/src/pi/failurePatternCandidates.ts
 backend-ts/src/pi/failurePatterns.ts
 backend-ts/src/pi/guardianActionLease.ts
 backend-ts/src/pi/guardianAlertRetryPolicy.ts
@@ -571,6 +568,7 @@ backend-ts/src/pi/imReplyOutboxDispatcher.ts
 backend-ts/src/pi/notificationCoordinator.ts
 backend-ts/src/pi/notificationPreferenceResolver.ts
 backend-ts/src/pi/notificationPreferenceService.ts
+backend-ts/src/pi/notificationPreferenceTools.ts
 ```
 
 </details>
@@ -638,7 +636,6 @@ backend-ts/src/pi/issueSupervisorRecoveryFixtures.ts
 
 ```text
 backend-ts/src/pi/meaningfulProgress.ts
-backend-ts/src/pi/projectFindingActions.ts
 backend-ts/src/pi/projectFindings.ts
 backend-ts/src/pi/projectSnapshot.ts
 backend-ts/src/pi/repoContextPack.ts
@@ -672,7 +669,6 @@ backend-ts/src/pi/issueToolViews.ts
 backend-ts/src/pi/providerErrorParser.ts
 backend-ts/src/pi/providerErrorParserSupport.ts
 backend-ts/src/pi/providerOutageDiagnosis.ts
-backend-ts/src/pi/recoveryActionPlanner.ts
 backend-ts/src/pi/recoveryBudget.ts
 backend-ts/src/pi/recoveryDiagnosis.ts
 backend-ts/src/pi/runnerActionTools.ts
@@ -686,8 +682,6 @@ backend-ts/src/pi/supervisorCommitments.ts
 backend-ts/src/pi/supervisorContextResolver.ts
 backend-ts/src/pi/supervisorControlContracts.ts
 backend-ts/src/pi/supervisorControlTools.ts
-backend-ts/src/pi/supervisorIntentRouter.ts
-backend-ts/src/pi/supervisorWorkPlanner.ts
 ```
 
 </details>

@@ -23,7 +23,7 @@ afterAll(async () => {
 });
 
 describe("P09.02 Feishu ChannelConnector migration", () => {
-  test("normalizes, deduplicates, preserves project hints, and reuses conversation routing", async () => {
+  test("normalizes, deduplicates, preserves explicit envelope hints without inferring message intent, and reuses conversation routing", async () => {
     const db = await fixtureDatabase();
     try {
       const config = configFixture();
@@ -45,7 +45,7 @@ describe("P09.02 Feishu ChannelConnector migration", () => {
       const events = listExternalEvents(db, { source: "feishu" });
       expect(duplicate.event_id).toBe(first.event_id);
       expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({ project_hint: "demo", project_id: "demo", trust_level: "untrusted" });
+      expect(events[0]).toMatchObject({ project_hint: "", project_id: "", trust_level: "untrusted" });
 
       const firstRoute = routeFeishuConversation(db, {
         clock: { now: () => NOW }, event: normalized.event, prompt: normalized.event.text

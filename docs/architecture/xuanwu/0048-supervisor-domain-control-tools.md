@@ -24,15 +24,15 @@ local Router 不监听端口，也没有绕过 Action Gate 的公开入口。
 
 ## 2. 权限、风险与审计
 
-- SDK pre-tool hook 先按 registry `read | write | dangerous` 和 P06.03 intent route fail closed；
+- SDK pre-tool hook 只按 registry `read | write | dangerous`、精确 target/scope、授权 envelope 和 Action Gate fail closed；自然语言本身不在 LLM 前被分类，也不能授权；
 - handler 再把 domain action 转成 `work.* | run.* | evidence.* | handoff.*` action envelope，经过既有 PI Action Gate 的
   action allowlist、project scope、delegation/authorization envelope 和 risk classification；
 - Work/Run mutation 只有 Action Gate 返回 `execute` 后才组装 domain audit。`actor.kind` 固定为 `supervisor`，domain gate
   仍由 authenticated adapter 固定为 `deterministic_policy/allow`；tool schema 不接受 `gate`，LLM 不能声明权限；
 - `work_control`、`run_control` 在 registry 粗粒度标为 `dangerous/high`；`work.cancel`、`run.interrupt`
   在 Action Gate 中保持 high-risk，即使存在 delegated envelope 也只生成待审批动作，不直接执行；
-- 其他写操作是 confirmation-required mutation，只有明确 mutating intent 产生的 project-scoped delegated
-  envelope 才能执行；
+- 其他写操作是 confirmation-required mutation，只有 PI 已选择具体工具，且 project-scoped delegated
+  envelope、target、revision、idempotency 与 Action Gate 全部匹配时才能执行；
 - 每个实际调用同时留下 `tool_call_audit`、`pi_actions/pi_action_events` 和 Work/Run domain audit。async provider/domain
   outcome 必须完成后才把 PI action 标为 `completed`；失败写 `execution_error`。
 

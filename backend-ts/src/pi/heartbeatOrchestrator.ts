@@ -8,9 +8,7 @@ import {
 } from "../db/repositories/pi.ts";
 import { heartbeatAuthorizationPolicy, heartbeatAuthorizationSummary } from "./heartbeatActionExecution.ts";
 import { collectProjectHeartbeatSignals } from "./heartbeatSignals.ts";
-import { planHeartbeatActions } from "./heartbeatPlanner.ts";
 import {
-  guardianSignalsFromHeartbeatActions,
   guardianSignalsFromSupervisorCandidates,
   writeGuardianSignals
 } from "./guardianSignals.ts";
@@ -121,13 +119,16 @@ async function runHeartbeatLocked(input: HeartbeatInput, ctx: ReturnType<typeof 
     recordSupervisorSignals(input.database, ctx, signals);
     const policy = evaluatePolicies(input.database, input, ctx);
     recordHeartbeatEvent(input.database, ctx, "evaluate_policies", policy);
-    const plan = planHeartbeatActions(signals, { now: ctx.now, projectID: ctx.projectID });
-    recordHeartbeatEvent(input.database, ctx, "plan_actions", { count: plan.length });
+    const plan: HeartbeatActionCandidate[] = [];
+    recordHeartbeatEvent(input.database, ctx, "delegate_decision", {
+      count: signals.supervisor.candidates.length,
+      decision_owner: "pi_supervisor"
+    });
     recordHeartbeatEvent(input.database, ctx, "authorization_gate", policy.authorization_summary);
-    const proposed = writeGuardianSignals(input.database, [
-      ...guardianSignalsFromHeartbeatActions(plan, ctx),
-      ...guardianSignalsFromSupervisorCandidates(signals.supervisor.candidates, ctx)
-    ]);
+    const proposed = writeGuardianSignals(
+      input.database,
+      guardianSignalsFromSupervisorCandidates(signals.supervisor.candidates, ctx)
+    );
     if (proposed.length > 0) recordHeartbeatEvent(input.database, ctx, "guardian_signal", { count: proposed.length, signals: proposed });
     const result = completedResult(ctx, signals, policy, plan, proposed);
     recordHeartbeatEvent(input.database, ctx, "audit", {

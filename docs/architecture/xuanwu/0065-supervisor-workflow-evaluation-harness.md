@@ -9,8 +9,7 @@ token/cost 预算与 regression threshold。Harness 位于 `backend-ts/src/evals
 
 评测必须复用当前产品 authority：
 
-- intent route：`routeSupervisorIntent()`；
-- plan / Workflow selection：`planSupervisorWork()` + canonical Workflow Registry contributions；
+- PI decision observation：recorded model variant 提供实际 `selected_tools`，不由评测器重新分类自然语言；
 - tool selection：以 `SUPERVISOR_CONTROL_TOOL_NAMES` 为允许集合，variant 选择不得越权；
 - completion gate：`ISSUE_WORK_VERIFICATION_POLICY` + `evaluateWorkflowVerificationPolicy()`；
 - report：`supervisorReportSummary()`；
@@ -24,10 +23,9 @@ token/cost 预算与 regression threshold。Harness 位于 `backend-ts/src/evals
 每个 case 包含：
 
 - `input`：固定 prompt、source、project，以及可选 completion/report fixture；
-- `golden`：路由、计划、工具、完成状态、报告字段和 token/cost 上限；
+- `golden`：工具、完成状态、报告字段和 token/cost 上限；
 - `observations`：每个 model variant 的工具选择与 token usage；
-- `required_scorers`：从 `intent_route`、`work_plan`、`tool_selection`、`completion_gate`、`report`、
-  `token_cost` 选择的确定性 scorer。
+- `required_scorers`：从 `tool_selection`、`completion_gate`、`report`、`token_cost` 选择的确定性 scorer。
 
 Suite 必须恰好有一个 baseline。所有 variant 必须覆盖全部 case；缺 observation、未知 variant、重复 id、
 token 加总不一致均 fail closed。候选 variant 还必须满足整体分数、逐 scorer 分数、相对 baseline 分数退化和
@@ -66,5 +64,5 @@ CI 应把该命令作为独立 `commandExecution`，使 Runner completion gate �
 
 回滚时删除 `backend-ts/src/evals/`、本 fixture 与本文即可；产品运行链无迁移、无数据恢复动作。
 
-最终删除门禁：仅当后续 evaluator 已能复用同一 runtime authority、覆盖六类 scorer、提供固定 golden、
+最终删除门禁：仅当后续 evaluator 已能复用同一 runtime authority、覆盖四类 scorer、提供固定 golden、
 model regression 与 token/cost threshold，并能输出等价 JSON/Markdown 非交互报告后，才可删除本 Harness。

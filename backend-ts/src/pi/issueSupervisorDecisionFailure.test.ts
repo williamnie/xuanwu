@@ -3,7 +3,7 @@ import { decisionFailurePayload, schemaDecisionFailure } from "./issueSupervisor
 import { rateLimitContext } from "./issueSupervisorDecisionTestSupport.ts";
 
 describe("PI supervisor decision failure diagnostics", () => {
-  test("summarizes schema mismatch without creating a user-facing fallback", () => {
+  test("summarizes schema mismatch with a user-facing alarm decision", () => {
     const failure = schemaDecisionFailure({
       confidence: 0,
       decision: "wait",
@@ -23,13 +23,13 @@ describe("PI supervisor decision failure diagnostics", () => {
       failure,
       fallback: {
         confidence: "low",
-        decision: "noop",
+        decision: "needs_user",
         evidence_refs: ["supervisor_decision_invalid"],
-        expected_outcome: "PI records invalid decision internally",
+        expected_outcome: "human reviews the invalid decision",
         fallback_if_no_progress: "blocked",
         rationale: failure.error,
-        recovery_message: "",
-        risk_level: "low"
+        recovery_message: "PI Supervisor failed to return a valid decision.",
+        risk_level: "medium"
       },
       raw
     });
@@ -40,7 +40,7 @@ describe("PI supervisor decision failure diagnostics", () => {
     expect(JSON.stringify(failure.schema_errors)).toContain("/wait_until");
     expect(payload).toMatchObject({
       context: { issue_id: 301, project_id: "demo", run_id: "issue-301-attempt-1" },
-      fallback_decision: "noop",
+      fallback_decision: "needs_user",
       raw_text_truncated: true,
       valid: false
     });

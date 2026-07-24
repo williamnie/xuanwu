@@ -89,7 +89,8 @@ describe("Xuanwu Supervisor runtime prompt", () => {
   test("keeps investigation, repo proposal, memory, and repair boundaries", async () => {
     await withRuntimePrompt("boundaries", (prompt) => {
       expect(prompt).toContain("Manual context trigger workflow:");
-      expect(prompt).toContain("manual_context_intake only builds context bundle -> intake -> proposal/draft output");
+      expect(prompt).toContain("manual_context_intake only fetches and persists a bounded context bundle");
+      expect(prompt).toContain("You must interpret it and choose any follow-up tool");
       expect(prompt).toContain("Automatic memory candidate policy");
       expect(prompt).toContain("memory_write_candidate");
       expect(prompt).toContain("Repo-aware issue proposal workflow:");

@@ -1,6 +1,8 @@
 # ADR-XW-0046：Supervisor Intent Router
 
-- 状态：Accepted
+> **状态：Superseded by ADR-XW-0085。** 逐 turn 的自然语言 intent router 已从运行链删除；本文仅保留历史决策背景，不再描述当前实现。
+
+- 状态：Superseded
 - 日期：2026-07-17
 - 路线 issue：XW P06.03 / Runner #682
 - 硬依赖：XW P06.01 / #680（`done`）

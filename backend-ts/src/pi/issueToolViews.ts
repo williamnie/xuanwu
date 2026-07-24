@@ -1,7 +1,10 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { listStoredHandoffs } from "../db/repositories/handoffs.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { getIssue, listIssueRuns, listIssues, type Issue, type IssueRun } from "../db/repositories/issues.ts";
+import { issueAsWork } from "../domain/work/issueAdapter.ts";
 import { redactSensitiveText } from "../util/redact.ts";
+import { makeDomainID } from "../xuanwu/coreDomainContracts.ts";
 
 export const DEFAULT_ISSUE_LIST_LIMIT = 50;
 export const MAX_ISSUE_LIST_LIMIT = 50;
@@ -62,6 +65,7 @@ export function createIssueExecutionStatus(db: RunnerDatabase, issueID: number) 
   const runs = listIssueRuns(db, issue.id);
   const latestRun = runs.at(-1);
   return {
+    completion: createIssueCompletionProjection(db, issue, latestRun),
     detail_hint: "Use issue_read only when full description is needed.",
     issue: issueSummary(issue),
     latest_run: latestRun ? runSummary(latestRun) : null,
@@ -69,6 +73,80 @@ export function createIssueExecutionStatus(db: RunnerDatabase, issueID: number) 
     run_count: runs.length,
     source: "issue_execution_status"
   };
+}
+
+export function createIssueCompletionProjection(
+  db: RunnerDatabase,
+  issue: Issue,
+  latestRun: IssueRun | undefined
+) {
+  const outcome = latestCompletionGateOutcome(db, issue.id);
+  const handoffGap = cleanString(outcome.handoff_gap);
+  const runID = latestRun ? makeDomainID("run", "issue_runs", latestRun.id) : "";
+  const workID = issueAsWork(issue).id;
+  const handoffPresent = runID !== "" && listStoredHandoffs(db, {
+    limit: 100,
+    statuses: ["ready", "delivered"],
+    work_id: workID
+  }).items.some((item) => item.handoff.run_ids.includes(runID));
+  const runEnded = Boolean(latestRun?.ended_at);
+  const implementationComplete = runEnded && (
+    issue.status === "done" ||
+    handoffPresent ||
+    (latestRun?.status === "pending_verification" && handoffGap !== "")
+  );
+  const state = issue.status === "done" && handoffPresent
+    ? "complete"
+    : implementationComplete && !handoffPresent
+      ? "implementation_complete_handoff_missing"
+      : latestRun?.status === "failed"
+        ? "execution_failed"
+        : runEnded
+          ? "completion_unresolved"
+          : latestRun
+            ? "running"
+            : "not_started";
+  return {
+    blocker: handoffGap === "" ? null : {
+      detail: preview(handoffGap),
+      kind: "handoff_gap"
+    },
+    formal_status: issue.status,
+    handoff_present: handoffPresent,
+    implementation_complete: implementationComplete,
+    next_step: completionNextStep(state),
+    retry_recommended: state === "execution_failed",
+    state,
+    truth_basis: {
+      completion_gate_event_id: outcome._event_id ?? null,
+      evidence_count: arrayValue(outcome.evidence_ids).length,
+      latest_run_id: runID || null,
+      latest_run_status: latestRun?.status ?? null,
+      work_id: workID
+    }
+  };
+}
+
+function latestCompletionGateOutcome(db: RunnerDatabase, issueID: number): Record<string, unknown> {
+  const event = listIssueEvents(db, issueID, {
+    hydrateArtifacts: false,
+    limit: 1,
+    types: ["issue.verification_gate_outcome.v1"]
+  })[0];
+  if (!event) return {};
+  const payload = jsonObject(event.payload);
+  return { ...payload, _event_id: event.id };
+}
+
+function completionNextStep(state: string): string {
+  if (state === "complete") return "No completion action is required.";
+  if (state === "implementation_complete_handoff_missing") {
+    return "Reconcile the completed Run's Git delivery Evidence into a persisted Handoff; do not retry the executor.";
+  }
+  if (state === "execution_failed") return "Inspect the failed Run and retry only after confirming the failure is retryable.";
+  if (state === "running") return "Wait for or inspect the active Run.";
+  if (state === "not_started") return "Create or enqueue a Run when execution is requested.";
+  return "Inspect the completion gate outcome before choosing any mutation.";
 }
 
 function issueSummary(issue: Issue): IssueSummary {
@@ -133,6 +211,21 @@ function preview(value: string): string {
 
 function safeText(value: string): string {
   return redactSensitiveText(value).replace(ABSOLUTE_PATH_PATTERN, "[redacted-path]");
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function jsonObject(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 function cleanString(value: unknown): string {

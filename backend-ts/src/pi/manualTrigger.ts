@@ -5,15 +5,11 @@ import {
   type ContextBundleSourceQuery
 } from "../db/repositories/contextBundles.ts";
 import { listExternalEvents, type ExternalEventRecord } from "../db/repositories/externalEvents.ts";
-import type { AttentionInboxItemRecord, IntakeRunRecord } from "../db/repositories/intakeRuns.ts";
-import type { PiAction } from "../db/repositories/pi.ts";
 import {
   buildContextBundleFromEvents,
   buildManualContextBundleRequest,
   type ManualContextBundleRequest
 } from "./contextBundleBuilder.ts";
-import { runDomainSkillAndMarkProposal } from "./domainSkillRun.ts";
-import { runIntakeSkill, type LlmIntakeOutput, type LlmIntakeRequest } from "./llmIntake.ts";
 import {
   listManualSourcePullSources,
   pullManualSourceEvents,
@@ -44,9 +40,6 @@ export type ManualContextIntakeInput = {
 
 export type ManualContextIntakeResult = {
   bundle?: ContextBundleRecord;
-  inbox_items?: AttentionInboxItemRecord[];
-  intake_run?: IntakeRunRecord;
-  proposal_actions?: PiAction[];
   reason: string;
   request?: ManualContextBundleRequest;
   status: "needs_user" | "succeeded";
@@ -82,20 +75,12 @@ export async function runManualContextIntake(
   }
   if (!selected.anchor) return needsUser("context_not_found", contextHelp(source, selected.reason), request);
   const bundle = persistManualBundle(db, request, selected.events, selected.anchor, now);
-  const intake = await runIntakeSkill(db, bundle, (llmRequest) => manualIntakeModel(llmRequest, input), {
-    model: "manual-trigger-intake"
-  });
-  const domainRuns = await Promise.all(intake.created_items.map((item) => runDomainSkillAndMarkProposal(db, item)));
-  const proposals = domainRuns.map((run) => run.action);
   return {
     bundle,
-    inbox_items: intake.created_items,
-    intake_run: intake.run,
-    proposal_actions: proposals,
-    reason: "manual_context_intake_completed",
+    reason: "manual_context_bundle_ready",
     request,
     status: "succeeded",
-    text: successText(bundle, intake.created_items, proposals)
+    text: successText(bundle)
   };
 }
 
@@ -148,7 +133,7 @@ function manualRequest(
   source: string,
   now: Date
 ): ManualContextBundleRequest {
-  const lookback = lookbackMinutes(input, prompt);
+  const lookback = lookbackMinutes(input);
   const base = buildManualContextBundleRequest(prompt, {
     defaultLookbackMinutes: lookback,
     limit: positiveInteger(input.limit, DEFAULT_LIMIT),
@@ -194,26 +179,6 @@ function selectManualEvents(
   return { anchor, events, reason: anchor ? "" : missingContextReason(all, events, query) };
 }
 
-function manualIntakeModel(request: LlmIntakeRequest, input: ManualContextIntakeInput): LlmIntakeOutput {
-  const projectID = cleanString(input.project_id);
-  const prompt = cleanString(input.user_prompt);
-  const evidence = request.bundle.evidence_refs.length > 0 ? request.bundle.evidence_refs : [];
-  return {
-    ignored_groups: [],
-    inbox_items: [{
-      actor_refs: [],
-      confidence: projectID === "" && wantsIssue(prompt) ? 0.68 : 0.82,
-      evidence_refs: evidence,
-      intents: { primary: primaryIntent(prompt, projectID), secondary: secondaryIntents(prompt), tags: ["manual_trigger"] },
-      suggested_actions: suggestedActions(prompt, projectID),
-      summary: manualSummary(request.bundle, prompt, projectID),
-      target_hints: projectID === "" ? [] : [projectHint(projectID)],
-      title: manualTitle(request.bundle, prompt),
-      urgency: urgency(prompt)
-    }]
-  };
-}
-
 function resolveManualSource(
   db: RunnerDatabase,
   requested: unknown,
@@ -240,7 +205,7 @@ function sourceQueryWithHints(
 ): ContextBundleSourceQuery {
   return cleanObject({
     ...query,
-    attachment_kinds: attachmentKinds(query, input, prompt),
+    attachment_kinds: attachmentKinds(query, input),
     cursor: cleanString(input.cursor),
     manual_trigger: manualTriggerMetadata(input, prompt),
     message_id: cleanString(input.message_id),
@@ -276,27 +241,20 @@ function missingContextReason(
   return "context_not_found";
 }
 
-function lookbackMinutes(input: ManualContextIntakeInput, prompt: string): number {
+function lookbackMinutes(input: ManualContextIntakeInput): number {
   const explicit = positiveInteger(input.lookback_minutes, 0);
-  if (explicit > 0) return explicit;
-  const minutes = firstNumber(prompt, /(\d+)\s*(?:分钟|mins?|minutes?)/i);
-  if (minutes > 0) return minutes;
-  const hours = firstNumber(prompt, /(\d+)\s*(?:小时|钟头|hours?|hrs?)/i);
-  if (hours > 0) return hours * 60;
-  if (/今天|today/i.test(prompt)) return 24 * 60;
-  return DEFAULT_LOOKBACK_MINUTES;
+  return explicit > 0 ? explicit : DEFAULT_LOOKBACK_MINUTES;
 }
 
 function attachmentKinds(
   query: ContextBundleSourceQuery,
-  input: ManualContextIntakeInput,
-  prompt: string
+  input: ManualContextIntakeInput
 ): string[] | undefined {
   const explicit = stringList(input.attachment_kinds);
   if (explicit.length > 0) return explicit;
   const existing = stringList(query.attachment_kinds);
   if (existing.length > 0) return existing;
-  return input.require_attachments || /截图|图片|图像|image|screenshot/i.test(prompt) ? ["image"] : undefined;
+  return input.require_attachments ? ["image"] : undefined;
 }
 
 function manualTriggerMetadata(input: ManualContextIntakeInput, prompt: string): JsonObject {
@@ -307,57 +265,6 @@ function manualTriggerMetadata(input: ManualContextIntakeInput, prompt: string):
     source_turn_id: cleanString(input.source_turn_id),
     user_prompt: prompt
   });
-}
-
-function manualSummary(bundle: ContextBundleRecord, prompt: string, projectID: string): string {
-  const context = bundle.context.map((item) => item.summary).filter(Boolean).join(" / ");
-  const projectNote = projectID === "" && wantsIssue(prompt) ? "目标 project 不明确，需要先向用户确认。" : "";
-  return [prompt, context, projectNote].filter(Boolean).join("\n");
-}
-
-function manualTitle(bundle: ContextBundleRecord, prompt: string): string {
-  const text = prompt || bundle.context.map((item) => item.summary).find(Boolean) || "Manual context intake";
-  return truncate(text.replace(/\s+/g, " "), 80);
-}
-
-function primaryIntent(prompt: string, projectID: string): LlmIntakeOutput["inbox_items"][number]["intents"]["primary"] {
-  if (projectID === "" && wantsIssue(prompt)) return "other";
-  if (/bug|报错|错误|异常|500|error|fail/i.test(prompt)) return "bug_report";
-  if (/回复|reply/i.test(prompt)) return "reply_needed";
-  if (/跟进|追踪|follow/i.test(prompt)) return "follow_up";
-  return "other";
-}
-
-function suggestedActions(prompt: string, projectID: string): string[] {
-  if (projectID === "" && wantsIssue(prompt)) return ["ask_user"];
-  if (wantsIssue(prompt)) return ["triage_attention_item", "create_issue_proposal"];
-  if (/回复|reply/i.test(prompt)) return ["message.reply_draft"];
-  return ["triage_attention_item"];
-}
-
-function secondaryIntents(prompt: string): string[] {
-  const intents: string[] = [];
-  if (/创建|建个|issue|任务|task/i.test(prompt)) intents.push("create_task");
-  if (/回复|reply/i.test(prompt)) intents.push("reply_needed");
-  return intents;
-}
-
-function projectHint(projectID: string): {
-  confidence: number;
-  id: string;
-  kind: string;
-  reason: string;
-} {
-  return { confidence: 0.8, id: projectID, kind: "project", reason: "manual trigger target project" };
-}
-
-function urgency(prompt: string): "high" | "low" | "medium" {
-  if (/紧急|马上|urgent|asap/i.test(prompt)) return "high";
-  return "medium";
-}
-
-function wantsIssue(prompt: string): boolean {
-  return /issue|创建|建个|开个|任务|bug|报错|错误|error/i.test(prompt);
 }
 
 function contextHelp(source: string, reason: string): string {
@@ -371,9 +278,8 @@ function sourceHelp(reason: string, sources: string[]): string {
   return sources.length === 0 ? "需要先指定并授权一个上下文来源。" : `请指定来源：${sources.join(", ")}。`;
 }
 
-function successText(bundle: ContextBundleRecord, items: AttentionInboxItemRecord[], actions: PiAction[]): string {
-  const actionTypes = actions.map((action) => action.action_type).join(", ") || "none";
-  return `已读取 ${bundle.source} 最近上下文，形成 context bundle #${bundle.id}、intake item ${items.length} 个、proposal ${actions.length} 个（${actionTypes}）。`;
+function successText(bundle: ContextBundleRecord): string {
+  return `已读取 ${bundle.source} 最近上下文，形成 context bundle #${bundle.id}；请由 PI 根据 bundle 内容决定是否追问或调用后续工具。`;
 }
 
 function needsUser(reason: string, text: string, request?: ManualContextBundleRequest): ManualContextIntakeResult {
@@ -437,11 +343,6 @@ function lookbackFromQuery(query: ContextBundleSourceQuery): number {
   return Math.max(1, Math.ceil((Date.now() - since) / 60_000));
 }
 
-function firstNumber(text: string, pattern: RegExp): number {
-  const value = Number(pattern.exec(text)?.[1] ?? 0);
-  return Number.isSafeInteger(value) && value > 0 ? value : 0;
-}
-
 function normalizeNow(value: Date | string | undefined): Date {
   if (value instanceof Date) return value;
   const parsed = Date.parse(cleanString(value));
@@ -466,10 +367,6 @@ function positiveInteger(value: unknown, fallback: number): number {
 
 function firstText(...values: unknown[]): string {
   return values.map(cleanString).find(Boolean) ?? "";
-}
-
-function truncate(value: string, maxLength: number): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 function cleanString(value: unknown): string {

@@ -78,7 +78,6 @@ bun test src/providers/codex/approvalBroker.test.ts \
   src/integrations/feishuLifecycleNotifications.test.ts \
   src/integrations/feishuLifecycleNotificationPreferences.test.ts \
   src/integrations/feishuDigestNotifications.test.ts \
-  src/integrations/feishuCompletionWatchNotifications.test.ts \
   src/integrations/feishuNotifications.test.ts \
   src/integrations/feishuNotificationLifecycle.test.ts \
   src/integrations/feishuApprovalNotifications.test.ts \

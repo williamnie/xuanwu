@@ -53,13 +53,13 @@ export function diagnoseIssueState(db: RunnerDatabase, options: IssueStateManage
 export function recommendedRepairPayload(
   db: RunnerDatabase,
   issueID: number,
-  options: IssueStateManagerOptions & { diagnosisCode?: string; operation?: string } = {}
+  options: IssueStateManagerOptions & { diagnosisCode: string; operation: IssueStateRepairOperation }
 ): Record<string, unknown> {
   const diagnostics = diagnoseIssueState(db, { ...options, includeDoneIssues: true, issueIDs: [issueID] }).diagnostics;
-  const diagnostic = diagnostics.find((item) => !options.diagnosisCode || item.code === options.diagnosisCode) ?? diagnostics[0];
-  if (!diagnostic) throw new Error("issue has no state manager repair recommendation");
-  const action = diagnostic.recommended_actions.find((item) => !options.operation || item.operation === options.operation) ?? diagnostic.recommended_actions[0];
-  if (!action) throw new Error("diagnosis has no repair action");
+  const diagnostic = diagnostics.find((item) => item.code === options.diagnosisCode);
+  if (!diagnostic) throw new Error(`issue diagnosis ${options.diagnosisCode} is not current`);
+  const action = diagnostic.recommended_actions.find((item) => item.operation === options.operation);
+  if (!action) throw new Error(`diagnosis ${diagnostic.code} does not allow operation ${options.operation}`);
   return { ...action, diagnosis_code: diagnostic.code, evidence: diagnostic.evidence };
 }
 

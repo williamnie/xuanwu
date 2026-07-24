@@ -3,12 +3,12 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import type { Project } from "../db/repositories/projects.ts";
 import { createPiProjectTools, PI_ALLOWED_TOOLS, PI_READ_ONLY_TOOLS } from "../http/piProjectTools.ts";
-import { builtinToolPermission, RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
+import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
 import { createReadOnlyRuntimeTools } from "./readOnlyRuntimeTools.ts";
 import { loadAssistantToolRegistrySnapshot } from "./toolRegistrySnapshot.ts";
 
-type ToolContext = Parameters<typeof createPiProjectTools>[2];
-type ToolSource = "registry" | "fallback";
+type ToolContext = NonNullable<Parameters<typeof createPiProjectTools>[2]>;
+type ToolSource = "registry";
 
 export type PiRuntimeToolRegistryAudit = {
   counts: { custom_tools: number; sdk_tools: number; skipped_tools: number };
@@ -17,6 +17,7 @@ export type PiRuntimeToolRegistryAudit = {
   registry_error?: string;
   skipped_tool_names: string[];
   source: ToolSource;
+  status: "ready" | "unavailable";
   tool_names: string[];
 };
 
@@ -43,11 +44,7 @@ export function createPiRuntimeToolKit(
   project?: Project,
   context: ToolContext = {}
 ): PiRuntimeToolKit {
-  try {
-    return registryToolKit(db, project, context);
-  } catch (error) {
-    return fallbackToolKit(db, project, context, error);
-  }
+  return registryToolKit(db, project, context);
 }
 
 export function recordPiRuntimeToolRegistryAudit(
@@ -66,11 +63,26 @@ export function recordPiRuntimeToolRegistryAudit(
       issue_id: input.issueID ?? 0,
       payload_json: JSON.stringify(audit),
       project_id: input.projectID,
-      reason: audit.source === "registry" ? "loaded PI runtime tools from registry" : "used PI runtime tool fallback"
+      reason: audit.status === "ready"
+        ? "loaded PI runtime tools from registry"
+        : "PI runtime tool registry is unavailable; no fallback tools were installed"
     });
   } catch (error) {
     console.warn("[pi-runtime] failed to audit tool registry snapshot:", safeError(error));
   }
+}
+
+export function unavailablePiRuntimeToolRegistryAudit(error: unknown): PiRuntimeToolRegistryAudit {
+  return {
+    counts: { custom_tools: 0, sdk_tools: 0, skipped_tools: 0 },
+    custom_tool_names: [],
+    provider_ids: [],
+    registry_error: safeError(error),
+    skipped_tool_names: [],
+    source: "registry",
+    status: "unavailable",
+    tool_names: []
+  };
 }
 
 function registryToolKit(db: RunnerDatabase, project: Project | undefined, context: ToolContext): PiRuntimeToolKit {
@@ -104,27 +116,6 @@ function registryToolKit(db: RunnerDatabase, project: Project | undefined, conte
     customTools: filteredCustomTools,
     readOnlyToolNames: readOnlyNames([...tools, ...filteredCustomTools.map((tool) => tool.name)], snapshot.tools),
     source: "registry",
-    tools
-  };
-}
-
-function fallbackToolKit(
-  db: RunnerDatabase,
-  project: Project | undefined,
-  context: ToolContext,
-  error: unknown
-): PiRuntimeToolKit {
-  const tools = [...PI_ALLOWED_TOOLS];
-  const customTools = createPiProjectTools(db, project, context);
-  return {
-    audit: {
-      ...auditSnapshot("fallback", tools, customTools, ["hardcoded-pi-runtime"], []),
-      registry_error: safeError(error)
-    },
-    customTools,
-    readOnlyToolNames: [...new Set([...tools, ...customTools.map((tool) => tool.name)])]
-      .filter((name) => builtinToolPermission(name) === "read"),
-    source: "fallback",
     tools
   };
 }
@@ -163,6 +154,7 @@ function auditSnapshot(
     provider_ids: providerIDs,
     skipped_tool_names: skippedTools,
     source,
+    status: "ready",
     tool_names: tools
   };
 }

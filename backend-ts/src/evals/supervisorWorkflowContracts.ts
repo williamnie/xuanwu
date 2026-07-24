@@ -1,11 +1,8 @@
 import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
-import { SUPERVISOR_INTENT_KINDS } from "../pi/supervisorIntentRouter.ts";
 
 export const SUPERVISOR_WORKFLOW_EVAL_SCHEMA_VERSION = "xw.supervisor-workflow-eval-suite.v1" as const;
 export const SUPERVISOR_WORKFLOW_EVAL_SCORERS = [
-  "intent_route",
-  "work_plan",
   "tool_selection",
   "completion_gate",
   "report",
@@ -17,11 +14,6 @@ export type SupervisorWorkflowEvalScorer = typeof SUPERVISOR_WORKFLOW_EVAL_SCORE
 const text = Type.String({ minLength: 1, maxLength: 8192 });
 const identifier = Type.String({ minLength: 1, maxLength: 128, pattern: "^[a-z0-9][a-z0-9._-]*$" });
 const scorer = Type.Union(SUPERVISOR_WORKFLOW_EVAL_SCORERS.map((name) => Type.Literal(name)));
-const intent = Type.Union(SUPERVISOR_INTENT_KINDS.map((name) => Type.Literal(name)));
-const routeDecision = Type.Union([
-  Type.Literal("answer"), Type.Literal("read_only"), Type.Literal("controlled_action"),
-  Type.Literal("ask_one_question")
-]);
 
 const modelVariantSchema = Type.Object({
   baseline: Type.Boolean(),
@@ -72,24 +64,9 @@ const goldenSchema = Type.Object({
   }, { additionalProperties: false })),
   max_estimated_cost_usd: Type.Number({ minimum: 0 }),
   max_total_tokens: Type.Integer({ minimum: 0 }),
-  plan: Type.Optional(Type.Object({
-    mode: Type.Union([Type.Literal("work_plan"), Type.Literal("read_only"), Type.Literal("no_work")]),
-    status: Type.Union([
-      Type.Literal("ready"), Type.Literal("needs_clarification"), Type.Literal("blocked")
-    ]),
-    work_count: Type.Integer({ minimum: 0, maximum: 8 }),
-    workflow_purposes: Type.Array(Type.Union([
-      Type.Literal("investigate"), Type.Literal("implement"), Type.Literal("release")
-    ]), { maxItems: 3 })
-  }, { additionalProperties: false })),
   report: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Union([
     Type.String(), Type.Number(), Type.Boolean(), Type.Null()
   ]))),
-  route: Type.Optional(Type.Object({
-    decision: routeDecision,
-    intents: Type.Array(intent, { minItems: 1, maxItems: 8 }),
-    primary_intent: intent
-  }, { additionalProperties: false })),
   selected_tools: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { maxItems: 32 }))
 }, { additionalProperties: false });
 
@@ -164,8 +141,6 @@ function validateSuiteRelations(suite: SupervisorWorkflowEvalSuite): string[] {
 
 function validateScorerInputs(fixture: SupervisorWorkflowEvalCase, errors: string[]): void {
   const required = new Set(fixture.required_scorers);
-  if (required.has("intent_route") && !fixture.golden.route) errors.push(`${fixture.id} route golden is required`);
-  if (required.has("work_plan") && !fixture.golden.plan) errors.push(`${fixture.id} plan golden is required`);
   if (required.has("tool_selection") && !fixture.golden.selected_tools) {
     errors.push(`${fixture.id} selected_tools golden is required`);
   }

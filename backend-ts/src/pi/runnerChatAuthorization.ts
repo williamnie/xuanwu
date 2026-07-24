@@ -1,4 +1,5 @@
 import type { PiActionContext } from "./actionEngine.ts";
+import { SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES } from "./supervisorControlContracts.ts";
 
 const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue.create",
@@ -6,7 +7,9 @@ const RUNNER_CHAT_MUTATION_ACTIONS = new Set([
   "issue.schedule_enqueue",
   "issue.state_repair",
   "issue_completion_watch.create",
-  "issue_completion_watch.cancel"
+  "issue_completion_watch.cancel",
+  "notification.preference.update",
+  ...SUPERVISOR_CONTROL_MUTATION_ACTION_TYPES
 ]);
 
 export function scopedRunnerChatActionContext<T extends PiActionContext>(

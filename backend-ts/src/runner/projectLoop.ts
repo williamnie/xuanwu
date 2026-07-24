@@ -21,6 +21,7 @@ import { publicMcpRegistry } from "../mcp/registry.ts";
 import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
+import { withIssueInstructionPrecedence } from "../domain/work/issueInstructionPolicy.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
@@ -252,9 +253,15 @@ function buildIssuePrompt(project: Project, issue: Issue): string {
   const templated = issue.prompt_template.trim();
   if (templated !== "") {
     const rendered = renderIssuePromptTemplate(templated, { project, issue }).trim();
-    if (rendered !== "") return withRunnerContext(project, issue, rendered);
+    if (rendered !== "") {
+      return withRunnerContext(project, issue, withIssueInstructionPrecedence(rendered, issue));
+    }
   }
-  return withRunnerContext(project, issue, issue.description.trim() || issue.title.trim());
+  return withRunnerContext(
+    project,
+    issue,
+    withIssueInstructionPrecedence(issue.description.trim() || issue.title.trim(), issue)
+  );
 }
 
 function withRunnerContext(project: Project, issue: Issue, prompt: string): string {

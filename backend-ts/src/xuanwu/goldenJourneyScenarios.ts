@@ -56,7 +56,7 @@ export const GOLDEN_JOURNEY_SCENARIOS: readonly GoldenJourneyScenario[] = [
   {
     api_paths: ["/api/issues", "/api/pi/actions", "/api/sync-outbox?source=feishu"],
     backend_tests: [
-      "backend-ts/src/integrations/feishuAgentBridgeIssueCommand.test.ts",
+      "backend-ts/src/integrations/feishuAgentBridgePiFirst.test.ts",
       "backend-ts/src/integrations/feishuApprovalRequests.test.ts",
       "backend-ts/src/http/piActionsAuditApi.test.ts"
     ],
