@@ -7,6 +7,7 @@ APP_SUPPORT_DIR="${CODEX_RUNNER_APP_SUPPORT_DIR:-$HOME/Library/Application Suppo
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$APP_SUPPORT_DIR/state}"
 DB_PATH="${CODEX_RUNNER_DB:-${CODEX_RUNNER_DEPLOY_DB:-$STATE_DIR/runner.db}}"
 AUTH_TOKEN_FILE="${CODEX_RUNNER_AUTH_TOKEN_FILE:-$STATE_DIR/auth_token}"
+PREDEPLOY_BACKUP_RETAIN="${CODEX_RUNNER_PREDEPLOY_BACKUP_RETAIN:-5}"
 
 log() { printf '[redeploy] %s\n' "$*"; }
 
@@ -74,7 +75,28 @@ verify_live_service() {
 
 backup_live_database() {
   [ -f "$DB_PATH" ] || { log "no existing DB to back up: $DB_PATH"; return; }
-  local backup_dir backup_path
+  local backup_dir backup_path backup_root
+  if ! [[ "$PREDEPLOY_BACKUP_RETAIN" =~ ^[1-9][0-9]*$ ]]; then
+    log "CODEX_RUNNER_PREDEPLOY_BACKUP_RETAIN must be a positive integer"
+    return 2
+  fi
+  backup_root="$APP_SUPPORT_DIR/backups"
+  mkdir -p "$backup_root"
+  python3 - "$backup_root" "$PREDEPLOY_BACKUP_RETAIN" <<'PY'
+import pathlib, re, shutil, sys
+
+root = pathlib.Path(sys.argv[1])
+retain = int(sys.argv[2])
+backups = sorted(
+    path
+    for path in root.iterdir()
+    if path.is_dir() and re.fullmatch(r"predeploy-\d{8}T\d{6}Z", path.name)
+)
+# Reserve one slot for the fresh verified backup created below.
+for path in backups[: max(0, len(backups) - (retain - 1))]:
+    shutil.rmtree(path)
+    print(f"[redeploy] pruned old DB backup: {path}")
+PY
   backup_dir="$APP_SUPPORT_DIR/backups/predeploy-$(date -u '+%Y%m%dT%H%M%SZ')"
   backup_path="$backup_dir/runner.db"
   mkdir -p "$backup_dir"

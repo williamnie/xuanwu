@@ -51,3 +51,10 @@ test('redeploy snapshots and quick-checks the live DB before replacing runtime',
   assert.match(redeploy, /latest-predeploy-backup/);
   assert.match(redeploy, /backup_live_database\s*\nlog "building and restarting/);
 });
+
+test('redeploy bounds predeploy DB backups before creating a fresh snapshot', () => {
+  assert.match(redeploy, /CODEX_RUNNER_PREDEPLOY_BACKUP_RETAIN:-5/);
+  assert.match(redeploy, /predeploy-\\d\{8\}T\\d\{6\}Z/);
+  assert.match(redeploy, /len\(backups\) - \(retain - 1\)/);
+  assert.match(redeploy, /shutil\.rmtree\(path\)/);
+});
