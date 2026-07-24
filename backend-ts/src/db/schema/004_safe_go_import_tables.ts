@@ -18,15 +18,6 @@ create table if not exists agent_profiles (
   updated_at text not null
 );
 
-create table if not exists issue_templates (
-  id text primary key,
-  name text not null,
-  content text not null,
-  is_default integer not null default 0,
-  created_at text not null,
-  updated_at text not null
-);
-
 create table if not exists app_preferences (
   key text primary key,
   value text not null default '',

@@ -14,14 +14,12 @@ import { isExecutorProviderId } from "../providers/types.ts";
 import { runIssueWithProvider } from "./providerRuntime.ts";
 import { failIssueExecution } from "./statusGate.ts";
 import { deferIssueToPiAfterProviderFailure, isProviderInfraTransientFailure } from "./providerFailure.ts";
-import { renderIssuePromptTemplate } from "./issuePromptTemplate.ts";
 import { issuePromptImages } from "./issuePromptImages.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import { publicMcpRegistry } from "../mcp/registry.ts";
 import { mergeSkillIntents, parseSkillPolicy } from "../skills/intents.ts";
 import { listSkillRegistry } from "../skills/registry.ts";
 import { resolveExecutorSelection, type AgentRecommendation } from "../pi/agentOrchestration.ts";
-import { withIssueInstructionPrecedence } from "../domain/work/issueInstructionPolicy.ts";
 import type { ExecutorProvider, ExecutorProviderId, ProviderRunResult } from "../providers/types.ts";
 
 export type ProjectLoopInput = {
@@ -250,22 +248,32 @@ export function buildIssuePromptForTest(project: Project, issue: Issue): string 
 }
 
 function buildIssuePrompt(project: Project, issue: Issue): string {
-  const templated = issue.prompt_template.trim();
-  if (templated !== "") {
-    const rendered = renderIssuePromptTemplate(templated, { project, issue }).trim();
-    if (rendered !== "") {
-      return withRunnerContext(project, issue, withIssueInstructionPrecedence(rendered, issue));
-    }
-  }
-  return withRunnerContext(
-    project,
-    issue,
-    withIssueInstructionPrecedence(issue.description.trim() || issue.title.trim(), issue)
-  );
+  const title = issue.title.trim();
+  const description = issue.description.trim();
+  const base = description === "" || description === title
+    ? title
+    : [`# ${title}`, "", description].join("\n");
+  return withRunnerContext(project, issue, base);
 }
 
 function withRunnerContext(project: Project, issue: Issue, prompt: string): string {
-  return withMcpRequirementContext(project, issue, withSkillIntentContext(project, issue, withGoalContract(issue, prompt)));
+  return withMcpRequirementContext(
+    project,
+    issue,
+    withSkillIntentContext(project, issue, withIssueLifecycleContract(issue, withGoalContract(issue, prompt)))
+  );
+}
+
+function withIssueLifecycleContract(issue: Issue, prompt: string): string {
+  return [
+    prompt.trim(),
+    "",
+    "## Runner lifecycle contract",
+    "- Verify the directly relevant behavior before reporting completion.",
+    "- Commit the completed repository changes unless the Issue explicitly forbids committing.",
+    `- On success, write back the final status with: codex-issue-runner issue update --id ${issue.id} --status done --json`,
+    `- On failure or a blocker, do not mark done; write back: codex-issue-runner issue update --id ${issue.id} --status failed --error "<reason>" --json`
+  ].join("\n").trim();
 }
 
 type GoalContractSection = {
@@ -287,7 +295,7 @@ function goalContractSections(issue: Issue): GoalContractSection[] {
   return [
     {
       aliases: [/^(target outcome|outcome|goal|goals|objective|目标|终态|期望结果)$/i],
-      text: `- Target outcome: Deliver the requested end state${target}; treat the issue description/template above as the source of truth.`
+      text: `- Target outcome: Deliver the requested end state${target}; treat the Issue title and description above as the source of truth.`
     },
     {
       aliases: [/^(required evidence|evidence|verification|validation|acceptance criteria|验收标准|验证|证据|最小验证)$/i],

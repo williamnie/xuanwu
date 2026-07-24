@@ -104,7 +104,7 @@ describe("Bun frontend API compatibility", () => {
     }
   });
 
-  test("covers project loop, profile, template, cron and reference endpoints", async () => {
+  test("covers project loop, profile, cron and reference endpoints", async () => {
     const { cwd, database } = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database });
@@ -119,10 +119,7 @@ describe("Bun frontend API compatibility", () => {
       const references = await requestJSON(router, "/api/projects/demo/references/search?type=file&query=src&limit=10", "GET");
       insertHold(database, "demo");
       const resumed = await requestJSON(router, "/api/projects/demo/hold/resume", "POST", {});
-      await requestJSON(router, "/api/issue-templates", "POST", { id: "default", name: "Default", content: "{{issue.description}}", is_default: 1 }, 201);
-      const template = await requestJSON(router, "/api/issue-templates", "POST", { id: "Custom Template", name: "Custom", content: "{{issue.title}}" }, 201);
-      const patchedTemplate = await requestJSON(router, "/api/issue-templates/custom-template", "PATCH", { is_default: 1 });
-      const deletedTemplate = await rawRequest(router, "/api/issue-templates/custom-template", "DELETE");
+      const removedTemplateRoute = await rawRequest(router, "/api/issue-templates", "POST", {});
       const cronRedirect = await rawRequest(router, "/api/cron-tasks", "POST", { project_id: "demo" });
       const capabilities = await requestJSON(router, "/api/capabilities", "GET");
 
@@ -137,9 +134,7 @@ describe("Bun frontend API compatibility", () => {
       expect((references.files as Array<Record<string, unknown>>)[0]).toMatchObject({ type: "file", path: "src.txt" });
       expect(resumed).toMatchObject({ id: "demo" });
       expect((resumed as Record<string, unknown>).hold).toBeUndefined();
-      expect(template).toMatchObject({ id: "custom-template", name: "Custom" });
-      expect(patchedTemplate).toMatchObject({ id: "custom-template", is_default: 1 });
-      expect(deletedTemplate.status).toBe(204);
+      expect(removedTemplateRoute.status).toBe(404);
       expect(cronRedirect.status).toBe(308);
       expect(cronRedirect.headers.get("location")).toBe("/api/automations");
       expect(Array.isArray(capabilities.skills)).toBe(true);

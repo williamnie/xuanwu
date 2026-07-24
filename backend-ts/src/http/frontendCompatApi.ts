@@ -19,7 +19,6 @@ export function registerFrontendCompatRoutes(router: Router, context: FrontendCo
   const handlers = createFrontendCompatHandlers(context);
   registerAgentProfileRoutes(router, handlers);
   registerProjectCompatRoutes(router, handlers);
-  registerTemplateRoutes(router, handlers);
   registerUtilityRoutes(router, handlers);
   registerUploadRoutes(router, handlers);
   registerAdvisoryIssueRoutes(router, handlers);
@@ -65,24 +64,6 @@ function registerProjectCompatRoutes(router: Router, handlers: FrontendCompatHan
     handlers.projects.references(projectIDAt(request, 1), projectReferenceFilter(request))
   ));
   router.post("/api/projects/sync/codex", () => writeResponse(() => handlers.projects.syncCodex()));
-}
-
-function registerTemplateRoutes(router: Router, handlers: FrontendCompatHandlers): void {
-  router.post("/api/issue-templates", async (request) => {
-    const body = await objectBody(request);
-    return writeResponse(() => handlers.issueTemplates.create(body), 201);
-  });
-  router.get("/api/issue-templates/:id", (request) => writeResponse(() => (
-    handlers.issueTemplates.read(lastPathPart(request))
-  )));
-  router.patch("/api/issue-templates/:id", async (request) => {
-    const body = await objectBody(request);
-    return writeResponse(() => handlers.issueTemplates.update(lastPathPart(request), body));
-  });
-  router.delete("/api/issue-templates/:id", (request) => writeResponse(() => {
-    handlers.issueTemplates.delete(lastPathPart(request));
-    return null;
-  }, 204));
 }
 
 function registerUtilityRoutes(router: Router, handlers: FrontendCompatHandlers): void {

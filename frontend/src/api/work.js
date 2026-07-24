@@ -107,22 +107,6 @@ export const workApi = {
     body: JSON.stringify(review),
   }),
 
-  getIssueTemplates: () => request('/api/issue-templates'),
-
-  createIssueTemplate: (template) => request('/api/issue-templates', {
-    method: 'POST',
-    body: JSON.stringify(template),
-  }),
-
-  updateIssueTemplate: (id, updates) => request(`/api/issue-templates/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  }),
-
-  deleteIssueTemplate: (id) => request(`/api/issue-templates/${id}`, {
-    method: 'DELETE',
-  }),
-
   getIssues: (projectId = '', status = '') => {
     const params = new URLSearchParams();
     if (projectId) params.append('projectId', projectId);

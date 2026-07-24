@@ -7,7 +7,6 @@ const issueDetailDataSource = readFileSync(new URL('./issue-detail/useIssueDetai
 const dashboardSource = readFileSync(new URL('./Dashboard.jsx', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8');
 const projectsSource = readFileSync(new URL('./Projects.jsx', import.meta.url), 'utf8');
-const templatesSource = readFileSync(new URL('./IssueTemplatesPanel.jsx', import.meta.url), 'utf8');
 const runsSource = readFileSync(new URL('./Runs.jsx', import.meta.url), 'utf8');
 const activeWorkSource = readFileSync(new URL('./command-center/ActiveWorkSection.jsx', import.meta.url), 'utf8');
 const recentDeliveriesSource = readFileSync(new URL('./command-center/RecentDeliveriesSection.jsx', import.meta.url), 'utf8');
@@ -43,11 +42,9 @@ test('selected issue detail does not reconcile the global issue list', () => {
   assert.doesNotMatch(appSource, /currentPage === 'issues' && selectedIssueId\) return \['issues'\]/);
 });
 
-test('project and template writes avoid refreshAllData fan-out', () => {
+test('project writes avoid refreshAllData fan-out', () => {
   assert.doesNotMatch(projectsSource, /refreshAllData/);
-  assert.doesNotMatch(templatesSource, /refreshAllData/);
   assert.match(projectsSource, /refreshData\(\['projects', 'issues'\]\)/);
-  assert.match(templatesSource, /refreshData\(\['issueTemplates'\]\)/);
 });
 
 test('Runs coalesces lifecycle refreshes, aborts stale reads, and loads detail only after selection', () => {

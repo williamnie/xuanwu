@@ -176,7 +176,7 @@ function work(description = "Deliver the Issue acceptance criteria"): WorkLedger
     title: "Verifier fixture",
     type: "engineering_task",
     updated_at: "2026-07-16T11:00:00.000Z",
-    workflow_ref: "issue-template:default"
+    workflow_ref: "workflow:implement@1"
   };
 }
 

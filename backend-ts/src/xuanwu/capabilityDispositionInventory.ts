@@ -206,11 +206,6 @@ export const TABLE_DISPOSITIONS = [
     live_rows: 2008, delete_preconditions: []
   },
   {
-    name: "issue_templates", disposition: "keep", target: "Work creation templates",
-    source_of_truth: "issue_templates", retention: "R2_DURABLE", runtime_origin: "source_schema",
-    live_rows: 1, delete_preconditions: []
-  },
-  {
     name: "issues", disposition: "keep", target: "Work authority",
     source_of_truth: "issues", retention: "R3_AUDIT", runtime_origin: "source_schema",
     live_rows: 742, delete_preconditions: []
@@ -538,11 +533,6 @@ export const API_ROUTE_DISPOSITIONS = [
   { method: "POST", path: "/api/integrations/feishu/events", family: "integration-intake-delivery" },
   { method: "GET", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
   { method: "PUT", path: "/api/integrations/feishu/settings", family: "integration-intake-delivery" },
-  { method: "GET", path: "/api/issue-templates", family: "work-ledger" },
-  { method: "POST", path: "/api/issue-templates", family: "work-ledger" },
-  { method: "DELETE", path: "/api/issue-templates/:id", family: "work-ledger" },
-  { method: "GET", path: "/api/issue-templates/:id", family: "work-ledger" },
-  { method: "PATCH", path: "/api/issue-templates/:id", family: "work-ledger" },
   { method: "GET", path: "/api/issues", family: "work-ledger" },
   { method: "POST", path: "/api/issues", family: "work-ledger" },
   { method: "DELETE", path: "/api/issues/:id", family: "work-ledger" },
@@ -762,7 +752,7 @@ export const PAGE_SURFACES = [
   {
     id: "work-ledger", disposition: "keep", target: "Work ledger compatibility API",
     page_ids: ["issues", "issue-detail", "work-board", "work-detail"],
-    source_files: ["frontend/src/pages/IssueCard.jsx", "frontend/src/pages/IssueCardMoreActions.jsx", "frontend/src/pages/IssueDetail.jsx", "frontend/src/pages/Issues.jsx", "frontend/src/pages/IssueSupervisorPanel.jsx", "frontend/src/pages/IssueTemplatesPanel.jsx", "frontend/src/pages/WorkBoard.jsx", "frontend/src/pages/WorkDetail.jsx"]
+    source_files: ["frontend/src/pages/IssueCard.jsx", "frontend/src/pages/IssueCardMoreActions.jsx", "frontend/src/pages/IssueDetail.jsx", "frontend/src/pages/Issues.jsx", "frontend/src/pages/IssueSupervisorPanel.jsx", "frontend/src/pages/WorkBoard.jsx", "frontend/src/pages/WorkDetail.jsx"]
   },
 ] as const;
 

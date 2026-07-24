@@ -2,7 +2,6 @@ import { workApi } from '../api/work.js';
 import { useEffect, useState } from 'react';
 import { message } from '../store/toastStore';
 import {
-  selectIssueTemplates,
   selectIssues,
   selectProjects,
   selectRefreshData,
@@ -18,10 +17,6 @@ import PromptEditor from '../components/editor/PromptEditor';
 import IssueEditModal from '../components/IssueEditModal';
 import IssueCard from './IssueCard';
 import { sortIssuesByIdDesc } from '../utils/issueSort';
-import {
-  extractIssueTemplateVariables,
-  renderIssuePromptTemplate,
-} from '../utils/issuePromptTemplate';
 import { serviceTierPayload } from '../utils/serviceTier';
 
 export default function Issues({
@@ -36,14 +31,12 @@ export default function Issues({
 }) {
   const projects = useDataStore(selectProjects);
   const issues = useDataStore(selectIssues);
-  const issueTemplates = useDataStore(selectIssueTemplates);
   const refreshData = useDataStore(selectRefreshData);
 
   // 新建 Issue 的局部表单状态
   const [formDescription, setFormDescription] = useState('');
   const [formProjectId, setFormProjectId] = useState(projects[0]?.id || '');
   const [formPriority, setFormPriority] = useState(0);
-  const [formTemplateId, setFormTemplateId] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -132,18 +125,6 @@ export default function Issues({
   };
 
 
-  const selectedTemplate = issueTemplates.find(template => template.id === formTemplateId) || null;
-  const selectedProject = projects.find(project => project.id === formProjectId) || projects[0] || null;
-  const promptTemplatePreview = selectedTemplate ? renderIssuePromptTemplate(selectedTemplate.content, {
-    project: selectedProject,
-    issue: {
-      id: '保存后生成',
-      description: formDescription,
-      priority: formPriority,
-    },
-  }) : '';
-  const templateVariables = selectedTemplate ? extractIssueTemplateVariables(selectedTemplate.content) : { unknown: [] };
-
   // 拖拽开始：记录被拖拽的任务 ID 与当前状态，并设置拖拽状态
   const handleDragStart = (e, issueId, currentStatus) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ issueId, currentStatus }));
@@ -218,22 +199,12 @@ export default function Issues({
   // 当模态框打开时重置表单输入内容，防止共享项目列表更新时清空用户输入
   useEffect(() => {
     if (isNewIssueOpen) {
-      refreshData(['projects', 'issueTemplates']);
+      refreshData(['projects']);
       setFormDescription(sourceMetadata?.source_excerpt || '');
       setFormPriority(0);
       setFormError('');
     }
   }, [isNewIssueOpen, refreshData, sourceMetadata]);
-
-  useEffect(() => {
-    if (!isNewIssueOpen) return;
-    setFormTemplateId(prev => {
-      if (prev && issueTemplates.some(t => t.id === prev)) {
-        return prev;
-      }
-      return issueTemplates.find(t => t.is_default === 1)?.id || issueTemplates[0]?.id || '';
-    });
-  }, [isNewIssueOpen, issueTemplates]);
 
   // 当模态框打开或者项目列表变化时，同步关联项目 ID，但不影响已输入内容和用户手动选择
   useEffect(() => {
@@ -291,7 +262,6 @@ export default function Issues({
       project_id: finalProjectId,
       priority: parseInt(formPriority),
       status: prefilledStatus || 'triage',
-      template_id: formTemplateId,
     };
     addIssueSource(payload, sourceMetadata);
 
@@ -521,26 +491,6 @@ export default function Issues({
                 </div>
               )}
 
-              {issueTemplates.length > 0 && (
-                <div className="form-group">
-                  <label>Issue 执行模板</label>
-                  <select
-                    className="form-control"
-                    value={formTemplateId}
-                    onChange={(e) => setFormTemplateId(e.target.value)}
-                  >
-                    {issueTemplates.map(template => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}{template.is_default === 1 ? '（默认）' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    模板会在创建时快照保存，后续修改模板不会影响已创建 Issue。
-                  </span>
-                </div>
-              )}
-
               <div className="form-group">
                 <label>任务内容 / 需求描述 *</label>
                 <PromptEditor
@@ -551,14 +501,6 @@ export default function Issues({
                   hideToolbar={true}
                 />
               </div>
-
-
-              {selectedTemplate && (
-                <IssueTemplatePreview
-                  preview={promptTemplatePreview}
-                  unknownVariables={templateVariables.unknown}
-                />
-              )}
 
               <div className="form-group">
                 <label>任务优先级</label>
@@ -653,36 +595,4 @@ function addIssueSource(payload, sourceMetadata) {
   if (sourceMetadata.source_excerpt) {
     payload.source_excerpt = sourceMetadata.source_excerpt;
   }
-}
-
-function IssueTemplatePreview({ preview, unknownVariables }) {
-  return (
-    <div className="form-group" style={{ gap: '8px' }}>
-      <details>
-        <summary style={{ cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          模板渲染预览
-        </summary>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-          {unknownVariables.length > 0 && (
-            <div style={{ color: 'var(--warning)', background: 'var(--warning-bg)', padding: '8px 10px', borderRadius: '6px', fontSize: '0.76rem', border: '1px solid rgba(245, 158, 11, 0.18)' }}>
-              未识别变量：{unknownVariables.map(name => `{{${name}}}`).join('、')}。保存不会被阻塞，执行时这些占位符会原样保留。
-            </div>
-          )}
-          <pre style={{
-            margin: 0,
-            maxHeight: '220px',
-            overflow: 'auto',
-            whiteSpace: 'pre-wrap',
-            color: 'var(--text-secondary)',
-            background: 'rgba(0,0,0,0.04)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '8px',
-            padding: '10px',
-            fontSize: '0.74rem',
-            lineHeight: 1.5,
-          }}>{preview || '（模板为空或当前内容为空）'}</pre>
-        </div>
-      </details>
-    </div>
-  );
 }

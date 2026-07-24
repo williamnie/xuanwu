@@ -66,10 +66,10 @@ describe("Issue Tracker bidirectional sync", () => {
   test("manual link is audited and lets a mapped external status update the selected Issue", async () => {
     const database = await fixture();
     try {
-      const issue = database.sqlite.run(`insert into issues (project_id, title, description, status, priority, template_id, prompt_template,
+      const issue = database.sqlite.run(`insert into issues (project_id, title, description, status, priority,
         required_skill_intents_json, recommended_skill_intents_json, required_mcp_capabilities_json, recommended_mcp_capabilities_json,
         agent_profile_id, service_tier, source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json, created_at, updated_at)
-        values ('demo', 'Manual target', '', 'todo', 0, 'default', '{{issue.description}}', '[]', '[]', '[]', '[]', '', '', '', '', '', '{}',
+        values ('demo', 'Manual target', '', 'todo', 0, '[]', '[]', '[]', '[]', '', '', '', '', '', '{}',
         '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z')`);
       const issueID = Number(issue.lastInsertRowid);
       const handle = createRequestHandler(createDefaultRouter({ database }), "token");

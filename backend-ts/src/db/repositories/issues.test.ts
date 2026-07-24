@@ -53,8 +53,6 @@ describe("issue read repository", () => {
         description: "",
         status: "todo",
         priority: 3,
-        template_id: "",
-        prompt_template: "",
         required_skill_intents: "[]",
         recommended_skill_intents: "[]",
         required_mcp_capabilities: "[]",

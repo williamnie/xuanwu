@@ -462,8 +462,6 @@ function issueCompatibilityRevision(issue: Issue): number {
     issue.title,
     issue.description,
     issue.status,
-    issue.template_id,
-    issue.prompt_template,
     issue.required_skill_intents,
     issue.recommended_skill_intents,
     issue.required_mcp_capabilities,
@@ -480,7 +478,7 @@ function issueCompatibilityRevision(issue: Issue): number {
 }
 
 function issueWorkflowRef(issue: Issue): string {
-  const source = issue.workflow_snapshot_json.trim() || issue.prompt_template.trim() || issue.template_id.trim() || "default";
+  const source = issue.workflow_snapshot_json.trim() || "workflow:implement@1";
   const digest = createHash("sha256").update(source).digest("hex").slice(0, 16);
   return `issues:${issue.id}:workflow:${digest}`;
 }

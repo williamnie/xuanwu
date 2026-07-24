@@ -21,7 +21,6 @@ type NormalizedIssueWrite = {
   issue_log_mode: "debug" | "normal";
   priority: number;
   project_id: string;
-  prompt_template: string;
   recommended_mcp_capabilities: string;
   recommended_skill_intents: string;
   required_mcp_capabilities: string;
@@ -31,7 +30,6 @@ type NormalizedIssueWrite = {
   source_session_id: string;
   source_turn_id: string;
   status: string;
-  template_id: string;
   title: string;
   workflow_snapshot_json: string;
 };
@@ -46,35 +44,25 @@ export const VALID_ISSUE_STATUSES = new Set([
   "failed",
   "cancelled"
 ]);
-const DEFAULT_ISSUE_TEMPLATE_ID = "default";
-const DEFAULT_ISSUE_TEMPLATE_CONTENT = "{{issue.description}}";
-
-type IssueTemplateSnapshot = {
-  content: string;
-  id: string;
-};
-
 export function createIssue(
   db: RunnerDatabase,
   input: CreateIssueInput,
   options: CreateIssueOptions = {}
 ): Issue {
-  const issue = normalizeIssueForWrite(db, input);
+  const issue = normalizeIssueForWrite(input);
   validateIssueForCreate(db, issue);
   const timestamp = issueTimestamp();
   const insertIssue = db.transaction((record: NormalizedIssueWrite) => {
     db.sqlite.run(`insert into issues
       (project_id, title, description, dependency_issue_ids_json, dependency_declaration_error,
-       status, priority, template_id,
-       prompt_template, required_skill_intents_json, recommended_skill_intents_json,
+       status, priority, required_skill_intents_json, recommended_skill_intents_json,
        required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id,
        service_tier, source_session_id, source_turn_id, source_excerpt, workflow_snapshot_json,
        issue_log_mode, created_at, updated_at)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [record.project_id, record.title, record.description, JSON.stringify(record.dependency_issue_ids),
         record.dependency_declaration_error, record.status, record.priority,
-        record.template_id, record.prompt_template, record.required_skill_intents,
-        record.recommended_skill_intents, record.required_mcp_capabilities,
+        record.required_skill_intents, record.recommended_skill_intents, record.required_mcp_capabilities,
         record.recommended_mcp_capabilities, record.agent_profile_id, record.service_tier, record.source_session_id,
         record.source_turn_id, record.source_excerpt, record.workflow_snapshot_json,
         record.issue_log_mode, timestamp, timestamp]);
@@ -124,14 +112,9 @@ function projectExists(db: RunnerDatabase, id: string): boolean {
   return (row?.count ?? 0) > 0;
 }
 
-function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): NormalizedIssueWrite {
+function normalizeIssueForWrite(input: CreateIssueInput): NormalizedIssueWrite {
   const description = cleanString(input.description);
   const title = cleanString(input.title) || deriveIssueTitle(description);
-  const template = resolveIssueTemplateSnapshot(
-    db,
-    cleanString(input.template_id),
-    cleanString(input.prompt_template)
-  );
   const dependency = normalizeIssueDependencyDeclaration(input.depends_on_issue_ids, description);
   return {
     project_id: cleanString(input.project_id),
@@ -141,8 +124,6 @@ function normalizeIssueForWrite(db: RunnerDatabase, input: CreateIssueInput): No
     dependency_issue_ids: dependency.issue_ids,
     status: cleanString(input.status) || "triage",
     priority: integerInput(input.priority),
-    template_id: template.id,
-    prompt_template: template.content,
     required_skill_intents: normalizeSkillIntentList(input.required_skill_intents),
     recommended_skill_intents: normalizeSkillIntentList(input.recommended_skill_intents),
     required_mcp_capabilities: normalizeMcpCapabilityList(input.required_mcp_capabilities),
@@ -223,36 +204,6 @@ function normalizeIssueLogMode(value: unknown): "debug" | "normal" {
   if (mode === "" || mode === "normal") return "normal";
   if (mode === "debug") return "debug";
   throw new Error("issue_log_mode 只支持 normal 或 debug");
-}
-
-function resolveIssueTemplateSnapshot(
-  db: RunnerDatabase,
-  templateID: string,
-  promptTemplate: string
-): IssueTemplateSnapshot {
-  if (promptTemplate !== "") return { id: templateID, content: promptTemplate };
-  const template = templateID === "" ? defaultTemplateSnapshot(db) : templateSnapshotByID(db, templateID);
-  if (template) return template;
-  if (templateID === "" || templateID === DEFAULT_ISSUE_TEMPLATE_ID) return fallbackTemplateSnapshot();
-  throw new Error("issue template 不存在");
-}
-
-function templateSnapshotByID(db: RunnerDatabase, templateID: string): IssueTemplateSnapshot | null {
-  const row = db.sqlite.query<IssueTemplateSnapshot, [string]>(
-    "select id, content from issue_templates where id=?"
-  ).get(templateID);
-  return row ? { id: row.id.trim(), content: row.content.trim() } : null;
-}
-
-function defaultTemplateSnapshot(db: RunnerDatabase): IssueTemplateSnapshot | null {
-  const row = db.sqlite.query<IssueTemplateSnapshot, []>(`
-    select id, content from issue_templates order by is_default desc, created_at asc limit 1
-  `).get();
-  return row ? { id: row.id.trim(), content: row.content.trim() } : null;
-}
-
-function fallbackTemplateSnapshot(): IssueTemplateSnapshot {
-  return { id: DEFAULT_ISSUE_TEMPLATE_ID, content: DEFAULT_ISSUE_TEMPLATE_CONTENT };
 }
 
 function mustGetIssue(db: RunnerDatabase, id: number): Issue {

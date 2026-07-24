@@ -26,8 +26,6 @@ create table if not exists issues (
   description text not null default '',
   status text not null,
   priority integer not null default 0,
-  template_id text not null default '',
-  prompt_template text not null default '',
   agent_profile_id text not null default '',
   source_session_id text not null default '',
   source_turn_id text not null default '',

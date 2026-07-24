@@ -83,8 +83,8 @@ async function fixtureDatabase(): Promise<RunnerDatabase> {
 function insertTraceFixture(db: RunnerDatabase, secret: string): void {
   db.sqlite.run(`insert into projects (id, name, cwd, created_at, updated_at)
     values ('demo', 'Demo', '/tmp/demo-observability', '2026-07-18T05:00:00Z', '2026-07-18T05:00:00Z')`);
-  db.sqlite.run(`insert into issues (id, project_id, title, status, template_id, created_at, updated_at)
-    values (1, 'demo', 'Trace fixture', 'in_progress', 'default', '2026-07-18T05:00:00Z', '2026-07-18T05:30:00Z')`);
+  db.sqlite.run(`insert into issues (id, project_id, title, status, created_at, updated_at)
+    values (1, 'demo', 'Trace fixture', 'in_progress', '2026-07-18T05:00:00Z', '2026-07-18T05:30:00Z')`);
   db.sqlite.run(`insert into works (id, project_id, type, title, goal, status, acceptance_json,
       provenance_json, workflow_ref, created_at, updated_at)
     values ('xw:work:issues:1', 'demo', 'engineering_task', 'Trace fixture', 'Trace one Work', 'in_progress',

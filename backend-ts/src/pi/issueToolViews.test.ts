@@ -24,7 +24,6 @@ describe("PI issue execution status completion projection", () => {
       const issue = createIssue(db, {
         description: "Implement the fix. 不要 commit、push 或 deploy。",
         project_id: "demo",
-        prompt_template: "{{issue.description}}\n\n要求：\n1. 提交 git commit。",
         status: "failed",
         title: "Completed code with missing Handoff"
       });

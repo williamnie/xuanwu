@@ -21,11 +21,11 @@
 
 统计：
 
-- 86 张表：keep=54、merge=22、migrate=8、delete=2（84 张 current source + 2 张 captured live-only legacy）
-- 246 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
-- 36 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
+- 85 张表：keep=53、merge=22、migrate=8、delete=2（83 张 current source + 2 张 captured live-only legacy）
+- 242 条用户 API route（以 `API_ROUTE_DISPOSITIONS` 的 family 映射为准）
+- 32 个页面 JSX 组件归入 9 个 surface：keep=5、merge=3、migrate=1、delete=0
 - 15 个后台调度/启动单元：keep=4、merge=8、migrate=3、delete=0
-- 148 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
+- 143 个 PI 生产模块归入 11 个 family：keep=6、merge=4、migrate=1、delete=0
 
 ## 2. live reference 证据
 
@@ -74,7 +74,6 @@ sqlite3 -readonly "$LIVE_DB" "select name from sqlite_master where type='table' 
 | `issue_events` | **keep** | Work events and Evidence authority | issue_events | `R3_AUDIT` | 460891 |
 | `issue_runs` | **keep** | Run authority | issue_runs | `R3_AUDIT` | 560 |
 | `issue_supervisor_events` | **keep** | Run recovery Evidence | issue_supervisor_events | `R3_AUDIT` | 2008 |
-| `issue_templates` | **keep** | Work creation templates | issue_templates | `R2_DURABLE` | 1 |
 | `issues` | **keep** | Work authority | issues | `R3_AUDIT` | 742 |
 | `nightly_batch_items` | **delete** | Archived legacy nightly-batch export | live legacy table only | `R3_AUDIT` | 5 |
 | `nightly_batches` | **delete** | Archived legacy nightly-batch export | live legacy table only | `R3_AUDIT` | 1 |
@@ -389,11 +388,6 @@ GET /api/usage/codex
 <details><summary><code>work-ledger</code> 的逐项 routes</summary>
 
 ```text
-GET /api/issue-templates
-POST /api/issue-templates
-DELETE /api/issue-templates/:id
-GET /api/issue-templates/:id
-PATCH /api/issue-templates/:id
 GET /api/issues
 POST /api/issues
 DELETE /api/issues/:id
@@ -423,7 +417,7 @@ GET /api/issues/:id/runs
 | `project-scope` | `projects` | **keep** | Project/local control-plane scope | `ProjectHoldNotice.jsx`, `Projects.jsx` |
 | `run-session-drilldown` | `runs`, `sessions` | **merge** | Run with provider Session drill-down | `Runs.jsx`, `Sessions.jsx` |
 | `system-observability` | `dashboard` | **keep** | Local runtime observability/control | `Dashboard.jsx` |
-| `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `IssueTemplatesPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
+| `work-ledger` | `issues`, `issue-detail`, `work-board`, `work-detail` | **keep** | Work ledger compatibility API | `IssueCard.jsx`, `IssueCardMoreActions.jsx`, `IssueDetail.jsx`, `Issues.jsx`, `IssueSupervisorPanel.jsx`, `WorkBoard.jsx`, `WorkDetail.jsx` |
 
 页面迁移规则：`Issues`/`IssueDetail` 保留为 Work feature flag 的 rollback surface；`Sessions` 归入 Run drill-down，不创建独立 Run ledger；`cron`/`pi-automations` page id 统一投影到 `Automations`；`pi-inbox`/`attention-inbox` page id 统一投影到 Command Center。兼容 page id 不再拥有独立 JSX/CSS。
 
@@ -451,7 +445,7 @@ GET /api/issues/:id/runs
 
 ## 8. PI 模块清单
 
-`backend-ts/src/pi` 的 148 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
+`backend-ts/src/pi` 的 143 个非 `*.test.ts` 模块全部在下面 family 中逐项列出；测试保证没有漏项或重复归属。
 
 | family | 文件数 | 结论 | 目标 | source of truth |
 | --- | ---: | --- | --- | --- |
@@ -741,4 +735,4 @@ bunx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext \
   src/xuanwu/capabilityDispositionInventory.test.ts
 ```
 
-测试会验证：84 张 current source table + 2 张 captured live-only table = 86；246 条唯一用户 API route 全覆盖；36 个 JSX 页面组件与 148 个 PI 模块恰好归属一次；14 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。
+测试会验证：83 张 current source table + 2 张 captured live-only table = 85；242 条唯一用户 API route 全覆盖；32 个 JSX 页面组件与 143 个 PI 模块恰好归属一次；12 个 scheduler 入口存在；每个 delete 项都有 live row、零生产引用和至少三条删除门禁。

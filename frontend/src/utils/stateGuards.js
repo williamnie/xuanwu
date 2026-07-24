@@ -23,8 +23,6 @@ const ISSUE_FIELDS = [
   'description',
   'status',
   'priority',
-  'template_id',
-  'prompt_template',
   'required_mcp_capabilities',
   'recommended_mcp_capabilities',
   'mcp_requirements',
@@ -43,15 +41,6 @@ const ISSUE_FIELDS = [
   'auto_retry_next_at',
   'auto_retry_reason',
   'error',
-  'created_at',
-  'updated_at',
-];
-
-const ISSUE_TEMPLATE_FIELDS = [
-  'id',
-  'name',
-  'content',
-  'is_default',
   'created_at',
   'updated_at',
 ];
@@ -138,10 +127,6 @@ export function sameProjects(current, next) {
 
 export function sameIssues(current, next) {
   return sameListByFields(current, next, ISSUE_FIELDS);
-}
-
-export function sameIssueTemplates(current, next) {
-  return sameListByFields(current, next, ISSUE_TEMPLATE_FIELDS);
 }
 
 export function sameCronTasks(current, next) {

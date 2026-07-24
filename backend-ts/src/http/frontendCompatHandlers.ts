@@ -7,7 +7,6 @@ import { createAgentProfile, deleteAgentProfile, updateAgentProfile } from "../d
 import { recordIssueEvent } from "../db/repositories/issueEvents.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { getIssue, listIssueRuns } from "../db/repositories/issues.ts";
-import { createIssueTemplate, deleteIssueTemplate, getIssueTemplate, updateIssueTemplate } from "../db/repositories/issueTemplates.ts";
 import { listNotifications, markNotificationRead } from "../db/repositories/notifications.ts";
 import { clearProjectHold, deleteProject, reorderProjects } from "../db/repositories/projectsExtra.ts";
 import { getProject, ProjectNotFoundError, updateProject } from "../db/repositories/projects.ts";
@@ -62,12 +61,6 @@ export function createFrontendCompatHandlers(context: FrontendCompatContext) {
     capabilities: () => ({ skills: listSkillRegistry(), plugins: [] }),
     commands: {
       execute: (body: Record<string, unknown>) => executeCommand(context, body)
-    },
-    issueTemplates: {
-      create: (body: Record<string, unknown>) => createIssueTemplate(context.database, body),
-      delete: (id: string) => deleteIssueTemplate(context.database, id),
-      read: (id: string) => mustTemplate(context.database, id),
-      update: (id: string, body: Record<string, unknown>) => updateIssueTemplate(context.database, id, body)
     },
     issues: {
       verifierReport: (id: number) => verifierReport(context.database, id)
@@ -295,12 +288,6 @@ function defaultModels(): Record<string, unknown> {
       supportedReasoningEfforts: []
     }]
   };
-}
-
-function mustTemplate(db: RunnerDatabase, id: string) {
-  const item = getIssueTemplate(db, id);
-  if (!item) throw new ProjectNotFoundError();
-  return item;
 }
 
 function normalizeCommand(value: unknown): CommandPayload {

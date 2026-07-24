@@ -55,6 +55,7 @@ import { compactEventSummaryProjectionMigration } from "./054_compact_event_summ
 import { collapsePiAgentsToSupervisorMigration } from "./055_collapse_pi_agents_to_supervisor.ts";
 import { issueLogModeMigration } from "./056_issue_log_mode.ts";
 import { issueDependencyAndRunGitBaselineMigration } from "./057_issue_dependency_and_run_git_baseline.ts";
+import { dropIssueTemplatesMigration } from "./058_drop_issue_templates.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -113,5 +114,6 @@ export const migrations = [
   compactEventSummaryProjectionMigration,
   collapsePiAgentsToSupervisorMigration,
   issueLogModeMigration,
-  issueDependencyAndRunGitBaselineMigration
+  issueDependencyAndRunGitBaselineMigration,
+  dropIssueTemplatesMigration
 ];

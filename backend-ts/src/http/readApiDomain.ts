@@ -5,7 +5,6 @@ import {
   type ListIssueEventsOptions
 } from "../db/repositories/issueEvents.ts";
 import { listAgentProfiles } from "../db/repositories/agentProfiles.ts";
-import { listIssueTemplates } from "../db/repositories/issueTemplates.ts";
 import { reviewIssueVerification } from "../db/repositories/issueVerification.ts";
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
 import { auditIssueSkillIntents } from "../skills/intentAudit.ts";
@@ -53,8 +52,7 @@ type PublicIssue = Omit<Issue, "latest_run"> & {
 export function createReadApiDomainHandlers(context: ReadApiContext) {
   return {
     auxiliary: {
-      listAgentProfiles: () => listAgentProfiles(context.database),
-      listIssueTemplates: () => listIssueTemplates(context.database)
+      listAgentProfiles: () => listAgentProfiles(context.database)
     },
     issues: {
       cancel: (id: number) => cancelIssue(context, id),

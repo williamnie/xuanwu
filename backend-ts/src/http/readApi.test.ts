@@ -195,7 +195,7 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("provides minimal auxiliary read endpoints needed by the Issues page", async () => {
+  test("provides remaining auxiliary endpoints and removes Issue template routes", async () => {
     const database = await openFixtureDatabase();
     try {
       const router = createDefaultRouter({ database });
@@ -203,10 +203,7 @@ describe("Bun projects/issues read API", () => {
       const cron = await router.handle(new Request(`${BASE_URL}/api/cron-tasks`));
       const profiles = await router.handle(new Request(`${BASE_URL}/api/agent-profiles`));
 
-      expect(templates.status).toBe(200);
-      expect(await templates.json()).toEqual([
-        { id: "default", name: "Default", content: "{{issue.description}}", is_default: 1, created_at: "", updated_at: "" }
-      ]);
+      expect(templates.status).toBe(404);
       expect(cron.status).toBe(308);
       expect(cron.headers.get("location")).toBe("/api/automations");
       expect(await cron.json()).toMatchObject({
@@ -345,8 +342,6 @@ describe("Bun projects/issues read API", () => {
           required_skill_intents: ["codex-issue-runner"],
           recommended_skill_intents: ["verification-before-completion"],
           priority: 4,
-          template_id: "custom-template",
-          prompt_template: "snapshot body",
           agent_profile_id: "Codex Pro!",
           source_session_id: "codex:thread-source",
           source_turn_id: "turn-source",
@@ -369,8 +364,6 @@ describe("Bun projects/issues read API", () => {
         description: "Issue body",
         status: "triage",
         priority: 4,
-        template_id: "custom-template",
-        prompt_template: "snapshot body",
         agent_profile_id: "codex-pro",
         source_session_id: "thread-source",
         source_turn_id: "turn-source",
@@ -473,40 +466,35 @@ describe("Bun projects/issues read API", () => {
     }
   });
 
-  test("auto-run issue create snapshots and renders the selected issue template", async () => {
+  test("auto-run issue create sends the canonical title, description, and lifecycle contract", async () => {
     const database = await openFixtureDatabase();
     const provider = new FakeExecutionProvider();
     try {
       insertProject(database, { id: "demo", name: "Demo", sortOrder: 1, autoRun: 1, provider: provider.id });
-      insertIssueTemplate(database, {
-        id: "runner-template",
-        content: "cwd={{project.cwd}}\ntitle={{issue.title}}\nbody={{issue.description}}\nprio={{issue.priority}}"
-      });
       const router = createDefaultRouter({ database, providers: { [provider.id]: provider } });
 
       const created = await router.handle(new Request(`${BASE_URL}/api/issues`, {
         method: "POST",
         body: JSON.stringify({
           project_id: "demo",
-          title: "模板执行",
-          description: "按模板发给 runner",
+          title: "直接执行",
+          description: "直接发给 runner",
           priority: 2,
-          status: "todo",
-          template_id: "runner-template"
+          status: "todo"
         }),
         headers: { "content-type": "application/json" }
       }));
 
       expect(created.status).toBe(201);
       const body = await created.json() as Record<string, unknown>;
-      expect(body).toMatchObject({
-        template_id: "runner-template",
-        prompt_template: "cwd={{project.cwd}}\ntitle={{issue.title}}\nbody={{issue.description}}\nprio={{issue.priority}}"
-      });
+      expect(body).not.toHaveProperty("template_id");
+      expect(body).not.toHaveProperty("prompt_template");
       await waitForProviderStart(provider);
       const prompt = provider.inputs[0]?.prompt ?? "";
-      expect(prompt).toContain("cwd=/tmp/demo\ntitle=模板执行\nbody=按模板发给 runner\nprio=2");
+      expect(prompt).toContain("# 直接执行\n\n直接发给 runner");
       expect(prompt).toContain("## Goal Contract");
+      expect(prompt).toContain("## Runner lifecycle contract");
+      expect(prompt).toContain(`issue update --id ${body.id} --status done --json`);
     } finally {
       database.close();
     }
@@ -678,14 +666,6 @@ function insertProject(db: RunnerDatabase, project: ProjectFixture): void {
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
     [project.id, project.name, `/tmp/${project.id}`, project.provider ?? "codex", project.autoRun ?? 0,
       project.sortOrder, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
-
-function insertIssueTemplate(db: RunnerDatabase, template: { content: string; id: string }): void {
-  db.sqlite.run(
-    `insert into issue_templates (id, name, content, is_default, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [template.id, template.id, template.content, 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

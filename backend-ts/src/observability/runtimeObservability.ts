@@ -67,7 +67,7 @@ export function buildRuntimeObservability(database: RunnerDatabase, now = new Da
     source_of_truth: {
       work: "issues",
       run: "issue_runs+run_attempts",
-      workflow: "works+automation_execution_links+issue-template-fallback",
+      workflow: "works+automation_execution_links+canonical-workflow-fallback",
       provider_cost: "run_attempts.cost_json",
       automation: "automation_definitions+automation_runs+automation_execution_links",
       structured_events: "event_summary_projection"
@@ -85,7 +85,7 @@ export function buildRuntimeObservability(database: RunnerDatabase, now = new Da
         attempts: scalar(database, "select count(*) as count from run_attempts")
       },
       workflow: {
-        source: "works+automation_execution_links+issue-template-fallback",
+        source: "works+automation_execution_links+canonical-workflow-fallback",
         total: workflows.length,
         items: workflows
       },
@@ -138,7 +138,7 @@ function workflowMetrics(database: RunnerDatabase): WorkflowRow[] {
   return database.sqlite.query<WorkflowRow, []>(`
     select
       coalesce(nullif(link.workflow_ref, ''), nullif(work.workflow_ref, ''),
-        'issue-template:' || coalesce(nullif(issue.template_id, ''), 'default')) as workflow_ref,
+        'workflow:implement@1') as workflow_ref,
       count(distinct issue.id) as work,
       count(distinct run.id) as runs,
       max(issue.updated_at) as updated_at
@@ -225,7 +225,7 @@ function traceRows(database: RunnerDatabase): TraceRow[] {
       coalesce(latest.provider_invocation_ref, '') as provider_invocation_ref,
       coalesce(latest.provider_session_id, run.provider_session_id, '') as provider_session_id,
       coalesce(link.workflow_ref, work.workflow_ref,
-        'issue-template:' || coalesce(nullif(issue.template_id, ''), 'default')) as workflow_ref,
+        'workflow:implement@1') as workflow_ref,
       link.automation_id, link.automation_run_id,
       count(attempt.attempt_id) as attempt_count,
       coalesce(sum(case when json_type(attempt.cost_json, '$.usage.total_tokens') in ('integer','real')

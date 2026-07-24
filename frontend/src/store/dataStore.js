@@ -5,7 +5,6 @@ import { create } from 'zustand';
 import { clearAuthToken } from '../api/authToken';
 import {
   sameGuardianAlerts,
-  sameIssueTemplates,
   sameIssues,
   sameProjects,
 } from '../utils/stateGuards';
@@ -19,11 +18,6 @@ const DATA_SLICE_CONFIG = {
   issues: {
     fetch: () => workApi.getIssues(),
     same: sameIssues,
-    fallback: [],
-  },
-  issueTemplates: {
-    fetch: () => workApi.getIssueTemplates(),
-    same: sameIssueTemplates,
     fallback: [],
   },
   automations: {
@@ -65,7 +59,6 @@ function buildConnectionPatch(current, online) {
 export const useDataStore = create((set, get) => ({
   projects: [],
   issues: [],
-  issueTemplates: [],
   automations: [],
   guardianAlerts: [],
   loading: true,
@@ -133,7 +126,6 @@ export const useDataStore = create((set, get) => ({
 
 export const selectProjects = (state) => state.projects;
 export const selectIssues = (state) => state.issues;
-export const selectIssueTemplates = (state) => state.issueTemplates;
 export const selectAutomations = (state) => state.automations;
 export const selectGuardianAlerts = (state) => state.guardianAlerts;
 export const selectBackendOnline = (state) => state.backendOnline;

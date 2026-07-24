@@ -1,4 +1,3 @@
-import IssueTemplatesPanel from './IssueTemplatesPanel';
 import PiMemoryPanel from './PiMemoryPanel';
 import ActivityTimelinePanel from './ActivityTimelinePanel';
 import ProviderAvailabilityPanel from './ProviderAvailabilityPanel';
@@ -76,12 +75,7 @@ function AdvancedRuntimeSettingsTab({ RuntimeStatusPanel }) {
 }
 
 function AdvancedSkillsSettingsTab() {
-  return (
-    <>
-      <SkillsRuntimePanel />
-      <IssueTemplatesPanel />
-    </>
-  );
+  return <SkillsRuntimePanel />;
 }
 
 function MemorySettingsTab() {

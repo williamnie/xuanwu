@@ -27,7 +27,6 @@ type IssueRow = {
   issue_log_mode: unknown;
   priority: unknown;
   project_id: unknown;
-  prompt_template: unknown;
   recommended_mcp_capabilities_json: unknown;
   recommended_skill_intents_json: unknown;
   required_mcp_capabilities_json: unknown;
@@ -37,7 +36,6 @@ type IssueRow = {
   source_session_id: unknown;
   source_turn_id: unknown;
   status: unknown;
-  template_id: unknown;
   title: unknown;
   updated_at: unknown;
   workflow_snapshot_json: unknown;
@@ -103,7 +101,6 @@ export type Issue = {
   latest_run?: IssueRun;
   priority: number;
   project_id: string;
-  prompt_template: string;
   recommended_mcp_capabilities: string;
   recommended_skill_intents: string;
   required_mcp_capabilities: string;
@@ -113,14 +110,13 @@ export type Issue = {
   source_session_id: string;
   source_turn_id: string;
   status: string;
-  template_id: string;
   title: string;
   updated_at: string;
   workflow_snapshot_json: string;
 };
 
 const ISSUE_COLUMNS = `id, project_id, title, description, status, priority,
-  template_id, prompt_template, required_skill_intents_json, recommended_skill_intents_json,
+  required_skill_intents_json, recommended_skill_intents_json,
   required_mcp_capabilities_json, recommended_mcp_capabilities_json, agent_profile_id, source_session_id,
   source_turn_id, source_excerpt, codex_thread_id, codex_turn_id, service_tier,
   attempt_count,
@@ -264,8 +260,6 @@ function mapIssueRow(row: IssueRow): Issue {
     description: rawString(row.description),
     status: requiredString(row.status, "issues.status"),
     priority: integerValue(row.priority, "issues.priority"),
-    template_id: optionalString(row.template_id),
-    prompt_template: optionalString(row.prompt_template),
     required_skill_intents: optionalString(row.required_skill_intents_json, "[]"),
     recommended_skill_intents: optionalString(row.recommended_skill_intents_json, "[]"),
     required_mcp_capabilities: optionalString(row.required_mcp_capabilities_json, "[]"),

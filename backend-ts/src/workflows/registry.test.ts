@@ -62,14 +62,14 @@ describe("Workflow Manifest V1", () => {
     ]));
   });
 
-  test("locks authority, compatibility window, rollback, and deletion gates in the canonical ADR", () => {
+  test("locks authority, template removal, rollback, and retained workflow boundaries in the canonical ADR", () => {
     const adr = readFileSync(ADR, "utf8");
 
     expect(adr).toContain("Per-Work authority");
     expect(adr).toContain("双写 0、双读 0");
-    expect(adr).toContain("最多两个正式 release window");
+    expect(adr).toContain("058_drop_issue_templates");
     expect(adr).toContain("回滚");
-    expect(adr).toContain("最终删除门禁");
+    expect(adr).toContain("workflow_snapshot_json");
   });
 });
 

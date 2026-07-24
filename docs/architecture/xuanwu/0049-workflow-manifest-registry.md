@@ -66,7 +66,7 @@ V1 override 只能收紧或在 base 明确授权的集合内选择：
 ## 5. Authority、兼容、迁移与回滚
 
 - **Workflow template authority**：V1 schema + Registry 拥有可选择 manifest revision 与 effective project override 的语义。
-- **Per-Work authority**：现有 Issue `workflow_snapshot_json` / Work `workflow_ref` 继续拥有某个 Work 已冻结的执行合同；Registry 不反向覆盖历史 snapshot。当前 legacy prompt/template snapshot 不会被猜测成 V1 manifest。
+- **Per-Work authority**：现有 Issue `workflow_snapshot_json` / Work `workflow_ref` 继续拥有某个 Work 已冻结的执行合同；Registry 不反向覆盖历史 snapshot。Issue Prompt 模板已由 `058_drop_issue_templates` 删除，不能被猜测成 V1 manifest。
 - **Verification authority**：P04.06 policy/evaluator 继续拥有 Evidence gate 语义；Workflow 只保存精确 ref。现有 `project_pi_policies.verification_policy_json` 继续只拥有 PI timeout/evidence-required V0 设置。
 - **Permission/state authority**：既有 tool registry、project policy、Action Gate、approval repository 与 Work/Run/Evidence/Handoff services 最终裁决；manifest/override/LLM output 都不是 writer。
 
@@ -74,13 +74,11 @@ V1 override 只能收紧或在 base 明确授权的集合内选择：
 
 | 窗口 | 读写与 authority |
 | --- | --- |
-| W0（本期） | 只新增纯合同/Registry；新 DB/API writer 为 0，legacy runtime 读写不变，双写 0、双读 0 |
-| W1（P06.08–P06.12） | 新建 Work 显式选择 exact ref 并把 effective manifest 冻结到既有 snapshot carrier；已有 Work 继续只读自己的 legacy snapshot，不对同一 Work 双读猜 winner |
-| W2（所有标准 Workflow 接入后最多两个正式 release window） | selector/diagnostics 可展示 legacy 与 V1 coverage；执行仍按每个 Work 的 frozen authority，不做状态双写 |
-| W3 | 新 Work 必须来自 registered V1+ manifest；legacy snapshot 仅为旧 Work retention/audit carrier |
+| Workflow Manifest V1 | Registry 与既有 `workflow_snapshot_json` / `workflow_ref` 继续按精确 revision 工作，双写 0、双读 0 |
+| Issue Prompt 模板移除 | 删除无实际多模板消费者的 UI、API、CLI、快照字段与表；不兼容历史模板数据，也不做双读或双写；Runner lifecycle contract 成为不可配置的执行约束 |
 
-- **回滚**：停止新 Work 的 Registry selection，恢复现有 prompt/template snapshot 创建路径；已经冻结的 ref/snapshot 与 audit 保留，没有 DB/data rollback，也不能把新 manifest 反写成旧模板。
-- **最终删除门禁**：只有 P06.08–P06.12 standard workflows/Skill Runtime 全部接入、P10 evaluation 与 clean-baseline journeys 通过、所有 active Work 都能按 frozen snapshot 重放、unknown/duplicate/invalid override fail-closed 指标稳定、连续一个正式 release 无 legacy new-Work producer，且 P11/G7批准后，才可删除 legacy new-Work template adapter。旧 Work snapshot 仍按 retention policy 保留。
+- **回滚**：恢复上一版应用和迁移前 SQLite 备份；删除模板后的新 Issue 不再生成 `template_id` / `prompt_template`，不能把 Workflow manifest 反写成旧模板。
+- **删除边界**：`058_drop_issue_templates` 只删除 Issue Prompt 模板。`workflow_snapshot_json`、Work `workflow_ref`、Registry、Evidence 与 Handoff authority 全部保留。
 
 ## 6. 最小验证
 

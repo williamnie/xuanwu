@@ -91,7 +91,6 @@ describe("Bun SQLite database connection", () => {
         "issue_events",
         "issue_runs",
         "issue_supervisor_events",
-        "issue_templates",
         "issues",
         "notifications",
         "pi_action_events",
@@ -247,11 +246,14 @@ describe("Bun SQLite database connection", () => {
         { id: "054_compact_event_summary_projection" },
         { id: "055_collapse_pi_agents_to_supervisor" },
         { id: "056_issue_log_mode" },
-        { id: "057_issue_dependency_and_run_git_baseline" }
+        { id: "057_issue_dependency_and_run_git_baseline" },
+        { id: "058_drop_issue_templates" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
       expect(columnNames(connection, "issues")).toContain("issue_log_mode");
+      expect(columnNames(connection, "issues")).not.toContain("template_id");
+      expect(columnNames(connection, "issues")).not.toContain("prompt_template");
       expect(indexNames(connection, "event_summary_projection")).toEqual(expect.arrayContaining([
         "idx_event_summary_projection_issue",
         "idx_event_summary_projection_project"
@@ -875,7 +877,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 56 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 57 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();
