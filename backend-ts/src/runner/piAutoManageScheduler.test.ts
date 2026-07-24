@@ -32,15 +32,22 @@ class FakePiCycleRunner {
 
 
 class SlowSupervisorDatabase {
-  readonly path: string; readonly readonly: boolean; readonly sqlite; supervisorQueries = 0;
+  readonly path: string; readonly readonly: boolean; readonly sqlite;
+  supervisorQueries = 0;
+  watchdogWrites = 0;
+
   constructor(readonly inner: RunnerDatabase) {
     this.path = inner.path; this.readonly = inner.readonly;
+    const run = inner.sqlite.run.bind(inner.sqlite) as (...args: any[]) => unknown;
     this.sqlite = {
       query: (sql: string) => {
         if (sql.includes("auto_retry_next_at")) this.supervisorQueries += 1;
         return inner.sqlite.query(sql);
       },
-      run: inner.sqlite.run.bind(inner.sqlite)
+      run: (sql: string, ...bindings: any[]) => {
+        if (sql.includes("pi_guardian_watchdog_status")) this.watchdogWrites += 1;
+        return run(sql, ...bindings);
+      }
     };
   }
   close(): void { this.inner.close(); }
@@ -135,6 +142,72 @@ describe("PI auto-manage scheduler", () => {
       expect(errors).toEqual([]);
       scheduler.stop();
     } finally {
+      db.close();
+    }
+  });
+
+  test("rearms Guardian and project cycles after long work and a recoverable cycle error", async () => {
+    const db = await openFixtureDatabase();
+    const wrapped = new SlowSupervisorDatabase(db);
+    const clock = new FakeClock();
+    const errors: unknown[] = [];
+    let active = 0;
+    let calls = 0;
+    let maxActive = 0;
+    let releaseLongCycle = () => {};
+    const longCycle = new Promise<void>((resolve) => {
+      releaseLongCycle = resolve;
+    });
+    const runProjectCycle = async () => {
+      calls += 1;
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      try {
+        if (calls === 2) await longCycle;
+        if (calls === 3) throw new Error("recoverable provider cycle failure");
+      } finally {
+        active -= 1;
+      }
+    };
+    try {
+      insertProject(db, "enabled", 1);
+      insertAgent(db, "pi-default");
+      insertSettings(db, "enabled", 1, 2);
+      const scheduler = createPiAutoManageScheduler({
+        clock,
+        database: wrapped as unknown as RunnerDatabase,
+        intervalMs: 5,
+        onError: (error) => errors.push(error),
+        runProjectCycle,
+        supervisorIntervalMs: 60_000
+      });
+
+      scheduler.start();
+      await clock.runNext();
+      await waitUntil(() => calls === 1 && clock.timers.length === 1);
+
+      await clock.runNext();
+      await waitUntil(() => calls === 2 && active === 1);
+      expect(clock.timers).toEqual([]);
+      await clock.runNext();
+      expect(calls).toBe(2);
+      expect(maxActive).toBe(1);
+
+      releaseLongCycle();
+      await waitUntil(() => active === 0 && clock.timers.length === 1);
+      await clock.runNext();
+      await waitUntil(() => errors.length === 1 && clock.timers.length === 1);
+      await clock.runNext();
+      await waitUntil(() => calls === 4 && clock.timers.length === 1);
+
+      expect(errors.map((error) => error instanceof Error ? error.message : String(error)))
+        .toEqual(["recoverable provider cycle failure"]);
+      expect(wrapped.watchdogWrites).toBe(4);
+      expect(maxActive).toBe(1);
+      scheduler.stop();
+      expect(clock.timers[0]?.canceled).toBe(true);
+    } finally {
+      releaseLongCycle();
       db.close();
     }
   });

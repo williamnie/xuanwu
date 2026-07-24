@@ -114,6 +114,11 @@ describe("Bun PI conversation message API", () => {
       });
       expect(firstEvent?.issueId).toBeUndefined();
       expect(faux.state.callCount).toBe(1);
+      const persisted = await waitForConversationTranscript(router, "conv-msg", "pi reply");
+      expect(persisted.transcript).toEqual([
+        expect.objectContaining({ role: "user", text: "hello" }),
+        expect.objectContaining({ role: "assistant", text: "pi reply" })
+      ]);
     } finally {
       faux.unregister();
       database.close();
@@ -624,7 +629,10 @@ describe("Bun PI conversation message API", () => {
       tokensPerSecond: 1
     });
     try {
-      faux.setResponses([fauxAssistantMessage("slow response")]);
+      faux.setResponses([
+        fauxAssistantMessage("slow response"),
+        fauxAssistantMessage("ok")
+      ]);
       insertProject(database, "demo");
       insertFauxAgent(database);
       writeFauxModelsConfig(database);
@@ -657,6 +665,15 @@ describe("Bun PI conversation message API", () => {
           text: ""
         }
       });
+      const next = await requestAfterActiveTurn(router, "/api/pi/conversations/conv-interrupt/messages", {
+        prompt: "start a fresh turn"
+      });
+      expect(await finalPiConversationSseData(next)).toMatchObject({
+        conversation_id: "conv-interrupt",
+        status: "completed",
+        text: "ok"
+      });
+      expect(faux.state.callCount).toBe(2);
     } finally {
       faux.unregister();
       database.close();
@@ -697,6 +714,16 @@ describe("Bun PI conversation message API", () => {
       expect(conflict.status).toBe(409);
 
       releaseProvider();
+      const recovered = await waitForConversationTranscript(
+        router,
+        "conv-cancel",
+        "persist after disconnect"
+      );
+      expect(recovered.transcript).toEqual([
+        expect.objectContaining({ role: "user", text: "keep running" }),
+        expect.objectContaining({ role: "assistant", text: "persist after disconnect" })
+      ]);
+      expect(faux.state.callCount).toBe(1);
       const next = await requestAfterActiveTurn(router, "/api/pi/conversations/conv-cancel/messages", {
         prompt: "next"
       });
@@ -879,6 +906,23 @@ async function requestAfterActiveTurn(
     await Bun.sleep(10);
   }
   throw new Error("active PI turn did not clean up");
+}
+
+async function waitForConversationTranscript(
+  router: ReturnType<typeof createDefaultRouter>,
+  conversationID: string,
+  expectedText: string
+): Promise<Record<string, any>> {
+  for (let index = 0; index < 50; index += 1) {
+    const response = await router.handle(new Request(
+      `${BASE_URL}/api/pi/conversations/${encodeURIComponent(conversationID)}`
+    ));
+    const body = await response.json() as Record<string, any>;
+    const transcript = Array.isArray(body.transcript) ? body.transcript : [];
+    if (transcript.some((item) => item?.text === expectedText)) return body;
+    await Bun.sleep(10);
+  }
+  throw new Error(`persisted PI transcript did not include: ${expectedText}`);
 }
 
 function imageSummary(context: unknown): string {
