@@ -29,4 +29,12 @@ describe("server entrypoint wiring", () => {
     expect(source).not.toContain('from "./providers/');
   });
 
+  test("keeps invasive process-table and footprint probes off the Core HTTP event loop", () => {
+    const source = readFileSync(join(import.meta.dir, "runtime", "core.ts"), "utf8");
+
+    expect(source).toContain("footprint: async () => new Map()");
+    expect(source).toContain("inspect: () => [{");
+    expect(source).toContain("rss_bytes: process.memoryUsage.rss()");
+  });
+
 });

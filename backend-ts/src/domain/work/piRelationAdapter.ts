@@ -1,15 +1,16 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import {
-  listPiActionEvents,
+  listPiActionEventIDsByActionID,
   listPiActions,
+  listPiActionsReferencingIssue,
   type PiAction
 } from "../../db/repositories/pi/actions.ts";
 import type { PiIssueCompletionWatch } from "../../db/repositories/pi/issueCompletionWatches.ts";
 import { listIssueCompletionAutomations } from "../../pi/issueCompletionAutomation.ts";
-import { listIssues, type Issue } from "../../db/repositories/issues.ts";
+import { getIssue, listIssues, type Issue } from "../../db/repositories/issues.ts";
 import { makeDomainID } from "../../xuanwu/coreDomainContracts.ts";
 import type { WorkID } from "./contracts.ts";
-import { issueIDToWorkID } from "./issueAdapter.ts";
+import { issueIDToWorkID, workIDToIssueID } from "./issueAdapter.ts";
 
 export const PI_WORK_RELATION_KINDS = ["execution", "authorization", "observation"] as const;
 export type PiWorkRelationKind = typeof PI_WORK_RELATION_KINDS[number];
@@ -92,8 +93,14 @@ export function listPiWorkRelations(
   db: RunnerDatabase,
   filter: PiWorkRelationFilter = {}
 ): PiWorkRelationProjection {
-  const issues = new Map(listIssues(db).map((issue) => [issue.id, issue]));
-  const actionProjections = listPiActions(db).map((action) => projectAction(db, action));
+  const issueID = filter.work_id ? workIDToIssueID(filter.work_id) : undefined;
+  const issueRows = issueID
+    ? [getIssue(db, issueID)].filter((issue): issue is Issue => Boolean(issue))
+    : listIssues(db);
+  const issues = new Map(issueRows.map((issue) => [issue.id, issue]));
+  const actions = issueID ? listPiActionsReferencingIssue(db, issueID) : listPiActions(db);
+  const eventIDs = listPiActionEventIDsByActionID(db, actions.map((action) => action.id));
+  const actionProjections = actions.map((action) => projectAction(action, eventIDs.get(action.id) ?? []));
   const output: MutableProjection = { relations: new Map(), unmapped: new Map() };
 
   for (const projection of actionProjections) projectActionRelations(output, issues, projection, filter);
@@ -135,11 +142,10 @@ export function piWatchRelationLifecycle(status: string): PiWorkRelationLifecycl
   return "legacy_unknown";
 }
 
-function projectAction(db: RunnerDatabase, action: PiAction): ActionProjection {
-  const events = listPiActionEvents(db, { actionId: action.id });
+function projectAction(action: PiAction, eventIDs: number[]): ActionProjection {
   return {
     action,
-    event_refs: events.map((event) => makeDomainID("evidence", "pi_action_events", event.id)),
+    event_refs: eventIDs.map((eventID) => makeDomainID("evidence", "pi_action_events", eventID)),
     issue_ids: actionIssueIDs(action)
   };
 }

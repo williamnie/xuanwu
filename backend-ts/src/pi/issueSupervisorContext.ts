@@ -61,7 +61,7 @@ export async function buildIssueSupervisorRecoveryContextAsync(
   issueID: number,
   options: IssueSupervisorContextOptions = {}
 ): Promise<IssueSupervisorRecoveryContext> {
-  const events = await listIssueEventsAsync(db.path, issueID, supervisorEventOptions());
+  const events = await listIssueEventsAsync(db, issueID, supervisorEventOptions());
   return buildIssueSupervisorRecoveryContextFromEvents(db, issueID, events, options);
 }
 
@@ -81,8 +81,18 @@ function buildIssueSupervisorRecoveryContextFromEvents(
   const recentEvents = events.slice(-recentLimit(options)).map(summarizeIssueEvent);
   const providerError = latestProviderError(currentRunEvents, now);
   const policy = readProjectPiPolicy(db, issue.project_id);
-  const supervisorEvents = listIssueSupervisorEvents(db, { issueId: issue.id });
-  const projectSupervisorEvents = listIssueSupervisorEvents(db, { projectId: issue.project_id });
+  // Signal rows can be extremely numerous and are not used by recovery-budget
+  // history. Reading/redacting every historical signal once per scheduler tick
+  // caused hundreds of MB of transient allocations and multi-second GC pauses.
+  const supervisorEvents = listIssueSupervisorEvents(db, {
+    eventTypes: ["action", "result"],
+    issueId: issue.id
+  });
+  const projectSupervisorEvents = listIssueSupervisorEvents(db, {
+    createdAfter: new Date(now.getTime() - 60 * 60 * 1_000).toISOString(),
+    eventTypes: ["action"],
+    projectId: issue.project_id
+  });
   const budget = readPiRecoveryBudget(db, {
     actionType: "session.resume_followup",
     issueID: issue.id,

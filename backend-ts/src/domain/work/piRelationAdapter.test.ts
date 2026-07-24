@@ -150,6 +150,7 @@ describe("PI carrier to Work relation adapter", () => {
         status: "denied"
       });
       const projection = listPiWorkRelations(db, { project_id: PROJECT_ID });
+      const workProjection = listPiWorkRelations(db, { work_id: issueIDToWorkID(issue.id) });
 
       expect(projection.relations).toContainEqual(expect.objectContaining({
         kind: "execution",
@@ -168,6 +169,17 @@ describe("PI carrier to Work relation adapter", () => {
         expect.objectContaining({ candidate_issue_id: 999999, reason: "missing_work", source_ref: expect.objectContaining({ external_id: "action-missing-work" }) }),
         expect.objectContaining({ candidate_issue_id: issue.id, reason: "project_mismatch", source_ref: expect.objectContaining({ external_id: "action-project-mismatch" }) })
       ]));
+      expect(workProjection.relations.map((relation) => relation.source_ref.external_id).sort()).toEqual([
+        "action-created-work",
+        "action-payload-ref"
+      ]);
+      expect(workProjection.unmapped).toEqual([
+        expect.objectContaining({
+          candidate_issue_id: issue.id,
+          reason: "project_mismatch",
+          source_ref: expect.objectContaining({ external_id: "action-project-mismatch" })
+        })
+      ]);
       expect(rowCount(db, "works")).toBe(0);
       expect(rowCount(db, "work_relations")).toBe(0);
     } finally {

@@ -160,10 +160,14 @@ export function runProgressProjectionStatus(db: RunnerDatabase, now = new Date()
     active_runs: activeRuns,
     backpressure: activeRuns > runIDs.length,
     evaluated_active_runs: runIDs.length,
+    // `max(id)` makes SQLite evaluate the JSON predicate across the complete
+    // issue_events table. Walking the integer primary key backwards can stop
+    // at the first matching normalized event and is equivalent.
     latest_source_event_id: db.sqlite.query<{ id: number }, []>(`
-      select coalesce(max(id), 0) as id from issue_events
+      select id from issue_events
       where type='issue.log' and json_valid(payload)
         and json_extract(payload, '$.run_event.contract')='${NORMALIZED_RUN_EVENT_CONTRACT}'
+      order by id desc limit 1
     `).get()?.id ?? 0,
     projection_id: "run_progress_read_projection_v1",
     projection_mode: "read_through_rebuild",

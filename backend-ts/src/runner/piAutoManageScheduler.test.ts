@@ -55,9 +55,9 @@ class SlowSupervisorDatabase {
 }
 
 class FakeClock {
-  readonly timers: Array<{ callback: () => void; canceled: boolean; delayMs: number }> = [];
+  readonly timers: Array<{ callback: () => void | Promise<void>; canceled: boolean; delayMs: number }> = [];
 
-  setTimeout(callback: () => void, delayMs: number) {
+  setTimeout(callback: () => void | Promise<void>, delayMs: number) {
     const timer = { callback, canceled: false, delayMs };
     this.timers.push(timer);
     return timer;
@@ -70,8 +70,10 @@ class FakeClock {
   async runNext(): Promise<void> {
     const timer = this.timers.shift();
     if (!timer || timer.canceled) return;
-    timer.callback();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    void timer.callback();
+    for (let index = 0; index < 50 && this.timers.length === 0; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
 }
 

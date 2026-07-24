@@ -101,6 +101,42 @@ describe("PI supervisor issue API", () => {
       database.close();
     }
   });
+
+  test("keeps the issue view below one second with a large historical signal backlog", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "backlog");
+      const issueID = insertIssue(database, "backlog");
+      database.sqlite.run(`
+        with recursive seq(n) as (
+          select 1
+          union all
+          select n + 1 from seq where n < 12000
+        )
+        insert into issue_supervisor_events (
+          issue_id, project_id, event_type, diagnosis_code, payload_json, created_at
+        )
+        select ?, 'backlog', 'signal', 'provider_timeout',
+          json_object('raw_summary', replace(hex(zeroblob(1024)), '00', 'x')),
+          '2026-06-10T09:00:00Z'
+        from seq
+      `, [issueID]);
+
+      const startedAt = performance.now();
+      const response = await createDefaultRouter({ database }).handle(
+        new Request(`${BASE_URL}/api/issues/${issueID}/supervisor`)
+      );
+      const elapsedMs = performance.now() - startedAt;
+      const body = await response.json() as Record<string, any>;
+
+      expect(response.status).toBe(200);
+      expect(body.summary.signals).toBe(12000);
+      expect(body.recovery_history).toHaveLength(20);
+      expect(elapsedMs).toBeLessThan(1000);
+    } finally {
+      database.close();
+    }
+  });
 });
 
 async function openFixtureDatabase(): Promise<RunnerDatabase> {

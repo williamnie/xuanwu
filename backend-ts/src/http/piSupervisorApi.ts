@@ -1,7 +1,11 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents, type IssueEvent } from "../db/repositories/issueEvents.ts";
 import { getIssue } from "../db/repositories/issues.ts";
-import { listIssueSupervisorEvents, type IssueSupervisorEvent } from "../db/repositories/pi.ts";
+import {
+  listIssueSupervisorEvents,
+  summarizeIssueSupervisorEvents,
+  type IssueSupervisorEvent
+} from "../db/repositories/pi.ts";
 import { redactAuditJsonText, redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { HttpError, json } from "./errors.ts";
 import type { Router } from "./router.ts";
@@ -18,45 +22,56 @@ export function registerPiSupervisorRoutes(router: Router, context: PiSupervisor
 function issueSupervisorView(db: RunnerDatabase, id: number): Record<string, unknown> {
   const issue = getIssue(db, id);
   if (!issue) throw new HttpError(404, "资源不存在");
-  const supervisorEvents = listIssueSupervisorEvents(db, { issueId: id });
+  // The history panel only renders the latest rows. Keep special latest values
+  // as targeted queries so a large historical signal backlog never has to be
+  // materialized and redacted on the HTTP event loop.
+  const supervisorEvents = listIssueSupervisorEvents(db, { issueId: id, latestLimit: 20 });
+  const latestDecision = listIssueSupervisorEvents(db, {
+    eventTypes: ["decision", "decision_failed"],
+    issueId: id,
+    latestLimit: 1
+  }).at(-1);
+  const latestProvider = listIssueSupervisorEvents(db, {
+    eventTypes: ["signal", "signal_failed"],
+    issueId: id,
+    latestLimit: 1
+  }).at(-1);
+  const latestRecovery = listIssueSupervisorEvents(db, {
+    eventTypes: ["action", "result"],
+    issueId: id,
+    latestLimit: 1
+  }).at(-1);
+  const retryAfterEvents = listIssueSupervisorEvents(db, {
+    issueId: id,
+    latestLimit: 20,
+    retryAfterOnly: true
+  });
   // Supervisor 只需要 retry-after 证据；避免详情页读取整段 Provider 日志。
   const issueEvents = listIssueEvents(db, id, {
     hydrateArtifacts: false,
     limit: 100,
     types: ["issue.retry_after_scheduled"]
   });
-  const latestDecision = latestEvent(supervisorEvents, (event) => event.event_type.includes("decision"));
-  const latestProvider = latestEvent(supervisorEvents, providerSignalEvent) ?? latestRetryIssueEvent(issueEvents);
-  const latestRecovery = latestEvent(supervisorEvents, recoveryMessageEvent);
+  const providerEvidence = latestProvider ?? latestRetryIssueEvent(issueEvents);
   return {
     issue_id: id,
     latest: {
-      created_at: latestDecision?.created_at || latestProvider?.created_at || "",
-      diagnosis_code: latestDecision?.diagnosis_code || clean(rowValue(latestProvider, "diagnosis_code")),
+      created_at: latestDecision?.created_at || providerEvidence?.created_at || "",
+      diagnosis_code: latestDecision?.diagnosis_code || clean(rowValue(providerEvidence, "diagnosis_code")),
       executed_recovery_message: recoveryMessage(latestRecovery) || decisionView(latestDecision).recovery_message,
       pi_decision: decisionView(latestDecision),
-      provider_error: providerErrorView(latestProvider),
+      provider_error: providerErrorView(providerEvidence),
       recovery_action: recoveryActionView(latestRecovery)
     },
     project_id: issue.project_id,
     recovery_history: supervisorEvents.slice(-20).reverse().map(historyItem),
-    retry_after: retryAfterView(issue, supervisorEvents, issueEvents),
-    summary: supervisorSummary(supervisorEvents)
+    retry_after: retryAfterView(issue, retryAfterEvents, issueEvents),
+    summary: summarizeIssueSupervisorEvents(db, id)
   };
 }
 
 function latestEvent<T>(items: T[], predicate: (item: T) => boolean): T | undefined {
   return [...items].reverse().find(predicate);
-}
-
-function providerSignalEvent(event: IssueSupervisorEvent): boolean {
-  if (event.event_type === "signal") return true;
-  const payload = jsonValue(event.payload_json);
-  return clean(payload.raw_summary) !== "" || numberValue(payload.status_code) > 0;
-}
-
-function recoveryMessageEvent(event: IssueSupervisorEvent): boolean {
-  return event.event_type === "action" || event.event_type === "result" || recoveryMessage(event) !== "";
 }
 
 function decisionView(event: IssueSupervisorEvent | undefined): Record<string, unknown> {
@@ -162,31 +177,6 @@ function issueRetryRecord(issue: { auto_retry_next_at: string; auto_retry_reason
     source: "issue.auto_retry_next_at",
     source_event_id: ""
   };
-}
-
-function supervisorSummary(events: IssueSupervisorEvent[]): Record<string, number> {
-  return {
-    actions: events.filter((event) => event.event_type === "action").length,
-    decisions: events.filter((event) => event.event_type.includes("decision")).length,
-    exhausted_recoveries: events.filter((event) => event.diagnosis_code === "session_recovery_exhausted").length,
-    needs_user_escalations: events.filter(needsUserEvent).length,
-    rate_limit_waits: events.filter(rateLimitWaitEvent).length,
-    recovered_issues: new Set(events.filter(recoveryActionEvent).map((event) => event.issue_id)).size,
-    results: events.filter((event) => event.event_type === "result").length,
-    signals: events.filter((event) => event.event_type === "signal").length
-  };
-}
-
-function needsUserEvent(event: IssueSupervisorEvent): boolean {
-  return event.action_type === "needs_user.escalate" || event.decision === "needs_user" || event.decision === "blocked";
-}
-
-function rateLimitWaitEvent(event: IssueSupervisorEvent): boolean {
-  return event.action_type === "issue.retry_after" || event.retry_after_at !== "" || event.provider_error_category === "rate_limit";
-}
-
-function recoveryActionEvent(event: IssueSupervisorEvent): boolean {
-  return event.event_type === "action" && ["session.resume_followup", "session.steer", "issue.retry"].includes(event.action_type);
 }
 
 function recoveryMessage(event: IssueSupervisorEvent | undefined): string {

@@ -1,4 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
+import { basename, join } from "node:path";
 import { redactedUserVisibleText } from "../util/redact.ts";
 import { redactRegisteredSecrets } from "../security/redactionRegistry.ts";
 import {
@@ -7,6 +8,13 @@ import {
 } from "../db/repositories/compactEventSummaryProjection.ts";
 
 export const RUNTIME_OBSERVABILITY_SCHEMA_VERSION = "xuanwu.runtime-observability.v1" as const;
+export const RUNTIME_OBSERVABILITY_CACHE_TTL_MS = 15_000;
+const runtimeObservabilityCache = new Map<string, {
+  expiresAt: number;
+  refreshing?: Promise<void>;
+  value: Record<string, unknown>;
+}>();
+const RUNTIME_OBSERVABILITY_WORKER_TIMEOUT_MS = 30_000;
 
 type CountRow = { count: number; key: string };
 type WorkflowRow = { runs: number; updated_at: string; work: number; workflow_ref: string };
@@ -51,8 +59,57 @@ type EventRow = {
  * Read-only operational projection. Every query uses durable domain tables or
  * event_summary_projection; it never reads provider session JSONL or runtime log files.
  */
-export function buildRuntimeObservability(database: RunnerDatabase, now = new Date()): Record<string, unknown> {
-  const generatedAt = now.toISOString();
+export function buildRuntimeObservability(database: RunnerDatabase, now?: Date): Record<string, unknown> {
+  // This is a diagnostic snapshot assembled from several aggregate queries.
+  // Page polling does not need sub-second freshness, and rebuilding it for
+  // every status request can monopolize the local Core for hundreds of ms.
+  // Explicit timestamps (tests/reports) bypass the runtime cache.
+  const cacheable = now === undefined;
+  const cached = cacheable ? runtimeObservabilityCache.get(database.path) : undefined;
+  if (cached) {
+    if (cached.expiresAt <= Date.now() && !cached.refreshing) {
+      cached.refreshing = refreshRuntimeObservabilityInWorker(database.path)
+        .then((value) => {
+          runtimeObservabilityCache.set(database.path, {
+            expiresAt: Date.now() + RUNTIME_OBSERVABILITY_CACHE_TTL_MS,
+            value: redactRegisteredSecrets(value) as Record<string, unknown>
+          });
+        })
+        .catch((error) => {
+          cached.expiresAt = Date.now() + RUNTIME_OBSERVABILITY_CACHE_TTL_MS;
+          console.warn(JSON.stringify({
+            event: "runner.runtime_observability_refresh_failed",
+            error: error instanceof Error ? error.message : String(error)
+          }));
+        })
+        .finally(() => {
+          cached.refreshing = undefined;
+        });
+    }
+    return cached.value;
+  }
+  return buildAndCacheRuntimeObservability(database, now, cacheable);
+}
+
+/**
+ * Populate the live status cache before the HTTP listener is exposed. Later
+ * refreshes use the same isolated reader process and return the last complete
+ * snapshot immediately, so aggregate diagnostics never block page requests.
+ */
+export async function primeRuntimeObservability(database: RunnerDatabase): Promise<void> {
+  const value = await refreshRuntimeObservabilityInWorker(database.path);
+  runtimeObservabilityCache.set(database.path, {
+    expiresAt: Date.now() + RUNTIME_OBSERVABILITY_CACHE_TTL_MS,
+    value: redactRegisteredSecrets(value) as Record<string, unknown>
+  });
+}
+
+function buildAndCacheRuntimeObservability(
+  database: RunnerDatabase,
+  now: Date | undefined,
+  cacheable: boolean
+): Record<string, unknown> {
+  const generatedAt = (now ?? new Date()).toISOString();
   const workStatuses = statusCounts(database, "issues");
   const runStatuses = statusCounts(database, "issue_runs");
   const automationStatuses = statusCounts(database, "automation_runs");
@@ -112,7 +169,45 @@ export function buildRuntimeObservability(database: RunnerDatabase, now = new Da
       items: structuredEvents
     }
   };
-  return redactRegisteredSecrets(snapshot) as Record<string, unknown>;
+  const value = redactRegisteredSecrets(snapshot) as Record<string, unknown>;
+  if (cacheable) {
+    runtimeObservabilityCache.set(database.path, {
+      expiresAt: Date.now() + RUNTIME_OBSERVABILITY_CACHE_TTL_MS,
+      value
+    });
+  }
+  return value;
+}
+
+async function refreshRuntimeObservabilityInWorker(databasePath: string): Promise<Record<string, unknown>> {
+  const workerArgs = ["__runtime-observability-worker", databasePath, String(process.pid)];
+  const command = basename(process.execPath).startsWith("bun")
+    ? [process.execPath, join(import.meta.dir, "../main.ts"), ...workerArgs]
+    : [process.execPath, ...workerArgs];
+  const child = Bun.spawn({
+    cmd: command,
+    env: workerEnvironment(),
+    stderr: "pipe",
+    stdout: "pipe"
+  });
+  const timeout = setTimeout(() => child.kill(), RUNTIME_OBSERVABILITY_WORKER_TIMEOUT_MS);
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited
+  ]).finally(() => clearTimeout(timeout));
+  if (exitCode !== 0) {
+    throw new Error(`runtime observability worker failed (${exitCode}): ${stderr.trim() || stdout.trim()}`);
+  }
+  const parsed = JSON.parse(stdout) as { ok?: boolean; snapshot?: Record<string, unknown> };
+  if (!parsed.ok || !parsed.snapshot) throw new Error("runtime observability worker returned an invalid result");
+  return parsed.snapshot;
+}
+
+function workerEnvironment(): Record<string, string> {
+  return Object.fromEntries(["HOME", "PATH", "TMPDIR", "TZ"]
+    .map((key) => [key, Bun.env[key] ?? ""])
+    .filter(([, value]) => value !== ""));
 }
 
 function statusCounts(database: RunnerDatabase, table: "issues" | "issue_runs" | "automation_runs"): CountRow[] {

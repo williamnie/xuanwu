@@ -1,10 +1,8 @@
 import type { RunnerDatabase } from "../../database.ts";
 import {
-  buildFilter,
   cleanString,
   integerInput,
   integerValue,
-  listRows,
   now,
   optionalString,
   requiredString,
@@ -22,9 +20,24 @@ export type IssueSupervisorEvent = {
 export type IssueSupervisorEventInput = PatchInput<IssueSupervisorEvent>;
 export type IssueSupervisorEventFilter = {
   actionId?: string;
+  createdAfter?: string;
+  createdBefore?: string;
   eventType?: string;
+  eventTypes?: string[];
   issueId?: number;
+  latestLimit?: number;
   projectId?: string;
+  retryAfterOnly?: boolean;
+};
+export type IssueSupervisorEventSummary = {
+  actions: number;
+  decisions: number;
+  exhausted_recoveries: number;
+  needs_user_escalations: number;
+  rate_limit_waits: number;
+  recovered_issues: number;
+  results: number;
+  signals: number;
 };
 
 const TABLE = "issue_supervisor_events";
@@ -52,12 +65,86 @@ export function listIssueSupervisorEvents(
   db: RunnerDatabase,
   filter: IssueSupervisorEventFilter = {}
 ): IssueSupervisorEvent[] {
-  return listRows(db, TABLE, COLUMNS, mapIssueSupervisorEvent, buildFilter([
-    ["project_id=?", filter.projectId],
-    ["issue_id=?", filter.issueId],
-    ["event_type=?", filter.eventType],
-    ["action_id=?", filter.actionId]
-  ], "created_at asc, id asc"));
+  const conditions: string[] = [];
+  const args: Array<string | number> = [];
+  addFilter(conditions, args, "project_id=?", filter.projectId);
+  addFilter(conditions, args, "issue_id=?", filter.issueId);
+  addFilter(conditions, args, "event_type=?", filter.eventType);
+  addFilter(conditions, args, "action_id=?", filter.actionId);
+  addFilter(conditions, args, "created_at>=?", filter.createdAfter);
+  addFilter(conditions, args, "created_at<=?", filter.createdBefore);
+  const eventTypes = [...new Set((filter.eventTypes ?? []).map(cleanString).filter(Boolean))];
+  if (eventTypes.length > 0) {
+    conditions.push(`event_type in (${eventTypes.map(() => "?").join(", ")})`);
+    args.push(...eventTypes);
+  }
+  if (filter.retryAfterOnly) conditions.push("retry_after_at<>''");
+  const latestLimit = boundedLatestLimit(filter.latestLimit);
+  if (latestLimit !== undefined) args.push(latestLimit);
+  const rows = db.sqlite.query<Record<string, unknown>, Array<string | number>>(
+    `select ${COLUMNS} from ${TABLE}
+     ${conditions.length > 0 ? `where ${conditions.join(" and ")}` : ""}
+     order by created_at ${latestLimit === undefined ? "asc" : "desc"}, id ${latestLimit === undefined ? "asc" : "desc"}
+     ${latestLimit === undefined ? "" : "limit ?"}`
+  ).all(...args).map(mapIssueSupervisorEvent);
+  return latestLimit === undefined ? rows : rows.reverse();
+}
+
+export function summarizeIssueSupervisorEvents(
+  db: RunnerDatabase,
+  issueID: number
+): IssueSupervisorEventSummary {
+  const row = db.sqlite.query<Record<string, unknown>, [number]>(`
+    select
+      sum(case when event_type='action' then 1 else 0 end) as actions,
+      sum(case when event_type like '%decision%' then 1 else 0 end) as decisions,
+      sum(case when diagnosis_code='session_recovery_exhausted' then 1 else 0 end) as exhausted_recoveries,
+      sum(case when action_type='needs_user.escalate' or decision in ('needs_user', 'blocked') then 1 else 0 end)
+        as needs_user_escalations,
+      sum(case when action_type='issue.retry_after' or retry_after_at<>'' or provider_error_category='rate_limit'
+        then 1 else 0 end) as rate_limit_waits,
+      max(case when event_type='action' and action_type in ('session.resume_followup', 'session.steer', 'issue.retry')
+        then 1 else 0 end) as recovered_issues,
+      sum(case when event_type='result' then 1 else 0 end) as results,
+      sum(case when event_type='signal' then 1 else 0 end) as signals
+    from ${TABLE}
+    where issue_id=?
+  `).get(issueID) ?? {};
+  return {
+    actions: countValue(row.actions),
+    decisions: countValue(row.decisions),
+    exhausted_recoveries: countValue(row.exhausted_recoveries),
+    needs_user_escalations: countValue(row.needs_user_escalations),
+    rate_limit_waits: countValue(row.rate_limit_waits),
+    recovered_issues: countValue(row.recovered_issues),
+    results: countValue(row.results),
+    signals: countValue(row.signals)
+  };
+}
+
+function addFilter(
+  conditions: string[],
+  args: Array<string | number>,
+  condition: string,
+  value: string | number | undefined
+): void {
+  const normalized = typeof value === "number" ? value : cleanString(value);
+  if (normalized === "") return;
+  conditions.push(condition);
+  args.push(normalized);
+}
+
+function boundedLatestLimit(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 500) {
+    throw new Error("latest supervisor event limit must be between 1 and 500");
+  }
+  return value;
+}
+
+function countValue(value: unknown): number {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : 0;
 }
 
 function mustGetIssueSupervisorEvent(db: RunnerDatabase, id: number): IssueSupervisorEvent {

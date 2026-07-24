@@ -263,7 +263,12 @@ function recentDecisionExists(
   return recentCompletedDecisionExists(input.database, target);
 }
 function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTarget): boolean {
-  const events = listIssueSupervisorEvents(db, { issueId: target.issueID });
+  // Signals are intentionally excluded: only completed decision/action/result
+  // rows participate in this dedupe check.
+  const events = listIssueSupervisorEvents(db, {
+    eventTypes: ["budget_exhausted", "decision", "action", "result"],
+    issueId: target.issueID
+  });
   if (latestSupervisorResult(events) === "no_progress") return false;
   const diagnosis = primaryDiagnosis(target.context);
   const retryAfter = readyRetryAfterTime(target.context);

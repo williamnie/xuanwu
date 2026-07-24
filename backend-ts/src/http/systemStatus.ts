@@ -31,36 +31,62 @@ type SystemStatusContext = {
 
 type CheckStatus = { ok: boolean; error?: string };
 type ProviderStatus = ReturnType<typeof providerStatus>[number];
+const commandVersionCache = new Map<string, string>();
 
 export function buildSystemStatus(context: SystemStatusContext): Record<string, unknown> {
-  const providers = providerStatus(context.config);
-  const connectorHealth = buildStaticConnectorDiagnostics({
+  const startedAt = performance.now();
+  const timings: Record<string, number> = {};
+  const phase = <T>(name: string, operation: () => T): T => {
+    const started = performance.now();
+    try {
+      return operation();
+    } finally {
+      timings[name] = roundedMs(performance.now() - started);
+    }
+  };
+  const providers = phase("providers", () => providerStatus(context.config));
+  const receiver = phase("receiver", () => context.feishuReceiverStatus?.());
+  const connectorHealth = phase("connector_health", () => buildStaticConnectorDiagnostics({
     config: context.config,
     database: context.database,
-    feishuReceiverStatus: context.feishuReceiverStatus?.(),
+    feishuReceiverStatus: receiver,
     webhookSigningSecret: context.webhookSigningSecret
-  });
-  const eventProjection = eventProjectionStatus(context.database);
-  const runProgressProjection = runProgressProjectionStatus(context.database);
-  const observability = buildRuntimeObservability(context.database);
+  }));
+  const eventProjection = phase("event_projection", () => eventProjectionStatus(context.database));
+  const runProgressProjection = phase("run_progress_projection", () => runProgressProjectionStatus(context.database));
+  const observability = phase("observability", () => buildRuntimeObservability(context.database));
   const status = {
-    service: serviceStatus(context.startedAt, context.role),
-    db: databaseStatus(context.database),
+    service: phase("service", () => serviceStatus(context.startedAt, context.role)),
+    db: phase("database", () => databaseStatus(context.database)),
     auth: { enabled: context.authEnabled },
     config: configStatus(context),
     security: { warnings: securityWarnings(context.config.addr, context.authEnabled) },
-    codex: codexStatus(context.config),
+    codex: phase("codex", () => codexStatus(context.config)),
     providers,
-    connectors: connectorStatus(context.config, context.feishuReceiverStatus?.()),
+    connectors: phase("connectors", () => connectorStatus(context.config, receiver)),
     connector_health: connectorHealth,
     event_projection: eventProjection,
     run_progress_projection: runProgressProjection,
-    runner: runnerStatus(context.database),
+    runner: phase("runner", () => runnerStatus(context.database)),
     observability,
-    process_group_memory: context.processGroupMemory?.snapshot() ?? unavailableProcessGroupMemory(),
+    process_group_memory: phase("process_group_memory", () => (
+      context.processGroupMemory?.snapshot() ?? unavailableProcessGroupMemory()
+    )),
     background_projection: context.projectionWorker?.snapshot() ?? { status: "unavailable" }
   };
-  return { ...status, health: systemHealth({ ...status, required_provider_ids: requiredProviderIDs(context.database) }) };
+  const health = phase("health", () => systemHealth({
+    ...status,
+    required_provider_ids: requiredProviderIDs(context.database)
+  }));
+  const durationMs = performance.now() - startedAt;
+  if (durationMs >= 500) {
+    console.warn(JSON.stringify({
+      event: "runner.system_status_slow",
+      duration_ms: roundedMs(durationMs),
+      phases_ms: timings
+    }));
+  }
+  return { ...status, health };
 }
 
 /** Lightweight authenticated liveness payload for the Web shell. */
@@ -217,6 +243,11 @@ export function providerStatus(config: RunnerConfig): Array<{
   return out;
 }
 
+/** Resolve slow provider CLI versions before the HTTP listener is exposed. */
+export function primeProviderStatus(config: RunnerConfig): void {
+  providerStatus(config);
+}
+
 function connectorStatus(config: RunnerConfig, receiver?: FeishuReceiverStatus): Array<Record<string, unknown>> {
   const status = feishuConnectorStatus(config.integrations.feishu);
   return receiver ? [{ ...status, runtime: receiver }] : [status];
@@ -296,13 +327,30 @@ function isExecutable(path: string): boolean {
   }
 }
 function commandVersion(path: string, env: Record<string, string>): string {
+  const key = commandVersionCacheKey(path, env);
+  if (commandVersionCache.has(key)) return commandVersionCache.get(key) ?? "";
   try {
     const result = Bun.spawnSync([path, "--version"], { env: { ...Bun.env, ...env }, stderr: "pipe", stdout: "pipe" });
-    if (result.exitCode !== 0) return "";
-    return redactSensitiveText(new TextDecoder().decode(result.stdout).trim());
+    const value = result.exitCode === 0
+      ? redactSensitiveText(new TextDecoder().decode(result.stdout).trim())
+      : "";
+    commandVersionCache.set(key, value);
+    return value;
   } catch {
+    commandVersionCache.set(key, "");
     return "";
   }
+}
+
+function commandVersionCacheKey(path: string, env: Record<string, string>): string {
+  let modifiedAt = 0;
+  try {
+    modifiedAt = statSync(path).mtimeMs;
+  } catch {
+    // Executable availability is reported separately; a missing stat simply
+    // gets a short-lived empty-version cache entry.
+  }
+  return `${path}\0${modifiedAt}\0${env.PATH ?? ""}`;
 }
 
 function codexCapabilities(): ExecutorCapability[] {
@@ -462,6 +510,10 @@ function object(value: unknown): Record<string, unknown> {
 
 function arrayObjects(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? value.map(object) : [];
+}
+
+function roundedMs(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 function requiredProviderIDs(database: RunnerDatabase): Set<string> {

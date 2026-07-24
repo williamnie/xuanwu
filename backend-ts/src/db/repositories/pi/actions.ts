@@ -98,6 +98,69 @@ export function listPiActions(db: RunnerDatabase, filter: PiActionFilter = {}): 
   ], "created_at asc, id asc"));
 }
 
+/**
+ * Returns only Actions whose normalized carrier payload references one Issue.
+ *
+ * Work detail must not materialize every historical Action (and every large
+ * payload/result JSON value) just to project relations for a single Work.
+ */
+export function listPiActionsReferencingIssue(db: RunnerDatabase, issueID: number): PiAction[] {
+  const id = positiveIssueID(issueID);
+  const payload = validJson("payload_json");
+  const result = validJson("result_json");
+  const args = Array.from({ length: 7 }, () => id);
+  return db.sqlite.query<Record<string, unknown>, number[]>(`
+    select ${COLUMNS} from ${TABLE}
+    where issue_id=?
+      or cast(json_extract(${payload}, '$.issue_id') as integer)=?
+      or cast(json_extract(${payload}, '$.target_issue_id') as integer)=?
+      or exists (
+        select 1 from json_each(${payload}, '$.issue_ids')
+        where cast(json_each.value as integer)=?
+      )
+      or exists (
+        select 1 from json_each(${payload}, '$.target_issue_ids')
+        where cast(json_each.value as integer)=?
+      )
+      or (
+        action_type in ('issue.create', 'agent.workflow_request')
+        and (
+          cast(json_extract(${result}, '$.id') as integer)=?
+          or cast(json_extract(${result}, '$.issue_id') as integer)=?
+        )
+      )
+    order by created_at asc, id asc
+  `).all(...args).map(mapPiAction);
+}
+
+/**
+ * Relation projections only need Action Event ids for stable Evidence refs.
+ * Batch those ids instead of loading/redacting every audit payload through an
+ * N+1 query loop.
+ */
+export function listPiActionEventIDsByActionID(
+  db: RunnerDatabase,
+  actionIDs: string[]
+): Map<string, number[]> {
+  const ids = [...new Set(actionIDs.map(cleanString).filter(Boolean))];
+  const output = new Map<string, number[]>();
+  for (let offset = 0; offset < ids.length; offset += 500) {
+    const chunk = ids.slice(offset, offset + 500);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = db.sqlite.query<{ action_id: string; id: number }, string[]>(`
+      select action_id, id from ${EVENT_TABLE}
+      where action_id in (${placeholders})
+      order by action_id asc, id asc
+    `).all(...chunk);
+    for (const row of rows) {
+      const values = output.get(row.action_id) ?? [];
+      values.push(row.id);
+      output.set(row.action_id, values);
+    }
+  }
+  return output;
+}
+
 export function getPiAction(db: RunnerDatabase, id: string): PiAction | null {
   return getByID(db, TABLE, COLUMNS, id, mapPiAction);
 }
@@ -254,4 +317,13 @@ function eventInsertColumns(): string {
 
 function placeholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function validJson(column: "payload_json" | "result_json"): string {
+  return `case when json_valid(${column}) then ${column} else '{}' end`;
+}
+
+function positiveIssueID(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error("issue id must be a positive integer");
+  return value;
 }

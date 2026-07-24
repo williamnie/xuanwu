@@ -83,7 +83,7 @@ function listIssueEventsForApi(
   options: ListIssueEventsOptions
 ) {
   if (!getIssue(db, id)) throw new ProjectNotFoundError();
-  return listIssueEventsAsync(db.path, id, { ...options, hydrateArtifacts: false });
+  return listIssueEventsAsync(db, id, { ...options, hydrateArtifacts: false });
 }
 
 export type ReadApiDomainHandlers = ReturnType<typeof createReadApiDomainHandlers>;

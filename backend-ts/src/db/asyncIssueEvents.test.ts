@@ -12,7 +12,7 @@ afterEach(async () => {
 });
 
 describe("async Issue event reads", () => {
-  test("runs the bounded SQLite query outside the Core event loop", async () => {
+  test("runs bounded reads on the supplied read connection without spawning child processes", async () => {
     const root = await mkdtemp(join(tmpdir(), "issue-events-worker-"));
     roots.push(root);
     const db = await openDatabase({ stateDir: root });
@@ -29,7 +29,7 @@ describe("async Issue event reads", () => {
       setTimeout(() => {
         eventLoopAdvanced = true;
       }, 0);
-      const pending = listIssueEventsAsync(db.path, issueID, {
+      const pending = listIssueEventsAsync(db, issueID, {
         hydrateArtifacts: false,
         limit: 5,
         types: ["issue.log"]
@@ -46,6 +46,32 @@ describe("async Issue event reads", () => {
         "event-18",
         "event-19"
       ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("returns complete large payloads under concurrent detail reads", async () => {
+    const root = await mkdtemp(join(tmpdir(), "issue-events-concurrent-"));
+    roots.push(root);
+    const db = await openDatabase({ stateDir: root });
+    try {
+      const issueID = fixtureIssue(db);
+      const text = "x".repeat(32_000);
+      for (let index = 0; index < 100; index += 1) {
+        db.sqlite.run(
+          "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+          [issueID, JSON.stringify({ index, text }), `2026-01-01T00:01:${String(index % 60).padStart(2, "0")}Z`]
+        );
+      }
+
+      const pages = await Promise.all(Array.from({ length: 20 }, () => (
+        listIssueEventsAsync(db, issueID, { hydrateArtifacts: false, limit: 100, types: ["issue.log"] })
+      )));
+
+      expect(pages).toHaveLength(20);
+      expect(pages.every((events) => events.length === 100)).toBe(true);
+      expect(pages.every((events) => JSON.parse(events.at(-1)?.payload ?? "{}").text === text)).toBe(true);
     } finally {
       db.close();
     }

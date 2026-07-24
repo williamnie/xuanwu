@@ -79,6 +79,13 @@ describe("Run progress repository", () => {
         "approval/requested",
         "approval required"
       );
+      const latestNormalizedID = db.sqlite.query<{ id: number }, []>(
+        "select max(id) as id from issue_events"
+      ).get()?.id ?? 0;
+      db.sqlite.run(
+        "insert into issue_events (issue_id, type, payload, created_at) values (?, 'issue.log', ?, ?)",
+        [issueID, JSON.stringify({ type: "raw", text: "newer non-normalized event" }), "2026-01-01T00:02:00.000Z"]
+      );
 
       const projection = rebuildRunProgressProjection(db, runID, {
         now: new Date("2026-01-01T01:00:00.000Z"),
@@ -91,6 +98,7 @@ describe("Run progress repository", () => {
       });
       expect(runProgressProjectionStatus(db, new Date("2026-01-01T01:00:00.000Z"))).toMatchObject({
         active_runs: 1,
+        latest_source_event_id: latestNormalizedID,
         stalled_runs: 0,
         status: "ready",
         waiting_approval_runs: 1

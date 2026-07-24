@@ -37,7 +37,11 @@ export function listReportSupervisorEvents(
   }
 ): IssueSupervisorEvent[] {
   const auditIssueIDs = new Set(input.auditEvents.map((event) => event.issue_id).filter((id) => id > 0));
-  return listIssueSupervisorEvents(db, { projectId: input.projectID })
+  return listIssueSupervisorEvents(db, {
+    createdAfter: input.window.since,
+    createdBefore: input.window.until,
+    projectId: input.projectID
+  })
     .filter((event) => inWindow(event.created_at, input.window) && scopeMatches(event, input.scope, auditIssueIDs))
     .slice(-50);
 }

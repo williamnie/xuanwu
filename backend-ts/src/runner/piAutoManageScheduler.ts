@@ -98,7 +98,7 @@ export type PiAutoManageCycleInput = {
 
 export type PiAutoManageSchedulerClock<Timer = unknown> = {
   clearTimeout(timer: Timer): void;
-  setTimeout(callback: () => void, delayMs: number): Timer;
+  setTimeout(callback: () => void | Promise<void>, delayMs: number): Timer;
 };
 
 export type PiAutoManageSchedulerInput<Timer = unknown> = PiAutoManageCycleInput & {
@@ -133,15 +133,17 @@ export function createPiAutoManageScheduler<Timer = unknown>(
   const schedule = () => {
     timer = clock.setTimeout(tick, intervalMs);
   };
-  const tick = () => {
+  const tick = async () => {
     const now = Date.now();
     const runSupervisor = shouldRunSupervisor(now, lastSupervisorScanAt, supervisorIntervalMs);
     if (runSupervisor) lastSupervisorScanAt = now;
-    void runScheduleLayerCycle({ ...runtimeInput, runSupervisor }).catch((error) => {
+    try {
+      await runScheduleLayerCycle({ ...runtimeInput, runSupervisor });
+    } catch (error) {
       input.onError?.(error);
-    }).finally(() => {
+    } finally {
       if (!stopped) schedule();
-    });
+    }
   };
 
   return {
@@ -177,75 +179,98 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 }
 
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
+  const cycleStartedAt = performance.now();
   const supervisor = input.runSupervisor === false
     ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
-    : await runPiIssueSupervisorSchedulerOnce({
+    : await timedSchedulePhase("supervisor", () => runPiIssueSupervisorSchedulerOnce({
       database: input.database,
       now: optionalDate(input.watchdogNow),
       providers: input.providers,
       runDecision: input.runSupervisorDecision
-    });
+    }));
   // W3 target-only cutover: compatibility result fields stay stable for one
   // release, but legacy Cron/PI/delegation schedulers are no longer invoked.
   const cron = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
   const automations = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
-  const automationCore = await runDueAutomations({
+  const automationCore = await timedSchedulePhase("automation_core", () => runDueAutomations({
     database: input.database,
     executeAutomation: input.runAutomationCore ?? createNativeAutomationExecutor(input),
     now: optionalDate(input.watchdogNow)
-  });
+  }));
   const delegations = { scanned: 0, skipped: 0, started: 0 };
-  const providerTerminalSignals = signalOpenRunTerminalProviderErrors(input.database);
-  const guardianDecisions = drainGuardianDecisionOrchestrator(input.database);
-  const guardianActionDispatch = await dispatchApprovedGuardianActions({
+  const providerTerminalSignals = await timedSchedulePhase(
+    "provider_terminal_signals",
+    () => signalOpenRunTerminalProviderErrors(input.database)
+  );
+  const guardianDecisions = await timedSchedulePhase(
+    "guardian_decisions",
+    () => drainGuardianDecisionOrchestrator(input.database)
+  );
+  const guardianActionDispatch = await timedSchedulePhase("guardian_action_dispatch", () => dispatchApprovedGuardianActions({
     bus: input.bus,
     database: input.database,
     providers: input.providers
-  });
-  const digestFlush = runDigestFlushSchedulerOnce(input.database);
+  }));
+  const digestFlush = await timedSchedulePhase("digest_flush", () => runDigestFlushSchedulerOnce(input.database));
   const directFeishu = guardianDirectFeishuOptions(input);
-  const watchdog = await runPiGuardianWatchdogOnce(input.database, {
+  const watchdog = await timedSchedulePhase("guardian_watchdog", () => runPiGuardianWatchdogOnce(input.database, {
     directFeishu,
     now: input.watchdogNow,
     staleAfterMs: input.watchdogStaleAfterMs
-  });
-  const missedIntentSweep = await runMissedIntentSweepWithFallback(input, watchdog, directFeishu);
-  resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow));
-  const operationsDailyReports = queueGuardianOperationsDailyReports(input.database, {
+  }));
+  const missedIntentSweep = await timedSchedulePhase(
+    "missed_intent_sweep",
+    () => runMissedIntentSweepWithFallback(input, watchdog, directFeishu)
+  );
+  await timedSchedulePhase("resolve_recovered_alerts", () => (
+    resolveRecoveredAlerts(input.database, watchdog.checks, cycleNowText(input.watchdogNow))
+  ));
+  const operationsDailyReports = await timedSchedulePhase("operations_daily_reports", () => queueGuardianOperationsDailyReports(input.database, {
     now: optionalDate(input.watchdogNow)
-  });
-  const watchResult = runWatchAutomationsOnce(input.database, { now: input.watchdogNow });
+  }));
+  const watchResult = await timedSchedulePhase(
+    "watch_automations",
+    () => runWatchAutomationsOnce(input.database, { now: input.watchdogNow })
+  );
   if (watchResult.queued > 0 && input.config) {
-    await dispatchFeishuOutbox({
+    await timedSchedulePhase("watch_feishu_outbox", () => dispatchFeishuOutbox({
       config: input.config.integrations.feishu,
       database: input.database,
       now: optionalDate(input.watchdogNow),
       sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: input.config.integrations.feishu })
-    });
+    }));
   }
-  const dailyDigestNotifications = queueDailyNotificationDigests(input.database, { now: optionalDate(input.watchdogNow) });
-  const digestNotifications = queueReadyFeishuDigestNotifications(input.database);
+  const dailyDigestNotifications = await timedSchedulePhase(
+    "daily_digest_notifications",
+    () => queueDailyNotificationDigests(input.database, { now: optionalDate(input.watchdogNow) })
+  );
+  const digestNotifications = await timedSchedulePhase(
+    "digest_notifications",
+    () => queueReadyFeishuDigestNotifications(input.database)
+  );
   const completionWatchNotifications = { failed: 0, queued: 0, scanned: 0, skipped: 0 };
-  const issueWatchdog = await runAutoRunIssueWatchdogOnce({
+  const issueWatchdog = await timedSchedulePhase("issue_watchdog", () => runAutoRunIssueWatchdogOnce({
     bus: input.bus,
     database: input.database,
     now: input.watchdogNow,
     providers: input.providers,
     staleAfterMs: input.watchdogStaleAfterMs
-  });
-  const projects = await runPiAutoManageCycle(input);
-  const agentCommunications = await runAgentCommunicationGatewayOnce(input.database, {
+  }));
+  const projects = await timedSchedulePhase("projects", () => runPiAutoManageCycle(input));
+  const agentCommunications = await timedSchedulePhase("agent_communications", () => runAgentCommunicationGatewayOnce(input.database, {
     decide: input.agentCommunicationDecider,
     now: optionalDate(input.watchdogNow)
-  });
+  }));
   if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && input.config) {
-    await dispatchFeishuOutbox({
+    await timedSchedulePhase("communication_feishu_outbox", () => dispatchFeishuOutbox({
       config: input.config.integrations.feishu,
       database: input.database,
       now: optionalDate(input.watchdogNow),
       sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: input.config.integrations.feishu })
-    });
+    }));
   }
+  const cycleDurationMs = performance.now() - cycleStartedAt;
+  if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("cycle", cycleDurationMs);
   return {
     ...projects,
     agentCommunications,
@@ -266,6 +291,30 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     supervisor,
     watchdog
   };
+}
+
+const SLOW_SCHEDULE_PHASE_MS = 250;
+
+async function timedSchedulePhase<T>(phase: string, operation: () => T | Promise<T>): Promise<T> {
+  // A maintenance cycle contains many synchronous SQLite projections. Yield
+  // between them so the HTTP control plane cannot be starved by the scheduler.
+  await Bun.sleep(0);
+  const startedAt = performance.now();
+  try {
+    return await operation();
+  } finally {
+    const durationMs = performance.now() - startedAt;
+    if (durationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming(phase, durationMs);
+    await Bun.sleep(0);
+  }
+}
+
+function logScheduleTiming(phase: string, durationMs: number): void {
+  console.warn(JSON.stringify({
+    event: "runner.schedule_phase_slow",
+    duration_ms: Math.round(durationMs),
+    phase
+  }));
 }
 
 function withNativeAutomationExecutor<T extends PiAutoManageCycleInput>(input: T): T {
@@ -307,7 +356,7 @@ async function runManagedProjectCycle(runProjectCycle: PiAutoManageProjectCycle,
 function defaultClock<Timer>(): PiAutoManageSchedulerClock<Timer> {
   return {
     clearTimeout: (timer) => clearTimeout(timer as Timer & ReturnType<typeof setTimeout>),
-    setTimeout: (callback, delayMs) => setTimeout(callback, delayMs) as Timer
+    setTimeout: (callback, delayMs) => setTimeout(() => { void callback(); }, delayMs) as Timer
   };
 }
 

@@ -27,7 +27,10 @@ export function refreshSupervisorProgressResult(input: {
   projectID: string;
   staleAfterSeconds?: number;
 }): SupervisorProgressRefreshOutcome | null {
-  const events = listIssueSupervisorEvents(input.database, { issueId: input.issueID });
+  const events = listIssueSupervisorEvents(input.database, {
+    eventTypes: ["action", "result"],
+    issueId: input.issueID
+  });
   const action = latestRecoveryAction(events);
   if (!action || hasFinalResult(events, action)) return null;
   if (!staleEnough(action.created_at, input.now, input.staleAfterSeconds)) return null;

@@ -6,6 +6,7 @@ import { EventBus } from "../events/bus.ts";
 import { BackgroundProjectionWorker } from "../events/projectionWorker.ts";
 import { runProjectPiCycle } from "../http/piProjectControlApi.ts";
 import { startServer } from "../http/server.ts";
+import { primeProviderStatus } from "../http/systemStatus.ts";
 import type { FeishuConnectorConfig } from "../integrations/feishu.ts";
 import { createFeishuAgentBridge } from "../integrations/feishuAgentBridge.ts";
 import { buildFeishuConversationPromptContext } from "../integrations/feishuConversationContext.ts";
@@ -15,6 +16,7 @@ import {
   resolveRecoveredProcessGroupMemoryAlerts,
   writeProcessGroupMemoryAlert
 } from "../observability/processGroupMemory.ts";
+import { primeRuntimeObservability } from "../observability/runtimeObservability.ts";
 import { createClaudeExecutorProvider } from "../providers/claude/provider.ts";
 import { createCodexExecutorProvider } from "../providers/codex/provider.ts";
 import { reconcileStaleCodexProcessOwnership } from "../providers/codex/processLifecycle.ts";
@@ -45,6 +47,21 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
     activeRuns: () => database.sqlite.query<{ count: number }, []>(
       "select count(*) as count from issue_runs where ended_at=''"
     ).get()?.count ?? 0,
+    // `footprint` suspends the inspected process on macOS. Running it from the
+    // Core against its own PID can stall Bun's HTTP accept loop permanently.
+    // Keep the lightweight RSS/process-tree budget in-process; an external
+    // observer may collect footprint without making the target its own parent.
+    footprint: async () => new Map(),
+    // Do not synchronously allocate and parse the full system `ps -axo`
+    // command table every second on the HTTP event loop. The in-process guard
+    // needs Core RSS; descendant diagnostics belong in an external observer.
+    inspect: () => [{
+      command: "unknown\tcodex-issue-runner-core",
+      pgid: process.pid,
+      pid: process.pid,
+      ppid: process.ppid,
+      rss_bytes: process.memoryUsage.rss()
+    }],
     onAlert: (alert) => writeProcessGroupMemoryAlert(database, alert),
     onRecovery: (recovery) => resolveRecoveredProcessGroupMemoryAlerts(database, recovery),
     providerRuntime: () => (providers.codex as ReturnType<typeof createCodexExecutorProvider> | undefined)?.runtimeSnapshot()
@@ -75,6 +92,13 @@ export async function startCoreRuntime(args: string[], role: Exclude<ServerRole,
   const feishuReceiver = createFeishuReceiverManager({ agentBridge: feishuBridge, bus, database, providers });
   activeFeishuReceiver = feishuReceiver;
   coldStartTrace("connectors_initialized");
+  await primeRuntimeObservability(readDatabase).catch((error) => {
+    console.warn(JSON.stringify({
+      event: "runner.runtime_observability_prime_failed",
+      error: safeError(error)
+    }));
+  });
+  primeProviderStatus(config);
   const server = await startServer(config, {
     bus,
     database,
