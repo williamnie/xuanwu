@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, mkdtemp } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { getModel } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createDefaultRouter } from "./server.ts";
@@ -139,6 +140,32 @@ describe("Bun PI provider settings API", () => {
       expect(raw.providers.openai.models).toEqual([]);
       expect(raw.providers.openai.modelOverrides).toEqual({ "gpt-5.5": {} });
       expect(JSON.stringify(raw.providers.openai)).not.toContain("\"contextWindow\":128000");
+    } finally {
+      database.close();
+    }
+  });
+
+  test("omits an empty base URL so custom Codex OAuth models remain loadable", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      const router = createDefaultRouter({ database });
+      const saved = await request(router, "/api/pi/provider-settings/openai-codex", {
+        api: "openai-codex-responses",
+        base_url: "",
+        models: ["gpt-5.6-luna"]
+      });
+
+      expect(saved.status).toBe(200);
+      const raw = JSON.parse(await readFile(modelsPath(database), "utf8"));
+      expect(raw.providers["openai-codex"].baseUrl).toBeUndefined();
+
+      const authStorage = AuthStorage.create(join(dirname(database.path), "pi-runtime", "agent", "auth.json"));
+      const registry = ModelRegistry.create(authStorage, modelsPath(database));
+      expect(registry.getError()).toBeUndefined();
+      expect(registry.find("openai-codex", "gpt-5.6-luna")).toMatchObject({
+        id: "gpt-5.6-luna",
+        provider: "openai-codex"
+      });
     } finally {
       database.close();
     }

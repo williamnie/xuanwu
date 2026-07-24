@@ -354,7 +354,7 @@ function normalizeModelsConfig(value: unknown): ModelsConfig {
       api: cleanString(provider.api),
       apiKey: cleanString(provider.apiKey),
       apiKeyRef: cleanString(provider.apiKeyRef),
-      baseUrl: cleanString(provider.baseUrl),
+      baseUrl: cleanString(provider.baseUrl) || undefined,
       headers: isStringRecord(provider.headers) ? provider.headers : undefined,
       models: normalizeModels(provider.models, id),
       modelOverrides: normalizeModelOverrides(provider.modelOverrides)
@@ -380,7 +380,7 @@ function normalizeProviderConfig(
     api,
     apiKey: credentialChanged ? undefined : cleanString(current.apiKey) || undefined,
     apiKeyRef: apiKeyRef || undefined,
-    baseUrl: cleanString(body.base_url) || cleanString(body.baseUrl) || current.baseUrl || "",
+    baseUrl: cleanString(body.base_url) || cleanString(body.baseUrl) || cleanString(current.baseUrl) || undefined,
     headers: nextHeaders(current.headers, body),
     models: selection.models,
     modelOverrides: selection.modelOverrides
