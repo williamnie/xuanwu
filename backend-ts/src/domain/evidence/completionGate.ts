@@ -43,6 +43,11 @@ import {
   createGitEvidenceCollector
 } from "./gitCollector.ts";
 import {
+  gitPathspecFingerprint,
+  issueRunGitDeliveryScope,
+  type IssueRunGitDeliveryScope
+} from "./runGitWorkspaceBaseline.ts";
+import {
   evaluateWorkflowVerificationPolicy,
   type VerificationManualOverride,
   type VerificationPolicyEvaluation,
@@ -443,11 +448,6 @@ type CompletionHandoffPreparation = {
   handoff?: HandoffRecord;
 };
 
-type IssueDeliveryGitScope = {
-  base_revision: string;
-  pathspecs?: string[];
-};
-
 async function prepareCompletionHandoff(
   db: RunnerDatabase,
   issueID: number,
@@ -461,7 +461,11 @@ async function prepareCompletionHandoff(
   if (!project) return { errors: ["Handoff gap: Issue project is unavailable"], evidence: [] };
   const runID = makeDomainID("run", "issue_runs", run.id);
   const workID = issueAsWork(issue).id;
-  const deliveryScope = issueDeliveryGitScope(db, issueID, project.cwd);
+  const deliveryScope = issueRunGitDeliveryScope(db, issueID, {
+    base_revision: run.git_base_revision,
+    repository_path: project.cwd,
+    run_id: run.id
+  });
   const deliveryBaseRevision = deliveryScope.base_revision;
   const existing = listStoredHandoffs(db, {
     limit: 100,
@@ -471,10 +475,16 @@ async function prepareCompletionHandoff(
   if (existing) return { errors: [], evidence: [] };
   let gitEvidence = [...evidence].reverse().find((item) =>
     item.kind === "git" && item.status === "passed" && item.run_id === runID && item.work_id === workID &&
-    gitEvidenceCoversDelivery(item, deliveryBaseRevision)
+    gitEvidenceCoversDelivery(item, deliveryScope)
   );
   const collected: EvidenceRecord[] = [];
   try {
+    if (deliveryScope.pathspecs.length === 0) {
+      const uncertainty = deliveryScope.uncertainty_reasons.length > 0
+        ? ` ${deliveryScope.uncertainty_reasons.join("; ")}`
+        : "";
+      throw new Error(`Run delivery scope does not identify attributable changed files.${uncertainty}`);
+    }
     if (!gitEvidence) {
       const collector = createGitEvidenceCollector({
         artifact_store: new FileSystemGitEvidenceArtifactStore(dirname(db.path))
@@ -491,13 +501,21 @@ async function prepareCompletionHandoff(
           source_ref: `project:${project.id}:git-worktree`,
           work_id: workID
         },
-        ...(deliveryScope.pathspecs ? { pathspecs: deliveryScope.pathspecs } : {}),
+        pathspecs: deliveryScope.pathspecs,
         repository_path: project.cwd,
         untracked_policy: "include_all"
       });
       collected.push(gitEvidence);
     }
-    const handoff = completionHandoffFromGit(db, issue, run, [...evidence, ...collected], gitEvidence, now);
+    const handoff = completionHandoffFromGit(
+      db,
+      issue,
+      run,
+      [...evidence, ...collected],
+      gitEvidence,
+      now,
+      deliveryScope.uncertainty_reasons
+    );
     return { errors: [], evidence: collected, handoff };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -514,7 +532,8 @@ function completionHandoffFromGit(
   run: IssueRun,
   evidence: readonly EvidenceRecord[],
   gitEvidence: EvidenceRecord,
-  now: string
+  now: string,
+  attributionUncertainty: readonly string[]
 ): HandoffRecord {
   const validation = validateEvidence(gitEvidence);
   if (!validation.ok || gitEvidence.kind !== "git" || gitEvidence.status !== "passed") {
@@ -571,7 +590,16 @@ function completionHandoffFromGit(
     changed_files: summary.changed_files,
     delivery: { mode: "local_changes", working_tree_ref: finalRevision },
     delivery_actions: [],
-    risks: summary.risk_hints,
+    risks: [
+      ...summary.risk_hints,
+      ...(attributionUncertainty.length > 0 ? [{
+        id: "handoff_attribution_uncertainty",
+        severity: "high" as const,
+        summary: attributionUncertainty.join("; "),
+        mitigation: "Review the Run baseline and committed path scope before delivery; excluded dirty paths remain outside this Handoff.",
+        source_refs: [gitEvidence.id]
+      }] : [])
+    ],
     rollback: {
       availability: "not_required",
       destructive: false,
@@ -581,65 +609,17 @@ function completionHandoffFromGit(
   };
 }
 
-function gitEvidenceCoversDelivery(evidence: EvidenceRecord, expectedBaseRevision: string): boolean {
+function gitEvidenceCoversDelivery(evidence: EvidenceRecord, scope: IssueRunGitDeliveryScope): boolean {
   const facts = evidence.decisive_output.facts;
   const baseRevision = typeof facts.base_revision === "string" ? facts.base_revision.trim() : "";
-  if (expectedBaseRevision !== "" && baseRevision !== expectedBaseRevision) return false;
+  if (scope.base_revision !== "" && baseRevision !== scope.base_revision) return false;
+  if (facts.pathspec_scope !== "selected_paths" ||
+    facts.pathspec_sha256 !== gitPathspecFingerprint(scope.pathspecs) ||
+    facts.pathspec_count !== scope.pathspecs.length) return false;
   return facts.working_tree_dirty === true ||
     (facts.revision_changed_from_base === true &&
       typeof facts.head_revision === "string" &&
       baseRevision !== facts.head_revision.trim());
-}
-
-function issueDeliveryGitScope(db: RunnerDatabase, issueID: number, cwd: string): IssueDeliveryGitScope {
-  const runs = listIssueRuns(db, issueID);
-  const recorded = runs.find((item) => gitObjectID(item.git_base_revision))?.git_base_revision.trim().toLowerCase() ?? "";
-  if (recorded !== "") return { base_revision: recorded };
-  const startedAt = runs[0]?.started_at ?? "";
-  if (startedAt === "" || cwd.trim() === "") return { base_revision: "" };
-  try {
-    const baselineRevision = revisionBefore(cwd, startedAt);
-    if (!gitObjectID(baselineRevision)) return { base_revision: "" };
-    const endedAt = [...runs].reverse().find((item) => item.ended_at.trim() !== "")?.ended_at.trim() ?? "";
-    const finalRevision = endedAt === "" ? "" : revisionBefore(cwd, endedAt);
-    const pathspecs = gitObjectID(finalRevision) && finalRevision !== baselineRevision
-      ? changedPathsBetween(cwd, baselineRevision, finalRevision)
-      : [];
-    return {
-      base_revision: baselineRevision,
-      ...(pathspecs.length > 0 ? { pathspecs } : {})
-    };
-  } catch {
-    return { base_revision: "" };
-  }
-}
-
-function revisionBefore(cwd: string, timestamp: string): string {
-  const result = Bun.spawnSync({
-    cmd: ["git", "rev-list", "-1", `--before=${timestamp}`, "HEAD"],
-    cwd,
-    stderr: "ignore",
-    stdout: "pipe"
-  });
-  return result.exitCode === 0 ? result.stdout.toString().trim().toLowerCase() : "";
-}
-
-function changedPathsBetween(cwd: string, baselineRevision: string, finalRevision: string): string[] {
-  const result = Bun.spawnSync({
-    cmd: [
-      "git", "diff", "--name-only", "--no-ext-diff", "--no-renames", "-z",
-      baselineRevision, finalRevision, "--"
-    ],
-    cwd,
-    stderr: "ignore",
-    stdout: "pipe"
-  });
-  if (result.exitCode !== 0) return [];
-  return [...new Set(result.stdout.toString().split("\0").filter((item) => item !== ""))].sort();
-}
-
-function gitObjectID(value: string): boolean {
-  return /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(value.trim().toLowerCase());
 }
 
 function gitSnapshotArtifact(

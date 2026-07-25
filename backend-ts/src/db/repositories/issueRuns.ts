@@ -1,5 +1,6 @@
 import type { RunnerDatabase } from "../database.ts";
 import { pendingRunCreation, recordRunMaterialized } from "../../domain/run/service.ts";
+import { recordIssueRunGitWorkspaceBaseline } from "../../domain/evidence/runGitWorkspaceBaseline.ts";
 import { issueTimestamp } from "./issueCreate.ts";
 import { listIssueRuns, type IssueRun } from "./issues.ts";
 
@@ -20,22 +21,33 @@ export function createIssueRun(db: RunnerDatabase, issueID: number): IssueRun {
   const attempt = nextAttempt(db, issueID);
   const requested = pendingRunCreation(db, issueID, attempt);
   const id = `issue-${issueID}-attempt-${attempt}`;
+  const projectCwd = issueProjectCwd(db, issueID);
   const gitBaseRevision = currentIssueProjectRevision(db, issueID);
+  const startedAt = issueTimestamp();
   db.sqlite.run(`insert into issue_runs (
     id, issue_id, attempt, status, provider, git_base_revision, started_at
   ) values (?, ?, ?, ?, ?, ?, ?)`, [
-    id, issueID, attempt, "in_progress", "codex", gitBaseRevision, issueTimestamp()
+    id, issueID, attempt, "in_progress", "codex", gitBaseRevision, startedAt
   ]);
+  if (projectCwd !== "" && gitBaseRevision !== "") {
+    try {
+      recordIssueRunGitWorkspaceBaseline(db, issueID, {
+        base_revision: gitBaseRevision,
+        captured_at: startedAt,
+        repository_path: projectCwd,
+        run_id: id
+      });
+    } catch {
+      // Run creation must remain available when Git observation is unavailable.
+      // Completion will fail closed or report attribution uncertainty.
+    }
+  }
   if (requested) recordRunMaterialized(db, requested, id);
   return mustFindIssueRun(db, issueID, id);
 }
 
 function currentIssueProjectRevision(db: RunnerDatabase, issueID: number): string {
-  const cwd = db.sqlite.query<{ cwd: string }, [number]>(`
-    select projects.cwd from issues
-    join projects on projects.id=issues.project_id
-    where issues.id=?
-  `).get(issueID)?.cwd.trim() ?? "";
+  const cwd = issueProjectCwd(db, issueID);
   if (cwd === "") return "";
   try {
     const result = Bun.spawnSync({
@@ -50,6 +62,14 @@ function currentIssueProjectRevision(db: RunnerDatabase, issueID: number): strin
   } catch {
     return "";
   }
+}
+
+function issueProjectCwd(db: RunnerDatabase, issueID: number): string {
+  return db.sqlite.query<{ cwd: string }, [number]>(`
+    select projects.cwd from issues
+    join projects on projects.id=issues.project_id
+    where issues.id=?
+  `).get(issueID)?.cwd.trim() ?? "";
 }
 
 export function ensureOpenIssueRun(db: RunnerDatabase, issueID: number): IssueRun {

@@ -5,6 +5,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../database.ts";
+import {
+  ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT,
+  ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT
+} from "../../domain/evidence/runGitWorkspaceBaseline.ts";
 import { createIssueRun, ensureOpenIssueRun, updateIssueRuntime, updateOpenIssueRunRuntime } from "./issueRuns.ts";
 
 const tempRoots: string[] = [];
@@ -44,8 +48,18 @@ describe("issue run repository", () => {
       const issueId = insertIssue(db, "demo");
 
       const run = createIssueRun(db, issueId);
+      const baseline = db.sqlite.query<{ payload: string }, [number, string]>(`
+        select payload from issue_events where issue_id=? and type=? order by id desc limit 1
+      `).get(issueId, ISSUE_RUN_GIT_WORKSPACE_BASELINE_EVENT);
 
       expect(run.git_base_revision).toBe(revision);
+      expect(JSON.parse(baseline?.payload ?? "{}")).toMatchObject({
+        base_revision: revision,
+        contract: ISSUE_RUN_GIT_WORKSPACE_BASELINE_CONTRACT,
+        entries: [],
+        run_id: run.id,
+        snapshot_sha256: expect.stringMatching(/^[a-f0-9]{64}$/)
+      });
     } finally {
       db.close();
     }

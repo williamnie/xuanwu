@@ -10,6 +10,7 @@ import { listStoredEvidence } from "../../db/repositories/evidence.ts";
 import { listStoredHandoffs } from "../../db/repositories/handoffs.ts";
 import { validateWorkflowVerificationPolicy } from "./policy.ts";
 import { parseStructuredVerifierReviewEventPayload } from "./verifierReview.ts";
+import { recordIssueRunGitWorkspaceBaseline } from "./runGitWorkspaceBaseline.ts";
 import {
   classifyVerificationCommand,
   completeIssueFromRuntimeEvidence,
@@ -350,6 +351,29 @@ function prepareDirtyRepository(db: RunnerDatabase): void {
     "-c", "user.name=Runner Test", "-c", "user.email=runner@example.invalid",
     "commit", "-qm", "baseline"
   ], { cwd: repository });
+  const baseRevision = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: repository,
+    encoding: "utf8"
+  }).trim();
+  const run = db.sqlite.query<{ id: string }, []>(
+    "select id from issue_runs order by started_at desc limit 1"
+  ).get();
+  if (!run) throw new Error("missing fixture issue run");
+  const capturedAt = new Date().toISOString();
+  db.sqlite.run(
+    "update issue_runs set git_base_revision=?, started_at=? where id=?",
+    [baseRevision, capturedAt, run.id]
+  );
+  const issueID = db.sqlite.query<{ issue_id: number }, [string]>(
+    "select issue_id from issue_runs where id=?"
+  ).get(run.id)?.issue_id;
+  if (!issueID) throw new Error("missing fixture issue");
+  recordIssueRunGitWorkspaceBaseline(db, issueID, {
+    base_revision: baseRevision,
+    captured_at: capturedAt,
+    repository_path: repository,
+    run_id: run.id
+  });
   writeFileSync(join(repository, "result.txt"), "actual delivery artifact\n");
 }
 
