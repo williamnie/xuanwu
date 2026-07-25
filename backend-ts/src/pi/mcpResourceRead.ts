@@ -91,6 +91,9 @@ function auditResult(
     durationMs: result.duration_ms ?? 0,
     error: result.error ? { message: result.error.message, type: result.error.code ?? "tool_error" } : undefined,
     output: result.output,
+    permission: capability
+      ? capability.permission === "read" ? "read" : capability.permission === "write" ? "write" : "dangerous"
+      : undefined,
     providerID: server ? mcpToolProviderID(server.id) : undefined,
     status: result.status,
     toolCallID: result.invocation_id,

@@ -155,7 +155,13 @@ describe("PI MCP discovery API", () => {
       expect(await json(called)).toMatchObject({ result: { output: { echoed: "hello" }, status: "succeeded" } });
       const audit = listPiActionEvents(fixture.db, { conversationId: "conv-mcp-discovery" })
         .find((event) => event.event_type === "tool_call_audit");
-      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({ provider_id: `mcp-${serverID}`, status: "succeeded", tool: "echo" });
+      expect(JSON.parse(audit?.payload_json ?? "{}")).toMatchObject({
+        permission: "read",
+        provider_id: `mcp-${serverID}`,
+        result: "succeeded",
+        status: "succeeded",
+        tool: "echo"
+      });
       expect(audit?.payload_json).not.toContain("secret-token-value");
     } finally {
       fixture.db.close();

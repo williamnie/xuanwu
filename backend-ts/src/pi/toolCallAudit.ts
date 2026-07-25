@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import { createPiActionEvent } from "../db/repositories/pi.ts";
 import { redactAuditJsonText, redactAuditText } from "../db/repositories/pi/auditRedaction.ts";
 import { RUNNER_BUILTIN_PROVIDER_ID } from "./builtinToolRegistry.ts";
-import type { ToolResultStatus } from "./toolProviderEnvelope.ts";
+import type { ToolPermission, ToolResultStatus } from "./toolProviderEnvelope.ts";
 
 export type ToolCallAuditContext = {
   conversationID: string;
@@ -18,6 +18,7 @@ type ToolCallAuditInput = {
   durationMs: number;
   error?: { message: string; type: string };
   output?: unknown;
+  permission?: ToolPermission;
   providerID?: string;
   status: ToolResultStatus;
   toolCallID: string;
@@ -54,8 +55,10 @@ function toolCallAuditEnvelope(context: ToolCallAuditContext, input: ToolCallAud
     error: input.error ? safeError(input.error) : undefined,
     input_summary: auditSummary(input.args),
     output_summary: input.output === undefined ? undefined : auditSummary(input.output),
+    permission: input.permission ?? "unknown",
     provider: providerID,
     provider_id: providerID,
+    result: input.status,
     source: cleanString(context.source) || "pi_runtime",
     status: input.status,
     tool: cleanString(input.toolName),
