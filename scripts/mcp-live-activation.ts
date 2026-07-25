@@ -6,8 +6,9 @@ import { resolve } from "node:path";
 import { openDatabase } from "../backend-ts/src/db/database.ts";
 import { listPiActionEvents, listPiActions } from "../backend-ts/src/db/repositories/pi.ts";
 import { createPiMcpActions } from "../backend-ts/src/pi/mcpActionTools.ts";
+import { mcpServerLifecycleStates } from "../frontend/src/utils/mcpLifecycle.js";
 
-const SERVER_ID = "agent-05-fixture";
+const SERVER_ID = "project-agent-05-fixture";
 const PROVIDER_ID = `mcp-${SERVER_ID}`;
 const READ_CAPABILITY = `${SERVER_ID}:tool:fixture_read`;
 const WRITE_CAPABILITY = `${SERVER_ID}:tool:fixture_write`;
@@ -37,50 +38,39 @@ else {
 }
 
 async function exercise(input: Options): Promise<void> {
+  await rm(input.artifactDir, { force: true, recursive: true });
   await mkdir(input.artifactDir, { recursive: true });
   const startedAt = new Date().toISOString();
   await writeJson(controlPath(input), { online: true });
   await writeJson(statePath(input), { value: "baseline" });
-  await timeline(input, "preflight", "inspect-live-state", "started");
+  await writeReplay(input);
+  await timeline(input, "preflight", "inspect-isolated-runner-state", "started");
 
   const initial = await api(input, "/api/pi/mcp/discovery/results");
   await writeJson(resolve(input.artifactDir, "initial-state.json"), initial);
-  const discovered = initial.servers.find((server: JsonObject) => server.status === "discovered");
-
-  let server = initial.servers.find((item: JsonObject) => item.id === SERVER_ID);
-  if (!server) {
-    const created = await api(input, "/api/pi/mcp/servers", {
-      body: {
-        id: SERVER_ID,
-        name: "Agent-05 Safe MCP Fixture",
-        transport: {
-          args: [input.serverScript],
-          command: process.execPath,
-          cwd: resolve("."),
-          env: {
-            MCP_ACTIVATION_CONTROL_FILE: controlPath(input),
-            MCP_ACTIVATION_STATE_FILE: statePath(input)
-          },
-          type: "stdio"
-        }
-      },
-      method: "POST"
+  if (initial.servers.some((item: JsonObject) => item.id === SERVER_ID)) {
+    await api(input, `/api/pi/mcp/servers/${encodeURIComponent(SERVER_ID)}`, {
+      body: { enabled: false },
+      method: "PATCH"
     });
-    server = created.server;
-    await timeline(input, "connect", "create-disabled-server", "passed", {
-      enabled: server.enabled,
-      readiness: server.readiness,
-      server_id: server.id,
-      status: server.status
-    });
-  } else {
-    await timeline(input, "connect", "reuse-existing-server", "passed", {
-      enabled: server.enabled,
-      readiness: server.readiness,
-      server_id: server.id,
-      status: server.status
-    });
+    await api(input, `/api/pi/mcp/servers/${encodeURIComponent(SERVER_ID)}`, { method: "DELETE" });
   }
+  await prepareDiscoveryFixture(input);
+  const scan = await api(input, "/api/pi/mcp/discovery/scan", {
+    body: { sources: ["project"], workspace_dir: discoveryWorkspace(input) },
+    method: "POST"
+  });
+  await writeJson(resolve(input.artifactDir, "discovery-scan.json"), scan);
+  const discoveredState = await api(input, "/api/pi/mcp/discovery/results");
+  await writeJson(resolve(input.artifactDir, "discovered-state.json"), discoveredState);
+  const server = fixtureServer(discoveredState);
+  const discovered = { ...server };
+  await timeline(input, "connect", "discover-disabled-server", server.status === "discovered" && server.enabled === false ? "passed" : "failed", {
+    enabled: server.enabled,
+    readiness: server.readiness,
+    server_id: server.id,
+    status: server.status
+  });
 
   const introspection = await api(input, `/api/pi/mcp/servers/${encodeURIComponent(SERVER_ID)}/introspect`, { method: "POST" });
   await writeJson(resolve(input.artifactDir, "introspection.json"), introspection);
@@ -130,6 +120,12 @@ async function exercise(input: Options): Promise<void> {
   await writeJson(controlPath(input), { online: true });
   const reintrospection = await api(input, `/api/pi/mcp/servers/${encodeURIComponent(SERVER_ID)}/introspect`, { method: "POST" });
   await writeJson(resolve(input.artifactDir, "reintrospection.json"), reintrospection);
+  for (const capabilityID of [READ_CAPABILITY, WRITE_CAPABILITY]) {
+    await api(input, `/api/pi/mcp/capabilities/${encodeURIComponent(capabilityID)}`, {
+      body: { enabled: true },
+      method: "PATCH"
+    });
+  }
   const secondRead = await readFixture(input, "after-reconnect");
   await writeJson(resolve(input.artifactDir, "read-after-reconnect.json"), secondRead);
   const recovered = await api(input, "/api/pi/mcp/discovery/results");
@@ -145,7 +141,14 @@ async function exercise(input: Options): Promise<void> {
     disabled: server,
     discovered,
     enabled: fixtureServer(enabled),
-    ready: fixtureServer(recovered)
+    ready: fixtureServer(recovered),
+    ui_lifecycle: {
+      degraded: mcpServerLifecycleStates(degraded.server),
+      disabled: mcpServerLifecycleStates(server),
+      discovered: mcpServerLifecycleStates(discovered),
+      enabled: mcpServerLifecycleStates(fixtureServer(enabled)),
+      ready: mcpServerLifecycleStates(fixtureServer(recovered))
+    }
   };
   await writeJson(resolve(input.artifactDir, "state-model.json"), stateModel);
 
@@ -156,7 +159,7 @@ async function exercise(input: Options): Promise<void> {
     assertion("disconnect_returns_diagnostic_error", disconnected.result?.status === "failed" && Boolean(disconnected.result?.error?.code), "disconnected-call.json"),
     assertion("degraded_state_is_visible", degraded.server?.enabled === true && degraded.server?.readiness === "failed", "degraded-state.json"),
     assertion("reconnect_restores_same_read_call", readSucceeded(secondRead), "read-after-reconnect.json"),
-    assertion("api_state_model_distinguishes_lifecycle", stateModelComplete(stateModel), "state-model.json"),
+    assertion("ui_api_state_model_distinguishes_lifecycle", stateModelComplete(stateModel), "state-model.json"),
     assertion("core_restart_preserves_alias_and_ready", false, "post-restart.json", "pending Core restart"),
     assertion("tool_call_audit_is_complete_and_redacted", false, "tool-call-audit.json", "pending post-restart audit verification")
   ];
@@ -291,13 +294,19 @@ async function writeReport(input: Options, startedAt: string, assertions: Assert
   const failures = assertions.filter((item) => !item.passed).map((item) => `${item.id}: ${stringDetail(item.detail)}`);
   await writeJson(resolve(input.artifactDir, "report.json"), {
     artifact_refs: [
-      "initial-state.json", "introspection.json", "enabled-ready.json", "read-before-disconnect.json",
+      "initial-state.json", "discovery-scan.json", "discovered-state.json", "introspection.json",
+      "enabled-ready.json", "read-before-disconnect.json",
       "write-gate.json", "disconnected-call.json", "degraded-state.json", "reintrospection.json",
       "read-after-reconnect.json", "recovered-state.json", "state-model.json", "post-restart.json",
-      "tool-call-audit.json", "timeline.jsonl", "replay.md"
+      "tool-call-audit.json", "timeline.jsonl", "replay.md", "verification-command.log"
     ],
     assertions,
     ended_at: new Date().toISOString(),
+    execution_context: {
+      addr: input.addr,
+      live_service_mutated: false,
+      mode: "isolated_dev_runner"
+    },
     failure_reasons: failures,
     result: failures.length === 0 ? "passed" : "pending",
     started_at: startedAt
@@ -313,7 +322,12 @@ function stateModelComplete(state: JsonObject): boolean {
     state.disabled?.enabled === false &&
     state.enabled?.enabled === true &&
     state.ready?.readiness === "ready" &&
-    state.degraded?.readiness === "failed";
+    state.degraded?.readiness === "failed" &&
+    state.ui_lifecycle?.discovered?.includes("discovered") &&
+    state.ui_lifecycle?.disabled?.includes("disabled") &&
+    state.ui_lifecycle?.enabled?.includes("enabled") &&
+    state.ui_lifecycle?.ready?.includes("ready") &&
+    state.ui_lifecycle?.degraded?.includes("degraded");
 }
 
 function readSucceeded(payload: JsonObject): boolean {
@@ -340,6 +354,76 @@ function statePath(input: Options): string {
   return resolve(input.artifactDir, "fixture-state.json");
 }
 
+function discoveryWorkspace(input: Options): string {
+  return resolve(input.artifactDir, "discovery-workspace");
+}
+
+async function prepareDiscoveryFixture(input: Options): Promise<void> {
+  const workspace = discoveryWorkspace(input);
+  await mkdir(workspace, { recursive: true });
+  await writeJson(resolve(workspace, ".mcp.json"), {
+    mcpServers: {
+      "agent-05-fixture": {
+        args: [input.serverScript],
+        command: process.execPath,
+        description: "Safe local MCP server for Agent-05 activation verification.",
+        env: {
+          MCP_ACTIVATION_CONTROL_FILE: controlPath(input),
+          MCP_ACTIVATION_STATE_FILE: statePath(input)
+        }
+      }
+    }
+  });
+}
+
+async function writeReplay(input: Options): Promise<void> {
+  const [host, port = "3569"] = input.addr.split(":");
+  const frontendPort = String(Number.parseInt(port, 10) - 1);
+  const lines = [
+    "# Issue #781 MCP 实连权限闭环复现",
+    "",
+    "所有运行态验证使用隔离 state/DB/ports；不得操作 launchd live 服务。",
+    "",
+    "## 1. 启动隔离 Runner（终端 A）",
+    "",
+    "```bash",
+    'export ISSUE781_STATE_DIR=\"$(mktemp -d /tmp/codex-issue-781-replay.XXXXXX)\"',
+    `printf '%s\\n' "$ISSUE781_STATE_DIR" > ${shellQuote(resolve(input.artifactDir, "replay-state-path.txt"))}`,
+    ': > \"$ISSUE781_STATE_DIR/auth_token\"',
+    `CODEX_RUNNER_STATE_DIR="$ISSUE781_STATE_DIR" \\`,
+    `CODEX_RUNNER_DB="$ISSUE781_STATE_DIR/runner.db" \\`,
+    `CODEX_RUNNER_AUTH_TOKEN_FILE="$ISSUE781_STATE_DIR/auth_token" \\`,
+    `CODEX_RUNNER_DEV_ADDR=${shellQuote(input.addr)} \\`,
+    `FRONTEND_HOST=${shellQuote(host || "127.0.0.1")} FRONTEND_PORT=${shellQuote(frontendPort)} ./dev.sh`,
+    "```",
+    "",
+    "## 2. 执行真实 discovery/introspection/read/deny/disconnect/reconnect（终端 B）",
+    "",
+    "```bash",
+    `export ISSUE781_STATE_DIR="$(cat ${shellQuote(resolve(input.artifactDir, "replay-state-path.txt"))})"`,
+    `bun scripts/mcp-live-activation.ts exercise --addr ${shellQuote(input.addr)} --db "$ISSUE781_STATE_DIR/runner.db" --token-file "$ISSUE781_STATE_DIR/auth_token" --artifact-dir ${shellQuote(input.artifactDir)}`,
+    "```",
+    "",
+    "## 3. 重启隔离 Core 并验证持久化",
+    "",
+    "在终端 A 按 Ctrl+C，随后用第 1 步完全相同的环境变量和命令重新启动；再在终端 B 执行：",
+    "",
+    "```bash",
+    `bun scripts/mcp-live-activation.ts verify-persistence --addr ${shellQuote(input.addr)} --db "$ISSUE781_STATE_DIR/runner.db" --token-file "$ISSUE781_STATE_DIR/auth_token" --artifact-dir ${shellQuote(input.artifactDir)}`,
+    `jq -e '.result == "passed" and ([.assertions[].passed] | all)' ${shellQuote(resolve(input.artifactDir, "report.json"))}`,
+    "```",
+    "",
+    "## 4. 可选清理",
+    "",
+    "```bash",
+    `bun scripts/mcp-live-activation.ts cleanup --addr ${shellQuote(input.addr)} --db "$ISSUE781_STATE_DIR/runner.db" --token-file "$ISSUE781_STATE_DIR/auth_token" --artifact-dir ${shellQuote(input.artifactDir)}`,
+    "```",
+    ""
+  ];
+  await writeFile(resolve(input.artifactDir, "replay-state-path.txt"), `${resolve(input.dbPath, "..")}\n`, "utf8");
+  await writeFile(resolve(input.artifactDir, "replay.md"), lines.join("\n"), "utf8");
+}
+
 async function timeline(input: Options, phase: string, action: string, result: string, detail: unknown = {}): Promise<void> {
   await mkdir(input.artifactDir, { recursive: true });
   await Bun.write(Bun.file(resolve(input.artifactDir, "timeline.jsonl")), [
@@ -362,6 +446,10 @@ function parseJson(value: string): JsonObject {
 function stringDetail(value: unknown): string {
   if (value === undefined) return "assertion failed";
   return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function parseOptions(args: string[]): Options {

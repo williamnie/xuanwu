@@ -2,6 +2,7 @@ import { connectorsApi } from '../api/connectors.js';
 import { useEffect, useMemo, useState } from 'react';
 import { PlugZap, RefreshCw, ShieldCheck } from 'lucide-react';
 import { message } from '../store/toastStore';
+import { mcpServerLifecycleStates } from '../utils/mcpLifecycle.js';
 
 const emptyForm = { args: '', command: '', envKeys: '', name: '' };
 const redactedText = '[redacted]';
@@ -102,11 +103,12 @@ function ServerGroup({ servers, showForget = false, state, title }) {
 }
 
 function ServerCard({ server, showForget, state }) {
+  const lifecycle = mcpServerLifecycleStates(server);
   return (
     <div style={rowCardStyle}>
       <div style={{ minWidth: 0 }}>
         <strong>{server.name || server.id}</strong>
-        <div style={mutedStyle}>{server.source} · {server.transport_type} · {server.enabled ? 'enabled' : 'disabled by default'} · {server.readiness || 'not_introspected'}</div>
+        <div style={mutedStyle}>{server.source} · {server.transport_type} · lifecycle {lifecycle.join(' / ')} · readiness {server.readiness || 'not_introspected'}</div>
         <Diagnostics diagnostics={server.diagnostics} />
       </div>
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>

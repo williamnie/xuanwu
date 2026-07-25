@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mcpServerLifecycleStates } from '../utils/mcpLifecycle.js';
 
 const panelSource = readFileSync(new URL('./PiMcpManagementPanel.jsx', import.meta.url), 'utf8');
 const connectionsSource = readFileSync(new URL('./Connections.jsx', import.meta.url), 'utf8');
@@ -19,4 +20,16 @@ test('Connections exposes MCP discovery and enablement management without secret
   assert.match(connectorsSource, /scanPiMcpDiscovery:/);
   assert.match(connectorsSource, /\/api\/pi\/mcp\/discovery\/scan/);
   assert.match(connectorsSource, /patchPiMcpCapability:/);
+});
+
+test('MCP lifecycle labels distinguish discovered, enabled, ready, degraded, and disabled', () => {
+  assert.deepEqual(mcpServerLifecycleStates({
+    enabled: false, readiness: 'not_introspected', status: 'discovered'
+  }), ['discovered', 'disabled']);
+  assert.deepEqual(mcpServerLifecycleStates({
+    enabled: true, readiness: 'ready', status: 'available'
+  }), ['enabled', 'ready']);
+  assert.deepEqual(mcpServerLifecycleStates({
+    enabled: true, readiness: 'failed', status: 'failed'
+  }), ['enabled', 'degraded']);
 });
