@@ -1218,10 +1218,14 @@ function writeReplay(artifactDir: string): void {
 - 只创建临时 SQLite、临时 Git repository 和本地 stdio MCP fixture。
 - 不调用 LLM，不发送外部消息。
 
-## 定向测试
+## 定向测试与相邻主链回归
 
 \`\`\`bash
-bun test scripts/intake-observability-live.test.ts
+bun test \\
+  scripts/intake-observability-live.test.ts \\
+  backend-ts/src/skills/runtime.test.ts \\
+  backend-ts/src/pi/eventRouter.test.ts \\
+  backend-ts/src/pi/fixtureCliE2e.test.ts
 \`\`\`
 
 ## 三周期短窗预演
