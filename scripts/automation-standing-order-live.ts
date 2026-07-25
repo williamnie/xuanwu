@@ -788,10 +788,14 @@ function validRunEventOrder(events: Json[], runID: string): boolean {
   const claims = types
     .map((type, index) => type === "automation.run_claimed.v1" ? index : -1)
     .filter((index) => index >= 0);
+  const expiredLeases = types
+    .map((type, index) => type === "automation.run_lease_expired.v1" ? index : -1)
+    .filter((index) => index >= 0);
   return queued >= 0
     && claims.length >= 1
     && succeeded > claims.at(-1)!
     && claims[0]! > queued
+    && expiredLeases.every((expired) => claims.some((claim) => claim > expired && claim < succeeded))
     && types.filter((type) => type === "automation.run_succeeded.v1").length === 1;
 }
 

@@ -26,6 +26,16 @@ describe("AGENT-02 live Standing Order assertions", () => {
     expect(eventTypes(recovered, "run-1")).toHaveLength(5);
   });
 
+  test("requires a fresh claim after restart lease expiry", () => {
+    const missingReclaim = events(
+      "automation.run_queued.v1",
+      "automation.run_claimed.v1",
+      "automation.run_lease_expired.v1",
+      "automation.run_succeeded.v1"
+    );
+    expect(validRunEventOrder(missingReclaim, "run-1")).toBeFalse();
+  });
+
   test("rejects duplicate terminal outcomes and detects side-effect drift", () => {
     const duplicate = events(
       "automation.run_queued.v1",
