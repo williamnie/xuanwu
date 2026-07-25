@@ -25,6 +25,7 @@ export function publicIntakeRun(run: IntakeRunRecord): JsonObject {
       context_bundle: `/api/pi/attention-inbox/context-bundles/${run.bundle_id}`,
       inbox_items: `/api/pi/attention-inbox/items?intake_run_id=${run.id}`
     },
+    lifecycle: { execution: run.status === "running" ? "running" : "executed" },
     created_at: run.created_at,
     updated_at: run.updated_at
   };

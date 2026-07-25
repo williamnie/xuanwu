@@ -32,11 +32,15 @@ describe("PI skill registry", () => {
       allowed_roles: expect.arrayContaining(["pi", "executor"]),
       description: "Use when working on runner issues, verification, and commits.",
       id: "codex-issue-runner",
+      instruction_bytes: expect.any(Number),
+      instruction_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      instructions: expect.stringContaining("# Skill body"),
       name: "codex-issue-runner",
       risk_level: "medium",
       source_path: "fixture:codex-issue-runner/SKILL.md",
       trigger_rules: expect.stringContaining("runner issues")
     });
+    expect(skill?.version).toMatch(/^sha256:/);
     expect(skill?.source_path).not.toContain(root);
     expect(JSON.stringify(registry)).not.toContain(root);
     expect(skillPath).toContain("SKILL.md");

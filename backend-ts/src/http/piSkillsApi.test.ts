@@ -43,11 +43,32 @@ describe("PI skill metadata API", () => {
         expect.objectContaining({ code: "missing_front_matter", source_path: "codex-home:broken/SKILL.md" })
       ]));
       expect(JSON.stringify(listBody)).not.toContain(fixture.root);
+      expect(listBody.skills.find((skill: { id: string }) => skill.id === "local-fixture")).toMatchObject({
+        availability_status: "ready",
+        discovery_status: "discovered",
+        lifecycle: {
+          availability: "ready",
+          discovery: "discovered",
+          execution: "not_executed",
+          load: "not_loaded"
+        },
+        load_status: "not_loaded"
+      });
+      expect(listBody.skills.find((skill: { id: string }) => skill.id === "local-fixture")).not.toHaveProperty("instructions");
 
       expect(detail.status).toBe(200);
       await expect(detail.json()).resolves.toMatchObject({
         skill: {
+          instruction_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+          instructions: expect.stringContaining("name: local-fixture"),
           id: "local-fixture",
+          lifecycle: {
+            availability: "ready",
+            discovery: "discovered",
+            execution: "not_executed",
+            load: "loaded"
+          },
+          load_status: "loaded",
           source_path: "codex-home:local-fixture/SKILL.md",
           trigger_rules: expect.stringContaining("local fixture")
         }
@@ -72,8 +93,17 @@ describe("PI skill metadata API", () => {
 
       expect(listed.status).toBe(200);
       expect(skill).toMatchObject({
+        availability_status: "ready",
         enabled: true,
         required_tools: ["docs:tool:search"],
+        resolved_tools: [{
+          capability_id: "docs:tool:search",
+          grant: "docs:tool:search",
+          name: "search",
+          permission: "read",
+          provider_id: "mcp-docs",
+          status: "resolved"
+        }],
         runtime_status: "enabled"
       });
       expect(body.diagnostics).not.toEqual(expect.arrayContaining([
@@ -102,6 +132,7 @@ describe("PI skill metadata API", () => {
         output_objects: ["inbox_items", "ignored_groups"]
       });
       expect(byID.get("fixture-domain")).toMatchObject({
+        availability_status: "blocked",
         executable: true,
         execution: {
           handler: "builtin:pi-domain-proposal",
@@ -110,6 +141,7 @@ describe("PI skill metadata API", () => {
         },
         input_object: "inbox_item",
         kind: "domain",
+        missing_capabilities: ["missing.tool"],
         output_objects: ["action_proposals"]
       });
       expect(body.diagnostics).toEqual(expect.arrayContaining([
@@ -204,6 +236,7 @@ describe("PI skill metadata API", () => {
       expect(intakeRun.run).toMatchObject({
         bundle_id: seed.bundleID,
         input_object: "context_bundle",
+        lifecycle: { execution: "running" },
         links: { context_bundle: `/api/pi/attention-inbox/context-bundles/${seed.bundleID}` },
         skill_id: "fixture-intake",
         status: "running"
@@ -217,6 +250,7 @@ describe("PI skill metadata API", () => {
         bundle_id: seed.bundleID,
         input_object: "inbox_item",
         item_id: seed.itemID,
+        lifecycle: { execution: "executed" },
         links: {
           context_bundle: `/api/pi/attention-inbox/context-bundles/${seed.bundleID}`,
           inbox_item: `/api/pi/attention-inbox/items/${seed.itemID}`

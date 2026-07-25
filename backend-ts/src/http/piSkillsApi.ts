@@ -11,6 +11,7 @@ import { getPiAction, listPiActionEvents, type PiActionEvent } from "../db/repos
 import { runDomainSkillAndMarkProposal } from "../pi/domainSkillRun.ts";
 import { buildIntakeSkillInput } from "../pi/intakeSkillInput.ts";
 import { loadAssistantToolRegistrySnapshot } from "../pi/toolRegistrySnapshot.ts";
+import type { AssistantTool } from "../pi/toolProviderEnvelope.ts";
 import { readSkillRegistry, type SkillMetadata, type SkillRegistryDiagnostic } from "../skills/registry.ts";
 import { DEFAULT_DOMAIN_SKILL_ID } from "../skills/builtinDomainProposal.ts";
 import { SKILL_RUNTIME_COMPLETED_EVENT } from "../skills/runtime.ts";
@@ -20,7 +21,11 @@ import type { Router } from "./router.ts";
 
 type SkillRouteContext = { config?: RunnerConfig; database: RunnerDatabase };
 type JsonObject = Record<string, unknown>;
-type SkillRegistryView = { diagnostics: SkillRegistryDiagnostic[]; items: SkillMetadata[] };
+type SkillRegistryView = {
+  diagnostics: SkillRegistryDiagnostic[];
+  items: SkillMetadata[];
+  tools: AssistantTool[];
+};
 
 const RUN_STATUSES = new Set(["running", "succeeded", "failed"]);
 
@@ -35,7 +40,7 @@ export function registerPiSkillRoutes(router: Router, context?: SkillRouteContex
 
 function skillsResponse(context?: SkillRouteContext): Response {
   const registry = readRegistry(context);
-  return json({ diagnostics: registry.diagnostics, skills: decorateSkills(registry) });
+  return json({ diagnostics: registry.diagnostics, skills: decorateSkills(registry, false) });
 }
 
 function skillResponse(request: Request, context?: SkillRouteContext): Response {
@@ -43,7 +48,7 @@ function skillResponse(request: Request, context?: SkillRouteContext): Response 
   const registry = readRegistry(context);
   const skill = findSkill(registry.items, id);
   if (!skill) throw new HttpError(404, `skill 不存在: ${id}`);
-  return json({ diagnostics: registry.diagnostics, skill: decoratedSkill(skill, registry) });
+  return json({ diagnostics: registry.diagnostics, skill: decoratedSkill(skill, registry, true) });
 }
 
 function intakeRunsResponse(context: SkillRouteContext | undefined, request: Request): JsonObject[] {
@@ -142,24 +147,48 @@ function domainRunView(db: RunnerDatabase, event: PiActionEvent): JsonObject {
       inbox_item: itemID ? `/api/pi/attention-inbox/items/${itemID}` : "",
       proposal: `/api/pi/actions/${encodeURIComponent(event.action_id)}`
     },
+    lifecycle: { execution: "executed" },
     created_at: event.created_at,
     updated_at: action?.updated_at || event.created_at
   };
 }
 
-function decorateSkills(registry: SkillRegistryView): JsonObject[] {
-  return registry.items.map((skill) => decoratedSkill(skill, registry));
+function decorateSkills(registry: SkillRegistryView, includeInstructions: boolean): JsonObject[] {
+  return registry.items.map((skill) => decoratedSkill(skill, registry, includeInstructions));
 }
 
-function decoratedSkill(skill: SkillMetadata, registry: SkillRegistryView): JsonObject {
+function decoratedSkill(
+  skill: SkillMetadata,
+  registry: SkillRegistryView,
+  includeInstructions: boolean
+): JsonObject {
   const diagnostics = skillDiagnostics(skill, registry.diagnostics);
   const executable = Boolean(skill.execution);
   const manifestOnly = skill.kind === "domain" && !executable;
+  const resolvedTools = skill.required_tools.flatMap((grant) => {
+    const tool = resolveTool(registry.tools, grant);
+    return tool ? [publicResolvedTool(grant, tool)] : [];
+  });
+  const missingCapabilities = skill.required_tools.filter((grant) => !resolveTool(registry.tools, grant));
+  const availability = diagnostics.length > 0 || manifestOnly ? "blocked" : "ready";
+  const { instructions, ...metadata } = skill;
   return {
-    ...skill,
+    ...metadata,
+    ...(includeInstructions ? { instructions } : {}),
+    availability_status: availability,
     diagnostics,
+    discovery_status: "discovered",
     enabled: skill.kind ? diagnostics.length === 0 && !manifestOnly : true,
     executable,
+    lifecycle: {
+      availability,
+      discovery: "discovered",
+      execution: "not_executed",
+      load: includeInstructions ? "loaded" : "not_loaded"
+    },
+    load_status: includeInstructions ? "loaded" : "not_loaded",
+    missing_capabilities: missingCapabilities,
+    resolved_tools: resolvedTools,
     runtime_status: manifestOnly
       ? "manifest_only"
       : skill.kind ? (diagnostics.length === 0 ? "enabled" : "diagnostic") : "metadata_only"
@@ -188,7 +217,7 @@ function requireRuntimeSkill(
 }
 
 function readRegistry(context?: SkillRouteContext) {
-  if (!context) return readSkillRegistry();
+  if (!context) return { ...readSkillRegistry(), tools: [] };
   const snapshot = loadAssistantToolRegistrySnapshot(context.database, {
     cliConnectorDirs: context.config?.cliConnectors.manifestDirs ?? []
   });
@@ -198,7 +227,27 @@ function readRegistry(context?: SkillRouteContext) {
     permission: tool.permission,
     provider_id: tool.provider_id
   }));
-  return readSkillRegistry({ availableTools });
+  return { ...readSkillRegistry({ availableTools }), tools: snapshot.tools };
+}
+
+function resolveTool(tools: AssistantTool[], grant: string): AssistantTool | undefined {
+  const matches = tools.filter((tool) => (
+    tool.name === grant ||
+    `${tool.provider_id}:${tool.name}` === grant ||
+    cleanString(tool.metadata?.capability_id) === grant
+  ));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function publicResolvedTool(grant: string, tool: AssistantTool): JsonObject {
+  return {
+    capability_id: cleanString(tool.metadata?.capability_id),
+    grant,
+    name: tool.name,
+    permission: tool.permission,
+    provider_id: tool.provider_id,
+    status: "resolved"
+  };
 }
 
 function toolAliases(metadata: Record<string, unknown> | undefined): string[] {

@@ -11,10 +11,14 @@ export default function SkillsRuntimePanel() {
   const [selectedId, setSelectedId] = useState('');
   const [form, setForm] = useState({ bundleId: '', itemId: '' });
   const skills = useMemo(() => runtimeSkills(state.skills), [state.skills]);
-  const selected = useMemo(() => selectedSkill(skills, selectedId), [skills, selectedId]);
+  const selected = useMemo(
+    () => state.skillDetails[selectedId] || selectedSkill(skills, selectedId),
+    [skills, selectedId, state.skillDetails]
+  );
 
   useEffect(() => { loadAll(setState); }, []);
   useEffect(() => { if (!selectedId && skills[0]) setSelectedId(skills[0].id); }, [skills, selectedId]);
+  useEffect(() => { if (selectedId) loadSkillDetail(selectedId, setState); }, [selectedId]);
   useEffect(() => setForm((previous) => defaultInputs(previous, state.bundles, state.items)), [state.bundles, state.items]);
 
   const runSelected = () => runSkill(selected, form, setState);
@@ -53,7 +57,7 @@ function SkillList({ onSelect, selectedId, skills }) {
         <button className={skill.id === selectedId ? 'active' : ''} key={skill.id} onClick={() => onSelect(skill.id)} type="button">
           <span className={`skills-kind ${skill.kind}`}>{KIND_LABEL[skill.kind]}</span>
           <strong>{skill.name || skill.id}</strong>
-          <small>{skill.enabled ? 'enabled' : 'diagnostic'} · tools {(skill.required_tools || []).length}</small>
+          <small>{skill.availability_status || (skill.enabled ? 'ready' : 'blocked')} · tools {(skill.required_tools || []).length}</small>
         </button>
       ))}
     </aside>
@@ -70,7 +74,9 @@ function SkillDetail({ form, onRun, runs, selected, setForm }) {
           <h3>{selected.name || selected.id}</h3>
           <p>{selected.description}</p>
         </div>
-        <span className={`skills-enabled ${selected.enabled ? 'ok' : 'warn'}`}>{selected.runtime_status}</span>
+        <span className={`skills-enabled ${selected.availability_status === 'blocked' ? 'warn' : 'ok'}`}>
+          {selected.load_status} · {selected.availability_status}
+        </span>
       </div>
       <SkillMeta skill={selected} />
       <ManualRunControls form={form} onRun={onRun} selected={selected} setForm={setForm} />
@@ -83,8 +89,12 @@ function SkillMeta({ skill }) {
   return (
     <div className="skills-runtime-meta">
       <ChipGroup title="Required tools" values={skill.required_tools || []} empty="无" />
+      <ChipGroup title="Resolved tools" values={(skill.resolved_tools || []).map((tool) => `${tool.grant} → ${tool.provider_id}:${tool.name}`)} empty="无" />
+      <ChipGroup title="Missing capabilities" values={skill.missing_capabilities || []} />
       <ChipGroup title="Primary intents" values={skill.primary_intents || []} />
+      <ChipGroup title="Instruction" values={[`${skill.version} · sha256:${(skill.instruction_sha256 || '').slice(0, 12)} · ${skill.instruction_bytes || 0} bytes`]} />
       <Diagnostics diagnostics={skill.diagnostics || []} />
+      {skill.instructions && <SchemaBlock title="Full SKILL.md instructions" value={skill.instructions} raw />}
       <SchemaBlock title="Input schema" value={skill.input_schema || {}} />
       <SchemaBlock title="Output schema" value={skill.output_schema || {}} />
     </div>
@@ -99,7 +109,7 @@ function ManualRunControls({ form, onRun, selected, setForm }) {
         {selected.kind === 'intake' ? 'Context bundle ID' : 'Inbox item ID'}
         <input value={form[field]} onChange={(event) => setForm({ ...form, [field]: event.target.value })} placeholder="输入数字 ID" />
       </label>
-      <button className="btn" disabled={!selected.enabled || !form[field]} onClick={onRun} type="button">
+      <button className="btn" disabled={selected.availability_status === 'blocked' || !selected.enabled || !form[field]} onClick={onRun} type="button">
         <Play size={15} /> Manual run
       </button>
     </div>
@@ -120,7 +130,9 @@ function RunRow({ run }) {
   return (
     <details className="skills-run-row">
       <summary>
-        <span className={`skills-enabled ${run.status === 'failed' ? 'warn' : 'ok'}`}>{run.status}</span>
+        <span className={`skills-enabled ${run.status === 'failed' ? 'warn' : 'ok'}`}>
+          {run.lifecycle?.execution || 'executed'} · {run.status}
+        </span>
         <strong>#{run.id}</strong>
         <small>{run.input_object} #{run.input_id || run.bundle_id || run.item_id}</small>
       </summary>
@@ -147,12 +159,22 @@ function Diagnostics({ diagnostics }) {
   return <ChipGroup title="Diagnostics" values={diagnostics.map((item) => `${item.code}: ${item.message}`)} />;
 }
 
-function SchemaBlock({ title, value }) {
-  return <details className="skills-schema"><summary>{title}</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>;
+function SchemaBlock({ raw = false, title, value }) {
+  return <details className="skills-schema"><summary>{title}</summary><pre>{raw ? value : JSON.stringify(value, null, 2)}</pre></details>;
 }
 
 function initialState() {
-  return { bundles: [], domainRuns: [], error: '', intakeRuns: [], items: [], loading: true, notice: '', skills: [] };
+  return { bundles: [], domainRuns: [], error: '', intakeRuns: [], items: [], loading: true, notice: '', skillDetails: {}, skills: [] };
+}
+
+function loadSkillDetail(id, setState) {
+  assistantApi.getPiSkill(id).then((result) => setState((previous) => ({
+    ...previous,
+    skillDetails: { ...previous.skillDetails, [id]: result.skill }
+  }))).catch((error) => setState((previous) => ({
+    ...previous,
+    error: error.message || `加载 skill ${id} 失败`
+  })));
 }
 
 function loadAll(setState) {

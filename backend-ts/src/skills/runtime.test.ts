@@ -299,6 +299,9 @@ function fixtureSkill(
     description: `${id} runtime fixture`,
     execution: { adapter: "builtin", handler, sandbox: "capability", timeout_ms: 1000 },
     id,
+    instruction_bytes: 32,
+    instruction_sha256: "fixture-instruction-sha256",
+    instructions: "# Fixture skill instructions",
     input_object: "inbox_item",
     input_schema: { type: "object" },
     intent_tags: [],
@@ -314,6 +317,7 @@ function fixtureSkill(
     source_path: `fixture:${id}/SKILL.md`,
     summary: `${id} runtime fixture`,
     trigger_rules: `Use ${id} in tests.`,
+    version: "1.0.0",
     ...overrides
   };
 }

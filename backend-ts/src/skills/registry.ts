@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
@@ -8,11 +9,15 @@ export type SkillMetadata = SkillRuntimeMetadata & {
   allowed_roles: string[];
   description: string;
   id: string;
+  instruction_bytes: number;
+  instruction_sha256: string;
+  instructions: string;
   name: string;
   risk_level: "low" | "medium" | "high";
   source_path: string;
   summary: string;
   trigger_rules: string;
+  version: string;
 };
 
 export type SkillRegistryDiagnostic = {
@@ -119,16 +124,21 @@ function readSkillFile(
   const name = normalizeID(frontMatter.name) || id;
   const description = clean(frontMatter.description);
   if (description === "") return badSkill(root, path, diagnostics, "missing_description", "SKILL.md missing description");
+  const instructionSha256 = createHash("sha256").update(text).digest("hex");
   return {
     allowed_roles: allowedRoles(description),
     description,
     id,
+    instruction_bytes: Buffer.byteLength(text),
+    instruction_sha256: instructionSha256,
+    instructions: text,
     name,
     risk_level: riskLevel(`${name} ${description}`),
     source_path: publicPath(path, root),
     summary: description,
     ...runtimeManifest(path, root, options, diagnostics),
-    trigger_rules: description || `Use when ${name} is requested.`
+    trigger_rules: description || `Use when ${name} is requested.`,
+    version: clean(frontMatter.version) || `sha256:${instructionSha256.slice(0, 12)}`
   };
 }
 
