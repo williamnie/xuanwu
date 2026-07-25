@@ -17,6 +17,8 @@ describe("Issue 783 Handoff and Attention fixture", () => {
     roots.push(root);
 
     const report = await runIssue783Fixture(root);
+    const persistedReport = JSON.parse(await readFile(join(root, "report.json"), "utf8"));
+    const replay = await readFile(join(root, "replay.md"), "utf8");
     const manifest = JSON.parse(await readFile(join(root, "fixture-manifest.json"), "utf8"));
     const handoff = JSON.parse(await readFile(join(root, "handoff-results.json"), "utf8"));
     const attention = JSON.parse(await readFile(join(root, "attention-results.json"), "utf8"));
@@ -24,6 +26,16 @@ describe("Issue 783 Handoff and Attention fixture", () => {
       .trim().split("\n").map((line) => JSON.parse(line));
 
     expect(report.result).toBe("passed");
+    expect(persistedReport).toEqual(report);
+    expect(report.artifact_refs).toEqual([
+      "fixture-manifest.json",
+      "handoff-results.json",
+      "attention-results.json",
+      "timeline.jsonl",
+      "replay.md"
+    ]);
+    expect(replay).toContain("bun scripts/handoff-attention-fixture.ts exercise");
+    expect(replay).toContain("bun test");
     expect(report.assertions).toHaveLength(9);
     expect(report.assertions.every((item) => item.passed)).toBeTrue();
     expect(handoff.clean_commit.changed_files).toEqual(manifest.handoff_files.clean_commit);
