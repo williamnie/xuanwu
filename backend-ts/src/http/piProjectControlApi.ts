@@ -89,7 +89,7 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   activeProjectPiRuns.set(project.id, "pending");
   let state: Awaited<ReturnType<typeof createManagerCycleState>>;
   try {
-    state = await createManagerCycleState(context, project, agent);
+    state = await createManagerCycleState(context, project, agent, cycleSettings);
     activeProjectPiRuns.set(project.id, state.runtime.session);
   } catch (error) {
     if (activeProjectPiRuns.get(project.id) === "pending") activeProjectPiRuns.delete(project.id);
@@ -104,11 +104,16 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
   }
 }
 
-async function createManagerCycleState(context: PiProjectControlContext, project: Project, agent: PiAgent) {
+async function createManagerCycleState(
+  context: PiProjectControlContext,
+  project: Project,
+  agent: PiAgent,
+  settings: ProjectPiSettings
+) {
   const conversationID = crypto.randomUUID();
   const runtime = await createPiRuntimeSession(context.database, {
     agent,
-    authorization: managerCycleAuthorization(project),
+    authorization: managerCycleAuthorization(project, settings),
     bus: context.bus,
     conversationID,
     delegationID: `pi-cycle:${project.id}`,
@@ -222,7 +227,9 @@ function managerCyclePrompt(
     "Project default MCP policy:",
     JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
     "Use role workflow tools for executor, verifier, reviewer, reporter proposals when needed; all role actions must go through action gate and audit.",
-    "Create Supervisor action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
+    settings.auto_enqueue === 1
+      ? "Automatic enqueue is enabled only for this project. After reading the exact Work and confirming it is complete, authorized, dependency-ready, inside cwd/deadline policy, use work_control action=enqueue with an explicit stable intent idempotency_key. Do not create or enqueue guessed or cross-project Work."
+      : "Automatic enqueue is disabled. Create Supervisor action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
     "When you find durable project/user/process observations, write disabled review candidates via memory_write_candidate; manager-cycle observations must never auto-enable memory.",
     `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."

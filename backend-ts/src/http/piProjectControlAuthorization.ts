@@ -1,23 +1,30 @@
 import type { Project } from "../db/repositories/projects.ts";
+import type { ProjectPiSettings } from "../db/repositories/pi.ts";
 import { parseMcpPolicy } from "../mcp/policy.ts";
 import type { PiGatePolicy } from "../pi/actionGate.ts";
 import { parseSkillPolicy } from "../skills/intents.ts";
 
-export function managerCycleAuthorization(project: Project): PiGatePolicy {
+export function managerCycleAuthorization(
+  project: Project,
+  settings?: Pick<ProjectPiSettings, "auto_enqueue">
+): PiGatePolicy {
   const projectID = project.id;
-  const authorizedActions = managerAuthorizedActions(projectID);
+  const authorizedActions = managerAuthorizedActions(projectID, settings?.auto_enqueue === 1);
   return {
     allowedActions: [...new Set(authorizedActions.map((action) => action.action_type ?? ""))],
     allowedMcpCapabilities: parseMcpPolicy(project.default_mcp_policy).allowed ?? [],
     allowedSkillIntents: parseSkillPolicy(project.default_skill_policy).allowed ?? [],
     authorizedActions,
-    mode: "attended",
+    mode: settings?.auto_enqueue === 1 ? "delegated" : "attended",
     scope: { project_id: projectID }
   };
 }
 
-function managerAuthorizedActions(projectID: string): PiGatePolicy["authorizedActions"] {
-  return [
+function managerAuthorizedActions(
+  projectID: string,
+  autoEnqueue: boolean
+): PiGatePolicy["authorizedActions"] {
+  const actions: PiGatePolicy["authorizedActions"] = [
     { action_type: "agent.profile_recommend", project_id: projectID },
     { action_type: "agent.workflow_request", project_id: projectID },
     { action_type: "issue.completion_reconcile", project_id: projectID },
@@ -35,4 +42,6 @@ function managerAuthorizedActions(projectID: string): PiGatePolicy["authorizedAc
     { action_type: "mcp.requirement.recommend", project_id: projectID },
     { action_type: "mcp.resource.list", project_id: projectID }, { action_type: "mcp.resource.read", project_id: projectID }
   ];
+  if (autoEnqueue) actions.push({ action_type: "work.enqueue", project_id: projectID });
+  return actions;
 }

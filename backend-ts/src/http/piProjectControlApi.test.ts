@@ -6,8 +6,11 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getProjectPiSettings, listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
+import { gatePiActionEnvelope } from "../pi/actionGate.ts";
 import { createDefaultRouter } from "./server.ts";
+import { managerCycleAuthorization } from "./piProjectControlAuthorization.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
 const tempRoots: string[] = [];
@@ -202,6 +205,35 @@ describe("Bun project PI control API", () => {
     } finally {
       database?.close();
       restored?.close();
+    }
+  });
+
+  test("authorizes only project-scoped Work enqueue when auto_enqueue is enabled", async () => {
+    const database = await openFixtureDatabase();
+    try {
+      insertProject(database, "demo");
+      const project = getProject(database, "demo")!;
+      const enabled = managerCycleAuthorization(project, { auto_enqueue: 1 });
+      const disabled = managerCycleAuthorization(project, { auto_enqueue: 0 });
+      const envelope = {
+        action_type: "work.enqueue",
+        issue_id: 7,
+        payload: { action: "enqueue", work_id: "xw:work:issues:7" },
+        project_id: "demo",
+        requires_confirmation: true,
+        risk_level: "medium" as const,
+        source: "pi_manager_cycle"
+      };
+
+      expect(gatePiActionEnvelope(envelope, enabled)).toMatchObject({ decision: "execute" });
+      expect(gatePiActionEnvelope(envelope, disabled)).toMatchObject({ decision: "deny" });
+      expect(gatePiActionEnvelope({ ...envelope, project_id: "other" }, enabled))
+        .toMatchObject({ decision: "deny" });
+      expect(enabled.allowedActions).toContain("work.enqueue");
+      expect(enabled.mode).toBe("delegated");
+      expect(disabled.mode).toBe("attended");
+    } finally {
+      database.close();
     }
   });
 
