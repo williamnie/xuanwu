@@ -710,6 +710,23 @@ async function persistFinalEvidenceAndStatus(options: Options, report: Json): Pr
   const cli = existsSync(resolve("dist/codex-issue-runner"))
     ? resolve("dist/codex-issue-runner")
     : "codex-issue-runner";
+  if (report.result !== "passed") {
+    const current = await api(options, `/api/issues/${ISSUE_ID}`, {}, [200]);
+    if (current.body?.status === "pending_verification") {
+      const release = await runCommand([
+        cli, "issue", "request-changes",
+        "--addr", options.addr,
+        "--id", String(ISSUE_ID),
+        "--token-file", options.tokenFile,
+        "--comment", "24h deterministic report failed; return to triage before explicit failed write-back",
+        "--json"
+      ], process.cwd(), 120_000);
+      writeStableJson(artifact(options, "final-verification-release.json"), release);
+      if (release.exit_code !== 0) {
+        throw new Error(`failed to release pending verification before failed status: ${release.stderr}`);
+      }
+    }
+  }
   const args = [
     cli, "issue", "update",
     "--addr", options.addr,
