@@ -28,6 +28,7 @@ export type DomainSkillRunResult = {
 export type DomainSkillRunOptions = {
   cliConnectorDirs?: string[];
   env?: Record<string, string | undefined>;
+  handlers?: ExecuteSkillRuntimeInput["handlers"];
   skill?: SkillMetadata;
   toolSnapshot?: ExecuteSkillRuntimeInput["toolSnapshot"];
 };
@@ -49,6 +50,7 @@ export async function createDomainSkillProposal(
     db,
     env: options.env,
     evidenceRefs: item.evidence_refs,
+    handlers: options.handlers,
     input: { context_retrieval: contextRetrieval, inbox_item: item as unknown as JsonObject },
     runID: domainSkillActionID(item.id, skill.id),
     skill,
