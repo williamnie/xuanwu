@@ -80,14 +80,18 @@ if (import.meta.main) {
   try {
     if (command === "run") await runController(options);
     else if (command === "report") {
+      writeReplay(options);
       const report = writeOfflineReport(options);
       console.log(JSON.stringify(report, null, 2));
       if (report.result !== "passed") process.exitCode = 1;
+    } else if (command === "replay") {
+      writeReplay(options);
+      console.log(JSON.stringify({ output: artifact(options, "replay.md") }, null, 2));
     } else if (command === "status") {
       console.log(JSON.stringify(controllerStatus(options), null, 2));
     } else {
       console.error(
-        "usage: bun scripts/agentic-endurance-live.ts <run|report|status> " +
+        "usage: bun scripts/agentic-endurance-live.ts <run|report|replay|status> " +
         "[--artifact-dir <path>] [--db <runner.db>] [--token-file <path>]"
       );
       process.exit(64);
@@ -654,6 +658,8 @@ function writeOfflineReport(options: Options, fatalReason = ""): Json {
       "raw-samples.jsonl",
       "analysis.json",
       "analysis-rebuilt.json",
+      "launch-agent.plist",
+      "launch-recovery.json",
       "timeline.jsonl",
       "replay.md",
       "workloads/",
@@ -917,21 +923,63 @@ function writeReplay(options: Options): void {
 
 \`\`\`bash
 ART='${options.artifactDir}'
-nohup bun scripts/agentic-endurance-live.ts run \\
-  --artifact-dir "$ART" \\
-  --db '${options.dbPath}' \\
-  --token-file '${options.tokenFile}' \\
-  >"$ART/controller.log" 2>&1 </dev/null &
-echo $! >"$ART/controller.pid"
+LABEL='com.xiaobei.codex-issue-runner.issue-785-endurance'
+DOMAIN="gui/$(id -u)"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+BUN_BIN="$(command -v bun)"
+ROOT="$PWD"
+LOG_DIR='${options.appSupportDir}/logs'
+mkdir -p "$ART" "$LOG_DIR" "$(dirname "$PLIST")"
+
+launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+cat >"$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>Program</key><string>$BUN_BIN</string>
+  <key>ProgramArguments</key><array>
+    <string>$BUN_BIN</string>
+    <string>$ROOT/scripts/agentic-endurance-live.ts</string>
+    <string>run</string>
+    <string>--artifact-dir</string><string>$ART</string>
+    <string>--db</string><string>${options.dbPath}</string>
+    <string>--token-file</string><string>${options.tokenFile}</string>
+    <string>--app-support-dir</string><string>${options.appSupportDir}</string>
+  </array>
+  <key>WorkingDirectory</key><string>$ROOT</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><false/>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>$LOG_DIR/issue-785-endurance.out.log</string>
+  <key>StandardErrorPath</key><string>$LOG_DIR/issue-785-endurance.err.log</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>HOME</key><string>$HOME</string>
+    <key>PATH</key><string>$(dirname "$BUN_BIN"):/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict></plist>
+PLIST
+plutil -lint "$PLIST"
+launchctl bootstrap "$DOMAIN" "$PLIST"
 for _ in $(seq 1 120); do
-  test -s "$ART/ready.json" && break
+  test -s "$ART/ready.json" && test -s "$ART/raw-samples.jsonl" && break
   sleep 1
 done
+launchctl print "$DOMAIN/$LABEL" | grep -E 'state =|pid ='
 bun scripts/agentic-endurance-live.ts status --artifact-dir "$ART"
+cp "$PLIST" "$ART/launch-agent.plist"
+python3 - "$PLIST" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).unlink(missing_ok=True)
+PY
 \`\`\`
 
 控制器使用真实 wall clock 运行至少 24 小时，每 20 分钟原子采样一次。
-采样和报表均为确定性程序，不调用 LLM；不得用短窗口、fake clock 或回填样本替代。
+独立 LaunchAgent 的控制器进程以 PPID 1 运行；启动 Agent 在 \`ready.json\` 和首个原子样本
+落盘后退出。采样和报表均为确定性程序，不调用 LLM；不得用短窗口、fake clock
+或回填样本替代。
 
 ## 离线重建
 
@@ -943,6 +991,12 @@ shasum -a 256 \\
   '${options.artifactDir}/analysis-rebuilt.json'
 jq '{result,started_at,ended_at,failure_reasons,assertions}' \\
   '${options.artifactDir}/report.json'
+launchctl bootout "gui/$(id -u)/com.xiaobei.codex-issue-runner.issue-785-endurance"
+python3 - "$HOME/Library/LaunchAgents/com.xiaobei.codex-issue-runner.issue-785-endurance.plist" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).unlink(missing_ok=True)
+PY
 \`\`\`
 
 最终控制器会先 POST 当前 Run 的 persisted command Evidence，再根据报告结果显式运行：
