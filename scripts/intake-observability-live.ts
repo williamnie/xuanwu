@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -63,6 +64,12 @@ type TimelineEvent = {
   target: string;
 };
 type Watermark = Record<string, number>;
+type SamplerState = {
+  contract: "xw.agentic-activation.issue-784-sampler-state.v1";
+  cycle: number;
+  watermark_end: Watermark;
+  window_started_at: string;
+};
 type Sample = {
   contract: typeof SAMPLE_CONTRACT;
   cycle: number;
@@ -130,8 +137,18 @@ if (import.meta.main) {
     const output = resolve(requiredOption(args, "output"));
     writeStableJson(output, reportFromSampleLog(input));
     console.log(JSON.stringify({ output, sha256: fileSha256(output) }, null, 2));
+  } else if (command === "sample") {
+    const result = await sampleObservationWindow({
+      dbPath: resolve(requiredOption(args, "db")),
+      outputPath: resolve(requiredOption(args, "output")),
+      projectID: option(args, "project-id", ""),
+      source: option(args, "source", ""),
+      statePath: resolve(requiredOption(args, "state")),
+      windowStartedAt: option(args, "window-start", "")
+    });
+    console.log(JSON.stringify(result, null, 2));
   } else {
-    console.error("usage: bun scripts/intake-observability-live.ts <exercise|report> [options]");
+    console.error("usage: bun scripts/intake-observability-live.ts <exercise|sample|report> [options]");
     process.exit(64);
   }
 }
@@ -158,7 +175,11 @@ export async function runIssue784Fixture(artifactDir: string): Promise<IssueRepo
       const scenario = SCENARIOS[index]!;
       const result = await executeScenario(fixture, scenario, timeline);
       scenarioResults.push(result);
-      const sample = sampleDatabase(fixture.db, index + 1, previous, windowStartedAt);
+      const sample = sampleDatabase(fixture.db, index + 1, previous, windowStartedAt, {
+        projectID: PROJECT_ID,
+        source: SOURCE,
+        toolProviderID: MCP_PROVIDER_ID
+      });
       appendJsonLine(rawLog, sample);
       previous = sample.watermark_end;
       record(timeline, `sample-${index + 1}`, "state", "capture-watermark",
@@ -296,7 +317,60 @@ export function reportFromSampleLog(path: string): ObserverReport {
   if (samples.some((sample) => sample.contract !== SAMPLE_CONTRACT)) {
     throw new Error("sample log contract mismatch");
   }
+  samples.forEach((sample, index) => {
+    if (sample.cycle !== index + 1) throw new Error(`sample cycle ${sample.cycle} is not contiguous`);
+    if (index > 0 && stableJson(sample.watermark_start) !== stableJson(samples[index - 1]!.watermark_end)) {
+      throw new Error(`sample cycle ${sample.cycle} watermark does not continue the previous cycle`);
+    }
+    if (sample.window.started_at !== samples[0]!.window.started_at) {
+      throw new Error(`sample cycle ${sample.cycle} changed window start`);
+    }
+  });
   return aggregateSamples(samples);
+}
+
+export async function sampleObservationWindow(input: {
+  dbPath: string;
+  outputPath: string;
+  projectID?: string;
+  source?: string;
+  statePath: string;
+  windowStartedAt?: string;
+}): Promise<{ cycle: number; output: string; state: string; watermark_end: Watermark; window: Sample["window"] }> {
+  if (existsSync(input.outputPath) && !existsSync(input.statePath)) {
+    throw new Error("sample output exists without sampler state; use a new output/state pair");
+  }
+  if (existsSync(input.statePath) && !existsSync(input.outputPath)) {
+    throw new Error("sampler state exists without sample output; restore the log or use a new state");
+  }
+  const database = await openDatabase({ readonlyImportPath: input.dbPath });
+  try {
+    const existing = readSamplerState(input.statePath);
+    const now = new Date().toISOString();
+    const windowStartedAt = existing?.window_started_at || optionalIso(input.windowStartedAt, "window start") || now;
+    const watermarkStart = existing?.watermark_end ?? watermarks(database);
+    const cycle = (existing?.cycle ?? 0) + 1;
+    const sample = sampleDatabase(database, cycle, watermarkStart, windowStartedAt, {
+      projectID: clean(input.projectID),
+      source: clean(input.source)
+    });
+    appendJsonLine(input.outputPath, sample);
+    writeStableJson(input.statePath, {
+      contract: "xw.agentic-activation.issue-784-sampler-state.v1",
+      cycle,
+      watermark_end: sample.watermark_end,
+      window_started_at: windowStartedAt
+    } satisfies SamplerState);
+    return {
+      cycle,
+      output: input.outputPath,
+      state: input.statePath,
+      watermark_end: sample.watermark_end,
+      window: sample.window
+    };
+  } finally {
+    database.close();
+  }
 }
 
 function aggregateSamples(samples: Sample[]): ObserverReport {
@@ -646,14 +720,15 @@ function sampleDatabase(
   db: RunnerDatabase,
   cycle: number,
   watermarkStart: Watermark,
-  windowStartedAt: string
+  windowStartedAt: string,
+  scope: { projectID?: string; source?: string; toolProviderID?: string } = {}
 ): Sample {
   const watermarkEnd = watermarks(db);
   const sampledAt = new Date().toISOString();
   return {
     contract: SAMPLE_CONTRACT,
     cycle,
-    facts: databaseFacts(db),
+    facts: databaseFacts(db, windowStartedAt, scope),
     sampled_at: sampledAt,
     watermark_end: watermarkEnd,
     watermark_start: watermarkStart,
@@ -661,27 +736,34 @@ function sampleDatabase(
   };
 }
 
-function databaseFacts(db: RunnerDatabase): Json {
+function databaseFacts(
+  db: RunnerDatabase,
+  windowStartedAt: string,
+  scope: { projectID?: string; source?: string; toolProviderID?: string }
+): Json {
+  const projectID = clean(scope.projectID);
+  const source = clean(scope.source);
   const bundles = rows(db, "select id, event_refs_json from context_bundles order by id")
     .map((row) => ({ event_refs: jsonArray(row.event_refs_json), id: row.id }));
-  const inbox = rows(db, `select id, bundle_id, intake_run_id, status, created_at
+  const allInbox = rows(db, `select id, bundle_id, intake_run_id, status, created_at
     from attention_inbox_items order by id`).map((row) => ({
-    ...row,
-    event_refs: bundles.find((bundle) => bundle.id === row.bundle_id)?.event_refs ?? []
-  }));
-  const proposals = listActionProposals(db).map((proposal) => ({
+      ...row,
+      event_refs: bundles.find((bundle) => bundle.id === row.bundle_id)?.event_refs ?? []
+    }));
+  const allProposals = listActionProposals(db).map((proposal) => ({
     id: proposal.id,
     source_item_ids: proposal.source_item_ids,
     status: proposal.status
   }));
-  const actions = listPiActions(db).map((action) => ({
+  const allActions = listPiActions(db).map((action) => ({
     action_type: action.action_type,
     id: action.id,
     idempotency_key: action.idempotency_key,
     issue_id: action.issue_id,
     status: action.status
   }));
-  const issues = listIssues(db, { projectId: PROJECT_ID });
+  const issues = listIssues(db, projectID ? { projectId: projectID } : {})
+    .filter((issue) => issue.created_at >= windowStartedAt || issue.updated_at >= windowStartedAt);
   const works = issues.map((issue) => {
     const inboxID = Number(/^attention_inbox_item:(\d+)$/.exec(issue.source_turn_id)?.[1] ?? 0);
     return {
@@ -694,24 +776,28 @@ function databaseFacts(db: RunnerDatabase): Json {
       work_id: `xw:work:issues:${issue.id}`
     };
   });
+  const issueIDs = new Set(works.map((work) => work.id));
   const runs = rows(db, `select id, run_id, issue_id, attempt, status, started_at, ended_at, error
-    from issue_runs where issue_id in (
-      select id from issues where project_id=?
-    ) order by issue_id, attempt`, [PROJECT_ID]);
+    from issue_runs order by issue_id, attempt`).filter((run) => issueIDs.has(run.issue_id));
+  const runIDs = new Set(runs.map((run) => run.run_id));
   const runAttempts = rows(db, `select attempt_id, run_id, sequence, kind, status,
-    started_at, ended_at, terminal_reason from run_attempts where run_id in (
-      select run_id from issue_runs where issue_id in (
-        select id from issues where project_id=?
-      )
-    ) order by run_id, sequence`, [PROJECT_ID]);
+    started_at, ended_at, terminal_reason from run_attempts order by run_id, sequence`)
+    .filter((attempt) => runIDs.has(attempt.run_id));
   const issueEvents = rows(db, `select id, issue_id, type, payload, created_at from issue_events
-    where issue_id in (select id from issues where project_id=?) order by id`, [PROJECT_ID])
+    order by id`).filter((event) => issueIDs.has(event.issue_id))
     .map((event) => ({ ...event, actor: eventActor(event.payload), payload: redactPayload(event.payload) }));
-  const externalEvents = listExternalEvents(db, { source: SOURCE }).map((event) => ({
-    id: event.id,
-    occurred_at: event.occurred_at,
-    source: event.source
+  const inboxIDs = new Set(works.map((work) => work.inbox_item_id).filter((id) => id > 0));
+  const inbox = allInbox.filter((item) => inboxIDs.has(item.id));
+  const proposals = allProposals.filter((proposal) => proposal.source_item_ids.some((ref: string) => {
+    const id = Number(/^attention_inbox_item:(\d+)$/.exec(ref)?.[1] ?? 0);
+    return inboxIDs.has(id);
   }));
+  const proposalIDs = actionsForProposal(proposals);
+  const actions = allActions.filter((action) =>
+    issueIDs.has(action.issue_id) || proposalAction(proposalIDs, action));
+  const externalEventIDs = new Set(inbox.flatMap((item) => item.event_refs));
+  const externalEvents = rows(db, "select id, occurred_at, source from external_events order by id")
+    .filter((event) => externalEventIDs.has(event.id) && (!source || event.source === source));
   const attentions = listPersistedAttention(db).flatMap((attention) => {
     const issueIDs = attention.source_refs.flatMap((ref) => ref.correlation_refs)
       .map((ref) => Number(/^issue:(\d+)$/.exec(ref)?.[1] ?? 0))
@@ -746,7 +832,7 @@ function databaseFacts(db: RunnerDatabase): Json {
     proposals,
     run_attempts: runAttempts,
     runs,
-    tool_calls: toolCallFacts(db),
+    tool_calls: toolCallFacts(db, scope.toolProviderID, windowStartedAt),
     works
   };
 }
@@ -832,11 +918,13 @@ function duplicateGroups(items: Json[], key: (item: Json) => string, kind: strin
   }));
 }
 
-function toolCallFacts(db: RunnerDatabase): Json[] {
+function toolCallFacts(db: RunnerDatabase, providerID?: string, windowStartedAt = ""): Json[] {
   return listPiActionEvents(db, { eventType: "tool_call_audit" }).flatMap((event) => {
     const payload = parseObject(event.payload_json);
-    if (payload.provider_id !== MCP_PROVIDER_ID) return [];
+    if (providerID && payload.provider_id !== providerID) return [];
+    if (windowStartedAt && event.created_at < windowStartedAt) return [];
     return [{
+      created_at: event.created_at,
       event_id: event.id,
       permission: payload.permission,
       provider_id: payload.provider_id,
@@ -1249,6 +1337,32 @@ shasum -a 256 \\
 
 两个 SHA-256 必须一致。检查 \`report.json\` 的 \`result=passed\`，以及
 \`short-window-report.json\` 的 Work/Run/Event/Attention 下钻 ID。
+
+## 后续 24 小时确定性采样
+
+首次采样固定窗口起点；后续周期复用同一 state/watermark。采样器只读 SQLite，
+不调用 LLM。按需用 \`--project-id\` 或 \`--source\` 收窄范围。
+
+\`\`\`bash
+WINDOW_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+bun scripts/intake-observability-live.ts sample \\
+  --db data/runner.db \\
+  --output /tmp/issue-784-24h/raw-samples.jsonl \\
+  --state /tmp/issue-784-24h/sampler-state.json \\
+  --window-start "$WINDOW_START" \\
+  --project-id codex-issue-runner
+
+# 每个后续采样周期执行同一命令；已有 state 时 window-start 不再改变。
+bun scripts/intake-observability-live.ts sample \\
+  --db data/runner.db \\
+  --output /tmp/issue-784-24h/raw-samples.jsonl \\
+  --state /tmp/issue-784-24h/sampler-state.json \\
+  --project-id codex-issue-runner
+
+bun scripts/intake-observability-live.ts report \\
+  --input /tmp/issue-784-24h/raw-samples.jsonl \\
+  --output /tmp/issue-784-24h/report.json
+\`\`\`
 `);
 }
 
@@ -1410,6 +1524,34 @@ function requiredOption(args: string[], name: string): string {
   const value = option(args, name, "");
   if (!value) throw new Error(`--${name} is required`);
   return value;
+}
+
+function readSamplerState(path: string): SamplerState | null {
+  if (!existsSync(path)) return null;
+  const value = parseObject(readFileSync(path, "utf8"));
+  if (value.contract !== "xw.agentic-activation.issue-784-sampler-state.v1") {
+    throw new Error("sampler state contract mismatch");
+  }
+  const cycle = Number(value.cycle);
+  if (!Number.isSafeInteger(cycle) || cycle < 1) throw new Error("sampler state cycle is invalid");
+  const windowStartedAt = optionalIso(value.window_started_at, "sampler state window start");
+  const watermark = parseObject(value.watermark_end);
+  if (Object.values(watermark).some((entry) => !Number.isSafeInteger(entry) || entry < 0)) {
+    throw new Error("sampler state watermark is invalid");
+  }
+  return {
+    contract: "xw.agentic-activation.issue-784-sampler-state.v1",
+    cycle,
+    watermark_end: watermark as Watermark,
+    window_started_at: windowStartedAt
+  };
+}
+
+function optionalIso(value: unknown, field: string): string {
+  const text = clean(value);
+  if (!text) return "";
+  if (!Number.isFinite(Date.parse(text))) throw new Error(`${field} must be an ISO timestamp`);
+  return new Date(text).toISOString();
 }
 
 function safeMessage(error: unknown): string {

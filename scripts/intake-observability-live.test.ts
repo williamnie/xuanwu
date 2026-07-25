@@ -2,9 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { openDatabase } from "../backend-ts/src/db/database.ts";
 import {
   reportFromSampleLog,
-  runIssue784Fixture
+  runIssue784Fixture,
+  sampleObservationWindow
 } from "./intake-observability-live.ts";
 
 const roots: string[] = [];
@@ -37,4 +39,37 @@ describe("Issue 784 intake observability live fixture", () => {
     expect(rebuilt.metrics.detection_latency.count).toBe(3);
     expect(rebuilt.metrics.recovery_latency.count).toBe(1);
   }, 30_000);
+
+  test("persists a read-only sampling watermark across unattended cycles", async () => {
+    const root = await mkdtemp(join(tmpdir(), "issue-784-sampler-"));
+    roots.push(root);
+    const writer = await openDatabase({ stateDir: join(root, "state") });
+    const dbPath = writer.path;
+    writer.close();
+    const outputPath = join(root, "observation", "raw-samples.jsonl");
+    const statePath = join(root, "observation", "sampler-state.json");
+
+    const first = await sampleObservationWindow({
+      dbPath,
+      outputPath,
+      projectID: "codex-issue-runner",
+      statePath,
+      windowStartedAt: "2026-07-25T00:00:00Z"
+    });
+    const second = await sampleObservationWindow({
+      dbPath,
+      outputPath,
+      projectID: "codex-issue-runner",
+      statePath
+    });
+    const report = reportFromSampleLog(outputPath);
+
+    expect(first.cycle).toBe(1);
+    expect(second.cycle).toBe(2);
+    expect(second.window.started_at).toBe("2026-07-25T00:00:00.000Z");
+    expect(report.sample_cycles).toBe(2);
+    expect(report.watermark_start).toEqual(first.watermark_end);
+    expect(report.watermark_end).toEqual(second.watermark_end);
+    expect(report.metrics.total_work.count).toBe(0);
+  });
 });
