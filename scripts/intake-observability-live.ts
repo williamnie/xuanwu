@@ -777,14 +777,18 @@ function databaseFacts(
     };
   });
   const issueIDs = new Set(works.map((work) => work.id));
-  const runs = rows(db, `select id, run_id, issue_id, attempt, status, started_at, ended_at, error
-    from issue_runs order by issue_id, attempt`).filter((run) => issueIDs.has(run.issue_id));
+  const issueIDList = [...issueIDs];
+  const runs = scopedRows(db, `select id, run_id, issue_id, attempt, status, started_at, ended_at, error
+    from issue_runs`, "issue_id", issueIDList, "order by issue_id, attempt");
   const runIDs = new Set(runs.map((run) => run.run_id));
-  const runAttempts = rows(db, `select attempt_id, run_id, sequence, kind, status,
-    started_at, ended_at, terminal_reason from run_attempts order by run_id, sequence`)
-    .filter((attempt) => runIDs.has(attempt.run_id));
-  const issueEvents = rows(db, `select id, issue_id, type, payload, created_at from issue_events
-    order by id`).filter((event) => issueIDs.has(event.issue_id))
+  const runAttempts = scopedRows(db, `select attempt_id, run_id, sequence, kind, status,
+    started_at, ended_at, terminal_reason from run_attempts`, "run_id", [...runIDs], "order by run_id, sequence");
+  const rawIssueEvents = scopedRows(db,
+    "select id, issue_id, type, payload, created_at from issue_events",
+    "issue_id",
+    issueIDList,
+    "order by id");
+  const issueEvents = rawIssueEvents
     .map((event) => ({ ...event, actor: eventActor(event.payload), payload: redactPayload(event.payload) }));
   const inboxIDs = new Set(works.map((work) => work.inbox_item_id).filter((id) => id > 0));
   const inbox = allInbox.filter((item) => inboxIDs.has(item.id));
@@ -811,17 +815,7 @@ function databaseFacts(
       }]
       : [];
   });
-  const handoffs = issues.flatMap((issue) => listStoredHandoffs(db, {
-    limit: 20,
-    work_id: `xw:work:issues:${issue.id}`
-  }).items.map((item) => ({
-    evidence_ids: item.handoff.evidence_ids,
-    event_id: item.event_id,
-    id: item.handoff.id,
-    run_ids: item.handoff.run_ids,
-    status: item.handoff.status,
-    work_id: item.handoff.work_id
-  })));
+  const handoffs = handoffFacts(rawIssueEvents);
   return {
     actions,
     attentions,
@@ -1345,8 +1339,9 @@ shasum -a 256 \\
 
 \`\`\`bash
 WINDOW_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+DB_PATH="\${CODEX_RUNNER_DB_PATH:-data-bun/runner.db}"
 bun scripts/intake-observability-live.ts sample \\
-  --db data/runner.db \\
+  --db "$DB_PATH" \\
   --output /tmp/issue-784-24h/raw-samples.jsonl \\
   --state /tmp/issue-784-24h/sampler-state.json \\
   --window-start "$WINDOW_START" \\
@@ -1354,7 +1349,7 @@ bun scripts/intake-observability-live.ts sample \\
 
 # 每个后续采样周期执行同一命令；已有 state 时 window-start 不再改变。
 bun scripts/intake-observability-live.ts sample \\
-  --db data/runner.db \\
+  --db "$DB_PATH" \\
   --output /tmp/issue-784-24h/raw-samples.jsonl \\
   --state /tmp/issue-784-24h/sampler-state.json \\
   --project-id codex-issue-runner
@@ -1399,6 +1394,53 @@ async function jsonRequest(
 
 function rows(db: RunnerDatabase, sql: string, args: Array<number | string> = []): Json[] {
   return db.sqlite.query<Json, Array<number | string>>(sql).all(...args);
+}
+
+function scopedRows(
+  db: RunnerDatabase,
+  select: string,
+  field: string,
+  ids: Array<number | string>,
+  order: string
+): Json[] {
+  if (ids.length === 0) return [];
+  if (!/^[a-z_]+$/.test(field)) throw new Error(`invalid scoped field ${field}`);
+  const result: Json[] = [];
+  for (let offset = 0; offset < ids.length; offset += 500) {
+    const chunk = ids.slice(offset, offset + 500);
+    result.push(...rows(db,
+      `${select} where ${field} in (${chunk.map(() => "?").join(",")}) ${order}`,
+      chunk));
+  }
+  return result;
+}
+
+function handoffFacts(events: Json[]): Json[] {
+  const records = new Map<string, Json>();
+  for (const event of events) {
+    if (![
+      "handoff.prepared.v1",
+      "handoff.delivery_requested.v1",
+      "handoff.delivery_completed.v1",
+      "handoff.delivery_failed.v1",
+      "handoff.superseded.v1"
+    ].includes(clean(event.type))) continue;
+    const handoff = parseObject(event.payload).handoff as Json | undefined;
+    const id = clean(handoff?.id);
+    if (!id) continue;
+    const current = records.get(id);
+    if (current && Number(current.revision) > Number(handoff?.revision ?? 0)) continue;
+    records.set(id, {
+      evidence_ids: Array.isArray(handoff?.evidence_ids) ? handoff.evidence_ids : [],
+      event_id: event.id,
+      id,
+      revision: Number(handoff?.revision ?? 0),
+      run_ids: Array.isArray(handoff?.run_ids) ? handoff.run_ids : [],
+      status: clean(handoff?.status),
+      work_id: clean(handoff?.work_id)
+    });
+  }
+  return [...records.values()].sort((left, right) => clean(left.id).localeCompare(clean(right.id)));
 }
 
 function maxID(db: RunnerDatabase, table: string): number {
