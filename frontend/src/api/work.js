@@ -22,15 +22,6 @@ function workListParams({ order = 'desc', page = 1, pageSize = WORK_PAGE_SIZE, p
   return params;
 }
 
-function workRelationParams({ kinds = [], lifecycles = [], page = 1, pageSize = WORK_PAGE_SIZE, projectId = '', workId = '' } = {}) {
-  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-  if (projectId) params.set('project_id', projectId);
-  if (workId) params.set('work_id', workId);
-  appendMany(params, 'kind', kinds);
-  appendMany(params, 'lifecycle', lifecycles);
-  return params;
-}
-
 function workTimelineParams({ cursor = '', limit = 50 } = {}) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
@@ -80,12 +71,6 @@ export const workApi = {
   getWorkTimeline: (id, options = {}) => (
     request(`/api/works/${encodeURIComponent(id)}/timeline?${workTimelineParams(options)}`)
   ),
-
-  getWorkRelations: (filters = {}) => request(`/api/work-relations?${workRelationParams(filters)}`),
-
-  getAllWorkRelations: (filters = {}) => allPages(page => (
-    request(`/api/work-relations?${workRelationParams({ ...filters, page, pageSize: WORK_PAGE_SIZE })}`)
-  )),
 
   createWork: (work) => request('/api/works', {
     method: 'POST',

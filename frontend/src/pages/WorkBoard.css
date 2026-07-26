@@ -229,7 +229,6 @@
 .work-card-topline { align-items: center; display: flex; gap: 6px; justify-content: space-between; }
 .work-type-badge,
 .work-attention-badge,
-.work-relation-row span,
 .work-dialog-contract span {
   border: 1px solid var(--border-light);
   border-radius: 999px;
@@ -243,10 +242,6 @@
 .work-card h3 { font-family: var(--font-display); font-size: 0.94rem; line-height: 1.35; margin: 11px 0 6px; }
 .work-card > p { color: var(--text-secondary); display: -webkit-box; font-size: 0.72rem; -webkit-line-clamp: 3; -webkit-box-orient: vertical; line-height: 1.52; margin: 0; overflow: hidden; }
 .work-card-project { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.61rem; margin-top: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.work-relation-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
-.work-relation-row span[data-lifecycle='active'] { border-color: color-mix(in srgb, var(--info) 30%, var(--border-color)); color: var(--info); }
-.work-relation-row span[data-lifecycle='failed'] { border-color: color-mix(in srgb, var(--error) 30%, var(--border-color)); color: var(--error); }
-
 .work-card-footer { border-top: 1px solid var(--border-light); justify-content: space-between; margin-top: 11px; padding-top: 9px; }
 .work-card-footer button { align-items: center; background: transparent; border: 0; color: var(--text-muted); cursor: pointer; display: inline-flex; font-size: 0.65rem; font-weight: 700; gap: 4px; padding: 2px 0; }
 .work-card-footer .work-issue-link { color: var(--primary); }

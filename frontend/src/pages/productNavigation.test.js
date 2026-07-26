@@ -92,7 +92,7 @@ test('retired Inbox and Settings placeholders have no remaining frontend consume
   const workDetailSource = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8');
   const assistantApiSource = readFileSync(new URL('../api/assistant.js', import.meta.url), 'utf8');
   assert.doesNotMatch(sectionsSource, /SettingsPlaceholderPanel|AssistantSettingsPlaceholders/);
-  assert.match(workDetailSource, /navigateTo\('command-center'\)/);
+  assert.doesNotMatch(workDetailSource, /navigateTo\('command-center'\)/);
   assert.doesNotMatch(workDetailSource, /navigateTo\('attention-inbox'\)/);
   for (const retiredMutation of [
     'updatePiAttentionItem',

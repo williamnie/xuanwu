@@ -1,7 +1,7 @@
 # ADR-XW-0026：Runs 主视图与 Sessions 兼容入口
 
 > P11.05 更新：`sessions` 旧 page id 的期限、warning、telemetry 和 compat v1 removal gate 由
-> [ADR-XW-0081](0081-issues-sessions-route-retirement.md) 接管；provider observation drill-down 继续保留。
+> [ADR-XW-0081](0081-issues-sessions-route-retirement.md) 接管；provider observation 作为次级跳转保留。
 
 - 状态：Accepted
 - 日期：2026-07-16
@@ -19,7 +19,8 @@ Run lifecycle 的唯一 authority 仍是 `issue_runs`，Attempt child facts 是 
 
 - `runs` 是 canonical page id；所有新导航进入 Runs list/detail。
 - `sessions` 保留为 compatibility page id。旧 `navigateTo('sessions', null, providerSessionRef)` deep link 会进入 Runs shell 的 provider session 兼容视图，不改写旧引用。
-- Run 详情中的 provider session transcript 为只读 observation。`interrupt`、`resume`、`retry` 分别映射到 `POST /api/runs/:id/actions/:action`，携带 user actor、event/correlation id 与 Run/Attempt revision，由 Run command service 写入 lifecycle audit。
+- Run 详情固定为 `Summary / Logs / Evidence / Advanced` 四个视图；`Approvals` 不再作为低使用率固定 Tab，单 Attempt 时也不展示 Attempt selector。
+- provider session transcript 为只读 observation，通过 Run context bar 的次级按钮跳转，不再嵌套为固定 Tab。`interrupt`、`resume`、`retry` 分别映射到 `POST /api/runs/:id/actions/:action`，携带 user actor、event/correlation id 与 Run/Attempt revision，由 Run command service 写入 lifecycle audit。
 - 独立的“新建 provider session”仍可使用旧 Session create/message/steer 能力；它不会伪装成 Work Run。只有被 Work claim 的正式执行才进入 Runs list。
 
 ## 3. 并存窗口、回滚和删除门禁

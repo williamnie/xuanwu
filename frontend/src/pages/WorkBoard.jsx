@@ -20,7 +20,6 @@ import WorkEditorDialog from './work/WorkEditorDialog.jsx';
 import {
   filterWorkBoardItems,
   groupWorksByStatus,
-  indexRelationsByWork,
   issueIdFromWorkId,
   laneScrollDecision,
   WORK_BOARD_STATUSES,
@@ -44,12 +43,6 @@ const TYPE_LABELS = {
   objective: 'Objective',
 };
 
-const RELATION_LABELS = {
-  authorization: 'Delegation',
-  execution: 'Action',
-  observation: 'Watch',
-};
-
 const EMPTY_FILTERS = {
   attention: '',
   delivery: '',
@@ -62,7 +55,6 @@ const EMPTY_FILTERS = {
 export default function WorkBoard({ navigateTo, onPageContextChange, selectedWorkId = '' }) {
   const projects = useDataStore(selectProjects);
   const [works, setWorks] = useState([]);
-  const [relations, setRelations] = useState([]);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [dialog, setDialog] = useState(null);
   const [evidenceWork, setEvidenceWork] = useState(null);
@@ -97,7 +89,6 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
         if (!active) return;
         const snapshot = normalizeBoardSnapshot(boardResponse);
         setWorks(snapshot.items);
-        setRelations([]);
         setLanePages(snapshot.lanePages);
         setTotalWorks(snapshot.total);
       })
@@ -158,11 +149,10 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
     if (decision.load) void loadMore(status);
   }, [loadMore]);
 
-  const relationIndex = useMemo(() => indexRelationsByWork(relations), [relations]);
   const projectNames = useMemo(() => new Map(projects.map(project => [project.id, project.name])), [projects]);
   const filteredWorks = useMemo(
-    () => filterWorkBoardItems(works, relationIndex, filters),
-    [filters, relationIndex, works],
+    () => filterWorkBoardItems(works, filters),
+    [filters, works],
   );
   const groupedWorks = useMemo(() => groupWorksByStatus(filteredWorks), [filteredWorks]);
   useEffect(() => {
@@ -301,7 +291,6 @@ export default function WorkBoard({ navigateTo, onPageContextChange, selectedWor
                   onDragStart={handleDragStart}
                   onDrop={handleDrop}
                   projectNames={projectNames}
-                  relationIndex={relationIndex}
                   status={status}
                   movingWorkId={movingWorkId}
                   works={groupedWorks.get(status) || []}
@@ -382,7 +371,6 @@ function WorkColumn({
   onLoadMore,
   onReachEnd,
   projectNames,
-  relationIndex,
   status,
   works,
 }) {
@@ -412,7 +400,6 @@ function WorkColumn({
             onDragEnd={onDragEnd}
             onDragStart={onDragStart}
             projectName={projectNames.get(work.owner?.project_id) || work.owner?.project_id || 'Unscoped'}
-            relations={relationIndex.get(work.id) || []}
             work={work}
           />
         )) : (
@@ -461,9 +448,9 @@ function normalizeLanePage(response, fallbackPageSize) {
   };
 }
 
-function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit, onEvidence, projectName, relations, work }) {
+function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit, onEvidence, projectName, work }) {
   const issueId = issueIdFromWorkId(work.id);
-  const needsAttention = workNeedsAttention(work, relations);
+  const needsAttention = workNeedsAttention(work);
   return (
     <article
       aria-busy={moving}
@@ -480,16 +467,6 @@ function WorkCard({ dragging, moving, navigateTo, onDragEnd, onDragStart, onEdit
       <h3>{work.title}</h3>
       <p>{work.goal}</p>
       <div className="work-card-project">{projectName}</div>
-      {relations.length > 0 ? (
-        <div className="work-relation-row">
-          {relations.slice(0, 3).map(relation => (
-            <span key={relation.relation_id} data-lifecycle={relation.lifecycle}>
-              {RELATION_LABELS[relation.kind] || relation.kind} · {relation.lifecycle}
-            </span>
-          ))}
-          {relations.length > 3 ? <span>+{relations.length - 3}</span> : null}
-        </div>
-      ) : null}
       <div className="work-card-footer">
         <button className="work-detail-link" onClick={() => navigateTo('work', work.id)} type="button">
           Open <ArrowUpRight size={13} />

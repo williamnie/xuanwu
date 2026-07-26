@@ -42,7 +42,7 @@ export function buildRunControlPayload(run, action, {
   eventId,
   occurredAt = new Date().toISOString(),
   prompt = '',
-  reasonPrefix = 'Runs compatibility view',
+  reasonPrefix = 'Runs UI',
 } = {}) {
   const latestAttempt = Array.isArray(run?.attempts) ? run.attempts.at(-1) : null;
   const payload = {

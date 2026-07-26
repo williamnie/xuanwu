@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
+import { projectPendingEventSummaries } from "../events/eventSummaryProjector.ts";
 import { issueIDToWorkID } from "../domain/work/issueAdapter.ts";
 import { createDefaultRouter } from "./server.ts";
 
@@ -38,18 +39,18 @@ describe("Work timeline HTTP API", () => {
 
       expect(first.status).toBe(200);
       expect(firstBody).toMatchObject({
-        compatibility: { read_authority: "issues", target_shadow: "disabled" },
         has_more: true,
-        items: [{ kind: "issue_event", summary: "second" }],
-        limit: 1,
-        schema_version: "xuanwu.work-timeline.v1",
-        work_id: workID
+        items: [{ kind: "issue_event", summary: "second" }]
       });
+      expect(Object.keys(firstBody).sort()).toEqual(["has_more", "items", "next_cursor"]);
+      expect(Object.keys((firstBody.items as Record<string, unknown>[])[0] ?? {}).sort()).toEqual([
+        "id", "kind", "occurred_at", "status", "summary", "title"
+      ]);
       expect(cursor).not.toBe("");
       expect(second.status).toBe(200);
       expect(secondBody).toMatchObject({
         has_more: false,
-        items: [{ kind: "work_event", event_name: "work.created.v1" }],
+        items: [{ kind: "work_event", title: "issue.created" }],
         next_cursor: ""
       });
       expect(invalidCursor.status).toBe(400);
@@ -90,6 +91,7 @@ function seedIssue(db: RunnerDatabase): number {
   db.sqlite.run("insert into issue_events (issue_id, type, payload, created_at) values (?, ?, ?, ?)", [
     issueID, "issue.comment", JSON.stringify({ body: "second" }), "2026-01-01T00:00:01Z"
   ]);
+  projectPendingEventSummaries(db);
   return issueID;
 }
 

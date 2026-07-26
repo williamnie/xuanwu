@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../../db/database.ts";
 import { clearEventSummaryProjection } from "../../db/repositories/eventSummaryProjection.ts";
-import { EVENT_SUMMARY_PROJECTOR_VERSION } from "../../events/eventSummaryProjector.ts";
+import { EVENT_SUMMARY_PROJECTOR_VERSION, projectPendingEventSummaries } from "../../events/eventSummaryProjector.ts";
 import { issueIDToWorkID } from "./issueAdapter.ts";
 import { queryWorkTimeline, type WorkTimelineNode } from "./timeline.ts";
 
@@ -76,6 +76,7 @@ describe("Work timeline projection", () => {
       const issueID = seedTimeline(db);
       const workID = issueIDToWorkID(issueID);
       insertIssueEvent(db, issueID, "issue.comment", { body: "same timestamp" }, "2026-01-01T00:00:06Z");
+      projectPendingEventSummaries(db);
       const first = queryWorkTimeline(db, workID, { limit: 3 });
       expect(first.has_more).toBe(true);
       expect(first.next_cursor).not.toBe("");
@@ -93,8 +94,10 @@ describe("Work timeline projection", () => {
       expect(tiedIDs).toHaveLength(2);
       expect(tiedIDs).toEqual([...tiedIDs].sort().reverse());
 
+      projectPendingEventSummaries(db);
       const beforeRebuild = queryWorkTimeline(db, workID, { limit: 50 }).items.map((item) => item.id);
       clearEventSummaryProjection(db, EVENT_SUMMARY_PROJECTOR_VERSION, "2026-01-01T01:00:00.000Z");
+      projectPendingEventSummaries(db);
       const afterRebuild = queryWorkTimeline(db, workID, { limit: 50 }).items.map((item) => item.id);
       expect(afterRebuild).toEqual(beforeRebuild);
       expect(new Set(afterRebuild).size).toBe(afterRebuild.length);
@@ -117,6 +120,7 @@ describe("Work timeline projection", () => {
         }
       });
       insertMany.immediate();
+      projectPendingEventSummaries(db);
 
       const startedAt = performance.now();
       const result = queryWorkTimeline(db, issueIDToWorkID(issueID), { limit: 100 });
@@ -184,6 +188,7 @@ function seedTimeline(db: RunnerDatabase): number {
       'focused verification passed', '{"action_id":"spoofed"}', '{"status":"passed"}', '', '', '', ?)`, [
     issueID, "2026-01-01T00:00:09Z"
   ]);
+  projectPendingEventSummaries(db);
   return issueID;
 }
 

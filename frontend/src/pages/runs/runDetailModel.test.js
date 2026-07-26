@@ -2,26 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   RUN_EVENT_SCAN_LIMIT,
-  approvalsForAttempt,
   eventPageCursor,
   eventsWithinAttempt,
   mergeRunEventPages,
-  runAttemptProviderSessionRef,
   runCostView,
   runEventInitialBeforeId,
   runLogSummary,
   selectedRunAttempt,
 } from './runDetailModel.js';
 
-test('Codex and Claude Attempts resolve provider observations without changing Run identity', () => {
+test('Attempt selection preserves Run identity and falls back to the latest Attempt', () => {
   const run = fixtureRun();
-  assert.equal(runAttemptProviderSessionRef(run.attempts[0], run), 'codex:thread-codex');
-  assert.equal(runAttemptProviderSessionRef(run.attempts[1], run), 'claude:session-claude');
   assert.equal(selectedRunAttempt(run, run.attempts[0].id)?.kind, 'initial');
   assert.equal(selectedRunAttempt(run, 'missing')?.kind, 'recovery');
 });
 
-test('failed and recovery Attempt windows keep logs and approvals scoped to the selected turn', () => {
+test('failed and recovery Attempt windows keep logs scoped to the selected turn', () => {
   const run = fixtureRun();
   const recovery = run.attempts[1];
   const events = [
@@ -31,10 +27,6 @@ test('failed and recovery Attempt windows keep logs and approvals scoped to the 
   ];
   assert.deepEqual(eventsWithinAttempt(events, recovery, run).map(item => item.id), [101]);
   assert.equal(runEventInitialBeforeId(run, recovery), '102');
-  assert.deepEqual(approvalsForAttempt([
-    approval('approval-initial', 'turn-codex', '2026-07-17T00:00:06Z'),
-    approval('approval-recovery', 'turn-claude', '2026-07-17T00:01:06Z'),
-  ], recovery).map(item => item.approval_id), ['approval-recovery']);
 });
 
 test('long raw logs remain cursor-paged, deduplicated, ordered, and capped', () => {
@@ -112,13 +104,4 @@ function fixtureRun() {
 
 function event(id, createdAt, text) {
   return { created_at: createdAt, id, payload: JSON.stringify({ text }), type: 'issue.log' };
-}
-
-function approval(id, turnId, createdAt) {
-  return {
-    approval_id: id,
-    created_at: createdAt,
-    session_id: turnId === 'turn-codex' ? 'thread-codex' : 'session-claude',
-    turn_id: turnId,
-  };
 }

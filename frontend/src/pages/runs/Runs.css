@@ -242,15 +242,6 @@
   color: white;
 }
 
-.run-compatibility-details {
-  color: var(--text-muted);
-  font-size: 0.64rem;
-  grid-column: 1 / -1;
-}
-
-.run-compatibility-details summary { cursor: pointer; width: max-content; }
-.run-compatibility-details[open] { display: flex; flex-direction: column; gap: 3px; }
-
 .run-surface-notice {
   align-items: center;
   background: color-mix(in srgb, var(--primary) 7%, var(--bg-card));
@@ -414,8 +405,6 @@
   padding: 22px clamp(18px, 3vw, 42px) 40px;
 }
 
-.run-detail-content.provider-active { overflow: hidden; padding: 0; }
-
 .run-summary-layout {
   display: grid;
   gap: 18px;
@@ -446,12 +435,6 @@
 .run-section-heading h2,
 .run-resource-header h2 { color: var(--text-primary); font-size: 1.04rem; margin: 0; }
 .run-resource-header h2 { align-items: center; display: flex; gap: 7px; }
-
-.run-source-badge {
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  padding: 4px 8px;
-}
 
 .run-summary-metrics {
   border-bottom: 1px solid var(--border-color);
@@ -539,16 +522,14 @@
 .run-cost-card { padding: 14px; }
 
 .run-attempt-summary-card dl,
-.run-cost-card dl,
-.run-approval-list dl {
+.run-cost-card dl {
   display: grid;
   gap: 0;
   margin: 0;
 }
 
 .run-attempt-summary-card dl > div,
-.run-cost-card dl > div,
-.run-approval-list dl > div {
+.run-cost-card dl > div {
   align-items: baseline;
   border-top: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
   display: flex;
@@ -557,11 +538,9 @@
 }
 
 .run-attempt-summary-card dt,
-.run-cost-card dt,
-.run-approval-list dt { color: var(--text-muted); font-size: 0.64rem; }
+.run-cost-card dt { color: var(--text-muted); font-size: 0.64rem; }
 .run-attempt-summary-card dd,
-.run-cost-card dd,
-.run-approval-list dd { color: var(--text-secondary); font-size: 0.68rem; margin: 0; text-align: right; }
+.run-cost-card dd { color: var(--text-secondary); font-size: 0.68rem; margin: 0; text-align: right; }
 .run-attempt-summary-card dd[data-status='failed'] { color: var(--error); }
 .run-attempt-summary-card dd[data-status='succeeded'] { color: var(--success); }
 .run-attempt-terminal { color: var(--error); font-size: 0.67rem; margin: 9px 0 0; }
@@ -644,51 +623,6 @@
   padding-top: 12px;
 }
 
-.run-approval-list {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.run-approval-list article {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-left: 3px solid var(--warning);
-  border-radius: 8px;
-  padding: 11px 12px;
-}
-
-.run-approval-list article[data-status='approved'],
-.run-approval-list article[data-status='resolved'] { border-left-color: var(--success); }
-.run-approval-list article[data-status='denied'],
-.run-approval-list article[data-status='rejected'] { border-left-color: var(--error); }
-.run-approval-list article > div { display: flex; flex-direction: column; gap: 4px; }
-.run-approval-list article > div span { color: var(--text-muted); font-size: 0.61rem; }
-.run-approval-list article > div strong { font-size: 0.72rem; line-height: 1.4; }
-.run-approval-list article > p { color: var(--error); font-size: 0.64rem; margin: 8px 0 0; }
-
-.run-provider-drilldown {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.run-provider-drilldown > header {
-  align-items: center;
-  background: color-mix(in srgb, var(--bg-card) 96%, transparent);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  flex-shrink: 0;
-  justify-content: space-between;
-  padding: 8px 18px;
-}
-
-.run-provider-drilldown > header > div { align-items: center; display: flex; font-size: 0.7rem; gap: 6px; }
-.run-provider-drilldown > header span { color: var(--text-muted); font-size: 0.62rem; }
-.run-provider-drilldown > .sessions-client-container { flex: 1; min-height: 0; }
-
 .run-advanced-contract {
   display: grid;
   gap: 7px;
@@ -752,7 +686,6 @@
   .run-attention-card { grid-column: 1 / -1; }
   .run-summary-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .run-summary-metrics > div:nth-child(2) { border-right: 0; }
-  .run-approval-list { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
@@ -772,5 +705,4 @@
   .run-advanced-contract { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .run-raw-event-list summary { grid-template-columns: 60px minmax(0, 1fr); }
   .run-raw-event-list summary time { display: none; }
-  .run-provider-drilldown > header { align-items: flex-start; flex-direction: column; gap: 4px; }
 }

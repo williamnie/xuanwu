@@ -50,7 +50,7 @@ test('legacy controls map to audited Run commands with fresh revisions', () => {
       correlation_id: `runs-ui:${run.id}`,
       event_id: 'runs-ui:interrupt:1',
       occurred_at: '2026-07-16T08:00:00Z',
-      reason: 'Runs compatibility view requested interrupt',
+      reason: 'Runs UI requested interrupt',
     },
     expected_attempt_revision: 3,
     expected_revision: 7,

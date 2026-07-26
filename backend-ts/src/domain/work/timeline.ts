@@ -1,7 +1,11 @@
 import type { RunnerDatabase } from "../../db/database.ts";
 import { listWorkEvents, type WorkEvent } from "../../db/repositories/workLedger.ts";
 import { getIssue, listIssueRuns, type IssueRun } from "../../db/repositories/issues.ts";
-import { listPiActionEvents, type PiActionEvent } from "../../db/repositories/pi/actions.ts";
+import {
+  listPiActionEvents,
+  listPiActionsReferencingIssue,
+  type PiActionEvent
+} from "../../db/repositories/pi/actions.ts";
 import {
   listPiApprovalRequests,
   type PiApprovalRequest
@@ -9,7 +13,6 @@ import {
 import { redactAuditJsonText, redactAuditText } from "../../db/repositories/pi/auditRedaction.ts";
 import { queryEventSummaries, type PublicEventSummary } from "../../events/eventSummaryQuery.ts";
 import { issueIDToWorkID, workIDToIssueID } from "./issueAdapter.ts";
-import { listPiWorkRelations } from "./piRelationAdapter.ts";
 import type { WorkID } from "./contracts.ts";
 
 export const WORK_TIMELINE_SCHEMA_VERSION = "xuanwu.work-timeline.v1" as const;
@@ -281,13 +284,7 @@ function runNodes(workID: WorkID, issueID: number, run: IssueRun): WorkTimelineN
 }
 
 function piActionEventNodes(db: RunnerDatabase, workID: WorkID, issueID: number): WorkTimelineNode[] {
-  const actionIDs = listPiWorkRelations(db, { work_id: workID }).relations.flatMap((relation) => {
-    const refs = relation.source_ref.related_refs
-      .filter((ref) => ref.authority === "pi_actions")
-      .map((ref) => ref.external_id);
-    if (relation.source_ref.authority === "pi_actions") refs.push(relation.source_ref.external_id);
-    return refs;
-  });
+  const actionIDs = listPiActionsReferencingIssue(db, issueID).map((action) => action.id);
   const events = [
     ...listPiActionEvents(db, { issueId: issueID }),
     ...actionIDs.flatMap((actionID) => listPiActionEvents(db, { actionId: actionID }))

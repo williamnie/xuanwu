@@ -19,7 +19,6 @@ export function laneScrollDecision({ armed, clientHeight, scrollHeight, scrollTo
 }
 
 const ATTENTION_STATUSES = new Set(['triage', 'pending_verification', 'failed']);
-const ATTENTION_RELATION_LIFECYCLES = new Set(['pending', 'paused', 'failed', 'legacy_unknown']);
 
 export function workBoardEnabled(env = {}) {
   const value = String(env?.VITE_WORK_BOARD_ENABLED ?? 'true').trim().toLowerCase();
@@ -42,20 +41,8 @@ export function workIdFromIssueId(issueId) {
   return Number.isSafeInteger(value) && value > 0 ? `xw:work:issues:${value}` : '';
 }
 
-export function indexRelationsByWork(relations = []) {
-  const index = new Map();
-  relations.forEach((relation) => {
-    if (!relation?.work_id) return;
-    const current = index.get(relation.work_id) || [];
-    current.push(relation);
-    index.set(relation.work_id, current);
-  });
-  return index;
-}
-
-export function workNeedsAttention(work, relations = []) {
-  if (ATTENTION_STATUSES.has(work?.status)) return true;
-  return relations.some(relation => ATTENTION_RELATION_LIFECYCLES.has(relation.lifecycle));
+export function workNeedsAttention(work) {
+  return ATTENTION_STATUSES.has(work?.status);
 }
 
 export function workDeliveryStage(work) {
@@ -65,15 +52,14 @@ export function workDeliveryStage(work) {
   return 'outstanding';
 }
 
-export function filterWorkBoardItems(works, relationsByWork, filters) {
+export function filterWorkBoardItems(works, filters) {
   const query = String(filters.query || '').trim().toLowerCase();
   return works.filter((work) => {
-    const relations = relationsByWork.get(work.id) || [];
     if (filters.type && work.type !== filters.type) return false;
     if (filters.status && work.status !== filters.status) return false;
     if (filters.project && work.owner?.project_id !== filters.project) return false;
-    if (filters.attention === 'required' && !workNeedsAttention(work, relations)) return false;
-    if (filters.attention === 'clear' && workNeedsAttention(work, relations)) return false;
+    if (filters.attention === 'required' && !workNeedsAttention(work)) return false;
+    if (filters.attention === 'clear' && workNeedsAttention(work)) return false;
     if (filters.delivery && workDeliveryStage(work) !== filters.delivery) return false;
     if (query && !`${work.title || ''}\n${work.goal || ''}\n${work.id || ''}`.toLowerCase().includes(query)) return false;
     return true;

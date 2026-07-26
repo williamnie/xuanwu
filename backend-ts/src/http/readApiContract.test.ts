@@ -12,7 +12,7 @@ import { HANDOFF_HTTP_COMPATIBILITY_POLICY, registerHandoffRoutes } from "./hand
 import { READ_API_ROUTE_REGISTRY } from "./readApi.ts";
 import type { ReadApiContext } from "./readApiContext.ts";
 import { registerCoreReadRoutes } from "./readApiRoutes.ts";
-import { registerRunRoutes, RUN_HTTP_COMPATIBILITY_POLICY } from "./runApi.ts";
+import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "./runApi.ts";
 import type { Router } from "./router.ts";
 import { registerWorkRoutes } from "./workApi.ts";
 
@@ -153,13 +153,8 @@ describe("read API route contracts", () => {
       "GET /api/runs/:id",
       "POST /api/runs/:id/actions/:action"
     ]);
-    expect(RUN_HTTP_COMPATIBILITY_POLICY).toMatchObject({
-      attempt_authority: "run_attempts-child-facts",
-      dual_write: "none",
-      read_authority: "issue_runs",
-      session_authority: "agent_sessions-observation-only",
-      write_authority: "domain-run-command-service-over-issue_runs"
-    });
+    expect(RUN_READ_AUTHORITY).toBe("issue_runs");
+    expect(RUN_WRITE_AUTHORITY).toBe("domain-run-command-service-over-issue_runs");
   });
 
   test("locks core domain method and path contracts", () => {
@@ -189,10 +184,8 @@ describe("read API route contracts", () => {
   test("locks Work method and path contracts", () => {
     expect(captureRoutes(registerWorkRoutes)).toMatchInlineSnapshot(`
       [
-        "GET /api/work-relations",
         "GET /api/works",
         "GET /api/works/:id",
-        "GET /api/works/:id/relations",
         "GET /api/works/:id/timeline",
         "GET /api/works/board",
         "PATCH /api/works/:id",

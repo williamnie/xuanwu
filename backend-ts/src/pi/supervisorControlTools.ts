@@ -10,8 +10,8 @@ import { WORK_STATUSES } from "../domain/work/contracts.ts";
 import { RUN_STATUSES } from "../domain/run/contracts.ts";
 import { EVIDENCE_STATUSES } from "../domain/evidence/contracts.ts";
 import { DELIVERY_MODES, HANDOFF_STATUSES } from "../domain/handoff/contracts.ts";
-import { registerWorkRoutes, WORK_HTTP_COMPATIBILITY_POLICY } from "../http/workApi.ts";
-import { registerRunRoutes, RUN_HTTP_COMPATIBILITY_POLICY } from "../http/runApi.ts";
+import { registerWorkRoutes, WORK_WRITE_AUTHORITY } from "../http/workApi.ts";
+import { registerRunRoutes, RUN_READ_AUTHORITY, RUN_WRITE_AUTHORITY } from "../http/runApi.ts";
 import { registerEvidenceRoutes, EVIDENCE_HTTP_COMPATIBILITY_POLICY } from "../http/evidenceApi.ts";
 import { registerHandoffRoutes, HANDOFF_HTTP_COMPATIBILITY_POLICY } from "../http/handoffApi.ts";
 import { createRouter, type Router } from "../http/router.ts";
@@ -500,15 +500,8 @@ function compactWorkList(call: DomainCall): Record<string, unknown> {
 
 function compactWorkDetail(call: DomainCall): Record<string, unknown> {
   if (!call.ok) return compactDomainError("work", call);
-  const relations = objectValue(call.body.relations);
   return withBudget("issues-via-work-adapter", {
     domain: "work",
-    relations: {
-      items: arrayValue(relations.items).slice(0, 12).map((item) => select(item, [
-        "id", "kind", "lifecycle", "source_id", "target_id", "work_id"
-      ])),
-      total: numberValue(relations.total)
-    },
     work: compactWork(call.body.work, true)
   });
 }
@@ -516,7 +509,7 @@ function compactWorkDetail(call: DomainCall): Record<string, unknown> {
 function compactWorkMutation(call: DomainCall): Record<string, unknown> {
   if (!call.ok) return compactDomainError("work", call);
   const mutation = objectValue(call.body.mutation);
-  return withBudget(WORK_HTTP_COMPATIBILITY_POLICY.write_authority, {
+  return withBudget(WORK_WRITE_AUTHORITY, {
     domain: "work",
     mutation: select(mutation, ["applied", "audit_event_id"]),
     work: compactWork(call.body.work, true)
@@ -548,7 +541,7 @@ function compactWork(value: unknown, includeGoal: boolean): Record<string, unkno
 function compactRunList(call: DomainCall): Record<string, unknown> {
   if (!call.ok) return compactDomainError("run", call);
   const items = arrayValue(call.body.items).slice(0, 20).map(compactRun);
-  return withBudget(RUN_HTTP_COMPATIBILITY_POLICY.read_authority, {
+  return withBudget(RUN_READ_AUTHORITY, {
     domain: "run",
     items,
     page: numberValue(call.body.page),
@@ -561,7 +554,7 @@ function compactRunList(call: DomainCall): Record<string, unknown> {
 function compactRunDetail(call: DomainCall): Record<string, unknown> {
   if (!call.ok) return compactDomainError("run", call);
   const run = objectValue(call.body.run);
-  return withBudget(RUN_HTTP_COMPATIBILITY_POLICY.read_authority, {
+  return withBudget(RUN_READ_AUTHORITY, {
     domain: "run",
     run: {
       ...compactRun(run),
@@ -588,7 +581,7 @@ function compactRunDetail(call: DomainCall): Record<string, unknown> {
 
 function compactRunMutation(call: DomainCall): Record<string, unknown> {
   if (!call.ok) return compactDomainError("run", call);
-  return withBudget(RUN_HTTP_COMPATIBILITY_POLICY.write_authority, {
+  return withBudget(RUN_WRITE_AUTHORITY, {
     domain: "run",
     mutation: objectValue(call.body.mutation),
     run: compactRun(call.body.run)
@@ -812,8 +805,8 @@ function truncatedProjection(authority: string, originalChars: number, preview: 
 }
 
 function domainAuthority(domain: string): string {
-  if (domain === "work") return WORK_HTTP_COMPATIBILITY_POLICY.write_authority;
-  if (domain === "run") return RUN_HTTP_COMPATIBILITY_POLICY.write_authority;
+  if (domain === "work") return WORK_WRITE_AUTHORITY;
+  if (domain === "run") return RUN_WRITE_AUTHORITY;
   if (domain === "evidence") return EVIDENCE_HTTP_COMPATIBILITY_POLICY.read_authority;
   if (domain === "handoff") return HANDOFF_HTTP_COMPATIBILITY_POLICY.read_authority;
   return "unknown";

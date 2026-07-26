@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createIssue } from "../db/repositories/issueCreate.ts";
 import { insertWorkRecord, insertWorkRelationRecord } from "../db/repositories/workLedger.ts";
-import { createPiAction } from "../db/repositories/pi/actions.ts";
 import type { DependencyRelation } from "../domain/work/contracts.ts";
 import { readIssueDependency } from "../domain/work/issueDependency.ts";
 import { getIssueAsWork, issueIDToWorkID, workIDToIssueID } from "../domain/work/issueAdapter.ts";
@@ -59,7 +58,7 @@ describe("Work HTTP API", () => {
     }
   });
 
-  test("lists, filters, sorts and pages Issue-authoritative Work with detail relations", async () => {
+  test("lists, filters, sorts and pages Issue-authoritative Work without relation projections", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -71,13 +70,6 @@ describe("Work HTTP API", () => {
       });
       createIssue(db, { description: "Charlie goal", project_id: "demo", status: "triage", title: "Charlie" });
       createIssue(db, { description: "Bravo goal", project_id: "demo", status: "todo", title: "Bravo" });
-      createPiAction(db, {
-        action_type: "issue.comment",
-        id: "action-alpha",
-        issue_id: alpha.id,
-        project_id: "demo",
-        status: "executing"
-      });
       const router = createDefaultRouter({ database: db });
 
       const list = await router.handle(new Request(
@@ -92,14 +84,10 @@ describe("Work HTTP API", () => {
         `${BASE_URL}/api/works/${encodeURIComponent(issueIDToWorkID(alpha.id))}`
       ));
       const detailBody = await body(detail);
-      const relations = await router.handle(new Request(
-        `${BASE_URL}/api/work-relations?project_id=demo&kind=execution&page=1&page_size=10`
-      ));
-      const relationBody = await body(relations);
+      const removedRelations = await router.handle(new Request(`${BASE_URL}/api/work-relations`));
 
       expect(list.status).toBe(200);
       expect(listBody).toMatchObject({
-        compatibility: { read_authority: "issues", target_shadow: "disabled" },
         items: [{ title: "Charlie", type: "engineering_task" }],
         page: 2,
         page_size: 1,
@@ -119,19 +107,11 @@ describe("Work HTTP API", () => {
         sort: { field: "updated_at", order: "desc" }
       });
       expect(detail.status).toBe(200);
-      expect(detailBody).toMatchObject({
-        relations: {
-          items: [{ kind: "execution", lifecycle: "active", work_id: issueIDToWorkID(alpha.id) }],
-          total: 1
-        },
-        work: { goal: "Alpha goal", id: issueIDToWorkID(alpha.id), title: "Alpha" }
+      expect(detailBody).toEqual({
+        work: expect.objectContaining({ goal: "Alpha goal", id: issueIDToWorkID(alpha.id), title: "Alpha" })
       });
-      expect(relations.status).toBe(200);
-      expect(relationBody).toMatchObject({
-        items: [{ kind: "execution", source_ref: { external_id: "action-alpha" } }],
-        total: 1,
-        unmapped: []
-      });
+      expect(removedRelations.status).toBe(404);
+      expect(listBody).not.toHaveProperty("compatibility");
       expect(rowCount(db, "works")).toBe(0);
       expect(rowCount(db, "work_relations")).toBe(0);
     } finally {
@@ -195,7 +175,7 @@ describe("Work HTTP API", () => {
         message: "Work audit event conflicts with another command"
       });
       expect(createdBody).toMatchObject({
-        mutation: { applied: true, audit_event_id: "work-create-1", shadow: { mode: "disabled" } },
+        mutation: { applied: true, audit_event_id: "work-create-1" },
         work: {
           goal: "Ship Work API",
           provenance: { origin: { completeness: "complete", correlation_id: "correlation:work-create-1" } },
@@ -203,6 +183,7 @@ describe("Work HTTP API", () => {
           title: "Work API"
         }
       });
+      expect(createdBody.mutation).not.toHaveProperty("shadow");
       expect(rowCount(db, "issues")).toBe(1);
       expect(updated.status).toBe(200);
       expect(updatedWork).toMatchObject({ goal: "Ship and verify Work API", title: "Verified Work API" });
@@ -294,7 +275,7 @@ describe("Work HTTP API", () => {
     }
   });
 
-  test("declares audited readiness requirements and exposes the live Evidence gap on Work Detail", async () => {
+  test("declares audited readiness requirements without expanding Work Detail", async () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
@@ -342,7 +323,7 @@ describe("Work HTTP API", () => {
       });
       expect(replay.status).toBe(200);
       expect(await body(replay)).toMatchObject({ mutation: { replayed: true } });
-      expect(await body(detail)).toMatchObject({ readiness: { contract: "xw.delivery-readiness.projection.v1" } });
+      expect(await body(detail)).toEqual({ work: expect.objectContaining({ id: workID }) });
     } finally {
       db.close();
     }

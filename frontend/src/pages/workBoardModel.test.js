@@ -4,7 +4,6 @@ import test from 'node:test';
 
 import {
   filterWorkBoardItems,
-  indexRelationsByWork,
   issueIdFromWorkId,
   laneScrollDecision,
   resolveWorkBoardPage,
@@ -20,10 +19,6 @@ const works = [
   work('xw:work:issues:12', 'done', 'beta', 'engineering_task'),
   work('xw:work:issues:13', 'in_progress', 'alpha', 'objective'),
 ];
-const relations = indexRelationsByWork([
-  { lifecycle: 'failed', work_id: works[2].id },
-]);
-
 test('feature flag falls back from Work to the legacy Issues route', () => {
   assert.equal(workBoardEnabled({}), true);
   assert.equal(workBoardEnabled({ VITE_WORK_BOARD_ENABLED: 'false' }), false);
@@ -39,10 +34,10 @@ test('Issue-backed Work IDs produce stable Issues deep links', () => {
   assert.equal(workIdFromIssueId(0), '');
 });
 
-test('Attention and delivery projections stay deterministic', () => {
+test('Attention is derived from actionable Work status only', () => {
   assert.equal(workNeedsAttention(works[0]), true);
   assert.equal(workNeedsAttention(works[1]), false);
-  assert.equal(workNeedsAttention(works[2], relations.get(works[2].id)), true);
+  assert.equal(workNeedsAttention(works[2]), false);
   assert.equal(workDeliveryStage(works[1]), 'delivered');
   assert.equal(workDeliveryStage(works[2]), 'outstanding');
 });
@@ -81,12 +76,12 @@ test('lane scroll loads once until the user leaves the end threshold', () => {
 
 test('board filters combine type, status, project, Attention and delivery', () => {
   assert.deepEqual(
-    filterWorkBoardItems(works, relations, { attention: 'required', delivery: 'outstanding', project: 'alpha', query: '', status: '', type: '' })
+    filterWorkBoardItems(works, { attention: 'required', delivery: 'outstanding', project: 'alpha', query: '', status: '', type: '' })
       .map(item => item.id),
-    ['xw:work:issues:11', 'xw:work:issues:13'],
+    ['xw:work:issues:11'],
   );
   assert.deepEqual(
-    filterWorkBoardItems(works, relations, { attention: '', delivery: 'delivered', project: '', query: 'issues:12', status: 'done', type: 'engineering_task' })
+    filterWorkBoardItems(works, { attention: '', delivery: 'delivered', project: '', query: 'issues:12', status: 'done', type: 'engineering_task' })
       .map(item => item.id),
     ['xw:work:issues:12'],
   );
@@ -99,7 +94,7 @@ test('large Work lists preserve deterministic combined filtering', () => {
     index % 2 === 0 ? 'alpha' : 'beta',
     'engineering_task',
   ));
-  const result = filterWorkBoardItems(large, new Map(), {
+  const result = filterWorkBoardItems(large, {
     attention: '',
     delivery: 'delivered',
     project: 'alpha',

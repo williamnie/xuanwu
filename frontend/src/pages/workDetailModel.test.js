@@ -5,7 +5,6 @@ import {
   buildWorkActionPayload,
   filterTimelineItems,
   mergeTimelinePages,
-  workAttentionSignals,
   workAvailableActions,
 } from './workDetailModel.js';
 
@@ -50,20 +49,6 @@ test('timeline pagination stays deduplicated and filterable', () => {
   const merged = mergeTimelinePages(first, [timeline('one', '2026-07-17T00:01:00Z', 'work_event'), timeline('zero', '2026-07-17T00:00:00Z', 'run')]);
   assert.deepEqual(merged.map(item => item.id), ['two', 'one', 'zero']);
   assert.deepEqual(filterTimelineItems(merged, 'run').map(item => item.id), ['two', 'zero']);
-});
-
-test('Attention combines Work, relation, unresolved approval and Guardian signals', () => {
-  const signals = workAttentionSignals(
-    { status: 'pending_verification' },
-    [{ kind: 'execution', lifecycle: 'failed', relation_id: 'relation-1' }],
-    [
-      { id: 'approval-open', kind: 'approval', occurred_at: '2026-07-17T00:00:00Z', source: { external_id: 'approval-1' }, status: 'pending', summary: 'Needs approval' },
-      { id: 'approval-resolved', kind: 'approval', occurred_at: '2026-07-17T00:01:00Z', source: { external_id: 'approval-2' }, status: 'resolved' },
-    ],
-    [{ alert_type: 'stalled_work', id: 'guardian-1', message: 'No progress', severity: 'watch', status: 'open' }],
-  );
-  assert.deepEqual(signals.map(item => item.kind), ['work', 'relationship', 'approval', 'guardian']);
-  assert.equal(signals.some(item => item.id === 'approval:approval-2'), false);
 });
 
 function timeline(id, occurredAt, kind) {

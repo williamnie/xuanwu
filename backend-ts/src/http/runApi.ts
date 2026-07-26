@@ -44,17 +44,8 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 const RUN_HTTP_POLICY_REF = "xuanwu-run-http-authenticated-control-v1";
 
-export const RUN_HTTP_COMPATIBILITY_POLICY = {
-  attempt_authority: "run_attempts-child-facts",
-  audit_authority: "issue_events-run.lifecycle.v1",
-  dual_read: "W2-at-most-one-release-with-legacy-fallback",
-  dual_write: "none",
-  final_removal_gate: "P11.05-and-G7-and-one-W2-parity-release-and-zero-Sessions-consumer-and-backup-restore-window",
-  read_authority: "issue_runs",
-  rollback: "unregister-run-http-routes-and-restore-legacy-Issue-Session-control-without-data-deletion",
-  session_authority: "agent_sessions-observation-only",
-  write_authority: "domain-run-command-service-over-issue_runs"
-} as const;
+export const RUN_READ_AUTHORITY = "issue_runs";
+export const RUN_WRITE_AUTHORITY = "domain-run-command-service-over-issue_runs";
 
 type PageInput = { page: number; page_size: number };
 type RunAction = "interrupt" | "resume" | "retry";
@@ -103,14 +94,13 @@ function listResponse(context: ReadApiContext, request: Request): Record<string,
   };
   const total = countRuns(database, filter);
   return {
-    compatibility: RUN_HTTP_COMPATIBILITY_POLICY,
     filters: {
       project_id: projectID,
       provider: providers,
       status: statuses,
       work_id: workIDFilter ?? ""
     },
-    items: listRuns(database, filter),
+    items: listRuns(database, filter).map(publicRun),
     page: page.page,
     page_size: page.page_size,
     sort: { field: sort, order },
@@ -121,8 +111,7 @@ function listResponse(context: ReadApiContext, request: Request): Record<string,
 
 function detailResponse(context: ReadApiContext, request: Request): Record<string, unknown> {
   return {
-    compatibility: RUN_HTTP_COMPATIBILITY_POLICY,
-    run: requireRun(context, runID(request), context.readDatabase ?? context.database)
+    run: publicRun(requireRun(context, runID(request), context.readDatabase ?? context.database))
   };
 }
 
@@ -287,10 +276,14 @@ function mutationResponse(
   mutation: Record<string, unknown>
 ): Record<string, unknown> {
   return {
-    compatibility: RUN_HTTP_COMPATIBILITY_POLICY,
     mutation: { applied: true, ...mutation },
-    run: requireRun(context, id)
+    run: publicRun(requireRun(context, id))
   };
+}
+
+function publicRun<T extends RunDetail | Omit<RunDetail, "attempts">>(run: T): Omit<T, "legacy"> {
+  const { legacy: _legacy, ...publicValue } = run;
+  return publicValue;
 }
 
 function persistResumeRuntime(

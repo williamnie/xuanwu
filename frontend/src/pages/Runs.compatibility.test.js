@@ -24,18 +24,16 @@ test('Runs list uses the canonical API and provider sessions keep Run authority 
   assert.match(clientSource, /request\(`\/api\/runs\?\$\{params\.toString\(\)\}`, options\)/);
   assert.match(clientSource, /request\(`\/api\/runs\/\$\{encodeURIComponent\(id\)\}`, options\)/);
   assert.match(pageSource, /runProviderSessionRef\(runDetail\)/);
-  assert.match(detailSource, /not Run authority/);
-  assert.doesNotMatch(detailSource, /observationNotice=/);
+  assert.match(pageSource, /navigateTo\?\.\('sessions', null, providerSessionRef\)/);
+  assert.doesNotMatch(detailSource, /Provider session|<Sessions/);
   assert.match(sessionsSource, /showSidebar \? \(/);
   assert.match(sessionsSource, /observationNotice,/);
 });
 
-test('old operations map to audited Run control while compatibility mode retains session operations', () => {
+test('Run controls remain audited without exposing migration internals in the product UI', () => {
   assert.match(pageSource, /runsApi\.controlRun\(run\.id, action, buildRunControlPayload/);
   assert.match(pageSource, /actions\.interrupt/);
   assert.match(pageSource, /actions\.resume/);
   assert.match(pageSource, /actions\.retry/);
-  assert.match(pageSource, /Sessions 兼容 deep link/);
-  assert.match(pageSource, /Run source of truth:/);
-  assert.match(pageSource, /最终删除门禁/);
+  assert.doesNotMatch(pageSource, /兼容与迁移|Run source of truth:|最终删除门禁|setCompatibility/);
 });

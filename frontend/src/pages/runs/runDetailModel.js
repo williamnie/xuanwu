@@ -1,14 +1,6 @@
 export const RUN_EVENT_PAGE_SIZE = 100;
 export const RUN_EVENT_SCAN_LIMIT = 500;
 
-export function runAttemptProviderSessionRef(attempt, run = {}) {
-  const observationRef = text(attempt?.provider_ref?.observation_ref) || text(attempt?.agent_session_key);
-  if (observationRef) return observationRef;
-  const provider = text(attempt?.provider_ref?.provider) || text(run?.provider);
-  const sessionRef = text(attempt?.provider_ref?.session_ref);
-  return provider && sessionRef ? `${provider}:${sessionRef}` : '';
-}
-
 export function selectedRunAttempt(run, attemptId = '') {
   const attempts = Array.isArray(run?.attempts) ? run.attempts : [];
   return attempts.find(attempt => attempt.id === attemptId) || attempts.at(-1) || null;
@@ -64,22 +56,6 @@ export function runLogSummary(event, maximum = 280) {
     event?.type,
   ].map(text).find(Boolean) || 'Raw event';
   return truncate(value.replace(/\s+/g, ' '), maximum);
-}
-
-export function approvalsForAttempt(approvals = [], attempt = null) {
-  if (!attempt) return approvals;
-  const turnRef = text(attempt?.provider_ref?.turn_ref);
-  const sessionRef = text(attempt?.provider_ref?.session_ref);
-  const startedAt = timestamp(attempt?.started_at);
-  const endedAt = timestamp(attempt?.ended_at) || Number.POSITIVE_INFINITY;
-  return approvals.filter(approval => {
-    const approvalTurn = text(approval?.turn_id);
-    if (turnRef && approvalTurn) return approvalTurn === turnRef;
-    const approvalSession = text(approval?.session_id) || text(approval?.thread_id);
-    if (sessionRef && approvalSession && approvalSession !== sessionRef) return false;
-    const occurredAt = timestamp(approval?.created_at);
-    return occurredAt >= startedAt && occurredAt <= endedAt;
-  });
 }
 
 export function runCostView(cost) {

@@ -6,18 +6,17 @@ const detail = readFileSync(new URL('./WorkDetail.jsx', import.meta.url), 'utf8'
 const board = readFileSync(new URL('./WorkBoard.jsx', import.meta.url), 'utf8');
 const model = readFileSync(new URL('./workDetailModel.js', import.meta.url), 'utf8');
 
-test('Work Detail composes canonical sections without replacing existing domain clients', () => {
-  for (const section of ['readiness', 'acceptance', 'relationships', 'attention', 'runs', 'evidence', 'handoffs', 'timeline']) {
-    assert.match(detail, new RegExp(`id="work-${section}"`));
-  }
+test('Work Detail keeps two task-oriented views and loads Activity only on demand', () => {
+  assert.match(detail, />Overview</);
+  assert.match(detail, />Activity</);
   assert.match(detail, /workApi\.getWork\(workId\)/);
   assert.match(detail, /workApi\.getWorkTimeline/);
   assert.match(detail, /runsApi\.getRuns/);
-  assert.match(detail, /<EvidencePanel title="Work Evidence" workId=\{work\.id\} \/>/);
+  assert.match(detail, /evidenceApi\.listEvidence/);
   assert.match(detail, /handoffsApi\.getHandoffs/);
-  assert.match(detail, /assistantApi\.getPiGuardianAlerts/);
-  assert.match(detail, /readiness\?\.current_stage/);
-  assert.match(detail, /missing_evidence/);
+  assert.match(detail, /activeView === 'activity' && !activityLoaded/);
+  assert.doesNotMatch(detail, /getWorkRelations|readiness|relationship|guardianAlerts|compatibility/);
+  assert.doesNotMatch(detail, /<EvidencePanel/);
 });
 
 test('Work Board stays board-only and opens canonical Work Detail', () => {
@@ -27,6 +26,7 @@ test('Work Board stays board-only and opens canonical Work Detail', () => {
   assert.doesNotMatch(board, /navigateTo\('issues', issueId\)/);
   assert.match(board, /Issue #\{issueId\} authority/);
   assert.match(board, /<WorkDetail/);
+  assert.doesNotMatch(board, /relations=|work-relation-row|indexRelationsByWork/);
 });
 
 test('Work Detail mutations use audited Work controls and the existing verification gate', () => {

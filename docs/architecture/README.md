@@ -48,7 +48,7 @@
 - [ADR-XW-0012：Work Ledger 持久化结构](xuanwu/0012-work-ledger-schema.md)
 - [ADR-XW-0013：Work Ledger repository 与事务服务](xuanwu/0013-work-ledger-repository-service.md)
 - [ADR-XW-0014：Issue → Work 兼容适配器](xuanwu/0014-issue-work-compatibility-adapter.md)
-- [ADR-XW-0015：PI carrier → Work 关系兼容适配器](xuanwu/0015-pi-work-relation-adapter.md)
+- [ADR-XW-0015：PI carrier → Work 关系兼容适配器（已退役）](xuanwu/0015-pi-work-relation-adapter.md)
 - [ADR-XW-0016：Work HTTP API 与兼容 authority](xuanwu/0016-work-http-api.md)
 - [ADR-XW-0017：Work timeline 与统一事件视图](xuanwu/0017-work-timeline.md)
 - [ADR-XW-0018：Work backfill、双读一致性审计与回滚](xuanwu/0018-work-backfill-dual-read.md)

@@ -57,13 +57,14 @@ describe("Run HTTP API", () => {
 
       expect(response.status).toBe(200);
       expect(body).toMatchObject({
-        compatibility: { dual_write: "none", read_authority: "issue_runs" },
         page: 3,
         page_size: 50,
         total: 125,
         total_pages: 3
       });
       expect(body.items).toHaveLength(25);
+      expect(body).not.toHaveProperty("compatibility");
+      expect(body.items[0]).not.toHaveProperty("legacy");
       expect(body.items[0]).toMatchObject({
         attempt_count: 1,
         progress: { attempt_status: "succeeded", phase: "succeeded", projection_mode: "list_summary" },
@@ -93,6 +94,8 @@ describe("Run HTTP API", () => {
         }
       });
       expect(detailBody.run.progress.projection_mode).toBe("read_through_rebuild");
+      expect(detailBody).not.toHaveProperty("compatibility");
+      expect(detailBody.run).not.toHaveProperty("legacy");
     } finally {
       db.close();
     }

@@ -12,12 +12,6 @@ import {
   type IssueWorkMutationResult
 } from "../domain/work/issueAdapter.ts";
 import {
-  PI_WORK_RELATION_KINDS,
-  PI_WORK_RELATION_LIFECYCLES,
-  listPiWorkRelations,
-  type PiWorkRelation
-} from "../domain/work/piRelationAdapter.ts";
-import {
   WORK_STATUSES,
   WORK_TYPES,
   type WorkLedgerEntry,
@@ -40,17 +34,7 @@ const WORK_HTTP_POLICY_REF = "xuanwu-work-http-authenticated-write-v1";
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
-export const WORK_HTTP_COMPATIBILITY_POLICY = {
-  dual_read: "none",
-  final_removal_gate: "P11.05/P11.09-and-G7-and-zero-consumer-and-backup-restore-observation-window",
-  read_authority: "issues",
-  readiness_authority: "issues.status+work_relations+append-only-structured-Evidence-request-time-projection",
-  relation_authority: "work_relations-with-atomic-issue-create-materialization",
-  rollback: "unregister-work-http-routes-without-data-migration",
-  structural_relation_write: "issue-create-depends_on",
-  target_shadow: "disabled",
-  write_authority: "issues-via-work-adapter"
-} as const;
+export const WORK_WRITE_AUTHORITY = "issues-via-work-adapter";
 
 type PageInput = {
   page: number;
@@ -65,9 +49,6 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
   router.get("/api/works/:id/timeline", (request) => (
     workResponse(() => timelineResponse(readDatabase, request))
   ));
-  router.get("/api/works/:id/relations", (request) => (
-    workResponse(() => workRelationsResponse(readDatabase, request))
-  ));
   router.put("/api/works/:id/readiness-requirements", async (request) => workResponse(async () => {
     const work = requireWork(context.database, workID(request));
     const body = await objectBody(request);
@@ -76,15 +57,11 @@ export function registerWorkRoutes(router: Router, context: ReadApiContext): voi
     const result = declareIssueReadinessRequirements(context.database, workIDToIssueID(work.id), declaration);
     kickProject(context, work);
     return {
-      compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
       mutation: { event_id: result.event_id, replayed: result.replayed },
       readiness: readIssueReadiness(context.database, workIDToIssueID(work.id)),
       work
     };
   }));
-  router.get("/api/work-relations", (request) => (
-    workResponse(() => relationListResponse(readDatabase, request))
-  ));
   router.post("/api/works", async (request) => workResponse(async () => {
     const body = await objectBody(request);
     assertKeys(body, ["audit", "depends_on_issue_ids", "goal", "project_id", "status", "title", "type"]);
@@ -178,7 +155,6 @@ function boardResponse(db: RunnerDatabase, request: Request): Record<string, unk
     return [status, pagedItemsResponse(listIssueBackedWorks(db, filter), total, page, {})];
   }));
   return {
-    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
     lanes,
     page_size: pageSize,
     project_id: projectID,
@@ -214,20 +190,13 @@ function listResponse(db: RunnerDatabase, request: Request): Record<string, unkn
   const total = typeMatches ? countIssueBackedWorks(db, filter) : 0;
   const items = typeMatches ? listIssueBackedWorks(db, filter) : [];
   return pagedItemsResponse(items, total, page, {
-    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
     filters: { project_id: projectID, q: query, status: statuses, type: types },
     sort: { field: sort, order }
   });
 }
 
 function detailResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
-  const work = requireWork(db, workID(request));
-  return {
-    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
-    readiness: readIssueReadiness(db, workIDToIssueID(work.id)),
-    relations: relationsForWork(db, work.id),
-    work
-  };
+  return { work: requireWork(db, workID(request)) };
 }
 
 function readinessDeclaration(
@@ -284,12 +253,14 @@ function timelineResponse(db: RunnerDatabase, request: Request): Record<string, 
   const work = requireWork(db, workID(request));
   const params = new URL(request.url).searchParams;
   try {
-    return {
-      compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
-      ...queryWorkTimeline(db, work.id, {
+    const result = queryWorkTimeline(db, work.id, {
         cursor: optionalString(params.get("cursor")) || undefined,
         limit: positiveIntegerParam(params.get("limit"), "limit", 50, 500)
-      })
+      });
+    return {
+      has_more: result.has_more,
+      items: result.items.map(compactTimelineItem),
+      next_cursor: result.next_cursor
     };
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Work timeline cursor")) {
@@ -297,46 +268,6 @@ function timelineResponse(db: RunnerDatabase, request: Request): Record<string, 
     }
     throw error;
   }
-}
-
-function workRelationsResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
-  const work = requireWork(db, workID(request));
-  return {
-    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
-    ...relationsForWork(db, work.id),
-    work_id: work.id
-  };
-}
-
-function relationListResponse(db: RunnerDatabase, request: Request): Record<string, unknown> {
-  const params = new URL(request.url).searchParams;
-  const projectID = optionalString(params.get("project_id"));
-  if (projectID && !getProject(db, projectID)) throw workError(404, "project_not_found", "Project not found");
-  const rawWorkID = optionalString(params.get("work_id"));
-  const workIDFilter = rawWorkID ? canonicalWorkID(rawWorkID) : undefined;
-  const kinds = enumParams(params, "kind", PI_WORK_RELATION_KINDS);
-  const lifecycles = enumParams(params, "lifecycle", PI_WORK_RELATION_LIFECYCLES);
-  const page = pageInput(params);
-  const projection = listPiWorkRelations(db, {
-    project_id: projectID,
-    ...(workIDFilter ? { work_id: workIDFilter } : {})
-  });
-  const items = projection.relations
-    .filter((relation) => kinds.length === 0 || kinds.includes(relation.kind))
-    .filter((relation) => lifecycles.length === 0 || lifecycles.includes(relation.lifecycle));
-  return pageResponse(items, page, {
-    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
-    filters: { kind: kinds, lifecycle: lifecycles, project_id: projectID, work_id: workIDFilter ?? "" },
-    unmapped: projection.unmapped
-  });
-}
-
-function relationsForWork(db: RunnerDatabase, workIDValue: WorkLedgerEntry["id"]): {
-  items: PiWorkRelation[];
-  total: number;
-} {
-  const items = listPiWorkRelations(db, { work_id: workIDValue }).relations;
-  return { items, total: items.length };
 }
 
 function mutationResponse(result: IssueWorkMutationResult, appliedStatus = 200): Response {
@@ -349,14 +280,23 @@ function mutationResponse(result: IssueWorkMutationResult, appliedStatus = 200):
     }, { status: 409 });
   }
   return json({
-    compatibility: WORK_HTTP_COMPATIBILITY_POLICY,
     mutation: {
       applied: true,
-      audit_event_id: result.audit_event_id,
-      shadow: result.shadow
+      audit_event_id: result.audit_event_id
     },
     work: result.work
   }, { status: appliedStatus });
+}
+
+function compactTimelineItem(item: ReturnType<typeof queryWorkTimeline>["items"][number]) {
+  return {
+    id: item.id,
+    kind: item.kind,
+    occurred_at: item.occurred_at,
+    status: item.status,
+    summary: item.summary,
+    title: item.title
+  };
 }
 
 function auditInput(value: unknown): WorkTransitionAudit {

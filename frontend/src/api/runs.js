@@ -19,11 +19,6 @@ export const runsApi = {
     return request(`/api/issues/${encodeURIComponent(issueId)}/events?${params.toString()}`);
   },
 
-  getRunApprovals: (legacyRunId) => {
-    const params = new URLSearchParams({ run_id: legacyRunId });
-    return request(`/api/pi/approval-requests?${params.toString()}`);
-  },
-
   controlRun: (id, action, payload) => request(`/api/runs/${encodeURIComponent(id)}/actions/${action}`, {
     method: 'POST',
     body: JSON.stringify(payload),

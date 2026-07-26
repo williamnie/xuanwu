@@ -9,21 +9,16 @@ import {
   ListTree,
   LoaderCircle,
   RefreshCw,
-  ShieldCheck,
-  Terminal,
 } from 'lucide-react';
 import EvidencePanel from '../../components/EvidencePanel.jsx';
-import Sessions from '../Sessions.jsx';
 import { runsApi } from '../../api/runs.js';
 import { runIssueId } from './runPageModel.js';
 import {
   RUN_EVENT_PAGE_SIZE,
   RUN_EVENT_SCAN_LIMIT,
-  approvalsForAttempt,
   eventPageCursor,
   eventsWithinAttempt,
   mergeRunEventPages,
-  runAttemptProviderSessionRef,
   runCostView,
   runEventInitialBeforeId,
   runLogSummary,
@@ -33,13 +28,11 @@ import {
 const DETAIL_SECTIONS = [
   { id: 'summary', icon: Activity, label: 'Summary' },
   { id: 'logs', icon: FileText, label: 'Logs' },
-  { id: 'approvals', icon: ShieldCheck, label: 'Approvals' },
   { id: 'evidence', icon: FileCheck2, label: 'Evidence' },
-  { id: 'provider', icon: Terminal, label: 'Provider session' },
   { id: 'advanced', icon: ListTree, label: 'Advanced' },
 ];
 
-export default function RunDetail({ navigateTo, onActiveSectionChange, run }) {
+export default function RunDetail({ run }) {
   const [activeSection, setActiveSection] = useState('summary');
   const [selectedAttemptId, setSelectedAttemptId] = useState(() => run?.attempts?.at(-1)?.id || '');
   const attempts = useMemo(() => Array.isArray(run?.attempts) ? run.attempts : [], [run]);
@@ -49,7 +42,6 @@ export default function RunDetail({ navigateTo, onActiveSectionChange, run }) {
     [run, selectedAttemptId],
   );
   const issueId = runIssueId(run);
-  const providerSessionRef = runAttemptProviderSessionRef(selectedAttempt, run);
 
   useEffect(() => {
     setActiveSection('summary');
@@ -59,10 +51,6 @@ export default function RunDetail({ navigateTo, onActiveSectionChange, run }) {
   useEffect(() => {
     if (selectedAttempt?.id && selectedAttempt.id !== selectedAttemptId) setSelectedAttemptId(selectedAttempt.id);
   }, [selectedAttempt, selectedAttemptId]);
-
-  useEffect(() => {
-    onActiveSectionChange?.(activeSection);
-  }, [activeSection, onActiveSectionChange]);
 
   return (
     <div className="run-detail-workspace">
@@ -82,7 +70,7 @@ export default function RunDetail({ navigateTo, onActiveSectionChange, run }) {
         })}
       </nav>
 
-      {attempts.length ? (
+      {attempts.length > 1 ? (
         <div aria-label="Run attempts" className="run-attempt-tabs" role="tablist">
           <span className="run-attempt-tabs-label">Attempts</span>
           {attempts.map(attempt => (
@@ -102,19 +90,10 @@ export default function RunDetail({ navigateTo, onActiveSectionChange, run }) {
         </div>
       ) : null}
 
-      <main className={`run-detail-content ${activeSection === 'provider' ? 'provider-active' : ''}`}>
+      <main className="run-detail-content">
         {activeSection === 'summary' ? <RunSummary attempt={selectedAttempt} run={run} /> : null}
         {activeSection === 'logs' ? <RunLogs attempt={selectedAttempt} issueId={issueId} run={run} /> : null}
-        {activeSection === 'approvals' ? <RunApprovals attempt={selectedAttempt} run={run} /> : null}
         {activeSection === 'evidence' ? <EvidencePanel runId={run.id} title="Run Evidence" /> : null}
-        {activeSection === 'provider' ? (
-          <ProviderSessionDrillDown
-            attempt={selectedAttempt}
-            navigateTo={navigateTo}
-            run={run}
-            sessionRef={providerSessionRef}
-          />
-        ) : null}
         {activeSection === 'advanced' ? <RunAdvanced issueId={issueId} run={run} /> : null}
       </main>
     </div>
@@ -133,7 +112,6 @@ function RunSummary({ attempt, run }) {
       <section className="run-summary-main">
         <header className="run-section-heading">
           <div><span>Execution progress</span><h2>Run summary</h2></div>
-          <span className="run-source-badge">{progress.projection_mode || 'read-through'}</span>
         </header>
 
         <div className="run-summary-metrics">
@@ -250,66 +228,6 @@ function RunLogs({ attempt, issueId, run }) {
         </div>
       )}
       <EventPageFooter events={events} />
-    </section>
-  );
-}
-
-function RunApprovals({ attempt, run }) {
-  const approvals = useRunApprovals(run.legacy?.id);
-  const visible = useMemo(() => approvalsForAttempt(approvals.items, attempt), [approvals.items, attempt]);
-  return (
-    <section className="run-resource-panel">
-      <ResourceHeader
-        eyebrow={`Attempt ${attempt?.sequence || '?'} · deterministic permission history`}
-        icon={ShieldCheck}
-        loading={approvals.loading}
-        onRefresh={approvals.refresh}
-        title="Approvals"
-      />
-      {approvals.error ? <ErrorState error={approvals.error} onRetry={approvals.refresh} /> : null}
-      {!approvals.loading && !approvals.error && visible.length === 0 ? (
-        <EmptyState icon={ShieldCheck} text="No approval request is linked to this Attempt." />
-      ) : (
-        <div className="run-approval-list">
-          {[...visible].reverse().map(approval => (
-            <article data-status={approval.status} key={approval.approval_id}>
-              <div>
-                <span>{approval.request_type || 'provider request'} · {approval.risk || 'unknown'} risk</span>
-                <strong>{approval.request_summary || approval.summary || 'Approval request'}</strong>
-              </div>
-              <dl>
-                <div><dt>Status</dt><dd>{approval.status}</dd></div>
-                <div><dt>Decision</dt><dd>{approval.resolved_decision || approval.fast_decision || 'pending'}</dd></div>
-                <div><dt>Requested</dt><dd>{formatTime(approval.created_at)}</dd></div>
-                <div><dt>Resolved</dt><dd>{formatTime(approval.resolved_at)}</dd></div>
-              </dl>
-              {approval.resolver_error ? <p>{approval.resolver_error}</p> : null}
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
-  if (!sessionRef) {
-    return <EmptyState icon={Terminal} text="This Attempt has no provider session observation reference." />;
-  }
-  return (
-    <section className="run-provider-drilldown">
-      <header>
-        <div><Terminal size={15} /><strong>Low-level provider session</strong></div>
-        <span>{attempt?.provider_ref?.provider || run.provider} observation · not Run authority</span>
-      </header>
-      <Sessions
-        autoSelectFirstSession={false}
-        key={sessionRef}
-        navigateTo={navigateTo}
-        selectedSessionId={sessionRef}
-        showEvidence={false}
-        showSidebar={false}
-      />
     </section>
   );
 }
@@ -464,37 +382,6 @@ function useRunEvents({ active, attempt, issueId, run, types }) {
     refresh: () => setReloadToken(value => value + 1),
     scanned,
   };
-}
-
-function useRunApprovals(legacyRunId) {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [reloadToken, setReloadToken] = useState(0);
-  useEffect(() => {
-    if (!legacyRunId) {
-      setItems([]);
-      setLoading(false);
-      return undefined;
-    }
-    let alive = true;
-    setLoading(true);
-    runsApi.getRunApprovals(legacyRunId)
-      .then(result => {
-        if (alive) {
-          setItems(Array.isArray(result) ? result : []);
-          setError('');
-        }
-      })
-      .catch(loadError => {
-        if (alive) setError(loadError.message || '加载 Run approvals 失败');
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => { alive = false; };
-  }, [legacyRunId, reloadToken]);
-  return { error, items, loading, refresh: () => setReloadToken(value => value + 1) };
 }
 
 function prettyPayload(value) {

@@ -7,7 +7,6 @@ import { runStatusLabel } from './runPageModel.js';
 const RUNS_APP_SIDEBAR_SLOT_ID = 'sessions-app-sidebar-slot';
 
 export default function RunSidebar({
-  compatibility,
   hasMore,
   loading,
   loadingMore,
@@ -45,7 +44,7 @@ export default function RunSidebar({
       <div className="runs-sidebar-heading">
         <div>
           <span className="sidebar-section-title">Runs</span>
-          <small>{compatibility?.read_authority === 'issue_runs' ? 'issue_runs authoritative' : '统一执行视图'}</small>
+          <small>执行历史</small>
         </div>
         <button aria-label="刷新 Runs" className="runs-sidebar-refresh" disabled={loading} onClick={onRefresh} type="button">
           <RotateCw className={loading ? 'is-spinning' : ''} size={13} />

@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   CircleStop,
   History,
+  MessageSquareText,
   Play,
   RotateCcw,
 } from 'lucide-react';
@@ -36,7 +37,6 @@ const RUN_REFRESH_EVENT_TYPES = new Set([
 
 export default function Runs({ navigateTo, onPageContextChange, selectedRunId = '', selectedSessionId = '' }) {
   const [runs, setRuns] = useState([]);
-  const [compatibility, setCompatibility] = useState(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -46,7 +46,6 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   const [activeRunId, setActiveRunId] = useState(selectedRunId);
   const [runDetail, setRunDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [activeRunSection, setActiveRunSection] = useState('summary');
   const listRequest = useRef(null);
   const listController = useRef(null);
   const loadMoreController = useRef(null);
@@ -65,7 +64,6 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
       const response = await pending;
       const firstPage = response?.items || [];
       setRuns(current => silent ? mergeRunPages(firstPage, current) : firstPage);
-      setCompatibility(response?.compatibility || null);
       if (!silent) setPage(Number(response?.page || 1));
       setTotalPages(Number(response?.total_pages || 0));
       setError('');
@@ -175,7 +173,6 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   const selectRun = useCallback((id) => {
     setSurface('run');
     setActiveRunId(id);
-    setActiveRunSection('summary');
     navigateTo?.('runs', null, id);
   }, [navigateTo]);
 
@@ -195,14 +192,13 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
       run_id: surface === 'run' ? runDetail?.id || activeRunId || '' : '',
       session_id: surface === 'run' ? providerSessionRef : selectedSessionId,
       work_id: surface === 'run' ? runDetail?.work_id || '' : '',
-      interaction_surface: surface !== 'run' || activeRunSection === 'provider' ? 'provider-session' : '',
+      interaction_surface: surface !== 'run' ? 'provider-session' : '',
     });
-  }, [activeRunId, activeRunSection, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
+  }, [activeRunId, onPageContextChange, providerSessionRef, runDetail, selectedSessionId, surface]);
 
   return (
     <section className="runs-page-shell">
       <RunSidebar
-        compatibility={compatibility}
         hasMore={hasMore}
         loading={loading}
         loadingMore={loadingMore}
@@ -236,7 +232,6 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
       ) : runDetail ? (
         <div className="run-detail-surface">
           <RunContextBar
-            compatibility={compatibility}
             navigateTo={navigateTo}
             onRunChanged={(nextRun) => {
               setRunDetail(nextRun);
@@ -245,7 +240,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
             }}
             run={runDetail}
           />
-          <RunDetail navigateTo={navigateTo} onActiveSectionChange={setActiveRunSection} run={runDetail} />
+          <RunDetail run={runDetail} />
         </div>
       ) : (
         <div className="run-provider-empty">
@@ -258,12 +253,13 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
   );
 }
 
-function RunContextBar({ compatibility, navigateTo, onRunChanged, run }) {
+function RunContextBar({ navigateTo, onRunChanged, run }) {
   const [pendingAction, setPendingAction] = useState('');
   const [resumePrompt, setResumePrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const actions = runAvailableActions(run);
   const issueId = runIssueId(run);
+  const providerSessionRef = runProviderSessionRef(run);
 
   const controlRun = async (action) => {
     if (submitting || (action === 'resume' && !resumePrompt.trim())) return;
@@ -307,6 +303,11 @@ function RunContextBar({ compatibility, navigateTo, onRunChanged, run }) {
       </div>
 
       <div className="run-context-actions">
+        {providerSessionRef ? (
+          <button onClick={() => navigateTo?.('sessions', null, providerSessionRef)} type="button">
+            <MessageSquareText size={13} /> Provider session
+          </button>
+        ) : null}
         {actions.interrupt ? (
           <button onClick={() => setPendingAction('interrupt')} type="button"><CircleStop size={13} /> 中断</button>
         ) : null}
@@ -345,13 +346,6 @@ function RunContextBar({ compatibility, navigateTo, onRunChanged, run }) {
         </div>
       ) : null}
 
-      <details className="run-compatibility-details">
-        <summary>兼容与迁移</summary>
-        <span>Run source of truth: {compatibility?.read_authority || 'issue_runs'}；provider session 仅 observation。</span>
-        <span>双写：{compatibility?.dual_write || 'none'}；双读：{compatibility?.dual_read || 'W2 at most one release'}。</span>
-        <span>回滚：注销 Runs route 并恢复 legacy Issue/Session control，不删除 authority data。</span>
-        <span>最终删除门禁：{compatibility?.final_removal_gate || 'P11.05 + G7 + zero Sessions consumer + backup/restore window'}。</span>
-      </details>
     </div>
   );
 }
@@ -359,8 +353,8 @@ function RunContextBar({ compatibility, navigateTo, onRunChanged, run }) {
 function CompatibilitySessionNotice() {
   return (
     <div className="run-surface-notice compat">
-      <strong>Sessions 兼容 deep link</strong>
-      <span>此入口按 compat v1 保留至 v0.3.x；请迁移到 Runs provider drill-down，以 Work/Run 为执行主线。</span>
+      <strong>Provider session</strong>
+      <span>这是 Run 的底层会话记录；返回 Runs 可查看执行结论。</span>
     </div>
   );
 }
