@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   CircleStop,
   History,
-  MessageSquareText,
   Play,
   RotateCcw,
 } from 'lucide-react';
@@ -217,6 +216,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
             autoSelectFirstSession={false}
             navigateTo={navigateTo}
             selectedSessionId={selectedSessionId}
+            showEvidence={false}
             showSidebar={false}
           />
         </div>
@@ -240,7 +240,7 @@ export default function Runs({ navigateTo, onPageContextChange, selectedRunId = 
             }}
             run={runDetail}
           />
-          <RunDetail run={runDetail} />
+          <RunDetail navigateTo={navigateTo} run={runDetail} />
         </div>
       ) : (
         <div className="run-provider-empty">
@@ -259,7 +259,6 @@ function RunContextBar({ navigateTo, onRunChanged, run }) {
   const [submitting, setSubmitting] = useState(false);
   const actions = runAvailableActions(run);
   const issueId = runIssueId(run);
-  const providerSessionRef = runProviderSessionRef(run);
 
   const controlRun = async (action) => {
     if (submitting || (action === 'resume' && !resumePrompt.trim())) return;
@@ -303,11 +302,6 @@ function RunContextBar({ navigateTo, onRunChanged, run }) {
       </div>
 
       <div className="run-context-actions">
-        {providerSessionRef ? (
-          <button onClick={() => navigateTo?.('sessions', null, providerSessionRef)} type="button">
-            <MessageSquareText size={13} /> Provider session
-          </button>
-        ) : null}
         {actions.interrupt ? (
           <button onClick={() => setPendingAction('interrupt')} type="button"><CircleStop size={13} /> 中断</button>
         ) : null}

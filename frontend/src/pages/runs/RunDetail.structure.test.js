@@ -8,13 +8,12 @@ const modelSource = readFileSync(new URL('./runDetailModel.js', import.meta.url)
 
 const runsPageSource = readFileSync(new URL('../Runs.jsx', import.meta.url), 'utf8');
 
-test('Run Detail exposes four decision-oriented sections and hides a single Attempt selector', () => {
-  for (const label of ['Summary', 'Logs', 'Evidence', 'Advanced']) {
+test('Run Detail puts Provider first and hides a single Attempt selector', () => {
+  for (const label of ['Provider', 'Summary', 'Logs', 'Evidence', 'Advanced']) {
     assert.match(detailSource, new RegExp(`label: '${label}'`));
   }
-  for (const label of ['Approvals', 'Provider session']) {
-    assert.doesNotMatch(detailSource, new RegExp(`label: '${label}'`));
-  }
+  assert.ok(detailSource.indexOf("label: 'Provider'") < detailSource.indexOf("label: 'Summary'"));
+  assert.doesNotMatch(detailSource, /label: 'Approvals'/);
   assert.match(detailSource, /aria-label="Run attempts"/);
   assert.match(detailSource, /attempts\.length > 1/);
   assert.match(detailSource, />Timeline</);
@@ -23,12 +22,14 @@ test('Run Detail exposes four decision-oriented sections and hides a single Atte
   assert.match(detailSource, /<EvidencePanel runId=\{run\.id\}/);
 });
 
-test('provider observation is a secondary context action instead of a fixed detail tab', () => {
-  assert.match(runsPageSource, /Provider session/);
-  assert.match(runsPageSource, /navigateTo\?\.\('sessions', null, providerSessionRef\)/);
-  assert.doesNotMatch(detailSource, /<Sessions|ProviderSessionDrillDown|useRunApprovals/);
+test('provider observation is an embedded primary tab without duplicate Evidence', () => {
+  assert.match(detailSource, /<Sessions/);
+  assert.match(detailSource, /ProviderSessionDrillDown/);
+  assert.match(detailSource, /showEvidence=\{false\}/);
+  assert.doesNotMatch(detailSource, /useRunApprovals/);
   assert.doesNotMatch(detailSource, /interruptSession\(/);
   assert.doesNotMatch(detailSource, /sendSessionMessage\(/);
+  assert.doesNotMatch(runsPageSource, /> Provider session/);
 });
 
 test('logs and raw events reuse bounded existing APIs instead of expanding the Run contract', () => {

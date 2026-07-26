@@ -5,14 +5,17 @@ import {
   eventPageCursor,
   eventsWithinAttempt,
   mergeRunEventPages,
+  runAttemptProviderSessionRef,
   runCostView,
   runEventInitialBeforeId,
   runLogSummary,
   selectedRunAttempt,
 } from './runDetailModel.js';
 
-test('Attempt selection preserves Run identity and falls back to the latest Attempt', () => {
+test('Attempt selection and provider observation preserve Run identity', () => {
   const run = fixtureRun();
+  assert.equal(runAttemptProviderSessionRef(run.attempts[0], run), 'codex:thread-codex');
+  assert.equal(runAttemptProviderSessionRef(run.attempts[1], run), 'claude:session-claude');
   assert.equal(selectedRunAttempt(run, run.attempts[0].id)?.kind, 'initial');
   assert.equal(selectedRunAttempt(run, 'missing')?.kind, 'recovery');
 });

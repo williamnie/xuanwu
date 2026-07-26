@@ -24,8 +24,10 @@ test('Runs list uses the canonical API and provider sessions keep Run authority 
   assert.match(clientSource, /request\(`\/api\/runs\?\$\{params\.toString\(\)\}`, options\)/);
   assert.match(clientSource, /request\(`\/api\/runs\/\$\{encodeURIComponent\(id\)\}`, options\)/);
   assert.match(pageSource, /runProviderSessionRef\(runDetail\)/);
-  assert.match(pageSource, /navigateTo\?\.\('sessions', null, providerSessionRef\)/);
-  assert.doesNotMatch(detailSource, /Provider session|<Sessions/);
+  assert.match(detailSource, /label: 'Provider'/);
+  assert.match(detailSource, /<Sessions/);
+  assert.match(detailSource, /showEvidence=\{false\}/);
+  assert.match(pageSource, /selectedSessionId=\{selectedSessionId\}[\s\S]*showEvidence=\{false\}/);
   assert.match(sessionsSource, /showSidebar \? \(/);
   assert.match(sessionsSource, /observationNotice,/);
 });

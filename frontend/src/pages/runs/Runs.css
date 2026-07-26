@@ -405,6 +405,8 @@
   padding: 22px clamp(18px, 3vw, 42px) 40px;
 }
 
+.run-detail-content.provider-active { overflow: hidden; padding: 0; }
+
 .run-summary-layout {
   display: grid;
   gap: 18px;
@@ -662,6 +664,26 @@
   white-space: pre-wrap;
 }
 
+.run-provider-drilldown {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.run-provider-drilldown > header {
+  align-items: center;
+  background: color-mix(in srgb, var(--bg-card) 96%, transparent);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 18px;
+}
+
+.run-provider-drilldown > header > div { align-items: center; display: flex; font-size: 0.7rem; gap: 6px; }
+.run-provider-drilldown > header span { color: var(--text-muted); font-size: 0.62rem; }
+.run-provider-drilldown > .sessions-client-container { flex: 1; min-height: 0; }
+
 .run-raw-object { color: var(--text-muted); font-size: 0.65rem; margin-top: 14px; }
 .run-raw-object summary { cursor: pointer; }
 
@@ -692,6 +714,7 @@
   .run-context-bar { grid-template-columns: 1fr; }
   .run-context-actions { justify-content: flex-start; }
   .run-control-confirm { align-items: stretch; flex-direction: column; }
+  .run-provider-drilldown > header { align-items: flex-start; flex-direction: column; gap: 4px; }
   .run-surface-notice { align-items: flex-start; flex-direction: column; gap: 3px; }
   .run-detail-content { padding: 16px 12px 28px; }
   .run-detail-section-tabs,

@@ -9,8 +9,10 @@ import {
   ListTree,
   LoaderCircle,
   RefreshCw,
+  Terminal,
 } from 'lucide-react';
 import EvidencePanel from '../../components/EvidencePanel.jsx';
+import Sessions from '../Sessions.jsx';
 import { runsApi } from '../../api/runs.js';
 import { runIssueId } from './runPageModel.js';
 import {
@@ -19,6 +21,7 @@ import {
   eventPageCursor,
   eventsWithinAttempt,
   mergeRunEventPages,
+  runAttemptProviderSessionRef,
   runCostView,
   runEventInitialBeforeId,
   runLogSummary,
@@ -26,27 +29,30 @@ import {
 } from './runDetailModel.js';
 
 const DETAIL_SECTIONS = [
+  { id: 'provider', icon: Terminal, label: 'Provider' },
   { id: 'summary', icon: Activity, label: 'Summary' },
   { id: 'logs', icon: FileText, label: 'Logs' },
   { id: 'evidence', icon: FileCheck2, label: 'Evidence' },
   { id: 'advanced', icon: ListTree, label: 'Advanced' },
 ];
 
-export default function RunDetail({ run }) {
-  const [activeSection, setActiveSection] = useState('summary');
+export default function RunDetail({ navigateTo, run }) {
+  const [activeSection, setActiveSection] = useState('provider');
   const [selectedAttemptId, setSelectedAttemptId] = useState(() => run?.attempts?.at(-1)?.id || '');
   const attempts = useMemo(() => Array.isArray(run?.attempts) ? run.attempts : [], [run]);
   const latestAttemptId = attempts.at(-1)?.id || '';
+  const latestProviderSessionRef = runAttemptProviderSessionRef(attempts.at(-1), run);
   const selectedAttempt = useMemo(
     () => selectedRunAttempt(run, selectedAttemptId),
     [run, selectedAttemptId],
   );
   const issueId = runIssueId(run);
+  const providerSessionRef = runAttemptProviderSessionRef(selectedAttempt, run);
 
   useEffect(() => {
-    setActiveSection('summary');
+    setActiveSection(latestProviderSessionRef ? 'provider' : 'summary');
     setSelectedAttemptId(latestAttemptId);
-  }, [latestAttemptId, run?.id]);
+  }, [latestAttemptId, latestProviderSessionRef, run?.id]);
 
   useEffect(() => {
     if (selectedAttempt?.id && selectedAttempt.id !== selectedAttemptId) setSelectedAttemptId(selectedAttempt.id);
@@ -90,13 +96,43 @@ export default function RunDetail({ run }) {
         </div>
       ) : null}
 
-      <main className="run-detail-content">
+      <main className={`run-detail-content ${activeSection === 'provider' ? 'provider-active' : ''}`}>
+        {activeSection === 'provider' ? (
+          <ProviderSessionDrillDown
+            attempt={selectedAttempt}
+            navigateTo={navigateTo}
+            run={run}
+            sessionRef={providerSessionRef}
+          />
+        ) : null}
         {activeSection === 'summary' ? <RunSummary attempt={selectedAttempt} run={run} /> : null}
         {activeSection === 'logs' ? <RunLogs attempt={selectedAttempt} issueId={issueId} run={run} /> : null}
         {activeSection === 'evidence' ? <EvidencePanel runId={run.id} title="Run Evidence" /> : null}
         {activeSection === 'advanced' ? <RunAdvanced issueId={issueId} run={run} /> : null}
       </main>
     </div>
+  );
+}
+
+function ProviderSessionDrillDown({ attempt, navigateTo, run, sessionRef }) {
+  if (!sessionRef) {
+    return <EmptyState icon={Terminal} text="This Attempt has no provider session observation reference." />;
+  }
+  return (
+    <section className="run-provider-drilldown">
+      <header>
+        <div><Terminal size={15} /><strong>{attempt?.provider_ref?.provider || run.provider || 'Provider'} session</strong></div>
+        <span>当前 Attempt 的实际执行记录</span>
+      </header>
+      <Sessions
+        autoSelectFirstSession={false}
+        key={sessionRef}
+        navigateTo={navigateTo}
+        selectedSessionId={sessionRef}
+        showEvidence={false}
+        showSidebar={false}
+      />
+    </section>
   );
 }
 
