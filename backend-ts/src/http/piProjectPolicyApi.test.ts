@@ -29,13 +29,11 @@ describe("PI project policy API", () => {
         allowed_skill_intents: ["codex-issue-runner", "verification-before-completion"],
         allowed_supervisor_actions: ["session.resume_followup", "issue.retry_after"],
         concurrency_policy: { max_parallel_issues: 1, max_parallel_pi_cycles: 1 },
-        default_mode: "delegated",
         quiet_hours: { daily: [{ end: "08:00", start: "22:00" }] },
         retry_policy: { enabled: true, max_attempts: 2, backoff_minutes: [15, 60] },
         supervisor_cooldown_seconds: 900,
         supervisor_max_recoveries_per_issue: 3,
         supervisor_max_recoveries_per_project_per_hour: 12,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai",
         verification_policy: { evidence_required: true, on_timeout: "request_verifier", pending_timeout_minutes: 90 },
@@ -44,21 +42,20 @@ describe("PI project policy API", () => {
       const readBack = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-policy`));
 
       expect(initial.status).toBe(200);
-      expect(await initial.json()).toMatchObject({
-        default_mode: "manual",
+      const initialBody = await initial.json() as Record<string, unknown>;
+      expect(initialBody).toMatchObject({
         project_id: "demo",
-        supervisor_mode: "autonomous",
         timezone: "UTC"
       });
+      expect(initialBody).not.toHaveProperty("default_mode");
+      expect(initialBody).not.toHaveProperty("supervisor_mode");
       expect(patched.status).toBe(200);
       const body = await patched.json() as Record<string, unknown>;
       expect(body).toMatchObject({
-        default_mode: "delegated",
         project_id: "demo",
         supervisor_cooldown_seconds: 900,
         supervisor_max_recoveries_per_issue: 3,
         supervisor_max_recoveries_per_project_per_hour: 12,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "default_cooldown",
         timezone: "Asia/Shanghai"
       });
@@ -134,7 +131,7 @@ describe("PI project policy API", () => {
       });
 
       expect(invalidMode.status).toBe(400);
-      expect(await invalidMode.json()).toEqual({ message: "default_mode 不合法" });
+      expect(await invalidMode.json()).toEqual({ message: "default_mode 已移除；PI 绑定项目后固定为 autonomous" });
       expect(invalidRetry.status).toBe(400);
       expect(await invalidRetry.json()).toEqual({ message: "retry_policy 必须是合法 JSON object" });
       expect(invalidVerification.status).toBe(400);
@@ -146,7 +143,7 @@ describe("PI project policy API", () => {
       expect(invalidMcp.status).toBe(400);
       expect(await invalidMcp.json()).toEqual({ message: "MCP capability id 不合法: bad mcp" });
       expect(invalidSupervisorMode.status).toBe(400);
-      expect(await invalidSupervisorMode.json()).toEqual({ message: "supervisor_mode 不合法" });
+      expect(await invalidSupervisorMode.json()).toEqual({ message: "supervisor_mode 已移除；PI 绑定项目后固定为 autonomous" });
       expect(invalidSupervisorAction.status).toBe(400);
       expect(await invalidSupervisorAction.json()).toEqual({ message: "allowed_supervisor_actions id 不合法: bad action" });
       expect(invalidSupervisorWait.status).toBe(400);

@@ -74,15 +74,12 @@ describe("PI guardian system status", () => {
         satisfied_pending_notification: 1
       });
       expect(body.pi_guardian.runtime_modes).toMatchObject({
-        manager_active_projects: 0,
-        manager_disabled_projects: 1,
-        supervisor_active_projects: 1,
-        supervisor_independent_of_manager: true,
+        contract: "xuanwu.guardian-runtime-modes.v2",
+        managed_projects: 1,
+        unmanaged_projects: 0,
         projects: [{
-          manager_active: false,
-          project_id: "demo",
-          supervisor_active: true,
-          supervisor_mode: "autonomous"
+          managed: true,
+          project_id: "demo"
         }]
       });
     } finally {
@@ -114,6 +111,10 @@ function insertProject(db: RunnerDatabase, root: string): void {
     `insert into projects (id, name, cwd, provider, provider_config_json, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
     ["demo", "Demo", join(root, "project"), "codex", "{}", 1, "2026-06-29T00:00:00Z", "2026-06-29T00:00:00Z"]
+  );
+  db.sqlite.run(
+    "insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)",
+    ["demo", "2026-06-29T00:00:00Z", "2026-06-29T00:00:00Z"]
   );
 }
 

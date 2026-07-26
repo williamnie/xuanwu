@@ -222,8 +222,6 @@ GET /api/projects/:id/pi/heartbeat/diagnostics
 POST /api/projects/:id/pi/heartbeat/pause
 POST /api/projects/:id/pi/heartbeat/resume
 POST /api/projects/:id/pi/heartbeat/run-once
-POST /api/projects/:id/pi/pause
-POST /api/projects/:id/pi/resume
 POST /api/projects/:id/pi/run-once
 ```
 
@@ -270,6 +268,7 @@ GET /api/projects/:id/pi-policy
 PATCH /api/projects/:id/pi-policy
 GET /api/projects/:id/pi-settings
 PATCH /api/projects/:id/pi-settings
+DELETE /api/projects/:id/pi-settings
 GET /api/runner/settings
 PUT /api/runner/settings
 ```

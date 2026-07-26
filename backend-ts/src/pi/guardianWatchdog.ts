@@ -117,10 +117,10 @@ function piRuntimeChecks(context: PiGuardianWatchdogContext): PiGuardianWatchdog
     select project_id, reason, count(*) as count, min(seen_at) as oldest_created_at
     from (
       select s.project_id as project_id,
-        case when a.id is null then 'missing_agent' else 'disabled_agent' end as reason,
+        case when a.id is null then 'missing_supervisor' else 'disabled_supervisor' end as reason,
         s.updated_at as seen_at
-      from project_pi_settings s left join pi_agents a on a.id=s.pi_agent_id
-      where s.auto_manage=1 and (a.id is null or a.enabled<>1)
+      from project_pi_settings s left join pi_agents a on a.id='runner-default'
+      where a.id is null or a.enabled<>1
       union all
       select c.project_id, 'failed_conversation' as reason, c.updated_at as seen_at
       from pi_conversations c

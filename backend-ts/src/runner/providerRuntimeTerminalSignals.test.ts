@@ -44,8 +44,7 @@ describe("provider runtime terminal PI signals", () => {
         diagnosis_code: "provider_rate_limited",
         provider_error_category: "rate_limit",
         provider_session_id: "thread-overloaded",
-        provider_turn_id: "turn-overloaded",
-        supervisor_mode: "autonomous"
+        provider_turn_id: "turn-overloaded"
       });
 
       const now = new Date("2026-06-22T15:40:40Z");
@@ -69,7 +68,7 @@ function seedIssue(db: RunnerDatabase, issueID: number): void {
     `insert into projects (id, name, cwd, provider, created_at, updated_at) values (?, ?, ?, ?, ?, ?)`,
     ["demo", "demo", "/tmp/demo", "codex", "2026-06-22T15:00:00Z", "2026-06-22T15:00:00Z"]
   );
-  upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "off", allowed_supervisor_actions_json: [] });
+  upsertProjectPiPolicy(db, { project_id: "demo", allowed_supervisor_actions_json: [] });
   db.sqlite.run(
     `insert into issues (id, project_id, title, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)`,
     [issueID, "demo", "Runtime", "in_progress", "2026-06-22T15:00:00Z", "2026-06-22T15:00:00Z"]

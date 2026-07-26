@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
-import { getProjectPiSettings, listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
+import { listPiActionEvents, listPiActions, listPiConversations, listPiMemoryItems } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { EventBus } from "../events/bus.ts";
 import { gatePiActionEnvelope } from "../pi/actionGate.ts";
@@ -48,7 +48,7 @@ describe("Bun project PI control API", () => {
 
       expect(response.status).toBe(201);
       expect(await response.json()).toMatchObject({
-        auto_manage: 0,
+        managed: true,
         project_id: "demo",
         status: "completed",
         text: "cycle done"
@@ -180,41 +180,28 @@ describe("Bun project PI control API", () => {
     }
   });
 
-  test("pause and resume persist auto_manage state", async () => {
-    let database: RunnerDatabase | undefined = await openFixtureDatabase();
-    let restored: RunnerDatabase | undefined;
+  test("does not expose pause or resume mode endpoints", async () => {
+    const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
-      insertAgent(database, "pi-default", 1);
       const router = createDefaultRouter({ database });
 
       const paused = await post(router, "/api/projects/demo/pi/pause");
       const resumed = await post(router, "/api/projects/demo/pi/resume");
 
-      expect(paused.status).toBe(200);
-      expect(await paused.json()).toMatchObject({ project_id: "demo", auto_manage: 0 });
-      expect(resumed.status).toBe(200);
-      expect(await resumed.json()).toMatchObject({ project_id: "demo", auto_manage: 1 });
-      expect(getProjectPiSettings(database, "demo")?.auto_manage).toBe(1);
-
-      const dbPath = database.path;
-      database.close();
-      database = undefined;
-      restored = await openDatabase({ dbPath });
-      expect(getProjectPiSettings(restored, "demo")?.auto_manage).toBe(1);
+      expect(paused.status).toBe(404);
+      expect(resumed.status).toBe(404);
     } finally {
-      database?.close();
-      restored?.close();
+      database.close();
     }
   });
 
-  test("authorizes only project-scoped Work enqueue when auto_enqueue is enabled", async () => {
+  test("always authorizes only project-scoped Work enqueue for a managed project", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
       const project = getProject(database, "demo")!;
-      const enabled = managerCycleAuthorization(project, { auto_enqueue: 1 });
-      const disabled = managerCycleAuthorization(project, { auto_enqueue: 0 });
+      const enabled = managerCycleAuthorization(project);
       const envelope = {
         action_type: "work.enqueue",
         issue_id: 7,
@@ -226,30 +213,25 @@ describe("Bun project PI control API", () => {
       };
 
       expect(gatePiActionEnvelope(envelope, enabled)).toMatchObject({ decision: "execute" });
-      expect(gatePiActionEnvelope(envelope, disabled)).toMatchObject({ decision: "deny" });
       expect(gatePiActionEnvelope({ ...envelope, project_id: "other" }, enabled))
         .toMatchObject({ decision: "deny" });
       expect(enabled.allowedActions).toContain("work.enqueue");
       expect(enabled.mode).toBe("delegated");
-      expect(disabled.mode).toBe("attended");
     } finally {
       database.close();
     }
   });
 
-  test("run-once and resume use the bootstrapped default PI agent", async () => {
+  test("run-once uses the bootstrapped default PI agent", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
       const router = createDefaultRouter({ database });
 
       const runOnce = await post(router, "/api/projects/demo/pi/run-once");
-      const resume = await post(router, "/api/projects/demo/pi/resume");
 
       expect(runOnce.status).toBe(400);
       expect(String((await runOnce.json() as Record<string, unknown>).message)).toContain("No API key found for openai");
-      expect(resume.status).toBe(200);
-      expect(await resume.json()).toMatchObject({ project_id: "demo", pi_agent_id: "runner-default", auto_manage: 1 });
     } finally {
       database.close();
     }
@@ -269,12 +251,6 @@ async function nextEvent(events: ReturnType<EventBus["subscribe"]>, type: string
   }
   return undefined;
 }
-function insertAgent(db: RunnerDatabase, id: string, enabled: number): void {
-  db.sqlite.run(
-    `insert into pi_agents (id, name, enabled, created_at, updated_at) values (?, ?, ?, ?, ?)`,
-    [id, id, enabled, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
-  );
-}
 function insertFauxAgent(db: RunnerDatabase, provider = "pi-control-faux"): void {
   db.sqlite.run(
     `update pi_agents
@@ -289,6 +265,10 @@ function insertProject(db: RunnerDatabase, id: string): void {
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, "codex", '{"capabilities":["issue_execution"]}', 1,
       "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+  db.sqlite.run(
+    "insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)",
+    [id, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 function insertIssue(db: RunnerDatabase, issue: {

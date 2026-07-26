@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
-import { createIssueSupervisorEvent, listIssueSupervisorEvents, listPiActionEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
+import { createIssueSupervisorEvent, listIssueSupervisorEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { getPiRecoveryAttempt, listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
 import { EventBus, type AppEvent } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
@@ -20,42 +20,6 @@ afterEach(async () => {
 });
 
 describe("PI issue supervisor actions", () => {
-  test("propose_only creates gated proposal and does not execute resume follow-up", async () => {
-    const db = await fixtureDb();
-    const provider = new SupervisorProvider();
-    try {
-      insertProject(db, "demo");
-      upsertProjectPiPolicy(db, {
-        allowed_supervisor_actions_json: ["session.resume_followup"],
-        project_id: "demo",
-        supervisor_mode: "propose_only"
-      });
-      insertIssueRunSession(db, { issueID: 305, projectID: "demo", sessionID: "thread-305", turnID: "turn-old" });
-
-      const result = await applyIssueSupervisorDecisionActions({
-        context: buildIssueSupervisorRecoveryContext(db, 305, { now: NOW }),
-        database: db,
-        decision: resumeDecision(),
-        now: NOW,
-        providers: { codex: provider }
-      });
-
-      expect(result.executed_actions).toEqual([]);
-      expect(provider.calls).toEqual([]);
-      expect(result.actions).toContainEqual(expect.objectContaining({
-        action_type: "session.resume_followup",
-        decision: "ask",
-        status: "pending"
-      }));
-      expect(listPiActionEvents(db, { actionId: result.actions[0]?.action_id }).map((event) => event.event_type))
-        .toEqual(["candidate", "gate_decision", "pending_approval"]);
-      expect(listIssueSupervisorEvents(db, { issueId: 305 }).map((event) => event.event_type))
-        .toEqual(["decision", "action"]);
-    } finally {
-      db.close();
-    }
-  });
-
   test("autonomous policy executes covered resume follow-up and writes audit trails", async () => {
     const db = await fixtureDb();
     const provider = new SupervisorProvider();
@@ -64,8 +28,7 @@ describe("PI issue supervisor actions", () => {
       insertIssueRunSession(db, { issueID: 305, projectID: "demo", sessionID: "thread-305", turnID: "turn-old" });
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["session.resume_followup"],
-        project_id: "demo",
-        supervisor_mode: "autonomous"
+        project_id: "demo"
       });
 
       const result = await applyIssueSupervisorDecisionActions({
@@ -111,8 +74,7 @@ describe("PI issue supervisor actions", () => {
       insertIssueRunSession(db, { issueID: 307, projectID: "demo", sessionID: "thread-307", turnID: "turn-old" });
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["needs_user.escalate"],
-        project_id: "demo",
-        supervisor_mode: "autonomous"
+        project_id: "demo"
       });
 
       const result = await applyIssueSupervisorDecisionActions({
@@ -148,8 +110,7 @@ describe("PI issue supervisor actions", () => {
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["session.resume_followup"],
         project_id: "demo",
-        supervisor_cooldown_seconds: 600,
-        supervisor_mode: "autonomous"
+        supervisor_cooldown_seconds: 600
       });
       recordPiRecoveryAttempt(db, {
         action_type: "session.resume_followup",
@@ -195,8 +156,7 @@ describe("PI issue supervisor actions", () => {
         allowed_supervisor_actions_json: ["session.resume_followup"],
         project_id: "demo",
         supervisor_cooldown_seconds: 600,
-        supervisor_max_recoveries_per_issue: 1,
-        supervisor_mode: "autonomous"
+        supervisor_max_recoveries_per_issue: 1
       });
       for (const index of [1, 2, 3]) {
         recordPiRecoveryAttempt(db, {

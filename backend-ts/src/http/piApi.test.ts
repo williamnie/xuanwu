@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { getAgentSession } from "../db/repositories/agentSessions.ts";
+import { getProject } from "../db/repositories/projects.ts";
 import { createDefaultRouter } from "./server.ts";
 
 const BASE_URL = "http://127.0.0.1:3008";
@@ -78,7 +79,7 @@ describe("Bun PI settings API", () => {
     }
   });
 
-  test("reads and updates project PI settings with default values", async () => {
+  test("binds and unbinds a project with automatic PI takeover", async () => {
     const database = await openFixtureDatabase();
     try {
       insertProject(database, "demo");
@@ -86,31 +87,22 @@ describe("Bun PI settings API", () => {
 
       const initial = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`));
       expect(initial.status).toBe(200);
-      expect(await initial.json()).toMatchObject({
-        project_id: "demo",
-        pi_agent_id: "runner-default",
-        auto_manage: 0,
-        auto_triage: 0,
-        auto_enqueue: 0,
-        notify_on_needs_user: 1,
-        max_actions_per_cycle: 5
-      });
+      expect(await initial.json()).toBeNull();
 
-      const patched = await request(router, "/api/projects/demo/pi-settings", "PATCH", {
-        auto_manage: true,
-        auto_triage: 1,
-        auto_enqueue: false,
-        max_actions_per_cycle: 3
-      });
+      const patched = await request(router, "/api/projects/demo/pi-settings", "PATCH", {});
       expect(patched.status).toBe(200);
-      expect(await patched.json()).toMatchObject({
-        project_id: "demo",
-        pi_agent_id: "runner-default",
-        auto_manage: 1,
-        auto_triage: 1,
-        auto_enqueue: 0,
-        max_actions_per_cycle: 3
-      });
+      expect(await patched.json()).toMatchObject({ project_id: "demo" });
+      expect(getProject(database, "demo")?.auto_run).toBe(1);
+      expect(getProject(database, "demo")?.pi_managed).toBe(1);
+
+      const removedField = await request(router, "/api/projects/demo/pi-settings", "PATCH", { auto_manage: 0 });
+      expect(removedField.status).toBe(400);
+      expect(await removedField.json()).toEqual({ message: "auto_manage 已移除；绑定项目后 Supervisor 会自动完全接管" });
+
+      const deleted = await router.handle(new Request(`${BASE_URL}/api/projects/demo/pi-settings`, { method: "DELETE" }));
+      expect(deleted.status).toBe(200);
+      expect(await deleted.json()).toEqual({ managed: false, project_id: "demo" });
+      expect(getProject(database, "demo")?.pi_managed).toBe(0);
     } finally {
       database.close();
     }
@@ -257,16 +249,13 @@ describe("Bun PI settings API", () => {
       insertProject(database, "demo");
       const router = createDefaultRouter({ database });
 
-      const autoManaged = await request(router, "/api/projects/demo/pi-settings", "PATCH", {
-        pi_agent_id: "retired-client-selection",
-        auto_manage: 1
-      });
+      const autoManaged = await request(router, "/api/projects/demo/pi-settings", "PATCH", {});
       const disabledAfterEnable = await request(router, "/api/pi/supervisor", "PATCH", { enabled: 0 });
 
       expect(autoManaged.status).toBe(200);
-      expect(await autoManaged.json()).toMatchObject({ pi_agent_id: "runner-default", auto_manage: 1 });
+      expect(await autoManaged.json()).toMatchObject({ project_id: "demo" });
       expect(disabledAfterEnable.status).toBe(400);
-      expect(await disabledAfterEnable.json()).toEqual({ message: "enabled=false would disable an automatically managed Supervisor" });
+      expect(await disabledAfterEnable.json()).toEqual({ message: "enabled=false would disable projects managed by Supervisor" });
     } finally {
       database.close();
     }

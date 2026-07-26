@@ -104,8 +104,7 @@ describe("PI issue supervisor scheduler", () => {
       insertProject(db, "demo", await tempRoot("supervisor-autonomous-project-"));
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["session.resume_followup"],
-        project_id: "demo",
-        supervisor_mode: "autonomous"
+        project_id: "demo"
       });
       insertRunningIssue(db, {
         issueID: 500,
@@ -146,8 +145,7 @@ describe("PI issue supervisor scheduler", () => {
       insertProject(db, "demo", await tempRoot("supervisor-invalid-project-"));
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["needs_user.escalate"],
-        project_id: "demo",
-        supervisor_mode: "autonomous"
+        project_id: "demo"
       });
       insertRunningIssue(db, {
         issueID: 501,
@@ -187,8 +185,7 @@ describe("PI issue supervisor scheduler", () => {
       insertProject(db, "demo", await tempRoot("supervisor-invalid-cooldown-project-"));
       upsertProjectPiPolicy(db, {
         project_id: "demo",
-        supervisor_cooldown_seconds: 300,
-        supervisor_mode: "autonomous"
+        supervisor_cooldown_seconds: 300
       });
       insertRunningIssue(db, {
         issueID: 507,
@@ -243,8 +240,7 @@ describe("PI issue supervisor scheduler", () => {
       insertProject(db, "demo", await tempRoot("supervisor-legacy-invalid-action-project-"));
       upsertProjectPiPolicy(db, {
         project_id: "demo",
-        supervisor_cooldown_seconds: 300,
-        supervisor_mode: "autonomous"
+        supervisor_cooldown_seconds: 300
       });
       insertRunningIssue(db, {
         issueID: 508,
@@ -291,7 +287,7 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
-  test("raises an alert-only Guardian event when the PI Agent is missing or disabled", async () => {
+  test("does not enter the Supervisor decision boundary while the singleton is disabled", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo", await tempRoot("supervisor-unavailable-project-"));
@@ -311,34 +307,19 @@ describe("PI issue supervisor scheduler", () => {
         staleAfterSeconds: 300
       });
 
-      expect(result).toMatchObject({ decisions: 0, failed: 1, signaled: 1 });
+      expect(result).toMatchObject({ decisions: 0, failed: 0, scanned: 0, signaled: 0 });
       expect(listPiActions(db, { issueId: 502 })).toEqual([]);
-      expect(listIssueSupervisorEvents(db, { issueId: 502 })).toContainEqual(expect.objectContaining({
-        decision: "needs_user",
-        event_type: "decision_failed"
-      }));
-      const [alert] = listPiGuardianEvents(db, { projectId: "demo" });
-      expect(alert).toMatchObject({
-        event_type: "guardian.pi_supervisor.unavailable",
-        issue_id: 502,
-        severity: "actionable",
-        status: "pending"
-      });
-      expect(JSON.parse(alert?.normalized_payload_json ?? "{}")).toMatchObject({
-        diagnosis_code: "pi_supervisor_unavailable",
-        requires_user: true
-      });
+      expect(listIssueSupervisorEvents(db, { issueId: 502 })).toEqual([]);
     } finally {
       db.close();
     }
   });
 
-  test("off mode and normally active sessions do not call PI", async () => {
+  test("normally active sessions do not call PI", async () => {
     const db = await fixtureDb();
     let calls = 0;
     try {
       insertProject(db, "demo", await tempRoot("supervisor-skip-project-"));
-      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "off" });
       insertRunningIssue(db, {
         issueID: 503,
         projectID: "demo",
@@ -406,8 +387,7 @@ describe("PI issue supervisor scheduler", () => {
       insertProject(db, "demo", await tempRoot("supervisor-deterministic-transient-retry-"));
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["issue.retry"],
-        project_id: "demo",
-        supervisor_mode: "autonomous"
+        project_id: "demo"
       });
       insertRunningIssue(db, {
         issueID: 510,
@@ -453,8 +433,7 @@ describe("PI issue supervisor scheduler", () => {
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["issue.supervisor_decision"],
         project_id: "demo",
-        supervisor_cooldown_seconds: 300,
-        supervisor_mode: "autonomous"
+        supervisor_cooldown_seconds: 300
       });
       insertRunningIssue(db, {
         issueID: 506,
@@ -527,6 +506,11 @@ function insertProject(db: RunnerDatabase, projectID: string, cwd: string): void
     projectID,
     projectID,
     cwd,
+    "2026-06-10T07:00:00Z",
+    "2026-06-10T07:00:00Z"
+  ]);
+  db.sqlite.run(`insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`, [
+    projectID,
     "2026-06-10T07:00:00Z",
     "2026-06-10T07:00:00Z"
   ]);

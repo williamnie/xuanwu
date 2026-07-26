@@ -89,10 +89,8 @@ function seedAutoManagedProject(db: RunnerDatabase): void {
     "pi-default", "pi-default", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"
   ]);
   db.sqlite.run(
-    `insert into project_pi_settings
-     (project_id, pi_agent_id, auto_manage, max_actions_per_cycle, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    ["enabled", "pi-default", 1, 5, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+    ["enabled", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

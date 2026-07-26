@@ -28,8 +28,7 @@ describe("PI issue supervisor budget exhausted escalation", () => {
       insertProject(db, "demo", await tempRoot("supervisor-budget-project-"));
       upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: ["session.resume_followup"],
-        project_id: "demo",
-        supervisor_mode: "autonomous"
+        project_id: "demo"
       });
       insertRunningIssue(db, 505, "demo", "thread-505", "turn-505");
       for (const index of [1, 2]) recordBudgetAttempt(db, index);
@@ -102,6 +101,8 @@ function insertProject(db: RunnerDatabase, projectID: string, cwd: string): void
   mkdirSync(cwd, { recursive: true });
   db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, sort_order, created_at, updated_at)
     values (?, ?, ?, 'codex', 1, 1, ?, ?)`, [projectID, projectID, cwd, "2026-06-10T07:00:00Z", "2026-06-10T07:00:00Z"]);
+  db.sqlite.run(`insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+    [projectID, "2026-06-10T07:00:00Z", "2026-06-10T07:00:00Z"]);
 }
 
 function insertRunningIssue(db: RunnerDatabase, issueID: number, projectID: string, sessionID: string, turnID: string): void {

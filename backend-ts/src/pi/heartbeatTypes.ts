@@ -35,25 +35,18 @@ export type HeartbeatProjectSettingsSignal = {
   pi_policy?: {
     allowed_supervisor_actions?: string[];
     concurrency_policy: Record<string, unknown>;
-    default_mode: string;
     quiet_hours: Record<string, unknown>;
     retry_policy: Record<string, unknown>;
     supervisor_cooldown_seconds?: number;
     supervisor_max_recoveries_per_issue?: number;
     supervisor_max_recoveries_per_project_per_hour?: number;
-    supervisor_mode?: string;
     supervisor_rate_limit_wait_policy?: string;
     timezone: string;
     verification_policy: Record<string, unknown>;
     working_hours: Record<string, unknown>;
   };
   pi_settings: {
-    auto_enqueue: number;
-    auto_manage: number;
-    auto_triage: number;
-    max_actions_per_cycle: number;
-    notify_on_needs_user: number;
-    pi_agent_id: string;
+    managed: true;
   } | null;
   project: {
     approval_policy: string;
@@ -94,7 +87,6 @@ export type HeartbeatSupervisorCandidateSignal = {
   session_turn_id?: string;
   session_updated_at?: string;
   stale_gap_seconds: number;
-  supervisor_mode?: string;
   wait_until: string;
 };
 export type HeartbeatSupervisorRetryWindowSignal = {

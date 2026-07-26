@@ -1,7 +1,6 @@
 import type { RunnerDatabase } from "../db/database.ts";
 import { getIssue } from "../db/repositories/issues.ts";
 import {
-  getProjectPiSettings,
   isPiHeartbeatPaused,
   readProjectPiPolicy
 } from "../db/repositories/pi.ts";
@@ -182,9 +181,8 @@ function changedIssueSignals(
     });
 }
 
-function projectBudget(db: RunnerDatabase, projectID: string): number {
-  const configured = getProjectPiSettings(db, projectID)?.max_actions_per_cycle ?? DEFAULT_PROJECT_BUDGET;
-  return Number.isSafeInteger(configured) && configured >= 0 ? configured : DEFAULT_PROJECT_BUDGET;
+function projectBudget(_db: RunnerDatabase, _projectID: string): number {
+  return DEFAULT_PROJECT_BUDGET;
 }
 
 function consumedProjectBudget(db: RunnerDatabase, projectID: string, now: Date): number {

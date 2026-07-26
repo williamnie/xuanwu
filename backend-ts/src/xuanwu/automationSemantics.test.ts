@@ -86,9 +86,9 @@ describe("Xuanwu Automation semantics", () => {
       .sort();
     const actual = AUTOMATION_API_ROUTES.map((route) => `${route.method} ${route.path}`).sort();
     expect(actual).toEqual(expected);
-    expect(actual).toHaveLength(35);
+    expect(actual).toHaveLength(33);
     expect(new Set(actual).size).toBe(actual.length);
-    expect(AUTOMATION_API_ROUTES.filter((route) => route.write)).toHaveLength(22);
+    expect(AUTOMATION_API_ROUTES.filter((route) => route.write)).toHaveLength(20);
     expect(AUTOMATION_API_ROUTES.filter((route) => !route.write)).toHaveLength(13);
     for (const route of AUTOMATION_API_ROUTES) {
       expect(route.write).toBe(route.method !== "GET");

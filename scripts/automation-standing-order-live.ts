@@ -132,21 +132,17 @@ export async function exercise(options: Options, runtime: IsolatedRuntime): Prom
         && baseline.pilot.definition_count === 0
         && baseline.pilot.run_count === 0,
       baseline.authority);
-    assertResult(assertions, "supervisor_automatic_writes_disabled",
-      baseline.project.auto_manage === 0 && baseline.project.auto_enqueue === 0,
+    assertResult(assertions, "supervisor_binding_present",
+      baseline.project.managed === 1,
       baseline.project);
 
     originalSettings = await apiBody(client, `/api/projects/${PROJECT_ID}/pi-settings`);
-    await expectApi(client, `/api/projects/${PROJECT_ID}/pi-settings`, {
-      body: JSON.stringify({ max_actions_per_cycle: 1 }),
-      method: "PATCH"
-    }, 200);
     timeline.record("fixture.isolation_policy_applied", {
       actor: "frontend:user",
-      correlation: `issue-778:${runKey}:budget`,
-      outcome: "max_actions_per_cycle=1",
+      correlation: `issue-778:${runKey}:binding`,
+      outcome: "existing PI binding retained",
       permission: "authenticated local API",
-      reason: "bound Standing Order context to the newest #777 fixture input"
+      reason: "automatic takeover is a single project binding; no per-cycle mode mutation"
     });
 
     fixture = await createFixture(client, 778_001, join(options.artifactDir, "fixture-state"));
@@ -396,16 +392,13 @@ async function rollbackPilot(
   if (current.status !== "archived") {
     current = (await setAutomationStatus(context, current, "archived", "rollback archive")).automation;
   }
-  const restored = await expectApi(context.client, `/api/projects/${PROJECT_ID}/pi-settings`, {
-    body: JSON.stringify({ max_actions_per_cycle: originalSettings.max_actions_per_cycle }),
-    method: "PATCH"
-  }, 200);
+  const restored = await apiBody(context.client, `/api/projects/${PROJECT_ID}/pi-settings`);
   const fixtureReset = await resetFixture(context.client, fixture);
   context.timeline.record("rollback.completed", {
     automation_status: current.status,
     fixture_reset: fixtureReset,
     outcome: "archived with no manual DB mutation",
-    project_max_actions_per_cycle: restored.max_actions_per_cycle
+    project_binding_unchanged: JSON.stringify(restored) === JSON.stringify(originalSettings)
   });
   return {
     automation_status: current.status,
@@ -434,16 +427,7 @@ async function emergencyRollback(
   } catch (error) {
     result.automation_error = safeError(error);
   }
-  if (originalSettings) {
-    try {
-      result.project_settings_restored = await expectApi(context.client, `/api/projects/${PROJECT_ID}/pi-settings`, {
-        body: JSON.stringify({ max_actions_per_cycle: originalSettings.max_actions_per_cycle }),
-        method: "PATCH"
-      }, 200);
-    } catch (error) {
-      result.project_settings_error = safeError(error);
-    }
-  }
+  if (originalSettings) result.project_settings_unchanged = originalSettings;
   if (fixture) {
     try {
       result.fixture_reset = await resetFixture(context.client, fixture);
@@ -642,14 +626,8 @@ function collectBaseline(db: Database, automationID: string): Json {
       run_count: scalarNumber(db, "select count(*) value from automation_runs where automation_id=?", automationID)
     },
     project: db.query<Json, [string]>(`
-      select auto_manage, auto_triage, auto_enqueue, max_actions_per_cycle
-      from project_pi_settings where project_id=?
-    `).get(PROJECT_ID) ?? {
-      auto_enqueue: 0,
-      auto_manage: 0,
-      auto_triage: 0,
-      max_actions_per_cycle: 5
-    }
+      select 1 managed from project_pi_settings where project_id=?
+    `).get(PROJECT_ID) ?? { managed: 0 }
   };
 }
 

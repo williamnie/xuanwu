@@ -4,13 +4,10 @@ import { ensureDefaultPiAgent } from "../db/defaultPiAgent.ts";
 import { upsertAgentSession } from "../db/repositories/agentSessions.ts";
 import {
   createPiConversation,
-  createProjectPiSettings,
   getPiSupervisor,
   getProjectPiSettings,
-  updateProjectPiSettings,
   type PiAgent,
-  type PiConversation,
-  type ProjectPiSettings
+  type PiConversation
 } from "../db/repositories/pi.ts";
 import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { EventBus } from "../events/bus.ts";
@@ -30,16 +27,14 @@ import type { Router } from "./router.ts";
 
 type PiProjectControlContext = { bus?: EventBus; database: RunnerDatabase };
 type ProjectPiCycleInput = { maxActions?: number; projectId: string };
-type ProjectPiControlAction = "pause" | "resume";
 
 const PI_SESSION_PROVIDER = "pi-sdk";
+const DEFAULT_MANAGER_ACTION_LIMIT = 5;
 const activeProjectPiRuns = new Map<string, PiRuntimeSession["session"] | "pending">();
 
 export function registerPiProjectControlRoutes(router: Router, context: PiProjectControlContext): void {
   router.post("/api/projects/:id/pi/run-once", (request) => runOnceResponse(context, request));
   router.get("/api/projects/:id/pi/issue-state", (request) => issueStateResponse(context, request));
-  router.post("/api/projects/:id/pi/pause", (request) => projectPiSettingsActionResponse(context, request, "pause"));
-  router.post("/api/projects/:id/pi/resume", (request) => projectPiSettingsActionResponse(context, request, "resume"));
 }
 
 function issueStateResponse(context: PiProjectControlContext, request: Request): Response {
@@ -72,31 +67,23 @@ async function runOnceResponse(context: PiProjectControlContext, request: Reques
   return writeResponse(async () => runProjectPiCycle(context, { projectId: projectID(request) }), 201);
 }
 
-function projectPiSettingsActionResponse(
-  context: PiProjectControlContext,
-  request: Request,
-  action: ProjectPiControlAction
-): Response {
-  return json(persistProjectPiAutoManage(context.database, projectID(request), action));
-}
-
 export async function runProjectPiCycle(context: PiProjectControlContext, input: ProjectPiCycleInput) {
   const project = requireProject(context.database, input.projectId);
-  const settings = readProjectPiSettings(context.database, project.id);
-  const cycleSettings = { ...settings, max_actions_per_cycle: input.maxActions ?? settings.max_actions_per_cycle };
+  requireManagedProject(context.database, project.id);
+  const maxActions = input.maxActions ?? DEFAULT_MANAGER_ACTION_LIMIT;
   const agent = requireRunnableSupervisor(context.database, "run manager cycle");
   if (activeProjectPiRuns.has(project.id)) throw new HttpError(409, "Supervisor manager cycle is already running");
   activeProjectPiRuns.set(project.id, "pending");
   let state: Awaited<ReturnType<typeof createManagerCycleState>>;
   try {
-    state = await createManagerCycleState(context, project, agent, cycleSettings);
+    state = await createManagerCycleState(context, project, agent);
     activeProjectPiRuns.set(project.id, state.runtime.session);
   } catch (error) {
     if (activeProjectPiRuns.get(project.id) === "pending") activeProjectPiRuns.delete(project.id);
     throw error;
   }
   try {
-    return await executeManagerCycle(context, project, cycleSettings, state);
+    return await executeManagerCycle(context, project, maxActions, state);
   } finally {
     if (activeProjectPiRuns.get(project.id) === state.runtime.session) activeProjectPiRuns.delete(project.id);
     state.unsubscribe();
@@ -107,13 +94,12 @@ export async function runProjectPiCycle(context: PiProjectControlContext, input:
 async function createManagerCycleState(
   context: PiProjectControlContext,
   project: Project,
-  agent: PiAgent,
-  settings: ProjectPiSettings
+  agent: PiAgent
 ) {
   const conversationID = crypto.randomUUID();
   const runtime = await createPiRuntimeSession(context.database, {
     agent,
-    authorization: managerCycleAuthorization(project, settings),
+    authorization: managerCycleAuthorization(project),
     bus: context.bus,
     conversationID,
     delegationID: `pi-cycle:${project.id}`,
@@ -138,52 +124,19 @@ async function createManagerCycleState(
 async function executeManagerCycle(
   context: PiProjectControlContext,
   project: Project,
-  settings: ProjectPiSettings,
+  maxActions: number,
   state: Awaited<ReturnType<typeof createManagerCycleState>>
 ) {
   const snapshot = createProjectStatusSnapshot(context.database, project.id);
   const issueState = diagnoseIssueState(context.database, { projectID: project.id });
-  await state.runtime.session.prompt(managerCyclePrompt(project, settings, snapshot, issueState), {
+  await state.runtime.session.prompt(managerCyclePrompt(project, maxActions, snapshot, issueState), {
     expandPromptTemplates: false,
     source: "rpc"
   });
   await ensurePiSessionFile(state.runtime.session);
   persistPiSessionIndex(context.database, state.conversation, project);
   const notifications: never[] = [];
-  return managerCycleResult(state.conversation, state.runtime.session, settings, snapshot, issueState, notifications);
-}
-
-function persistProjectPiAutoManage(
-  db: RunnerDatabase,
-  projectID: string,
-  action: ProjectPiControlAction
-): ProjectPiSettings {
-  requireProject(db, projectID);
-  const current = getProjectPiSettings(db, projectID);
-  const nextAutoManage = action === "resume" ? 1 : 0;
-  const next = { ...defaultProjectPiSettings(db, projectID), ...current, auto_manage: nextAutoManage };
-  if (action === "resume") requireRunnableSupervisor(db, "resume auto-manage");
-  if (current) return updateProjectPiSettings(db, projectID, { auto_manage: nextAutoManage });
-  if (next.pi_agent_id === "") throw new HttpError(500, "Supervisor 配置不可用");
-  return createProjectPiSettings(db, { ...next, project_id: projectID });
-}
-
-function readProjectPiSettings(db: RunnerDatabase, projectID: string): ProjectPiSettings {
-  return getProjectPiSettings(db, projectID) ?? defaultProjectPiSettings(db, projectID);
-}
-
-function defaultProjectPiSettings(db: RunnerDatabase, projectID: string): ProjectPiSettings {
-  return {
-    project_id: projectID,
-    pi_agent_id: defaultPiAgentID(db),
-    auto_manage: 0,
-    auto_triage: 0,
-    auto_enqueue: 0,
-    notify_on_needs_user: 1,
-    max_actions_per_cycle: 5,
-    created_at: "",
-    updated_at: ""
-  };
+  return managerCycleResult(state.conversation, state.runtime.session, snapshot, issueState, notifications);
 }
 
 function requireRunnableSupervisor(db: RunnerDatabase, action: string): PiAgent {
@@ -209,7 +162,7 @@ function persistPiSessionIndex(db: RunnerDatabase, conversation: PiConversation,
 
 function managerCyclePrompt(
   project: Project,
-  settings: ProjectPiSettings,
+  maxActions: number,
   snapshot: ReturnType<typeof createProjectStatusSnapshot>,
   issueState: ReturnType<typeof diagnoseIssueState>
 ): string {
@@ -227,11 +180,9 @@ function managerCyclePrompt(
     "Project default MCP policy:",
     JSON.stringify(parseMcpPolicy(project.default_mcp_policy), null, 2),
     "Use role workflow tools for executor, verifier, reviewer, reporter proposals when needed; all role actions must go through action gate and audit.",
-    settings.auto_enqueue === 1
-      ? "Automatic enqueue is enabled only for this project. After reading the exact Work and confirming it is complete, authorized, dependency-ready, inside cwd/deadline policy, use work_control action=enqueue with an explicit stable intent idempotency_key. Do not create or enqueue guessed or cross-project Work."
-      : "Automatic enqueue is disabled. Create Supervisor action proposals for concrete next steps; execute only safe read/comment/profile-recommend tools.",
+    "This project is managed by Supervisor. After reading the exact Work and confirming it is complete, authorized, dependency-ready, inside cwd/deadline policy, use work_control action=enqueue with an explicit stable intent idempotency_key. Do not create or enqueue guessed or cross-project Work.",
     "When you find durable project/user/process observations, write disabled review candidates via memory_write_candidate; manager-cycle observations must never auto-enable memory.",
-    `Do not exceed ${settings.max_actions_per_cycle} action proposals in this cycle.`,
+    `Do not exceed ${maxActions} action proposals in this cycle.`,
     "Stop after this single cycle and return a concise summary."
   ].join("\n");
 }
@@ -239,13 +190,12 @@ function managerCyclePrompt(
 function managerCycleResult(
   conversation: PiConversation,
   session: PiRuntimeSession["session"],
-  settings: ProjectPiSettings,
   snapshot: ReturnType<typeof createProjectStatusSnapshot>,
   issueState: ReturnType<typeof diagnoseIssueState>,
   notifications: readonly never[]
 ) {
   return {
-    auto_manage: settings.auto_manage,
+    managed: true,
     conversation_id: conversation.id,
     message_count: session.state.messages.length,
     issue_state: issueState,
@@ -275,9 +225,10 @@ function requireProject(db: RunnerDatabase, id: string): Project {
   return project;
 }
 
-function defaultPiAgentID(db: RunnerDatabase): string {
-  ensureDefaultPiAgent(db);
-  return getPiSupervisor(db)?.id ?? "";
+function requireManagedProject(db: RunnerDatabase, projectID: string): void {
+  if (!getProjectPiSettings(db, projectID)) {
+    throw new HttpError(409, "project is not managed by Supervisor");
+  }
 }
 
 function projectID(request: Request): string {

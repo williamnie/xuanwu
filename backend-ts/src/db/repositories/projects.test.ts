@@ -58,6 +58,7 @@ describe("project read repository", () => {
         auto_run: 0,
         model: "codex-default",
         approval_policy: "never",
+        pi_managed: 0,
         sandbox: "workspace-write",
         default_agent_profile_id: "",
         default_mcp_policy: "{}",

@@ -303,9 +303,8 @@ async function exercise(options: Options, client: Client): Promise<Json> {
       "baseline-before.json + baseline-after.json");
     assert("all_baseline_fields_explicit", !containsNull(before) && !containsNull(after),
       "baseline-before.json + baseline-after.json");
-    assert("automatic_writes_disabled",
-      before.project.auto_manage === 0 && before.project.auto_enqueue === 0 &&
-      after.project.auto_manage === 0 && after.project.auto_enqueue === 0,
+    assert("pi_binding_unchanged",
+      before.project.managed === after.project.managed,
       "baseline-before.json + baseline-after.json");
     assert("three_inputs_are_safe_and_deterministic",
       scenarioResults.map((item) => item.exit_code).join(",") === "0,75,0,78" &&
@@ -410,9 +409,7 @@ async function collectBaseline(options: Options, client: Client): Promise<Json> 
       select p.id, p.auto_run,
         coalesce(nullif(p.default_skill_policy_json,''),'{}') default_skill_policy_json,
         coalesce(nullif(p.default_mcp_policy_json,''),'{}') default_mcp_policy_json,
-        coalesce(s.auto_manage,0) auto_manage,
-        coalesce(s.auto_triage,0) auto_triage,
-        coalesce(s.auto_enqueue,0) auto_enqueue
+        case when s.project_id is null then 0 else 1 end managed
       from projects p left join project_pi_settings s on s.project_id=p.id
       where p.id='codex-issue-runner'
     `).get();
@@ -543,7 +540,7 @@ function comparableBaselineDiff(before: Json, after: Json): Json {
     "skills.discovered_count", "skills.diagnostic_count", "skills.audit_count", "skills.intake_run_count",
     "tool.provider_count", "tool.registered_count", "tool.call_audit_count",
     "attention.item_count",
-    "project.auto_manage", "project.auto_triage", "project.auto_enqueue",
+    "project.managed",
     "project.default_skill_policy_json", "project.default_mcp_policy_json"
   ];
   const values = paths.map((path) => ({ path, before: atPath(before, path), after: atPath(after, path) }));
@@ -578,7 +575,7 @@ function scenarioDescription(scenario: Scenario, fixtureKey: string, stateDir: s
     `Expected: ${expected}`,
     "Execution policy: manual invocation only; keep this Issue in triage until a dependent acceptance test explicitly consumes it.",
     "External writes: forbidden.",
-    "Automation: auto_manage and auto_enqueue must remain disabled.",
+    "PI binding: this fixture must not add or remove the project binding.",
     `Replay: bun scripts/agentic-activation-fixture.ts scenario --scenario ${scenario} --state-dir ${resolve(stateDir)}`
   ].join("\n");
 }
@@ -589,7 +586,7 @@ function replayText(options: Options): string {
   const artifactDir = resolve(options.artifactDir);
   return `# Issue 777 replay
 
-前置条件：Web/Core 已由 launchd 启动；命令不会启用 \`auto_manage\`、\`auto_enqueue\` 或外部写工具。
+前置条件：Web/Core 已由 launchd 启动；命令不会修改 PI 项目绑定或启用外部写工具。
 
 \`\`\`bash
 bun scripts/agentic-activation-fixture.ts exercise \\

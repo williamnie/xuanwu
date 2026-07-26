@@ -1,5 +1,5 @@
 import type { RunnerDatabase } from "../db/database.ts";
-import { getProjectPiSettings, readProjectPiPolicy } from "../db/repositories/pi.ts";
+import { getProjectPiSettings } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import {
   resolveSourcePolicy,
@@ -40,13 +40,12 @@ function profilePolicy(profile: SourceProfile): JsonObject {
 
 function projectPolicy(db: RunnerDatabase, projectID: string): JsonObject {
   if (!getProject(db, projectID)) throw new HttpError(404, "project 不存在");
-  const settings = getProjectPiSettings(db, projectID);
-  const policy = readProjectPiPolicy(db, projectID);
+  const managed = getProjectPiSettings(db, projectID) !== null;
   return {
-    default_mode: policy.default_mode,
+    managed,
     issue_policy: {
-      auto_create_triage_issue: settings?.auto_triage === 1,
-      auto_enqueue: settings?.auto_enqueue === 1
+      auto_create_triage_issue: managed,
+      auto_enqueue: managed
     },
     project_id: projectID
   };

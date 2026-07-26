@@ -21,6 +21,7 @@ type ProjectRow = {
   id: unknown;
   model: unknown;
   name: unknown;
+  pi_managed: unknown;
   provider: unknown;
   provider_config_json: unknown;
   sandbox: unknown;
@@ -49,6 +50,7 @@ export type Project = {
   loop_status: string;
   model: string;
   name: string;
+  pi_managed: number;
   provider: string;
   provider_capabilities: string[];
   provider_config_json: string;
@@ -61,7 +63,8 @@ const PROJECT_COLUMNS = `p.id, p.name, p.cwd, p.provider, p.provider_config_json
   p.model, p.approval_policy, p.sandbox, p.default_agent_profile_id, p.default_skill_policy_json,
   p.default_mcp_policy_json, p.default_service_tier, p.sort_order,
   p.created_at, p.updated_at, h.reason, h.message, h.hold_since, h.next_check_at,
-  h.last_check_at, h.last_check_error`;
+  h.last_check_at, h.last_check_error,
+  case when exists(select 1 from project_pi_settings s where s.project_id=p.id) then 1 else 0 end as pi_managed`;
 
 
 export function createProject(db: RunnerDatabase, input: CreateProjectInput): Project {
@@ -128,6 +131,7 @@ function mapProjectRow(row: ProjectRow): Project {
   return {
     id: requiredString(row.id, "projects.id"),
     name: requiredString(row.name, "projects.name"),
+    pi_managed: integerValue(row.pi_managed, "projects.pi_managed"),
     cwd: requiredString(row.cwd, "projects.cwd"),
     provider: normalizeProjectProvider(row.provider),
     provider_config_json: normalizeProjectProviderConfig(row.provider_config_json),

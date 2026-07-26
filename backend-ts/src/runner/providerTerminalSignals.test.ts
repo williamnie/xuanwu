@@ -43,8 +43,7 @@ describe("provider terminal PI signals", () => {
         provider_session_id: "thread-525",
         provider_turn_id: "turn-525",
         ready: true,
-        signal_type: "supervisor.candidate",
-        supervisor_mode: "autonomous"
+        signal_type: "supervisor.candidate"
       });
 
       expect(signalOpenRunTerminalProviderErrors(db, { now: new Date("2026-06-22T15:42:00Z") }))
@@ -113,7 +112,7 @@ async function openFixtureDatabase(): Promise<RunnerDatabase> {
 
 function seedStuckIssue(db: RunnerDatabase, issueID: number): void {
   insertProject(db, "demo");
-  upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "off", allowed_supervisor_actions_json: [] });
+  upsertProjectPiPolicy(db, { project_id: "demo", allowed_supervisor_actions_json: [] });
   insertStuckIssue(db, issueID);
 }
 

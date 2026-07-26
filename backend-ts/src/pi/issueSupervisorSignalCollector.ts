@@ -119,7 +119,6 @@ function candidateSignals(
     session_turn_id: clean(context.session.provider_turn_id),
     session_updated_at: clean(context.session.updated_at),
     stale_gap_seconds: staleGapSeconds(context),
-    supervisor_mode: clean(context.policy.mode),
     wait_until: clean(candidate.wait_until)
   }));
 }

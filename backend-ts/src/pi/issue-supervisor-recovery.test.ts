@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { runMigrations } from "../db/migrations.ts";
-import { issueSupervisorRecoveryMigration } from "../db/schema/020_issue_supervisor_recovery.ts";
 import { migrations } from "../db/schema/index.ts";
 import {
   createIssueSupervisorEvent,
@@ -133,7 +132,7 @@ describe("PI issue supervisor recovery contract", () => {
     expect(isAutomaticRecoveryBlockedDiagnosis("missing_user_input")).toBe(true);
   });
 
-  test("extends project policy with supervisor mode, allowed actions, cooldown, budget, and 429 wait policy", async () => {
+  test("extends project policy with allowed actions, cooldown, budget, and 429 wait policy", async () => {
     const db = await openFixtureDatabase();
     try {
       expect(readProjectPiPolicy(db, "demo")).toMatchObject({
@@ -141,7 +140,6 @@ describe("PI issue supervisor recovery contract", () => {
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "respect_retry_after"
       });
 
@@ -151,7 +149,6 @@ describe("PI issue supervisor recovery contract", () => {
         supervisor_cooldown_seconds: 900,
         supervisor_max_recoveries_per_issue: 3,
         supervisor_max_recoveries_per_project_per_hour: 12,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "ask"
       });
 
@@ -159,7 +156,6 @@ describe("PI issue supervisor recovery contract", () => {
         supervisor_cooldown_seconds: 900,
         supervisor_max_recoveries_per_issue: 3,
         supervisor_max_recoveries_per_project_per_hour: 12,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "ask"
       });
       expect(JSON.parse(policy.allowed_supervisor_actions_json)).toEqual([
@@ -227,47 +223,6 @@ describe("PI issue supervisor recovery contract", () => {
     }
   });
 
-  test("upgrades existing supervisor policies to default autonomous recovery", async () => {
-    const db = await openFixtureDatabase();
-    try {
-      db.sqlite.run(`insert into project_pi_policies
-        (project_id, default_mode, timezone, working_hours_json, quiet_hours_json, retry_policy_json,
-          concurrency_policy_json, verification_policy_json, allowed_actions_json, allowed_mcp_capabilities_json,
-          allowed_skill_intents_json, allowed_supervisor_actions_json, supervisor_mode, supervisor_cooldown_seconds,
-          supervisor_max_recoveries_per_issue, supervisor_max_recoveries_per_project_per_hour,
-          supervisor_rate_limit_wait_policy, created_at, updated_at)
-        values (?, 'manual', 'UTC', '{}', '{}', '{"enabled":false,"max_attempts":0,"backoff_minutes":[]}',
-          '{"max_parallel_issues":1,"max_parallel_pi_cycles":1}',
-          '{"pending_timeout_minutes":1440,"on_timeout":"escalate","evidence_required":true}',
-          '[]', '[]', '[]', '[]', 'watchdog', 300, 2, 10, 'respect_retry_after', ?, ?)`,
-      ["legacy-default", "2026-06-22T00:00:00Z", "2026-06-22T00:00:00Z"]);
-      db.sqlite.run(`insert into project_pi_policies
-        (project_id, default_mode, timezone, working_hours_json, quiet_hours_json, retry_policy_json,
-          concurrency_policy_json, verification_policy_json, allowed_actions_json, allowed_mcp_capabilities_json,
-          allowed_skill_intents_json, allowed_supervisor_actions_json, supervisor_mode, supervisor_cooldown_seconds,
-          supervisor_max_recoveries_per_issue, supervisor_max_recoveries_per_project_per_hour,
-          supervisor_rate_limit_wait_policy, created_at, updated_at)
-        values (?, 'manual', 'UTC', '{}', '{}', '{"enabled":false,"max_attempts":0,"backoff_minutes":[]}',
-          '{"max_parallel_issues":1,"max_parallel_pi_cycles":1}',
-          '{"pending_timeout_minutes":1440,"on_timeout":"escalate","evidence_required":true}',
-          '[]', '[]', '[]', '[]', 'off', 300, 2, 10, 'respect_retry_after', ?, ?)`,
-      ["explicit-off", "2026-06-22T00:00:00Z", "2026-06-22T00:00:00Z"]);
-
-      issueSupervisorRecoveryMigration.apply?.(db.sqlite);
-
-      expect(readProjectPiPolicy(db, "legacy-default")).toMatchObject({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
-        supervisor_mode: "autonomous"
-      });
-      expect(readProjectPiPolicy(db, "explicit-off")).toMatchObject({
-        allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
-        supervisor_mode: "autonomous"
-      });
-    } finally {
-      db.close();
-    }
-  });
-
   test("migrates legacy databases with supervisor event table and policy columns", async () => {
     const root = await tempPath("codex-runner-supervisor-migrate-");
     const stateDir = join(root, "state");
@@ -292,13 +247,12 @@ describe("PI issue supervisor recovery contract", () => {
         "supervisor_cooldown_seconds",
         "supervisor_max_recoveries_per_issue",
         "supervisor_max_recoveries_per_project_per_hour",
-        "supervisor_mode",
         "supervisor_rate_limit_wait_policy"
       ]));
       expect(migrated.sqlite.query("select id from schema_migrations where id='020_issue_supervisor_recovery'").get())
         .toEqual({ id: "020_issue_supervisor_recovery" });
       expect(migrated.sqlite.query(`
-        select allowed_supervisor_actions_json, supervisor_mode, supervisor_cooldown_seconds,
+        select allowed_supervisor_actions_json, supervisor_cooldown_seconds,
           supervisor_max_recoveries_per_issue, supervisor_max_recoveries_per_project_per_hour,
           supervisor_rate_limit_wait_policy
         from project_pi_policies where project_id='legacy-demo'
@@ -307,7 +261,6 @@ describe("PI issue supervisor recovery contract", () => {
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "respect_retry_after"
       });
     } finally {

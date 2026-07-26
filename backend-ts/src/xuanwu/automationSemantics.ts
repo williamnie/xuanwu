@@ -197,8 +197,6 @@ export const AUTOMATION_API_ROUTES = [
   { method: "POST", path: "/api/projects/:id/pi/heartbeat/pause", role: "control", write: true },
   { method: "POST", path: "/api/projects/:id/pi/heartbeat/resume", role: "control", write: true },
   { method: "POST", path: "/api/projects/:id/pi/heartbeat/run-once", role: "trigger", write: true },
-  { method: "POST", path: "/api/projects/:id/pi/pause", role: "control", write: true },
-  { method: "POST", path: "/api/projects/:id/pi/resume", role: "control", write: true },
   { method: "POST", path: "/api/projects/:id/pi/run-once", role: "trigger", write: true }
 ] as const satisfies readonly AutomationRoute[];
 

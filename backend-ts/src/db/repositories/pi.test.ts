@@ -34,8 +34,7 @@ import {
   updatePiSupervisor,
   updatePiConversation,
   updatePiDelegation,
-  updatePiMemoryItem,
-  updateProjectPiSettings
+  updatePiMemoryItem
 } from "./pi.ts";
 import { listProjects } from "./projects.ts";
 
@@ -65,20 +64,8 @@ describe("PI runtime repositories", () => {
       });
       expect(updatedAgent).toMatchObject({ id: "runner-default", model_id: "gpt-5.4", tools_json: "[\"read\"]", enabled: 0 });
 
-      const settings = createProjectPiSettings(db, { project_id: "demo", pi_agent_id: "runner-default" });
-      expect(settings).toMatchObject({
-        project_id: "demo",
-        pi_agent_id: "runner-default",
-        auto_manage: 0,
-        notify_on_needs_user: 1,
-        max_actions_per_cycle: 5
-      });
-
-      const updatedSettings = updateProjectPiSettings(db, "demo", {
-        auto_manage: 1,
-        max_actions_per_cycle: 3
-      });
-      expect(updatedSettings).toMatchObject({ auto_manage: 1, max_actions_per_cycle: 3 });
+      const settings = createProjectPiSettings(db, { project_id: "demo" });
+      expect(settings).toMatchObject({ project_id: "demo" });
       expect(listProjectPiSettings(db).map((item) => item.project_id)).toEqual(["demo"]);
 
       expect(deleteProjectPiSettings(db, "demo")).toBe(true);

@@ -357,12 +357,7 @@ async function setupPilot(options: Options): Promise<void> {
     method: "POST"
   }, [201]);
   await api(options, `/api/projects/${projectID}/pi-settings`, {
-    body: {
-      auto_enqueue: false,
-      auto_manage: true,
-      auto_triage: false,
-      max_actions_per_cycle: 1
-    },
+    body: {},
     method: "PATCH"
   }, [200]);
   const created = await api(options, "/api/automations", {
@@ -385,7 +380,7 @@ async function setupPilot(options: Options): Promise<void> {
     automation_mode: "observe",
     external_writes: 0,
     project_id: projectID,
-    supervisor: { auto_enqueue: false, auto_manage: true, auto_triage: false }
+    supervisor: { managed: true }
   });
 }
 

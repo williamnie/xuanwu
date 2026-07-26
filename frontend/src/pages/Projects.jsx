@@ -97,7 +97,7 @@ export default function Projects() {
     formCwd: '',
     formProvider: DEFAULT_PROVIDER,
     formProviderConfig: '{}',
-    formAutoRun: false,
+    formPiManaged: true,
     formModel: DEFAULT_CODEX_MODEL,
     formApproval: 'never',
     formSandbox: 'workspace-write',
@@ -105,6 +105,7 @@ export default function Projects() {
     formAgentProfileId: '',
     formError: '',
     resumingHoldProjectId: '',
+    piBindingProjectId: '',
     profiles: [],
     profilesLoading: false,
     profileForm: emptyAgentProfileForm(),
@@ -123,7 +124,7 @@ export default function Projects() {
     formCwd,
     formProvider,
     formProviderConfig,
-    formAutoRun,
+    formPiManaged,
     formModel,
     formApproval,
     formSandbox,
@@ -131,6 +132,7 @@ export default function Projects() {
     formAgentProfileId,
     formError,
     resumingHoldProjectId,
+    piBindingProjectId,
     profiles,
     profilesLoading,
     profileForm,
@@ -232,7 +234,7 @@ export default function Projects() {
       draft.formCwd = '';
       draft.formProvider = DEFAULT_PROVIDER;
       draft.formProviderConfig = '{}';
-      draft.formAutoRun = false;
+      draft.formPiManaged = true;
       draft.formModel = DEFAULT_CODEX_MODEL;
       draft.formApproval = 'never';
       draft.formSandbox = 'workspace-write';
@@ -252,7 +254,7 @@ export default function Projects() {
       draft.formCwd = proj.cwd;
       draft.formProvider = proj.provider;
       draft.formProviderConfig = proj.provider_config_json || '{}';
-      draft.formAutoRun = proj.auto_run === 1;
+      draft.formPiManaged = proj.pi_managed === 1;
       draft.formModel = normalizeCodexModel(proj.model);
       draft.formApproval = proj.approval_policy || 'never';
       draft.formSandbox = proj.sandbox || 'workspace-write';
@@ -280,7 +282,6 @@ export default function Projects() {
       cwd: formCwd,
       provider: formProvider,
       provider_config_json: formProviderConfig,
-      auto_run: formAutoRun ? 1 : 0,
       model: normalizeCodexModel(formModel),
       approval_policy: formApproval,
       sandbox: formSandbox,
@@ -291,9 +292,15 @@ export default function Projects() {
     try {
       if (modalMode === 'create') {
         const generatedId = projectIdFromPath(formCwd);
-        await projectsApi.createProject({ id: generatedId, ...payload });
+        await projectsApi.createProject({ id: generatedId, ...payload, auto_run: 0 });
+        if (formPiManaged) await projectsApi.bindProjectToPi(generatedId);
       } else {
         await projectsApi.updateProject(selectedProjectId, payload);
+        if (formPiManaged) {
+          await projectsApi.bindProjectToPi(selectedProjectId);
+        } else {
+          await projectsApi.unbindProjectFromPi(selectedProjectId);
+        }
       }
       updateUi(draft => {
         draft.isModalOpen = false;
@@ -357,13 +364,25 @@ export default function Projects() {
     }
   };
 
-  const handleToggleAutoRun = async (proj) => {
-    const nextAutoRun = proj.auto_run === 1 ? 0 : 1;
+  const handleTogglePiManaged = async (proj) => {
+    updateUi(draft => {
+      draft.piBindingProjectId = proj.id;
+    });
     try {
-      await projectsApi.updateProject(proj.id, { auto_run: nextAutoRun });
-      refreshData(['projects', 'issues']);
-    } catch {
-      message.error('更新自动执行配置失败');
+      if (proj.pi_managed === 1) {
+        await projectsApi.unbindProjectFromPi(proj.id);
+        message.success('已移除 PI 接管，Issue Loop 保持当前运行状态');
+      } else {
+        await projectsApi.bindProjectToPi(proj.id);
+        message.success('PI 已接管，Issue Loop 已自动启用');
+      }
+      await refreshData(['projects', 'issues']);
+    } catch (err) {
+      message.error(err.message || '更新 PI 接管状态失败');
+    } finally {
+      updateUi(draft => {
+        draft.piBindingProjectId = '';
+      });
     }
   };
 
@@ -409,7 +428,7 @@ export default function Projects() {
       <div className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, padding: '24px 0 8px 0' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '6px' }}>项目管理</h1>
-          <p style={{ color: 'var(--text-muted)' }}>管理本地项目代码库，控制 Codex 自动扫描和执行参数</p>
+          <p style={{ color: 'var(--text-muted)' }}>添加项目给 PI 后即进入 Issue Loop 无人值守接管</p>
         </div>
         <div className="page-intro-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button className="btn btn-secondary" onClick={handleSyncCodexProjects} disabled={syncing}>
@@ -497,6 +516,7 @@ export default function Projects() {
               const todoCount = projIssues.filter(i => i.status === 'todo').length;
 
               const isHeld = Boolean(proj.hold);
+              const isPiManaged = proj.pi_managed === 1;
               const isLoopActive = !isHeld && (proj.loop_status === 'running' || proj.auto_run === 1);
 
               return (
@@ -562,20 +582,22 @@ export default function Projects() {
                       <ProjectMetaRow label="Capabilities" value={capabilitySummary(proj)} />
                       <ProjectMetaRow label="Agent Profile" value={summarizeAgentProfile(proj.default_agent_profile)} />
                       <ProjectMetaRow label="默认速度" value={serviceTierLabel(proj.default_service_tier)} strong />
+                      <ProjectMetaRow label="运行模式" value={isPiManaged ? 'PI 无人值守接管' : 'Issue Loop'} strong />
                     </div>
                   </details>
 
                   {/* 开关与控制操作 */}
                   <div className="project-card-footer">
                     
-                    {/* Auto run 开关 */}
+                    {/* PI 接管开关：绑定即完整接管，不再暴露细分自动化配置。 */}
                     <div className="project-card-auto">
-                      <span>自动运行</span>
+                      <span>PI 自动接管</span>
                       <label className="switch">
                         <input 
                           type="checkbox" 
-                          checked={proj.auto_run === 1}
-                          onChange={() => handleToggleAutoRun(proj)}
+                          checked={isPiManaged}
+                          disabled={piBindingProjectId === proj.id}
+                          onChange={() => handleTogglePiManaged(proj)}
                         />
                         <span className="slider"></span>
                       </label>
@@ -583,7 +605,7 @@ export default function Projects() {
 
                     {/* 核心控制动作 */}
                     <div className="project-card-actions">
-                      {isLoopActive ? (
+                      {!isPiManaged && (isLoopActive ? (
                         <button className="btn btn-secondary btn-danger project-card-loop-btn" onClick={() => handleStopLoop(proj.id)}>
                           <Square size={10} fill="currentColor" /> 暂停监听
                         </button>
@@ -591,7 +613,7 @@ export default function Projects() {
                         <button className="btn btn-secondary btn-success project-card-loop-btn" onClick={() => handleStartLoop(proj.id)}>
                           <Play size={10} fill="currentColor" /> 开启监听
                         </button>
-                      )}
+                      ))}
                       <button
                         className="btn btn-secondary project-card-icon-btn"
                         onClick={() => handleOpenEditModal(proj)}
@@ -785,16 +807,16 @@ export default function Projects() {
 
               <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
                 <label className="switch">
-                  <input 
+                  <input
                     type="checkbox" 
-                    checked={formAutoRun}
-                    onChange={(e) => setFormField('formAutoRun', e.target.checked)}
+                    checked={formPiManaged}
+                    onChange={(e) => setFormField('formPiManaged', e.target.checked)}
                   />
                   <span className="slider"></span>
                 </label>
                 <div>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block' }}>保存后立即开启自动运行 (Auto Run)</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>新 Issue 将会被自动提交给 Codex 执行。</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block' }}>由 PI 无人值守接管</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>绑定后自动启用 Issue Loop；无需再配置 triage、enqueue 或运行模式。</span>
                 </div>
               </div>
               </div>
@@ -804,7 +826,7 @@ export default function Projects() {
                   取消
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {modalMode === 'create' ? '创建并启用' : '保存修改'}
+                  {modalMode === 'create' ? (formPiManaged ? '创建并交给 PI' : '创建项目') : '保存修改'}
                 </button>
               </div>
 

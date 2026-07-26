@@ -137,7 +137,7 @@ export const PI_ASSISTANT_CONFIG_MODULES = [
     tab: 'policies',
     label: 'Policies',
     title: 'Policies',
-    description: '在 Supervisor Settings 中管理 source policy、自动回复、自动建 issue 与自动 enqueue 等策略。'
+    description: '管理项目级重试、并发与验证门禁；自动接管由项目绑定统一启用。'
   }
 ];
 

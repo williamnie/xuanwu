@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 describe("PI verifier workflow control", () => {
-  test("manager cycle can propose verifier and reviewer workflows", async () => {
+  test("manager cycle gates verifier and reviewer workflows by project skill policy", async () => {
     const database = await openFixtureDatabase();
     const faux = registerFauxProvider({ api: "pi-control-verifier-api", provider: "pi-control-verifier" });
     try {
@@ -36,12 +36,12 @@ describe("PI verifier workflow control", () => {
       insertIssue(database, "demo");
 
       const response = await post(createDefaultRouter({ database }), "/api/projects/demo/pi/run-once");
-      const pending = listPiActions(database, { status: "pending" });
+      const actions = listPiActions(database);
 
       expect(response.status).toBe(201);
-      expect(pending.map((item) => item.action_type)).toEqual(["agent.workflow_request", "agent.workflow_request"]);
-      expect(pending.map((item) => item.issue_id)).toEqual([1, 1]);
-      expect(pending.every((item) => item.gate_decision === "ask")).toBe(true);
+      expect(actions.map((item) => item.action_type)).toEqual(["agent.workflow_request", "agent.workflow_request"]);
+      expect(actions.map((item) => item.issue_id)).toEqual([1, 1]);
+      expect(actions.every((item) => item.gate_decision === "deny" && item.status === "denied")).toBe(true);
     } finally {
       faux.unregister();
       database.close();
@@ -60,6 +60,10 @@ function insertProject(db: RunnerDatabase, id: string): void {
     `insert into projects (id, name, cwd, provider, sort_order, created_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?)`,
     [id, id, `/tmp/${id}`, "codex", 1, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+  );
+  db.sqlite.run(
+    "insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)",
+    [id, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

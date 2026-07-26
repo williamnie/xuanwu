@@ -262,30 +262,25 @@ describe("native Automation scheduler composition", () => {
     }
   });
 
-  test("enforces the persisted project cycle budget across standing orders", async () => {
+  test("processes one changed project context once across competing standing orders", async () => {
     const db = await fixture();
     const provider = new FixtureProvider();
     try {
-      createProjectPiSettings(db, {
-        max_actions_per_cycle: 1,
-        pi_agent_id: "fixture-agent",
-        project_id: "demo"
-      });
-      const first = createFixture(db, "budget-a", "execute_allowed");
-      const second = createFixture(db, "budget-b", "execute_allowed");
+      createProjectPiSettings(db, { project_id: "demo" });
+      const automations = Array.from({ length: 6 }, (_, index) =>
+        createFixture(db, `budget-${index + 1}`, "execute_allowed"));
 
       const result = await cycle(db, provider, NOW);
-      const runs = [...listAutomationRuns(db, first.id), ...listAutomationRuns(db, second.id)];
+      const runs = automations.flatMap((automation) => listAutomationRuns(db, automation.id));
 
-      expect(result.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+      expect(result.automationCore).toMatchObject({ executed: 1, scanned: 6, skipped: 5 });
       expect(provider.inputs).toHaveLength(1);
       expect(runs.filter((run) => run.status === "succeeded")).toHaveLength(1);
-      expect(runs.find((run) => run.status === "skipped")?.summary.detail).toContain("budget exhausted (1/1)");
 
       const next = await cycle(db, provider, new Date("2026-07-18T10:01:00.000Z"));
-      expect(next.automationCore).toMatchObject({ executed: 1, scanned: 2, skipped: 1 });
+      expect(next.automationCore).toMatchObject({ executed: 1, scanned: 6, skipped: 5 });
       expect(provider.inputs).toHaveLength(2);
-      expect(listAutomationRuns(db, first.id).filter((run) => run.status === "succeeded")).toHaveLength(2);
+      expect(listAutomationRuns(db, automations[0]!.id).filter((run) => run.status === "succeeded")).toHaveLength(2);
     } finally {
       db.close();
     }

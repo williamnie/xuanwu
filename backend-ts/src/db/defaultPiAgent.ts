@@ -52,7 +52,6 @@ export function ensureDefaultPiAgent(db: PiAgentBootstrapDatabase): void {
 }
 
 function collapseLegacyPiAgents(sqlite: SQLiteDatabase): void {
-  sqlite.run("update project_pi_settings set pi_agent_id=? where pi_agent_id<>?", [DEFAULT_PI_AGENT_ID, DEFAULT_PI_AGENT_ID]);
   sqlite.run("update pi_conversations set pi_agent_id=? where pi_agent_id<>?", [DEFAULT_PI_AGENT_ID, DEFAULT_PI_AGENT_ID]);
   sqlite.run("delete from pi_agents where id<>?", [DEFAULT_PI_AGENT_ID]);
 }

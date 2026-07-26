@@ -113,7 +113,7 @@ export type PiAutoManageScheduler = {
   stop(): void;
 };
 
-type EnabledProjectRow = { max_actions_per_cycle: number; project_id: string };
+type EnabledProjectRow = { project_id: string };
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const DEFAULT_SUPERVISOR_INTERVAL_MS = 60_000;
@@ -338,11 +338,10 @@ export function isProjectHeartbeatPaused(db: RunnerDatabase, projectID: string):
 
 function listAutoManagedProjects(db: RunnerDatabase): EnabledProjectRow[] {
   return db.sqlite.query<EnabledProjectRow, []>(`
-    select s.project_id, s.max_actions_per_cycle
+    select s.project_id
     from project_pi_settings s
     join projects p on p.id = s.project_id
-    join pi_agents a on a.id = s.pi_agent_id
-    where s.auto_manage = 1 and a.enabled = 1
+    join pi_agents a on a.id = 'runner-default' and a.enabled = 1
     order by p.sort_order asc, p.created_at asc, p.id asc
   `).all();
 }
@@ -350,10 +349,7 @@ function listAutoManagedProjects(db: RunnerDatabase): EnabledProjectRow[] {
 async function runManagedProjectCycle(runProjectCycle: PiAutoManageProjectCycle, project: EnabledProjectRow): Promise<void> {
   activeProjectCycles.add(project.project_id);
   try {
-    await runProjectCycle({
-      maxActions: project.max_actions_per_cycle,
-      projectId: project.project_id
-    });
+    await runProjectCycle({ projectId: project.project_id });
   } finally {
     activeProjectCycles.delete(project.project_id);
   }

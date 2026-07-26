@@ -98,7 +98,6 @@ describe("PI Guardian decision action outlet", () => {
         provider_session_id: "thread-601",
         provider_turn_id: "turn-old",
         reason: "provider timed out after stream stall",
-        supervisor_mode: "autonomous"
       }, 601, "session.resume_followup");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:00:00Z") });
@@ -135,7 +134,6 @@ describe("PI Guardian decision action outlet", () => {
         provider_error_category: "network",
         reason: "codex app-server request timed out after 90000ms: thread/start",
         session_status: "unknown",
-        supervisor_mode: "autonomous"
       }, 670, "issue.retry");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
@@ -165,7 +163,6 @@ describe("PI Guardian decision action outlet", () => {
         budget_remaining: 1,
         diagnosis_code: "missing_user_input",
         reason: "agent needs the missing production tenant name",
-        supervisor_mode: "autonomous"
       }, 602, "needs_user.escalate");
 
       const queued = runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:01:00Z") });
@@ -199,7 +196,6 @@ describe("PI Guardian decision action outlet", () => {
         diagnosis_code: "provider_runtime_unavailable",
         provider: "claude",
         reason: "latest provider error has no recoverable provider session",
-        supervisor_mode: "autonomous"
       }, 605, "needs_user.escalate");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });
@@ -230,7 +226,6 @@ describe("PI Guardian decision action outlet", () => {
         provider_session_id: "thread-603",
         provider_turn_id: "turn-old",
         reason: "provider timed out",
-        supervisor_mode: "autonomous"
       }, 603, "session.resume_followup");
       supervisorCandidateEvent(db, "supervisor-cooldown", {
         allowed_actions: ["session.resume_followup"],
@@ -241,7 +236,6 @@ describe("PI Guardian decision action outlet", () => {
         provider_session_id: "thread-604",
         provider_turn_id: "turn-old",
         reason: "provider timed out",
-        supervisor_mode: "autonomous"
       }, 604, "session.resume_followup");
 
       runGuardianDecisionOrchestratorOnce(db, { now: new Date("2026-06-18T00:02:00Z") });

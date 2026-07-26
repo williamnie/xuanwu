@@ -66,7 +66,6 @@ function guardianPayload(target: SupervisorBudgetTarget, payload: Record<string,
     session_turn_id: clean(target.context.session.provider_turn_id),
     session_updated_at: clean(target.context.session.updated_at),
     stale_gap_seconds: numberValue(target.context.session.stale_gap_seconds),
-    supervisor_mode: clean(target.context.policy.mode),
     wait_until: "",
     ...payload
   };

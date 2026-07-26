@@ -33,7 +33,6 @@ test("Guardian does not invent a recovery action from a supervisor signal", asyn
         run_id: "issue-737-attempt-1",
         run_status: "in_progress",
         signal_type: "supervisor.candidate",
-        supervisor_mode: "autonomous"
       },
       projectID: "demo",
       severity: "watch",

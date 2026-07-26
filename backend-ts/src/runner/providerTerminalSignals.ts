@@ -125,7 +125,6 @@ function writeProviderTerminalSignal(
     session_turn_id: snapshot.turnID,
     session_updated_at: snapshot.sessionUpdatedAt,
     stale_gap_seconds: 0,
-    supervisor_mode: "autonomous",
     wait_until: clean(snapshot.signal.retry_after_at)
   } satisfies HeartbeatSupervisorCandidateSignal], {
     heartbeatID: snapshot.sourceID,

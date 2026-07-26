@@ -8,6 +8,7 @@ import { type Issue } from "../db/repositories/issues.ts";
 import {
   createPiGuardianEvent,
   createPiNotificationPreference,
+  createProjectPiSettings,
   listPiNotificationIntents,
   upsertProjectPiPolicy
 } from "../db/repositories/pi.ts";
@@ -26,7 +27,7 @@ describe("PI notification coordinator preference boundaries", () => {
   test("suppresses raw failed lifecycle noise while autonomous recovery is pending", async () => {
     const db = await fixtureDatabase();
     try {
-      upsertProjectPiPolicy(db, { project_id: "demo", supervisor_mode: "autonomous" });
+      createProjectPiSettings(db, { project_id: "demo" });
       const issue = createIssue(db, { project_id: "demo", status: "failed", title: "Recover this first" });
       const event = guardianEvent(db, issue, "event-failed-autonomous", { severity: "needs_user" });
 

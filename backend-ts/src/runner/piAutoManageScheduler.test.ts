@@ -18,10 +18,10 @@ import { isProjectLoopActive } from "./projectLoopManager.ts";
 
 class FakePiCycleRunner {
   active = 0;
-  readonly calls: Array<{ maxActions: number; projectId: string }> = [];
+  readonly calls: Array<{ maxActions?: number; projectId: string }> = [];
   deferred: Promise<void> | undefined;
 
-  async run(input: { maxActions: number; projectId: string }) {
+  async run(input: { maxActions?: number; projectId: string }) {
     if (this.active > 0) throw new Error("reentrant project cycle");
     this.active += 1;
     this.calls.push(input);
@@ -43,7 +43,7 @@ class SlowSupervisorDatabase {
     this.sqlite = new Proxy(inner.sqlite, {
       get: (target, property) => {
         if (property === "query") return (sql: string) => {
-          if (sql.includes("policy.supervisor_mode='autonomous'")) this.supervisorQueries += 1;
+          if (sql.includes("join project_pi_settings settings")) this.supervisorQueries += 1;
           return inner.sqlite.query(sql);
         };
         if (property === "run") return (sql: string, ...bindings: any[]) => {
@@ -117,7 +117,7 @@ describe("PI auto-manage scheduler", () => {
       expect(clock.timers.map((timer) => timer.delayMs)).toEqual([1000]);
       await clock.runNext();
 
-      expect(runner.calls).toEqual([{ projectId: "enabled", maxActions: 4 }]);
+      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
       await waitUntil(() => clock.timers.length === 1);
       scheduler.stop();
       expect(clock.timers[0]?.canceled).toBe(true);
@@ -233,7 +233,7 @@ describe("PI auto-manage scheduler", () => {
     }
   });
 
-  test("scans auto-managed projects and passes max_actions_per_cycle", async () => {
+  test("scans every project with a PI binding", async () => {
     const db = await openFixtureDatabase();
     const runner = new FakePiCycleRunner();
     try {
@@ -241,14 +241,12 @@ describe("PI auto-manage scheduler", () => {
       insertProject(db, "missing-agent", 1);
       insertProject(db, "enabled", 1);
       insertAgent(db, "pi-default");
-      insertSettings(db, "paused", 0, 9);
-      insertSettings(db, "missing-agent", 1, 8, "pi-missing");
       insertSettings(db, "enabled", 1, 3);
 
       const result = await runPiAutoManageCycle({ database: db, runProjectCycle: runner.run.bind(runner) });
 
       expect(result).toEqual({ projects: 1, started: 1, skipped: 0 });
-      expect(runner.calls).toEqual([{ projectId: "enabled", maxActions: 3 }]);
+      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
     } finally {
       db.close();
     }
@@ -285,7 +283,7 @@ describe("PI auto-manage scheduler", () => {
 
       expect(result.delegations).toEqual({ scanned: 0, started: 0, skipped: 0 });
       expect(result).toMatchObject({ projects: 1, started: 1, skipped: 0, supervisor: { decisions: 0, failed: 0 } });
-      expect(runner.calls).toEqual([{ maxActions: 5, projectId: "enabled" }]);
+      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
       expect(heartbeatRunCount(db)).toBe(0);
     } finally {
       db.close();
@@ -390,9 +388,9 @@ describe("PI auto-manage scheduler", () => {
       insertProject(db, "demo", 0);
       upsertProjectPiPolicy(db, {
         project_id: "demo",
-        supervisor_mode: "autonomous",
         allowed_supervisor_actions_json: ["issue.retry", "needs_user.escalate"]
       });
+      insertSettings(db, "demo", 1, 5);
       insertFailedIssueRunSession(db, 520);
 
       const first = await runScheduleLayerCycle({
@@ -598,7 +596,7 @@ describe("PI auto-manage scheduler", () => {
 
       expect(await first).toEqual({ projects: 1, started: 1, skipped: 0 });
       expect(second).toEqual({ projects: 1, started: 0, skipped: 1 });
-      expect(runner.calls).toEqual([{ projectId: "enabled", maxActions: 2 }]);
+      expect(runner.calls).toEqual([{ projectId: "enabled" }]);
     } finally {
       db.close();
     }
@@ -645,12 +643,10 @@ function insertIssueWatchdogKick(db: DB, issueID: number, createdAt: string): vo
   );
 }
 
-function insertSettings(db: DB, projectID: string, autoManage: number, maxActions: number, agentID = "pi-default"): void {
+function insertSettings(db: DB, projectID: string, _autoManage: number, _maxActions: number, _agentID = "pi-default"): void {
   db.sqlite.run(
-    `insert into project_pi_settings
-     (project_id, pi_agent_id, auto_manage, max_actions_per_cycle, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?)`,
-    [projectID, agentID, autoManage, maxActions, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+    `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+    [projectID, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
   );
 }
 

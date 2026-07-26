@@ -202,7 +202,7 @@ export function policyContext(input: PolicyContextInput): Record<string, unknown
     allowed_actions: jsonArray(policy.allowed_supervisor_actions_json),
     budget_remaining: history.budget_remaining,
     cooldown_seconds: policy.supervisor_cooldown_seconds,
-    mode: policy.supervisor_mode,
+    mode: "autonomous",
     project_budget_remaining: projectBudgetRemaining ??
       Math.max(0, policy.supervisor_max_recoveries_per_project_per_hour - projectAttempts),
     rate_limit_wait_policy: policy.supervisor_rate_limit_wait_policy

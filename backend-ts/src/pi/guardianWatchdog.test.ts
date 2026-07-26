@@ -305,7 +305,8 @@ describe("PI Guardian watchdog detector", () => {
     const db = await openFixtureDatabase();
     try {
       insertProject(db, "demo");
-      insertProjectPiSettings(db, "demo", "missing-agent");
+      insertProjectPiSettings(db, "demo");
+      db.sqlite.run("update pi_agents set enabled=0 where id='runner-default'");
 
       const result = await runPiGuardianWatchdogOnce(db, { now: NOW, staleAfterMs: STALE_MS });
       const alerts = listPiGuardianAlerts(db, { projectId: "demo", status: "open" });
@@ -559,12 +560,10 @@ class FakeGuardianFeishuSender {
   }
 }
 
-function insertProjectPiSettings(db: RunnerDatabase, projectID: string, agentID: string): void {
+function insertProjectPiSettings(db: RunnerDatabase, projectID: string): void {
   db.sqlite.run(
-    `insert into project_pi_settings
-     (project_id, pi_agent_id, auto_manage, max_actions_per_cycle, created_at, updated_at)
-     values (?, ?, 1, 3, ?, ?)`,
-    [projectID, agentID, "2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
+    `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+    [projectID, "2026-06-19T00:00:00Z", "2026-06-19T00:00:00Z"]
   );
 }
 

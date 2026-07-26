@@ -247,7 +247,8 @@ describe("Bun SQLite database connection", () => {
         { id: "055_collapse_pi_agents_to_supervisor" },
         { id: "056_issue_log_mode" },
         { id: "057_issue_dependency_and_run_git_baseline" },
-        { id: "058_drop_issue_templates" }
+        { id: "058_drop_issue_templates" },
+        { id: "059_pi_automatic_takeover" }
       ]);
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_type");
       expect(indexNames(connection, "issue_events")).toContain("idx_issue_events_issue_id_desc");
@@ -369,7 +370,6 @@ describe("Bun SQLite database connection", () => {
         supervisor_cooldown_seconds: "300",
         supervisor_max_recoveries_per_issue: "2",
         supervisor_max_recoveries_per_project_per_hour: "10",
-        supervisor_mode: "'autonomous'",
         supervisor_rate_limit_wait_policy: "'respect_retry_after'",
         verification_policy_json: "'{\"pending_timeout_minutes\":1440,\"on_timeout\":\"escalate\",\"evidence_required\":true}'"
       });
@@ -600,9 +600,8 @@ describe("Bun SQLite database connection", () => {
       ]
     );
     first.sqlite.run(
-      `insert into project_pi_settings
-        (project_id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
-      ["legacy-project", "pi-default", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+      `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+      ["legacy-project", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
     );
     first.sqlite.run(
       `insert into pi_conversations
@@ -615,8 +614,8 @@ describe("Bun SQLite database connection", () => {
 
     try {
       expect(upgraded.sqlite.query("select id from pi_agents order by id").all()).toEqual([{ id: "runner-default" }]);
-      expect(upgraded.sqlite.query("select pi_agent_id from project_pi_settings where project_id='legacy-project'").get())
-        .toEqual({ pi_agent_id: "runner-default" });
+      expect(upgraded.sqlite.query("select project_id from project_pi_settings where project_id='legacy-project'").get())
+        .toEqual({ project_id: "legacy-project" });
       expect(upgraded.sqlite.query("select pi_agent_id from pi_conversations where id='legacy-conversation'").get())
         .toEqual({ pi_agent_id: "runner-default" });
       expect(upgraded.sqlite.query("select id, name, model_provider, model_id, thinking_level, instructions, enabled from pi_agents where id='runner-default'").get()).toEqual({
@@ -651,8 +650,8 @@ describe("Bun SQLite database connection", () => {
         ["legacy-extra", "Legacy Extra", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
       );
       raw.run(
-        `insert into project_pi_settings (project_id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
-        ["legacy-extra-project", "legacy-extra", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
+        `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+        ["legacy-extra-project", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"]
       );
       raw.run(
         `insert into pi_conversations (id, pi_agent_id, created_at, updated_at) values (?, ?, ?, ?)`,
@@ -670,8 +669,8 @@ describe("Bun SQLite database connection", () => {
         name: "Xuanwu Supervisor",
         instructions: "你是玄武 Xuanwu Supervisor，作为 Engineering Chief of Staff 将工程目标组织为 Work，监督 Run，以 Evidence 判定完成，并产出可审查的 Handoff；所有写操作必须经过确定性权限与审计门禁。"
       });
-      expect(migrated.sqlite.query("select pi_agent_id from project_pi_settings where project_id='legacy-extra-project'").get())
-        .toEqual({ pi_agent_id: "runner-default" });
+      expect(migrated.sqlite.query("select project_id from project_pi_settings where project_id='legacy-extra-project'").get())
+        .toEqual({ project_id: "legacy-extra-project" });
       expect(migrated.sqlite.query("select pi_agent_id from pi_conversations where id='legacy-extra-conversation'").get())
         .toEqual({ pi_agent_id: "runner-default" });
     } finally {
@@ -877,7 +876,7 @@ describe("Bun SQLite database connection", () => {
     const second = await openDatabase({ stateDir });
 
     try {
-      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 57 });
+      expect(second.sqlite.query("select count(*) as count from schema_migrations").get()).toEqual({ count: 58 });
       expect(second.sqlite.query("select count(*) as count from projects").get()).toEqual({ count: 0 });
     } finally {
       second.close();

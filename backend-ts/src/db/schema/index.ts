@@ -56,6 +56,7 @@ import { collapsePiAgentsToSupervisorMigration } from "./055_collapse_pi_agents_
 import { issueLogModeMigration } from "./056_issue_log_mode.ts";
 import { issueDependencyAndRunGitBaselineMigration } from "./057_issue_dependency_and_run_git_baseline.ts";
 import { dropIssueTemplatesMigration } from "./058_drop_issue_templates.ts";
+import { piAutomaticTakeoverMigration } from "./059_pi_automatic_takeover.ts";
 
 export const migrations = [
   baseSchemaMigration,
@@ -115,5 +116,6 @@ export const migrations = [
   collapsePiAgentsToSupervisorMigration,
   issueLogModeMigration,
   issueDependencyAndRunGitBaselineMigration,
-  dropIssueTemplatesMigration
+  dropIssueTemplatesMigration,
+  piAutomaticTakeoverMigration
 ];

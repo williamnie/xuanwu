@@ -194,9 +194,10 @@ function insertSupervisorCandidate(db: RunnerDatabase): void {
   ]);
   upsertProjectPiPolicy(db, {
     allowed_supervisor_actions_json: ["issue.supervisor_decision"],
-    project_id: "demo",
-    supervisor_mode: "autonomous"
+    project_id: "demo"
   });
+  db.sqlite.run(`insert into project_pi_settings (project_id, created_at, updated_at)
+    values ('demo', '2026-06-02T09:00:00.000Z', '2026-06-02T09:00:00.000Z')`);
   db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
     values (912, 'demo', 'stale provider session', 'in_progress', 1, ?, ?)`, [
     "2026-06-02T09:00:00.000Z",

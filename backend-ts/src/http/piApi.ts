@@ -5,12 +5,11 @@ import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
   createProjectPiSettings,
+  deleteProjectPiSettings,
   getPiSupervisor,
   getProjectPiSettings,
   listProjectPiSettings,
   updatePiSupervisor,
-  updateProjectPiSettings,
-  type ProjectPiSettings
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
 import { HttpError, json, parseJsonBody } from "./errors.ts";
@@ -50,11 +49,6 @@ type PiApiContext = {
   webhookSigningSecret?: string;
 };
 
-type SettingsPatch = Partial<Pick<ProjectPiSettings,
-  "auto_enqueue" | "auto_manage" | "auto_triage" | "max_actions_per_cycle" |
-  "notify_on_needs_user"
->>;
-
 export function registerPiRoutes(router: Router, context: PiApiContext): void {
   router.get("/api/pi/supervisor", () => piSupervisorResponse(context));
   router.get("/api/pi/supervisor/runtime-prompt", () => piSupervisorPromptResponse(context));
@@ -84,6 +78,7 @@ export function registerPiRoutes(router: Router, context: PiApiContext): void {
   registerPiToolRegistryRoutes(router, context);
   router.get("/api/projects/:id/pi-settings", (request) => projectPiSettingsResponse(context, request));
   router.patch("/api/projects/:id/pi-settings", (request) => patchProjectPiSettingsResponse(context, request));
+  router.delete("/api/projects/:id/pi-settings", (request) => deleteProjectPiSettingsResponse(context, request));
 }
 
 function piSupervisorResponse(context: PiApiContext): Response {
@@ -116,37 +111,49 @@ function requirePiSupervisor(db: RunnerDatabase) {
 function projectPiSettingsResponse(context: PiApiContext, request: Request): Response {
   const id = projectID(request);
   assertProjectExists(context.database, id);
-  return json(readProjectPiSettings(context.database, id));
+  return json(getProjectPiSettings(context.database, id));
 }
 
 async function patchProjectPiSettingsResponse(context: PiApiContext, request: Request): Promise<Response> {
   const id = projectID(request);
   assertProjectExists(context.database, id);
+  assertNoRemovedProjectPiSettings(await parseObjectBody(request));
   const current = getProjectPiSettings(context.database, id);
-  const patch = normalizeSettingsPatch(await parseObjectBody(request));
-  const next = { ...defaultProjectPiSettings(context.database, id), ...current, ...patch };
-  assertSettingsCanUseSupervisor(context.database, next);
-  return writeResponse(() => current
-    ? updateProjectPiSettings(context.database, id, patch)
-    : createProjectPiSettings(context.database, { ...next, project_id: id }));
+  assertSupervisorCanManageProjects(context.database);
+  return writeResponse(() => bindProjectToSupervisor(context.database, id, current));
 }
 
-function readProjectPiSettings(db: RunnerDatabase, projectID: string): ProjectPiSettings {
-  return getProjectPiSettings(db, projectID) ?? defaultProjectPiSettings(db, projectID);
+function bindProjectToSupervisor(
+  db: RunnerDatabase,
+  projectID: string,
+  current: ReturnType<typeof getProjectPiSettings>
+) {
+  return db.transaction(() => {
+    db.sqlite.run(`update projects set auto_run=1,
+      updated_at=strftime('%Y-%m-%dT%H:%M:%fZ', 'now') where id=?`, [projectID]);
+    return current ?? createProjectPiSettings(db, { project_id: projectID });
+  }).immediate();
 }
 
-function defaultProjectPiSettings(db: RunnerDatabase, projectID: string): ProjectPiSettings {
-  return {
-    project_id: projectID,
-    pi_agent_id: defaultPiAgentID(db),
-    auto_manage: 0,
-    auto_triage: 0,
-    auto_enqueue: 0,
-    notify_on_needs_user: 1,
-    max_actions_per_cycle: 5,
-    created_at: "",
-    updated_at: ""
-  };
+function assertNoRemovedProjectPiSettings(input: Record<string, unknown>): void {
+  const field = REMOVED_PROJECT_PI_SETTINGS.find((key) => Object.hasOwn(input, key));
+  if (field) throw new HttpError(400, `${field} 已移除；绑定项目后 Supervisor 会自动完全接管`);
+}
+
+const REMOVED_PROJECT_PI_SETTINGS = [
+  "pi_agent_id",
+  "auto_manage",
+  "auto_triage",
+  "auto_enqueue",
+  "notify_on_needs_user",
+  "max_actions_per_cycle"
+] as const;
+
+function deleteProjectPiSettingsResponse(context: PiApiContext, request: Request): Response {
+  const id = projectID(request);
+  assertProjectExists(context.database, id);
+  deleteProjectPiSettings(context.database, id);
+  return json({ managed: false, project_id: id });
 }
 
 function normalizeAgentInput(input: Record<string, unknown>): Record<string, unknown> {
@@ -156,44 +163,19 @@ function normalizeAgentInput(input: Record<string, unknown>): Record<string, unk
   return normalized;
 }
 
-function normalizeSettingsPatch(input: Record<string, unknown>): SettingsPatch {
-  const patch: SettingsPatch = {};
-  for (const field of BOOLEAN_SETTINGS_FIELDS) {
-    if (hasValue(input, field)) patch[field] = integerFlag(input[field]);
-  }
-  if (hasValue(input, "max_actions_per_cycle")) {
-    patch.max_actions_per_cycle = positiveInteger(input.max_actions_per_cycle, 5);
-  }
-  return patch;
-}
-
-function assertSettingsCanUseSupervisor(db: RunnerDatabase, settings: ProjectPiSettings): void {
+function assertSupervisorCanManageProjects(db: RunnerDatabase): void {
+  ensureDefaultPiAgent(db);
   const supervisor = getPiSupervisor(db);
   if (!supervisor) throw new HttpError(500, "Supervisor 配置不可用");
-  if (hasAutoSetting(settings) && supervisor.enabled !== 1) {
-    throw new HttpError(400, "disabled Supervisor cannot be used automatically");
-  }
+  if (supervisor.enabled !== 1) throw new HttpError(400, "disabled Supervisor cannot manage projects");
 }
 
 
 function assertAgentCanBeDisabled(db: RunnerDatabase, id: string): void {
-  if (agentHasAutoSettings(db, id)) {
-    throw new HttpError(400, "enabled=false would disable an automatically managed Supervisor");
+  if (id === DEFAULT_PI_AGENT_ID && listProjectPiSettings(db).length > 0) {
+    throw new HttpError(400, "enabled=false would disable projects managed by Supervisor");
   }
 }
-
-function agentHasAutoSettings(db: RunnerDatabase, id: string): boolean {
-  return listProjectPiSettings(db).some((settings) => (
-    settings.pi_agent_id === id && hasAutoSetting(settings)
-  ));
-}
-
-const BOOLEAN_SETTINGS_FIELDS = [
-  "auto_manage",
-  "auto_triage",
-  "auto_enqueue",
-  "notify_on_needs_user"
-] as const;
 
 async function writeResponse(write: () => unknown | Promise<unknown>, status = 200): Promise<Response> {
   try {
@@ -215,17 +197,8 @@ async function parseObjectBody(request: Request): Promise<Record<string, unknown
   }
 }
 
-function defaultPiAgentID(db: RunnerDatabase): string {
-  ensureDefaultPiAgent(db);
-  return getPiSupervisor(db)?.id ?? "";
-}
-
 function inputDisablesAgent(input: Record<string, unknown>): boolean {
   return hasValue(input, "enabled") && integerFlag(input.enabled) === 0;
-}
-
-function hasAutoSetting(settings: Pick<ProjectPiSettings, "auto_enqueue" | "auto_manage" | "auto_triage">): boolean {
-  return settings.auto_manage !== 0 || settings.auto_triage !== 0 || settings.auto_enqueue !== 0;
 }
 
 function assertProjectExists(db: RunnerDatabase, id: string): void {
@@ -250,10 +223,6 @@ function hasValue(input: Record<string, unknown>, key: string): boolean {
 function integerFlag(value: unknown): number {
   if (typeof value === "boolean") return value ? 1 : 0;
   return typeof value === "number" && Number.isInteger(value) && value !== 0 ? 1 : 0;
-}
-
-function positiveInteger(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function jsonInput(value: unknown, fallback: string): string {

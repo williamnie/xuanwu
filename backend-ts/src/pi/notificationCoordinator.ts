@@ -2,7 +2,7 @@ import type { RunnerDatabase } from "../db/database.ts";
 import type { Issue } from "../db/repositories/issues.ts";
 import {
   createPiNotificationIntent,
-  getProjectPiPolicy,
+  getProjectPiSettings,
   listPiRunGroupItems,
   readProjectPiPolicy,
   updatePiNotificationIntent,
@@ -61,7 +61,7 @@ export function coordinateIssueLifecycleNotification(
 }
 
 function autonomousFailureRecoveryPending(db: RunnerDatabase, issue: Issue): boolean {
-  return issue.status === "failed" && getProjectPiPolicy(db, issue.project_id)?.supervisor_mode === "autonomous";
+  return issue.status === "failed" && getProjectPiSettings(db, issue.project_id) !== null;
 }
 
 export function markLifecycleIntentSent(

@@ -38,7 +38,7 @@ describe("PI heartbeat signal collector", () => {
       expect(snapshot.agent_sessions).toMatchObject({ total: 1, status_counts: { done: 1 } });
       expect(snapshot.agent_sessions.recent[0]).toMatchObject({ issue_id: issueID, session_key: "codex:thread-a" });
       expect(snapshot.project_settings.pi_policy?.verification_policy).toMatchObject({ pending_timeout_minutes: 1440 });
-      expect(snapshot.project_settings.pi_settings).toMatchObject({ auto_manage: 1, max_actions_per_cycle: 3 });
+      expect(snapshot.project_settings.pi_settings).toEqual({ managed: true });
       expect(snapshot.project_settings.project).toMatchObject({ id: "demo", provider: "codex" });
       expect(rowCount(db, "pi_actions")).toBe(0);
       expect(rowCount(db, "pi_heartbeat_runs")).toBe(0);
@@ -135,11 +135,8 @@ function insertPiAgent(db: RunnerDatabase, id: string): void {
 
 function insertProjectPiSettings(db: RunnerDatabase, projectID: string): void {
   db.sqlite.run(
-    `insert into project_pi_settings
-      (project_id, pi_agent_id, auto_manage, auto_triage, auto_enqueue,
-       notify_on_needs_user, max_actions_per_cycle, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [projectID, "pi-default", 1, 1, 0, 1, 3, "2026-06-04T09:00:00Z", "2026-06-04T09:00:00Z"]
+    `insert into project_pi_settings (project_id, created_at, updated_at) values (?, ?, ?)`,
+    [projectID, "2026-06-04T09:00:00Z", "2026-06-04T09:00:00Z"]
   );
 }
 

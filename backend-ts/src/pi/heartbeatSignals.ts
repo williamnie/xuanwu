@@ -106,14 +106,7 @@ function projectSettings(db: RunnerDatabase, projectID: string): HeartbeatProjec
   const settings = getProjectPiSettings(db, projectID);
   return {
     pi_policy: projectPiPolicy(db, projectID),
-    pi_settings: settings ? {
-      auto_enqueue: settings.auto_enqueue,
-      auto_manage: settings.auto_manage,
-      auto_triage: settings.auto_triage,
-      max_actions_per_cycle: settings.max_actions_per_cycle,
-      notify_on_needs_user: settings.notify_on_needs_user,
-      pi_agent_id: settings.pi_agent_id
-    } : null,
+    pi_settings: settings ? { managed: true } : null,
     project: {
       approval_policy: project.approval_policy,
       auto_run: project.auto_run,
@@ -139,13 +132,11 @@ function projectPiPolicy(db: RunnerDatabase, projectID: string) {
     allowed_skill_intents: safeJson(policy.allowed_skill_intents_json) as string[],
     allowed_supervisor_actions: safeJson(policy.allowed_supervisor_actions_json) as string[],
     concurrency_policy: safeJson(policy.concurrency_policy_json) as Record<string, unknown>,
-    default_mode: policy.default_mode,
     quiet_hours: safeJson(policy.quiet_hours_json) as Record<string, unknown>,
     retry_policy: safeJson(policy.retry_policy_json) as Record<string, unknown>,
     supervisor_cooldown_seconds: policy.supervisor_cooldown_seconds,
     supervisor_max_recoveries_per_issue: policy.supervisor_max_recoveries_per_issue,
     supervisor_max_recoveries_per_project_per_hour: policy.supervisor_max_recoveries_per_project_per_hour,
-    supervisor_mode: policy.supervisor_mode,
     supervisor_rate_limit_wait_policy: policy.supervisor_rate_limit_wait_policy,
     timezone: policy.timezone,
     verification_policy: safeJson(policy.verification_policy_json) as Record<string, unknown>,

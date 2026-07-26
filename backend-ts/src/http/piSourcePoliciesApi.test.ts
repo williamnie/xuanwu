@@ -40,18 +40,11 @@ describe("PI source policies API", () => {
     const db = await openFixtureDatabase();
     try {
       seedProject(db, "demo");
-      createProjectPiSettings(db, {
-        auto_enqueue: 1,
-        auto_manage: 0,
-        auto_triage: 1,
-        max_actions_per_cycle: 5,
-        notify_on_needs_user: 1,
-        pi_agent_id: "default",
-        project_id: "demo"
-      });
+      createProjectPiSettings(db, { project_id: "demo" });
       const policy = await jsonRequest(createDefaultRouter({ database: db }), "/api/pi/source-policies?project_id=demo");
 
       expect(policy.project_policy).toMatchObject({
+        managed: true,
         issue_policy: { auto_create_triage_issue: true, auto_enqueue: true },
         project_id: "demo"
       });

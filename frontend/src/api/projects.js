@@ -55,6 +55,15 @@ export const projectsApi = {
 
   getProjectLoopStatus: (id) => request(`/api/projects/${id}/loop/status`),
 
+  bindProjectToPi: (id) => request(`/api/projects/${id}/pi-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({}),
+  }),
+
+  unbindProjectFromPi: (id) => request(`/api/projects/${id}/pi-settings`, {
+    method: 'DELETE',
+  }),
+
   resumeProjectHold: (id) => request(`/api/projects/${id}/hold/resume`, {
     method: 'POST',
     body: JSON.stringify({}),

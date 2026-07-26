@@ -182,10 +182,11 @@ function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
   return db.sqlite.query<{ id: number }, [string, string]>(`
     select distinct i.id from issues i
     left join issue_runs ir on ir.issue_id=i.id
-    left join project_pi_policies policy on policy.project_id=i.project_id
+    join project_pi_settings settings on settings.project_id=i.project_id
+    join pi_agents supervisor on supervisor.id='runner-default' and supervisor.enabled=1
     where i.status not in ('done', 'cancelled') and (
       i.status='in_progress' or ir.ended_at='' or (i.auto_retry_next_at<>'' and i.auto_retry_next_at<=?)
-      or (i.status='failed' and policy.supervisor_mode='autonomous' and i.updated_at>=?)
+      or (i.status='failed' and i.updated_at>=?)
     )
     order by i.updated_at asc, i.id asc limit ${boundedLimit(limit)}
   `).all(nowText, recentFailedCutoff).map((row) => row.id);

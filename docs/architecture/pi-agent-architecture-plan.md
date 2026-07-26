@@ -521,11 +521,10 @@ DELETE /api/pi/agents/:id
 ### 6.2 Project PI Settings
 
 ```text
-GET   /api/projects/:id/pi-settings
-PATCH /api/projects/:id/pi-settings
+GET    /api/projects/:id/pi-settings
+PATCH  /api/projects/:id/pi-settings  # bind; presence means automatic takeover
+DELETE /api/projects/:id/pi-settings  # unbind
 POST  /api/projects/:id/pi/run-once
-POST  /api/projects/:id/pi/pause
-POST  /api/projects/:id/pi/resume
 ```
 
 ### 6.3 PI Conversations

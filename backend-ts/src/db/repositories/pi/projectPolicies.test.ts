@@ -35,11 +35,9 @@ describe("project PI policy repository", () => {
         allowed_mcp_capabilities_json: "[]",
         allowed_skill_intents_json: "[]",
         allowed_supervisor_actions_json: "[\"session.resume_followup\",\"issue.retry_after\",\"issue.retry\",\"needs_user.escalate\"]",
-        default_mode: "manual",
         supervisor_cooldown_seconds: 300,
         supervisor_max_recoveries_per_issue: 2,
         supervisor_max_recoveries_per_project_per_hour: 10,
-        supervisor_mode: "autonomous",
         supervisor_rate_limit_wait_policy: "respect_retry_after",
         timezone: "UTC",
         working_hours_json: "{}",
@@ -56,25 +54,23 @@ describe("project PI policy repository", () => {
     }
   });
 
-  test("keeps explicit supervisor off policy when project opts out", async () => {
+  test("keeps supervisor safety actions configurable without a mode switch", async () => {
     const db = await openFixtureDatabase();
     try {
       const policy = upsertProjectPiPolicy(db, {
         allowed_supervisor_actions_json: [],
-        project_id: "demo",
-        supervisor_mode: "off"
+        project_id: "demo"
       });
 
       expect(policy).toMatchObject({
-        allowed_supervisor_actions_json: "[]",
-        supervisor_mode: "off"
+        allowed_supervisor_actions_json: "[]"
       });
     } finally {
       db.close();
     }
   });
 
-  test("persists default mode plus working and quiet hours separately from project PI settings", async () => {
+  test("persists working and quiet hours separately from project PI binding", async () => {
     const db = await openFixtureDatabase();
     try {
       const workingHours = { weekdays: [1, 2, 3, 4, 5], start: "09:00", end: "18:00" };
@@ -85,7 +81,6 @@ describe("project PI policy repository", () => {
 
       const policy = upsertProjectPiPolicy(db, {
         project_id: "demo",
-        default_mode: "delegated",
         timezone: "Asia/Shanghai",
         working_hours_json: workingHours,
         quiet_hours_json: quietHours,
@@ -97,7 +92,7 @@ describe("project PI policy repository", () => {
         verification_policy_json: verificationPolicy
       });
 
-      expect(policy).toMatchObject({ project_id: "demo", default_mode: "delegated", timezone: "Asia/Shanghai" });
+      expect(policy).toMatchObject({ project_id: "demo", timezone: "Asia/Shanghai" });
       expect(JSON.parse(policy.allowed_actions_json)).toEqual(["issue.enqueue", "issue.state_repair"]);
       expect(JSON.parse(policy.allowed_mcp_capabilities_json)).toEqual(["docs:resource:runbook"]);
       expect(JSON.parse(policy.allowed_skill_intents_json)).toEqual(["codex-issue-runner"]);
@@ -106,7 +101,7 @@ describe("project PI policy repository", () => {
       expect(JSON.parse(policy.retry_policy_json)).toEqual(retryPolicy);
       expect(JSON.parse(policy.concurrency_policy_json)).toEqual(concurrencyPolicy);
       expect(JSON.parse(policy.verification_policy_json)).toEqual(verificationPolicy);
-      expect(readProjectPiPolicy(db, "demo")).toMatchObject({ default_mode: "delegated" });
+      expect(readProjectPiPolicy(db, "demo")).not.toHaveProperty("default_mode");
       expect(getProjectPiSettings(db, "demo")).toBeNull();
     } finally {
       db.close();
