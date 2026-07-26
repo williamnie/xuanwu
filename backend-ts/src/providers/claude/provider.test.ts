@@ -43,6 +43,7 @@ describe("Claude execution-only provider", () => {
 
       expect(factory.calls).toHaveLength(1);
       expect(factory.calls[0].cwd).toBe(cwd);
+      expect(factory.calls[0].env.CODEX_RUNNER_MANAGED_EXECUTION).toBe("1");
       expect(factory.calls[0].command).toEqual([
         "claude", "-p", "--verbose", "--bare", "--output-format", "stream-json",
         "--permission-mode", "dontAsk", "--allowedTools", "Read,Grep,Glob,LS,Edit,MultiEdit,Write,Bash",

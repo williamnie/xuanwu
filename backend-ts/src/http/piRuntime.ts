@@ -39,6 +39,12 @@ export type RuntimeSessionInput = {
   onIssueEnqueued?: (projectID: string) => void;
   project?: Project;
   providers?: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
+  retry?: {
+    baseDelayMs?: number;
+    enabled?: boolean;
+    maxRetries?: number;
+    provider?: { maxRetries?: number; maxRetryDelayMs?: number; timeoutMs?: number };
+  };
   sessionFile?: string;
   source?: string;
   sourceTurn?: { id?: string; source?: string; userPrompt?: string };
@@ -115,7 +121,10 @@ export async function createPiRuntimeSession(db: RunnerDatabase, input: RuntimeS
   const modelRegistry = sdk.pi.ModelRegistry.create(authStorage, paths.modelsPath);
   const settingsManager = sdk.pi.SettingsManager.create(context.cwd, paths.agentDir);
   const model = resolvePiModel(modelRegistry, input.agent);
-  settingsManager.applyOverrides({ compaction: piRuntimeCompactionSettings(model) });
+  settingsManager.applyOverrides({
+    compaction: piRuntimeCompactionSettings(model),
+    ...(input.retry ? { retry: input.retry } : {})
+  });
   const sessionManager = input.sessionFile
     ? sdk.pi.SessionManager.open(input.sessionFile, context.sessionDir, context.cwd)
     : sdk.pi.SessionManager.create(context.cwd, context.sessionDir, { id: input.conversationID });

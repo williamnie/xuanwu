@@ -24,6 +24,7 @@ import type { ExecutorProvider, ExecutorProviderId, ProviderRecoveryInput, Provi
 
 export type RecoveryInput = {
   database: RunnerDatabase;
+  now?: Date;
   providers: Partial<Record<ExecutorProviderId, ExecutorProvider>>;
 };
 
@@ -34,14 +35,16 @@ const STATUS_IN_PROGRESS = "in_progress";
 export async function recoverInProgressIssues(input: RecoveryInput): Promise<RecoveryResult> {
   const result = { deferred: 0, failed: 0, recovered: 0, requeued: 0 };
   const issues = listIssues(input.database, { status: STATUS_IN_PROGRESS });
+  const now = input.now ?? new Date();
   for (const issue of issues) {
-    const status = await recoverIssue(input, issue);
+    const status = await recoverIssue(input, issue, now);
     result[status] += 1;
   }
   return result;
 }
 
-async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<keyof RecoveryResult> {
+async function recoverIssue(input: RecoveryInput, issue: Issue, now: Date): Promise<keyof RecoveryResult> {
+  if (providerRetryWindowPending(issue, now)) return "deferred";
   const session = recoverableSession(input.database, issue);
   if (!session) {
     if (canRequeueUnstartedClaim(input.database, issue)) {
@@ -93,6 +96,12 @@ async function recoverIssue(input: RecoveryInput, issue: Issue): Promise<keyof R
     markRecoveryFailed(input.database, issue.id, error);
     return "failed";
   }
+}
+
+function providerRetryWindowPending(issue: Issue, now: Date): boolean {
+  if (!issue.auto_retry_reason.startsWith("provider_infra_transient:")) return false;
+  const retryAt = Date.parse(issue.auto_retry_next_at);
+  return Number.isFinite(retryAt) && retryAt > now.getTime();
 }
 
 function prepareRecoveryAttempt(

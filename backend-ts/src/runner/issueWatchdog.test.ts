@@ -148,8 +148,47 @@ describe("issue watchdog queue readiness", () => {
       });
 
       const resumed = await runProjectLoopOnce(loopInput(db, provider, new Date("2026-07-20T00:15:00.000Z")));
-      expect(resumed).toMatchObject({ claimed: true, issue: { id: queued } });
-      expect(provider.inputs.map((input) => input.issueId)).toEqual([queued]);
+      expect(resumed).toMatchObject({ claimed: true, issue: { id: deferred } });
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([deferred]);
+      expect(getIssue(db, queued)).toMatchObject({ status: "todo", attempt_count: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("kicks a fresh deferred todo as soon as provider cooldown expires", async () => {
+    const db = await fixtureDatabase();
+    const provider = new FixtureProvider();
+    try {
+      insertProject(db, "demo", provider.id);
+      const deferred = insertIssue(db, "retry provider startup", "todo");
+      db.sqlite.run(`update issues set updated_at=?, auto_retry_next_at=?,
+        auto_retry_reason=?, error=? where id=?`, [
+        NOW.toISOString(),
+        new Date(NOW.getTime() + 30_000).toISOString(),
+        `provider_infra_transient:${provider.id}`,
+        "codex thread/start timed out",
+        deferred
+      ]);
+
+      const waiting = await runAutoRunIssueWatchdogOnce({
+        database: db,
+        now: new Date(NOW.getTime() + 29_999),
+        providers: { [provider.id]: provider },
+        staleAfterMs: 60_000
+      });
+      expect(waiting).toMatchObject({ candidates: 0, kicked: 0 });
+      expect(provider.inputs).toEqual([]);
+
+      const due = await runAutoRunIssueWatchdogOnce({
+        database: db,
+        now: new Date(NOW.getTime() + 30_000),
+        providers: { [provider.id]: provider },
+        staleAfterMs: 60_000
+      });
+      expect(due).toMatchObject({ candidates: 1, kicked: 1 });
+      await waitFor(() => provider.inputs.length === 1 && !isProjectLoopActive("demo"));
+      expect(provider.inputs.map((input) => input.issueId)).toEqual([deferred]);
     } finally {
       db.close();
     }

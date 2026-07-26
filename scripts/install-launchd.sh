@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/assert-external-deploy-context.sh"
 LABEL="${CODEX_RUNNER_LAUNCHD_LABEL:-com.xiaobei.codex-issue-runner}"
 ADDR="${CODEX_RUNNER_ADDR:-0.0.0.0:3008}"
 CORE_ADDR="${CODEX_RUNNER_CORE_ADDR:-127.0.0.1:3009}"
@@ -295,6 +296,8 @@ cat > "$CORE_PLIST" <<PLIST
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
     <key>CODEX_RUNNER_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
+    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <string>1</string>
     <key>CODEX_RUNNER_AUTOMATION_SHADOW_W1</key>
     <string>$(xml_escape "$AUTOMATION_SHADOW_W1")</string>
   </dict>

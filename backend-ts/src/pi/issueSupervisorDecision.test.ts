@@ -188,7 +188,7 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("rejects automatic recovery for provider runtime unavailable hard outage", async () => {
+  test("rejects resume_session when provider runtime recovery has no resumable session", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-provider-outage-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -212,50 +212,49 @@ describe("PI supervisor decision runtime", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("needs_user");
-      expect(result.error).toContain("provider runtime unavailable");
+      expect(result.decision.decision).toBe("noop");
+      expect(result.error).toContain("existing provider session");
     } finally {
       faux.unregister();
       fixture.db.close();
     }
   });
 
-  test("accepts user-facing hard outage needs_user or blocked decisions", async () => {
+  test("accepts a fresh retry for transient provider runtime unavailability", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-provider-outage-blocked-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     let promptText = "";
     try {
-      faux.setResponses(["needs_user", "blocked"].map((decision) => (context) => {
+      faux.setResponses([(context) => {
         promptText = JSON.stringify(context);
         return fauxAssistantMessage(JSON.stringify({
           confidence: "high",
-          decision,
+          decision: "retry_issue",
           evidence_refs: ["provider_error", "latest_run", "session"],
-          expected_outcome: "the user repairs the unavailable worker runtime before PI retries execution",
-          fallback_if_no_progress: "blocked",
-          rationale: "provider initialize timed out and no provider session exists for automatic recovery",
-          recovery_message: "PI detected the Claude worker runtime is unavailable for issue #526. Please restart or repair the provider runtime, then retry the issue.",
+          expected_outcome: "a fresh provider process executes the issue without resuming the missing session",
+          fallback_if_no_progress: "retry_issue",
+          rationale: "the provider session is missing but the infrastructure diagnosis remains transient",
+          recovery_message: "Retry issue #526 on a fresh provider process after its retry window.",
           risk_level: "medium"
         }));
-      }));
+      }]);
 
-      for (const decision of ["needs_user", "blocked"]) {
-        const result = await runPiSupervisorDecision({
-          agent: fixture.agent,
-          context: providerRuntimeUnavailableContext(),
-          database: fixture.db,
-          now: NOW,
-          project: fixture.project
-        });
-        expect(result.valid).toBe(true);
-        expect(result.decision.decision).toBe(decision);
-      }
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: providerRuntimeUnavailableContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+      expect(result.valid).toBe(true);
+      expect(result.decision.decision).toBe("retry_issue");
       const supervisorPrompt = JSON.parse(promptText).messages[0].content[0].text as string;
       expect(supervisorPrompt).toContain("Supervisor owns issue lifecycle");
       expect(supervisorPrompt).toContain("generic worker/provider model");
       expect(supervisorPrompt).toContain("executor workers");
       expect(supervisorPrompt).toContain("Codex/Claude");
       expect(supervisorPrompt).toContain("provider_runtime_unavailable");
+      expect(supervisorPrompt).toContain("transient while recovery budget remains");
       expect(supervisorPrompt).not.toContain("Codex is the only provider");
     } finally {
       faux.unregister();
@@ -287,7 +286,7 @@ describe("PI supervisor decision runtime", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("needs_user");
+      expect(result.decision.decision).toBe("noop");
       expect(result.error).toContain("human-only provider failure");
     } finally {
       faux.unregister();
@@ -332,7 +331,7 @@ describe("PI supervisor decision runtime", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.decision.decision).toBe("needs_user");
+      expect(result.decision.decision).toBe("noop");
       expect(result.error).toContain("deterministic needs_context diagnosis");
     } finally {
       faux.unregister();
@@ -340,7 +339,40 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("turns invalid JSON into a visible needs_user alarm", async () => {
+  test("does not escalate a transient stale session merely because PI asks for a user", async () => {
+    const fixture = await openDecisionFixture("supervisor-decision-transient-needs-user-");
+    const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
+    try {
+      faux.setResponses([fauxAssistantMessage(JSON.stringify({
+        confidence: 0.98,
+        decision: "needs_user",
+        evidence_refs: ["session", "latest_run"],
+        expected_outcome: "the session eventually makes progress",
+        fallback_if_no_progress: "Keep the issue blocked and do not repeat automatic recovery.",
+        rationale: "the session has no recent progress",
+        recovery_message: "Ask the user to restart the provider.",
+        risk_level: "high",
+        wait_until: null
+      }))]);
+
+      const result = await runPiSupervisorDecision({
+        agent: fixture.agent,
+        context: streamDisconnectContext(),
+        database: fixture.db,
+        now: NOW,
+        project: fixture.project
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.decision.decision).toBe("noop");
+      expect(result.error).toContain("transient provider/session diagnosis");
+    } finally {
+      faux.unregister();
+      fixture.db.close();
+    }
+  });
+
+  test("turns invalid JSON into an audited no-op without mutating issue lifecycle", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-invalid-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
@@ -356,8 +388,8 @@ describe("PI supervisor decision runtime", () => {
 
       expect(result.valid).toBe(false);
       expect(result.decision).toMatchObject({
-        decision: "needs_user",
-        recovery_message: expect.stringContaining("Agent/model/provider")
+        decision: "noop",
+        recovery_message: expect.stringContaining("retry the decision after cooldown")
       });
       expect(result.error).toContain("invalid supervisor decision JSON");
       const events = fixture.db.sqlite.query<{ event_type: string; payload_json: string }, []>(
@@ -365,7 +397,7 @@ describe("PI supervisor decision runtime", () => {
       ).all();
       expect(events).toMatchObject([{ event_type: "decision_failed" }]);
       expect(JSON.parse(events[0]?.payload_json ?? "{}")).toMatchObject({
-        fallback_decision: "needs_user",
+        fallback_decision: "noop",
         valid: false
       });
     } finally {
@@ -374,20 +406,21 @@ describe("PI supervisor decision runtime", () => {
     }
   });
 
-  test("records schema mismatch diagnostic as a visible needs_user alarm", async () => {
+  test("normalizes common PI JSON variants without falling back to needs_user", async () => {
     const fixture = await openDecisionFixture("supervisor-decision-schema-");
     const faux = registerFauxProvider({ api: "pi-supervisor-api", provider: "pi-supervisor" });
     try {
-      faux.setResponses([fauxAssistantMessage(`${JSON.stringify({
-        confidence: 0,
+      faux.setResponses([fauxAssistantMessage(JSON.stringify({
+        confidence: 0.95,
         decision: "wait",
         evidence_refs: ["provider_error"],
         expected_outcome: "provider retry window is respected",
-        fallback_if_no_progress: "ask a human to inspect the malformed output",
+        fallback_if_no_progress: "If there is still no progress, ask a human to inspect the provider.",
         rationale: "HTTP 429 includes a future retry-after timestamp",
+        recovery_message: null,
         risk_level: "low",
-        wait_until: null
-      })}\n${"x".repeat(2_100)}`)]);
+        wait_until: "2026-06-10T08:10:00Z"
+      }))]);
 
       const result = await runPiSupervisorDecision({
         agent: fixture.agent,
@@ -396,16 +429,21 @@ describe("PI supervisor decision runtime", () => {
         now: NOW,
         project: fixture.project
       });
-      const events = fixture.db.sqlite.query<{ payload_json: string }, []>(
-        "select payload_json from issue_supervisor_events where event_type='decision_failed'"
+      const events = fixture.db.sqlite.query<{ event_type: string; payload_json: string }, []>(
+        "select event_type, payload_json from issue_supervisor_events order by id"
       ).all();
-      const payload = JSON.parse(events[0]?.payload_json ?? "{}");
 
-      expect(result).toMatchObject({ valid: false, decision: { decision: "needs_user" } });
+      expect(result).toMatchObject({
+        valid: true,
+        decision: {
+          confidence: "high",
+          decision: "wait",
+          fallback_if_no_progress: "needs_user",
+          wait_until: "2026-06-10T08:10:00Z"
+        }
+      });
       expect(listPiActions(fixture.db, { status: "pending" })).toEqual([]);
-      expect(payload).toMatchObject({ fallback_decision: "needs_user", raw_text_truncated: true, valid: false });
-      expect(payload.error_summary).toContain("schema validation");
-      expect(String(payload.raw_text).length).toBeLessThanOrEqual(2_000);
+      expect(events).toMatchObject([{ event_type: "decision" }]);
     } finally {
       faux.unregister();
       fixture.db.close();

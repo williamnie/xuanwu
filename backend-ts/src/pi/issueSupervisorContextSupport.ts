@@ -31,6 +31,7 @@ type CandidateInput = {
   events: IssueEvent[];
   history: Record<string, unknown>;
   issueStatus: string;
+  legacyInvalidFallbackDiagnosis?: PiSupervisorDiagnosisCode;
   latestRun: IssueRun | null;
   now: Date;
   policy?: { supervisor_cooldown_seconds?: number };
@@ -84,6 +85,14 @@ export function candidates(input: CandidateInput): SupervisorCandidate[] {
   const failedAttempt = input.issueStatus === "failed" && latestRun?.ended_at !== "";
   if (failedAttempt && providerError?.diagnosis_code) {
     out.push(providerErrorCandidate(input, providerError, providerError.diagnosis_code));
+    return out;
+  }
+  if (failedAttempt && input.legacyInvalidFallbackDiagnosis) {
+    out.push({
+      diagnosis_code: input.legacyInvalidFallbackDiagnosis,
+      evidence_refs: ["issue", "supervisor_decision_failed"],
+      reason: "legacy invalid Supervisor fallback closed the Issue; re-evaluate it under the current autonomous recovery policy"
+    });
     return out;
   }
   if (failedAttempt) {
@@ -215,8 +224,12 @@ export function sessionContext(input: SessionContextInput): Record<string, unkno
   };
 }
 
-export function workspaceSnapshot(cwd: string, events: RecentSupervisorEvent[]): Record<string, unknown> {
-  const gitStatus = gitStatusSummary(cwd);
+export function workspaceSnapshot(
+  cwd: string,
+  events: RecentSupervisorEvent[],
+  includeGit = true
+): Record<string, unknown> {
+  const gitStatus = includeGit ? gitStatusSummary(cwd) : { hash: "", summary: "omitted_for_scheduler_scan" };
   return {
     git_diff_hash: gitStatus.hash,
     git_status_summary: gitStatus.summary,

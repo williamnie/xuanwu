@@ -86,8 +86,10 @@ describe("Codex stdio JSON-RPC transport", () => {
 
   test("runs an initialize smoke request over fake stdio", async () => {
     let spawnedCommand: string[] = [];
-    const factory: CodexJsonRpcProcessFactory = ({ command }) => {
+    let spawnedEnvironment: Record<string, string | undefined> = {};
+    const factory: CodexJsonRpcProcessFactory = ({ command, env }) => {
       spawnedCommand = command;
+      spawnedEnvironment = env;
       return new FakeCodexProcess((request, fake) => {
         expect(request).toMatchObject({ id: 1, method: "initialize" });
         fake.sendStdout({ id: request.id, result: { protocolVersion: "fixture" } });
@@ -97,6 +99,7 @@ describe("Codex stdio JSON-RPC transport", () => {
     const result = await runCodexTransportInitializeSmoke(config, { processFactory: factory });
 
     expect(spawnedCommand).toEqual(["codex", "app-server", "--listen", "stdio://"]);
+    expect(spawnedEnvironment.CODEX_RUNNER_MANAGED_EXECUTION).toBe("1");
     expect(result).toEqual({ protocolVersion: "fixture" });
   });
 

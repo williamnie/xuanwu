@@ -3,6 +3,7 @@ import { splitCommand } from "../codex/jsonRpc.ts";
 import { parseClaudeStreamJSONL } from "./stream.ts";
 import { redactSensitiveText } from "../../util/redact.ts";
 import { normalizedRunEvent } from "../runEvents.ts";
+import { managedExecutionEnvironment } from "../managedExecution.ts";
 import type { ProviderRuntimeConfig } from "../../config/env.ts";
 import type { ExecutorProvider, InterruptInput, ProviderEvent, ProviderRunInput, ProviderRunResult, SessionRef } from "../types.ts";
 
@@ -67,7 +68,7 @@ export class ClaudeExecutorProvider implements ExecutorProvider {
     return this.processFactory()({
       command: claudeCommand(this.config, input),
       cwd: input.cwd,
-      env: { ...Bun.env, ...this.config.env }
+      env: managedExecutionEnvironment({ ...Bun.env, ...this.config.env })
     });
   }
 

@@ -367,6 +367,42 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
+  test("reopens diagnosis for a failed issue closed by the legacy invalid Supervisor fallback", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-legacy-invalid-supervisor-"));
+      insertIssue(db, {
+        id: 417,
+        projectID: "runner",
+        title: "Legacy false escalation",
+        status: "failed",
+        updatedAt: "2026-06-10T07:50:00Z"
+      });
+      insertRun(db, {
+        issueID: 417,
+        id: "issue-417-attempt-1",
+        status: "failed",
+        endedAt: "2026-06-10T07:50:00Z",
+        sessionID: "thread-417",
+        turnID: "turn-417"
+      });
+      db.sqlite.run("update issues set error=? where id=417", [
+        "needs_user: session_no_recent_progress\n" +
+        "Xuanwu Supervisor failed to return a valid decision. Check the configured Agent/model/provider and its decision audit before retrying."
+      ]);
+
+      const context = buildIssueSupervisorRecoveryContext(db, 417, { now: NOW });
+
+      expect(context.provider_error).toBeNull();
+      expect(context.candidates).toEqual([expect.objectContaining({
+        diagnosis_code: "session_no_recent_progress",
+        evidence_refs: ["issue", "supervisor_decision_failed"]
+      })]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("surfaces deferred provider infra failures as PI recovery candidates", async () => {
     const db = await fixtureDb();
     try {
@@ -493,7 +529,7 @@ describe("PI issue supervisor context builder", () => {
     }
   });
 
-  test("promotes repeated deferred events on the same issue to provider runtime unavailable", async () => {
+  test("does not double-count provider and lifecycle annotations for one deferred failure", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "runner", await tempRoot("runner-repeated-deferred-"));
@@ -509,6 +545,33 @@ describe("PI issue supervisor context builder", () => {
       }
 
       const context = buildIssueSupervisorRecoveryContext(db, 410, { now: NOW });
+
+      expect(context.candidates.map((item) => item.diagnosis_code))
+        .not.toContain("provider_runtime_unavailable");
+      expect(context.candidates.map((item) => item.diagnosis_code))
+        .toContain("provider_transient_network_error");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("promotes two distinct provider deferrals on the same issue to runtime unavailable", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", await tempRoot("runner-repeated-provider-deferred-"));
+      insertIssue(db, { id: 412, projectID: "runner", title: "Repeated provider deferrals", status: "in_progress", updatedAt: "2026-06-10T07:59:30Z" });
+      insertRun(db, { issueID: 412, id: "issue-412-attempt-1", status: "in_progress", endedAt: "", sessionID: "thread-412", turnID: "turn-412" });
+      insertSession(db, { issueID: 412, projectID: "runner", sessionID: "thread-412", status: "running", updatedAt: "2026-06-10T07:59:30Z" });
+      for (const [index, createdAt] of ["2026-06-10T07:59:40Z", "2026-06-10T07:59:50Z"].entries()) {
+        insertEvent(db, { issueID: 412, type: "issue.provider_deferred", payload: {
+          backoff_attempt: index + 1,
+          error: "app-server request timed out after 10000ms: initialize",
+          provider: "codex",
+          reason: "provider_infra_transient"
+        }, createdAt });
+      }
+
+      const context = buildIssueSupervisorRecoveryContext(db, 412, { now: NOW });
 
       expect(context.candidates[0]).toMatchObject({
         diagnosis_code: "provider_runtime_unavailable",
@@ -570,6 +633,39 @@ describe("PI issue supervisor context builder", () => {
       expect(buildIssueSupervisorRecoveryContext(db, 403, { now: NOW }).session).toMatchObject({
         run_state: "unknown",
         status: "unknown"
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("can omit repeated Git scans for the scheduler while retaining progress markers", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "runner", "/path/that/must/not/be-scanned");
+      insertIssue(db, {
+        id: 418,
+        projectID: "runner",
+        title: "Scheduler scan",
+        status: "in_progress",
+        updatedAt: "2026-06-10T07:59:00Z"
+      });
+      insertEvent(db, {
+        issueID: 418,
+        type: "issue.log",
+        payload: { command: "bun test focused.test.ts", type: "tool" },
+        createdAt: "2026-06-10T07:59:30Z"
+      });
+
+      const context = buildIssueSupervisorRecoveryContext(db, 418, {
+        includeWorkspaceGit: false,
+        now: NOW
+      });
+
+      expect(context.workspace_snapshot).toMatchObject({
+        git_diff_hash: "",
+        git_status_summary: "omitted_for_scheduler_scan",
+        last_commands: ["bun test focused.test.ts"]
       });
     } finally {
       db.close();

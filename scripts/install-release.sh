@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
+  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${CODEX_RUNNER_CODEX_SERVER_MODE:-}" ]; }; then
+  echo "[deploy-guard] denied: live deployment cannot run from a Runner-managed provider process." >&2
+  exit 78
+fi
+
 REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
 VERSION="${CODEX_RUNNER_VERSION:-latest}"
 VERIFY_ATTESTATION="${CODEX_RUNNER_VERIFY_ATTESTATION:-auto}"
@@ -317,6 +323,8 @@ PLIST
     <string>$(xml_escape "$CODEX_SERVER_MODE")</string>
     <key>CODEX_RUNNER_CODEX_APP_CMD</key>
     <string>$(xml_escape "$CODEX_APP_CMD")</string>
+    <key>CODEX_RUNNER_MANAGED_EXECUTION</key>
+    <string>1</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
@@ -397,6 +405,7 @@ Environment=PATH=$PATH_VALUE
 Environment=PI_PACKAGE_DIR=$STATE_DIR/pi-coding-agent
 Environment="CODEX_RUNNER_CODEX_SERVER_MODE=$CODEX_SERVER_MODE"
 Environment="CODEX_RUNNER_CODEX_APP_CMD=$CODEX_APP_CMD"
+Environment=CODEX_RUNNER_MANAGED_EXECUTION=1
 ExecStart=$BIN_PATH serve --role core --addr $CORE_ADDR --state-dir $STATE_DIR --db $DB_PATH --codex-cmd $codex_cmd$(auth_token_file_systemd_args)
 Restart=always
 RestartSec=2

@@ -6,6 +6,7 @@ import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
 import { createIssueSupervisorEvent, listIssueSupervisorEvents, listPiActionEvents, listPiActions, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { getPiRecoveryAttempt, listPiRecoveryAttempts, recordPiRecoveryAttempt } from "../db/repositories/pi/recoveryAttempts.ts";
+import { EventBus, type AppEvent } from "../events/bus.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { buildIssueSupervisorRecoveryContext } from "./issueSupervisorContext.ts";
 import { applyIssueSupervisorDecisionActions } from "./issueSupervisorActions.ts";
@@ -96,6 +97,44 @@ describe("PI issue supervisor actions", () => {
       expect(listIssueSupervisorEvents(db, { issueId: 305 }).map((event) => event.event_type))
         .toEqual(["decision", "action", "result"]);
     } finally {
+      db.close();
+    }
+  });
+
+  test("publishes an autonomous needs-user escalation onto the shared EventBus", async () => {
+    const db = await fixtureDb();
+    const bus = new EventBus();
+    const observed: AppEvent[] = [];
+    const detach = bus.observe((event) => observed.push(event));
+    try {
+      insertProject(db, "demo");
+      insertIssueRunSession(db, { issueID: 307, projectID: "demo", sessionID: "thread-307", turnID: "turn-old" });
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["needs_user.escalate"],
+        project_id: "demo",
+        supervisor_mode: "autonomous"
+      });
+
+      const result = await applyIssueSupervisorDecisionActions({
+        bus,
+        context: buildIssueSupervisorRecoveryContext(db, 307, { now: NOW }),
+        database: db,
+        decision: needsUserDecision(),
+        now: NOW
+      });
+
+      expect(result.executed_actions).toHaveLength(1);
+      expect(observed).toContainEqual(expect.objectContaining({
+        issueId: 307,
+        projectId: "demo",
+        type: "pi.needs_user"
+      }));
+      expect(listPiActions(db, { issueId: 307 })).toContainEqual(expect.objectContaining({
+        action_type: "needs_user.escalate",
+        status: "completed"
+      }));
+    } finally {
+      detach();
       db.close();
     }
   });
@@ -249,6 +288,19 @@ function resumeDecision(): PiSupervisorDecisionJson {
     fallback_if_no_progress: "needs_user",
     rationale: "stream disconnected",
     recovery_message: "Inspect state and continue safely.",
+    risk_level: "medium"
+  };
+}
+
+function needsUserDecision(): PiSupervisorDecisionJson {
+  return {
+    confidence: "high",
+    decision: "needs_user",
+    evidence_refs: ["verification_failure"],
+    expected_outcome: "the user receives one actionable escalation",
+    fallback_if_no_progress: "blocked",
+    rationale: "A deterministic verification failure needs a user decision.",
+    recovery_message: "Choose whether to retry from a fresh baseline.",
     risk_level: "medium"
   };
 }

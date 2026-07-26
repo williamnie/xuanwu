@@ -54,14 +54,11 @@ export function hasDeferredProviderRuntime(
   return countRows(db, `
     select count(distinct i.id) as count
     from issues i
-    join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-    where i.status=? and ir.provider=? and exists (
-      select 1 from issue_events event
-      where event.issue_id=i.id and event.type='issue.provider_deferred'
-        and event.created_at>=ir.started_at
-    )
-      and (i.auto_retry_next_at='' or i.auto_retry_next_at>?)
-  `, [STATUS_IN_PROGRESS, cleanProviderID, timestamp(at)]) > 0;
+    where i.status in ('todo', 'in_progress')
+      and i.auto_retry_reason=?
+      and i.auto_retry_next_at<>''
+      and i.auto_retry_next_at>?
+  `, [`provider_infra_transient:${cleanProviderID}`, timestamp(at)]) > 0;
 }
 
 export function hasActiveExecutorWorkForProject(

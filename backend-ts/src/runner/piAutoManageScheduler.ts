@@ -180,14 +180,6 @@ export async function runPiAutoManageCycle(input: PiAutoManageCycleInput): Promi
 
 export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Promise<ScheduleLayerCycleResult> {
   const cycleStartedAt = performance.now();
-  const supervisor = input.runSupervisor === false
-    ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
-    : await timedSchedulePhase("supervisor", () => runPiIssueSupervisorSchedulerOnce({
-      database: input.database,
-      now: optionalDate(input.watchdogNow),
-      providers: input.providers,
-      runDecision: input.runSupervisorDecision
-    }));
   // W3 target-only cutover: compatibility result fields stay stable for one
   // release, but legacy Cron/PI/delegation schedulers are no longer invoked.
   const cron = { executed: 0, failed: 0, scanned: 0, skipped: 0 };
@@ -232,12 +224,13 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     "watch_automations",
     () => runWatchAutomationsOnce(input.database, { now: input.watchdogNow })
   );
-  if (watchResult.queued > 0 && input.config) {
+  const watchFeishuConfig = input.config;
+  if (watchResult.queued > 0 && watchFeishuConfig) {
     await timedSchedulePhase("watch_feishu_outbox", () => dispatchFeishuOutbox({
-      config: input.config.integrations.feishu,
+      config: watchFeishuConfig.integrations.feishu,
       database: input.database,
       now: optionalDate(input.watchdogNow),
-      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: input.config.integrations.feishu })
+      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: watchFeishuConfig.integrations.feishu })
     }));
   }
   const dailyDigestNotifications = await timedSchedulePhase(
@@ -261,14 +254,27 @@ export async function runScheduleLayerCycle(input: PiAutoManageCycleInput): Prom
     decide: input.agentCommunicationDecider,
     now: optionalDate(input.watchdogNow)
   }));
-  if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && input.config) {
+  const communicationFeishuConfig = input.config;
+  if ((agentCommunications.queued > 0 || agentCommunications.fallback > 0) && communicationFeishuConfig) {
     await timedSchedulePhase("communication_feishu_outbox", () => dispatchFeishuOutbox({
-      config: input.config.integrations.feishu,
+      config: communicationFeishuConfig.integrations.feishu,
       database: input.database,
       now: optionalDate(input.watchdogNow),
-      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: input.config.integrations.feishu })
+      sender: input.guardianDirectFeishuSender ?? createFeishuMessageClient({ config: communicationFeishuConfig.integrations.feishu })
     }));
   }
+  // PI decisions can take tens of seconds. Keep the deterministic scheduler,
+  // watchdog, and project phases ahead of the LLM boundary so a slow
+  // Supervisor cannot starve due Automation runs or the control plane.
+  const supervisor = input.runSupervisor === false
+    ? { decisions: 0, failed: 0, scanned: 0, signaled: 0, skipped: 0 }
+    : await timedSchedulePhase("supervisor", () => runPiIssueSupervisorSchedulerOnce({
+      bus: input.bus,
+      database: input.database,
+      now: optionalDate(input.watchdogNow),
+      providers: input.providers,
+      runDecision: input.runSupervisorDecision
+    }));
   const cycleDurationMs = performance.now() - cycleStartedAt;
   if (cycleDurationMs >= SLOW_SCHEDULE_PHASE_MS) logScheduleTiming("cycle", cycleDurationMs);
   return {

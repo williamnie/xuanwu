@@ -89,10 +89,17 @@ if (import.meta.main) {
       console.log(JSON.stringify({ output: artifact(options, "replay.md") }, null, 2));
     } else if (command === "status") {
       console.log(JSON.stringify(controllerStatus(options), null, 2));
+    } else if (command === "stop") {
+      const reason = option(
+        process.argv.slice(3),
+        "reason",
+        "operator stopped the endurance window before the required 24 hours elapsed"
+      );
+      console.log(JSON.stringify(await stopController(options, reason), null, 2));
     } else {
       console.error(
-        "usage: bun scripts/agentic-endurance-live.ts <run|report|replay|status> " +
-        "[--artifact-dir <path>] [--db <runner.db>] [--token-file <path>]"
+        "usage: bun scripts/agentic-endurance-live.ts <run|report|replay|status|stop> " +
+        "[--artifact-dir <path>] [--db <runner.db>] [--token-file <path>] [--reason <text>]"
       );
       process.exit(64);
     }
@@ -297,6 +304,41 @@ async function runController(options: Options): Promise<void> {
   const report = writeOfflineReport(options, fatalReason);
   await persistFinalEvidenceAndStatus(options, report);
   if (report.result !== "passed") process.exitCode = 1;
+}
+
+async function stopController(options: Options, reason: string): Promise<Json> {
+  const before = controllerStatus(options);
+  const label = `gui/${process.getuid()}/com.xiaobei.codex-issue-runner.issue-785-endurance`;
+  const stopped = await runCommand(["/bin/launchctl", "bootout", label], process.cwd(), 30_000);
+  if (before.running && stopped.exit_code !== 0) {
+    throw new Error(`failed to stop endurance controller: ${stopped.stderr || stopped.stdout}`);
+  }
+  const installedPlist = join(
+    process.env.HOME ?? "",
+    "Library/LaunchAgents/com.xiaobei.codex-issue-runner.issue-785-endurance.plist"
+  );
+  rmSync(installedPlist, { force: true });
+  const cleanupErrors: string[] = [];
+  await cleanupPilot(options).catch((error) => cleanupErrors.push(`pilot cleanup failed: ${safeError(error)}`));
+  await cleanupMcp(options).catch((error) => cleanupErrors.push(`MCP cleanup failed: ${safeError(error)}`));
+  const finalReason = [reason, ...cleanupErrors].join("; ");
+  timeline(options, "window.cancelled", {
+    controller_pid: before.pid,
+    cleanup_errors: cleanupErrors,
+    reason: finalReason
+  });
+  writeFileSync(artifact(options, "fatal-error.txt"), `${finalReason}\n`, { mode: 0o600 });
+  const report = writeOfflineReport(options, finalReason);
+  await persistFinalEvidenceAndStatus(options, report);
+  return {
+    cleanup_errors: cleanupErrors,
+    controller_pid: before.pid,
+    issue_id: ISSUE_ID,
+    reason: finalReason,
+    report: report.result,
+    samples: before.samples,
+    stopped: true
+  };
 }
 
 async function setupPilot(options: Options): Promise<void> {
@@ -980,6 +1022,18 @@ PY
 独立 LaunchAgent 的控制器进程以 PPID 1 运行；启动 Agent 在 \`ready.json\` 和首个原子样本
 落盘后退出。采样和报表均为确定性程序，不调用 LLM；不得用短窗口、fake clock
 或回填样本替代。
+
+## 提前终止并失败收口
+
+需要取消长窗时，不要只杀进程或手工改 Issue 状态。使用同一确定性入口停止 LaunchAgent、
+清理隔离 fixture、保存部分报告和 persisted Evidence，并把 Issue 明确更新为 \`failed\`：
+
+\`\`\`bash
+bun scripts/agentic-endurance-live.ts stop --artifact-dir '${options.artifactDir}' \
+  --db '${options.dbPath}' --token-file '${options.tokenFile}' \
+  --app-support-dir '${options.appSupportDir}' \
+  --reason 'operator stopped the endurance window before 24 hours elapsed'
+\`\`\`
 
 ## 离线重建
 

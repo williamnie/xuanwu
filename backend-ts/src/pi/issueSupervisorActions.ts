@@ -1,5 +1,6 @@
 import { getPiAction, updatePiAction, createIssueSupervisorEvent, type PiAction } from "../db/repositories/pi.ts";
 import type { RunnerDatabase } from "../db/database.ts";
+import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import { dispatchPiAction } from "../http/piActionDispatch.ts";
 import { createPendingPiAction, recordPiActionAuditEvent, type PiActionRequest } from "./actionEngine.ts";
@@ -13,6 +14,7 @@ import {
 import { recordSupervisorRecoveryAttempt } from "./issueSupervisorRecoveryAttemptRecorder.ts";
 
 export type IssueSupervisorActionInput = {
+  bus?: Pick<EventBus, "publish">;
   context: IssueSupervisorRecoveryContext;
   database: RunnerDatabase;
   decision: PiSupervisorDecisionJson;
@@ -124,7 +126,11 @@ async function executeIfApproved(
   recordPiActionAuditEvent(input.database, executing, "execution_started", { actor: "gate", decision: "execute" });
   recordSupervisorRecoveryAttempt(input, executing);
   try {
-    const result = await dispatchPiAction({ database: input.database, providers: input.providers }, executing);
+    const result = await dispatchPiAction({
+      bus: input.bus,
+      database: input.database,
+      providers: input.providers
+    }, executing);
     const completed = updatePiAction(input.database, action.id, { result_json: JSON.stringify(result ?? null), status: "completed" });
     recordPiActionAuditEvent(input.database, completed, "execution_result", { actor: "executor", result });
     return actionSummary(completed);

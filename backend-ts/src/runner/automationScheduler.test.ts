@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openDatabase, type RunnerDatabase } from "../db/database.ts";
 import { createAutomation, getAutomation, listAutomationRuns } from "../db/repositories/automations.ts";
 import { claimDueAutomationRuns, nextCronOccurrence } from "../db/repositories/automationScheduler.ts";
-import { listPiGuardianAlerts } from "../db/repositories/pi.ts";
+import { listPiGuardianAlerts, upsertProjectPiPolicy } from "../db/repositories/pi.ts";
 import { runDueAutomations } from "./automationScheduler.ts";
 import { runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
 
@@ -87,6 +87,46 @@ describe("P08 Automation scheduler", () => {
     } finally { db.close(); }
   });
 
+  test("executes due Automation work before entering the slow PI Supervisor boundary", async () => {
+    const db = await fixture();
+    const order: string[] = [];
+    try {
+      createFixture(db, "2026-06-02T09:59:30.000Z");
+      insertSupervisorCandidate(db);
+
+      const result = await runScheduleLayerCycle({
+        database: db,
+        runAutomationCore: async () => {
+          order.push("automation");
+          return { detail: "ran before supervisor" };
+        },
+        runProjectCycle: async () => ({}),
+        runSupervisorDecision: async () => {
+          order.push("supervisor");
+          return {
+            decision: {
+              confidence: "high",
+              decision: "noop",
+              evidence_refs: ["latest_run", "session"],
+              expected_outcome: "current state remains unchanged",
+              fallback_if_no_progress: "retry_issue",
+              rationale: "fixture only verifies scheduler phase order",
+              recovery_message: "",
+              risk_level: "low"
+            },
+            raw_text: "{}",
+            valid: true
+          };
+        },
+        watchdogNow: NOW
+      });
+
+      expect(result.automationCore).toMatchObject({ executed: 1, scanned: 1 });
+      expect(result.supervisor).toMatchObject({ decisions: 1, signaled: 1 });
+      expect(order).toEqual(["automation", "supervisor"]);
+    } finally { db.close(); }
+  });
+
   test("executes a due manual trigger once and never scans a paused definition", async () => {
     const db = await fixture();
     try {
@@ -144,4 +184,39 @@ function createFixture(db: RunnerDatabase, nextRunAt: string) {
     permission_policy_ref: "project-policy:demo", status: "active", workflow_ref: "workflow:investigate@1",
     trigger_created_by: "system", trigger: { type: "cron", config: { expression: "0 9 * * *", timezone: "UTC" } }
   }, "2026-06-02T09:00:00.000Z");
+}
+
+function insertSupervisorCandidate(db: RunnerDatabase): void {
+  db.sqlite.run(`insert into projects (id, name, cwd, provider, auto_run, created_at, updated_at)
+    values ('demo', 'demo', '/tmp/demo', 'codex', 0, ?, ?)`, [
+    "2026-06-02T09:00:00.000Z",
+    "2026-06-02T09:00:00.000Z"
+  ]);
+  upsertProjectPiPolicy(db, {
+    allowed_supervisor_actions_json: ["issue.supervisor_decision"],
+    project_id: "demo",
+    supervisor_mode: "autonomous"
+  });
+  db.sqlite.run(`insert into issues (id, project_id, title, status, attempt_count, created_at, updated_at)
+    values (912, 'demo', 'stale provider session', 'in_progress', 1, ?, ?)`, [
+    "2026-06-02T09:00:00.000Z",
+    "2026-06-02T09:45:00.000Z"
+  ]);
+  db.sqlite.run(`insert into issue_runs
+    (id, issue_id, attempt, status, provider, provider_session_id, provider_turn_id, started_at, ended_at)
+    values ('issue-912-attempt-1', 912, 1, 'in_progress', 'codex', 'thread-912', 'turn-912', ?, '')`, [
+    "2026-06-02T09:00:00.000Z"
+  ]);
+  db.sqlite.run(`insert into agent_sessions
+    (session_key, provider, provider_session_id, project_id, issue_id, status, raw_ref, created_at, updated_at)
+    values ('codex:thread-912', 'codex', 'thread-912', 'demo', 912, 'running', ?, ?, ?)`, [
+    JSON.stringify({ provider_turn_id: "turn-912" }),
+    "2026-06-02T09:00:00.000Z",
+    "2026-06-02T09:45:00.000Z"
+  ]);
+  db.sqlite.run(`insert into issue_events (issue_id, type, payload, created_at)
+    values (912, 'issue.log', ?, ?)`, [
+    JSON.stringify({ raw_payload: "stream disconnected before completion", type: "error" }),
+    "2026-06-02T09:45:05.000Z"
+  ]);
 }

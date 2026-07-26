@@ -55,7 +55,10 @@ export function providerOutageCandidate(input: ProviderOutageDiagnosisInput): Su
   return {
     diagnosis_code: "provider_runtime_unavailable",
     evidence_refs: evidence.refs,
-    reason: outageReason(evidence.reason)
+    reason: outageReason(evidence.reason),
+    ...(clean(input.providerError?.retry_after_at) === ""
+      ? {}
+      : { wait_until: clean(input.providerError?.retry_after_at) })
   };
 }
 
@@ -95,7 +98,10 @@ function issueDeferredCount(events: IssueEvent[], now: Date): number {
   return events.filter((event) => DEFERRED_EVENT_TYPES.has(event.type) && eventMs(event) >= since).length;
 }
 
-const DEFERRED_EVENT_TYPES = new Set(["issue.provider_deferred", "issue.recovery_deferred"]);
+// issue.recovery_deferred is the lifecycle annotation emitted for the same
+// provider failure as issue.provider_deferred. Counting both turns one failure
+// into a false repeated-outage signal.
+const DEFERRED_EVENT_TYPES = new Set(["issue.provider_deferred"]);
 
 function outageReason(reason: string): string {
   return redactAuditText(reason || "provider runtime is unavailable");

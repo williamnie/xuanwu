@@ -25,6 +25,40 @@ afterEach(async () => {
 });
 
 describe("PI issue supervisor scheduler", () => {
+  test("uses the five-minute scheduler stale threshold when no override is provided", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-default-stale-project-"));
+      insertRunningIssue(db, {
+        issueID: 497,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:54:00Z",
+        threadID: "thread-497",
+        turnID: "turn-497"
+      });
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => {
+          calls += 1;
+          return validDecision(noopDecision());
+        }
+      });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, scanned: 1, signaled: 1 });
+      expect(calls).toBe(1);
+      expect(listIssueSupervisorEvents(db, { issueId: 497 }))
+        .toContainEqual(expect.objectContaining({
+          diagnosis_code: "session_no_recent_progress",
+          event_type: "signal"
+        }));
+    } finally {
+      db.close();
+    }
+  });
+
   test("invokes PI for a dispatchable watchdog signal instead of stopping at a hardcoded candidate", async () => {
     const db = await fixtureDb();
     let calls = 0;
@@ -106,7 +140,7 @@ describe("PI issue supervisor scheduler", () => {
     }
   });
 
-  test("turns invalid PI output into a needs-user action instead of a recovery guess", async () => {
+  test("keeps issue lifecycle unchanged when PI output is invalid", async () => {
     const db = await fixtureDb();
     try {
       insertProject(db, "demo", await tempRoot("supervisor-invalid-project-"));
@@ -138,10 +172,120 @@ describe("PI issue supervisor scheduler", () => {
       });
 
       expect(result).toMatchObject({ decisions: 1, failed: 1, signaled: 1 });
-      expect(listPiActions(db, { issueId: 501 })).toContainEqual(expect.objectContaining({
+      expect(listPiActions(db, { issueId: 501 })).toEqual([]);
+      expect(db.sqlite.query<{ status: string }, [number]>("select status from issues where id=?").get(501))
+        .toEqual({ status: "in_progress" });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("cooldowns an audited invalid decision before asking PI again", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-invalid-cooldown-project-"));
+      upsertProjectPiPolicy(db, {
+        project_id: "demo",
+        supervisor_cooldown_seconds: 300,
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, {
+        issueID: 507,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-507",
+        turnID: "turn-507"
+      });
+      insertIssueEvent(db, 507, { raw_payload: "stream disconnected before completion", type: "error" }, "2026-06-10T07:45:05Z");
+      createIssueSupervisorEvent(db, {
+        decision: "noop",
+        diagnosis_code: "executor_stream_disconnected",
+        event_type: "decision_failed",
+        issue_id: 507,
+        project_id: "demo",
+        created_at: "2026-06-10T07:59:00Z"
+      });
+      db.sqlite.run(
+        "update issue_supervisor_events set created_at=? where issue_id=? and event_type='decision_failed'",
+        ["2026-06-10T07:59:00Z", 507]
+      );
+      const runDecision = async () => {
+        calls += 1;
+        return validDecision(noopDecision());
+      };
+
+      const cooling = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision,
+        staleAfterSeconds: 300
+      });
+      const due = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: new Date("2026-06-10T08:04:01Z"),
+        runDecision,
+        staleAfterSeconds: 300
+      });
+
+      expect(cooling).toMatchObject({ decisions: 0, skipped: 1 });
+      expect(due).toMatchObject({ decisions: 1, signaled: 1 });
+      expect(calls).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("does not let a legacy action after an invalid decision suppress recovery forever", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-legacy-invalid-action-project-"));
+      upsertProjectPiPolicy(db, {
+        project_id: "demo",
+        supervisor_cooldown_seconds: 300,
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, {
+        issueID: 508,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-508",
+        turnID: "turn-508"
+      });
+      insertIssueEvent(db, 508, { raw_payload: "stream disconnected before completion", type: "error" }, "2026-06-10T07:45:05Z");
+      createIssueSupervisorEvent(db, {
+        decision: "needs_user",
+        diagnosis_code: "executor_stream_disconnected",
+        event_type: "decision_failed",
+        issue_id: 508,
+        project_id: "demo"
+      });
+      createIssueSupervisorEvent(db, {
         action_type: "needs_user.escalate",
-        status: "completed"
-      }));
+        decision: "needs_user",
+        diagnosis_code: "executor_stream_disconnected",
+        event_type: "action",
+        issue_id: 508,
+        project_id: "demo"
+      });
+      db.sqlite.run(
+        "update issue_supervisor_events set created_at=? where issue_id=?",
+        ["2026-06-10T07:50:00Z", 508]
+      );
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => {
+          calls += 1;
+          return validDecision(noopDecision());
+        },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 1, signaled: 1, skipped: 0 });
+      expect(calls).toBe(1);
     } finally {
       db.close();
     }
@@ -215,6 +359,87 @@ describe("PI issue supervisor scheduler", () => {
 
       expect(result).toMatchObject({ decisions: 0, signaled: 0 });
       expect(calls).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("ignores stale retry metadata on a completed issue", async () => {
+    const db = await fixtureDb();
+    let calls = 0;
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-completed-stale-retry-"));
+      insertRunningIssue(db, {
+        issueID: 509,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-509",
+        turnID: "turn-509"
+      });
+      db.sqlite.run(
+        "update issues set status='done', auto_retry_next_at='2026-06-10T07:00:00Z' where id=509"
+      );
+      db.sqlite.run(
+        "update issue_runs set status='done', ended_at='2026-06-10T07:50:00Z' where issue_id=509"
+      );
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        runDecision: async () => {
+          calls += 1;
+          return validDecision(noopDecision());
+        },
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 0, scanned: 0, signaled: 0 });
+      expect(calls).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("retries a failed transient issue deterministically when PI runtime is unavailable", async () => {
+    const db = await fixtureDb();
+    try {
+      insertProject(db, "demo", await tempRoot("supervisor-deterministic-transient-retry-"));
+      upsertProjectPiPolicy(db, {
+        allowed_supervisor_actions_json: ["issue.retry"],
+        project_id: "demo",
+        supervisor_mode: "autonomous"
+      });
+      insertRunningIssue(db, {
+        issueID: 510,
+        projectID: "demo",
+        sessionUpdatedAt: "2026-06-10T07:45:00Z",
+        threadID: "thread-510",
+        turnID: "turn-510"
+      });
+      db.sqlite.run(
+        "update issues set status='failed', error=? where id=510",
+        ["needs_user: session_no_recent_progress\nXuanwu Supervisor failed to return a valid decision. Check the configured Agent/model/provider and its decision audit before retrying."]
+      );
+      db.sqlite.run(
+        "update issue_runs set status='failed', ended_at='2026-06-10T07:50:00Z' where issue_id=510"
+      );
+
+      const result = await runPiIssueSupervisorSchedulerOnce({
+        database: db,
+        now: NOW,
+        staleAfterSeconds: 300
+      });
+
+      expect(result).toMatchObject({ decisions: 1, failed: 0, signaled: 1 });
+      expect(db.sqlite.query<{ status: string }, [number]>(
+        "select status from issues where id=?"
+      ).get(510)).toEqual({ status: "todo" });
+      expect(listIssueSupervisorEvents(db, { issueId: 510 }).map((event) => event.event_type))
+        .toEqual(["signal", "decision", "action", "result"]);
+      expect(listPiActions(db, { issueId: 510 })).toContainEqual(expect.objectContaining({
+        action_type: "issue.retry",
+        status: "completed"
+      }));
     } finally {
       db.close();
     }

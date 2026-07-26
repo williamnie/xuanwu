@@ -305,6 +305,41 @@ describe("Supervisor Work/Run/Evidence/Handoff control tools", () => {
     }
   });
 
+  test("lets an autonomous manager idempotently enqueue a todo Work without an active Run", async () => {
+    const fixture = await openFixture();
+    try {
+      const issue = createIssue(fixture.db, {
+        project_id: fixture.project.id,
+        status: "todo",
+        title: "Queued without active Run"
+      });
+      const work = getIssueAsWork(fixture.db, issue.id)!;
+      const tools = createPiSupervisorControlTools(fixture.db, fixture.project, {
+        authorization: delegatedAuthorization(fixture.project.id, "work.enqueue"),
+        conversationID: "conv-idempotent-todo-enqueue"
+      });
+
+      const result = await runTool(tools, "work_control", {
+        action: "enqueue",
+        expected_revision: work.revision,
+        idempotency_key: "enqueue-existing-todo",
+        reason: "wake the queued Work",
+        work_id: work.id
+      });
+
+      expect(result.details).toMatchObject({
+        action_type: "work.enqueue",
+        decision: "execute",
+        result: { mutation: { applied: true }, work: { status: "todo" } },
+        status: "completed"
+      });
+      expect(listIssueEvents(fixture.db, issue.id, { types: ["issue.work_adapter_write"] }))
+        .toHaveLength(1);
+    } finally {
+      fixture.db.close();
+    }
+  });
+
   test("creates and updates Work only through revisioned audited domain writes", async () => {
     const fixture = await openFixture();
     try {

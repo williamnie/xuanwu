@@ -81,8 +81,10 @@ function scanIssueIDs(
   return db.sqlite.query<{ id: number }, [string, string]>(`
     select distinct i.id from issues i
     left join issue_runs ir on ir.issue_id=i.id
-    where i.project_id=? and (
-      i.status='in_progress' or ir.ended_at='' or (i.auto_retry_next_at<>'' and i.auto_retry_next_at<=?)
+    where i.project_id=? and i.status not in ('done', 'cancelled') and (
+      i.status='in_progress' or ir.ended_at='' or (
+        i.auto_retry_next_at<>'' and i.auto_retry_next_at<=?
+      )
     )
     order by i.updated_at asc, i.id asc limit ${limit(options)}
   `).all(projectID, nowText).map((row) => row.id);

@@ -184,6 +184,50 @@ describe("Bun in-progress issue recovery", () => {
     }
   });
 
+  test("does not create another recovery attempt before a persisted provider retry window is due", async () => {
+    const db = await openFixtureDatabase();
+    const provider = new RecoveringCodexProvider();
+    try {
+      insertProject(db, { id: "demo", provider: provider.id });
+      const issueId = insertIssue(db, {
+        codexThreadId: "thread-backoff",
+        codexTurnId: "turn-backoff",
+        projectId: "demo",
+        status: "in_progress",
+        title: "respect provider backoff"
+      });
+      insertOpenRun(db, {
+        issueId,
+        provider: provider.id,
+        providerSessionId: "thread-backoff",
+        providerTurnId: "turn-backoff"
+      });
+      db.sqlite.run(`update issues set auto_retry_next_at=?, auto_retry_reason=?, error=? where id=?`, [
+        "2026-06-10T08:15:00.000Z",
+        "provider_infra_transient:codex",
+        "codex app-server transport stopped",
+        issueId
+      ]);
+
+      const result = await recoverInProgressIssues({
+        database: db,
+        now: new Date("2026-06-10T08:00:00.000Z"),
+        providers: { codex: provider }
+      });
+
+      expect(result).toEqual({ deferred: 1, failed: 0, recovered: 0, requeued: 0 });
+      expect(provider.inputs).toEqual([]);
+      expect(listEventTypes(db)).toEqual([]);
+      expect(listIssueRuns(db, issueId)).toMatchObject([{
+        status: "in_progress",
+        ended_at: "",
+        provider_session_id: "thread-backoff"
+      }]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("requeues an already deferred startup failure that never created a provider session", async () => {
     const db = await openFixtureDatabase();
     try {

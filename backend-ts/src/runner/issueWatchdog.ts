@@ -80,6 +80,7 @@ export async function runAutoRunIssueWatchdogOnce(input: IssueWatchdogInput): Pr
   const rows = uniqueProjectRows(listStaleTodoWithoutRuntime(
     input.database,
     cutoff,
+    now.toISOString(),
     positiveInteger(input.limit, DEFAULT_LIMIT)
   ));
   resolveInactiveWatchdogAlerts(input.database, cutoff, now);
@@ -398,10 +399,10 @@ function providerRuntimeBlocker(db: RunnerDatabase, provider: string): Record<st
     select event.id as event_id, event.issue_id, i.auto_retry_next_at as next_check_at, event.payload
     from issue_events event
     join issues i on i.id=event.issue_id
-    join issue_runs ir on ir.issue_id=i.id and ir.ended_at=''
-    where event.type='issue.provider_deferred' and ir.provider=? and event.created_at>=ir.started_at
+    where event.type='issue.provider_deferred'
+      and i.auto_retry_reason=?
     order by event.id desc limit 1
-  `).get(provider);
+  `).get(`provider_infra_transient:${provider}`);
   if (!row) return { provider };
   return {
     event_id: row.event_id,
@@ -492,15 +493,27 @@ function recordWatchdogEvent(
   );
 }
 
-function listStaleTodoWithoutRuntime(db: RunnerDatabase, cutoff: string, limit: number): StaleTodoRow[] {
-  return db.sqlite.query<StaleTodoRow, [string, number]>(`
+function listStaleTodoWithoutRuntime(
+  db: RunnerDatabase,
+  cutoff: string,
+  now: string,
+  limit: number
+): StaleTodoRow[] {
+  return db.sqlite.query<StaleTodoRow, [string, string, number]>(`
     select i.id, i.project_id, i.title, i.status, i.created_at, i.updated_at,
            p.name as project_name, p.provider
     from issues i
     join projects p on p.id=i.project_id
     where p.auto_run=1
       and i.status='todo'
-      and coalesce(nullif(i.updated_at, ''), i.created_at) <= ?
+      and (
+        coalesce(nullif(i.updated_at, ''), i.created_at) <= ?
+        or (
+          i.auto_retry_reason like 'provider_infra_transient:%'
+          and i.auto_retry_next_at<>''
+          and i.auto_retry_next_at<=?
+        )
+      )
       and not exists (
         select 1 from issue_runs ir where ir.issue_id=i.id and ir.ended_at=''
       )
@@ -512,7 +525,7 @@ function listStaleTodoWithoutRuntime(db: RunnerDatabase, cutoff: string, limit: 
       )
     order by i.updated_at asc, i.created_at asc, i.id asc
     limit ?
-  `).all(cutoff, limit);
+  `).all(cutoff, now, limit);
 }
 
 function uniqueProjectRows(rows: StaleTodoRow[]): StaleTodoRow[] {

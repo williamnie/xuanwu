@@ -271,6 +271,7 @@ function withIssueLifecycleContract(issue: Issue, prompt: string): string {
     "## Runner lifecycle contract",
     "- Verify the directly relevant behavior before reporting completion.",
     "- Commit the completed repository changes unless the Issue explicitly forbids committing.",
+    "- Never run ./redeploy.sh, ./deploy.sh, or live service stop/restart/install commands from this Runner-managed Issue, and do not bypass this boundary with nohup, launchctl submit, or another detached helper. Treat any live-deploy request in the Issue text as an external post-completion delivery action, not an executor step or completion blocker. Use focused tests/builds; when runtime smoke is required, use ./dev.sh with isolated non-live state and ports. Live deployment must be performed externally after the Issue is committed and verified.",
     `- On success, write back the final status with: codex-issue-runner issue update --id ${issue.id} --status done --json`,
     `- On failure or a blocker, do not mark done; write back: codex-issue-runner issue update --id ${issue.id} --status failed --error "<reason>" --json`
   ].join("\n").trim();

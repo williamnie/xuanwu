@@ -54,6 +54,7 @@ const TRANSIENT_DIAGNOSIS = new Set([
   "provider_rate_limited",
   "provider_retry_after_ready",
   "provider_retry_after_waiting",
+  "provider_runtime_unavailable",
   "provider_timeout",
   "provider_transient_network_error",
   "session_no_recent_progress",
@@ -68,7 +69,6 @@ const NEEDS_CONTEXT_DIAGNOSIS = new Set([
   "business_decision_required",
   "external_account_required",
   "missing_user_input",
-  "provider_runtime_unavailable",
   "requires_human_decision",
   "scheduler_retryable_error"
 ]);

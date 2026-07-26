@@ -1,4 +1,5 @@
 import { updateIssue } from "../db/repositories/issueUpdate.ts";
+import { requeueUnstartedIssueClaim } from "../db/repositories/issueActions.ts";
 import { issueTimestamp } from "../db/repositories/issueCreate.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import type { ExecutorProviderId } from "../providers/types.ts";
@@ -42,12 +43,20 @@ export function deferIssueToPiAfterProviderFailure(
   const attempt = providerDeferralAttempt(db, issueID, provider);
   const delayMs = providerBackoffMs(error, message, attempt, now);
   const nextCheckAt = new Date(now.getTime() + delayMs).toISOString();
-  updateIssue(db, issueID, {
+  const deferred = {
     auto_retry_next_at: nextCheckAt,
     auto_retry_reason: `provider_infra_transient:${provider}`,
     error: message
-  });
-  annotateOpenRun(db, issueID, provider, message);
+  };
+  if (hasUnstartedOpenRun(db, issueID)) {
+    closeUnstartedRunAttempt(db, issueID, message, now);
+    requeueUnstartedIssueClaim(db, issueID);
+    updateIssue(db, issueID, deferred);
+    annotateDeferredRun(db, issueID, provider, message);
+  } else {
+    updateIssue(db, issueID, deferred);
+    annotateOpenRun(db, issueID, provider, message);
+  }
   recordIssueEvent(db, issueID, "issue.provider_deferred", {
     backoff_attempt: attempt,
     backoff_ms: delayMs,
@@ -56,6 +65,43 @@ export function deferIssueToPiAfterProviderFailure(
     provider,
     reason: "provider_infra_transient"
   }, now);
+}
+
+function hasUnstartedOpenRun(db: RunnerDatabase, issueID: number): boolean {
+  return (db.sqlite.query<{ count: number }, [number]>(`
+    select count(*) as count from issue_runs
+    where issue_id=? and ended_at='' and provider_session_id='' and provider_turn_id=''
+  `).get(issueID)?.count ?? 0) > 0;
+}
+
+function closeUnstartedRunAttempt(
+  db: RunnerDatabase,
+  issueID: number,
+  error: string,
+  now: Date
+): void {
+  const timestamp = eventTimestamp(now);
+  db.sqlite.run(`update run_attempts set status='failed', revision=revision+1,
+    ended_at=?, terminal_reason=?, terminal_source_ref='issue.provider_deferred', updated_at=?
+    where attempt_id=(
+      select attempt.attempt_id from run_attempts attempt
+      join issue_runs run on run.id=attempt.issue_run_id
+      where run.issue_id=? and run.ended_at='' and attempt.provider_session_id=''
+        and attempt.status in ('created', 'running')
+      order by run.attempt desc, attempt.sequence desc limit 1
+    )`, [timestamp, error, timestamp, issueID]);
+}
+
+function annotateDeferredRun(
+  db: RunnerDatabase,
+  issueID: number,
+  provider: ExecutorProviderId,
+  error: string
+): void {
+  db.sqlite.run(`update issue_runs set status='failed', provider=?, error=?, exit_reason='provider_deferred'
+    where id=(select id from issue_runs where issue_id=? order by attempt desc limit 1)
+      and provider_session_id='' and provider_turn_id=''`,
+    [provider, error, issueID]);
 }
 
 function annotateOpenRun(
@@ -87,11 +133,15 @@ function eventTimestamp(value: Date): string {
 }
 
 function providerDeferralAttempt(db: RunnerDatabase, issueID: number, provider: ExecutorProviderId): number {
-  const count = db.sqlite.query<{ count: number }, [number, string]>(`
+  const count = db.sqlite.query<{ count: number }, [number, string, number]>(`
     select count(*) as count from issue_events
     where issue_id=? and type='issue.provider_deferred' and json_valid(payload)
       and json_extract(payload, '$.provider')=?
-  `).get(issueID, provider)?.count ?? 0;
+      and created_at>=coalesce((
+        select started_at from issue_runs
+        where issue_id=? and ended_at='' order by attempt desc limit 1
+      ), '')
+  `).get(issueID, provider, issueID)?.count ?? 0;
   return Math.min(Math.max(count + 1, 1), 31);
 }
 

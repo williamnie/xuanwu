@@ -158,6 +158,11 @@ describe("Bun project loop claim execution", () => {
       expect(prompt).toContain("- Stop policy / escalation:");
       expect(prompt).toContain("same failure repeats");
       expect(prompt).toContain("schema/public-contract/shared-runtime changes");
+      expect(prompt).toContain("Never run ./redeploy.sh");
+      expect(prompt).toContain("do not bypass this boundary with nohup, launchctl submit");
+      expect(prompt).toContain("external post-completion delivery action");
+      expect(prompt).toContain("./dev.sh with isolated non-live state and ports");
+      expect(prompt).toContain("Live deployment must be performed externally");
     } finally {
       db.close();
     }
@@ -460,7 +465,7 @@ describe("Bun project loop claim execution", () => {
     });
   }
 
-  test("auto-run defers provider infra transient failures and keeps later todos queued for PI", async () => {
+  test("auto-run defers provider startup failures without leaving a phantom in-progress Run", async () => {
     const db = await openFixtureDatabase();
     const provider = new TransientInfraExecutionProvider();
     try {
@@ -474,12 +479,15 @@ describe("Bun project loop claim execution", () => {
 
       expect(provider.inputs.map((input) => input.issueId)).toEqual([first]);
       expect(getIssue(db, first)).toMatchObject({
-        status: "in_progress",
+        status: "todo",
+        auto_retry_reason: `provider_infra_transient:${provider.id}`,
+        auto_retry_next_at: expect.stringMatching(/Z$/),
         error: "codex app-server request timed out after 10000ms: initialize"
       });
       expect(listIssueRuns(db, first).at(-1)).toMatchObject({
-        status: "in_progress",
-        ended_at: "",
+        status: "failed",
+        ended_at: expect.stringMatching(/Z$/),
+        exit_reason: "provider_deferred",
         error: "codex app-server request timed out after 10000ms: initialize"
       });
       expect(getIssue(db, second)).toMatchObject({ status: "todo", attempt_count: 0 });

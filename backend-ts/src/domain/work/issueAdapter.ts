@@ -260,26 +260,35 @@ export function applyIssueWorkAction(
     if (replay) return replay;
     const before = mustGetIssueWork(db, issueID);
     const target = actionTargetStatus(command.action);
+    const idempotentEnqueue = command.action === "enqueue" && before.status === "todo";
     const decision = evaluateWorkTransition({ relations: [], works: [before] }, {
       audit: command.audit,
       expected_revision: command.expected_revision,
       to: target,
       work_id: before.id
     });
-    if (!decision.allowed) {
-      return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, command.action, decision.violations, { to: target });
+    const violations = idempotentEnqueue
+      ? decision.violations.filter((violation) => violation !== "illegal Work transition todo -> todo")
+      : decision.violations;
+    if (violations.length > 0) {
+      return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, command.action, violations, { to: target });
     }
-    try {
-      applyLegacyIssueAction(db, issueID, command.action, command.audit.reason);
-    } catch (error) {
-      return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, command.action, [errorMessage(error)], { to: target });
+    if (!idempotentEnqueue) {
+      try {
+        applyLegacyIssueAction(db, issueID, command.action, command.audit.reason);
+      } catch (error) {
+        return rejectAdapterWrite(db, issueID, before, command.audit, fingerprint, command.action, [errorMessage(error)], { to: target });
+      }
     }
     const after = mustGetIssueWork(db, issueID);
     if (after.status !== target) {
       return rejectAdapterWrite(db, issueID, after, command.audit, fingerprint, command.action,
         [`legacy Issue action left status ${after.status}; expected ${target}`], { to: target });
     }
-    recordAdapterWrite(db, issueID, command.audit, fingerprint, command.action, "applied", [], before, after, { to: target });
+    recordAdapterWrite(db, issueID, command.audit, fingerprint, command.action, "applied", [], before, after, {
+      ...(idempotentEnqueue ? { idempotent: true } : {}),
+      to: target
+    });
     return { applied: true, audit_event_id: command.audit.event_id, violations: [], work: after };
   }).immediate();
   return attachShadow(db, write, command.audit, command.shadow_mode);

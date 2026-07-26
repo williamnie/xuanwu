@@ -4,6 +4,7 @@ import type { ApprovalDecision, ProviderEvent } from "../types.ts";
 import { CodexApprovalBroker } from "./approvalBroker.ts";
 import { normalizeCodexEvent } from "./events.ts";
 import { CodexProcessGroupLifecycle, type CodexProcessOwnership } from "./processLifecycle.ts";
+import { managedExecutionEnvironment } from "../managedExecution.ts";
 
 export type JsonRpcParams = Record<string, unknown> | unknown[] | null;
 
@@ -87,7 +88,7 @@ export class CodexStdioJsonRpcTransport {
     const spawned = this.processFactory()({
       command: splitCommand(this.config.command),
       cwd: this.config.cwd.trim() || undefined,
-      env: { ...Bun.env, ...this.config.env }
+      env: managedExecutionEnvironment({ ...Bun.env, ...this.config.env })
     });
     this.process = spawned;
     try {

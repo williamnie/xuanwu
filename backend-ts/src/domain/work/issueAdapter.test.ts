@@ -202,6 +202,34 @@ describe("Issue-backed Work compatibility adapter", () => {
     }
   });
 
+  test("treats enqueue on an already queued Work as an audited idempotent kick", async () => {
+    const db = await openFixtureDatabase();
+    try {
+      insertProject(db, PROJECT_ID);
+      const issue = createIssue(db, { project_id: PROJECT_ID, status: "todo", title: "Queued without Run" });
+      const work = mustGetIssueWork(db, issue.id);
+
+      const kicked = applyIssueWorkAction(db, {
+        action: "enqueue",
+        audit: audit("enqueue-todo-idempotent"),
+        expected_revision: work.revision,
+        work_id: work.id
+      });
+
+      expect(kicked).toMatchObject({ applied: true, violations: [], work: { status: "todo" } });
+      expect(getIssue(db, issue.id)).toMatchObject({ status: "todo", attempt_count: 0 });
+      expect(issueStatusEvents(db, issue.id)).toEqual([]);
+      expect(adapterAudits(db, issue.id)).toContainEqual(expect.objectContaining({
+        event_id: "enqueue-todo-idempotent",
+        operation: "enqueue",
+        outcome: "applied",
+        requested: { idempotent: true, to: "todo" }
+      }));
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps the old Issue API behavior and data path unchanged", async () => {
     const db = await openFixtureDatabase();
     try {

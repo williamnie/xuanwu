@@ -5,6 +5,8 @@ import { getProject, type Project } from "../db/repositories/projects.ts";
 import type { RunnerDatabase } from "../db/database.ts";
 import { applyRecoveryBudgetToHistory, readPiRecoveryBudget } from "./recoveryBudget.ts";
 import type { ProviderErrorSignal } from "./providerErrorParser.ts";
+import type { PiSupervisorDiagnosisCode } from "./issueSupervisorRecovery.ts";
+import { isTransientRecoveryDiagnosis } from "./recoveryDiagnosis.ts";
 import {
   candidates,
   issueContext,
@@ -25,6 +27,7 @@ import { listIssueEventsAsync } from "../db/asyncIssueEvents.ts";
 import type { IssueEvent } from "../db/repositories/issueEvents.ts";
 
 export type IssueSupervisorContextOptions = {
+  includeWorkspaceGit?: boolean;
   now?: Date;
   recentEventLimit?: number;
   staleAfterSeconds?: number;
@@ -110,6 +113,7 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     candidates: candidates({
       events: currentRunEvents,
       history,
+      legacyInvalidFallbackDiagnosis: legacyInvalidFallbackDiagnosis(issue.error),
       issueStatus: issue.status,
       latestRun,
       now,
@@ -131,8 +135,18 @@ function buildIssueSupervisorRecoveryContextFromEvents(
     recent_events: recentEvents,
     recovery_history: history,
     session: sessionContext({ session, latestRun, now, staleAfterSeconds: options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS }),
-    workspace_snapshot: workspaceSnapshot(project.cwd, recentEvents)
+    workspace_snapshot: workspaceSnapshot(project.cwd, recentEvents, options.includeWorkspaceGit !== false)
   };
+}
+
+function legacyInvalidFallbackDiagnosis(error: string): PiSupervisorDiagnosisCode | undefined {
+  const match = error.match(
+    /^needs_user:\s*([a-z0-9_]+)\s*\nXuanwu Supervisor failed to return a valid decision\./
+  );
+  const diagnosis = match?.[1] ?? "";
+  return isTransientRecoveryDiagnosis(diagnosis)
+    ? diagnosis as PiSupervisorDiagnosisCode
+    : undefined;
 }
 
 function supervisorEventOptions() {

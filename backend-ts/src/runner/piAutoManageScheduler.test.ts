@@ -9,6 +9,7 @@ import { createPiAction, createPiGuardianEvent, listIssueSupervisorEvents, listP
 import { listPiRecoveryAttempts } from "../db/repositories/pi/recoveryAttempts.ts";
 import { listNotifications } from "../db/repositories/notifications.ts";
 import { listIssueEvents } from "../db/repositories/issueEvents.ts";
+import { EventBus, type AppEvent } from "../events/bus.ts";
 import type { PiSupervisorDecisionJson } from "../pi/issueSupervisorRecovery.ts";
 import type { ExecutorProvider, ProviderRunInput, SessionMessageInput } from "../providers/types.ts";
 import { createPiAutoManageScheduler, runPiAutoManageCycle, runScheduleLayerCycle } from "./piAutoManageScheduler.ts";
@@ -39,16 +40,20 @@ class SlowSupervisorDatabase {
   constructor(readonly inner: RunnerDatabase) {
     this.path = inner.path; this.readonly = inner.readonly;
     const run = inner.sqlite.run.bind(inner.sqlite) as (...args: any[]) => unknown;
-    this.sqlite = {
-      query: (sql: string) => {
-        if (sql.includes("auto_retry_next_at")) this.supervisorQueries += 1;
-        return inner.sqlite.query(sql);
-      },
-      run: (sql: string, ...bindings: any[]) => {
-        if (sql.includes("pi_guardian_watchdog_status")) this.watchdogWrites += 1;
-        return run(sql, ...bindings);
+    this.sqlite = new Proxy(inner.sqlite, {
+      get: (target, property) => {
+        if (property === "query") return (sql: string) => {
+          if (sql.includes("policy.supervisor_mode='autonomous'")) this.supervisorQueries += 1;
+          return inner.sqlite.query(sql);
+        };
+        if (property === "run") return (sql: string, ...bindings: any[]) => {
+          if (sql.includes("pi_guardian_watchdog_status")) this.watchdogWrites += 1;
+          return run(sql, ...bindings);
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
       }
-    };
+    });
   }
   close(): void { this.inner.close(); }
   transaction(inside: Parameters<RunnerDatabase["transaction"]>[0]) { return this.inner.transaction(inside); }
@@ -136,11 +141,12 @@ describe("PI auto-manage scheduler", () => {
 
       scheduler.start();
       await clock.runNext();
-      await waitUntil(() => wrapped.supervisorQueries === 1 && clock.timers.length === 1);
+      await waitUntil(() => wrapped.supervisorQueries >= 1 && clock.timers.length === 1);
+      const firstScanQueries = wrapped.supervisorQueries;
       await clock.runNext();
       await waitUntil(() => clock.timers.length === 1);
 
-      expect(wrapped.supervisorQueries).toBe(1);
+      expect(wrapped.supervisorQueries).toBe(firstScanQueries);
       expect(errors).toEqual([]);
       scheduler.stop();
     } finally {
@@ -376,6 +382,9 @@ describe("PI auto-manage scheduler", () => {
 
   test("escalates a deterministic failed autonomous issue instead of spending a blind retry", async () => {
     const db = await openFixtureDatabase();
+    const bus = new EventBus();
+    const observed: AppEvent[] = [];
+    const detach = bus.observe((event) => observed.push(event));
     const runner = new FakePiCycleRunner();
     try {
       insertProject(db, "demo", 0);
@@ -387,6 +396,7 @@ describe("PI auto-manage scheduler", () => {
       insertFailedIssueRunSession(db, 520);
 
       const first = await runScheduleLayerCycle({
+        bus,
         database: db,
         runProjectCycle: runner.run.bind(runner),
         runSupervisorDecision: async () => ({
@@ -407,8 +417,14 @@ describe("PI auto-manage scheduler", () => {
       expect(listNotifications(db, { projectID: "demo", unreadOnly: true })).toMatchObject([
         expect.objectContaining({ event: "pi.needs_user", issue_id: 520 })
       ]);
+      expect(observed).toContainEqual(expect.objectContaining({
+        issueId: 520,
+        projectId: "demo",
+        type: "pi.needs_user"
+      }));
       expect(listPiRecoveryAttempts(db, { issueId: 520 })).toEqual([]);
     } finally {
+      detach();
       db.close();
     }
   });
@@ -531,14 +547,17 @@ describe("PI auto-manage scheduler", () => {
 
       const result = await runOutageScheduleClosure(db, runner);
 
-      expect(result.first.supervisor).toMatchObject({ scanned: 1, signaled: 0 });
+      expect(result.first.supervisor).toMatchObject({ scanned: 0, signaled: 0 });
       expect(result.first.guardianDecisions).toMatchObject({ created: 1 });
       expect(result.second.guardianActionDispatch).toMatchObject({ completed: 0, failed: 0, scanned: 0 });
       expect(runner.calls).toEqual([]);
       expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
 
       expect(listPiActions(db, { issueId: 701 })).toEqual([]);
-      expect(getIssue(db, 701)).toMatchObject({ status: "in_progress" });
+      expect(getIssue(db, 701)).toMatchObject({
+        auto_retry_reason: "provider_infra_transient:claude",
+        status: "todo"
+      });
     } finally {
       db.close();
     }
@@ -681,8 +700,16 @@ async function runOutageScheduleClosure(db: DB, runner: FakePiCycleRunner) {
 
 function expectDeferredOutageClaim(db: DB, provider: InitializeTimeoutProvider): void {
   expect(provider.inputs.map((input) => input.issueId)).toEqual([701]);
-  expect(getIssue(db, 701)).toMatchObject({ status: "in_progress" });
-  expect(listIssueRuns(db, 701).at(-1)).toMatchObject({ ended_at: "", provider: "claude", status: "in_progress" });
+  expect(getIssue(db, 701)).toMatchObject({
+    auto_retry_reason: "provider_infra_transient:claude",
+    status: "todo"
+  });
+  expect(listIssueRuns(db, 701).at(-1)).toMatchObject({
+    ended_at: expect.not.stringMatching(/^$/),
+    exit_reason: "provider_deferred",
+    provider: "claude",
+    status: "failed"
+  });
   expect(getIssue(db, 702)).toMatchObject({ attempt_count: 0, status: "todo" });
   expect(listIssueRuns(db, 702)).toEqual([]);
   expect(listIssueEvents(db, 701).map((event) => event.type)).toContain("issue.provider_deferred");
@@ -776,7 +803,7 @@ function heartbeatRunCount(db: DB): number {
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < 200; i += 1) {
     if (predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 0));
   }

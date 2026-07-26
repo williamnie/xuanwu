@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
+  { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${CODEX_RUNNER_CODEX_SERVER_MODE:-}" ]; }; then
+  echo "[deploy-guard] denied: live deployment cannot run from a Runner-managed provider process." >&2
+  exit 78
+fi
+
 REPO="${CODEX_RUNNER_REPO:-williamnie/codex-issue-runner}"
 INSTALL_DIR="${CODEX_RUNNER_INSTALL_DIR:-$HOME/.local/bin}"
 STATE_DIR="${CODEX_RUNNER_STATE_DIR:-$HOME/.local/state/codex-issue-runner}"

@@ -6,6 +6,7 @@ import {
   listIssueSupervisorEvents
 } from "../db/repositories/pi.ts";
 import { getProject } from "../db/repositories/projects.ts";
+import type { EventBus } from "../events/bus.ts";
 import type { ExecutorProvider, ExecutorProviderId } from "../providers/types.ts";
 import {
   buildIssueSupervisorRecoveryContextAsync,
@@ -26,6 +27,7 @@ import {
   supervisorResultOutcome
 } from "./issueSupervisorProgressTracker.ts";
 export type PiIssueSupervisorSchedulerInput = {
+  bus?: Pick<EventBus, "publish">;
   database: RunnerDatabase;
   limit?: number;
   now?: Date;
@@ -46,8 +48,12 @@ type SupervisorTarget = {
   issueID: number;
   projectID: string;
 };
+type SupervisorDecisionSelection = PiSupervisorDecisionRuntimeResult & {
+  recordDecision?: boolean;
+};
 const activeSupervisorIssues = new Set<string>();
 const DEFAULT_LIMIT = 50;
+const DEFAULT_STALE_SECONDS = 5 * 60;
 export async function runPiIssueSupervisorSchedulerOnce(
   input: PiIssueSupervisorSchedulerInput
 ): Promise<PiIssueSupervisorSchedulerResult> {
@@ -68,7 +74,7 @@ export async function runPiIssueSupervisorSchedulerOnce(
     }
     activeSupervisorIssues.add(key);
     try {
-      if (recentDecisionExists(input, target)) {
+      if (recentDecisionExists(input, target, now)) {
         result.skipped += 1;
         continue;
       }
@@ -77,16 +83,20 @@ export async function runPiIssueSupervisorSchedulerOnce(
         continue;
       }
       const decision = await decideTarget(input, target, now);
-      if (!decision.valid) result.failed += 1;
+      result.decisions += 1;
+      if (!decision.valid) {
+        result.failed += 1;
+        continue;
+      }
       await applyIssueSupervisorDecisionActions({
+        bus: input.bus,
         context: target.context,
         database: input.database,
         decision: decision.decision,
         now,
         providers: input.providers,
-        recordDecision: Boolean(input.runDecision)
+        recordDecision: Boolean(input.runDecision) || decision.recordDecision === true
       });
-      result.decisions += 1;
     } catch (error) {
       result.failed += 1;
       recordFailure(input.database, target, error, now);
@@ -102,14 +112,16 @@ async function collectTargets(
   options: Pick<PiIssueSupervisorSchedulerInput, "limit" | "staleAfterSeconds">
 ): Promise<{ ready: SupervisorTarget[]; scanned: number; signaled: number }> {
   const issueIDs = scanIssueIDs(db, now, options.limit ?? DEFAULT_LIMIT);
+  const staleAfterSeconds = options.staleAfterSeconds ?? DEFAULT_STALE_SECONDS;
   const ready: SupervisorTarget[] = [];
   let signaled = 0;
   for (const issueID of issueIDs) {
     const issue = getIssue(db, issueID);
     if (!issue) continue;
     let context = await buildIssueSupervisorRecoveryContextAsync(db, issueID, {
+      includeWorkspaceGit: false,
       now,
-      staleAfterSeconds: options.staleAfterSeconds
+      staleAfterSeconds
     });
     if (clean(context.policy.mode) === "off") continue;
     if (refreshSupervisorProgressResult({
@@ -121,12 +133,13 @@ async function collectTargets(
       staleAfterSeconds: options.staleAfterSeconds
     }) !== null) {
       context = await buildIssueSupervisorRecoveryContextAsync(db, issueID, {
+        includeWorkspaceGit: false,
         now,
-        staleAfterSeconds: options.staleAfterSeconds
+        staleAfterSeconds
       });
     }
     const dispatchableCandidates = context.candidates.filter((candidate) =>
-      supervisorCandidateDispatchable(context, candidate, now, options)
+      supervisorCandidateDispatchable(context, candidate, now, { staleAfterSeconds })
     );
     if (dispatchableCandidates.length > 0) signaled += 1;
     if (dispatchableCandidates.length === 0) continue;
@@ -170,8 +183,10 @@ function scanIssueIDs(db: RunnerDatabase, now: Date, limit: number): number[] {
     select distinct i.id from issues i
     left join issue_runs ir on ir.issue_id=i.id
     left join project_pi_policies policy on policy.project_id=i.project_id
-    where i.status='in_progress' or ir.ended_at='' or (i.auto_retry_next_at<>'' and i.auto_retry_next_at<=?)
+    where i.status not in ('done', 'cancelled') and (
+      i.status='in_progress' or ir.ended_at='' or (i.auto_retry_next_at<>'' and i.auto_retry_next_at<=?)
       or (i.status='failed' and policy.supervisor_mode='autonomous' and i.updated_at>=?)
+    )
     order by i.updated_at asc, i.id asc limit ${boundedLimit(limit)}
   `).all(nowText, recentFailedCutoff).map((row) => row.id);
 }
@@ -206,8 +221,10 @@ async function decideTarget(
   input: PiIssueSupervisorSchedulerInput,
   target: SupervisorTarget,
   now: Date
-): Promise<PiSupervisorDecisionRuntimeResult> {
+): Promise<SupervisorDecisionSelection> {
   if (input.runDecision) return input.runDecision(target.context);
+  const deterministic = deterministicTransientRetry(target.context, now);
+  if (deterministic) return deterministic;
   const agent = getPiSupervisor(input.database);
   if (!agent || agent.enabled !== 1) throw new Error("PI Supervisor Agent is missing or disabled");
   const project = getProject(input.database, target.projectID);
@@ -219,6 +236,38 @@ async function decideTarget(
     now,
     project
   });
+}
+
+function deterministicTransientRetry(
+  context: IssueSupervisorRecoveryContext,
+  now: Date
+): SupervisorDecisionSelection | null {
+  const diagnosis = primaryDiagnosis(context);
+  const issueFailed = clean(context.issue.status) === "failed";
+  const runEnded = clean(context.latest_run?.ended_at) !== "";
+  const autonomous = clean(context.policy.mode) === "autonomous";
+  const issueBudget = numberValue(context.policy.budget_remaining);
+  const projectBudget = numberValue(context.policy.project_budget_remaining);
+  if (!issueFailed || !runEnded || !autonomous || !isTransientRecoveryDiagnosis(diagnosis) ||
+    issueBudget <= 0 || projectBudget <= 0 || readyRetryAfterTime(context) > now.getTime()) {
+    return null;
+  }
+  const decision = {
+    confidence: "high" as const,
+    decision: "retry_issue" as const,
+    evidence_refs: ["failed_issue", "ended_run", ...context.candidates.flatMap((candidate) => candidate.evidence_refs)].slice(0, 8),
+    expected_outcome: "a fresh executor attempt resumes the interrupted Work under the persisted recovery budget",
+    fallback_if_no_progress: "blocked" as const,
+    rationale: `Deterministic autonomous retry for transient diagnosis ${diagnosis}; the previous Run has ended and recovery budget remains.`,
+    recovery_message: "",
+    risk_level: "low" as const
+  };
+  return {
+    decision,
+    raw_text: JSON.stringify(decision),
+    recordDecision: true,
+    valid: true
+  };
 }
 
 function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unknown, now: Date): void {
@@ -258,26 +307,40 @@ function recordFailure(db: RunnerDatabase, target: SupervisorTarget, error: unkn
 }
 function recentDecisionExists(
   input: PiIssueSupervisorSchedulerInput,
-  target: SupervisorTarget
+  target: SupervisorTarget,
+  now: Date
 ): boolean {
-  return recentCompletedDecisionExists(input.database, target);
+  return recentCompletedDecisionExists(input.database, target, now);
 }
-function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTarget): boolean {
+function recentCompletedDecisionExists(db: RunnerDatabase, target: SupervisorTarget, now: Date): boolean {
   // Signals are intentionally excluded: only completed decision/action/result
   // rows participate in this dedupe check.
   const events = listIssueSupervisorEvents(db, {
-    eventTypes: ["budget_exhausted", "decision", "action", "result"],
+    eventTypes: ["budget_exhausted", "decision", "decision_failed", "action", "result"],
     issueId: target.issueID
   });
   if (latestSupervisorResult(events) === "no_progress") return false;
   const diagnosis = primaryDiagnosis(target.context);
   const retryAfter = readyRetryAfterTime(target.context);
   const threshold = retryAfter || latestEvidenceTime(target.context);
-  return events.some((event) => {
-    if (!["budget_exhausted", "decision", "action", "result"].includes(event.event_type)) return false;
+  const failedDecisionCooldown = now.getTime() -
+    Math.max(30, numberValue(target.context.policy.cooldown_seconds) || 300) * 1_000;
+  const matching = events.filter((event) => {
+    if (!["budget_exhausted", "decision", "decision_failed", "action", "result"].includes(event.event_type)) return false;
     if (diagnosis !== "" && event.diagnosis_code !== diagnosis) return false;
-    return threshold === 0 || Date.parse(event.created_at) >= threshold;
+    const createdAt = Date.parse(event.created_at);
+    return Number.isFinite(createdAt) && (threshold === 0 || createdAt >= threshold);
   });
+  const latestDecisionBoundary = [...matching].reverse().find((event) =>
+    ["budget_exhausted", "decision", "decision_failed"].includes(event.event_type)
+  );
+  // Older builds applied their needs_user fallback even after recording an
+  // invalid PI decision. Treat that action/result tail as part of the failed
+  // decision, otherwise it permanently suppresses a corrected Supervisor.
+  if (latestDecisionBoundary?.event_type === "decision_failed") {
+    return Date.parse(latestDecisionBoundary.created_at) >= failedDecisionCooldown;
+  }
+  return matching.some((event) => event.event_type !== "decision_failed");
 }
 function latestSupervisorResult(events: ReturnType<typeof listIssueSupervisorEvents>): string {
   const result = [...events].reverse().find((event) => event.event_type === "result");

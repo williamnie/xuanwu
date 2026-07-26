@@ -83,6 +83,9 @@ describe("Xuanwu Supervisor runtime prompt", () => {
       expect(prompt).toContain("issue_enqueue_next_triage");
       expect(prompt).toContain("issue_enqueue_batch_triage");
       expect(prompt).toContain("issue_completion_watch_create");
+      expect(prompt).toContain("Use depends_on_issue_ids only for success dependencies");
+      expect(prompt).toContain("rollback verification, incident review, cleanup, or a final report");
+      expect(prompt).toContain("Never combine depends_on_issue_ids with acceptance text that says the Work must proceed when that dependency fails");
     });
   });
 

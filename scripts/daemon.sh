@@ -136,6 +136,11 @@ uninstall_service() {
 
 run_mutation() {
   local action="$1" operation="$2"
+  if [ "${CODEX_RUNNER_MANAGED_EXECUTION:-}" = "1" ] ||
+    { [ -n "${PI_PACKAGE_DIR:-}" ] && [ -n "${CODEX_RUNNER_CODEX_SERVER_MODE:-}" ]; }; then
+    echo "[deploy-guard] denied: live service mutation cannot run from a Runner-managed provider process." >&2
+    return 78
+  fi
   audit "$action" requested
   if "$operation"; then
     audit "$action" applied
